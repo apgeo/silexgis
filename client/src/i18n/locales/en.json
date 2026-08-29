@@ -1476,9 +1476,9 @@
     "status": "State",
     "statusValues": {
       "ready": "Ready",
-      "pending": "Waiting to be converted",
-      "processing": "Converting",
-      "failed": "Could not be converted"
+      "pending": "Waiting its turn",
+      "processing": "In progress",
+      "failed": "Could not be processed"
     },
     "formats": {
       "lox": "Therion .lox",
@@ -1487,9 +1487,14 @@
     },
     "converting": "The walls are being prepared for the 3D scene. This list updates itself when they are ready.",
     "conversionFailed": "The walls could not be converted.",
+    "reading": "The survey is being read into its stations and shots. The plot can be viewed already; this list updates itself when the reading is done.",
+    "readingFailed": "The survey could not be read.",
     "triangles": "{{count}} triangles",
     "precisionLost": "The file lost precision before it arrived",
     "precisionLostHint": "The coordinates in this file were too large for the numbers it stores them in, so the survey is coarser than it was surveyed. Re-exporting it about a local origin recovers the detail.",
+    "plotDeclaration": "Where this survey sits in the world",
+    "plotDeclarationRequiredHint": "A .lox file has no field for a coordinate system, so it never says where it is. Say what its numbers mean — without this the survey cannot be placed, and nothing can be read out of it.",
+    "plotDeclarationOptionalHint": "A .3d file states its own coordinate system only when the survey was compiled with one. If this one does, that is used and what you give here is ignored; if it does not, this is the only thing that can place it.",
     "meshDeclaration": "Where these walls sit in the world",
     "meshDeclarationHint": "An .stl file is bare triangles: nothing in it says which coordinate system its numbers are in, and read as the neighbouring zone the same file lands hundreds of kilometres away. Say what its numbers mean.",
     "coordinatesLocal": "Metres from a point",

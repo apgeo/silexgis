@@ -17,25 +17,28 @@ public enum SurveyModelFormat : short
 }
 
 /// <summary>
-/// How far an uploaded model has got towards being drawable.
+/// How far an uploaded model has got through the work that arriving started.
 ///
 /// <para>
-/// Only wall meshes have anything to do here: line-plot formats are handed to the viewer as
-/// uploaded, so they are ready the moment they land.
+/// Every format has some: a wall mesh is turned into the one file the 3D scene draws, and a line
+/// plot is read into the station and shot rows that carry its own flags. What differs is what is
+/// waiting on it. Nothing waits on a line plot — the viewer draws the file exactly as it was
+/// uploaded throughout — so these states describe what the survey is known about, not whether it
+/// can be looked at.
 /// </para>
 /// </summary>
 public enum SurveyModelStatus : short
 {
-    /// <summary>Drawable now.</summary>
+    /// <summary>The work that arriving started is done.</summary>
     Ready = 0,
 
-    /// <summary>Waiting for conversion.</summary>
+    /// <summary>Queued, not started.</summary>
     Pending = 1,
 
-    /// <summary>Being converted.</summary>
+    /// <summary>Being read or converted now.</summary>
     Processing = 2,
 
-    /// <summary>Conversion failed; <see cref="SurveyModel.ProcessingError"/> says why.</summary>
+    /// <summary>It could not be done; <see cref="SurveyModel.ProcessingError"/> says why.</summary>
     Failed = 3,
 }
 
@@ -116,6 +119,27 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// origin and get it back.
     /// </summary>
     public bool SourcePrecisionLost { get; set; }
+
+    /// <summary>
+    /// How many legs the extraction could not attach to the station network, or null before a
+    /// line-plot model has been read.
+    ///
+    /// <para>
+    /// Shot endpoints are matched to stations by exact coordinate equality, because one of the two
+    /// formats names no endpoints at all, and a leg whose endpoint matches nothing is left out of
+    /// the network. Recorded rather than ignored: an incomplete network still produces topology
+    /// numbers that look entirely reasonable, and this count is the only thing that says they were
+    /// computed over less than the file contained.
+    /// </para>
+    /// </summary>
+    public int? DroppedShotCount { get; set; }
+
+    /// <summary>
+    /// How many stations shared a position with an earlier one and so became a single node, or null
+    /// before a line-plot model has been read. Same reason as
+    /// <see cref="DroppedShotCount"/>: merging is silent, and it is what causes legs to be dropped.
+    /// </summary>
+    public int? MergedStationCount { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

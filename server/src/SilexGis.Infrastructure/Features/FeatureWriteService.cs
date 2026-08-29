@@ -176,6 +176,46 @@ public sealed class FeatureWriteService(
         await SyncCaveMirrorAsync(caveFeatureId, ct);
     }
 
+    /// <summary>
+    /// Retires a centerline: hands the cave's shape on to another one if this was it, then
+    /// soft-deletes it. Does nothing when the id names no centerline that still exists.
+    /// </summary>
+    /// <remarks>
+    /// One home for the rule, because a centerline is removed by two different requests — a person
+    /// deleting the centerline, and a person deleting the survey model it was read out of — and the
+    /// half that is easy to forget is the flag. Deletion is soft, and the one-default-per-cave
+    /// uniqueness does not know about it: the flag has to come off the departing row, and be
+    /// committed, before any other row can take it, or the next centerline of that cave collides
+    /// with a row nobody can see. A cave whose last centerline goes simply has no shape until
+    /// another arrives.
+    /// </remarks>
+    public async Task DeleteCenterlineAsync(Guid centerlineFeatureId, CancellationToken ct = default)
+    {
+        var centerline = await db.Centerlines.FirstOrDefaultAsync(c => c.Id == centerlineFeatureId, ct);
+        if (centerline is null)
+        {
+            return;
+        }
+
+        if (centerline.IsDefault)
+        {
+            centerline.IsDefault = false;
+            await db.SaveChangesAsync(ct);
+
+            var successor = await db.Centerlines
+                .Where(c => c.CaveFeatureId == centerline.CaveFeatureId && c.Id != centerlineFeatureId)
+                .OrderBy(c => c.Feature.CreatedAt)
+                .Select(c => c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (successor != Guid.Empty)
+            {
+                await SetDefaultCenterlineAsync(successor, ct);
+            }
+        }
+
+        await SoftDeleteAsync(centerlineFeatureId, ct);
+    }
+
     /// <summary>Marks a centerline as the cave's current shape (exactly one per cave).</summary>
     public async Task SetDefaultCenterlineAsync(Guid centerlineFeatureId, CancellationToken ct = default)
     {

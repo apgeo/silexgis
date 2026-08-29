@@ -35,11 +35,17 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable
     public SurveyModelTests(PostgresFixture postgres)
     {
         filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-files-{Guid.NewGuid():N}");
-        factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
-        {
-            ["Files:Root"] = filesRoot,
-            ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
-        });
+        factory = new SilexGisApiFactory(
+            postgres.ConnectionString,
+            new Dictionary<string, string?>
+            {
+                ["Files:Root"] = filesRoot,
+                ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+            },
+            // Every upload here queues work, and the queue lives in the container every test class
+            // shares: a drain started in this host would claim work another class queued and fail
+            // it against storage this host does not have. The tests that care run their own job.
+            JobWorkers.RemoveFrom);
     }
 
     public async Task InitializeAsync()
@@ -308,7 +314,7 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable
         model.GetProperty("meshUrl").ValueKind.ShouldBe(JsonValueKind.Null);
         var id = model.GetProperty("id").GetGuid();
 
-        await RunQueuedMeshJobsAsync();
+        await RunQueuedMeshJobAsync(id);
 
         var converted = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{id}");
         converted.GetProperty("status").GetString().ShouldBe("ready");
@@ -356,7 +362,7 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable
                     .Content.ReadAsStringAsync())
             .RootElement.GetProperty("id").GetGuid();
 
-        await RunQueuedMeshJobsAsync(expectFailure: true);
+        await RunQueuedMeshJobAsync(id, expectFailure: true);
 
         var failed = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/survey-models/{id}");
         failed.GetProperty("status").GetString().ShouldBe("failed");
@@ -364,28 +370,39 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable
         failed.GetProperty("processingError").GetString().ShouldNotBeNullOrEmpty();
     }
 
-    /// <summary>Runs whatever the upload queued, the way the background worker would.</summary>
-    private async Task RunQueuedMeshJobsAsync(bool expectFailure = false)
+    /// <summary>
+    /// Runs what one upload queued, the way the background worker would.
+    ///
+    /// <para>
+    /// One model's job and not every queued one: the queue lives in the container every test class
+    /// shares, and a class holds its stored files under a directory of its own — so running another
+    /// class's job here reads its file out of a directory this host does not have, and fails a
+    /// conversion that was never this test's to run.
+    /// </para>
+    /// </summary>
+    private async Task RunQueuedMeshJobAsync(Guid modelId, bool expectFailure = false)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
             .Single(h => h.Kind == ProcessingJobKinds.SurveyMesh);
 
-        var queued = await db.ProcessingJobs
+        var job = await db.ProcessingJobs
             .Where(j => j.Kind == ProcessingJobKinds.SurveyMesh && j.Status == ProcessingJobStatus.Queued)
             .ToListAsync();
 
-        foreach (var job in queued)
+        foreach (var queued in job.Where(j =>
+            JsonSerializer.Deserialize<SurveyMeshPayload>(j.Payload, JsonSerializerOptions.Web)
+                ?.SurveyModelId == modelId))
         {
             try
             {
-                await handler.ExecuteAsync(job, CancellationToken.None);
+                await handler.ExecuteAsync(queued, CancellationToken.None);
             }
             catch (Exception) when (expectFailure)
             {
-                // The handler records the reason on the model and rethrows so the worker can retry
-                // it; what this test is checking is the record it left behind.
+                // The handler records the reason on the model and rethrows so the worker records
+                // the failure too; what this test is checking is the record it left behind.
             }
         }
     }
@@ -416,7 +433,10 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable
         return bytes;
     }
 
-    /// <summary>Opaque bytes are fine — the server stores survey files without parsing them.</summary>
+    /// <summary>
+    /// Opaque bytes. The upload path stores a survey file without opening it, so these exercise
+    /// everything up to the reading — which is queued, and which these tests never run.
+    /// </summary>
     private static byte[] FakeLox() =>
         Encoding.ASCII.GetBytes($"LOX-FIXTURE-{Guid.NewGuid():N}").Concat(new byte[128]).ToArray();
 

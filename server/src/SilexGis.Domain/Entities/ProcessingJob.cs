@@ -48,6 +48,12 @@ public static class ProcessingJobKinds
     /// <summary>Turn an uploaded cave wall mesh into the form the 3D scene draws.</summary>
     public const string SurveyMesh = "survey-mesh";
 
+    /// <summary>
+    /// Read an uploaded line-plot survey into station and shot rows carrying the file's own
+    /// flags, and the centerline that follows from them.
+    /// </summary>
+    public const string SurveyGraph = "survey-graph";
+
     /// <summary>Backfill EXIF GPS points onto existing image files that predate geotag capture.</summary>
     public const string PhotoGeoBackfill = "photo-geo-backfill";
 

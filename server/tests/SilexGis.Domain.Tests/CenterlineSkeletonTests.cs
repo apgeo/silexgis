@@ -226,4 +226,57 @@ public class CenterlineSkeletonTests
         var plain = Lines(Polyline((25.0, 45.0, 100), (25.001, 45.0, 101)));
         CenterlineSkeleton.IsWorthStoring(plain, CenterlineSkeleton.Build(plain)).ShouldBeFalse();
     }
+
+    [Fact]
+    public void The_altitude_keeping_skeleton_reduces_identically_and_keeps_the_altitudes()
+    {
+        var source = Lines([.. Traverse(4), .. Splays(Station(2), 45.0, 102, 5)]);
+
+        var flat = CenterlineSkeleton.Build(source);
+        var withAltitude = CenterlineSkeleton.Build3D(source);
+
+        // The same reduction: the two must not disagree about which shots are passage, or a
+        // measurement taken over one would describe a different cave from the map drawn off
+        // the other.
+        withAltitude.NumGeometries.ShouldBe(flat.NumGeometries);
+        withAltitude.NumPoints.ShouldBe(flat.NumPoints);
+        for (var i = 0; i < flat.NumPoints; i++)
+        {
+            withAltitude.Coordinates[i].X.ShouldBe(flat.Coordinates[i].X);
+            withAltitude.Coordinates[i].Y.ShouldBe(flat.Coordinates[i].Y);
+        }
+
+        flat.Coordinates.ShouldAllBe(c => double.IsNaN(c.Z));
+        withAltitude.Coordinates.ShouldAllBe(c => !double.IsNaN(c.Z));
+
+        // The traverse climbs one metre per station from 100, and the retained network is the
+        // whole of it, so its ends say so.
+        withAltitude.Coordinates.Min(c => c.Z).ShouldBe(100);
+        withAltitude.Coordinates.Max(c => c.Z).ShouldBe(104);
+        withAltitude.SRID.ShouldBe(4326);
+    }
+
+    [Fact]
+    public void Sewing_a_survey_whose_splays_are_already_known_prunes_nothing()
+    {
+        // What an extraction hands over: the legs the file itself says are passage, and no
+        // others. Sewing only joins them up.
+        var traverse = Lines(Traverse(4));
+
+        var sewn = CenterlineSkeleton.Sew(traverse);
+
+        sewn.NumGeometries.ShouldBe(1);
+        sewn.NumPoints.ShouldBe(5);
+
+        // Flat, like the guessed skeleton: this is the same overlay geometry and the same column
+        // holds it. A survey's altitudes are kept on its shot rows, not here.
+        sewn.Coordinates.ShouldAllBe(c => double.IsNaN(c.Z));
+
+        // And the difference that matters: the guess, shown the same four legs with a splay fan
+        // at the second-to-last station, cannot tell the final leg from one more shot in the fan
+        // and takes it too. Sewing keeps every leg it was handed, so the two answers differ.
+        var withFan = Lines([.. Traverse(4), .. Splays(Station(3), 45.0, 103, 5)]);
+        CenterlineSkeleton.Build(withFan).NumPoints.ShouldBe(4);
+        CenterlineSkeleton.Sew(traverse).NumPoints.ShouldBe(5);
+    }
 }

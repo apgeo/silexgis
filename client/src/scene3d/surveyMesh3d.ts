@@ -135,15 +135,22 @@ export function drawableSurveyMesh(
   return best;
 }
 
-/** The state to publish for a cave that has models but none of them drawable. */
+/**
+ * The state to publish for a cave that has models but none of them drawable.
+ *
+ * Only the wall meshes are consulted. A line plot also has work done on it after it arrives — it
+ * is read into its stations and shots — but no amount of that work ever produces walls, so
+ * reporting "walls on the way" because a .lox is being read promises something that never comes.
+ */
 function stateWithoutMesh(models: readonly SurveyModelInfo[]): Partial<SurveyMesh3DState> {
-  const converting = models.find(
+  const meshes = models.filter((model) => model.format === 'stl');
+  const converting = meshes.find(
     (model) => model.status === 'pending' || model.status === 'processing',
   );
   if (converting) {
     return { status: 'converting', name: converting.name };
   }
-  const failed = models.find((model) => model.status === 'failed');
+  const failed = meshes.find((model) => model.status === 'failed');
   if (failed) {
     return { status: 'failed', name: failed.name, message: failed.processingError ?? undefined };
   }
