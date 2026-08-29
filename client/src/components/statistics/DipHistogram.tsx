@@ -90,7 +90,7 @@ export default function DipHistogram({ bins, height = 260 }: DipHistogramProps) 
   const container = useECharts(option);
 
   return (
-    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={8} style={{ width: '100%' }}>
       <Segmented
         size="small"
         aria-label={t('statistics.orientation.countAxis')}

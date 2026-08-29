@@ -96,7 +96,7 @@ export default function RoseDiagram({ bins, meanAxis, defaultWeighting = 'length
 
   return (
     <div data-testid="chart-rose">
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
         <Segmented
           size="small"
           aria-label={t('statistics.orientation.weighting')}
