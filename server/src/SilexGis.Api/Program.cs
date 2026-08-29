@@ -230,6 +230,7 @@ try
     api.MapSurveySourceEndpoints();
     api.MapCenterlineEndpoints();
     api.MapCaveSurveyStatisticsEndpoints();
+    api.MapCaveClosestApproachEndpoints();
     api.MapCrsEndpoints();
     api.MapFeatureEndpoints();
     api.MapFilterEndpoints();
