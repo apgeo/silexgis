@@ -1520,6 +1520,35 @@
       "forbidden": "You are not allowed to change this cave's survey models."
     }
   },
+  "surveySources": {
+    "title": "Survey sources",
+    "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on; nothing here is read or interpreted.",
+    "upload": "Archive a source",
+    "uploaded": "Source archived",
+    "uploadFailed": "The file could not be archived",
+    "acceptHint": "Therion .th, .th2 and .thconfig, Survex .svx, a compilation .log, or a survey app's .zip export — up to 100 MB.",
+    "kind": "Kind",
+    "size": "Size",
+    "revision": "Revision",
+    "download": "Download",
+    "empty": "No sources archived yet",
+    "deleteConfirm": "Remove this source from the cave's archive? The stored file itself is kept.",
+    "kinds": {
+      "therionSource": "Therion source",
+      "therionConfig": "Therion .thconfig",
+      "therionLog": "Compilation log",
+      "survexSource": "Survex .svx",
+      "topoDroidArchive": "Survey app export"
+    },
+    "problems": {
+      "formatUnsupported": "Archive a survey source: Therion .th, .th2 or .thconfig, Survex .svx, a compilation .log, or a survey app's .zip export.",
+      "contentMismatch": "This file is not what its name says it is. A survey source has to be the format its extension claims.",
+      "sizeInvalid": "The file is empty or larger than 100 MB.",
+      "notFound": "This archived source no longer exists.",
+      "caveNotFound": "This cave no longer exists.",
+      "forbidden": "You are not allowed to change this cave's survey archive."
+    }
+  },
   "centerlines": {
     "title": "Centerlines",
     "upload": "Upload centerline",

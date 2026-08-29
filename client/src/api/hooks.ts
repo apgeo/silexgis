@@ -82,6 +82,7 @@ export const queryKeys = {
   caveSummary: (id: string) => ['caves', 'summary', id] as const,
   entrances: (caveId: string) => ['entrances', caveId] as const,
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
+  surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
@@ -799,6 +800,74 @@ export function useDeleteSurveyModel() {
   return useMutation({
     mutationFn: async ({ id }: { id: string; caveId: string }) => {
       const { error, response } = await api.DELETE('/api/v1/survey-models/{id}', { params: { path: { id } } });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+export type SurveySourceInfo = components['schemas']['SurveySourceDto'];
+export type SurveySourceKind = SurveySourceInfo['kind'];
+
+/**
+ * The raw material a cave's compiled surveys were produced from — the survey languages, a project
+ * configuration, a survey app's export bundle, and the log a compilation wrote.
+ *
+ * Kept apart from the models list because these are not models: nothing draws them, nothing reads
+ * them, and what they are for is the day the compiled export can no longer be re-made from itself.
+ */
+export function useSurveySources(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.surveySources(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{caveId}/survey-sources', { params: { path: { caveId: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+  });
+}
+
+function useInvalidateSurveySources() {
+  const queryClient = useQueryClient();
+  return (caveId: string) =>
+    void queryClient.invalidateQueries({ queryKey: queryKeys.surveySources(caveId) });
+}
+
+export function useUploadSurveySource() {
+  const invalidate = useInvalidateSurveySources();
+  return useMutation({
+    mutationFn: async ({
+      caveId,
+      file,
+      description,
+    }: {
+      caveId: string;
+      file: File;
+      description?: string;
+    }): Promise<SurveySourceInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      if (description !== undefined && description.trim() !== '') {
+        form.append('description', description.trim());
+      }
+      return unwrap(api.POST('/api/v1/caves/{caveId}/survey-sources', {
+        params: { path: { caveId } },
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+export function useDeleteSurveySource() {
+  const invalidate = useInvalidateSurveySources();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; caveId: string }) => {
+      const { error, response } = await api.DELETE('/api/v1/survey-sources/{id}', {
+        params: { path: { id } },
+      });
       if (error !== undefined) {
         throw new Error(`API error ${response.status}`);
       }
