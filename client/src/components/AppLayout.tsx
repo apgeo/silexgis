@@ -189,7 +189,13 @@ export default function AppLayout() {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
-            openKeys={openKeys}
+            // Nothing is open while the rail is collapsed, and that is not cosmetic. Collapsed,
+            // antd draws an open group as a floating flyout beside the rail — and a flyout the
+            // reader never asked for sits over the page, silently swallowing clicks on whatever
+            // is beneath it. Auto-opening the current page's group therefore has to stop at the
+            // edge of the collapsed rail: the state is kept, so it reappears on expand, but it
+            // is not handed to antd while there is nowhere for it to go but on top of the page.
+            openKeys={navCollapsed ? [] : openKeys}
             onOpenChange={setOpenKeys}
             // "/map" rather than "/": the root dispatches to the dashboard for users who
             // chose it as their landing page, which would make this item unable to reach the map.

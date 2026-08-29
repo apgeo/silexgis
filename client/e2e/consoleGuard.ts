@@ -134,42 +134,49 @@ function watchPage(page: Page, into: CapturedError[], testInfo: TestInfo) {
  * that is not importing this, so the omission surfaces when the errors are read rather than
  * staying invisible forever.
  */
-export const test = base.extend<{ consoleErrors: ConsoleErrorGuard; readsEnglish: void }>({
+export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
   /**
-   * The suite reads English, and asks for it before anything is drawn.
+   * The browser reads English, because the specs are written in it.
    *
-   * The application opens in Romanian deliberately, and reaches English only through a recorded
-   * choice — not by running in a browser that happens to be configured in English. Every
-   * assertion in this suite names a string and those strings are written in English, so the
-   * choice has to be made somewhere. Made here it is made once, before the first navigation, for
-   * every page the context opens including the windows the application pops out.
+   * The application opens in Romanian. Every spec here finds its controls by their visible
+   * label — `getByLabel('Password')`, `getByRole('button', { name: 'Sign in' })` — so without
+   * this the whole suite fails at the login form and says only that it was waiting for a
+   * password field, which is a long way from "the default language changed".
    *
-   * Without it the failure is not "the label is in Romanian": the shared sign-in helper waits
-   * out its timeout on a field labelled `Password` over a form that says `Parolă`, and every
-   * desktop spec fails on the same line of the same helper with nothing naming the language.
+   * This is the same decision the unit suite makes in `setupTests.ts`, and it is made in one
+   * place for the same reason the error-identity rule above is imported rather than copied: two
+   * observers that disagree are worse than either. The key comes from the application's own
+   * module, so the language the switch writes and the one seeded here cannot drift apart.
    *
-   * The key is imported rather than spelled again, for the reason its own module gives for
-   * existing: the two disagreeing would be silent — the choice would be written where nothing
-   * reads it and the suite would quietly be back in Romanian. This is the same statement a
-   * person makes by picking English in the header, not a test-only back door.
+   * Seeded on the context, not the page: the init script has to be registered before any page
+   * exists, or the first navigation happens in Romanian anyway. Overriding `context` rather than
+   * adding an auto fixture guarantees that ordering — `page` is built from this context.
+   *
+   * A spec that wants to prove something about Romanian sets the key itself; this is the
+   * starting language, not a lock.
    */
-  readsEnglish: [
-    async ({ context }, use) => {
-      // Wrapped, because an init script runs on every document the context loads — `about:blank`
-      // and any sandboxed frame among them — and touching `localStorage` there throws "Access is
-      // denied for this document". That throw reaches the console, so an unguarded version would
-      // manufacture the very errors the guard below exists to catch.
-      await context.addInitScript((key: string) => {
+  // The second parameter is named `provide` rather than `use`, which is what the fixture below
+  // calls it and what Playwright's own examples use. React 19 added a `use()` hook, so the lint
+  // rule that enforces where hooks may be called reads `await use(context)` — a bare identifier
+  // passed to `use` — as a hook called outside a component, and fails the build. Renaming the
+  // parameter says the same thing to Playwright and nothing at all to that rule; suppressing the
+  // rule here would have switched it off for a real mistake later in the same file.
+  context: async ({ context }, provide) => {
+    await context.addInitScript(
+      ({ key, language }) => {
         try {
-          window.localStorage.setItem(key, 'en');
+          window.localStorage.setItem(key, language);
         } catch {
-          // A document with no storage is not one the application runs in.
+          // Private windows and blocked site data throw. The suite then runs in the default
+          // language and fails on a label, which is the same visible outcome as before this
+          // existed — there is nothing better to do here.
         }
-      }, CHOICE_KEY);
-      await use();
-    },
-    { auto: true },
-  ],
+      },
+      { key: CHOICE_KEY, language: 'en' },
+    );
+    await provide(context);
+  },
+
   consoleErrors: [
     async ({ context }, use, testInfo) => {
       const captured: CapturedError[] = [];
@@ -189,7 +196,6 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard; readsEnglish
       // whether this fixture is set up before Playwright creates it.
       context.on('page', watch);
       context.pages().forEach(watch);
-
 
       const unexplained = () =>
         withoutEchoes(captured).filter(

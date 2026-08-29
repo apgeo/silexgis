@@ -166,6 +166,31 @@ describe('AppLayout selected destination', () => {
   });
 });
 
+describe('AppLayout collapsed rail', () => {
+  it('opens no group while the rail is collapsed, so nothing floats over the page', async () => {
+    // The rail opens collapsed, and collapsed antd draws an open group as a floating flyout
+    // beside it. The group holding the current page opens itself, so without this the reader
+    // lands on a page with a menu panel they never asked for sitting on top of it — and it
+    // swallows clicks on whatever is underneath. It cost four browser flows before it was seen,
+    // every one of them failing as "something intercepts pointer events" rather than as a menu.
+    capabilities = { checklists: 'read' };
+    renderShell('/checklists');
+
+    // The page is shown, and the group that holds it is the one that would have opened.
+    expect(screen.getByText('checklists page')).toBeInTheDocument();
+    // On the marked-open class, because that is the one thing that actually differs here.
+    // jsdom lays nothing out, so the flyout that does the damage in a real browser is not drawn
+    // and cannot be asserted on — a check for the popup element, or for its children being
+    // absent, passes just as well with the defect present. This class is what antd sets from
+    // the open state, and it is what flips.
+    expect(document.querySelectorAll('.ant-menu-submenu-open')).toHaveLength(0);
+
+    // ...and expanding the rail still opens it, which is the behaviour this must not cost.
+    expandRail();
+    expect(selectedItem()).toBe('Checklists');
+  });
+});
+
 describe('AppLayout nav gating', () => {
   it('offers no admin destinations before capabilities arrive', () => {
     renderShell();
