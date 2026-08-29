@@ -43,12 +43,25 @@ public sealed record SyncSetDto(
     DateTimeOffset UpdatedAt);
 
 /// <summary>Create or replace a sync set. Every field is stated; there is no partial write.</summary>
+/// <param name="BaseRevision">
+/// The set revision the caller last read, required when replacing an existing set and ignored
+/// when creating one. It is what a replacement of the settings document is arbitrated on, and it
+/// is the same rule an uploaded row is arbitrated on: the value the server last stamped, compared
+/// for equality, never a clock.
+///
+/// Without it the two writers of a set — the settings page and the caver's own phone, which both
+/// post the whole of it — cannot both be right. A phone that last read the set two weeks ago
+/// would otherwise win unconditionally over a digit width the caver changed yesterday, and the
+/// two devices would go on allocating place codes that do not fit together, with nothing anywhere
+/// having reported a conflict.
+/// </param>
 public sealed record SyncSetWriteRequest(
     string Name,
     Guid? CavingGroupId,
     Visibility UploadVisibility,
     IReadOnlyList<Guid> RootFeatureIds,
-    JsonElement Settings);
+    JsonElement Settings,
+    long? BaseRevision = null);
 
 public sealed class SyncSetWriteRequestValidator : AbstractValidator<SyncSetWriteRequest>
 {

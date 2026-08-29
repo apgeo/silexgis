@@ -1,0 +1,18 @@
+{
+  "batchId": "<batch>",
+  "importBatchId": "<uuid-1>",
+  "replayed": false,
+  "written": 1,
+  "refused": 0,
+  "rows": [
+    {
+      "id": "<place>",
+      "status": "deleted",
+      "revision": "<timestamp>",
+      "code": null,
+      "detail": null
+    }
+  ],
+  "conflicts": [],
+  "duplicates": []
+}

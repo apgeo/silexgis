@@ -1,0 +1,13 @@
+{
+  "batchId": "<batch>",
+  "contractVersion": 1,
+  "rows": [
+    {
+      "id": "<place>",
+      "kind": "generic",
+      "baseRevision": "<timestamp>",
+      "deleted": true,
+      "isMain": false
+    }
+  ]
+}

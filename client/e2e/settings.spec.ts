@@ -139,7 +139,7 @@ test.describe('settings', () => {
     // Reviewing it is the half a phone cannot do, so it is asserted after a reload: what is on
     // screen has to have come back from the server, not from the form that was just submitted.
     await page.reload();
-    const row = page.locator('.ant-list-item').filter({ hasText: name });
+    const row = page.locator('.silex-list-item').filter({ hasText: name });
     await expect(row).toBeVisible({ timeout: 20_000 });
     await expect(row).toContainText('Caves carried: 1');
     if (caveName) {
@@ -149,7 +149,7 @@ test.describe('settings', () => {
     await row.getByRole('button', { name: 'Revoke' }).click();
     await page.getByRole('button', { name: 'Revoke' }).last().click();
     await expect(page.getByText('Selection revoked.')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('.ant-list-item').filter({ hasText: name })).toHaveCount(0);
+    await expect(page.locator('.silex-list-item').filter({ hasText: name })).toHaveCount(0);
   });
 
   test('turning notification email off disables the per-category switches', async ({ page }) => {

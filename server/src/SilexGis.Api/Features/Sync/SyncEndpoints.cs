@@ -32,7 +32,7 @@ public static class SyncEndpoints
     /// failing at the first transfer — which is why reading rows is announced separately from
     /// writing them, and why a build that can only be read from says so.
     /// </summary>
-    public static readonly IReadOnlyList<string> ServedFeatures = ["download"];
+    public static readonly IReadOnlyList<string> ServedFeatures = ["download", "upload"];
 
     public static RouteGroupBuilder MapSyncEndpoints(this RouteGroupBuilder api)
     {
@@ -75,6 +75,7 @@ public static class SyncEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithSummary("Deletes a sync set the caller owns.");
         sets.MapSyncDownloadEndpoints();
+        sets.MapSyncUploadEndpoints();
 
         return api;
     }
@@ -187,6 +188,22 @@ public static class SyncEndpoints
         if (set is null)
         {
             return NotFound();
+        }
+
+        // Arbitrated on the revision the caller last saw, exactly as an uploaded row is. A
+        // replacement is the whole document — the selection and the code-generation settings
+        // together — so a caller working from a stale copy does not merge with the current one,
+        // it replaces it, and the edit it never saw disappears without a word.
+        if (request.BaseRevision is not { } baseRevision)
+        {
+            return ApiProblems.BadRequest(
+                "sync.set_revision_required",
+                "Send the revision this set had when you last read it.");
+        }
+
+        if (baseRevision != set.Revision)
+        {
+            return Conflict();
         }
 
         var refused = await RefuseBindingAsync(db, ctx, request, ct);

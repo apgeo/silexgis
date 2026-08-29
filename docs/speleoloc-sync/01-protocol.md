@@ -5,10 +5,9 @@ finds out what a server can do, how it names the caves it wants to carry, and ho
 page at a time so that a lost connection costs one page rather than the whole sync.
 
 It is written as the server is built, so a section that is not here yet is a part that does not
-exist yet. What is described below is **the read direction only** — a device can currently take rows
-from a server and cannot yet send any back. The server says so itself: `features` in the
-capabilities answer names `download` and does not name `upload`, and a device is expected to read
-that rather than to discover the gap at the first write.
+exist yet. Both directions now exist: §§3–7 are the read, and §8 is the write. The server says which
+it serves — `features` in the capabilities answer names `download` and `upload` — and a device is
+expected to read that rather than to discover a gap at the first request.
 
 Signing in is a separate document; everything here assumes a bearer token obtained the way that one
 describes. **No route in this slice is reachable without one.** There is no anonymous read of a sync
@@ -29,7 +28,7 @@ Authorization: Bearer <token>
   "contractVersion": 1,
   "pageSizeMax": 500,
   "uploadRowsMax": 500,
-  "features": ["download"]
+  "features": ["download", "upload"]
 }
 ```
 
@@ -243,12 +242,224 @@ distinguishable. It moves only when something about the set actually changed —
 selection a device already holds is not an edit and does not tell it that its copy has gone stale.
 Compare it to the revision you last saw to find out whether to re-read the document.
 
+**Replacing the set is arbitrated on `setRevision`, exactly as a row is on its own revision.**
+A write to `/api/v1/sync/sets/{setId}` replaces the whole document — the selection and the settings
+together — so it carries `baseRevision`: the revision the caller last read. Sending none is answered
+`400 sync.set_revision_required`; sending one the set has moved past is answered `409
+sync.set_conflict`, and the reflex is the same as for any other conflict: read the set again,
+re-apply the change, send it back with the revision that read returned. This matters most for the
+settings: two devices allocating place codes from different digit widths produce codes that do not
+fit together, and a stale write that won silently would leave nothing anywhere to notice it by.
+
 **A moved `setRevision` also retires every cursor issued before it** (§3). A device that notices the
 revision has moved can drop its cursor immediately; a device that does not notice is told, because
 its next request with the old cursor is answered `409 sync.cursor_stale` rather than answered short.
 Either way the response is the same: read the set again from the beginning.
 
-## 8. The recorded traffic, which is the actual specification
+## 8. Writing rows back
+
+```
+POST /api/v1/sync/sets/{setId}/upload
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "batchId": "0198f2aa-…",
+  "contractVersion": 1,
+  "rows": [
+    {
+      "id": "0198f2ab-…",
+      "kind": "cave",
+      "baseRevision": null,
+      "deleted": false,
+      "name": "Peștera Mică",
+      "caveTypeCode": "cave",
+      "isMain": false,
+      "clientUpdatedAt": "2026-08-28T07:02:11.000Z"
+    }
+  ]
+}
+```
+
+Four ideas hold this half together, and each of them exists because of a way an offline device
+breaks.
+
+### 8.1 The batch identifier, which is what makes a retry safe
+
+**The device mints `batchId`, and sending the same one again returns the first answer and writes
+nothing.** An answer lost on the way back is the ordinary case on a mobile connection, and without
+this it would cost a duplicate registry rather than a resend. Mint a version-7 uuid per *attempt*;
+never reuse one for different rows, and never mint a new one for a resend of the same rows. If a
+batch has to be split for `uploadRowsMax`, each part is its own attempt and gets its own identifier.
+
+The recorded answer is the decisions, not the rows: a replay is answered `"replayed": true` with the
+same `rows` and the same `importBatchId`, while the conflict echo and the duplicate report are
+worked out afresh — an account's right to see a position can be withdrawn between the two calls.
+
+**Every upload becomes an import batch**, which is what lets a caver look at what a phone put into
+the registry and take all of it back through the same screen and the same button that undoes a bad
+file. `importBatchId` is that batch.
+
+### 8.2 The row identifier, adopted verbatim
+
+**A new row carries `baseRevision: null` and the identifier the device gave it, and the server
+adopts that identifier.** Both sides mint version-7 uuids and neither re-keys the other's, which is
+what removes the translation table a two-sided identifier scheme would need, and with it every way
+that table could go stale.
+
+Two consequences:
+
+- **A create whose identifier is already here writes nothing** and comes back `unchanged` with the
+  row's current revision. That is what makes a retry safe when the answer to the first attempt was
+  lost but the write itself landed.
+- **An identifier in use by a row this account may not read** is answered `rejected` /
+  `sync.id_conflict`. That does disclose that the identifier is taken, and it is accepted: a
+  version-7 uuid carries enough randomness that guessing a live one is infeasible unless it has
+  already leaked, and the alternative is a translation table for ever. **Do not re-key the row.**
+
+### 8.3 The base revision, which is the only thing arbitrated on
+
+**An edit carries `baseRevision`: the `updatedAt` the device last saw for that row.** It is compared
+for equality against what the server holds now, and nothing else is compared — never the device's
+own clock, which is unsynchronised, resettable by whoever holds the phone, and routinely wrong by
+hours. A row whose revision has moved is answered `conflict` and **not applied**; the rest of the
+batch still is.
+
+**Arbitration is per row, and so is the answer.** A device that edited forty caves offline and lost
+one to a conflict is told which one, and does not have the other thirty-nine thrown away with it. So
+a row's verdict rides a `200`:
+
+```json
+{
+  "batchId": "0198f2aa-…",
+  "importBatchId": "0198f2b0-…",
+  "replayed": false,
+  "written": 1,
+  "refused": 1,
+  "rows": [
+    { "id": "0198f2ab-…", "status": "created", "revision": "2026-08-28T09:14:52.113Z", "code": null, "detail": null },
+    { "id": "0198f2ac-…", "status": "conflict", "revision": "2026-08-28T08:00:00.000Z", "code": "sync.conflict", "detail": "…" }
+  ],
+  "conflicts": [ … ],
+  "duplicates": [ … ]
+}
+```
+
+`status` is one of `created`, `updated`, `deleted`, `unchanged`, `conflict`, `rejected`. **Store the
+`revision` that comes back** — it is what the next edit of that row sends as its `baseRevision`.
+The errors document is the list of `code` values and what to do about each.
+
+**Rows are applied in the order they are given**, so a container may be created earlier in the same
+batch than the row that hangs under it. Send a cave before its entrances and an area before the
+places inside it. A row may appear only once in a batch; a batch naming one twice is refused whole.
+
+**Deleting is arbitrated exactly as editing is.** Send `"deleted": true` with the `baseRevision` the
+device holds. A row already gone here answers `unchanged`; a row that moved on answers `conflict`.
+Removing a row and editing one are **different rights**, so an account allowed to correct a cave may
+still be refused its deletion — a delete takes the row's whole containment subtree with it.
+
+### 8.4 What a row may carry, and what it may never carry
+
+| Field | Notes |
+|---|---|
+| `id` | The device's own identifier, adopted verbatim |
+| `kind` | `cave`, `caveEntrance` or `generic`. Anything else is `rejected` / `sync.kind_unsupported` |
+| `baseRevision` | The `updatedAt` last seen, or `null` for a new row |
+| `deleted` | Asks for the row to go |
+| `parentId` | The row this one is contained by — see below |
+| `name`, `description` | As stored. `name` is at most 255 characters |
+| `caveTypeCode`, `entranceTypeCode`, `featureTypeCode` | The kind, **by its stable code, never by a numeric id** |
+| `isMain` | For an entrance: whether it is the cave's main one |
+| `geometry`, `altitude`, `positionQuality` | The position, and how it was obtained |
+| `properties` | The property document, stored verbatim. Where the device's own identifiers and codes live |
+| `clientUpdatedAt` | When the device believes it last wrote the row. Stored as provenance; **never consulted in the arbitration** |
+
+**An upload is a partial write.** `name`, `description`, `properties`, the position and the
+containment are what a device owns. The thirty-odd server-only cave fields — the survey figures, the
+exploration status, the descriptive text somebody typed in the browser — are **never cleared** by an
+upload that does not mention them, because there is no way for a device to mention them.
+
+**No coordinate may ever go in `properties`.** That document is handed to every reader of a row with
+no protection filter anywhere on its path, so a position stored in it would be published to exactly
+the people the guard below exists to keep it from. Keep the device's index and codes there; keep
+positions in `geometry`.
+
+**`parentId` is a request, and the server makes the edge.** Containment is never accepted as a
+free-standing structure a device declares, because protection and visibility are inherited along
+containment and along nothing else — a client-declared edge would be a client-declared audience. The
+container has to exist and be one this account may add to, or the row is refused
+(`sync.parent_not_found`, `sync.parent_forbidden`). Whether a row *needs* one is a property of its
+kind: `cave_area` and `cave_place` do; `surface_area` does not and is written with nothing above it.
+A container that is named is always made into a real edge, never quietly dropped.
+
+**A cave's own `geometry` is not a field.** It is a copy of its main entrance's, kept in step by the
+server, so a cave that arrives carrying a point is stored without it rather than refused — the
+entrance that follows in the same batch is where that position belongs.
+
+### 8.5 The write-right rule, stated per field
+
+**An account that may write a row but may not see its position exactly keeps its name, description
+and property edits, and loses only the geometry, the altitude and the position quality.** The row
+comes back `updated`, and it is `updated` honestly: refusing the whole row would lose a caver's
+rename to protect a coordinate that was never going to move.
+
+The reason for the loss is what §6 describes. A caller without exact view was never shown the stored
+position — elsewhere in this API they are shown a grid-snapped one — so a coordinate they send back
+came from somewhere other than the truth, and writing it would replace a real position with a
+degraded one.
+
+**This applies to creates as well, which is the part most likely to be got wrong.** The usual
+reasoning — "a coordinate arriving with a new row is the caller's own, so echoing it back discloses
+nothing" — is about *where the value came from*, not about which verb carried it, and it does not
+survive this channel: a device replays coordinates this server handed it. Creating an entrance
+writes a position onto the cave above it, so an entrance sent for a cave whose position this account
+may not see exactly is refused outright with `sync.location_forbidden` rather than half-applied.
+
+### 8.6 The conflict echo, and its absence rule
+
+`conflicts` carries **this server's own version of every row that lost a conflict**, shaped exactly
+as a download would have delivered it, so a device can show a caver what it is being asked to merge
+against instead of making them go and fetch it.
+
+**A row that lost and is missing from `conflicts` is a row whose position this account may not
+have.** That is the same answer the download gives — absence, never a blurred stand-in (§6) — and it
+is read the same way: the row changed, and re-reading it is how to find out what to. The echo is a
+list beside the decisions rather than a field inside them, so the recorded answer a replay is served
+from can never hold a position.
+
+### 8.7 The duplicate report, which is never a verdict
+
+`duplicates` says what was already here, near a row this batch **created**. Every row listed was
+written and its entry in `rows` says so; nothing here changes a status.
+
+It exists because a device is offline when it decides to add a cave and cannot ask first. A caver
+who surveyed a shaft forty metres from one a clubmate entered last week has no way of knowing, and
+refusing the row would leave the work nowhere to go — so the row lands and the answer says what it
+landed next to. Deciding whether the two are the same cave is the caver's, not the server's.
+
+```json
+{ "id": "0198f2ab-…",
+  "nearby": [ { "id": "…", "name": "Avenul Mare", "kind": "caveEntrance",
+                "distanceMeters": 41.2, "caveFeatureId": "…" } ] }
+```
+
+Two properties to plan for. **Rows this same batch wrote are never each other's duplicates** — a
+cave and the places inside it are a few metres apart by construction. And the pool searched is what
+this account may read *and* place exactly: "something is within fifty metres of this point" is
+itself a position, so a protected row this account may not place is not compared against and not
+reported. The cost is real and is accepted — a duplicate of such a row will not be noticed — because
+the alternative is answering a position to somebody entitled to none.
+
+### 8.8 Whole-batch refusals
+
+Some failures are the batch's, not a row's, and then the answer is a problem document and nothing at
+all was written: a `contractVersion` this server does not speak, more rows than `uploadRowsMax`, a
+set that is not this account's, a caving-group binding this account is no longer entitled to, and
+the same batch identifier arriving twice at once. They are listed with their codes in the errors
+document.
+
+## 9. The recorded traffic, which is the actual specification
 
 Everything above is an explanation. The thing to write code against is in `contract/speleoloc-sync/v1/`:
 one directory per exchange, each with the request line and the exact body that came back.
@@ -268,10 +479,23 @@ Four cases cover the read direction:
 | `09-download-tombstones` | A row that has gone — an identifier and a moment, and nothing else |
 | `10-download-protected-withheld` | A caller who may read a cave but not one point inside it: the point is simply not in the payload |
 
+Five cover the write direction, and these have a `request.json` as well: a write is not described by
+its request line, and what a device sends is the half the other application has to compose rather
+than merely parse.
+
+| Directory | What it shows |
+|---|---|
+| `11-upload-create` | A new row under the identifier the device minted, with `baseRevision: null` |
+| `12-upload-retry` | The same batch identifier sent again: `replayed: true`, the first answer, nothing written |
+| `13-upload-conflict` | A stale `baseRevision`: the row is refused and the server's own version comes back in `conflicts` |
+| `14-upload-conflict-withheld` | The same refusal for a row this caller may not place: the decision is there and the echo is **absent** |
+| `15-upload-delete` | A tombstone going up, arbitrated on `baseRevision` exactly as an edit is |
+
 **What no recording covers yet, stated so it is not read as absence of the thing:** there is no
-fixture showing a `centerline` row, and none showing a refusal — neither `sync.cursor_invalid` nor
-`sync.cursor_stale` has a recorded exchange. All three are asserted by the test suite and described
-above; they are simply not among the four bodies committed as bytes.
+fixture showing a `centerline` row, none showing a read refusal — neither `sync.cursor_invalid` nor
+`sync.cursor_stale` has a recorded exchange — and none showing a whole-batch refusal or a duplicate
+report. All of them are asserted by the test suite and described above; they are simply not among
+the bodies committed as bytes.
 
 Three kinds of value are replaced in those files, because they differ on every run and would
 otherwise make the comparison meaningless: identifiers (minted server-side as each row is written,
@@ -279,7 +503,7 @@ so there is nothing to pin), timestamps (stamped from the server's own clock) an
 (opaque, and it moves with the data). `contract/speleoloc-sync/v1/README.md` lists them. Everything
 else — field names, field order, nesting, and every value not in that list — is exactly as sent.
 
-## 9. Generating a client from the served description
+## 10. Generating a client from the served description
 
 The server publishes its own description at `/openapi/v1.json`. Two things in it matter to whoever
 generates code from it, and both are recent:
@@ -294,7 +518,7 @@ generates code from it, and both are recent:
   No sync route is on that allow-list.
 - **The sync operations are named**, and almost nothing else on this server is. The names are
   `syncCapabilities`, `syncListSets`, `syncCreateSet`, `syncGetSet`, `syncReplaceSet`,
-  `syncDeleteSet` and `syncDownload`. An unnamed operation gets a name invented by the generator
+  `syncDeleteSet`, `syncDownload` and `syncUpload`. An unnamed operation gets a name invented by the generator
   from its path, which then moves whenever a path is tidied; these are chosen deliberately and are
   part of the contract. Naming the rest of the server's operations is a larger change than this one
   and has not been made, so do not expect an identifier on any operation outside this slice.

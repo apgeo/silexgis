@@ -11912,6 +11912,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/sets/{id}/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Applies one batch of device rows, arbitrated row by row; resends are answered, not re-applied. */
+        post: operations["syncUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -13592,7 +13609,7 @@ export interface components {
             photoClusterRadiusMeters: number;
         };
         /** @enum {unknown} */
-        ImportSource: "vectorFile" | "photos";
+        ImportSource: "vectorFile" | "photos" | "deviceSync";
         /** @enum {unknown} */
         ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
         /** @enum {unknown} */
@@ -14869,6 +14886,21 @@ export interface components {
             nextCursor: null | string;
             hasMore: boolean;
         };
+        SyncDuplicateCandidateDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            kind: components["schemas"]["FeatureKind"];
+            /** Format: double */
+            distanceMeters: number;
+            /** Format: uuid */
+            caveFeatureId: null | string;
+        };
+        SyncDuplicateDto: {
+            /** Format: uuid */
+            id: string;
+            nearby: components["schemas"]["SyncDuplicateCandidateDto"][];
+        };
         SyncFeatureDto: {
             /** Format: uuid */
             id: string;
@@ -14897,6 +14929,8 @@ export interface components {
             parentId: string;
             isPrimary: boolean;
         };
+        /** @enum {unknown} */
+        SyncRowStatus: "created" | "updated" | "deleted" | "unchanged" | "conflict" | "rejected";
         SyncSetDto: {
             /** Format: uuid */
             id: string;
@@ -14920,12 +14954,67 @@ export interface components {
             uploadVisibility: components["schemas"]["Visibility"];
             rootFeatureIds: string[];
             settings: components["schemas"]["JsonElement"];
+            /** Format: int64 */
+            baseRevision?: null | number;
         };
         SyncTombstoneDto: {
             /** Format: uuid */
             id: string;
             /** Format: date-time */
             deletedAt: string;
+        };
+        SyncUploadRequest: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            contractVersion: number;
+            rows: components["schemas"]["SyncUploadRowDto"][];
+        };
+        SyncUploadResultDto: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: uuid */
+            importBatchId: string;
+            replayed: boolean;
+            /** Format: int32 */
+            written: number;
+            /** Format: int32 */
+            refused: number;
+            rows: components["schemas"]["SyncUploadRowResultDto"][];
+            conflicts: components["schemas"]["SyncFeatureDto"][];
+            duplicates: components["schemas"]["SyncDuplicateDto"][];
+        };
+        SyncUploadRowDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeatureKind"];
+            /** Format: date-time */
+            baseRevision: null | string;
+            deleted: boolean;
+            /** Format: uuid */
+            parentId: null | string;
+            name: null | string;
+            description: null | string;
+            featureTypeCode: null | string;
+            caveTypeCode: null | string;
+            entranceTypeCode: null | string;
+            isMain: boolean;
+            geometry: null | components["schemas"]["GeoJsonGeometry"];
+            /** Format: double */
+            altitude: null | number;
+            positionQuality: null | components["schemas"]["PositionQuality"];
+            properties: null | components["schemas"]["JsonElement"];
+            /** Format: date-time */
+            clientUpdatedAt: null | string;
+        };
+        SyncUploadRowResultDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["SyncRowStatus"];
+            /** Format: date-time */
+            revision: null | string;
+            code: null | string;
+            detail: null | string;
         };
         TagDto: {
             /** Format: int64 */
@@ -15747,6 +15836,68 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncUploadResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

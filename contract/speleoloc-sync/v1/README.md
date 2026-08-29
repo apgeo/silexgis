@@ -2,6 +2,9 @@
 
 Each directory here is one exchange with a running server, taken from the test suite that also
 asserts about it. `request.txt` is the request line; `response.json` is the body that came back.
+A write also has a `request.json` — the body that went up. A read is fully described by its
+request line and the first recordings here were all reads; a write is not, and what a device
+sends is the half the other application has to compose rather than merely parse.
 
 These are the specification. Prose describing a payload drifts from the payload silently, so the
 documents in `docs/speleoloc-sync/` explain *why* the protocol is shaped as it is and these files
@@ -44,6 +47,11 @@ Two consequences worth stating, because they are easy to misread:
 | `08-download-cursor-restart` | The page after the first one, asked for with the cursor the first one returned. `hasMore` is true, so the device knows to come back |
 | `09-download-tombstones` | A row that has gone. It arrives as an identifier and a moment, in `tombstones` rather than in `features`, and carries nothing else at all |
 | `10-download-protected-withheld` | A caller who may read a cave but may not place one point inside it. The point is **absent** — there is no entry for it anywhere in the payload and nothing says one was kept back. It is not delivered blurred, and its absence is not reported as a deletion |
+| `11-upload-create` | A device pushing up a place it surveyed underground, under the identifier the device itself minted. `baseRevision` is null, which is how a row says it is new, and the answer carries the revision to send back next time |
+| `12-upload-retry` | The same batch identifier again, after an answer was lost on the way back. `replayed` is true, the import batch is the same one, and nothing was written a second time |
+| `13-upload-conflict` | A row whose `baseRevision` is no longer the server's. It is refused, and the server's own version of it rides back in `conflicts` so the device can show a caver what to merge against without fetching it |
+| `14-upload-conflict-withheld` | Two rows lose the same conflict, and one of them is a position this caller may not place. Both are named in `rows`; only the readable one appears in `conflicts`. The other is **absent**, exactly as it would be from a download — the conflict answer is a second place this server hands a device a coordinate, and it asks the same question in the same place |
+| `15-upload-delete` | A device removing a row it holds. A removal is arbitrated exactly as an edit is: it carries the revision the device last saw, and a stale one loses the same way |
 
 Numbering starts at 07, and the gap is deliberate rather than a set of missing files. Steps 01–06
 are reserved for the exchanges that come before a download — signing in (`01-login`,

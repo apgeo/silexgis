@@ -186,7 +186,7 @@ public static class SyncDownloadEndpoints
         return TypedResults.Ok(new SyncDownloadPageDto(
             set.Revision,
             settings,
-            await ToDtosAsync(db, visible, emittedFeatures, ct),
+            await SyncFeatureShaping.ToDtosAsync(db, visible, emittedFeatures, ct),
             tombstones,
             next,
             hasMore));
@@ -211,51 +211,4 @@ public static class SyncDownloadEndpoints
     /// </summary>
     private static IQueryable<Feature> Order(IQueryable<Feature> rows) =>
         rows.OrderBy(f => f.DeletedAt ?? f.UpdatedAt).ThenBy(f => f.Id);
-
-    /// <summary>
-    /// Fills in the two things a row cannot carry on its own: the stable code of its kind, and the
-    /// containment edges above it. Parent edges are restricted to parents this caller may read, so
-    /// the payload never names a row somebody cannot ask about.
-    /// </summary>
-    private static async Task<List<SyncFeatureDto>> ToDtosAsync(
-        SilexGisDbContext db, IQueryable<Feature> visible, List<Feature> rows, CancellationToken ct)
-    {
-        if (rows.Count == 0)
-        {
-            return [];
-        }
-
-        var ids = rows.Select(f => f.Id).ToList();
-        var typeIds = rows.Where(f => f.FeatureTypeId is not null).Select(f => f.FeatureTypeId!.Value).Distinct().ToList();
-        var codes = typeIds.Count == 0
-            ? []
-            : await db.FeatureTypes.AsNoTracking()
-                .Where(t => typeIds.Contains(t.Id))
-                .ToDictionaryAsync(t => t.Id, t => t.Code, ct);
-
-        var edges = await db.FeatureHierarchyEdges.AsNoTracking()
-            .Where(e => ids.Contains(e.ChildId) && visible.Any(v => v.Id == e.ParentId))
-            .Select(e => new { e.ChildId, e.ParentId, e.IsPrimary })
-            .ToListAsync(ct);
-
-        return [.. rows.Select(f => new SyncFeatureDto(
-            f.Id,
-            f.Kind,
-            f.FeatureTypeId is { } typeId && codes.TryGetValue(typeId, out var code) ? code : null,
-            f.Category,
-            f.Name,
-            f.Description,
-            f.Geom is null ? null : GeoJsonGeometry.From(f.Geom),
-            JsonSerializer.Deserialize<JsonElement>(f.Properties),
-            f.PropertiesSchemaVersion,
-            f.LocationProtected,
-            f.IsProtectedEffective,
-            f.Visibility,
-            [.. edges.Where(e => e.ChildId == f.Id)
-                .OrderByDescending(e => e.IsPrimary).ThenBy(e => e.ParentId)
-                .Select(e => new SyncParentDto(e.ParentId, e.IsPrimary))],
-            f.CreatedAt,
-            f.UpdatedAt,
-            f.ClientUpdatedAt))];
-    }
 }

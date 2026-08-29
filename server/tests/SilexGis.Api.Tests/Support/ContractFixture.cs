@@ -113,32 +113,68 @@ public sealed class ContractFixture
     /// <summary>
     /// Writes or checks one exchange. <paramref name="caseName"/> is the directory it lands in.
     /// </summary>
-    public async Task AssertAsync(string caseName, string requestLine, HttpResponseMessage response)
+    public Task AssertAsync(string caseName, string requestLine, HttpResponseMessage response) =>
+        AssertAsync(caseName, requestLine, requestBody: null, response);
+
+    /// <summary>
+    /// Writes or checks one exchange that carried a body up as well as down.
+    /// </summary>
+    /// <remarks>
+    /// A read is fully described by its request line, and the first recordings here were all
+    /// reads. A write is not: what a device sends is half of what has to be got right, and it is
+    /// the half the other application has to construct rather than merely parse. So a case with a
+    /// request body records it too, scrubbed by the same rules as the answer — the identifiers a
+    /// device mints for its own rows appear on both sides of the exchange, and a recording that
+    /// pinned them on one side and named them on the other would read as two different rows.
+    /// </remarks>
+    public async Task AssertAsync(
+        string caseName, string requestLine, string? requestBody, HttpResponseMessage response)
     {
         var raw = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(raw);
 
-        // Re-serialised indented rather than copied from the wire, so a person can read the file
-        // and a difference in it points at the field that moved. The relaxed encoder is what keeps
-        // the placeholders below legible; it means the file is a rendering of the payload and not
-        // its literal bytes, which is the right trade for a document somebody has to read.
-        var buffer = new MemoryStream();
-        await using (var writer = new Utf8JsonWriter(
-            buffer,
-            new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
-        {
-            Write(writer, document.RootElement);
-        }
-
-        // Written as LF and read back as LF. The repository normalises text on the way in, so a
-        // recording made with the platform's line ending would pass here and fail for the next
-        // person to check the file out.
-        var body = Encoding.UTF8.GetString(buffer.ToArray()).ReplaceLineEndings("\n") + "\n";
+        // The request first, so that an identifier neither side named is numbered in the order a
+        // reader meets it: sent, then answered.
+        var sent = requestBody is null ? null : Render(requestBody);
+        var body = Render(document.RootElement);
         var request = Scrub(requestLine) + "\n";
 
         var directory = Path.Combine(ContractRoot(), caseName);
         await CompareOrWriteAsync(Path.Combine(directory, "request.txt"), request);
+        if (sent is not null)
+        {
+            await CompareOrWriteAsync(Path.Combine(directory, "request.json"), sent);
+        }
+
         await CompareOrWriteAsync(Path.Combine(directory, "response.json"), body);
+    }
+
+    private string Render(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return Render(document.RootElement);
+    }
+
+    /// <summary>
+    /// One payload as it lands in a file: re-serialised indented rather than copied from the wire,
+    /// so a person can read it and a difference in it points at the field that moved. The relaxed
+    /// encoder is what keeps the placeholders legible; it means the file is a rendering of the
+    /// payload and not its literal bytes, which is the right trade for a document somebody has to
+    /// read. Written as LF and read back as LF — the repository normalises text on the way in, so
+    /// a recording made with the platform's line ending would pass here and fail for the next
+    /// person to check the file out.
+    /// </summary>
+    private string Render(JsonElement root)
+    {
+        var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(
+            buffer,
+            new JsonWriterOptions { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+        {
+            Write(writer, root);
+        }
+
+        return Encoding.UTF8.GetString(buffer.ToArray()).ReplaceLineEndings("\n") + "\n";
     }
 
     private static async Task CompareOrWriteAsync(string path, string content)

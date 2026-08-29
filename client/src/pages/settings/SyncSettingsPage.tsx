@@ -10,7 +10,6 @@ import {
   Flex,
   Form,
   Input,
-  List,
   Modal,
   Popconfirm,
   Select,
@@ -19,6 +18,7 @@ import {
   Typography,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
+import List from '../../components/List.tsx';
 import { ApiError } from '../../api/client.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import {
@@ -235,7 +235,6 @@ export default function SyncSettingsPage() {
         ) : (
           <List
             dataSource={sets ?? []}
-            rowKey={(set) => set.id}
             renderItem={(set) => (
               <List.Item
                 actions={[

@@ -2378,6 +2378,7 @@
     "viewBatches": "See the imports",
     "batchFile": "File",
     "batchFromPhotos": "Photographs",
+    "batchFromDevice": "Phone upload",
     "batchMode": "How",
     "batchDetail": "What this import created",
     "confirmedAt": "Confirmed",

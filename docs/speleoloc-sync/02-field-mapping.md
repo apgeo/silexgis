@@ -6,10 +6,17 @@ values may never be sent at all.
 
 The shapes below exist on the server and can be created and read through the ordinary feature
 routes. The transfer that carries them to a device is a separate document — the protocol one, beside
-this — and it currently moves rows in one direction only: a device can read these shapes from a
-server and cannot yet send any back. What this document fixes is the vocabulary, because a device
-that allocates codes against one set of names cannot be repointed at another later without
-renumbering everything it holds.
+this — and it now moves rows in both directions: a device reads these shapes from a server and
+sends its own back. What this document fixes is the vocabulary, because a device that allocates
+codes against one set of names cannot be repointed at another later without renumbering everything
+it holds.
+
+**A kind's "must sit inside something" column is the rule the upload applies too.** A row of a kind
+that needs a container and names none is refused; a row of a kind that does not — a `surface_area`,
+which is what a selection is rooted in and what a device's general-area segment is allocated from —
+is written with nothing above it. A container that *is* named is always made into a real containment
+edge, never dropped, because protection and visibility are inherited along that edge and along
+nothing else.
 
 ---
 

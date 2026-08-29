@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -53,7 +54,7 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
+            caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync();
             cavePlaceTypeId = await db.FeatureTypes
                 .Where(t => t.Code == "cave_place").Select(t => t.Id).SingleAsync();
         }
@@ -77,7 +78,7 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable
             .ToList();
 
         // If this ever reads zero the test below proves nothing, so it is stated as a fact.
-        routes.Count.ShouldBeGreaterThanOrEqualTo(7);
+        routes.Count.ShouldBeGreaterThanOrEqualTo(8);
 
         foreach (var route in routes)
         {
@@ -537,6 +538,182 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable
         Features(await DownloadAsync(reader, set)).Keys.ShouldBe([open], ignoreOrder: true);
     }
 
+    /// <summary>
+    /// The whole loop a phone actually lives, in order and against one database: read a
+    /// selection, survey something underground with no signal, push it up under an identifier
+    /// the phone chose, resend the push because the answer never arrived, lose a round to
+    /// somebody who edited the same row in the meantime, take the server's version, send the
+    /// edit again on top of it, and read back level.
+    /// </summary>
+    /// <remarks>
+    /// Each of these steps is asserted on its own elsewhere. What only this test can say is that
+    /// they compose: the revision a download hands out is the one an upload accepts, the
+    /// revision an upload hands back is the one the next download reports, and a device that
+    /// follows the protocol converges instead of oscillating. Every one of those is a seam
+    /// between two pieces of code that were written at different times, and a seam is what a
+    /// per-endpoint test cannot see.
+    /// </remarks>
+    [Fact]
+    public async Task A_device_reads_edits_uploads_loses_a_round_takes_the_servers_row_and_comes_back_level()
+    {
+        var cave = await CreateCaveAsync($"Field cave {marker}");
+        var set = await CreateSetAsync([cave]);
+
+        // The phone's first read. It holds the rows and the revision each one carried.
+        var first = await DownloadAsync(set);
+        Features(first).Keys.ShouldBe([cave], ignoreOrder: true);
+        first.GetProperty("hasMore").GetBoolean().ShouldBeFalse();
+        var cursor = first.GetProperty("nextCursor").GetString();
+
+        // Underground: a new place, named by the phone, under an identifier the phone minted.
+        // The clock it stamps is deliberately wrong by an hour and a half — it is carried as
+        // provenance and never consulted, and the assertions below are what say so.
+        var place = Guid.CreateVersion7();
+        var phoneClock = DateTimeOffset.UtcNow.AddMinutes(-90);
+        var upload = Guid.CreateVersion7();
+        var created = await RecordUploadAsync(
+            "11-upload-create", owner, set, upload, [(cave, "cave"), (place, "place")],
+            Place(place, cave, $"Sump {marker}", 25.501, 45.601, clientUpdatedAt: phoneClock));
+
+        created.GetProperty("replayed").GetBoolean().ShouldBeFalse();
+        created.GetProperty("written").GetInt32().ShouldBe(1);
+        Row(created, place).GetProperty("status").GetString().ShouldBe("created");
+        var revision = Row(created, place).GetProperty("revision").GetDateTimeOffset();
+
+        // The answer was lost on the way back, so the phone sends the same batch again. It gets
+        // the first answer and the registry gains nothing: the failure this prevents is a caver
+        // finding every cave twice after one bad signal.
+        var replay = await RecordUploadAsync(
+            "12-upload-retry", owner, set, upload, [(cave, "cave"), (place, "place")],
+            Place(place, cave, $"Sump {marker}", 25.501, 45.601, clientUpdatedAt: phoneClock));
+
+        replay.GetProperty("replayed").GetBoolean().ShouldBeTrue();
+        replay.GetProperty("importBatchId").GetGuid()
+            .ShouldBe(created.GetProperty("importBatchId").GetGuid());
+        Row(replay, place).GetProperty("status").GetString().ShouldBe("created");
+
+        // Reading on from where the first page stopped brings back exactly the row just pushed,
+        // at the revision the upload reported — the seam between the two halves of the protocol.
+        var back = Features(await DownloadAsync(set, cursor));
+        back.Keys.ShouldBe([place], ignoreOrder: true);
+        back[place].GetProperty("name").GetString().ShouldBe($"Sump {marker}");
+        back[place].GetProperty("updatedAt").GetDateTimeOffset().ShouldBe(revision);
+        back[place].GetProperty("geometry").GetProperty("coordinates")[0]
+            .GetDouble().ShouldBe(25.501, 1e-9);
+
+        // The phone's own clock came back as provenance and did not become the revision — a
+        // clock ninety minutes behind would have been the newer version under any merge that
+        // consulted it.
+        back[place].GetProperty("clientUpdatedAt").GetDateTimeOffset()
+            .ShouldBe(phoneClock, TimeSpan.FromSeconds(1));
+        revision.ShouldBeGreaterThan(phoneClock);
+
+        // Meanwhile a second phone renames the same place and gets there first.
+        var second = await UploadAsync(owner, set, Guid.CreateVersion7(),
+            Place(place, cave, $"Sump lower {marker}", 25.501, 45.601, baseRevision: revision));
+        Row(second, place).GetProperty("status").GetString().ShouldBe("updated");
+
+        // The first phone still holds the revision it read and pushes its own rename on top of
+        // it. Nothing is written and the server's row comes back so the caver can be shown what
+        // they are merging against without going to fetch it.
+        var lost = await RecordUploadAsync(
+            "13-upload-conflict", owner, set, Guid.CreateVersion7(),
+            [(cave, "cave"), (place, "place")],
+            Place(place, cave, $"Sump upper {marker}", 25.502, 45.602, baseRevision: revision));
+
+        Row(lost, place).GetProperty("status").GetString().ShouldBe("conflict");
+        Row(lost, place).GetProperty("code").GetString().ShouldBe("sync.conflict");
+        lost.GetProperty("refused").GetInt32().ShouldBe(1);
+        var echoed = lost.GetProperty("conflicts").EnumerateArray().Single();
+        echoed.GetProperty("id").GetGuid().ShouldBe(place);
+        echoed.GetProperty("name").GetString().ShouldBe($"Sump lower {marker}");
+
+        // The losing push really did leave the row alone: the name is the winner's, not the
+        // one that was refused.
+        Features(await DownloadAsync(set))[place].GetProperty("name").GetString()
+            .ShouldBe($"Sump lower {marker}");
+
+        // The phone applies what it was handed and sends the same edit again on top of it. The
+        // revision to send back is the one inside the echo, which is why the echo carries it.
+        var merged = echoed.GetProperty("updatedAt").GetDateTimeOffset();
+        var resent = await UploadAsync(owner, set, Guid.CreateVersion7(),
+            Place(place, cave, $"Sump upper {marker}", 25.502, 45.602, baseRevision: merged));
+        Row(resent, place).GetProperty("status").GetString().ShouldBe("updated");
+        var settled = Row(resent, place).GetProperty("revision").GetDateTimeOffset();
+
+        // Level: what the server holds is what the phone last sent, at the revision the upload
+        // reported, and the position moved with the name rather than being left behind.
+        var final = Features(await DownloadAsync(set))[place];
+        final.GetProperty("name").GetString().ShouldBe($"Sump upper {marker}");
+        final.GetProperty("updatedAt").GetDateTimeOffset().ShouldBe(settled);
+        final.GetProperty("geometry").GetProperty("coordinates")[0].GetDouble().ShouldBe(25.502, 1e-9);
+
+        // And a removal travels the same way and is arbitrated the same way: the row goes, and
+        // the next read reports it as gone rather than as never having been there.
+        var removed = await RecordUploadAsync(
+            "15-upload-delete", owner, set, Guid.CreateVersion7(), [(place, "place")],
+            Removal(place, settled));
+        Row(removed, place).GetProperty("status").GetString().ShouldBe("deleted");
+
+        var after = await DownloadAsync(set);
+        Features(after).Keys.ShouldNotContain(place);
+        after.GetProperty("tombstones").EnumerateArray()
+            .Select(t => t.GetProperty("id").GetGuid()).ShouldContain(place);
+    }
+
+    /// <summary>
+    /// The conflict answer is a second place this server hands a device a coordinate, on a route
+    /// where none of the download's filtering runs — so it is asked the same question, in the
+    /// same place, and answers the same way: the row a caller may not place is absent from the
+    /// echo rather than blurred in it.
+    /// </summary>
+    /// <remarks>
+    /// Driven by a real stale revision rather than by a download, and asserted with both halves
+    /// on one call — the readable row echoed whole beside the guarded one missing — because an
+    /// echo that had stopped working at all would satisfy the absence on its own.
+    /// </remarks>
+    [Fact]
+    public async Task A_conflict_echo_withholds_the_row_the_caller_may_not_place_and_hands_back_the_one_it_may()
+    {
+        var cave = await CreateCaveAsync($"Echo cave {marker}", visibility: "authenticated");
+        var open = await CreatePlaceAsync(cave, $"Echo open {marker}", 25.511, 45.611, "authenticated");
+        var guarded = await CreatePlaceAsync(
+            cave, $"Echo guarded {marker}", 25.512, 45.612, "authenticated", locationProtected: true);
+
+        // Read and write on both and exact view on neither, held by an account that owns none of
+        // them: a row's own owner is always shown it exactly, whatever its protection says.
+        await GrantAsync(open, "read, write");
+        await GrantAsync(guarded, "read, write");
+        var set = await CreateSetAsync(reader, [cave]);
+
+        // A revision from before either row existed. Whatever the device once held, it is not
+        // what the server holds now, which is the whole of what a conflict is.
+        var stale = DateTimeOffset.UtcNow.AddDays(-1);
+        var answer = await RecordUploadAsync(
+            "14-upload-conflict-withheld", reader, set, Guid.CreateVersion7(),
+            [(cave, "cave"), (open, "place-readable"), (guarded, "place-withheld")],
+            Place(open, cave, $"Echo open renamed {marker}", 25.511, 45.611, baseRevision: stale),
+            Place(guarded, cave, $"Echo guarded renamed {marker}", 25.512, 45.612, baseRevision: stale));
+
+        Row(answer, open).GetProperty("status").GetString().ShouldBe("conflict");
+        Row(answer, guarded).GetProperty("status").GetString().ShouldBe("conflict");
+
+        // Both lost, and the decisions say so for both. Only one of them comes back as a row.
+        var echoed = answer.GetProperty("conflicts").EnumerateArray().ToList();
+        echoed.Select(f => f.GetProperty("id").GetGuid()).ShouldBe([open], ignoreOrder: true);
+        echoed.Single().GetProperty("geometry").GetProperty("coordinates")[0]
+            .GetDouble().ShouldBe(25.511, 1e-9);
+
+        // And the withholding is alive rather than the echo being broken: granting exact view on
+        // the guarded row — the protection root itself — puts it in the same answer.
+        await GrantAsync(guarded, "read, write, viewExactLocation");
+        var granted = await UploadAsync(reader, set, Guid.CreateVersion7(),
+            Place(guarded, cave, $"Echo guarded renamed {marker}", 25.512, 45.612, baseRevision: stale));
+        granted.GetProperty("conflicts").EnumerateArray()
+            .Single().GetProperty("geometry").GetProperty("coordinates")[0]
+            .GetDouble().ShouldBe(25.512, 1e-9);
+    }
+
     private static string FillRoute(string pattern)
     {
         var segments = pattern.Split('/')
@@ -621,6 +798,125 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable
         }
     }
 
+    /// <summary>One place as a device sends it: the row it minted, inside the cave it belongs to.</summary>
+    private static object Place(
+        Guid id,
+        Guid caveId,
+        string name,
+        double lon,
+        double lat,
+        DateTimeOffset? baseRevision = null,
+        DateTimeOffset? clientUpdatedAt = null) => new
+        {
+            id,
+            kind = "generic",
+            baseRevision,
+            deleted = false,
+            parentId = caveId,
+            name,
+            featureTypeCode = "cave_place",
+            isMain = false,
+            geometry = new { type = "Point", coordinates = new[] { lon, lat } },
+            clientUpdatedAt,
+        };
+
+    /// <summary>
+    /// A row the device wants gone. It carries the revision it last saw and nothing else worth
+    /// sending: a removal is arbitrated exactly as an edit is, and the fields of a row nobody is
+    /// keeping have nothing to say.
+    /// </summary>
+    private static object Removal(Guid id, DateTimeOffset baseRevision) => new
+    {
+        id,
+        kind = "generic",
+        baseRevision,
+        deleted = true,
+        isMain = false,
+    };
+
+    private static JsonElement Row(JsonElement answer, Guid id) =>
+        answer.GetProperty("rows").EnumerateArray()
+            .Single(r => r.GetProperty("id").GetGuid() == id);
+
+    private static async Task<JsonElement> UploadAsync(
+        HttpClient client, Guid set, Guid batchId, params object[] rows)
+    {
+        var (response, _, _) = await UploadResponseAsync(client, set, batchId, rows);
+        using (response)
+        {
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+            return await response.Content.ReadFromJsonAsync<JsonElement>();
+        }
+    }
+
+    /// <summary>
+    /// The same exchange, kept whole so a recording can be taken from it — and serialised here
+    /// rather than handed to <c>PostAsJsonAsync</c>, so that what lands in the recorded file is
+    /// the bytes that went up rather than a second rendering of the same object.
+    /// </summary>
+    private static async Task<(HttpResponseMessage Response, string Url, string Body)> UploadResponseAsync(
+        HttpClient client, Guid set, Guid batchId, object[] rows)
+    {
+        var url = $"/api/v1/sync/sets/{set}/upload";
+        var body = JsonSerializer.Serialize(
+            new { batchId, contractVersion = 1, rows }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var response = await client.PostAsync(
+            url, new StringContent(body, Encoding.UTF8, "application/json"));
+        return (response, url, body);
+    }
+
+    /// <summary>
+    /// One upload, asserted about by the caller and recorded as it happens. A write records what
+    /// it sent as well as what it was told: the request body is the half of a write that the
+    /// application on the other side has to compose rather than merely read.
+    /// </summary>
+    private async Task<JsonElement> RecordUploadAsync(
+        string caseName,
+        HttpClient client,
+        Guid set,
+        Guid batchId,
+        (Guid Id, string Label)[] names,
+        params object[] rows)
+    {
+        var fixture = new ContractFixture()
+            .Literal(marker, "marker").Name(set, "set").Name(batchId, "batch");
+        foreach (var (id, label) in names)
+        {
+            fixture.Name(id, label);
+        }
+
+        var (response, url, body) = await UploadResponseAsync(client, set, batchId, rows);
+        using (response)
+        {
+            response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+            await fixture.AssertAsync(caseName, $"POST {url}", body, response);
+            return await response.Content.ReadFromJsonAsync<JsonElement>();
+        }
+    }
+
+    /// <summary>
+    /// Lets the reader reach one row, by the actions named. Every refusal here is re-asked after
+    /// a grant like this one, so a fixture that produced no row at all cannot pass as a refusal.
+    /// </summary>
+    private async Task GrantAsync(Guid featureId, string actions)
+    {
+        var response = await owner.PutAsJsonAsync($"/api/v1/objects/feature/{featureId}/access", new
+        {
+            entries = new[]
+            {
+                new
+                {
+                    subjectKind = "user",
+                    subjectId = readerId,
+                    effect = "allow",
+                    actions,
+                    scopeKind = "object",
+                },
+            },
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
     private Task<Guid> CreateSetAsync(IReadOnlyList<Guid> roots, object? settings = null) =>
         CreateSetAsync(owner, roots, settings);
 
@@ -640,12 +936,15 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable
 
     private async Task ReplaceRootsAsync(Guid set, IReadOnlyList<Guid> roots, object? settings = null)
     {
+        // Read first, because a replacement is arbitrated on the revision the caller last saw.
+        var current = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/sync/sets/{set}");
         var response = await owner.PutAsJsonAsync($"/api/v1/sync/sets/{set}", new
         {
             name = $"Phone {marker}",
             uploadVisibility = "private",
             rootFeatureIds = roots,
             settings = settings ?? new { },
+            baseRevision = current.GetProperty("revision").GetInt64(),
         });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }

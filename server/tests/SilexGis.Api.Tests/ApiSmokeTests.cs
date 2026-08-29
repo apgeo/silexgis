@@ -122,7 +122,7 @@ public sealed class ApiSmokeTests : IDisposable
         named.Select(x => x.Id).ShouldBe(
             [
                 "syncCapabilities", "syncListSets", "syncCreateSet", "syncGetSet",
-                "syncReplaceSet", "syncDeleteSet", "syncDownload",
+                "syncReplaceSet", "syncDeleteSet", "syncDownload", "syncUpload",
             ],
             ignoreOrder: true);
         named.ShouldAllBe(x => x.Path.StartsWith("/api/v1/sync", StringComparison.Ordinal));
@@ -153,9 +153,53 @@ public sealed class ApiSmokeTests : IDisposable
             + "demand one before it can obtain one.");
         loginSecurity.EnumerateArray().ShouldBeEmpty();
 
-        // A guarded route says nothing of its own and inherits the document's requirement.
-        var download = paths.GetProperty("/api/v1/sync/sets/{id}/download").GetProperty("get");
-        download.TryGetProperty("security", out _).ShouldBeFalse();
+        // A guarded route says nothing of its own and inherits the document's requirement. Both
+        // halves of the mobile contract are named, the write half included: a generated client
+        // that issued an upload with no credential would be pushing a caver's survey at whatever
+        // the server does with an unauthenticated write.
+        foreach (var route in new[] { "download", "upload" })
+        {
+            var operation = paths.GetProperty($"/api/v1/sync/sets/{{id}}/{route}");
+            var verb = operation.TryGetProperty("get", out var get) ? get : operation.GetProperty("post");
+            verb.TryGetProperty("security", out _).ShouldBeFalse();
+        }
+    }
+
+    /// <summary>
+    /// The failures a device has to act on are in the served description, not only in the code
+    /// that produces them.
+    /// </summary>
+    /// <remarks>
+    /// The application on the other side of this protocol branches on these: a stale cursor means
+    /// start again, a contract mismatch means stop and tell the caver to update, a batch that is
+    /// too large means send fewer rows. A status a generated client has never been told about is
+    /// a status it handles as "something went wrong", which for the first of those loses a
+    /// device's place in the stream and for the last is an upload that never succeeds however
+    /// many times it is retried.
+    /// </remarks>
+    [Fact]
+    public async Task OpenApi_document_declares_the_statuses_a_device_has_to_branch_on()
+    {
+        var response = await factory.CreateClient().GetAsync("/openapi/v1.json");
+        var document = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var paths = document.GetProperty("paths");
+
+        var download = paths.GetProperty("/api/v1/sync/sets/{id}/download").GetProperty("get")
+            .GetProperty("responses").EnumerateObject().Select(p => p.Name).ToList();
+        download.ShouldContain("400");
+        download.ShouldContain("404");
+        download.ShouldContain("409");
+
+        var upload = paths.GetProperty("/api/v1/sync/sets/{id}/upload").GetProperty("post")
+            .GetProperty("responses").EnumerateObject().Select(p => p.Name).ToList();
+        upload.ShouldContain("400");
+        upload.ShouldContain("404");
+        upload.ShouldContain("409");
+
+        // A row that lost its arbitration is not one of these. It rides a 200 beside the rows
+        // that were written, because a batch of forty is answered row by row — and a device told
+        // about a conflict by a status code would have to throw the other thirty-nine away.
+        upload.ShouldContain("200");
     }
 
     public void Dispose() => factory.Dispose();

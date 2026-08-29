@@ -29,6 +29,31 @@ export default function ImportBatchesTab() {
   const detail = useImportBatch(open ?? undefined);
   const revert = useRevertImportBatch();
 
+  /**
+   * What to call a batch in the file column. A batch that never had a file must not claim its
+   * file was deleted — that lie was written for photographs and is now equally available to a
+   * phone's upload, which has no file either.
+   *
+   * The switch is exhaustive on purpose. Nothing about adding a source on the server makes a
+   * label appear here, and the missing arm is silent: it falls through to "the file has been
+   * deleted" and reaches a caver as a statement about a file that never existed. With the
+   * check below, a new source stops the build instead.
+   */
+  const batchLabel = (source: ImportBatch['source'], fileName: string | null): string => {
+    switch (source) {
+      case 'photos':
+        return t('vectorImport.batchFromPhotos');
+      case 'deviceSync':
+        return t('vectorImport.batchFromDevice');
+      case 'vectorFile':
+        return fileName ?? t('vectorImport.fileGone');
+      default: {
+        const unhandled: never = source;
+        return unhandled;
+      }
+    }
+  };
+
   const onRevert = async (id: string) => {
     try {
       await revert.mutateAsync(id);
@@ -64,11 +89,7 @@ export default function ImportBatchesTab() {
             render: (name: string | null, row) => (
               <Flex vertical>
                 <Typography.Link onClick={() => setOpen(row.id)}>
-                  {/* A batch made of photographs never had a file to name, so "the file is
-                      gone" would be a lie about it rather than a fact. */}
-                  {row.source === 'photos'
-                    ? t('vectorImport.batchFromPhotos')
-                    : (name ?? t('vectorImport.fileGone'))}
+                  {batchLabel(row.source, name)}
                 </Typography.Link>
                 {row.termRuleSetName && (
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>

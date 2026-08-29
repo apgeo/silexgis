@@ -84,7 +84,7 @@ public sealed class SyncSetTests : IAsyncLifetime, IDisposable
         // a read-only server and takes what is there instead of failing at the first write.
         var features = body.GetProperty("features").EnumerateArray().Select(x => x.GetString()).ToList();
         features.ShouldContain("download");
-        features.ShouldNotContain("upload");
+        features.ShouldContain("upload");
     }
 
     [Fact]
@@ -126,13 +126,15 @@ public sealed class SyncSetTests : IAsyncLifetime, IDisposable
         // Reposting the same selection is not a change, so a device that resends what it
         // already holds is not told its copy has gone stale.
         var unchanged = await owner.PutAsJsonAsync($"/api/v1/sync/sets/{id}", Body(
-            "Field phone", roots: [readableFeatureId], settings: new { pciStrategy = "ro-default", digits = 4 }));
+            "Field phone", roots: [readableFeatureId], settings: new { pciStrategy = "ro-default", digits = 4 },
+            baseRevision: 1));
         unchanged.StatusCode.ShouldBe(HttpStatusCode.OK, await unchanged.Content.ReadAsStringAsync());
         (await unchanged.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("revision").GetInt64().ShouldBe(1);
 
         // Dropping the root is a change, and the revision is what the device compares on.
         var changed = await owner.PutAsJsonAsync($"/api/v1/sync/sets/{id}", Body(
-            "Field phone", roots: [], settings: new { pciStrategy = "ro-default", digits = 4 }));
+            "Field phone", roots: [], settings: new { pciStrategy = "ro-default", digits = 4 },
+            baseRevision: 1));
         changed.StatusCode.ShouldBe(HttpStatusCode.OK, await changed.Content.ReadAsStringAsync());
         var replaced = await changed.Content.ReadFromJsonAsync<JsonElement>();
         replaced.GetProperty("revision").GetInt64().ShouldBe(2);
@@ -283,8 +285,8 @@ public sealed class SyncSetTests : IAsyncLifetime, IDisposable
     public async Task The_lifecycle_of_a_set_writes_nothing_to_the_audit_trail()
     {
         var id = await CreateSetAsync("Audited phone");
-        (await owner.PutAsJsonAsync($"/api/v1/sync/sets/{id}", Body("Audited phone renamed"))).StatusCode
-            .ShouldBe(HttpStatusCode.OK);
+        (await owner.PutAsJsonAsync($"/api/v1/sync/sets/{id}", Body("Audited phone renamed", baseRevision: 1)))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
         (await owner.DeleteAsync($"/api/v1/sync/sets/{id}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         await using var scope = factory.Services.CreateAsyncScope();
@@ -335,17 +337,67 @@ public sealed class SyncSetTests : IAsyncLifetime, IDisposable
         factory.Dispose();
     }
 
+    /// <summary>
+    /// A replacement is arbitrated on the revision the caller last read, the same rule an
+    /// uploaded row is arbitrated on. The settings document is what makes this matter: two
+    /// devices allocating place codes from different digit widths produce codes that do not fit
+    /// together, and a stale write that won silently would leave nothing anywhere to notice it by.
+    /// </summary>
+    [Fact]
+    public async Task A_replacement_from_a_stale_copy_of_the_set_is_refused_and_the_current_one_lands()
+    {
+        var created = await owner.PostAsJsonAsync("/api/v1/sync/sets/", Body(
+            "Two writers", settings: new { pciStrategy = "ro-default", digits = 4 }));
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        // The settings page moves the set on, exactly as a caver changing the digit width would.
+        var first = await owner.PutAsJsonAsync($"/api/v1/sync/sets/{id}", Body(
+            "Two writers", settings: new { pciStrategy = "ro-default", digits = 6 }, baseRevision: 1));
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("revision").GetInt64().ShouldBe(2);
+
+        // The phone, still holding revision 1, posts the whole document back.
+        var stale = await owner.PutAsJsonAsync($"/api/v1/sync/sets/{id}", Body(
+            "Two writers", settings: new { pciStrategy = "ro-default", digits = 4 }, baseRevision: 1));
+        stale.StatusCode.ShouldBe(HttpStatusCode.Conflict, await stale.Content.ReadAsStringAsync());
+        (await stale.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString()
+            .ShouldBe("sync.set_conflict");
+
+        // Stating no revision at all is refused too, so the arbitration is not a field a caller
+        // switches off by omitting it.
+        var silent = await owner.PutAsJsonAsync($"/api/v1/sync/sets/{id}", Body(
+            "Two writers", settings: new { pciStrategy = "ro-default", digits = 4 }));
+        silent.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await silent.Content.ReadAsStringAsync());
+        (await silent.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString()
+            .ShouldBe("sync.set_revision_required");
+
+        // Neither refusal touched the stored document, and the same write on the current
+        // revision lands — without which the two above would hold for an endpoint that had
+        // stopped accepting anything.
+        var after = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/sync/sets/{id}");
+        after.GetProperty("settings").GetProperty("digits").GetInt32().ShouldBe(6);
+        after.GetProperty("revision").GetInt64().ShouldBe(2);
+
+        var fresh = await owner.PutAsJsonAsync($"/api/v1/sync/sets/{id}", Body(
+            "Two writers", settings: new { pciStrategy = "ro-default", digits = 4 }, baseRevision: 2));
+        fresh.StatusCode.ShouldBe(HttpStatusCode.OK, await fresh.Content.ReadAsStringAsync());
+        (await fresh.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("revision").GetInt64().ShouldBe(3);
+    }
+
     private static object Body(
         string name,
         Guid? group = null,
         IReadOnlyList<Guid>? roots = null,
-        object? settings = null) => new
+        object? settings = null,
+        long? baseRevision = null) => new
         {
             name,
             cavingGroupId = group,
             uploadVisibility = "private",
             rootFeatureIds = roots ?? [],
             settings = settings ?? new { },
+            baseRevision,
         };
 
     private async Task<Guid> CreateSetAsync(string name)

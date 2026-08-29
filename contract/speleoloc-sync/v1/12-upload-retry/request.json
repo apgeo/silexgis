@@ -1,0 +1,24 @@
+{
+  "batchId": "<batch>",
+  "contractVersion": 1,
+  "rows": [
+    {
+      "id": "<place>",
+      "kind": "generic",
+      "baseRevision": null,
+      "deleted": false,
+      "parentId": "<cave>",
+      "name": "Sump <marker>",
+      "featureTypeCode": "cave_place",
+      "isMain": false,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          25.501,
+          45.601
+        ]
+      },
+      "clientUpdatedAt": "<timestamp>"
+    }
+  ]
+}
