@@ -46,6 +46,8 @@ import HistoryPanel, { type HistoryRestore } from '../../components/history/Hist
 import { applyRestore } from '../../components/history/historyModel.ts';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
+import CaveOrientationPanel from '../../components/statistics/CaveOrientationPanel.tsx';
+import CaveStatisticsPanel from '../../components/statistics/CaveStatisticsPanel.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
@@ -329,6 +331,13 @@ export default function CaveDetailPage() {
       {id && <SurveySourceSection caveId={id} canEdit={canEdit} />}
 
       {id && <CenterlineSection caveId={id} canEdit={canEdit} />}
+
+      {/* Beside the line work they are measured from rather than beside the trips: these figures
+          follow the survey, and a survey uploaded today changes them without any trip being
+          written up. */}
+      {id && <CaveStatisticsPanel caveId={id} />}
+
+      {id && <CaveOrientationPanel caveId={id} />}
 
       {id && <CaveTripsSection caveId={id} />}
 
