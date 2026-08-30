@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -122,7 +123,7 @@ public static class SurveySegmentSql
                        s.to_station_name,
                        s.length_m,
                        (s.flags & {(int)SurveyShotFlags.Duplicate}) <> 0 AS is_duplicate,
-                       ST_NDims(s.geom) = 3 AS has_z,
+                       {SpatialSql.HasAltitudes("s.geom")} AS has_z,
                        ST_StartPoint(s.geom) AS a,
                        ST_EndPoint(s.geom) AS b
                 FROM survey_shots s

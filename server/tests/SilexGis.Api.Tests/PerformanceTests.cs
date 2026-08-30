@@ -530,6 +530,8 @@ public sealed class PerformanceTests : IDisposable
                     {{(short)Visibility.Authenticated}}, now(), now()
                 FROM features f
                 WHERE f.kind = {{(short)FeatureKind.Cave}}
+                  AND f.name LIKE 'Perf Cave %'
+                  AND f.geom IS NOT NULL
                 RETURNING id
             ),
             centerline_rows AS (
@@ -541,7 +543,10 @@ public sealed class PerformanceTests : IDisposable
                     ST_Multi(ST_MakeLine(c.geom, ST_Translate(c.geom, 0.001, 0.001))), 1,
                     {{(short)CenterlineSource.Uploaded}}, 100
                 FROM (SELECT id, geom, row_number() OVER (ORDER BY id) rn
-                      FROM features WHERE kind = {{(short)FeatureKind.Cave}}) c
+                      FROM features
+                      WHERE kind = {{(short)FeatureKind.Cave}}
+                        AND name LIKE 'Perf Cave %'
+                        AND geom IS NOT NULL) c
                 JOIN (SELECT id, row_number() OVER (ORDER BY id) rn FROM centerline_features) cf
                   ON cf.rn = c.rn
                 RETURNING id
@@ -555,6 +560,7 @@ public sealed class PerformanceTests : IDisposable
                 false, now(), now()
             FROM features f, file
             WHERE f.kind = {{(short)FeatureKind.Cave}}
+              AND f.name LIKE 'Perf Cave %'
             """);
 
         // Fresh bulk-loaded tables have no statistics yet (autoanalyze hasn't run) and the

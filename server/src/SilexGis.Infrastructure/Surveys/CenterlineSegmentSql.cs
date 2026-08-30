@@ -5,6 +5,7 @@ using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Geo;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -160,7 +161,7 @@ public static class CenterlineSegmentSql
         // the same walk, while a centerline that is itself withheld stays withheld even for a
         // caller who may read the cave.
         var sql = $"""
-            SELECT ST_NDims(f.geom) = 3 AS "HasZ",
+            SELECT {SpatialSql.HasAltitudes("f.geom")} AS "HasZ",
                    ST_AsEWKB(f.geom) AS "Ewkb"
             FROM centerlines c
             JOIN features f ON f.id = c.id
