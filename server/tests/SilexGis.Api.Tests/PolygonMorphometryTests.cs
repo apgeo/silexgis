@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Common;
+using SilexGis.Api.Features.Features;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -354,7 +355,15 @@ public sealed class PolygonMorphometryTests : IAsyncLifetime, IDisposable
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var (sql, parameters) = PolygonMorphometrySql.BuildForArea(
-            ctx, 26.34, 46.04, 26.37, 46.06, sinkholeTypeId, limit: 50, workingSrid);
+            ctx,
+            26.34,
+            46.04,
+            26.37,
+            46.06,
+            sinkholeTypeId,
+            limit: 50,
+            maxCandidates: FeatureMorphometryLimits.MaxCandidates,
+            workingSrid);
         var rows = await db.Database.GetDbConnection()
             .QueryAsync<PolygonMorphometryRow>(new CommandDefinition(sql, parameters));
         return [.. rows];

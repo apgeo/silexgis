@@ -23,18 +23,37 @@ const familyOfClass: Record<string, Exclude<FeatureTypeGroupKind, 'any'>> = {
   multiPolygon: 'polygon',
 };
 
+/** The drawable families a feature type accepts, with anything unrecognised dropped. */
+function familiesOf(type: Pick<FeatureType, 'acceptedGeometryClasses'>): Set<FeatureTypeGroupKind> {
+  return new Set(type.acceptedGeometryClasses.map((c) => familyOfClass[c]).filter((f) => f !== undefined));
+}
+
 /**
- * The palette group a feature type belongs to, derived from its accepted geometry
- * classes: a single family keeps its group, a mix (or an unconstrained type) is `any`.
+ * Which single geometry family a feature type is, for the purpose of arming a draw tool:
+ * a single family answers itself, a mix answers `any` — meaning "more than one, so ask".
  */
 export function geometryGroupOf(type: Pick<FeatureType, 'acceptedGeometryClasses'>): FeatureTypeGroupKind {
-  const families = new Set(
-    type.acceptedGeometryClasses.map((c) => familyOfClass[c]).filter((f) => f !== undefined),
-  );
+  const families = familiesOf(type);
   if (families.size === 1) {
     return [...families][0];
   }
   return families.size === 0 ? 'point' : 'any';
+}
+
+/**
+ * The palette group a feature type is filed under.
+ *
+ * Deliberately not the same question as the one above. A kind that accepts two families has no
+ * single family to arm a draw tool with, but it does have a place readers look for it in, and
+ * those are different answers: filing every widened kind under "Other" would move the commonest
+ * surface symbol there — a doline is a marker on a small depression and an outline on a large one
+ * — out of the group it has always been in, as a side effect of gaining a second geometry. So a
+ * kind is filed under the first family it accepts, in the order the palette lists its groups, and
+ * `any` is left for a kind that names no drawable geometry at all.
+ */
+export function paletteGroupOf(type: Pick<FeatureType, 'acceptedGeometryClasses'>): FeatureTypeGroupKind {
+  const families = familiesOf(type);
+  return FEATURE_TYPE_GROUP_ORDER.find((kind) => families.has(kind)) ?? 'point';
 }
 
 /**
@@ -75,9 +94,7 @@ export function drawShapesForType(
   if (!type) {
     return ['Point'];
   }
-  const families = new Set(
-    type.acceptedGeometryClasses.map((c) => familyOfClass[c]).filter((f) => f !== undefined),
-  );
+  const families = familiesOf(type);
   const shapes = FEATURE_TYPE_GROUP_ORDER.filter(
     (kind): kind is Exclude<FeatureTypeGroupKind, 'any'> => kind !== 'any' && families.has(kind),
   ).map((kind) => shapeOfFamily[kind]);
@@ -92,6 +109,6 @@ export function drawShapesForType(
 export function groupFeatureTypes(featureTypes: FeatureType[]): FeatureTypeGroup[] {
   return FEATURE_TYPE_GROUP_ORDER.map((kind) => ({
     kind,
-    items: featureTypes.filter((ft) => geometryGroupOf(ft) === kind),
+    items: featureTypes.filter((ft) => paletteGroupOf(ft) === kind),
   })).filter((group) => group.items.length > 0);
 }

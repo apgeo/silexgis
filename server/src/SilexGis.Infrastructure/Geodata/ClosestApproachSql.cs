@@ -90,7 +90,27 @@ public sealed record ClosestApproachRow(
 /// from the working system. There is no index over the projected geometry and deliberately so,
 /// the working system being configuration rather than something a migration could name, so both
 /// queries narrow in the stored system first — by cave id for a pair, by an index-only envelope
-/// overlap and a metre-accurate spheroid test for an area — and transform only the survivors.
+/// overlap for an area — and transform only the survivors.
+/// </para>
+/// <para>
+/// <b>What bounds the work, which is not the distance threshold.</b> The area query pairs every
+/// admitted cave with every other one, so its cost grows with the square of how many caves are
+/// admitted — and the threshold is the predicate being evaluated by that pairing, not a filter
+/// ahead of it. What bounds it is a ceiling on how many caves enter the pool at all, applied
+/// inside the narrowing CTE, in the same way the map layers cap the rows they will draw. Above
+/// that ceiling the table is built from the first caves in id order rather than from the whole
+/// box: a bounded answer to an unreasonable question, rather than a request that never returns.
+/// </para>
+/// <para>
+/// <b>Nothing on the pairing path casts a whole survey to the geography type.</b> A survey is a
+/// multi-line string with tens of thousands of components; a spheroid distance over two of them
+/// costs a detoast and a full traversal each, and the pairing evaluates its predicate once per
+/// pair with no index able to help it. So the pre-filter is a bounding-box overlap between the
+/// two projected geometries, expanded by the threshold — a header read, no traversal — and the
+/// metre-accurate test that follows it runs in the working system on the rows that survived.
+/// A plan test can only over-include, the shortest plan distance between two bodies of line work
+/// never being larger than the shortest distance in three dimensions, so nothing inside the
+/// threshold is lost by pre-filtering in two.
 /// </para>
 /// </summary>
 public static class ClosestApproachSql
@@ -109,12 +129,7 @@ public static class ClosestApproachSql
         parameters.Add(SridParameter, workingSrid);
 
         return (
-            Build(
-                shapeNarrowing: "AND c.cave_feature_id = ANY(@ca_cave_ids)",
-                pairNarrowing: string.Empty,
-                ordering: string.Empty,
-                visibleSql,
-                exactSql),
+            Build(forArea: false, "AND c.cave_feature_id = ANY(@ca_cave_ids)", visibleSql, exactSql),
             parameters);
     }
 
@@ -124,11 +139,12 @@ public static class ClosestApproachSql
     /// per-pair question about a cave the per-pair question would refuse.
     /// </summary>
     /// <param name="maxMetres">
-    /// How far apart two caves may be and still be worth reporting. It is applied on the spheroid
-    /// in the stored system, before anything is projected, which is what keeps the projection off
-    /// the whole table. A plan test can only over-include here — the shortest plan distance
-    /// between two bodies of line work is never larger than the shortest distance in three
-    /// dimensions — so nothing inside the threshold is lost by pre-filtering in two.
+    /// How far apart two caves may be and still be worth reporting, in the working system's
+    /// metres — the same metres every figure on the answer is stated in.
+    /// </param>
+    /// <param name="maxCaves">
+    /// How many caves may enter the pairing at all. This, and not the threshold, is what keeps
+    /// the quadratic pairing bounded; see the note on this class.
     /// </param>
     public static (string Sql, DynamicParameters Parameters) BuildForArea(
         AccessContext ctx,
@@ -138,6 +154,7 @@ public static class ClosestApproachSql
         double north,
         double maxMetres,
         int limit,
+        int maxCaves,
         int workingSrid)
     {
         var (visibleSql, exactSql, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
@@ -147,22 +164,20 @@ public static class ClosestApproachSql
         parameters.Add("ca_north", north);
         parameters.Add("ca_max_metres", maxMetres);
         parameters.Add("ca_limit", limit);
+        parameters.Add("ca_candidates", maxCaves);
         parameters.Add(SridParameter, workingSrid);
 
         return (
             Build(
+                forArea: true,
                 // The overlap operator is answered from the geometry index alone.
-                shapeNarrowing:
-                    "AND f.geom && ST_MakeEnvelope(@ca_west, @ca_south, @ca_east, @ca_north, 4326)",
-                pairNarrowing: $"AND {SpatialSql.WithinMetres("a.stored", "b.stored", "ca_max_metres")}",
-                ordering: "ORDER BY \"DistanceM\" ASC NULLS LAST, \"CaveAId\", \"CaveBId\"\nLIMIT @ca_limit",
+                "AND f.geom && ST_MakeEnvelope(@ca_west, @ca_south, @ca_east, @ca_north, 4326)",
                 visibleSql,
                 exactSql),
             parameters);
     }
 
-    private static string Build(
-        string shapeNarrowing, string pairNarrowing, string ordering, string visibleSql, string exactSql)
+    private static string Build(bool forArea, string shapeNarrowing, string visibleSql, string exactSql)
     {
         // Materialised on purpose: inlined — which is the planner's default for a CTE read once —
         // the projection is substituted into every column that reads it and runs once per column
@@ -170,11 +185,29 @@ public static class ClosestApproachSql
         var projected = SpatialSql.ToWorking("s.geom", SridParameter);
         var hasAltitudes = SpatialSql.HasAltitudes("f.geom");
 
+        // The ceiling on the pairing's input. Ordered so the cut is the same cut on every run of
+        // the same request rather than whatever the scan happened to reach first. The per-pair
+        // question is already narrowed to two named caves and needs none.
+        var candidateCap = forArea
+            ? "\n      ORDER BY c.cave_feature_id\n      LIMIT @ca_candidates"
+            : string.Empty;
+
+        // The bounding boxes first, then the metric test on what survives — the class note says
+        // why neither of them is a spheroid cast of a whole survey.
+        var pairNarrowing = forArea
+            ? "AND ST_Expand(a.g, @ca_max_metres) && b.g\n"
+                + "                       AND ST_DWithin(a.g, b.g, @ca_max_metres)"
+            : string.Empty;
+
         // A table of nearest pairs carries no room to say why a row is missing, so a pair
         // whose line work has no altitudes is left out of it rather than listed with nothing in
         // it. The per-pair question is asked about two named caves and can say so, which is why
         // it keeps such a pair and reports the reason instead.
-        var altitudeFilter = ordering.Length == 0 ? string.Empty : "AND a.has_z AND b.has_z";
+        var altitudeFilter = forArea ? "AND a.has_z AND b.has_z" : string.Empty;
+
+        var ordering = forArea
+            ? "ORDER BY dist ASC NULLS LAST, a_id, b_id\n                LIMIT @ca_limit"
+            : string.Empty;
 
         return $"""
             WITH shape AS MATERIALIZED (
@@ -189,13 +222,13 @@ public static class ClosestApproachSql
                   AND NOT ST_IsEmpty(f.geom)
                   {shapeNarrowing}
                   AND {visibleSql}
-                  AND {exactSql}
+                  AND {exactSql}{candidateCap}
             ),
             placed AS MATERIALIZED (
                 -- The cave itself, reached by primary key from the line work that was narrowed
                 -- above, and held to the same two tests. A cave failing either drops out with
                 -- its shape, so it is never one end of a measurement.
-                SELECT s.cave_id, f.name, s.has_z, s.geom AS stored, {projected} AS g
+                SELECT s.cave_id, f.name, s.has_z, {projected} AS g
                 FROM shape s
                 JOIN features f ON f.id = s.cave_id AND f.kind = {(short)FeatureKind.Cave}
                 WHERE f.deleted_at IS NULL
@@ -219,18 +252,28 @@ public static class ClosestApproachSql
                        ST_StartPoint(p.ln) AS pa,
                        ST_EndPoint(p.ln) AS pb
                 FROM pair p
+            ),
+            ranked AS (
+                -- Where the table is cut down to the rows it will return. Everything below this
+                -- — two transforms back to the stored system and a spheroid bearing, per row —
+                -- is presentation, and running it over every pair in the box before discarding
+                -- all but a handful would be paying for answers nobody is shown.
+                SELECT e.*, ST_3DDistance(e.pa, e.pb) AS dist
+                FROM ends e
+                {ordering}
             )
             SELECT e.a_id AS "CaveAId",
                    e.a_name AS "CaveAName",
                    e.b_id AS "CaveBId",
                    e.b_name AS "CaveBName",
                    e.has_z AS "HasAltitudes",
-                   ST_3DDistance(e.pa, e.pb) AS "DistanceM",
+                   e.dist AS "DistanceM",
                    ST_Distance(e.pa, e.pb) AS "HorizontalDistanceM",
                    abs(ST_Z(e.pb) - ST_Z(e.pa)) AS "VerticalDistanceM",
                    -- On the spheroid rather than off the working system's grid, so the bearing is
                    -- the true one every other bearing in the application is: grid north and true
-                   -- north differ by up to a few degrees across a projected zone.
+                   -- north differ by up to a few degrees across a projected zone. Two points, and
+                   -- only for the rows being returned.
                    degrees(ST_Azimuth(
                        ST_Transform(e.pa, 4326)::geography,
                        ST_Transform(e.pb, 4326)::geography)) AS "BearingDegrees",
@@ -240,8 +283,7 @@ public static class ClosestApproachSql
                    ST_X(ST_Transform(e.pb, 4326)) AS "ToLongitude",
                    ST_Y(ST_Transform(e.pb, 4326)) AS "ToLatitude",
                    ST_Z(e.pb) AS "ToAltitude"
-            FROM ends e
-            {ordering}
+            FROM ranked e
             """;
     }
 }

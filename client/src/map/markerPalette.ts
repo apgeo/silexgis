@@ -34,6 +34,17 @@ export const centerlinePalette = {
   casing: 'rgba(255, 255, 255, 0.7)',
 } as const;
 
+/**
+ * Where two caves come closest. Deliberately unlike the survey colours it is drawn among: it is
+ * not a thing that was surveyed, it is an answer to a question somebody asked, and it should not
+ * be mistaken for a passage.
+ */
+export const closestApproachPalette = {
+  line: '#0958d9',
+  /** Casing under the line and halo behind its label, so both stay legible over any basemap. */
+  casing: 'rgba(255, 255, 255, 0.85)',
+} as const;
+
 /** Where the feature-type symbol images are served from; the server sends the file name only. */
 export function featureSymbolUrl(symbolFile: string): string {
   return `/feature_symbols/${encodeURIComponent(symbolFile)}`;

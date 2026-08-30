@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SilexGis.Api.Common;
+using SilexGis.Api.Features.Caves;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -321,6 +322,77 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable
             "/api/v1/caves/closest-approaches?west=23.9&south=46.015&east=24.1&north=46.035&maxDistanceM=10"));
         tight.GetProperty("pairs").GetArrayLength().ShouldBe(0);
         tight.GetProperty("maxDistanceM").GetDouble().ShouldBe(10d);
+    }
+
+    /// <summary>
+    /// What the pairing costs per pair, asserted against the plan rather than against a clock.
+    ///
+    /// <para>
+    /// The area query compares every admitted cave with every other one, so whatever its join
+    /// evaluates runs a number of times that grows with the square of how many caves the box
+    /// holds. A cast of a survey to the geography type on that path is therefore the one shape
+    /// that cannot be allowed: a survey is a multi-line string of tens of thousands of components,
+    /// the cast detoasts and traverses the whole of it, and no index can help a comparison between
+    /// two rows of a materialised intermediate. It would pass every test in this class — the
+    /// fixtures hold three or four caves — and fall over on a real karst region.
+    /// </para>
+    /// <para>
+    /// So the plan itself is read, and every condition and filter in it is required to be free of
+    /// the geography type. The measurement is still metre-accurate: it is made in the working
+    /// system, which is what every other figure on this answer is measured in.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task No_condition_on_the_pairing_path_casts_a_survey_to_the_geography_type()
+    {
+        await CreatePairAsync();
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var (sql, parameters) = ClosestApproachSql.BuildForArea(
+            Admin(),
+            23.9,
+            45.9,
+            24.1,
+            46.1,
+            ClosestApproachLimits.DefaultDistanceM,
+            ClosestApproachLimits.DefaultRows,
+            ClosestApproachLimits.MaxCavesPaired,
+            workingSrid);
+
+        var planLines = await db.Database.GetDbConnection().QueryAsync<string>(
+            new CommandDefinition($"EXPLAIN (ANALYZE, BUFFERS)\n{sql}", parameters));
+        var plan = string.Join("\n", planLines);
+
+        var predicates = plan.Split('\n')
+            .Where(line => line.Contains("Cond:", StringComparison.Ordinal)
+                || line.Contains("Filter:", StringComparison.Ordinal))
+            .ToList();
+
+        // A plan with no conditions in it at all would pass the assertion below for the wrong
+        // reason, so the plan is first required to have narrowed anything.
+        predicates.ShouldNotBeEmpty("the plan states no conditions at all, so it cannot be read");
+
+        predicates
+            .Where(line => line.Contains("geography", StringComparison.OrdinalIgnoreCase))
+            .ShouldBeEmpty(
+                "no condition on the closest-approach path may cast to the geography type: the "
+                + "pairing evaluates its condition once per pair of caves, over whole surveys, "
+                + "with no index able to answer it");
+
+        // And the two halves that replaced it are both there: the bounding-box pre-filter, which
+        // is answered from the geometry header, and the metric test on what survived it.
+        predicates.ShouldContain(
+            line => line.Contains("st_expand", StringComparison.OrdinalIgnoreCase),
+            "the pairing must pre-filter on expanded bounding boxes");
+        predicates.ShouldContain(
+            line => line.Contains("st_dwithin", StringComparison.OrdinalIgnoreCase),
+            "the pairing must still make a metre-accurate test on what the boxes admitted");
+
+        // The ceiling on how many caves may be paired is in the plan, not merely in a constant:
+        // it is the only thing that bounds a request whose box is the whole world.
+        plan.ShouldContain("Limit", Case.Sensitive,
+            "the candidate ceiling must appear as a limit in the plan");
     }
 
     [Fact]

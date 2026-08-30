@@ -129,6 +129,7 @@ public static class CaveClosestApproachEndpoints
             request.North,
             maxDistance,
             request.Limit ?? ClosestApproachLimits.DefaultRows,
+            ClosestApproachLimits.MaxCavesPaired,
             spatial.Value.WorkingSrid);
 
         var rows = await db.Database.GetDbConnection().QueryAsync<ClosestApproachRow>(

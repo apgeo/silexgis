@@ -5,12 +5,15 @@ import type {
   AccessDomainName,
   AccessScopeKind,
   ActivityState,
+  ClosestApproach,
   SearchDocumentItem,
   TerrainBuildPhase,
   TerrainBuildSourceKind,
   TerrainBuildStatus,
   SurveyModelInfo,
 } from '../api/hooks.ts';
+import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
+import type { DrawShape } from '../map/mapEdit.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
 import {
   SEEDED_RELATION_CODES,
@@ -195,6 +198,31 @@ const terrainDepthBands: Record<TerrainDepthBand, true> = {
   coverage: true,
   fine: true,
   survey: true,
+};
+
+/**
+ * Why a measurement between two caves is missing, as the server words it. The panel looks the
+ * sentence up by the value it was sent, so a reason added on the server ships as its own lookup
+ * key exactly where the explanation belongs — and the key is built from a template, which the
+ * scan of written-out keys below cannot see. "none" is deliberately absent: it means there IS a
+ * measurement, so it never reaches the lookup and a sentence for it would be a sentence that
+ * could only ever be wrong.
+ */
+type ClosestApproachAbsent = Exclude<ClosestApproach['absence'], 'none'>;
+const closestApproachAbsences: Record<ClosestApproachAbsent, true> = {
+  noLineWork: true,
+  noAltitudes: true,
+};
+
+/**
+ * The shapes a feature can be drawn as. The chooser that appears when a kind accepts more than
+ * one of them names each by looking it up, so an unnamed shape is offered to the drawer as a raw
+ * key on the button they are about to press.
+ */
+const drawShapes: Record<DrawShape, true> = {
+  Point: true,
+  LineString: true,
+  Polygon: true,
 };
 
 // EN and RO must be maintained together.
@@ -448,6 +476,40 @@ describe('i18n locales', () => {
    * code asks for. Only literal calls are checked; keys built from a template are covered by
    * the exhaustiveness tests above, which is why those exist.
    */
+  it('every reason there is no closest approach is worded in both locales', () => {
+    const names = Object.keys(closestApproachAbsences);
+    const enNames: Record<string, string> = en.closestApproach.absence;
+    const roNames: Record<string, string> = ro.closestApproach.absence;
+    expect(names.filter((name) => !enNames[name])).toEqual([]);
+    expect(names.filter((name) => !roNames[name])).toEqual([]);
+    // And no wording outlives its reason — including a sentence for "none", which would be a
+    // sentence saying there is no measurement shown beside one.
+    expect(Object.keys(enNames).sort()).toEqual(names.sort());
+    expect(Object.keys(roNames).sort()).toEqual(names.sort());
+  });
+
+  it('every shape a feature can be drawn as is named in both locales', () => {
+    const names = Object.keys(drawShapes);
+    const enNames: Record<string, string> = en.mapEdit.shapes;
+    const roNames: Record<string, string> = ro.mapEdit.shapes;
+    expect(names.filter((name) => !enNames[name])).toEqual([]);
+    expect(names.filter((name) => !roNames[name])).toEqual([]);
+    expect(Object.keys(enNames).sort()).toEqual(names.sort());
+    expect(Object.keys(roNames).sort()).toEqual(names.sort());
+  });
+
+  it('every palette group is named in both locales', () => {
+    // Built from a template at the point of use as well, and it is the heading over a group of
+    // symbols: unnamed, the palette grows a section titled with its own lookup key.
+    const names = [...FEATURE_TYPE_GROUP_ORDER];
+    const enNames: Record<string, string> = en.mapEdit.groups;
+    const roNames: Record<string, string> = ro.mapEdit.groups;
+    expect(names.filter((name) => !enNames[name])).toEqual([]);
+    expect(names.filter((name) => !roNames[name])).toEqual([]);
+    expect(Object.keys(enNames).sort()).toEqual([...names].sort());
+    expect(Object.keys(roNames).sort()).toEqual([...names].sort());
+  });
+
   it('every translation key the code asks for by name exists', () => {
     const asked = Object.entries(sourceText)
       .filter(([file]) => !file.includes('.test.'))

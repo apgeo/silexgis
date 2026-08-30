@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { ClosestApproach } from '../../api/hooks.ts';
+import { getClosestApproachLine } from '../../workspace/closestApproachLine.ts';
 
 const { cavesSpy, approachSpy } = vi.hoisted(() => ({
   cavesSpy: vi.fn(),
@@ -83,6 +84,38 @@ describe('CaveClosestApproachSection', () => {
     showPicked({ data: { ...measured, absence: 'noAltitudes', distanceM: null } });
     expect(screen.queryByTestId('closest-approach')).toBeNull();
     expect(screen.getByText(/recorded no depths/)).toBeTruthy();
+  });
+
+  it('names the ends of the line the way the bearing is measured, on either cave\u2019s page', () => {
+    // The server reports the pair lowest id first and measures the bearing from the first cave's
+    // end to the second's. Putting the cave whose page this is first would, on half of all pages,
+    // print a direction and a bearing that disagree by a hundred and eighty degrees — and a caver
+    // following it would walk the wrong way.
+    showPicked({ data: { ...measured, caveAId: 'cave-b', caveBId: 'cave-a' } });
+    expect(screen.getByText('From Peștera A to Peștera B.')).toBeTruthy();
+  });
+
+  it('hands the shortest line to the views that can draw it, and takes it back', () => {
+    // The number is half the answer; where the two caves nearly touch is the other half, and this
+    // page has no map on it. Both ends come off the same answer as the figures beside them.
+    const { unmount } = showPicked({ data: measured });
+    expect(getClosestApproachLine()).toEqual({
+      caveAId: 'cave-a',
+      caveBId: 'cave-b',
+      from: measured.from,
+      to: measured.to,
+      label: '268.2 m',
+    });
+
+    // A line left drawn after its panel has gone is an answer with no question beside it, and
+    // nothing else would ever take it down.
+    unmount();
+    expect(getClosestApproachLine()).toBeNull();
+  });
+
+  it('draws no line when there is no measurement to draw', () => {
+    showPicked({ data: { ...measured, absence: 'noAltitudes', distanceM: null } });
+    expect(getClosestApproachLine()).toBeNull();
   });
 
   it('offers no number at all to a reader who may not place both caves', () => {

@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Card, Col, Empty, Row, Select, Statistic, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 
 import { useCaves, useClosestApproach } from '../../api/hooks.ts';
+import {
+  setClosestApproachLine,
+  type ClosestApproachLine,
+} from '../../workspace/closestApproachLine.ts';
 
 interface CaveClosestApproachSectionProps {
   caveId: string;
@@ -27,6 +31,14 @@ interface CaveClosestApproachSectionProps {
  * answer is still an answer and the same pair asked from two vantage points would triangulate away
  * whatever the snapping hid. A refusal is spelled as "no such cave", so this section shows the same
  * nothing for a guarded cave as for a cave that was never created.
+ * </p>
+ *
+ * <p>
+ * <b>The number is only half the answer.</b> What a caver is asking, when they ask how close two
+ * caves come, is where — because that is where one would dig to connect them. So the measured line
+ * is announced to the views that can draw it: the flat map draws its plan, and the 3D scene draws
+ * it through the rock at the depths its two ends were surveyed at. It is announced rather than
+ * drawn here, because this page has no map on it and must not know which views are open.
  * </p>
  *
  * <p>
@@ -65,7 +77,7 @@ export default function CaveClosestApproachSection({ caveId }: CaveClosestApproa
         data-testid="closest-approach-other"
       />
 
-      {other && <Body caveId={caveId} data={data} isError={isError} isLoading={isLoading} />}
+      {other && <Body data={data} isError={isError} isLoading={isLoading} />}
       {!other && (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -78,14 +90,23 @@ export default function CaveClosestApproachSection({ caveId }: CaveClosestApproa
 }
 
 interface BodyProps {
-  caveId: string;
   data: ReturnType<typeof useClosestApproach>['data'];
   isError: boolean;
   isLoading: boolean;
 }
 
-function Body({ caveId, data, isError, isLoading }: BodyProps) {
+function Body({ data, isError, isLoading }: BodyProps) {
   const { t } = useTranslation();
+
+  const unitMetres = t('closestApproach.unitMetres');
+
+  useEffect(() => {
+    setClosestApproachLine(drawnLine(data, unitMetres));
+    // Cleared when this section goes away as well as when the pair changes. A line left on the
+    // map after its panel has gone is an answer with no question beside it, and nothing else
+    // would ever take it down.
+    return () => setClosestApproachLine(null);
+  }, [data, unitMetres]);
 
   // A cave this reader may not place, one they may not read, and one that never existed all arrive
   // here identically, and are said in one sentence for the same reason the server answers them in
@@ -121,8 +142,14 @@ function Body({ caveId, data, isError, isLoading }: BodyProps) {
 
   // The pair is reported lowest id first however it was asked for, so which end of the bearing is
   // "from" is a property of the answer and not of the question — the name is stated beside it.
-  const fromName = data.caveAId === caveId ? data.caveAName : data.caveBName;
-  const toName = data.caveAId === caveId ? data.caveBName : data.caveAName;
+  //
+  // Which means the sentence keeps the server's order and does not put the cave whose page this
+  // is first. The bearing beside it is measured from the first cave's end of the line to the
+  // second's; naming the ends the other way round on half of all cave pages would print a
+  // direction and a bearing that disagree by a hundred and eighty degrees, and a caver following
+  // it would walk the wrong way.
+  const fromName = data.caveAName;
+  const toName = data.caveBName;
 
   return (
     <div data-testid="closest-approach" style={{ marginTop: 16 }}>
@@ -162,8 +189,35 @@ function Body({ caveId, data, isError, isLoading }: BodyProps) {
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
         {t('closestApproach.horizontalIsOfTheSameLine')}
       </Typography.Paragraph>
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+        {t('closestApproach.drawnOnMap')}
+      </Typography.Paragraph>
     </div>
   );
+}
+
+/**
+ * What the map and the scene draw, or nothing when there is no measurement to draw.
+ *
+ * Both ends and the distance come off one answer, so a drawn line and the figures beside it can
+ * never be about different pairs. The length is worded here, where there is a translator, and
+ * handed over already written: a renderer has no business deciding how a length is said, and a
+ * second place that decided it would sooner or later disagree with the figure on the panel.
+ */
+function drawnLine(
+  data: ReturnType<typeof useClosestApproach>['data'],
+  unitMetres: string,
+): ClosestApproachLine | null {
+  if (!data || data.absence !== 'none' || !data.from || !data.to || data.distanceM == null) {
+    return null;
+  }
+  return {
+    caveAId: data.caveAId,
+    caveBId: data.caveBId,
+    from: data.from,
+    to: data.to,
+    label: `${format(data.distanceM, 1)} ${unitMetres}`,
+  };
 }
 
 /** A figure to the stated number of places, or an em dash where there is not one. */

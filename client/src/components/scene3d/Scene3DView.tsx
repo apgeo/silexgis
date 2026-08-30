@@ -25,6 +25,10 @@ import {
   type CaveData3DHandle,
   type CaveData3DState,
 } from '../../scene3d/caveData3d.ts';
+import {
+  attachClosestApproach3d,
+  type ClosestApproach3DHandle,
+} from '../../scene3d/closestApproach3d.ts';
 import { geoJsonBounds } from '../../scene3d/geoJson3d.ts';
 import type { OverlayRect } from '../../scene3d/overlayPlacement.ts';
 import { activePreset, presetCamera, type Camera3DPreset } from '../../scene3d/presets3d.ts';
@@ -248,6 +252,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // ---- cave data, picking and selection ----
 
   const dataRef = useRef<CaveData3DHandle | null>(null);
+  // Where two caves come closest, if a pair has been measured. Held apart from the loader above
+  // for the same reason the walls are: nothing about it is camera-driven — it is drawn because
+  // somebody asked a question on a cave's page, and it stays until they ask a different one.
+  const approachRef = useRef<ClosestApproach3DHandle | null>(null);
   const [dataState, setDataState] = useState<CaveData3DState>(EMPTY_CAVE_DATA_3D_STATE);
   const [caveFramable, setCaveFramable] = useState(false);
 
@@ -279,9 +287,17 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     dataRef.current = data;
     const mesh = attachSurveyMesh3d(engine);
     meshRef.current = mesh;
+    // The tops are read through the loader rather than copied out of it: they change with every
+    // load, and a line hung from the tops of a moment ago would drift away from the surveys it
+    // joins.
+    const approach = attachClosestApproach3d(engine, (caveId) => data.caveSurveyTop(caveId));
+    approachRef.current = approach;
     const unsubscribeMesh = mesh.subscribe(setMeshState);
     const unsubscribeState = data.subscribe((next) => {
       setDataState(next);
+      // A load is where the survey tops are learned, and both ends of the measured line hang from
+      // them. Redrawing here is what keeps the line joined to the surveys rather than floating.
+      approach.refresh();
       // Whether there is a cave to frame changes with every load, and only the loader knows.
       setCaveFramable(data.caveBounds() !== undefined);
       // The callout holds what it was handed when the thing was clicked, and a load replaces every
@@ -384,6 +400,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       sync.detach();
       unsubscribeState();
       unsubscribeMesh();
+      approach.detach();
+      approachRef.current = null;
       data.detach();
       dataRef.current = null;
       // Releases the graphics memory the walls hold; a scene handed back with a mesh still on it
@@ -589,6 +607,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // gained relief, would be buried under its own hillside. Moving it is arithmetic on its
     // anchor, so nothing is fetched again.
     meshRef.current?.setAltitudePlacement(placement);
+    // And the measured line, whose two ends hang from the tops of two different caves under the
+    // one rule: left behind, it would join two surveys that had both moved out from under it.
+    approachRef.current?.setAltitudePlacement(placement);
   }, [placement, engineVersion, showingHere]);
 
   // Which cave's walls are held. The selection names a cave both when a cave was picked and when

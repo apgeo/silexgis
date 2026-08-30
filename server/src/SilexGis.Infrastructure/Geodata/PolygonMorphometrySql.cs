@@ -97,7 +97,9 @@ public static class PolygonMorphometrySql
         parameters.Add("mm_feature_id", featureId);
         parameters.Add(SridParameter, workingSrid);
 
-        return (Build("AND f.id = @mm_feature_id", string.Empty, visibleSql, exactSql), parameters);
+        return (
+            Build("AND f.id = @mm_feature_id", string.Empty, string.Empty, visibleSql, exactSql),
+            parameters);
     }
 
     /// <summary>
@@ -108,6 +110,15 @@ public static class PolygonMorphometrySql
     /// and is offered because the query is the same one: a box holds karst areas and cave
     /// sectors as well as dolines, and a table mixing them measures nothing in particular.
     /// </param>
+    /// <param name="maxCandidates">
+    /// How many outlines may be measured at all, which is not the same number as how many rows
+    /// come back. Every admitted outline costs a projection and an oriented envelope before the
+    /// ordering can pick the largest, and a box is free to be the whole world — so the work is
+    /// bounded here, ahead of the measuring, rather than by the row count applied after it. The
+    /// cut is made on the outlines' bounding boxes, biggest first, which is the only size an
+    /// unprojected geometry can be sorted by for free and is a close enough proxy that the
+    /// largest outlines in a box survive it.
+    /// </param>
     public static (string Sql, DynamicParameters Parameters) BuildForArea(
         AccessContext ctx,
         double west,
@@ -116,6 +127,7 @@ public static class PolygonMorphometrySql
         double north,
         long? featureTypeId,
         int limit,
+        int maxCandidates,
         int workingSrid)
     {
         var (visibleSql, exactSql, parameters) = AccessSql.FeatureLayerFragments(ctx, "f");
@@ -127,6 +139,7 @@ public static class PolygonMorphometrySql
         // the driver nothing to infer the parameter's type from.
         parameters.Add("mm_feature_type_id", featureTypeId, DbType.Int64);
         parameters.Add("mm_limit", limit);
+        parameters.Add("mm_candidates", maxCandidates);
         parameters.Add(SridParameter, workingSrid);
 
         // The overlap operator is answered from the geometry index alone. The kind filter is
@@ -135,33 +148,52 @@ public static class PolygonMorphometrySql
         const string narrowing =
             """
             AND f.geom && ST_MakeEnvelope(@mm_west, @mm_south, @mm_east, @mm_north, 4326)
-                  AND (@mm_feature_type_id IS NULL OR f.feature_type_id = @mm_feature_type_id)
+                      AND (@mm_feature_type_id IS NULL OR f.feature_type_id = @mm_feature_type_id)
             """;
 
+        // Ordered on the stored bounding box, which PostGIS keeps in the geometry's own header,
+        // so bounding the candidate set costs no traversal of the outlines it is bounding.
+        const string candidateCap =
+            "\n                      ORDER BY ST_Area(ST_Envelope(f.geom)) DESC, f.id"
+            + "\n                      LIMIT @mm_candidates";
+
         return (
-            Build(narrowing, "ORDER BY \"AreaM2\" DESC NULLS LAST, s.id\nLIMIT @mm_limit", visibleSql, exactSql),
+            Build(
+                narrowing,
+                candidateCap,
+                "ORDER BY \"AreaM2\" DESC NULLS LAST, s.id\nLIMIT @mm_limit",
+                visibleSql,
+                exactSql),
             parameters);
     }
 
     private const string SridParameter = "workingSrid";
 
-    private static string Build(string narrowing, string ordering, string visibleSql, string exactSql)
+    private static string Build(
+        string narrowing, string candidateCap, string ordering, string visibleSql, string exactSql)
     {
         // Materialised on purpose. Inlined — which is the planner's default — the transform is
         // substituted into every column that reads it and the projection runs once per column
         // rather than once per row.
-        var projected = SpatialSql.ToWorking("f.geom", SridParameter);
+        var projected = SpatialSql.ToWorking("c.geom", SridParameter);
 
+        // The candidates are chosen in a subquery of their own, and the transform is applied
+        // outside it. Written as one level, the projection sits in the select list a sort feeds
+        // from and is evaluated for every row the sort saw — which is exactly the work the
+        // ceiling exists to prevent.
         return $"""
             WITH shape AS MATERIALIZED (
-                SELECT f.id, f.name, {projected} AS g
-                FROM features f
-                WHERE f.deleted_at IS NULL
-                  AND f.geom IS NOT NULL
-                  AND ST_Dimension(f.geom) = 2
-                  {narrowing}
-                  AND {visibleSql}
-                  AND {exactSql}
+                SELECT c.id, c.name, {projected} AS g
+                FROM (
+                    SELECT f.id, f.name, f.geom
+                    FROM features f
+                    WHERE f.deleted_at IS NULL
+                      AND f.geom IS NOT NULL
+                      AND ST_Dimension(f.geom) = 2
+                      {narrowing}
+                      AND {visibleSql}
+                      AND {exactSql}{candidateCap}
+                ) c
             ),
             envelope AS MATERIALIZED (
                 SELECT s.id, s.name, s.g, ST_IsValid(s.g) AS valid,

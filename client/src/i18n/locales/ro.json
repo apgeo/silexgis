@@ -299,7 +299,8 @@
     "centerlineMaxPaths": "Limită de linii",
     "centerlineLimitsHint": "Lasă gol pentru valorile implicite ale instalării. Detaliul mai mare costă mai mult la desenare.",
     "features": "Elemente",
-    "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată."
+    "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată.",
+    "closestApproach": "Cea mai mică distanță"
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",
@@ -2663,6 +2664,7 @@
     "absence": {
       "noLineWork": "Cel puțin una dintre aceste două peșteri nu are traseu topografic din care să se măsoare.",
       "noAltitudes": "Cel puțin una dintre aceste două peșteri a fost desenată în plan și nu a înregistrat adâncimi, deci nu există o distanță tridimensională onestă."
-    }
+    },
+    "drawnOnMap": "Linia cea mai scurtă este desenată pe hartă și în vizualizarea 3D. Pe hartă vedeți doar proiecția ei în plan; în 3D trece prin rocă, la adâncimile la care au fost măsurate cele două capete."
   }
 }

@@ -131,10 +131,17 @@ public sealed record ClosestApproachTableRequest(
     int? Limit);
 
 /// <summary>
-/// Bounds on the area request. The box is checked for being a box at all, and both the threshold
-/// and the row count are capped rather than left open: the work is quadratic in how many caves the
-/// box holds, so an unbounded threshold over a continent-sized box is a request that never returns.
+/// Bounds on the area request: the box has to be a box, and the threshold and the row count are
+/// each capped.
 /// </summary>
+/// <remarks>
+/// Neither cap is what keeps the request finite, and it is worth being clear about that. The work
+/// is quadratic in how many caves the box admits; the threshold is the predicate that pairing
+/// evaluates rather than a filter ahead of it, and the row count is applied to what the pairing
+/// produced. A box is free to be the whole world, so the bound that matters is a ceiling on how
+/// many caves enter the pairing at all — <see cref="ClosestApproachLimits.MaxCavesPaired"/>, which
+/// the query applies inside its own narrowing.
+/// </remarks>
 public sealed class ClosestApproachTableRequestValidator : AbstractValidator<ClosestApproachTableRequest>
 {
     public ClosestApproachTableRequestValidator()
@@ -161,8 +168,7 @@ public sealed class ClosestApproachTableRequestValidator : AbstractValidator<Clo
 public static class ClosestApproachLimits
 {
     /// <summary>Ten kilometres. Beyond this two caves are not near each other in any sense a
-    /// caver means by the word, and the pairing work grows with the square of how many caves the
-    /// threshold admits.</summary>
+    /// caver means by the word.</summary>
     public const double MaxDistanceCeilingM = 10_000d;
 
     /// <summary>Two hundred metres, the default: close enough to be worth knowing about, and the
@@ -174,4 +180,18 @@ public static class ClosestApproachLimits
 
     /// <summary>How many it holds when nobody said.</summary>
     public const int DefaultRows = 25;
+
+    /// <summary>
+    /// How many caves may be paired against each other for one table.
+    ///
+    /// <para>
+    /// The pairing compares every admitted cave with every other one, so this number squared is
+    /// the size of the request: five hundred caves is a hundred and twenty-five thousand pairs,
+    /// which is bounded work, and no bound at all is a signed-in caller being able to ask an
+    /// installation to compare every survey it holds with every other one. It is a ceiling rather
+    /// than a page: a box holding more caves than this is a box nobody drew on purpose, and the
+    /// answer it gets is built from the first caves in id order.
+    /// </para>
+    /// </summary>
+    public const int MaxCavesPaired = 500;
 }

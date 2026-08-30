@@ -98,6 +98,7 @@ public static class FeatureMorphometryEndpoints
             request.North,
             request.FeatureTypeId,
             request.Limit ?? FeatureMorphometryLimits.DefaultRows,
+            FeatureMorphometryLimits.MaxCandidates,
             spatial.Value.WorkingSrid);
 
         var rows = await db.Database.GetDbConnection().QueryAsync<PolygonMorphometryRow>(

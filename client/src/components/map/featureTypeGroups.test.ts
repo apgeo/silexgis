@@ -6,6 +6,7 @@ import {
   drawShapesForType,
   geometryGroupOf,
   groupFeatureTypes,
+  paletteGroupOf,
 } from './featureTypeGroups.ts';
 
 function makeType(id: number, acceptedGeometryClasses: string[]): FeatureType {
@@ -17,12 +18,36 @@ describe('groupFeatureTypes', () => {
     const groups = groupFeatureTypes([
       makeType(1, ['polygon']),
       makeType(2, ['point']),
-      makeType(3, ['point', 'lineString', 'polygon']),
+      makeType(3, ['lineString', 'polygon']),
       makeType(4, ['point', 'multiPoint']),
     ]);
 
-    expect(groups.map((g) => g.kind)).toEqual(['point', 'polygon', 'any']); // no 'line'
+    expect(groups.map((g) => g.kind)).toEqual(['point', 'line', 'polygon']);
     expect(groups[0].items.map((t) => t.id)).toEqual([2, 4]);
+    // The mixed kind is filed under the first family it accepts, not moved out of the palette.
+    expect(groups[1].items.map((t) => t.id)).toEqual([3]);
+  });
+
+  it('keeps a widened kind in the group readers already look for it in', () => {
+    // The doline case. Accepting outlines as well as markers is an addition, and an addition must
+    // not take the symbol out of "Points" and put it at the bottom of the palette under "Other" —
+    // which is what grouping by "has more than one family" did.
+    const doline = makeType(1, ['point', 'multiPoint', 'polygon', 'multiPolygon']);
+    expect(paletteGroupOf(doline)).toBe('point');
+
+    const groups = groupFeatureTypes([doline, makeType(2, ['polygon'])]);
+    expect(groups.map((g) => g.kind)).toEqual(['point', 'polygon']);
+    expect(groups[0].items.map((t) => t.id)).toEqual([1]);
+
+    // And the draw tool still knows it has a choice to offer, which is the other question and
+    // must not have been answered by the grouping.
+    expect(geometryGroupOf(doline)).toBe('any');
+    expect(drawShapesForType(doline)).toEqual(['Point', 'Polygon']);
+  });
+
+  it('files a kind that names no drawable geometry under markers', () => {
+    expect(paletteGroupOf(makeType(1, []))).toBe('point');
+    expect(paletteGroupOf(makeType(2, ['geometryCollection']))).toBe('point');
   });
 
   it('treats missing geometry classes as point', () => {

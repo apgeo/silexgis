@@ -88,10 +88,16 @@ public sealed record FeatureMorphometryTableRequest(
     int? Limit);
 
 /// <summary>
-/// Bounds on the area request. The box has to be a box, and the row count is capped rather than
-/// left open: each surviving row costs a projection, so an uncapped table over a country-sized box
-/// is a request that transforms the whole feature table.
+/// Bounds on the area request: the box has to be a box, and the row count is capped.
 /// </summary>
+/// <remarks>
+/// The row count is not by itself what bounds the work, and it is worth being clear about that.
+/// Rows are ordered by measured area, so the ordering can only be done once every outline in the
+/// box has been projected and measured — the cap then discards most of that. A box is free to be
+/// the whole world, so the bound that matters is a ceiling on how many outlines are measured at
+/// all: <see cref="FeatureMorphometryLimits.MaxCandidates"/>, which the query applies inside its
+/// own narrowing.
+/// </remarks>
 public sealed class FeatureMorphometryTableRequestValidator : AbstractValidator<FeatureMorphometryTableRequest>
 {
     public FeatureMorphometryTableRequestValidator()
@@ -120,4 +126,12 @@ public static class FeatureMorphometryLimits
 
     /// <summary>How many it holds when nobody said.</summary>
     public const int DefaultRows = 100;
+
+    /// <summary>
+    /// How many outlines may be measured for one table, whatever the box asked for. Each one
+    /// costs a projection and an oriented envelope, and those run before anything can be ordered
+    /// by size — so this, and not <see cref="MaxRows"/>, is what keeps a world-sized box from
+    /// measuring every polygon an installation holds.
+    /// </summary>
+    public const int MaxCandidates = 5_000;
 }
