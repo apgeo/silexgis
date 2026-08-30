@@ -23,6 +23,7 @@
     "antd": "^6.5.0",
     "cesium": "^1.143.0",
     "dayjs": "^1.11.21",
+    "echarts": "^6.1.0",
     "i18next": "^26.3.4",
     "i18next-browser-languagedetector": "^8.2.1",
     "oidc-client-ts": "^3.5.0",

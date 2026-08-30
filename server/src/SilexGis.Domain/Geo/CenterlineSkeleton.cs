@@ -15,11 +15,18 @@ namespace SilexGis.Domain.Geo;
 /// not even visible — they only thicken the passage lines.
 /// </para>
 /// <para>
-/// How a splay is recognised. Survey files carry no flag for it, but a splay is by construction
-/// a single shot from a station to a point nothing else touches, and splays come in bunches from
-/// the same station. So: explode the geometry into individual shots, build a graph on exact
-/// coordinate identity, and drop a shot whose far end is touched by nothing else — unless it is
-/// the only such shot at its station, which is how a genuine dead-end passage tip looks.
+/// How a splay is recognised. The interchange formats a centerline is uploaded in — GeoJSON, GPX,
+/// KML — carry no flag for it, but a splay is by construction a single shot from a station to a
+/// point nothing else touches, and splays come in bunches from the same station. So: explode the
+/// geometry into individual shots, build a graph on exact coordinate identity, and drop a shot
+/// whose far end is touched by nothing else — unless it is the only such shot at its station,
+/// which is how a genuine dead-end passage tip looks.
+/// </para>
+/// <para>
+/// This is a guess, and it is only made where there is nothing better. A compiled survey export
+/// states per leg whether it is a splay, so a centerline read out of one says which shots are
+/// passage instead of inferring it, and asks for <see cref="Sew"/> rather than <see cref="Build"/>.
+/// The guess remains correct for everything else, and remains what the uploaded formats get.
 /// </para>
 /// <para>
 /// Three details are load-bearing, each established by measurement against real exports:
@@ -50,7 +57,41 @@ public static class CenterlineSkeleton
     /// surface map; the stored survey keeps its altitudes). Returns an empty geometry for
     /// empty input.
     /// </summary>
-    public static MultiLineString Build(MultiLineString lines)
+    public static MultiLineString Build(MultiLineString lines) => Reduce(lines, keepAltitude: false);
+
+    /// <summary>
+    /// The same skeleton as <see cref="Build"/>, with the altitude of every station kept on the
+    /// output. Plan geometry is identical — the reduction is the same one, and the two differ only
+    /// in whether the coordinates that come out carry Z.
+    /// </summary>
+    /// <remarks>
+    /// The 2D form is what the map overlay draws and what the stored skeleton column can hold. A
+    /// measurement over passage — how steep it is, how deep it goes, how its bearings distribute
+    /// with height — needs the third coordinate, and for a cave whose centerline arrived as an
+    /// uploaded file there is no other source of it. That is what this exists for; nothing draws it.
+    /// </remarks>
+    public static MultiLineString Build3D(MultiLineString lines) => Reduce(lines, keepAltitude: true);
+
+    /// <summary>
+    /// The skeleton of a centerline whose splays are already known: the shots given, sewn into
+    /// maximal polylines, with nothing pruned. Flattened to 2D, like <see cref="Build"/>, because
+    /// this is the same overlay geometry and the same column holds it.
+    /// </summary>
+    /// <remarks>
+    /// For a survey read out of a compiled export, which states per leg whether it is a splay.
+    /// The caller passes the legs that are passage and this only does the sewing, because guessing
+    /// again on top of an answer that is already correct would drop the tip of every dead end for
+    /// nothing.
+    /// </remarks>
+    public static MultiLineString Sew(MultiLineString lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+
+        var (segments, nodes) = Explode(lines);
+        return Merge(segments, nodes, keepAltitude: false);
+    }
+
+    private static MultiLineString Reduce(MultiLineString lines, bool keepAltitude)
     {
         ArgumentNullException.ThrowIfNull(lines);
 
@@ -94,7 +135,7 @@ public static class CenterlineSkeleton
         // hanging off one station, indistinguishable from a fan, so the rule would erase it
         // outright. Nothing is a better answer than everything here: fall back to the unpruned
         // network, still sewn into polylines. Large surveys never reach this branch.
-        return Merge(kept.Count == 0 ? segments : kept, nodes);
+        return Merge(kept.Count == 0 ? segments : kept, nodes, keepAltitude);
     }
 
     /// <summary>Number of line components in a geometry (0 when null or empty).</summary>
@@ -173,7 +214,8 @@ public static class CenterlineSkeleton
     /// exactly two of them meet. Degrees are recomputed over the retained set — before
     /// pruning, a station carrying thirty splays is a junction and nothing would merge.
     /// </summary>
-    private static MultiLineString Merge(List<(int A, int B)> kept, List<Coordinate> nodes)
+    private static MultiLineString Merge(
+        List<(int A, int B)> kept, List<Coordinate> nodes, bool keepAltitude)
     {
         if (kept.Count == 0)
         {
@@ -193,6 +235,14 @@ public static class CenterlineSkeleton
 
         var used = new bool[kept.Count];
         var lines = new List<LineString>();
+
+        // The nodes carry whatever altitude the input had; a source with none reads back as NaN,
+        // which PostGIS and every consumer would rather see as a flat zero than as a hole.
+        Coordinate Vertex(int node) =>
+            keepAltitude
+                ? new CoordinateZ(
+                    nodes[node].X, nodes[node].Y, double.IsNaN(nodes[node].Z) ? 0 : nodes[node].Z)
+                : new Coordinate(nodes[node].X, nodes[node].Y);
 
         void Walk(int start)
         {
@@ -230,7 +280,7 @@ public static class CenterlineSkeleton
                 }
             }
 
-            lines.Add(new LineString([.. chain.Select(n => new Coordinate(nodes[n].X, nodes[n].Y))]) { SRID = 4326 });
+            lines.Add(new LineString([.. chain.Select(Vertex)]) { SRID = 4326 });
         }
 
         // Start where a chain has to end, so the walk produces maximal polylines rather than

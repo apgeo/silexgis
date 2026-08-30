@@ -323,7 +323,8 @@
     "centerlineMaxPaths": "Line budget",
     "centerlineLimitsHint": "Leave empty to follow this installation's defaults. Higher detail costs more to draw.",
     "features": "Features",
-    "locationWithheld": "Location withheld — exact geometry is protected."
+    "locationWithheld": "Location withheld — exact geometry is protected.",
+    "closestApproach": "Closest approach"
   },
   "dialog": {
     "dockToSide": "Dock to the side of the map",
@@ -861,6 +862,11 @@
       "line": "Lines",
       "polygon": "Areas",
       "any": "Other"
+    },
+    "shapes": {
+      "Point": "Marker",
+      "LineString": "Line",
+      "Polygon": "Outline"
     }
   },
   "trips": {
@@ -1362,7 +1368,68 @@
     "metresOfRope": "Rope",
     "surveyStations": "Survey stations",
     "incidents": "Trips with an incident",
-    "photographs": "Photographs"
+    "photographs": "Photographs",
+    "orientation": {
+      "rose": "Passage rose",
+      "weighting": "Weighting",
+      "byLength": "By length",
+      "byCount": "By count",
+      "north": "N",
+      "east": "E",
+      "south": "S",
+      "west": "W",
+      "ringLabel": "{{value}}%",
+      "meanAxis": "Mean trend {{value}}°",
+      "roseDescriptionLength": "Passage trends over {{sectors}} sectors of {{width}}°, north up, weighted by surveyed length. Each trend is drawn on both sides of the diagram because a passage running one way and the same passage surveyed from its other end are one trend, not two. The strongest is {{from}}–{{to}}°, carrying {{percent}}% of the length.",
+      "roseDescriptionCount": "Passage trends over {{sectors}} sectors of {{width}}°, north up, weighted by the number of survey legs. Each trend is drawn on both sides of the diagram because a passage running one way and the same passage surveyed from its other end are one trend, not two. The strongest is {{from}}–{{to}}°, carrying {{percent}}% of the legs.",
+      "title": "Passage orientation",
+      "dipAxis": "Inclination",
+      "legs": "Survey legs",
+      "countAxis": "Count axis",
+      "linearCount": "Linear",
+      "logCount": "Logarithmic",
+      "degrees": "{{value}}°",
+      "loading": "Working the figures out.",
+      "meanSteepness": "Mean steepness {{value}}° from level, ignoring whether a leg climbs or descends.",
+      "dipRefusedTitle": "Steepness cannot be worked out",
+      "dipRefusedReason": "This line work carries no altitudes, so nothing in it says whether a passage climbs or descends. Drawing it anyway would show the cave as level everywhere, which is a statement about the cave and not one this drawing can make.",
+      "noTrendTitle": "No direction can be worked out",
+      "noTrendReason": "Nothing in this line work runs anywhere on the map: every surveyed leg either drops straight down, climbs straight up, or is marked as passage already surveyed on another trip. A cave of pure pitches is the ordinary case for this. There is no trend to draw here, which is a statement about the line work and not about the cave — the lengths beside it were measured from the same survey and stand."
+    },
+    "cave": {
+      "title": "Survey statistics",
+      "nothingMeasured": "This cave has no line work to measure. Nothing here is computed from a survey.",
+      "totalLength": "Length surveyed",
+      "planLength": "Length in plan",
+      "verticalExtent": "Vertical extent",
+      "maximumExtent": "Greatest span",
+      "verticality": "Verticality",
+      "horizontality": "Horizontality",
+      "linearity": "Linearity",
+      "sinuosity": "Sinuosity",
+      "segments": "Segments",
+      "paths": "Paths",
+      "highest": "Highest point",
+      "lowest": "Lowest point",
+      "lengthToDepth": "Length to depth",
+      "pathSinuosityTitle": "Sinuosity of the longest passages",
+      "path": "Passage",
+      "pathNumber": "#{{value}}",
+      "pathLength": "Length",
+      "straightLine": "Straight line",
+      "lengthAgainstRecord": "Length against the record",
+      "depthAgainstRecord": "Depth against the record",
+      "notComputed": "Not computed from this cave's line work.",
+      "notDeclared": "{{computed}} computed; nothing written in the record to compare it with.",
+      "against": "{{computed}} computed, {{declared}} in the record, a difference of {{difference}}.",
+      "disagreementTitle": "The survey and the record do not agree",
+      "disagreementBody": "A figure computed from this cave's line work differs from the one written in its record. Neither is automatically the wrong one: a typed-in morphometry is frequently older than the survey it is being compared against, and a survey can be incomplete. Check which is the more recent before changing either.",
+      "basisSurveyFlags": "Measured from the compiled survey, using the surveyor's own flags to decide which shots are passage. This is what these figures are defined as.",
+      "hasAltitudes": "This line work carries altitudes, so the vertical figures above are measured from it rather than assumed.",
+      "noAltitudes": "This line work carries no altitudes — a plan drawing of a cave is not a flat cave. Every vertical figure above is therefore left blank rather than shown as nought: nothing here says how far the cave descends, which is a statement about the drawing and not about the cave.",
+      "measuredFromModel": "Measured from the survey \"{{name}}\". A cave may hold several uploaded surveys, and figures taken from two different ones are not the same measurement.",
+      "basisSkeletonHeuristic": "Approximated from the stored centerline, because this cave has no compiled survey carrying per-shot flags. The shape of the line work stands in for the surveyor's flags: it keeps most of the surveyed length but drops loose shots at a station, and with them the last few metres of every dead end. These figures should not be set against a cave measured from its survey as though the two were the same measurement."
+    }
   },
   "permissions": {
     "title": "Permissions",
@@ -1705,9 +1772,9 @@
     "status": "State",
     "statusValues": {
       "ready": "Ready",
-      "pending": "Waiting to be converted",
-      "processing": "Converting",
-      "failed": "Could not be converted"
+      "pending": "Waiting its turn",
+      "processing": "In progress",
+      "failed": "Could not be processed"
     },
     "formats": {
       "lox": "Therion .lox",
@@ -1742,7 +1809,12 @@
       "notFound": "This survey model no longer exists.",
       "caveNotFound": "This cave no longer exists.",
       "forbidden": "You are not allowed to change this cave's survey models."
-    }
+    },
+    "reading": "The survey is being read into its stations and shots. The plot can be viewed already; this list updates itself when the reading is done.",
+    "readingFailed": "The survey could not be read.",
+    "plotDeclaration": "Where this survey sits in the world",
+    "plotDeclarationRequiredHint": "A .lox file has no field for a coordinate system, so it never says where it is. Say what its numbers mean — without this the survey cannot be placed, and nothing can be read out of it.",
+    "plotDeclarationOptionalHint": "A .3d file states its own coordinate system only when the survey was compiled with one. If this one does, that is used and what you give here is ignored; if it does not, this is the only thing that can place it."
   },
   "centerlines": {
     "title": "Centerlines",
@@ -3133,5 +3205,88 @@
     "loadFailed": "The work areas could not be loaded.",
     "truncated": "Not every work area is shown: this installation holds more than this view lists.",
     "subAreaCount": "Areas inside: {{count}}"
+  },
+  "surveySources": {
+    "title": "Survey sources",
+    "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on; nothing here is read or interpreted.",
+    "upload": "Archive a source",
+    "uploaded": "Source archived",
+    "uploadFailed": "The file could not be archived",
+    "acceptHint": "Therion .th, .th2 and .thconfig, Survex .svx, a compilation .log, or a survey app's .zip export — up to 100 MB.",
+    "kind": "Kind",
+    "size": "Size",
+    "revision": "Revision",
+    "download": "Download",
+    "empty": "No sources archived yet",
+    "deleteConfirm": "Remove this source from the cave's archive? The stored file itself is kept.",
+    "kinds": {
+      "therionSource": "Therion source",
+      "therionConfig": "Therion .thconfig",
+      "therionLog": "Compilation log",
+      "survexSource": "Survex .svx",
+      "topoDroidArchive": "Survey app export"
+    },
+    "problems": {
+      "formatUnsupported": "Archive a survey source: Therion .th, .th2 or .thconfig, Survex .svx, a compilation .log, or a survey app's .zip export.",
+      "contentMismatch": "This file is not what its name says it is. A survey source has to be the format its extension claims.",
+      "sizeInvalid": "The file is empty or larger than 100 MB.",
+      "nameInvalid": "The file's name is too long to archive. Rename it to 255 characters or fewer and try again.",
+      "descriptionInvalid": "The description is too long; keep it to 4000 characters or fewer.",
+      "notFound": "This archived source no longer exists.",
+      "caveNotFound": "This cave no longer exists.",
+      "forbidden": "You are not allowed to change this cave's survey archive."
+    }
+  },
+  "karstStats": {
+    "count": "Caves",
+    "depthAxis": "Depth (m)",
+    "lengthAxis": "Surveyed length (m)",
+    "nothingMeasured": "No cave on this page has a surveyed length.",
+    "powerLawFit": "Power-law fit (exponent {{exponent}})",
+    "rank": "Rank",
+    "regression": "Fit: slope {{slope}}, R² {{r2}}",
+    "scopeNote": "Computed from the {{shown}} of {{total}} caves on this page that carry a surveyed length. Caves without one are absent rather than counted as zero.",
+    "title": "Distributions",
+    "viewByType": "By type",
+    "viewHistogram": "Length",
+    "viewLengthDepth": "Length vs depth",
+    "viewRankSize": "Rank–size"
+  },
+  "morphometry": {
+    "title": "Measured shape",
+    "area": "Area",
+    "perimeter": "Perimeter",
+    "circularity": "Circularity",
+    "longAxis": "Long axis",
+    "shortAxis": "Short axis",
+    "elongation": "Elongation",
+    "longAxisAzimuth": "Long-axis bearing",
+    "centroid": "Centre",
+    "unitMetres": "m",
+    "unitSquareMetres": "m²",
+    "unitDegrees": "°",
+    "invalidGeometry": "This outline crosses itself, so it has no measurable area or shape. Redraw it before reading anything from it.",
+    "measuredInWorkingSystem": "Measured in metres in this installation's working coordinate system, not in the degrees the outline is stored in.",
+    "axisIsNotABearing": "The long-axis bearing is an alignment, not a direction: it runs from 0° to 180°, so 170° and 350° are the same alignment."
+  },
+  "closestApproach": {
+    "title": "Closest approach",
+    "pickOther": "Choose another cave",
+    "pickOtherHint": "Choose a second cave to measure how close the two come to each other.",
+    "distance": "Shortest distance",
+    "horizontal": "Horizontal",
+    "vertical": "Vertical",
+    "bearing": "Bearing",
+    "unitMetres": "m",
+    "unitDegrees": "°",
+    "between": "From {{from}} to {{to}}.",
+    "horizontalIsOfTheSameLine": "The horizontal and vertical figures are the two parts of that same shortest line, not the shortest distance across and the shortest distance down, which are different pairs of points.",
+    "unavailable": "No distance for this pair",
+    "unavailableWhy": "A distance between two caves places each of them from the other, so it is given only to a reader who may see exactly where both are.",
+    "absence": {
+      "noLineWork": "At least one of these two caves has no line work to measure from.",
+      "noAltitudes": "At least one of these two caves was drawn in plan and recorded no depths, so there is no honest distance in three dimensions."
+    },
+    "drawnOnMap": "The shortest line is drawn on the map and in the 3D view. On the map you see its plan only; in 3D it runs through the rock at the depths its two ends were surveyed at."
   }
 }

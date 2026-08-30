@@ -2,3 +2,10 @@
 **/obj/
 **/TestResults/
 Dockerfile
+# The survey-reader submodule is a whole desktop application, of which this image builds one
+# leaf library. Its shell, tests, benchmarks and documentation are most of its size and none of
+# its use here, so they stay out of the build context.
+external/ThIDE/ThIDE/
+external/ThIDE/tests/
+external/ThIDE/benchmarks/
+external/ThIDE/docs/

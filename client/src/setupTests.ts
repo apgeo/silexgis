@@ -1,5 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+import { afterEach } from 'vitest';
+
+// Testing Library registers its own automatic unmount only when the runner exposes its hooks
+// as globals, and this project keeps them as explicit imports. Without that unmount, every
+// component a test file renders stays mounted for the life of the file, and React's concurrent
+// scheduler keeps posting work for them on the macrotask queue. When the DOM environment is
+// disposed at the end of the file, a callback that is still queued wakes to find no `window`
+// and throws an unhandled ReferenceError — attributed to whichever file happened to finish
+// last, which is why it moved between runs and never pointed at the file that caused it.
+// Unmounting after each test drains that work while the environment still exists.
+afterEach(cleanup);
 import i18n from './i18n';
 
 // The application opens in Romanian; the tests read English.
@@ -54,9 +66,19 @@ if (!window.ResizeObserver) {
 // builds its colour gradient through a canvas context the moment it is constructed,
 // which would throw under jsdom. A minimal stub covering the handful of calls that
 // gradient construction makes lets such layers be unit-tested without a real canvas.
+//
+// The stub also answers text measurement, which the charting library needs even when it
+// draws vectors rather than pixels: it lays an axis out by asking how wide each label
+// will be, and an unanswered question throws before anything is drawn. The width returned
+// is proportional, not real — there are no fonts here to measure against. That is the
+// right trade because nothing asserts on pixel positions; what matters is that layout
+// completes, so the labels, boxes and paths become elements a test can look at. Anything
+// that did depend on a true width would be depending on which fonts happen to be
+// installed on the machine running the tests.
 if (typeof HTMLCanvasElement !== 'undefined') {
   HTMLCanvasElement.prototype.getContext = function stubGetContext(this: HTMLCanvasElement) {
     const gradient = { addColorStop() {} };
+    let font = '12px sans-serif';
     return {
       canvas: this,
       createLinearGradient: () => gradient,
@@ -64,9 +86,40 @@ if (typeof HTMLCanvasElement !== 'undefined') {
       clearRect() {},
       drawImage() {},
       putImageData() {},
+      save() {},
+      restore() {},
+      beginPath() {},
+      closePath() {},
+      moveTo() {},
+      lineTo() {},
+      stroke() {},
+      fill() {},
+      translate() {},
+      scale() {},
+      rotate() {},
+      setTransform() {},
+      measureText: (text: string) => {
+        const size = Number.parseFloat(/(\d+(?:\.\d+)?)px/.exec(font)?.[1] ?? '12');
+        const width = text.length * size * 0.5;
+        return {
+          width,
+          actualBoundingBoxLeft: 0,
+          actualBoundingBoxRight: width,
+          actualBoundingBoxAscent: size * 0.8,
+          actualBoundingBoxDescent: size * 0.2,
+          fontBoundingBoxAscent: size * 0.8,
+          fontBoundingBoxDescent: size * 0.2,
+        } as unknown as TextMetrics;
+      },
       getImageData: (_x: number, _y: number, w: number, h: number) => ({
         data: new Uint8ClampedArray(Math.max(1, w * h * 4)),
       }),
+      set font(v: string) {
+        font = v;
+      },
+      get font() {
+        return font;
+      },
       set fillStyle(_v: unknown) {},
       get fillStyle() {
         return '';

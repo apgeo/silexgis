@@ -4658,6 +4658,66 @@ namespace SilexGis.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyLrud", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<double?>("DownM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("down_m");
+
+                    b.Property<double?>("LeftM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("left_m");
+
+                    b.Property<double?>("RightM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("right_m");
+
+                    b.Property<short?>("Section")
+                        .HasColumnType("smallint")
+                        .HasColumnName("section");
+
+                    b.Property<long?>("ShotId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("shot_id");
+
+                    b.Property<string>("StationName")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("station_name");
+
+                    b.Property<Guid>("SurveyModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_model_id");
+
+                    b.Property<double?>("UpM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("up_m");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_lrud");
+
+                    b.HasIndex("ShotId")
+                        .HasDatabaseName("ix_survey_lrud_shot_id");
+
+                    b.HasIndex("SurveyModelId", "StationName")
+                        .HasDatabaseName("ix_survey_lrud_survey_model_id_station_name");
+
+                    b.ToTable("survey_lrud", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_lrud_measured", "left_m is not null or right_m is not null or up_m is not null or down_m is not null");
+
+                            t.HasCheckConstraint("ck_survey_lrud_non_negative", "(left_m is null or left_m >= 0) and (right_m is null or right_m >= 0) and (up_m is null or up_m >= 0) and (down_m is null or down_m >= 0)");
+                        });
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.SurveyModel", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4693,6 +4753,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(4000)")
                         .HasColumnName("description");
 
+                    b.Property<int?>("DroppedShotCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("dropped_shot_count");
+
                     b.Property<Guid>("FileId")
                         .HasColumnType("uuid")
                         .HasColumnName("file_id");
@@ -4700,6 +4764,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<short>("Format")
                         .HasColumnType("smallint")
                         .HasColumnName("format");
+
+                    b.Property<int?>("MergedStationCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("merged_station_count");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -4749,6 +4817,180 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_survey_models_file_id");
 
                     b.ToTable("survey_models", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyShot", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Flags")
+                        .HasColumnType("integer")
+                        .HasColumnName("flags");
+
+                    b.Property<string>("FromStationName")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("from_station_name");
+
+                    b.Property<LineString>("Geom")
+                        .IsRequired()
+                        .HasColumnType("geometry(LineStringZ, 4326)")
+                        .HasColumnName("geom");
+
+                    b.Property<double>("LengthM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("length_m");
+
+                    b.Property<long>("RawFlags")
+                        .HasColumnType("bigint")
+                        .HasColumnName("raw_flags");
+
+                    b.Property<Guid>("SurveyModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_model_id");
+
+                    b.Property<string>("SurveyName")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("survey_name");
+
+                    b.Property<string>("ToStationName")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("to_station_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_shots");
+
+                    b.HasIndex("Geom")
+                        .HasDatabaseName("ix_survey_shots_geom");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geom"), "gist");
+
+                    b.HasIndex("SurveyModelId")
+                        .HasDatabaseName("ix_survey_shots_survey_model_id");
+
+                    b.ToTable("survey_shots", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_survey_shots_two_points", "st_npoints(geom) = 2");
+                        });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveySource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CaveFeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cave_feature_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<short>("Kind")
+                        .HasColumnType("smallint")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("original_file_name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_sources");
+
+                    b.HasIndex("CaveFeatureId")
+                        .HasDatabaseName("ix_survey_sources_cave_feature_id");
+
+                    b.HasIndex("DocumentId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_survey_sources_document_id");
+
+                    b.ToTable("survey_sources", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyStation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("FileStationId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("file_station_id");
+
+                    b.Property<int>("Flags")
+                        .HasColumnType("integer")
+                        .HasColumnName("flags");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("name");
+
+                    b.Property<Point>("Position")
+                        .IsRequired()
+                        .HasColumnType("geometry(PointZ, 4326)")
+                        .HasColumnName("position");
+
+                    b.Property<long>("RawFlags")
+                        .HasColumnType("bigint")
+                        .HasColumnName("raw_flags");
+
+                    b.Property<Guid>("SurveyModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_model_id");
+
+                    b.Property<string>("SurveyName")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("survey_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_survey_stations");
+
+                    b.HasIndex("Position")
+                        .HasDatabaseName("ix_survey_stations_position");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Position"), "gist");
+
+                    b.HasIndex("SurveyModelId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_survey_stations_survey_model_id_name");
+
+                    b.ToTable("survey_stations", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Tag", b =>
@@ -7249,6 +7491,24 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_files_document_versions_document_version_id");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyLrud", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.SurveyShot", "Shot")
+                        .WithMany()
+                        .HasForeignKey("ShotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_survey_lrud_survey_shots_shot_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.SurveyModel", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyModelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_lrud_survey_models_survey_model_id");
+
+                    b.Navigation("Shot");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.SurveyModel", b =>
                 {
                     b.HasOne("SilexGis.Domain.Entities.Cave", null)
@@ -7270,6 +7530,43 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_survey_models_files_file_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyShot", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.SurveyModel", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyModelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_shots_survey_models_survey_model_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveySource", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Cave", null)
+                        .WithMany()
+                        .HasForeignKey("CaveFeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_sources_caves_cave_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_sources_documents_document_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyStation", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.SurveyModel", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyModelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_stations_survey_models_survey_model_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Tagging", b =>

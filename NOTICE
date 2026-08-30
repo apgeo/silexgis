@@ -12,6 +12,22 @@ This repository redistributes the following third-party works. Their own license
 apply to those files and are reproduced alongside them.
 
 --------------------------------------------------------------------------------
+ThIDE — Therion.Blender
+--------------------------------------------------------------------------------
+Readers for the compiled cave-survey formats (Therion Loch .lox and Survex .3d).
+Not vendored: the source is a Git submodule at server/external/ThIDE, pinned to
+the commit below, and the built assembly is redistributed inside the server image.
+
+  Source:    https://github.com/apgeo/ThIDE
+  Commit:    25dfc7042f6eed50a3cbc67c8c96484898eb2ef2
+  License:   MPL-2.0 — see server/external/ThIDE/src/Therion.Blender/LICENSE
+
+The Mozilla Public License is file-level copyleft, and these sources are
+deliberately not marked "Incompatible With Secondary Licenses", so they combine
+into this work's AGPL-3.0-or-later terms under MPL-2.0 section 3.3. Modifications
+to the MPL-covered files are published in the repository named above.
+
+--------------------------------------------------------------------------------
 CaveView.js
 --------------------------------------------------------------------------------
 A 3D cave-survey viewer, vendored as a prebuilt runtime bundle under

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import {
   useCaveSummary,
   useUploadSurveyModel,
-  type SurveyMeshDeclaration,
+  type SurveySourceDeclaration,
 } from '../../api/hooks.ts';
 import { formatSize } from '../../components/attachments/fileFormat.ts';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
@@ -20,9 +20,31 @@ const LOWEST_HEIGHT_M = -500;
 const HIGHEST_HEIGHT_M = 9000;
 
 /**
- * A wall mesh is bare triangles with no coordinate system in the file, so its uploader has to
- * declare one. The line-plot formats carry their own georeferencing and are asked nothing.
+ * How much the uploader has to say about where a file sits, which the file's own format decides.
+ *
+ * <b>required</b> — nothing in the file can answer. A wall mesh is bare triangles with no
+ * coordinate system anywhere in it, and a Therion plot has no field for one either, so both are a
+ * pile of numbers until somebody says what the numbers mean. Left unanswered the survey is not
+ * placed wrongly, it is not placed at all: the reading fails, and there is no screen afterwards
+ * that can supply the missing position.
+ *
+ * <b>optional</b> — a Survex plot has a field naming its coordinate system, which an export fills
+ * in only when the survey was compiled with one declared. When it is filled in the file places
+ * itself and what is given here is not used; when it is not, this is again the only answer there
+ * is. Neither can be told apart from the outside, so the questions are offered and demanded of
+ * nobody.
  */
+function declarationNeed(file: File | undefined): 'none' | 'required' | 'optional' {
+  if (file === undefined) {
+    return 'none';
+  }
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.stl') || name.endsWith('.lox')) {
+    return 'required';
+  }
+  return name.endsWith('.3d') ? 'optional' : 'none';
+}
+
 function isWallMesh(file: File | undefined): boolean {
   return file !== undefined && file.name.toLowerCase().endsWith('.stl');
 }
@@ -36,13 +58,15 @@ interface DeclarationForm {
 }
 
 /**
- * Uploading a survey model, and — for a wall mesh — collecting what the conversion cannot work out
- * for itself.
+ * Uploading a survey model, and collecting what reading it cannot work out for itself.
  *
  * <b>Why the questions are asked at all.</b> An `.stl` is a triangle soup: no coordinate system, no
  * datum, nothing that says where on Earth the numbers are. Read as the neighbouring projected zone
  * the very same file lands hundreds of kilometres away, in a valid-looking place, so the system is
- * declared rather than guessed. And the height in these files is measured from the export's own
+ * declared rather than guessed. The compiled line plots are barely better — one format has no field
+ * for a coordinate system at all and the other only sometimes carries one — and they are now read
+ * into stations and shots rather than only drawn, so the same answer places them and the same
+ * silence stops them being placed. And the height in these files is measured from the export's own
  * origin, never above sea level — the highest value across a set of real cave exports was 38 m, in
  * a country whose caves sit between 200 and 2000 — so the altitude of the file's zero plane is
  * asked for separately.
@@ -99,6 +123,13 @@ export default function SurveyModelUploadModal({
         ? 'obfuscated'
         : 'noEntrance';
 
+  const need = declarationNeed(file);
+  const asked = need !== 'none';
+
+  // Demanded only where nothing in the file could answer. Where the file may answer for itself the
+  // same fields are offered and left empty, because refusing an upload for not repeating what the
+  // export already states would block the ordinary case to catch the other one.
+  const demanded = need === 'required';
   const mesh = isWallMesh(file);
   const coordinates = Form.useWatch('coordinates', form) ?? 'local';
 
@@ -112,7 +143,7 @@ export default function SurveyModelUploadModal({
   // say the fields were filled in from the entrance while sitting over two empty required ones.
   // Anything the uploader has typed themselves wins: this only ever fills a field nobody touched.
   useEffect(() => {
-    if (!mesh || originLongitude === undefined || originLatitude === undefined) {
+    if (!asked || originLongitude === undefined || originLatitude === undefined) {
       return;
     }
     const fill: Partial<DeclarationForm> = {};
@@ -125,7 +156,7 @@ export default function SurveyModelUploadModal({
     if (Object.keys(fill).length > 0) {
       form.setFieldsValue(fill);
     }
-  }, [mesh, originLongitude, originLatitude, form]);
+  }, [asked, originLongitude, originLatitude, form]);
 
   const close = () => {
     form.resetFields();
@@ -138,8 +169,8 @@ export default function SurveyModelUploadModal({
     if (!file) {
       return;
     }
-    let declaration: SurveyMeshDeclaration | undefined;
-    if (mesh) {
+    let declaration: SurveySourceDeclaration | undefined;
+    if (asked) {
       let values: DeclarationForm;
       try {
         values = await form.validateFields();
@@ -151,11 +182,14 @@ export default function SurveyModelUploadModal({
       // properties in without being checked against the target type, so a field the server had
       // renamed would still compile here and be refused at run time by every upload; a literal
       // assigned straight to the contract's own type is checked name by name.
+      //
+      // A half nobody answered goes as undefined and is left off the request entirely, which is
+      // what a file that places itself sends and what the server reads as nothing said.
       declaration =
         values.coordinates === 'projected'
-          ? { originHeightM: values.originHeightM!, sourceEpsg: values.sourceEpsg }
+          ? { originHeightM: values.originHeightM, sourceEpsg: values.sourceEpsg }
           : {
-              originHeightM: values.originHeightM!,
+              originHeightM: values.originHeightM,
               originLongitude: values.originLongitude,
               originLatitude: values.originLatitude,
             };
@@ -211,7 +245,7 @@ export default function SurveyModelUploadModal({
         />
       )}
 
-      {mesh && (
+      {asked && (
         <Form
           form={form}
           layout="vertical"
@@ -222,9 +256,17 @@ export default function SurveyModelUploadModal({
             originLatitude: exactOrigin?.latitude,
           }}
         >
-          <Typography.Text strong>{t('surveyModels.meshDeclaration')}</Typography.Text>
+          <Typography.Text strong>
+            {t(mesh ? 'surveyModels.meshDeclaration' : 'surveyModels.plotDeclaration')}
+          </Typography.Text>
           <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
-            {t('surveyModels.meshDeclarationHint')}
+            {t(
+              mesh
+                ? 'surveyModels.meshDeclarationHint'
+                : need === 'required'
+                  ? 'surveyModels.plotDeclarationRequiredHint'
+                  : 'surveyModels.plotDeclarationOptionalHint',
+            )}
           </Typography.Paragraph>
 
           <Form.Item name="coordinates">
@@ -242,7 +284,7 @@ export default function SurveyModelUploadModal({
               <Form.Item
                 name="sourceEpsg"
                 label={t('surveyModels.sourceEpsg')}
-                rules={[{ required: true, message: t('surveyModels.problems.crsInvalid') }]}
+                rules={[{ required: demanded, message: t('surveyModels.problems.crsInvalid') }]}
               >
                 <InputNumber min={1} step={1} style={{ width: 200 }} />
               </Form.Item>
@@ -275,14 +317,14 @@ export default function SurveyModelUploadModal({
               <Form.Item
                 name="originLongitude"
                 label={t('surveyModels.originLongitude')}
-                rules={[{ required: true, message: t('surveyModels.problems.originInvalid') }]}
+                rules={[{ required: demanded, message: t('surveyModels.problems.originInvalid') }]}
               >
                 <InputNumber min={-180} max={180} step={0.00001} style={{ width: 200 }} />
               </Form.Item>
               <Form.Item
                 name="originLatitude"
                 label={t('surveyModels.originLatitude')}
-                rules={[{ required: true, message: t('surveyModels.problems.originInvalid') }]}
+                rules={[{ required: demanded, message: t('surveyModels.problems.originInvalid') }]}
               >
                 <InputNumber min={-90} max={90} step={0.00001} style={{ width: 200 }} />
               </Form.Item>
@@ -293,7 +335,7 @@ export default function SurveyModelUploadModal({
             name="originHeightM"
             label={t('surveyModels.originHeightM')}
             extra={t('surveyModels.originHeightHint')}
-            rules={[{ required: true, message: t('surveyModels.problems.heightInvalid') }]}
+            rules={[{ required: demanded, message: t('surveyModels.problems.heightInvalid') }]}
           >
             <InputNumber
               min={LOWEST_HEIGHT_M}

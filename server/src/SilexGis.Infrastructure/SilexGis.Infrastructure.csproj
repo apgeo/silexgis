@@ -2,6 +2,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SilexGis.Domain\SilexGis.Domain.csproj" />
+    <!-- Readers for the two compiled cave-survey formats this application stores but could not
+         previously open: Therion Loch (.lox) and Survex image (.3d). Original MPL-2.0 C# carrying
+         no dependencies of its own, consumed from its own repository as a submodule rather than
+         copied in, so that corrections flow back to the one place the code lives. MPL-2.0
+         combines into this project's AGPL-3.0 because those sources are deliberately not marked
+         "Incompatible With Secondary Licenses". Referenced from Infrastructure and not from
+         Domain on purpose: parsing untrusted uploaded bytes is infrastructure work, and the
+         architecture tests assert that placement rather than trusting it. -->
+    <ProjectReference Include="..\..\external\ThIDE\src\Therion.Blender\Therion.Blender.csproj" />
   </ItemGroup>
 
   <ItemGroup>

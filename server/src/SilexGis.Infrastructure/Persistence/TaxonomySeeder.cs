@@ -437,7 +437,12 @@ public static class TaxonomySeeder
             bool RequiresParent, string? Symbol, string? Schema)[] items =
         [
             // Surface palette (v1/v2 heritage)
-            ("sinkhole", "Sinkhole / Doline", FeatureCategory.Surface, point, false, "sinkhole.png", sinkholeSchema),
+            // A doline is a hollow with an outline, and its area, circularity and long axis are
+            // the numbers karstology asks of one. Drawn as a point it can carry a typed diameter
+            // and nothing else, so the kind accepts an outline as well as a marker: a survey that
+            // has only a GPS fix still records a point, and one that has walked the rim records
+            // the rim.
+            ("sinkhole", "Sinkhole / Doline", FeatureCategory.Surface, [.. point, .. area], false, "sinkhole.png", sinkholeSchema),
             ("pit", "Pit", FeatureCategory.Surface, point, false, "pit.png", null),
             ("pitch", "Pitch", FeatureCategory.Surface, point, false, "pitch.png", null),
             ("chimney", "Chimney", FeatureCategory.Surface, point, false, "chimney.png", null),
@@ -496,6 +501,19 @@ public static class TaxonomySeeder
                 // Backfill a schema only where none was ever set — a non-null value
                 // may be an admin edit and is never overwritten.
                 row.PropertiesSchema ??= schema;
+
+                // Accepted geometry classes are widened, never narrowed. A kind that gains a
+                // class here has gained it for a reason — features of that shape are now
+                // expected — and leaving an already-seeded database on the old set would mean
+                // the same install rejects a drawing a freshly-installed one accepts, with the
+                // tests all passing because they build their database from empty. Narrowing is
+                // not done, because a class already in use would start refusing its own stored
+                // rows on the next edit.
+                var widened = row.AcceptedGeometryClasses.Union(classes).ToArray();
+                if (widened.Length != row.AcceptedGeometryClasses.Length)
+                {
+                    row.AcceptedGeometryClasses = widened;
+                }
             }
             else
             {

@@ -79,7 +79,7 @@ public class SurveyMeshTests
         // sizes an allocation from a number that is not a triangle count at all.
         BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(80), 2);
 
-        var thrown = Should.Throw<MeshIOException>(() => StlReader.Read(new MemoryStream(bytes)));
+        var thrown = Should.Throw<SurveySourceException>(() => StlReader.Read(new MemoryStream(bytes)));
 
         thrown.Message.ShouldContain("not a binary STL");
     }
@@ -89,7 +89,7 @@ public class SurveyMeshTests
     {
         var stl = Stl([((5, 5, 5), (5, 5, 5), (5, 5, 5))]);
 
-        Should.Throw<MeshIOException>(() => StlReader.Read(stl))
+        Should.Throw<SurveySourceException>(() => StlReader.Read(stl))
             .Message.ShouldContain("no surface");
     }
 
@@ -195,7 +195,7 @@ public class SurveyMeshTests
 
         var result = converter.Convert(
             Stl([((0, 0, 0), (10, 0, 0), (0, 10, 0))]),
-            new MeshSourceDeclaration(SourceEpsg: null, 25.4472, 45.5312, OriginHeightM: 1100),
+            new SurveySourceDeclaration(SourceEpsg: null, 25.4472, 45.5312, OriginHeightM: 1100),
             output);
 
         result.AnchorLongitude.ShouldBe(25.4472);
@@ -211,9 +211,9 @@ public class SurveyMeshTests
         var converter = new SurveyMeshConverter(new ProjCoordinateProjector());
         using var output = new MemoryStream();
 
-        Should.Throw<MeshIOException>(() => converter.Convert(
+        Should.Throw<SurveySourceException>(() => converter.Convert(
                 Stl([((0, 0, 0), (10, 0, 0), (0, 10, 0))]),
-                new MeshSourceDeclaration(SourceEpsg: null, null, null, OriginHeightM: 1100),
+                new SurveySourceDeclaration(SourceEpsg: null, null, null, OriginHeightM: 1100),
                 output))
             .Message.ShouldContain("zero point");
     }
@@ -230,7 +230,7 @@ public class SurveyMeshTests
                 ((359994, 5042094, 0), (360292, 5042094, 0), (359994, 5042171, 0)),
                 ((360292, 5042094, 0), (360292, 5042171, 0), (359994, 5042171, 0)),
             ]),
-            new MeshSourceDeclaration(SourceEpsg: 32635, null, null, OriginHeightM: 1100),
+            new SurveySourceDeclaration(SourceEpsg: 32635, null, null, OriginHeightM: 1100),
             output);
 
         // Piatra Craiului. Asserted to four decimals — about ten metres — because the point of the
@@ -250,9 +250,9 @@ public class SurveyMeshTests
         var converter = new SurveyMeshConverter(new ProjCoordinateProjector());
         using var output = new MemoryStream();
 
-        Should.Throw<MeshIOException>(() => converter.Convert(
+        Should.Throw<SurveySourceException>(() => converter.Convert(
             Stl([((359994, 5042094, 0), (360292, 5042094, 0), (359994, 5042171, 0))]),
-            new MeshSourceDeclaration(SourceEpsg: 999999, null, null, OriginHeightM: 1100),
+            new SurveySourceDeclaration(SourceEpsg: 999999, null, null, OriginHeightM: 1100),
             output));
     }
 

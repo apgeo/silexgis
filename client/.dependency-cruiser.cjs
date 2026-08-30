@@ -2,7 +2,7 @@
 /**
  * Module-boundary rules for the client (checked in CI via `npm run lint:deps`):
  * the generated API client stays isolated, map and 3D scene modules stay UI-free,
- * the 3D engine and PDF libraries each stay behind their one module, and page slices
+ * the 3D engine, PDF and charting libraries each stay behind their one module, and page slices
  * don't reach into each other's internals.
  */
 module.exports = {
@@ -71,6 +71,21 @@ module.exports = {
       severity: 'error',
       from: { pathNot: '^src/pdf/pdfEngine\\.ts$' },
       to: { path: '^node_modules/pdfjs-dist/' },
+    },
+    {
+      name: 'echarts-only-in-the-statistics-components',
+      comment:
+        'Only the chart components under src/components/statistics/ may import the charting '
+        + 'library. It is roughly 190 kB gzipped, and it is paid for by whoever downloads the '
+        + 'chunk it lands in: kept behind this one directory it rides in a lazily-loaded '
+        + 'route\'s own chunk, and a single import from an eagerly-loaded module would move all '
+        + 'of it into the entry bundle every signed-in reader fetches. Keeping the seam in one '
+        + 'place also keeps the library replaceable. Type-only imports count, and so does its '
+        + 'renderer package. Test files are excluded from this graph, so a test may import the '
+        + 'library to stand in for it.',
+      severity: 'error',
+      from: { pathNot: '^src/components/statistics/' },
+      to: { path: '^node_modules/(echarts|zrender)/' },
     },
     {
       name: 'page-slices-stay-isolated',

@@ -4,6 +4,12 @@
     <Project Path="src/SilexGis.Domain/SilexGis.Domain.csproj" />
     <Project Path="src/SilexGis.Infrastructure/SilexGis.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/external/">
+    <!-- Named here as well as referenced, because a Release build of the solution emits Debug
+         binaries for a referenced project the solution itself does not list, with exit code 0
+         and no warning. -->
+    <Project Path="external/ThIDE/src/Therion.Blender/Therion.Blender.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SilexGis.Api.Tests/SilexGis.Api.Tests.csproj" />
     <Project Path="tests/SilexGis.Architecture.Tests/SilexGis.Architecture.Tests.csproj" />

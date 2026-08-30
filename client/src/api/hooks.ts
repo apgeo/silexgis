@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
 import {
   defaultInboxTransport,
@@ -137,6 +138,7 @@ export const queryKeys = {
   caveSummary: (id: string) => ['caves', 'summary', id] as const,
   entrances: (caveId: string) => ['entrances', caveId] as const,
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
+  surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
@@ -211,6 +213,8 @@ export const queryKeys = {
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
   cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
+  featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
+  closestApproach: (id: string, other: string) => ['caves', id, 'closest-approach', other] as const,
   objectAccess: (entityType: string, entityId: string) => ['object-access', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
   mfa: ['mfa'] as const,
@@ -250,6 +254,8 @@ export const queryKeys = {
   resLinkTargets: (targetType: string, q: string) => ['reslinks', 'targets', targetType, q] as const,
   resLinkRelationTypes: ['reslinks', 'relation-types'] as const,
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
+  caveSurveyStatistics: (caveId: string) => ['caves', caveId, 'survey-statistics'] as const,
+  caveOrientation: (caveId: string) => ['caves', caveId, 'orientation'] as const,
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
   workAreas: ['work-areas'] as const,
@@ -823,14 +829,16 @@ export type AuditEntry = components['schemas']['AuditEntryDto'];
 
 /** The signed model URLs live 10 minutes; refresh before they lapse mid-view. */
 const SURVEY_MODEL_URL_REFRESH_MS = 8 * 60_000;
-/** How often a model whose conversion has not finished yet is asked about. */
+/** How often a model whose processing has not finished yet is asked about. */
 const SURVEY_MODEL_CONVERSION_POLL_MS = 2000;
 
 /**
- * A model still on its way to being drawable. Only wall meshes ever are — a line-plot upload is
- * handed to the viewer exactly as it arrived, so it is ready the moment it lands.
+ * A model with work still outstanding on it. Both kinds of upload have some: a wall mesh is
+ * converted into what the 3D scene draws, and a line plot is read into its stations and shots.
+ * The line plot stays viewable throughout — the viewer reads the file as uploaded — so what is
+ * outstanding there is the record behind it, not the picture.
  *
- * A failed conversion counts as settled. The worker may retry it and move the row on again, but
+ * A failure counts as settled. The worker may retry it and move the row on again, but
  * the reader has been told the outcome and is owed nothing further until they act on it; asking
  * every two seconds forever on the chance somebody re-queues the job is a page that never goes
  * quiet.
@@ -858,7 +866,7 @@ export function surveyModelReadableByViewer(model: { format: SurveyModelInfo['fo
 
 /**
  * How often the list re-asks. Two intervals meet in this one number, which is why it is a named
- * rule and not a literal at the query: a conversion in flight is worth a couple of seconds, and
+ * rule and not a literal at the query: work in flight is worth a couple of seconds, and
  * once everything has settled the list must still come back before the signed URLs on it lapse.
  *
  * Exported so the rule — a list holding nothing but finished models stops watching them — can be
@@ -873,8 +881,26 @@ export function surveyModelPollInterval(
     : SURVEY_MODEL_URL_REFRESH_MS;
 }
 
+/**
+ * The survey figures a cave's page works out from its line work, dropped whenever that line work
+ * changes.
+ *
+ * These two queries are computed per request from a cave's segments, so every upload, deletion or
+ * finished background extraction that changes the segments changes the answers — but they are
+ * keyed under the cave rather than under the centerlines or the survey models, so none of the
+ * invalidations that refresh those lists reaches them. Without this a reader who drops a file into
+ * the centerline card watches that card fill in while the two panels directly beneath it go on
+ * reporting the cave as it was before the upload, with nothing on screen to say the figures are
+ * stale.
+ */
+function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveyStatistics(caveId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
+}
+
 export function useSurveyModels(caveId: string | undefined) {
-  return useQuery({
+  const queryClient = useQueryClient();
+  const query = useQuery({
     queryKey: queryKeys.surveyModels(caveId ?? ''),
     queryFn: () =>
       unwrap(api.GET('/api/v1/caves/{caveId}/survey-models', { params: { path: { caveId: caveId! } } })),
@@ -882,6 +908,26 @@ export function useSurveyModels(caveId: string | undefined) {
     staleTime: 5 * 60_000,
     refetchInterval: (query) => surveyModelPollInterval(query.state.data),
   });
+
+  // Reading a line plot records the survey as the cave's own centerline, and it is a background
+  // job that does it — nothing the browser did. So the only sign a page watching this list gets
+  // is the moment the outstanding work stops being outstanding, and that moment is here: this is
+  // the one query that keeps asking. Without this the centerline table beside it stays as it was
+  // found, empty, until somebody reloads the page and wonders why the reload was needed.
+  //
+  // Keyed on the transition rather than the state, so a page that arrives after everything has
+  // settled — the ordinary visit to a cave whose survey was read weeks ago — asks for nothing.
+  const outstanding = (query.data ?? []).some((model) => surveyModelUnsettled(model.status));
+  const wasOutstanding = useRef(outstanding);
+  useEffect(() => {
+    if (wasOutstanding.current && !outstanding && caveId) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.centerlines(caveId) });
+      invalidateCaveSurveyFigures(queryClient, caveId);
+    }
+    wasOutstanding.current = outstanding;
+  }, [outstanding, caveId, queryClient]);
+
+  return query;
 }
 
 /**
@@ -901,8 +947,10 @@ export async function fetchSurveyModels(caveId: string): Promise<SurveyModelInfo
 
 function useInvalidateSurveyModels() {
   const queryClient = useQueryClient();
-  return (caveId: string) =>
+  return (caveId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModels(caveId) });
+    invalidateCaveSurveyFigures(queryClient, caveId);
+  };
 }
 
 /** The multipart body the upload endpoint declares, as the generated contract states it. */
@@ -910,20 +958,24 @@ type SurveyModelUploadBody =
   paths['/api/v1/caves/{caveId}/survey-models']['post']['requestBody']['content']['multipart/form-data'];
 
 /**
- * What a wall mesh needs alongside the file, because a triangle soup carries none of it: which
- * coordinate system its numbers are in, and what altitude the plane it calls zero sits at.
+ * What an uploader may say about where a survey file's numbers sit in the world: which coordinate
+ * system they are in, and what altitude the plane the file calls zero sits at.
  *
  * Either a projected system by code, or — for a file exported about a local origin, which is the
  * ordinary case — the position that origin sits at. Never both: with a code, the file's own
  * coordinates say where it is, and a second answer could only contradict the first.
  *
+ * Every half is optional here, and which of them a given file must actually answer is the uploading
+ * screen's to enforce, because only it knows the format: a wall mesh carries no coordinate system
+ * and one of the two line-plot formats has no field for one either, so both have to be told, while
+ * the other line-plot format may state its own and then needs none of this. What is left unanswered
+ * is left off the request rather than sent empty.
+ *
  * Taken from the generated contract rather than restated here, so that a field renamed or re-typed
- * on the server fails this build instead of failing every upload at run time. Only the altitude is
- * required of a caller — the server refuses a declaration without one — and the file itself is
- * appended separately, so both are set aside from what the contract calls optional.
+ * on the server fails this build instead of failing every upload at run time. Only the file itself
+ * is set aside, because it is appended separately.
  */
-export type SurveyMeshDeclaration = Omit<SurveyModelUploadBody, 'file' | 'originHeightM'> &
-  Required<Pick<SurveyModelUploadBody, 'originHeightM'>>;
+export type SurveySourceDeclaration = Omit<SurveyModelUploadBody, 'file'>;
 
 export function useUploadSurveyModel() {
   const invalidate = useInvalidateSurveyModels();
@@ -935,8 +987,8 @@ export function useUploadSurveyModel() {
     }: {
       caveId: string;
       file: File;
-      /** Required for a mesh; the line-plot formats place themselves and take none. */
-      declaration?: SurveyMeshDeclaration;
+      /** What the uploader said about where the file sits; absent when the file says it itself. */
+      declaration?: SurveySourceDeclaration;
     }): Promise<SurveyModelInfo> => {
       const form = new FormData();
       form.append('file', file, file.name);
@@ -972,6 +1024,74 @@ export function useDeleteSurveyModel() {
   });
 }
 
+export type SurveySourceInfo = components['schemas']['SurveySourceDto'];
+export type SurveySourceKind = SurveySourceInfo['kind'];
+
+/**
+ * The raw material a cave's compiled surveys were produced from — the survey languages, a project
+ * configuration, a survey app's export bundle, and the log a compilation wrote.
+ *
+ * Kept apart from the models list because these are not models: nothing draws them, nothing reads
+ * them, and what they are for is the day the compiled export can no longer be re-made from itself.
+ */
+export function useSurveySources(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.surveySources(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{caveId}/survey-sources', { params: { path: { caveId: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+  });
+}
+
+function useInvalidateSurveySources() {
+  const queryClient = useQueryClient();
+  return (caveId: string) =>
+    void queryClient.invalidateQueries({ queryKey: queryKeys.surveySources(caveId) });
+}
+
+export function useUploadSurveySource() {
+  const invalidate = useInvalidateSurveySources();
+  return useMutation({
+    mutationFn: async ({
+      caveId,
+      file,
+      description,
+    }: {
+      caveId: string;
+      file: File;
+      description?: string;
+    }): Promise<SurveySourceInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      if (description !== undefined && description.trim() !== '') {
+        form.append('description', description.trim());
+      }
+      return unwrap(api.POST('/api/v1/caves/{caveId}/survey-sources', {
+        params: { path: { caveId } },
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+export function useDeleteSurveySource() {
+  const invalidate = useInvalidateSurveySources();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; caveId: string }) => {
+      const { error, response } = await api.DELETE('/api/v1/survey-sources/{id}', {
+        params: { path: { id } },
+      });
+      if (error !== undefined) {
+        throw new Error(`API error ${response.status}`);
+      }
+    },
+    onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
 export type CenterlineInfo = components['schemas']['CenterlineDto'];
 
 export function useCenterlines(caveId: string | undefined) {
@@ -985,8 +1105,10 @@ export function useCenterlines(caveId: string | undefined) {
 
 function useInvalidateCenterlines() {
   const queryClient = useQueryClient();
-  return (caveId: string) =>
+  return (caveId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.centerlines(caveId) });
+    invalidateCaveSurveyFigures(queryClient, caveId);
+  };
 }
 
 export function useUploadCenterline() {
@@ -4759,6 +4881,60 @@ export function useTripStatistics(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Cave survey statistics
+// ---------------------------------------------------------------------------
+
+/** What a cave's line work measures, and how it compares with what the record claims. */
+export type CaveSurveyStatistics = components['schemas']['CaveStatisticsDto'];
+
+/** Which way and how steeply a cave's passages run. */
+export type CaveOrientation = components['schemas']['CaveOrientationDto'];
+
+/** One sector of a rose, or one band of a dip histogram. The range comes from the response. */
+export type OrientationBin = components['schemas']['OrientationBin'];
+
+/** How steep the passages are, or absent when the line work carries no altitudes. */
+export type DipSummary = components['schemas']['DipSummary'];
+
+/** A computed figure set against the one typed into the record. */
+export type MorphometryComparison = components['schemas']['MorphometryComparison'];
+
+/**
+ * Which body of line work a survey statistic was measured from.
+ *
+ * This is not decoration. `surveyFlags` means the surveyor's own per-leg flags decided what
+ * counts, which is what these statistics are defined as; `skeletonHeuristic` means the shape of a
+ * stored centerline was used to guess the same thing, which keeps most of the length but is a
+ * different measurement. Comparing one cave measured the first way against another measured the
+ * second, as though they were the same figure, is the mistake this field exists to prevent —
+ * so whatever renders these numbers has to say which one it got.
+ */
+export type SurveySegmentBasis = components['schemas']['SurveySegmentBasis'];
+
+export function useCaveSurveyStatistics(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveSurveyStatistics(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/statistics', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    // Recomputed per request from line work that changes only when a survey is uploaded.
+    staleTime: 5 * 60_000,
+    // A cave the caller may not read — or may read but not place exactly — is refused with the
+    // same answer as a cave that does not exist, and asking again will not change it.
+    retry: false,
+  });
+}
+
+export function useCaveOrientation(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveOrientation(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/orientation', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 export type TerrainBuild = components['schemas']['TerrainBuildDto'];
 export type TerrainBuildDetail = components['schemas']['TerrainBuildDetailDto'];
 export type TerrainBuildSource = components['schemas']['TerrainBuildSourceDto'];
@@ -5492,6 +5668,36 @@ export function useDeleteTerrainBuild() {
 }
 
 /**
+ * The measured shape of a drawn outline — a doline's area, how round it is, how long and how wide,
+ * which way it lies, and where its middle is.
+ *
+ * Every length is metres and every area square metres. They are measured in the installation's
+ * working coordinate system rather than in the degrees the outline is stored in, because a degree
+ * is not a unit of length and its size on the ground changes with latitude.
+ */
+export type FeatureMorphometry = components['schemas']['FeatureMorphometryDto'];
+
+/**
+ * Asks for one outline's measurements.
+ *
+ * A reader who may see the feature but may not be told where it is gets no answer at all — the
+ * server spells that as "no such feature", because a shape and a bearing place a doline as surely
+ * as a coordinate does. So a failure here means the card simply does not appear; it is never an
+ * empty set of figures, which would read as "this doline has no size".
+ */
+export function useFeatureMorphometry(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.featureMorphometry(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/features/{id}/morphometry', { params: { path: { id: id! } } })),
+    enabled: enabled && !!id,
+    // Measured from geometry that only changes when somebody redraws the outline.
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/**
  * Calls off this occurrence of a repeating event and every later one, keeping any that has
  * already begun.
  *
@@ -5512,6 +5718,37 @@ export function useDeleteEventSeriesFollowing() {
       return data as EventSeriesDeleteResult;
     },
     onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * How close two caves come to each other: the shortest line between their line work in three
+ * dimensions, split into its horizontal and vertical parts, with a bearing.
+ *
+ * `absence` says why there is no measurement when there is none, and is never blank — a cave with
+ * no line work and a cave whose line work was drawn in plan with no depths are different answers,
+ * and both are different from "these two have not been compared".
+ */
+export type ClosestApproach = components['schemas']['ClosestApproachDto'];
+
+/**
+ * Asks how close two caves come.
+ *
+ * Withheld entirely unless this caller may place both caves exactly — not rounded, not snapped.
+ * The refusal is spelled "no such cave", so a guarded cave and a cave that never existed answer
+ * alike and the query simply fails; whatever shows this shows nothing rather than a blank number.
+ */
+export function useClosestApproach(id: string | undefined, other: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.closestApproach(id ?? '', other ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caves/{id}/closest-approach/{other}', {
+          params: { path: { id: id!, other: other! } },
+        }),
+      ),
+    enabled: !!id && !!other && id !== other,
+    staleTime: 60_000,
   });
 }
 

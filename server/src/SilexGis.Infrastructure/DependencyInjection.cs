@@ -56,6 +56,7 @@ public static class DependencyInjection
         services.AddSingleton<Geodata.ICrsRegistry, Geodata.ProjCrsRegistry>();
         services.AddSingleton<Geodata.ICoordinateProjector, Geodata.ProjCoordinateProjector>();
         services.AddSingleton<Surveys.SurveyMeshConverter>();
+        services.AddSingleton<Surveys.SurveyGraphExtractor>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Import.TermRuleSetStore>();
@@ -212,6 +213,7 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, GeofileImportHandler>();
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyMeshHandler>();
+        services.AddScoped<IProcessingJobHandler, SurveyGraphHandler>();
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();
         services.AddScoped<IProcessingJobHandler, FeatureIntegrityVerifyHandler>();

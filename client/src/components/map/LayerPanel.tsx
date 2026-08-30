@@ -12,6 +12,7 @@ import {
   subscribeCenterlineLoadState,
   type CenterlineLoadState,
 } from '../../map/centerlineLayer.ts';
+import { CLOSEST_APPROACH_LAYER_ID } from '../../map/closestApproachLayer.ts';
 import { ENTRANCE_LAYER_ID } from '../../map/entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from '../../map/featureLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID } from '../../map/heatmapLayer.ts';
@@ -95,6 +96,8 @@ export default function LayerPanel({
         return t('map.heatmap');
       case PHOTO_LAYER_ID:
         return t('map.photos');
+      case CLOSEST_APPROACH_LAYER_ID:
+        return t('map.closestApproach');
       default:
         // Geofile/raster layers carry their catalog name on the OL layer itself.
         return (layer.get('name') as string | undefined) ?? id ?? '';

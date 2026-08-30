@@ -112,7 +112,7 @@ describe('the survey model list', () => {
   it('says a mesh is still being converted, and what its walls are made of once it is not', async () => {
     models = [model({ status: 'processing', meshUrl: null, triangleCount: null })];
     show();
-    expect(await screen.findByText('Converting')).toBeInTheDocument();
+    expect(await screen.findByText('In progress')).toBeInTheDocument();
     expect(screen.getByText(/updates itself when they are ready/)).toBeInTheDocument();
 
     cleanup();
@@ -132,7 +132,7 @@ describe('the survey model list', () => {
       }),
     ];
     show();
-    expect(await screen.findByText('Could not be converted')).toBeInTheDocument();
+    expect(await screen.findByText('Could not be processed')).toBeInTheDocument();
     expect(screen.getByText(/EPSG:31700 is not a coordinate system/)).toBeInTheDocument();
   });
 
@@ -230,16 +230,54 @@ describe('uploading a survey model', () => {
     expect(screen.getByText(/Filled in from this cave's main entrance/)).toBeInTheDocument();
   });
 
-  it('asks a line plot for no declaration at all, because it carries its own', async () => {
+  it('asks a Therion plot where it sits, because that format never says so itself', async () => {
+    // The plot is now read into stations and shots rather than only drawn, and a .lox has no field
+    // for a coordinate system anywhere in it. Uploaded without a position it is not placed
+    // approximately — it fails, and no screen afterwards can supply what was never asked for.
     show();
     await openUpload('cave.lox');
 
-    expect(screen.queryByLabelText('Longitude of the origin')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Where these walls sit in the world/)).not.toBeInTheDocument();
+    expect(screen.getByText('Where this survey sits in the world')).toBeInTheDocument();
+    expect(screen.getByLabelText('Longitude of the origin')).toHaveValue('25.20912');
+
+    fireEvent.change(screen.getByLabelText("Altitude of the file's zero level (m)"), {
+      target: { value: '1200' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
+    await waitFor(() => expect(uploadMutate).toHaveBeenCalled());
+    expect(uploadMutate.mock.calls[0][0].declaration).toEqual({
+      originHeightM: 1200,
+      originLongitude: 25.209_12,
+      originLatitude: 45.519_44,
+    });
+  });
+
+  it('will not send a Therion plot with nothing to place it by', async () => {
+    summary = { ...summaryWith(true), mainEntrance: null } as unknown as CaveSummary;
+    show();
+    await openUpload('cave.lox');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
+
+    // Both halves of the position are named, because both are missing.
+    expect(await screen.findAllByText(/needs the position its zero point sits at/)).toHaveLength(2);
+    expect(uploadMutate).not.toHaveBeenCalled();
+  });
+
+  it('offers a Survex plot the same questions and demands none of them', async () => {
+    // A .3d states its own coordinate system only when the survey was compiled with one, and which
+    // it is cannot be told from out here. So the fields are there for the export that says nothing,
+    // and an upload is never refused for failing to repeat what the file already states.
+    summary = { ...summaryWith(true), mainEntrance: null } as unknown as CaveSummary;
+    show();
+    await openUpload('cave.3d');
+
+    expect(screen.getByText('Where this survey sits in the world')).toBeInTheDocument();
+    expect(screen.getByLabelText('Longitude of the origin')).toHaveValue('');
 
     fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
     await waitFor(() => expect(uploadMutate).toHaveBeenCalled());
-    expect(uploadMutate.mock.calls[0][0]).toMatchObject({ caveId: 'c1', declaration: undefined });
+    expect(uploadMutate.mock.calls[0][0]).toMatchObject({ caveId: 'c1' });
   });
 
   it('sends the declaration a mesh needs, and only the half that was answered', async () => {
@@ -297,9 +335,11 @@ describe('uploading a survey model', () => {
     ['cave.not_found', /cave no longer exists/],
     ['acl.forbidden', /not allowed to change/],
   ])('turns %s into a sentence somebody can act on', async (code, expected) => {
+    // A .3d, because these are about what the server's refusals are turned into and the upload has
+    // to reach the server to be refused. It is the one format this screen demands nothing of.
     uploadMutate.mockRejectedValue(new ApiError(400, code, 'server wording'));
     show();
-    await openUpload('cave.lox');
+    await openUpload('cave.3d');
 
     fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
     expect(await screen.findByText(expected)).toBeInTheDocument();
@@ -309,7 +349,7 @@ describe('uploading a survey model', () => {
     // A paraphrase of an unknown code would be a guess presented as an explanation.
     uploadMutate.mockRejectedValue(new ApiError(500, 'something.nobody.wrote'));
     show();
-    await openUpload('cave.lox');
+    await openUpload('cave.3d');
 
     fireEvent.click(screen.getByRole('button', { name: /^Upload model$/ }));
     expect(await screen.findByText('Upload failed')).toBeInTheDocument();

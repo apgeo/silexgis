@@ -198,10 +198,12 @@ public static class CenterlineEndpoints
                 "centerline.no_lines", "The file contains no line geometries.");
         }
 
-        // The display skeleton is built once, here, from the geometry as surveyed: a survey
-        // export is mostly splays, and drawing one canvas path per splay is what makes the map
-        // overlay unusable. Rebuilding it later from an existing skeleton would keep pruning,
-        // so this is the only place it is computed.
+        // The display skeleton is built once, on the way in, from the geometry as surveyed: a
+        // survey export is mostly splays, and drawing one canvas path per splay is what makes the
+        // map overlay unusable. Rebuilding it later from an existing skeleton would keep pruning,
+        // so an uploaded centerline's skeleton is computed here and nowhere else. A centerline
+        // read out of a compiled survey file is built by that extraction instead, from the splay
+        // flag the file states, and never reaches this path.
         var skeleton = CenterlineSkeleton.Build(geom);
         var storeSkeleton = CenterlineSkeleton.IsWorthStoring(geom, skeleton);
         var pathCount = CenterlineSkeleton.PathCount(geom);
@@ -318,26 +320,7 @@ public static class CenterlineEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (found.Centerline.IsDefault)
-        {
-            // Deletion is soft, and the one-default-per-cave uniqueness does not know about it:
-            // the flag must come off the departing row — and be committed — before any other row
-            // can take it, or the next upload collides with a row nobody can see.
-            found.Centerline.IsDefault = false;
-            await db.SaveChangesAsync(ct);
-
-            var successor = await db.Centerlines
-                .Where(c => c.CaveFeatureId == found.Centerline.CaveFeatureId && c.Id != id)
-                .OrderBy(c => c.Feature.CreatedAt)
-                .Select(c => c.Id)
-                .FirstOrDefaultAsync(ct);
-            if (successor != Guid.Empty)
-            {
-                await writes.SetDefaultCenterlineAsync(successor, ct);
-            }
-        }
-
-        await writes.SoftDeleteAsync(id, ct);
+        await writes.DeleteCenterlineAsync(id, ct);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }

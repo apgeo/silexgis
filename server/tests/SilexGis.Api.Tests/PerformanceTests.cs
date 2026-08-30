@@ -12,6 +12,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Access;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 using Xunit.Abstractions;
 
 namespace SilexGis.Api.Tests;
@@ -107,6 +108,76 @@ public sealed class PerformanceTests : IDisposable
         }
 
         await AssertEntranceLayerPlansAsync(ownerId, strangerId);
+        await AssertSurveySubstratePlansAsync(strangerId);
+    }
+
+    /// <summary>
+    /// The two cave-scoped lookups a cave's survey statistics are computed over. Both splice the
+    /// whole access walk over the feature table, and both are given a single cave id — so the
+    /// feature row they need must be reached by its primary key, and the protection-root probe
+    /// beside it by an index. A sequential scan of a hundred thousand features to answer a
+    /// question about one cave is the regression this pins, and it is the shape that appears
+    /// silently as an installation's feature table grows rather than at the moment it is written.
+    /// </summary>
+    /// <remarks>
+    /// The seeded caves hold no survey models and no centerlines, so these plans are the ones the
+    /// planner chooses for an empty result — which is why each pin also asserts that the feature
+    /// lookup is <i>in</i> the plan. Without that half, a plan that never reached the feature
+    /// table at all would satisfy "no sequential scan of features" while proving nothing.
+    /// </remarks>
+    private async Task AssertSurveySubstratePlansAsync(Guid strangerId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var connection = db.Database.GetDbConnection();
+
+        var caveId = await connection.QuerySingleAsync<Guid>(
+            $"SELECT id FROM features WHERE kind = {(short)FeatureKind.Cave} LIMIT 1");
+
+        // Not the owner and holding nothing: the caller for whom both arms of the access walk
+        // actually run rather than short-circuiting on ownership.
+        var ctx = new AccessContext(strangerId, false, [], []);
+
+        var (legSql, legParameters) = SurveySegmentSql.BuildForCave(ctx, caveId);
+        var legs = await ExplainAsync(connection, legParameters, "survey leg substrate", legSql);
+        AssertReachesFeaturesByIndex(legs, "survey leg substrate");
+
+        // The step that picks the one survey model answering for this cave is cave-scoped too, and
+        // both of the tables it reads grow with the installation rather than with the cave.
+        legs.ShouldNotContain("Seq Scan on survey_models", Case.Insensitive,
+            "choosing which survey model answers must not scan every model in the installation");
+        legs.ShouldNotContain("Seq Scan on centerlines", Case.Insensitive,
+            "nor every centerline in it");
+
+        var (sourceSql, sourceParameters) = CenterlineSegmentSql.BuildSourceQuery(ctx, caveId);
+        var source = await ExplainAsync(
+            connection, sourceParameters, "centerline substrate source", sourceSql);
+        AssertReachesFeaturesByIndex(source, "centerline substrate source");
+    }
+
+    /// <summary>
+    /// The two halves of a plan pin over a cave-scoped feature lookup: no sequential scan of the
+    /// feature table, and evidence that the feature table was reached at all. The second half is
+    /// what keeps the first from being satisfied by a plan that never got there.
+    /// </summary>
+    /// <remarks>
+    /// Either of the two id-keyed indexes on <c>features</c> counts: the lookup that carries a
+    /// kind rides the id+kind alternate key, one without a kind rides the primary key, and both
+    /// are index probes on one row. Note that neither of them is the geometry index — a lookup by
+    /// id has no geometry in it to index — so a plan pin phrased in terms of the GIST index would
+    /// be pinning something these queries never touch.
+    /// </remarks>
+    private static void AssertReachesFeaturesByIndex(string plan, string label)
+    {
+        plan.ShouldNotContain("Seq Scan on features", Case.Insensitive,
+            $"{label}: a question about one cave must never scan the whole feature table");
+
+        (plan.Contains("ak_features_id_kind", StringComparison.OrdinalIgnoreCase)
+                || plan.Contains("pk_features", StringComparison.OrdinalIgnoreCase))
+            .ShouldBeTrue(
+                $"{label}: the cave's own feature row must be reached through an id-keyed index — "
+                + "and if neither appears, the plan never touched the feature table at all, which "
+                + "would leave the assertion above satisfied while proving nothing");
     }
 
     /// <summary>The viewport as a bbox query argument (invariant — the API parses '.' decimals).</summary>
@@ -408,11 +479,108 @@ public sealed class PerformanceTests : IDisposable
             SELECT count(*) FROM closure
             """);
 
+        // One survey model per seeded cave, so the plan pins over the survey tables measure
+        // something. They cannot otherwise: a pin forbidding a sequential scan of an EMPTY table
+        // asserts nothing about scale — the planner is right to scan nothing sequentially, and
+        // whether it says so depends on when autoanalyze last ran, which made the pin fail or
+        // pass by luck. The point of those pins is that choosing one cave's survey must not walk
+        // every survey in the installation, and only a populated table can show that.
+        //
+        // Every model points at the same stored file. The file is real enough to satisfy its
+        // foreign keys (a document and one revision) and nothing here reads its bytes, because
+        // what is being measured is which rows the planner visits, not what they contain.
+        await db.Database.ExecuteSqlAsync(
+            $$"""
+            WITH doc AS (
+                INSERT INTO documents (
+                    id, title, metadata, owner_user_id, visibility, created_at, updated_at)
+                VALUES (
+                    gen_random_uuid(), 'Perf survey source', '{}', {{ownerId}},
+                    {{(short)Visibility.Authenticated}}, now(), now())
+                RETURNING id
+            ),
+            version AS (
+                INSERT INTO document_versions (
+                    id, document_id, version_number, is_current, created_at, updated_at)
+                SELECT gen_random_uuid(), doc.id, 1, true, now(), now() FROM doc
+                RETURNING id
+            ),
+            file AS (
+                INSERT INTO files (
+                    id, storage_path, original_name, mime_type, sha256, size_bytes,
+                    document_version_id, kind, metadata, position_source, conversion,
+                    text_extraction, direction_is_magnetic, orientation_quarter_turns,
+                    created_at, updated_at)
+                SELECT
+                    gen_random_uuid(), 'perf/none', 'perf.3d', 'application/octet-stream',
+                    repeat('0', 64), 0, version.id, {{(short)FileKind.Survey}}, '{}',
+                    0, 0, 0, false, 0, now(), now()
+                FROM version
+                RETURNING id
+            ),
+            centerline_ids AS MATERIALIZED (
+                SELECT gen_random_uuid() AS centerline_id, c.id AS cave_id, c.geom
+                FROM features c
+                WHERE c.kind = {{(short)FeatureKind.Cave}}
+                  AND c.name LIKE 'Perf Cave %'
+                  AND c.geom IS NOT NULL
+            ),
+            centerline_features AS (
+                INSERT INTO features (
+                    id, kind, category, name, geom, location_protected, is_protected_effective,
+                    ancestor_ids, owner_user_id, visibility, created_at, updated_at)
+                SELECT
+                    ci.centerline_id, {{(short)FeatureKind.Centerline}},
+                    {{(short)FeatureCategory.Underground}}, 'Perf centerline',
+                    ST_Force3D(ST_Multi(ST_MakeLine(ci.geom, ST_Translate(ci.geom, 0.001, 0.001)))),
+                    false, false,
+                    ARRAY[ci.centerline_id, ci.cave_id],
+                    {{ownerId}}, {{(short)Visibility.Authenticated}}, now(), now()
+                FROM centerline_ids ci
+                RETURNING id
+            ),
+            centerline_rows AS (
+                INSERT INTO centerlines (
+                    id, cave_feature_id, kind, is_default, skeleton, path_count, source, length_m)
+                SELECT
+                    ci.centerline_id, ci.cave_id, {{(short)FeatureKind.Centerline}}, true,
+                    ST_Multi(ST_MakeLine(ci.geom, ST_Translate(ci.geom, 0.001, 0.001))), 1,
+                    {{(short)CenterlineSource.Uploaded}}, 100
+                FROM centerline_ids ci
+                RETURNING id
+            ),
+            centerline_edges AS (
+                INSERT INTO feature_hierarchy_edges (
+                    parent_id, child_id, is_primary, created_at, updated_at)
+                SELECT ci.cave_id, ci.centerline_id, true, now(), now()
+                FROM centerline_ids ci
+                RETURNING id
+            ),
+            centerline_closure AS (
+                INSERT INTO feature_ancestors (feature_id, ancestor_id)
+                SELECT ci.centerline_id, ci.centerline_id FROM centerline_ids ci
+                UNION ALL
+                SELECT ci.centerline_id, ci.cave_id FROM centerline_ids ci
+                RETURNING feature_id
+            )
+            INSERT INTO survey_models (
+                id, cave_feature_id, name, file_id, format, status,
+                source_precision_lost, created_at, updated_at)
+            SELECT
+                gen_random_uuid(), f.id, 'Perf survey', file.id,
+                {{(short)SurveyModelFormat.Survex3d}}, {{(short)SurveyModelStatus.Ready}},
+                false, now(), now()
+            FROM features f, file
+            WHERE f.kind = {{(short)FeatureKind.Cave}}
+              AND f.name LIKE 'Perf Cave %'
+            """);
+
         // Fresh bulk-loaded tables have no statistics yet (autoanalyze hasn't run) and the
         // planner picks pathological plans (measured 50x). Real databases are analyzed.
         await db.Database.ExecuteSqlRawAsync(
             "ANALYZE features; ANALYZE caves; ANALYZE cave_entrances; "
             + "ANALYZE feature_hierarchy_edges; ANALYZE feature_ancestors; "
+            + "ANALYZE survey_models; ANALYZE centerlines; "
             + "ANALYZE access_entries; ANALYZE permission_group_members; ANALYZE feature_set_members;");
 
         output.WriteLine(

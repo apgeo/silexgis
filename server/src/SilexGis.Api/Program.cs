@@ -137,6 +137,13 @@ try
         .BindConfiguration(MapOptions.SectionName);
     builder.Services.AddOptions<TerrainOptions>()
         .BindConfiguration(TerrainOptions.SectionName);
+    // Checked while starting rather than when first used: an unresolvable working system would
+    // otherwise surface as a projection error inside whichever request first asked a question in
+    // metres, which could be weeks after the value was mistyped.
+    builder.Services.AddOptions<SpatialOptions>()
+        .BindConfiguration(SpatialOptions.SectionName)
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IValidateOptions<SpatialOptions>, SpatialOptionsValidator>();
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<AdminTestSendThrottle>();
 builder.Services.AddScoped<GroupAnnouncementThrottle>();
@@ -232,9 +239,13 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCaveEndpoints();
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
+    api.MapSurveySourceEndpoints();
     api.MapCenterlineEndpoints();
+    api.MapCaveSurveyStatisticsEndpoints();
+    api.MapCaveClosestApproachEndpoints();
     api.MapCrsEndpoints();
     api.MapFeatureEndpoints();
+    api.MapFeatureMorphometryEndpoints();
     api.MapFilterEndpoints();
     api.MapFeatureHierarchyEndpoints();
     api.MapFeatureLinkEndpoints();

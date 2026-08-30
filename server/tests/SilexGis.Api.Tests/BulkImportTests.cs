@@ -55,6 +55,17 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable
             ["Files:Root"] = filesRoot,
             ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
             ["Files:ImportRoots:0"] = importRoot,
+            // These tests queue a job and then read it back to run its handler themselves. The
+            // background worker polls the same table every couple of seconds, so with it running
+            // this is a race: when the worker claims the row first, the read finds no queued job
+            // and the test fails with "sequence contains no elements". It needs the poll to land
+            // inside that gap, so it passes on a quiet machine and fails under load — which is why
+            // it has been rediscovered and re-diagnosed several times rather than fixed.
+            //
+            // Switched off here rather than for every test, because most classes rely on the
+            // worker doing its job: nine of them read back what it produced, and turning it off
+            // globally fails 52 tests.
+            ["Jobs:PollSeconds"] = "0",
         });
     }
 
@@ -183,6 +194,8 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable
                 ["Files:Root"] = tinyRoot,
                 ["Keys:Path"] = Path.Combine(tinyRoot, "keys"),
                 ["Files:MaxArchiveExpandedBytes"] = "40",
+                // Same reason as the shared factory above: this test drives the handler itself.
+                ["Jobs:PollSeconds"] = "0",
             });
 
         var email = $"tiny-{Guid.NewGuid():N}"[..14] + "@t.local";

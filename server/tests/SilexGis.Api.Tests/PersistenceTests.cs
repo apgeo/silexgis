@@ -59,6 +59,14 @@ public sealed class PersistenceTests : IDisposable
         sinkhole.PropertiesSchema.ShouldNotBeNull();
         sinkhole.PropertiesSchema.ShouldContain("depth_m");
 
+        // A doline is drawn as a rim as often as it is dropped as a marker, and its area,
+        // circularity and long axis are only measurable from the rim — so the kind carries
+        // both, and it is the outline half that this pins, the marker half being the one it
+        // shipped with.
+        sinkhole.AcceptedGeometryClasses.ShouldContain(GeometryClass.Point);
+        sinkhole.AcceptedGeometryClasses.ShouldContain(GeometryClass.Polygon);
+        sinkhole.AcceptedGeometryClasses.ShouldContain(GeometryClass.MultiPolygon);
+
         // Link kinds are security-bearing: a locating link to a protected feature is redacted.
         var associatedCave = await db.LinkKinds.SingleAsync(x => x.Code == "associated_cave");
         associatedCave.Locating.ShouldBeTrue();

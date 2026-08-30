@@ -1,0 +1,15 @@
+encoding utf-8
+
+survey e2e-entrance -title "Browser test survey"
+
+  centreline
+    date 1987.08.14
+    units length metres
+    units compass clino degrees
+    data normal from to length compass clino
+
+    0 1 12.40 118.0 -4.0
+    1 2  8.75 132.5 -11.5
+  endcentreline
+
+endsurvey

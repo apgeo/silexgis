@@ -63,7 +63,19 @@ public class Centerline : IAuditable
     /// <summary>Line components in <see cref="Skeleton"/>; null when there is no skeleton.</summary>
     public int? SkeletonPathCount { get; set; }
 
-    /// <summary>Geodesic length in meters, computed server-side at upload.</summary>
+    /// <summary>
+    /// Geodesic length in meters of the passage this centerline traces, computed server-side when
+    /// the line work arrives.
+    ///
+    /// <para>
+    /// Wall shots are not passage and are not in it. A centerline drawn by hand or imported as a
+    /// track has none to leave out, so its length is simply the length of its geometry; one read
+    /// out of a survey file leaves out the legs that file flagged as splays, which in a whole-system
+    /// export are the large majority of them. So this means the same thing whatever the centerline
+    /// came from — and for a read survey it is deliberately not the length of
+    /// <see cref="Feature"/>'s geometry, which also holds every wall shot the surveyor measured.
+    /// </para>
+    /// </summary>
     public decimal? LengthM { get; set; }
 
     public CenterlineSource Source { get; set; } = CenterlineSource.Uploaded;

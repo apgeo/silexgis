@@ -323,7 +323,8 @@
     "centerlineMaxPaths": "Limită de linii",
     "centerlineLimitsHint": "Lasă gol pentru valorile implicite ale instalării. Detaliul mai mare costă mai mult la desenare.",
     "features": "Elemente",
-    "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată."
+    "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată.",
+    "closestApproach": "Cea mai mică distanță"
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",
@@ -861,6 +862,11 @@
       "line": "Linii",
       "polygon": "Suprafețe",
       "any": "Altele"
+    },
+    "shapes": {
+      "Point": "Marcaj",
+      "LineString": "Linie",
+      "Polygon": "Contur"
     }
   },
   "trips": {
@@ -1362,7 +1368,68 @@
     "metresOfRope": "Coardă",
     "surveyStations": "Puncte topografice",
     "incidents": "Ture cu incident",
-    "photographs": "Fotografii"
+    "photographs": "Fotografii",
+    "orientation": {
+      "rose": "Roza direcțiilor galeriilor",
+      "weighting": "Ponderare",
+      "byLength": "După lungime",
+      "byCount": "După număr",
+      "north": "N",
+      "east": "E",
+      "south": "S",
+      "west": "V",
+      "ringLabel": "{{value}}%",
+      "meanAxis": "Direcția medie {{value}}°",
+      "roseDescriptionLength": "Direcțiile galeriilor pe {{sectors}} sectoare de {{width}}°, cu nordul în sus, ponderate după lungimea cartată. Fiecare direcție este desenată pe ambele părți ale diagramei, pentru că o galerie parcursă într-un sens și aceeași galerie cartată dinspre celălalt capăt sunt o singură direcție, nu două. Cea mai puternică este {{from}}–{{to}}°, cu {{percent}}% din lungime.",
+      "roseDescriptionCount": "Direcțiile galeriilor pe {{sectors}} sectoare de {{width}}°, cu nordul în sus, ponderate după numărul de vize topografice. Fiecare direcție este desenată pe ambele părți ale diagramei, pentru că o galerie parcursă într-un sens și aceeași galerie cartată dinspre celălalt capăt sunt o singură direcție, nu două. Cea mai puternică este {{from}}–{{to}}°, cu {{percent}}% din vize.",
+      "title": "Orientarea galeriilor",
+      "dipAxis": "Înclinare",
+      "legs": "Vize topografice",
+      "countAxis": "Axa numărului",
+      "linearCount": "Liniară",
+      "logCount": "Logaritmică",
+      "degrees": "{{value}}°",
+      "loading": "Se calculează valorile.",
+      "meanSteepness": "Înclinarea medie {{value}}° față de orizontală, indiferent dacă viza urcă sau coboară.",
+      "dipRefusedTitle": "Înclinarea nu poate fi calculată",
+      "dipRefusedReason": "Aceste trasee nu au altitudini, deci nimic din ele nu spune dacă o galerie urcă sau coboară. Desenarea lor oricum ar arăta peștera ca fiind orizontală peste tot, ceea ce este o afirmație despre peșteră pe care acest desen nu o poate face.",
+      "noTrendTitle": "Nu se poate calcula nicio direcție",
+      "noTrendReason": "Nimic din aceste trasee nu se deplasează pe hartă: fiecare viză fie coboară vertical, fie urcă vertical, fie este marcată ca galerie deja cartată într-o altă tură. O peșteră formată numai din puțuri este cazul obișnuit pentru aceasta. Nu există nicio direcție de desenat aici, ceea ce este o afirmație despre trasee și nu despre peșteră — lungimile de alături au fost măsurate din aceeași cartare și rămân valabile."
+    },
+    "cave": {
+      "title": "Statistici din cartare",
+      "nothingMeasured": "Această peșteră nu are trasee de măsurat. Nimic de aici nu este calculat dintr-o cartare.",
+      "totalLength": "Lungime cartată",
+      "planLength": "Lungime în plan",
+      "verticalExtent": "Denivelare",
+      "maximumExtent": "Cea mai mare desfășurare",
+      "verticality": "Verticalitate",
+      "horizontality": "Orizontalitate",
+      "linearity": "Liniaritate",
+      "sinuosity": "Sinuozitate",
+      "segments": "Segmente",
+      "paths": "Trasee",
+      "highest": "Punctul cel mai înalt",
+      "lowest": "Punctul cel mai jos",
+      "lengthToDepth": "Lungime raportată la denivelare",
+      "pathSinuosityTitle": "Sinuozitatea celor mai lungi galerii",
+      "path": "Galerie",
+      "pathNumber": "#{{value}}",
+      "pathLength": "Lungime",
+      "straightLine": "Linie dreaptă",
+      "lengthAgainstRecord": "Lungimea față de fișă",
+      "depthAgainstRecord": "Denivelarea față de fișă",
+      "notComputed": "Nu poate fi calculată din traseele acestei peșteri.",
+      "notDeclared": "{{computed}} calculat; nimic scris în fișă cu care să fie comparat.",
+      "against": "{{computed}} calculat, {{declared}} în fișă, o diferență de {{difference}}.",
+      "disagreementTitle": "Cartarea și fișa nu sunt de acord",
+      "disagreementBody": "O valoare calculată din traseele acestei peșteri diferă de cea scrisă în fișa ei. Niciuna nu este automat cea greșită: o morfometrie scrisă de mână este adesea mai veche decât cartarea cu care este comparată, iar o cartare poate fi incompletă. Verificați care este mai recentă înainte de a modifica vreuna.",
+      "basisSurveyFlags": "Măsurat din cartarea compilată, folosind marcajele topografului pentru a decide care vize sunt galerie. Aceasta este definiția acestor valori.",
+      "hasAltitudes": "Aceste trasee au altitudini, deci valorile verticale de mai sus sunt măsurate din ele, nu presupuse.",
+      "noAltitudes": "Aceste trasee nu au altitudini — planul unei peșteri nu înseamnă o peșteră orizontală. De aceea fiecare valoare verticală de mai sus este lăsată goală în loc să fie arătată ca zero: nimic de aici nu spune cât de mult coboară peștera, ceea ce este o afirmație despre desen și nu despre peșteră.",
+      "measuredFromModel": "Măsurat din cartarea „{{name}}”. O peșteră poate avea mai multe cartări încărcate, iar valorile luate din două cartări diferite nu sunt aceeași măsurătoare.",
+      "basisSkeletonHeuristic": "Aproximat din traseul stocat, pentru că această peșteră nu are o cartare compilată cu marcaje pe fiecare viză. Forma traseului ține locul marcajelor topografului: păstrează cea mai mare parte din lungimea cartată, dar pierde vizele razante dintr-un punct și, odată cu ele, ultimii metri ai fiecărui fund de sac. Aceste valori nu ar trebui puse alături de cele ale unei peșteri măsurate din cartarea ei ca și cum ar fi aceeași măsurătoare."
+    }
   },
   "permissions": {
     "title": "Permisiuni",
@@ -1705,9 +1772,9 @@
     "status": "Stare",
     "statusValues": {
       "ready": "Gata",
-      "pending": "Așteaptă conversia",
-      "processing": "Se convertește",
-      "failed": "Nu a putut fi convertit"
+      "pending": "Așteaptă la rând",
+      "processing": "În curs",
+      "failed": "Nu a putut fi procesat"
     },
     "formats": {
       "lox": "Therion .lox",
@@ -1742,7 +1809,12 @@
       "notFound": "Acest model topo nu mai există.",
       "caveNotFound": "Această peșteră nu mai există.",
       "forbidden": "Nu ai voie să modifici modelele topo ale acestei peșteri."
-    }
+    },
+    "reading": "Ridicarea este citită în stațiile și vizele ei. Planul poate fi deja vizualizat; lista se actualizează singură când citirea s-a încheiat.",
+    "readingFailed": "Ridicarea nu a putut fi citită.",
+    "plotDeclaration": "Unde se află această ridicare în lume",
+    "plotDeclarationRequiredHint": "Un fișier .lox nu are câmp pentru un sistem de coordonate, deci nu spune niciodată unde se află. Spune ce înseamnă numerele din el — fără asta ridicarea nu poate fi poziționată și nimic nu poate fi citit din ea.",
+    "plotDeclarationOptionalHint": "Un fișier .3d își declară sistemul de coordonate doar dacă ridicarea a fost compilată cu unul. Dacă acesta îl declară, el este folosit și ce scrii aici este ignorat; dacă nu, doar asta îl poate poziționa."
   },
   "centerlines": {
     "title": "Poligonații",
@@ -3133,5 +3205,88 @@
     "loadFailed": "Zonele de lucru nu au putut fi încărcate.",
     "truncated": "Nu sunt afișate toate zonele de lucru: instalația conține mai multe decât listează această vizualizare.",
     "subAreaCount": "Zone în interior: {{count}}"
+  },
+  "surveySources": {
+    "title": "Surse topografice",
+    "explanation": "Materialul din care au fost făcute modelele compilate de mai sus. Păstrat pentru ca topografia să poată fi compilată din nou atunci când uneltele care au produs exportul nu mai există în forma de azi; nimic de aici nu este citit sau interpretat.",
+    "upload": "Arhivează o sursă",
+    "uploaded": "Sursă arhivată",
+    "uploadFailed": "Fișierul nu a putut fi arhivat",
+    "acceptHint": "Therion .th, .th2 și .thconfig, Survex .svx, un .log de compilare sau exportul .zip al unei aplicații de topografie — până la 100 MB.",
+    "kind": "Tip",
+    "size": "Mărime",
+    "revision": "Revizie",
+    "download": "Descarcă",
+    "empty": "Nicio sursă arhivată încă",
+    "deleteConfirm": "Scoți această sursă din arhiva peșterii? Fișierul stocat rămâne.",
+    "kinds": {
+      "therionSource": "Sursă Therion",
+      "therionConfig": "Therion .thconfig",
+      "therionLog": "Jurnal de compilare",
+      "survexSource": "Survex .svx",
+      "topoDroidArchive": "Export din aplicație"
+    },
+    "problems": {
+      "formatUnsupported": "Arhivează o sursă topografică: Therion .th, .th2 sau .thconfig, Survex .svx, un .log de compilare sau exportul .zip al unei aplicații de topografie.",
+      "contentMismatch": "Acest fișier nu este ceea ce spune numele lui. O sursă topografică trebuie să fie chiar formatul pe care extensia îl pretinde.",
+      "sizeInvalid": "Fișierul este gol sau mai mare de 100 MB.",
+      "nameInvalid": "Numele fișierului este prea lung pentru arhivă. Redenumește-l la cel mult 255 de caractere și încearcă din nou.",
+      "descriptionInvalid": "Descrierea este prea lungă; păstreaz-o la cel mult 4000 de caractere.",
+      "notFound": "Această sursă arhivată nu mai există.",
+      "caveNotFound": "Această peșteră nu mai există.",
+      "forbidden": "Nu ai voie să modifici arhiva topografică a acestei peșteri."
+    }
+  },
+  "karstStats": {
+    "count": "Peșteri",
+    "depthAxis": "Denivelare (m)",
+    "lengthAxis": "Lungime carotată (m)",
+    "nothingMeasured": "Nicio peșteră de pe această pagină nu are lungime măsurată.",
+    "powerLawFit": "Ajustare putere (exponent {{exponent}})",
+    "rank": "Rang",
+    "regression": "Ajustare: pantă {{slope}}, R² {{r2}}",
+    "scopeNote": "Calculat din cele {{shown}} din {{total}} peșteri de pe această pagină care au o lungime măsurată. Peșterile fără lungime lipsesc, nu sunt numărate ca zero.",
+    "title": "Distribuții",
+    "viewByType": "După tip",
+    "viewHistogram": "Lungime",
+    "viewLengthDepth": "Lungime vs denivelare",
+    "viewRankSize": "Rang–mărime"
+  },
+  "morphometry": {
+    "title": "Formă măsurată",
+    "area": "Suprafață",
+    "perimeter": "Perimetru",
+    "circularity": "Circularitate",
+    "longAxis": "Axa lungă",
+    "shortAxis": "Axa scurtă",
+    "elongation": "Alungire",
+    "longAxisAzimuth": "Orientarea axei lungi",
+    "centroid": "Centru",
+    "unitMetres": "m",
+    "unitSquareMetres": "m²",
+    "unitDegrees": "°",
+    "invalidGeometry": "Conturul se intersectează cu el însuși, deci nu are o suprafață sau o formă măsurabilă. Redesenează-l înainte de a citi ceva din el.",
+    "measuredInWorkingSystem": "Măsurat în metri, în sistemul de coordonate de lucru al acestei instalări, nu în gradele în care este stocat conturul.",
+    "axisIsNotABearing": "Orientarea axei lungi este o aliniere, nu o direcție: merge de la 0° la 180°, deci 170° și 350° sunt aceeași aliniere."
+  },
+  "closestApproach": {
+    "title": "Cea mai mică distanță",
+    "pickOther": "Alege altă peșteră",
+    "pickOtherHint": "Alege o a doua peșteră pentru a măsura cât de aproape ajung una de cealaltă.",
+    "distance": "Distanța cea mai mică",
+    "horizontal": "Orizontal",
+    "vertical": "Vertical",
+    "bearing": "Azimut",
+    "unitMetres": "m",
+    "unitDegrees": "°",
+    "between": "De la {{from}} la {{to}}.",
+    "horizontalIsOfTheSameLine": "Valorile orizontală și verticală sunt cele două componente ale aceleiași linii minime, nu distanța orizontală minimă și distanța verticală minimă, care sunt alte perechi de puncte.",
+    "unavailable": "Nicio distanță pentru această pereche",
+    "unavailableWhy": "O distanță între două peșteri o localizează pe fiecare pornind de la cealaltă, așa că este dată doar unui cititor care poate vedea exact unde se află amândouă.",
+    "absence": {
+      "noLineWork": "Cel puțin una dintre aceste două peșteri nu are traseu topografic din care să se măsoare.",
+      "noAltitudes": "Cel puțin una dintre aceste două peșteri a fost desenată în plan și nu a înregistrat adâncimi, deci nu există o distanță tridimensională onestă."
+    },
+    "drawnOnMap": "Linia cea mai scurtă este desenată pe hartă și în vizualizarea 3D. Pe hartă vedeți doar proiecția ei în plan; în 3D trece prin rocă, la adâncimile la care au fost măsurate cele două capete."
   }
 }

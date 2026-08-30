@@ -889,6 +889,192 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{id}/stations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stations read out of the survey; withheld without the exact-location permission. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfSurveyStationDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-models/{id}/shots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Legs read out of the survey; withheld without the exact-location permission. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfSurveyShotDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{caveId}/survey-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Archived survey sources of a cave; withheld without the exact-location permission. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveySourceDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Archives a survey source file against the cave (Write on the cave). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    } & {
+                        description?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveySourceDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/survey-sources/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes the archive entry (Write on the cave); the stored document is kept. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{caveId}/centerlines": {
         parameters: {
             query?: never;
@@ -4667,6 +4853,164 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The shape one cave's survey measures, and where that disagrees with its record. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveStatisticsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/orientation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which way and how steeply one cave's passage runs. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveOrientationDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/closest-approach/{other}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The shortest three-dimensional line between two caves' line work, with its horizontal and vertical parts and its bearing. Withheld entirely unless the caller may place both caves exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    other: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ClosestApproachDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/closest-approaches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The closest pairs of caves in a bounding box, nearest first. Built only over pairs both of whose caves the caller may place exactly. */
+        get: {
+            parameters: {
+                query: {
+                    West: number;
+                    South: number;
+                    East: number;
+                    North: number;
+                    MaxDistanceM?: number;
+                    Limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ClosestApproachTableDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/features": {
         parameters: {
             query?: never;
@@ -4816,6 +5160,87 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/morphometry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The measured shape of every outline in a bounding box, largest first. Only outlines the caller may place exactly are in it. */
+        get: {
+            parameters: {
+                query: {
+                    West: number;
+                    South: number;
+                    East: number;
+                    North: number;
+                    FeatureTypeId?: number;
+                    Limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureMorphometryTableDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/morphometry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Area, perimeter, circularity, axes, elongation, long-axis bearing and centroid of one drawn outline, measured in metres. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureMorphometryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -14827,6 +15252,35 @@ export interface components {
             thumbnailUrl: string;
             caption: null | string;
         };
+        CaveIndexSummary: {
+            /** Format: int32 */
+            segmentCount: number;
+            /** Format: int32 */
+            pathCount: number;
+            /** Format: double */
+            totalLengthM: number;
+            /** Format: double */
+            planLengthM: number;
+            hasAltitudes: boolean;
+            /** Format: double */
+            highestZM: null | number;
+            /** Format: double */
+            lowestZM: null | number;
+            /** Format: double */
+            verticalExtentM: null | number;
+            /** Format: double */
+            maximumExtentM: null | number;
+            /** Format: double */
+            verticality: null | number;
+            /** Format: double */
+            horizontality: null | number;
+            /** Format: double */
+            linearity: null | number;
+            /** Format: double */
+            lengthToDepthRatio: null | number;
+            /** Format: double */
+            sinuosity: null | number;
+        };
         CaveListItemDto: {
             /** Format: uuid */
             id: string;
@@ -14856,6 +15310,23 @@ export interface components {
             name: null | string;
             geom: null | components["schemas"]["GeoJsonPoint"];
             approximateLocation: boolean;
+        };
+        CaveOrientationDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            /** Format: int32 */
+            segmentCount: number;
+            /** Format: double */
+            totalLengthM: number;
+            byCount: components["schemas"]["OrientationMeasure"];
+            byLength: components["schemas"]["OrientationMeasure"];
+            bins: components["schemas"]["OrientationBin"][];
+            dip: null | components["schemas"]["DipSummary"];
         };
         CaveParentDto: {
             /** Format: uuid */
@@ -14900,6 +15371,20 @@ export interface components {
             email: null | string;
             phone: null | string;
             notes: null | string;
+        };
+        CaveStatisticsDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            indices: components["schemas"]["CaveIndexSummary"];
+            paths: components["schemas"]["PathSinuosity"][];
+            length: components["schemas"]["MorphometryComparison"];
+            depth: components["schemas"]["MorphometryComparison"];
+            declaredDisagrees: boolean;
         };
         CaveSummaryDto: {
             /** Format: uuid */
@@ -15100,6 +15585,40 @@ export interface components {
             visibility: components["schemas"]["Visibility"];
             items: components["schemas"]["ChecklistItemRequest"][];
         };
+        /** @enum {unknown} */
+        ClosestApproachAbsence: "none" | "noLineWork" | "noAltitudes";
+        ClosestApproachDto: {
+            /** Format: uuid */
+            caveAId: string;
+            caveAName: null | string;
+            /** Format: uuid */
+            caveBId: string;
+            caveBName: null | string;
+            absence: components["schemas"]["ClosestApproachAbsence"];
+            /** Format: double */
+            distanceM: null | number;
+            /** Format: double */
+            horizontalDistanceM: null | number;
+            /** Format: double */
+            verticalDistanceM: null | number;
+            /** Format: double */
+            bearingDegrees: null | number;
+            from: null | components["schemas"]["ClosestApproachPointDto"];
+            to: null | components["schemas"]["ClosestApproachPointDto"];
+        };
+        ClosestApproachPointDto: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            altitudeM: number;
+        };
+        ClosestApproachTableDto: {
+            pairs: components["schemas"]["ClosestApproachDto"][];
+            /** Format: double */
+            maxDistanceM: number;
+        };
         ConfirmEmailRequest: {
             /** Format: uuid */
             userId: string;
@@ -15163,6 +15682,21 @@ export interface components {
             longitudeColumn?: null | string;
             elevationColumn?: null | string;
             wktColumn?: null | string;
+        };
+        DipSummary: {
+            /** Format: int32 */
+            sampleCount: number;
+            /** Format: double */
+            totalLengthM: number;
+            /** Format: double */
+            meanDipDegrees: null | number;
+            /** Format: double */
+            meanAbsoluteDipDegrees: null | number;
+            /** Format: double */
+            minimumDipDegrees: null | number;
+            /** Format: double */
+            maximumDipDegrees: null | number;
+            bins: components["schemas"]["OrientationBin"][];
         };
         DirectoryImportConfigDto: {
             roots: string[];
@@ -15814,6 +16348,33 @@ export interface components {
             visibility: components["schemas"]["Visibility"];
             /** Format: date-time */
             updatedAt: string;
+        };
+        FeatureMorphometryDto: {
+            /** Format: uuid */
+            featureId: string;
+            name: null | string;
+            geometryValid: boolean;
+            /** Format: double */
+            areaM2: null | number;
+            /** Format: double */
+            perimeterM: null | number;
+            /** Format: double */
+            circularity: null | number;
+            /** Format: double */
+            longAxisM: null | number;
+            /** Format: double */
+            shortAxisM: null | number;
+            /** Format: double */
+            elongation: null | number;
+            /** Format: double */
+            longAxisAzimuthDegrees: null | number;
+            /** Format: double */
+            centroidLongitude: null | number;
+            /** Format: double */
+            centroidLatitude: null | number;
+        };
+        FeatureMorphometryTableDto: {
+            rows: components["schemas"]["FeatureMorphometryDto"][];
         };
         FeatureParentDto: {
             /** Format: uuid */
@@ -16701,6 +17262,20 @@ export interface components {
             preferredMethod: null | components["schemas"]["TwoFactorMethod"];
             methods: components["schemas"]["MfaMethodDto"][];
         };
+        /** @enum {unknown} */
+        MorphometryAgreement: "notDeclared" | "notComputed" | "agrees" | "disagrees";
+        MorphometryComparison: {
+            /** Format: double */
+            computedM: null | number;
+            /** Format: double */
+            declaredM: null | number;
+            /** Format: double */
+            differenceM: null | number;
+            /** Format: double */
+            relativeDifference: null | number;
+            agreement: components["schemas"]["MorphometryAgreement"];
+            disagrees?: boolean;
+        };
         MyPermissionGroupDto: {
             /** Format: uuid */
             id: string;
@@ -16833,6 +17408,36 @@ export interface components {
         };
         ObjectAccessReplaceRequest: {
             entries: components["schemas"]["ObjectAccessEntryWrite"][];
+        };
+        OrientationBin: {
+            /** Format: double */
+            fromDegrees: number;
+            /** Format: double */
+            toDegrees: number;
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            lengthM: number;
+            /** Format: double */
+            countFraction: number;
+            /** Format: double */
+            lengthFraction: number;
+        };
+        OrientationMeasure: {
+            /** Format: double */
+            meanAxisDegrees: null | number;
+            /** Format: double */
+            resultantLength: number;
+            /** Format: double */
+            effectiveSampleSize: number;
+            /** Format: double */
+            rayleighZ: null | number;
+            /** Format: double */
+            rayleighP: null | number;
+            /** Format: double */
+            entropyNats: null | number;
+            /** Format: double */
+            entropyNormalized: null | number;
         };
         /** @enum {unknown} */
         PageDivision: "whole" | "page" | "sheet" | "slide";
@@ -17034,6 +17639,24 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfSurveyShotDto: {
+            items: components["schemas"]["SurveyShotDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
+        PagedResultOfSurveyStationDto: {
+            items: components["schemas"]["SurveyStationDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfTerrainBuildDto: {
             items: components["schemas"]["TerrainBuildDto"][];
             /** Format: int32 */
@@ -17092,6 +17715,16 @@ export interface components {
         PasswordChangeRequest: {
             currentPassword: string;
             newPassword: string;
+        };
+        PathSinuosity: {
+            /** Format: int32 */
+            pathIndex: number;
+            /** Format: double */
+            lengthM: number;
+            /** Format: double */
+            straightLineM: number;
+            /** Format: double */
+            sinuosity: null | number;
         };
         PermissionGroupDto: {
             /** Format: uuid */
@@ -17833,6 +18466,10 @@ export interface components {
             /** Format: int32 */
             triangleCount: null | number;
             sourcePrecisionLost: boolean;
+            /** Format: int32 */
+            droppedShotCount: null | number;
+            /** Format: int32 */
+            mergedStationCount: null | number;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -17847,6 +18484,68 @@ export interface components {
             description: null | string;
             /** Format: date */
             surveyedAt: null | string;
+        };
+        /** @enum {unknown} */
+        SurveySegmentBasis: "unavailable" | "surveyFlags" | "skeletonHeuristic";
+        SurveyShotDto: {
+            fromStationName: null | string;
+            toStationName: null | string;
+            surveyName: null | string;
+            /** Format: double */
+            fromLongitude: number;
+            /** Format: double */
+            fromLatitude: number;
+            /** Format: double */
+            fromAltitudeM: number;
+            /** Format: double */
+            toLongitude: number;
+            /** Format: double */
+            toLatitude: number;
+            /** Format: double */
+            toAltitudeM: number;
+            /** Format: double */
+            lengthM: number;
+            flags: string[];
+            isSplay: boolean;
+        };
+        SurveySourceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caveId: string;
+            kind: components["schemas"]["SurveySourceKind"];
+            name: string;
+            fileName: string;
+            description: null | string;
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            fileId: string;
+            mediaType: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: int32 */
+            versionNumber: number;
+            contentUrl: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        SurveySourceKind: "therionSource" | "therionConfig" | "therionLog" | "survexSource" | "topoDroidArchive";
+        SurveyStationDto: {
+            name: string;
+            surveyName: null | string;
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            altitudeM: number;
+            flags: string[];
+            isEntrance: boolean;
+            isFixed: boolean;
         };
         TagDto: {
             /** Format: int64 */
