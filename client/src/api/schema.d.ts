@@ -4475,6 +4475,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/closest-approach/{other}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The shortest three-dimensional line between two caves' line work, with its horizontal and vertical parts and its bearing. Withheld entirely unless the caller may place both caves exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    other: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ClosestApproachDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/closest-approaches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The closest pairs of caves in a bounding box, nearest first. Built only over pairs both of whose caves the caller may place exactly. */
+        get: {
+            parameters: {
+                query: {
+                    West: number;
+                    South: number;
+                    East: number;
+                    North: number;
+                    MaxDistanceM?: number;
+                    Limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ClosestApproachTableDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/features": {
         parameters: {
             query?: never;
@@ -4624,6 +4706,87 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/morphometry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The measured shape of every outline in a bounding box, largest first. Only outlines the caller may place exactly are in it. */
+        get: {
+            parameters: {
+                query: {
+                    West: number;
+                    South: number;
+                    East: number;
+                    North: number;
+                    FeatureTypeId?: number;
+                    Limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureMorphometryTableDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/morphometry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Area, perimeter, circularity, axes, elongation, long-axis bearing and centroid of one drawn outline, measured in metres. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureMorphometryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -12644,6 +12807,40 @@ export interface components {
             surveyModelId: null | string;
             isDefault: boolean;
         };
+        /** @enum {unknown} */
+        ClosestApproachAbsence: "none" | "noLineWork" | "noAltitudes";
+        ClosestApproachDto: {
+            /** Format: uuid */
+            caveAId: string;
+            caveAName: null | string;
+            /** Format: uuid */
+            caveBId: string;
+            caveBName: null | string;
+            absence: components["schemas"]["ClosestApproachAbsence"];
+            /** Format: double */
+            distanceM: null | number;
+            /** Format: double */
+            horizontalDistanceM: null | number;
+            /** Format: double */
+            verticalDistanceM: null | number;
+            /** Format: double */
+            bearingDegrees: null | number;
+            from: null | components["schemas"]["ClosestApproachPointDto"];
+            to: null | components["schemas"]["ClosestApproachPointDto"];
+        };
+        ClosestApproachPointDto: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            altitudeM: number;
+        };
+        ClosestApproachTableDto: {
+            pairs: components["schemas"]["ClosestApproachDto"][];
+            /** Format: double */
+            maxDistanceM: number;
+        };
         ConfirmEmailRequest: {
             /** Format: uuid */
             userId: string;
@@ -13077,6 +13274,33 @@ export interface components {
             visibility: components["schemas"]["Visibility"];
             /** Format: date-time */
             updatedAt: string;
+        };
+        FeatureMorphometryDto: {
+            /** Format: uuid */
+            featureId: string;
+            name: null | string;
+            geometryValid: boolean;
+            /** Format: double */
+            areaM2: null | number;
+            /** Format: double */
+            perimeterM: null | number;
+            /** Format: double */
+            circularity: null | number;
+            /** Format: double */
+            longAxisM: null | number;
+            /** Format: double */
+            shortAxisM: null | number;
+            /** Format: double */
+            elongation: null | number;
+            /** Format: double */
+            longAxisAzimuthDegrees: null | number;
+            /** Format: double */
+            centroidLongitude: null | number;
+            /** Format: double */
+            centroidLatitude: null | number;
+        };
+        FeatureMorphometryTableDto: {
+            rows: components["schemas"]["FeatureMorphometryDto"][];
         };
         FeatureParentDto: {
             /** Format: uuid */
