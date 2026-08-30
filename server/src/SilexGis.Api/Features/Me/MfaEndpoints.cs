@@ -241,6 +241,12 @@ public static class MfaEndpoints
             return blocked;
         }
 
+        if (await CodeAttempts.LockedOutAsync(userManager, user))
+        {
+            return ApiProblems.BadRequest(
+                "auth.locked_out", "Account temporarily locked after repeated failures.");
+        }
+
         var code = request.Code.Replace(" ", string.Empty);
         var valid = parsed == TwoFactorMethod.Authenticator
             ? await userManager.VerifyTwoFactorTokenAsync(
@@ -248,8 +254,11 @@ public static class MfaEndpoints
             : await userManager.VerifyTwoFactorTokenAsync(user, TwoFactorProviders.For(parsed), code);
         if (!valid)
         {
+            await CodeAttempts.FailedAsync(userManager, user);
             return ApiProblems.BadRequest("auth.mfa_invalid", "The code is not valid.");
         }
+
+        await CodeAttempts.SucceededAsync(userManager, user);
 
         // Recovery codes are issued when two-factor first comes on and never silently reissued:
         // regenerating them here would quietly invalidate the set the user has already written down.

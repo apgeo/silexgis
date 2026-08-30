@@ -18,7 +18,7 @@ import type { ResLinkTargetType } from './registry.ts';
  * asks the server for a total. Where the kind is not yet a world, it stays the search it always
  * was.
  *
- * When the remaining five kinds become worlds, the second branch goes and this file becomes a
+ * When the remaining six kinds become worlds, the second branch goes and this file becomes a
  * thin call to the selector. Until then the branch lives here rather than in the dialog, so the
  * dialog does not have to know there are two.
  */
@@ -93,7 +93,7 @@ export default function ResLinkTargetPicker({
 
 /**
  * The search as it was, for the kinds that are not worlds yet — cavers, caving groups, cabinets,
- * survey models and geofiles.
+ * survey models, geofiles and expeditions.
  */
 function LegacyTargetSearch({
   targetType,

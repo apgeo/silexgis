@@ -25,7 +25,9 @@ import { unByKey } from 'ol/Observable';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useSearchParams } from 'react-router-dom';
-import { useCan, useFeatureTypes, useGeofiles, useMapConfig, useMapLayers, useMapViews, useRasterMaps } from '../api/hooks.ts';
+import { useCan, useFeatureTypes, useGeofiles, useMapConfig, useMapLayers, useMapViews, useRasterMaps, useWorkAreas } from '../api/hooks.ts';
+import { transformExtent } from 'ol/proj';
+import { extentOf } from '../workareas/tree.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import EditToolbar from '../components/map/EditToolbar.tsx';
 import FeatureListPanel from '../components/map/FeatureListPanel.tsx';
@@ -346,6 +348,7 @@ export default function MapPage() {
   const { data: savedViews } = useMapViews();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedViewId = searchParams.get('view');
+  const requestedAreaId = searchParams.get('area');
 
   // A view picked elsewhere (?view=<id>, e.g. from the dashboard) is applied on arrival, then
   // the param is consumed. It is a one-shot instruction, not a description of the URL: the
@@ -371,6 +374,38 @@ export default function MapPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applyView is stable for this use
   }, [savedViews, requestedViewId, setSearchParams]);
 
+  // An area picked elsewhere (?area=<id>, from the work-area overview or the dashboard board) is
+  // framed on arrival, then the param is consumed — a one-shot instruction, exactly like ?view=
+  // above and for the same reason: the camera is synced into the hash as the reader pans, so
+  // leaving it behind would re-frame the area over a position somebody had panned to and shared.
+  //
+  // Fitted to the shape rather than centred on it at a guessed zoom: an area is a stretch of
+  // country, and the only honest answer to "show me this massif" is one that has all of it on
+  // screen. A guessed zoom would frame a valley and a mountain range identically.
+  const { data: workAreas } = useWorkAreas(requestedAreaId !== null);
+  useEffect(() => {
+    if (!requestedAreaId || !workAreas) {
+      return;
+    }
+    const extent = extentOf(workAreas.items.find((a) => a.id === requestedAreaId)?.geometry ?? null);
+    if (extent) {
+      getWorkspaceMap().getView().fit(transformExtent(extent, 'EPSG:4326', 'EPSG:3857'), {
+        padding: [48, 48, 48, 48],
+        duration: 250,
+        maxZoom: 15,
+      });
+    }
+    // Consumed whether or not it framed anything: an area with no boundary drawn yet, or one this
+    // reader may not see, must not leave the map trying again on every refetch.
+    setSearchParams(
+      (params) => {
+        params.delete('area');
+        return params;
+      },
+      { replace: true },
+    );
+  }, [requestedAreaId, workAreas, setSearchParams]);
+
   // The home view opens the workspace once per session. The flag is claimed on the first load
   // of the views whichever path runs, so that a requested view or a shared position can never
   // be overwritten by the home view later in the session.
@@ -382,7 +417,7 @@ export default function MapPage() {
     // An explicit view request and a shareable position in the URL both outrank the home view.
     // A 3D position counts: arriving on a shared 3D link and then opening the map must not have
     // the home view quietly take the position the link was sent for.
-    if (requestedViewId || hasMapHash() || hasScene3dHash()) {
+    if (requestedViewId || requestedAreaId || hasMapHash() || hasScene3dHash()) {
       return;
     }
     const home = savedViews.find((v) => v.isHome);
@@ -390,7 +425,7 @@ export default function MapPage() {
       applyView(home);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on first data
-  }, [savedViews, requestedViewId]);
+  }, [savedViews, requestedViewId, requestedAreaId]);
 
   // A scene opening beside the map starts on the ground the map is showing rather than on its own
   // default view of the Carpathians. It is said once, when the pane opens, rather than being

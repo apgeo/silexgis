@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using SilexGis.Domain;
+using SilexGis.Domain.Profiles;
 using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Identity;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -122,12 +123,16 @@ public static class ConnectEndpoints
             return Forbidden(Errors.InvalidToken, "The access token is no longer valid.");
         }
 
+        // The same protected label the token carries, for the same reason: neither name claim
+        // may be the email address, which has its own claim and its own scope.
+        var label = ProfileProtection.Label(user);
+
         return Results.Ok(new Dictionary<string, object?>
         {
             [Claims.Subject] = user.Id.ToString(),
             [Claims.Email] = user.Email,
-            [Claims.Name] = user.UserName,
-            [Claims.PreferredUsername] = user.DisplayName ?? user.UserName,
+            [Claims.Name] = label,
+            [Claims.PreferredUsername] = label,
             [Claims.Role] = await userManager.GetRolesAsync(user),
         });
     }

@@ -44,5 +44,12 @@ public static class AuditActions
     public const string Updated = "updated";
     public const string Deleted = "deleted";
     public const string PermissionChanged = "permission_changed";
+
+    /// <summary>
+    /// An operator put a dead outbound message back in the queue by hand. Its own name because it
+    /// is neither a change to a row somebody edited nor an automatic transition: it is a person
+    /// deciding that a message somebody else was meant to receive should be attempted again.
+    /// </summary>
+    public const string NotificationRetried = "notification_retried";
     public const string Login = "login";
 }

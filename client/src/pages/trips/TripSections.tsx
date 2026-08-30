@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   App,
   Alert,
@@ -124,13 +124,65 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
     safety: {},
   });
   const [measured, setMeasured] = useState<Measured>(measuredOf(trip));
+
+  /**
+   * Which blocks of this card hold something not yet sent, and which trip they were typed on.
+   *
+   * Every write to the trip re-reads it, and the re-read arrives as a new object seconds later —
+   * long enough to type a line into a section in the meantime. Re-syncing on the object alone
+   * would throw those keystrokes away and, worse, leave the next save serialising the copy that
+   * came back, so a section somebody was part way through writing would be written out empty.
+   *
+   * Per block rather than per card, because a save carries one section and leaves the other two
+   * absent: a card-wide flag cleared by saving field data would let the re-read that save
+   * triggers overwrite a half-written safety section, which is the same loss one step sideways.
+   * The counted facts travel on every save from this card, so they are cleared by any of them.
+   *
+   * Beside the trip it belongs to, because this card is not remounted when the page moves to
+   * another trip — the route element is the same and a cached trip arrives without a loading
+   * pass, so only the prop changes. Unsent text belongs to the trip it was typed on and must not
+   * be held back from, or worse written onto, a different one.
+   *
+   * A ref rather than a state: this is a condition the re-sync is read under, not something the
+   * card draws, and keeping it out of the effect's dependencies is what stops the effect running
+   * again the moment a block is cleared — which would re-sync from the copy the save was made
+   * against and undo on screen the save that had just been sent.
+   *
+   * Cleared when a save is sent rather than when it is answered: what was typed is on its way to
+   * the server at that point, so a re-read landing afterwards is welcome, and anything typed
+   * after that moment marks the block again and is protected in its turn. A save that fails
+   * marks it back, because then this card holds the only copy of that work.
+   */
+  const dirty = useRef<{ tripId: string; blocks: Set<SectionKey | 'measured'> }>({
+    tripId: trip.id,
+    blocks: new Set(),
+  });
+
+  const markDirty = (block: SectionKey | 'measured') => {
+    if (dirty.current.tripId !== trip.id) {
+      dirty.current = { tripId: trip.id, blocks: new Set() };
+    }
+    dirty.current.blocks.add(block);
+  };
+
   useEffect(() => {
-    setValues({
-      fieldData: asBag(trip.fieldData),
-      logistics: asBag(trip.logistics),
-      safety: asBag(trip.safety),
+    // A different trip: nothing held here belongs to it, so everything is taken from the new one.
+    if (dirty.current.tripId !== trip.id) {
+      dirty.current = { tripId: trip.id, blocks: new Set() };
+    }
+    const held = dirty.current.blocks;
+    setValues((current) => {
+      const next = { ...current };
+      for (const section of SECTIONS) {
+        if (!held.has(section)) {
+          next[section] = asBag(trip[section]);
+        }
+      }
+      return next;
     });
-    setMeasured(measuredOf(trip));
+    if (!held.has('measured')) {
+      setMeasured(measuredOf(trip));
+    }
   }, [trip]);
 
   /**
@@ -166,6 +218,10 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
       locationText: trip.locationText,
       organizingCavingGroupId: trip.organizingCavingGroupId,
       geom: trip.geom,
+      // Where the party gathers, back as it stands for the same reason as everything else on this
+      // list: a write replaces every field on the trip, so saving one section without it would
+      // erase the meeting point of a trip nobody was editing the meeting point of.
+      meetingGeom: trip.meetingGeom,
       // No list at all, not a cleared one: which caves this trip is about is recorded through
       // its roles, and saving a section must not be able to undo that.
       caveIds: null,
@@ -184,12 +240,27 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
       fieldData: section === 'fieldData' ? bag : null,
       logistics: section === 'logistics' ? bag : null,
       safety: section === 'safety' ? bag : null,
+      // Back as it stands: a write sets every field, so saving one section without it would take
+      // the trip's limit off and put everybody who was waiting on the trip.
+      maxParticipants: trip.maxParticipants,
     };
 
+    // Only what this request carries: the named section, and the counted facts, which travel on
+    // every save from this card. A section not in the body is untouched by the server and its
+    // unsent text is still the only copy there is.
+    const sent: (SectionKey | 'measured')[] = section ? [section, 'measured'] : ['measured'];
+    for (const block of sent) {
+      dirty.current.blocks.delete(block);
+    }
     try {
       await updateTrip.mutateAsync({ id: trip.id, body });
       message.success(t('common.saved'));
     } catch (error) {
+      // Nothing reached the server, so this card holds the only copy of what was typed and must
+      // not be overwritten by the next re-read of the trip.
+      for (const block of sent) {
+        markDirty(block);
+      }
       // Worth naming rather than folding into "save failed": a section the purpose's schema
       // rejects leaves somebody guessing which of the values they typed was at fault.
       message.error(
@@ -229,12 +300,13 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
             label={tripSectionFieldLabel(field, t)}
             value={values[section][field.key]}
             canEdit={canEdit}
-            onChange={(value) =>
+            onChange={(value) => {
+              markDirty(section);
               setValues((current) => ({
                 ...current,
                 [section]: { ...current[section], [field.key]: value },
-              }))
-            }
+              }));
+            }}
           />
         ))}
         {canEdit && (
@@ -264,7 +336,10 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
           {canEdit ? (
             <InputNumber
               value={measured[measure]}
-              onChange={(next) => setMeasured((current) => ({ ...current, [measure]: next }))}
+              onChange={(next) => {
+                markDirty('measured');
+                setMeasured((current) => ({ ...current, [measure]: next }));
+              }}
               min={0}
               precision={measure === 'surveyStations' ? 0 : undefined}
               style={{ width: '100%' }}
@@ -281,7 +356,10 @@ export default function TripSections({ trip, canEdit }: { trip: TripLogInfo; can
       {canEdit ? (
         <Checkbox
           checked={measured.hadIncident}
-          onChange={(e) => setMeasured((current) => ({ ...current, hadIncident: e.target.checked }))}
+          onChange={(e) => {
+            markDirty('measured');
+            setMeasured((current) => ({ ...current, hadIncident: e.target.checked }));
+          }}
           data-testid="trip-measure-hadIncident"
         >
           {t('trips.hadIncidentYes')}

@@ -14,10 +14,10 @@ namespace SilexGis.Infrastructure.Permissions;
 /// asks <see cref="FeatureProtection"/> the exact-view question once for the whole batch.
 /// </summary>
 /// <remarks>
-/// Four reads serve any number of photos: the attachments, the locating links of whatever
-/// features those name, the caves of whatever trips they name, and the exact-view pass over
-/// everything that turned up. Everything downstream of that is in memory, so authorising a
-/// page of photos costs what authorising one does.
+/// Five reads serve any number of photos: the attachments, the locating links of whatever
+/// features those name, the member trips of whatever camps they name, the caves of every trip
+/// that turned up either way, and the exact-view pass over the lot. Everything downstream of
+/// that is in memory, so authorising a page of photos costs what authorising one does.
 /// </remarks>
 public sealed class PhotoPositionDisclosure(SilexGisDbContext db, FeatureProtection protection)
 {
@@ -79,8 +79,28 @@ public sealed class PhotoPositionDisclosure(SilexGisDbContext db, FeatureProtect
 
         var attachedFeatureIds = links.Where(l => l.FeatureId != null)
             .Select(l => l.FeatureId!.Value).Distinct().ToList();
-        var tripIds = links.Where(l => l.EntityType == AttachedEntityType.TripLog)
+        var campIds = links.Where(l => l.EntityType == AttachedEntityType.Expedition)
             .Select(l => l.EntityId!.Value).Distinct().ToList();
+
+        // A camp gathers a named set of trips, and a photograph filed under the camp rather than
+        // under one of them is placed by exactly the same journeys — filing it one level up is a
+        // matter of where the uploader put it, not of where the camera was. So the camp's member
+        // trips join the chain of anything attached to the camp, and the places those trips name
+        // protect it just as they would if it hung on the trip itself. Fail-closed: every member
+        // trip counts, because nothing about the photograph says which of them it came from.
+        var campTrips = campIds.Count == 0
+            ? []
+            : await db.ExpeditionTrips.AsNoTracking()
+                .Where(x => campIds.Contains(x.ExpeditionId))
+                .Select(x => new { x.ExpeditionId, x.TripLogId })
+                .ToListAsync(ct);
+        var campToTrips = campTrips.GroupBy(x => x.ExpeditionId)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.TripLogId).ToList());
+
+        var tripIds = links.Where(l => l.EntityType == AttachedEntityType.TripLog)
+            .Select(l => l.EntityId!.Value)
+            .Concat(campTrips.Select(x => x.TripLogId))
+            .Distinct().ToList();
 
         // A link whose kind places its endpoints discloses the other end's position by
         // proximity, in either direction, so both ends join the chain — fail-closed.
@@ -123,6 +143,17 @@ public sealed class PhotoPositionDisclosure(SilexGisDbContext db, FeatureProtect
                 && tripToCaves.TryGetValue(link.EntityId!.Value, out var caveIds))
             {
                 Chain(link.FileId).AddRange(caveIds);
+            }
+            else if (link.EntityType == AttachedEntityType.Expedition
+                && campToTrips.TryGetValue(link.EntityId!.Value, out var memberTripIds))
+            {
+                foreach (var tripId in memberTripIds)
+                {
+                    if (tripToCaves.TryGetValue(tripId, out var campCaveIds))
+                    {
+                        Chain(link.FileId).AddRange(campCaveIds);
+                    }
+                }
             }
         }
 

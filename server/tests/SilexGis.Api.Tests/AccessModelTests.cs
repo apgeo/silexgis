@@ -72,6 +72,12 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
                 // A saved view is the caller's own workspace state, so every account keeps
                 // being able to make one.
                 AccessDomain.MapViews,
+                // And so is a list of what has to be settled before a trip sets off: anybody
+                // may write one and decide for themselves who else sees it.
+                AccessDomain.Checklists,
+                // And so is a date in the calendar: anybody may put one there, and decide for
+                // themselves who else sees that.
+                AccessDomain.Events,
             ],
             ignoreOrder: true);
 
@@ -140,17 +146,24 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
             && e.ScopeKind == AccessScopeKind.CavingGroup && e.ScopeId == groupId
             && (e.Actions & (AccessAction.Read | AccessAction.Write | AccessAction.Create))
                 == (AccessAction.Read | AccessAction.Write | AccessAction.Create));
+        // Expeditions are on the list for the reason trips are: a club's camps are club
+        // content, and a starter ruleset that left them out would give a club members who may
+        // write every trip of a camp and not the camp holding them.
         starter.Select(e => e.Domain).ShouldBe(
             [
                 AccessDomain.Features, AccessDomain.TripLogs, AccessDomain.Geofiles,
                 AccessDomain.GeoreferencedMaps, AccessDomain.MapViews, AccessDomain.Documents,
+                AccessDomain.Expeditions, AccessDomain.Checklists, AccessDomain.Events,
             ],
             ignoreOrder: true);
 
-        // Every domain that can carry a position carries the exact-view bit; documents carry
-        // none, so granting it there would be a line nobody editing this ruleset could act on.
+        // Every domain that can carry a position carries the exact-view bit; documents,
+        // checklists and calendar events carry none, so granting it there would be a line
+        // nobody editing this ruleset could act on. An event is where a club meets, written
+        // down for a person to read — an address, never a coordinate.
         starter.ShouldAllBe(e => ((e.Actions & AccessAction.ViewExactLocation) != 0)
-            == (e.Domain != AccessDomain.Documents));
+            == (e.Domain != AccessDomain.Documents && e.Domain != AccessDomain.Checklists
+                && e.Domain != AccessDomain.Events));
 
         // "«name» — managers": the creator manages the group record and can enroll
         // people from day one.
@@ -160,6 +173,12 @@ public sealed class AccessModelTests : IAsyncLifetime, IDisposable
             && e.ScopeId == groupId && (e.Actions & AccessAction.ManagePermissions) != 0);
         managerCtx.Entries.ShouldContain(e =>
             e.Domain == AccessDomain.Cavers && (e.Actions & AccessAction.Create) != 0);
+
+        // And can write to everyone on it. Without this the club's own leader could not announce
+        // anything and only an installation administrator could, which is not what a club is.
+        managerCtx.Entries.ShouldContain(e =>
+            e.Domain == AccessDomain.CavingGroups && e.ScopeKind == AccessScopeKind.Object
+            && e.ScopeId == groupId && (e.Actions & AccessAction.Execute) != 0);
     }
 
     [Fact]

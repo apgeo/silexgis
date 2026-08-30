@@ -130,5 +130,12 @@ public sealed class ProcessingJobConfiguration : IEntityTypeConfiguration<Proces
 
         // The worker polls for queued jobs ordered by id.
         builder.HasIndex(x => new { x.Status, x.Id });
+
+        // Two questions asked per kind rather than across the whole table: is a pass of this kind
+        // already waiting or running, and when did one of this kind last finish. The second is how
+        // a page says when a scheduled check last ran, which is what stops a check that never ran
+        // reading as a check that found nothing wrong — so it is asked on a page's own request and
+        // must not be a scan of every job ever queued.
+        builder.HasIndex(x => new { x.Kind, x.CompletedAt });
     }
 }

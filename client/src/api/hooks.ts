@@ -3,6 +3,11 @@ import { useEffect, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
+import {
+  defaultInboxTransport,
+  inboxPollIntervalMs,
+  isInboxTransport,
+} from '../notifications/transport.ts';
 import { api, ApiError, lastReadETag } from './client.ts';
 import type { components, paths } from './schema';
 
@@ -34,6 +39,8 @@ export type FileConfig = components['schemas']['FileConfigDto'];
 export type EntranceFeatureCollection = components['schemas']['FeatureCollection'];
 export type Me = components['schemas']['MeDto'];
 export type MeUpdate = components['schemas']['MeUpdateRequest'];
+export type MeLocale = components['schemas']['MeLocaleDto'];
+export type MeLocaleWrite = components['schemas']['MeLocaleWriteRequest'];
 export type ProfileVisibility = components['schemas']['ProfileVisibilityDto'];
 export type FieldVisibility = ProfileVisibility['email'];
 export type UserAddress = components['schemas']['UserAddressDto'];
@@ -41,6 +48,52 @@ export type UserAddressWrite = components['schemas']['UserAddressWriteRequest'];
 export type MemberSummary = components['schemas']['MemberDto'];
 export type NotificationPreferences = components['schemas']['NotificationPreferencesDto'];
 export type NotificationCategory = components['schemas']['NotificationCategoryDto'];
+export type NotificationChannelCell = components['schemas']['NotificationChannelDto'];
+export type NotificationChoice = components['schemas']['NotificationChannelChoice'];
+
+/**
+ * One channel of the preference matrix, as the wire spells it. The server's channel type is a
+ * set of bit flags, so it crosses the boundary as a string rather than as a closed union, and a
+ * cell always names exactly one of these. Written out here because the wording lookup, the
+ * column order and the exhaustiveness check all need a closed list, and the generated client
+ * cannot give them one.
+ */
+export type NotificationChannelName = 'inApp' | 'email' | 'sms';
+
+/** Every channel, in the order a settings page reads best: the one that always works first. */
+export const NOTIFICATION_CHANNELS: readonly NotificationChannelName[] = ['inApp', 'email', 'sms'];
+
+/**
+ * The name of one notification category, as the server publishes it. Named separately from the
+ * row that carries it because the settings page, the opt-out landing page and the inbox all look
+ * their wording up by this value alone. Non-null by construction: the generated union admits null only
+ * because one response omits the category — a daily summary collects every category and names
+ * none — and null is not a category anybody can be notified about.
+ */
+export type NotificationCategoryName = NonNullable<components['schemas']['NotificationCategory']>;
+
+/**
+ * One line of the reader's own inbox, as the server renders it.
+ *
+ * The wording is rendered on the server from the language the request was made in, so `title` is
+ * text to show rather than a key to look up. `targetWithheld` says the reader may no longer see
+ * the thing this row is about: the row is still listed — that it happened is not the secret — but
+ * it carries neither the name nor the link, and has to be shown as deliberate rather than broken.
+ */
+export type NotificationItem = components['schemas']['NotificationDto'];
+
+export type NotificationHealth = components['schemas']['NotificationHealthDto'];
+export type NotificationDeliveryRow = components['schemas']['NotificationDeliveryDto'];
+export type NotificationDeliveryStatus = components['schemas']['NotificationDeliveryStatus'];
+export type NotificationDeliveryChannel = components['schemas']['NotificationChannel'];
+export type NotificationRetryResult = components['schemas']['NotificationRetryDto'];
+export type NotificationRetryOutcome = components['schemas']['NotificationRetryOutcome'];
+
+/** How many lines of the reader's own inbox are still unopened. */
+export type UnreadNotificationCount = components['schemas']['UnreadNotificationCountDto'];
+
+/** What an opt-out link switched off, as the server reports it back to the landing page. */
+export type UnsubscribeResult = components['schemas']['UnsubscribeResultDto'];
 export type DataExport = components['schemas']['DataExportDto'];
 export type MfaStatus = components['schemas']['MfaStatusDto'];
 export type MfaMethod = components['schemas']['MfaMethodDto'];
@@ -52,6 +105,8 @@ export type SmsSettingsWrite = components['schemas']['SmsSettingsWriteRequest'];
 export type SecuritySettings = components['schemas']['SecuritySettingsDto'];
 export type ProtectionSettings = components['schemas']['ProtectionSettingsDto'];
 export type ImportSettings = components['schemas']['ImportSettingsDto'];
+export type NotificationSettings = components['schemas']['NotificationSettingsDto'];
+export type AnnouncementSettings = components['schemas']['AnnouncementSettingsDto'];
 export type MessageTemplate = components['schemas']['MessageTemplateDto'];
 export type ResLink = components['schemas']['ResLinkDto'];
 export type ResLinkMember = components['schemas']['ResLinkMemberDto'];
@@ -140,14 +195,21 @@ export const queryKeys = {
   cabinetDocuments: (id: string, params: CabinetDocumentParams) =>
     ['cabinets', id, 'documents', params] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
+  calendar: (params: CalendarParams) => ['calendar', params] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
+  myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
+  tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
+  tripChecklist: (id: string) => ['trip-logs', 'checklist', id] as const,
+  checklists: ['checklists'] as const,
+  checklist: (id: string) => ['checklists', 'detail', id] as const,
   tripReportTemplates: ['trip-report-templates'] as const,
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
   cavingGroups: ['cavingGroups'] as const,
   cavers: ['cavers'] as const,
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
+  cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
   closestApproach: (id: string, other: string) => ['caves', id, 'closest-approach', other] as const,
@@ -158,6 +220,16 @@ export const queryKeys = {
   members: (params: MemberListParams) => ['members', 'list', params] as const,
   member: (id: string) => ['members', 'detail', id] as const,
   notificationPrefs: ['me', 'notifications'] as const,
+  // The inbox keeps a root of its own rather than joining the preferences under 'me': every
+  // profile write invalidates that whole prefix, and a list of what happened has no reason to be
+  // fetched again because somebody uploaded a new picture of themselves. Both entries share the
+  // one root so marking something read can refresh the list and the badge with a single prefix.
+  notificationInbox: (params: NotificationListParams) =>
+    ['notification-inbox', 'list', params] as const,
+  unreadNotificationCount: ['notification-inbox', 'unread-count'] as const,
+  // Outside the inbox root on purpose: marking something read invalidates that whole prefix, and
+  // how this installation is configured is not something a reader can change by reading.
+  notificationTransport: ['notification-transport'] as const,
   uiPreferences: ['me', 'preferences'] as const,
   uiDefaults: ['ui-defaults'] as const,
   dataExport: ['me', 'data-export'] as const,
@@ -182,6 +254,9 @@ export const queryKeys = {
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
   caveSurveyStatistics: (caveId: string) => ['caves', caveId, 'survey-statistics'] as const,
   caveOrientation: (caveId: string) => ['caves', caveId, 'orientation'] as const,
+  // One key for the whole tree: the board, the overview and the map that zooms to one area all
+  // read the same answer, so they cannot disagree about which areas exist or where one of them is.
+  workAreas: ['work-areas'] as const,
   // Every terrain key starts with this list key, so the mutations that invalidate it also reach
   // the paged list and each build's own detail. A key that did not would leave the page showing
   // a build's old phase for as long as its query stayed fresh.
@@ -189,6 +264,15 @@ export const queryKeys = {
   terrainBuildList: (params: TerrainBuildPageParams) => ['terrain', 'builds', 'page', params] as const,
   terrainBuild: (id: string) => ['terrain', 'builds', 'detail', id] as const,
   terrainSourceDirectories: ['terrain', 'source-directories'] as const,
+  expeditions: (params: ExpeditionListParams) => ['expeditions', 'list', params] as const,
+  expedition: (id: string) => ['expeditions', 'detail', id] as const,
+  expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
+  expeditionMap: (id: string) => ['expeditions', 'map', id] as const,
+  expeditionLeads: (id: string) => ['expeditions', 'leads', id] as const,
+  events: (params: EventListParams) => ['events', 'list', params] as const,
+  event: (id: string) => ['events', 'detail', id] as const,
+  eventDefaults: ['events', 'defaults'] as const,
+  eventInvitations: (id: string) => ['events', 'invitations', id] as const,
 };
 
 async function unwrap<T>(
@@ -234,6 +318,14 @@ export function useUpdateProfile() {
   const invalidate = useInvalidateMe();
   return useMutation({
     mutationFn: (body: MeUpdate) => unwrap(api.PUT('/api/v1/me', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateLocale() {
+  const invalidate = useInvalidateMe();
+  return useMutation({
+    mutationFn: (body: MeLocaleWrite) => unwrap(api.PUT('/api/v1/me/locale', { body })),
     onSuccess: () => invalidate(),
   });
 }
@@ -361,12 +453,109 @@ export function useUpdateNotificationPreferences() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: {
-      emailEnabled: boolean;
-      digest: NotificationPreferences['digest'];
-      categories: { category: NotificationCategory['category']; enabled: boolean }[];
+      categories: {
+        category: NotificationCategory['category'];
+        channels: { channel: NotificationChannelName; choice: NotificationChoice }[];
+      }[];
     }) => unwrap(api.PUT('/api/v1/me/notifications', { body })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
   });
+}
+
+export interface NotificationListParams {
+  category?: NotificationCategoryName;
+  unreadOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+/** The reader's own inbox, newest first. Nobody else's is reachable through it. */
+export function useNotifications(params: NotificationListParams) {
+  return useQuery({
+    queryKey: queryKeys.notificationInbox(params),
+    queryFn: () => unwrap(api.GET('/api/v1/notifications', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Everything a read changes: the line's own unread mark, the page it sits on, and the count the
+ * header shows. One prefix covers all three because they share a query root.
+ */
+function useInvalidateNotificationInbox() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: ['notification-inbox'] });
+}
+
+/**
+ * Marks one line read. Idempotent on the server, which does not move the stamp a second time, so
+ * a row that is already read can be marked again without rewriting when it was first seen.
+ */
+export function useMarkNotificationRead() {
+  const invalidate = useInvalidateNotificationInbox();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrapVoid(api.POST('/api/v1/notifications/{id}/read', { params: { path: { id } } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/** Marks everything the reader has not read yet, in one act. */
+export function useMarkAllNotificationsRead() {
+  const invalidate = useInvalidateNotificationInbox();
+  return useMutation({
+    mutationFn: () => unwrapVoid(api.POST('/api/v1/notifications/read-all')),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * How many lines the reader has not opened yet, for the count the header shows.
+ *
+ * Its own request rather than a number read off the list, because the header is on every page and
+ * the list is on one: asking for the count costs one small answer, while asking for the first page
+ * of the inbox everywhere would fetch and re-render rows nobody is looking at.
+ *
+ * Kept current three ways, and the timer is the weakest of them. Both ways of marking something
+ * read invalidate the inbox root this key sits under, so the number moves as the reader acts
+ * rather than up to a minute later; returning to the tab refetches, which is what covers a browser
+ * that throttles timers in a background tab; and the interval itself only has to cover a
+ * notification arriving while somebody is watching a page that is not the inbox. `staleTime` is
+ * left at zero for the second of those: a query still considered fresh is not refetched on focus.
+ *
+ * The timer is the one of the three the installation chooses: it runs while the configured
+ * transport is polling, and stops when the server says it will push instead. The other two hold
+ * whatever the transport is.
+ */
+export function useUnreadNotificationCount() {
+  const transport = useInboxTransport();
+  return useQuery({
+    queryKey: queryKeys.unreadNotificationCount,
+    queryFn: () => unwrap(api.GET('/api/v1/notifications/unread-count')),
+    refetchInterval: transport === 'poll' ? inboxPollIntervalMs : false,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Which transport this installation has been configured for.
+ *
+ * The choice belongs to whoever runs the server, not to this client, so it is asked for rather
+ * than compiled in. Until the answer arrives — and if it never does, because the request failed —
+ * the header polls: that is the transport which needs nothing else in place, so a count is never
+ * left with nothing to move it.
+ *
+ * It changes when an operator restarts the server with a different setting, so it is asked for
+ * once and then left alone rather than re-fetched on every mount of the header.
+ */
+export function useInboxTransport() {
+  const { data } = useQuery({
+    queryKey: queryKeys.notificationTransport,
+    queryFn: () => unwrap(api.GET('/api/v1/notifications/config')),
+    staleTime: Infinity,
+  });
+  const named = data?.badgeTransport;
+  return isInboxTransport(named) ? named : defaultInboxTransport;
 }
 
 /**
@@ -1381,7 +1570,14 @@ export type AttachmentInfo = components['schemas']['AttachmentDto'];
  * cave, entrance or centerline — is addressed as 'feature' with its feature id. The wire
  * type is a plain string; this union is the documented set of accepted values.
  */
-export type EntityType = 'feature' | 'tripLog' | 'geofile' | 'georeferencedMap' | 'mapView';
+export type EntityType =
+  | 'feature'
+  | 'tripLog'
+  | 'geofile'
+  | 'georeferencedMap'
+  | 'mapView'
+  | 'expedition'
+  | 'event';
 // Stored files additionally carry taggings (never attachments or grants) — the tag
 // endpoints accept the extra target; the server rejects it everywhere else.
 export type AttachedEntityType = EntityType | 'storedFile';
@@ -1676,6 +1872,8 @@ export interface TripTypeWrite {
   fieldDataSchema: string | null;
   logisticsSchema: string | null;
   safetySchema: string | null;
+  /** The list trips of this purpose work through, by identity. Null names none. */
+  defaultChecklistId: string | null;
 }
 
 function useInvalidateTripTypes() {
@@ -2192,12 +2390,52 @@ export interface TripLogListParams {
   to?: string;
   caveId?: string;
   search?: string;
+  /**
+   * The camp's own trip list. It is filtered like every other listing, so the same camp lists
+   * different trips to different people; a camp the caller may not read answers as though it
+   * gathered nothing rather than refusing, so an id cannot be probed for existence here.
+   */
+  expeditionId?: string;
 }
 
 export function useTripLogs(params: TripLogListParams) {
   return useQuery({
     queryKey: queryKeys.tripLogs(params),
     queryFn: () => unwrap(api.GET('/api/v1/trip-logs', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * What the caller asked of their own list of trips. There is deliberately no member naming a
+ * person: whose trips these are is worked out on the server from whoever is making the request,
+ * and a parameter for it would let somebody assemble where a named person has been out of trips
+ * they may never open. Adding one here would be the first half of undoing that.
+ */
+export interface MyTripLogListParams {
+  page?: number;
+  pageSize?: number;
+  /** Inclusive, `YYYY-MM-DD`. Omitted, the server starts the window at today. */
+  from?: string;
+  /** Inclusive, `YYYY-MM-DD`. Omitted, the window has no far end. */
+  to?: string;
+  /** A lifecycle state spelled the way the contract spells it; an unknown word is refused. */
+  state?: ActivityState;
+}
+
+/**
+ * The trips the signed-in account is on, soonest first.
+ *
+ * Its own key rather than a shape of the trip list's, because it is a different question with a
+ * different answer for every reader, and because it goes stale as dates pass rather than as
+ * people edit. The key sits under the trip prefix so writing a trip re-reads it for free.
+ */
+export function useMyTripLogs(params: MyTripLogListParams) {
+  return useQuery({
+    queryKey: queryKeys.myTripLogs(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/mine', { params: { query: params } })),
+    // Paging or narrowing keeps the rows on screen while the next answer arrives, rather than
+    // emptying the table under whoever is reading it.
     placeholderData: keepPreviousData,
   });
 }
@@ -2215,6 +2453,27 @@ function useInvalidateTripLogs() {
   return () => void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
 }
 
+/**
+ * The same invalidation, but handed back so a caller can wait for the re-read it starts.
+ *
+ * A write on the trip is checked against the version the caller last *read*, and only a read
+ * records a version. So the moment a write succeeds, the version this caller holds is one behind
+ * the one their own write produced, and a second write sent before the re-read lands is refused
+ * as a conflict — with two saves on the same card a second apart, which is ordinary use, not a
+ * race anybody would think to look for. Refusing it is right: the caller really is writing
+ * against a version that has moved. What is wrong is answering "saved" while that is still true.
+ *
+ * So a write on the trip is not finished until the trip has been read back. The cost is that the
+ * confirmation waits for the read, which takes as long as it takes; the alternative is a second
+ * save that fails for a reason nobody can act on. This would be unnecessary if a write handed
+ * back the version it produced, and it is only needed on the trip's own writes — a write on
+ * something beside the trip carries no precondition on it.
+ */
+function useReadTripLogsBack() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+}
+
 export function useCreateTripLog() {
   const invalidate = useInvalidateTripLogs();
   return useMutation({
@@ -2224,14 +2483,16 @@ export function useCreateTripLog() {
 }
 
 export function useUpdateTripLog() {
-  const invalidate = useInvalidateTripLogs();
+  const readBack = useReadTripLogsBack();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: TripLogWrite }) =>
       unwrap(api.PUT('/api/v1/trip-logs/{id}', { params: { path: { id } }, body })),
     onSuccess: () => {
-      invalidate();
       invalidateHistory();
+      // Handed back rather than started and forgotten: the next write on this trip is checked
+      // against the version this one produced, and only the read records it.
+      return readBack();
     },
   });
 }
@@ -2317,39 +2578,381 @@ export function useKeepTripReport() {
 }
 
 /**
- * Announcing a trip and taking it back, as the two moves the server offers.
+ * Moving a trip to another lifecycle state, through the one route that names the state it moves
+ * to rather than a verb per move.
  *
- * Both are writes on the trip and both are checked against the version the user was looking at,
- * so each carries the precondition the detail read captured. Which moves are legal from which
- * state is the server's to decide — the buttons only offer the ones a reader would expect, and a
- * request the rules refuse comes back as a conflict rather than being prevented here.
+ * It is a write on the trip and is checked against the version the user was looking at, so it
+ * carries the precondition the detail read captured. Which moves are legal from which state is
+ * the server's to decide — the control only offers the ones a reader would expect, and a request
+ * the rules refuse comes back as a conflict rather than being prevented here.
  */
-function useTripLogTransition(action: 'publish' | 'unpublish') {
-  const invalidate = useInvalidateTripLogs();
+export function useMoveTripLog() {
+  const readBack = useReadTripLogsBack();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
-    mutationFn: (id: string) => {
+    mutationFn: ({ id, state }: { id: string; state: ActivityState }) => {
       const etag = lastReadETag(`/api/v1/trip-logs/${id}`);
       return unwrap(
-        api.POST(action === 'publish' ? '/api/v1/trip-logs/{id}/publish' : '/api/v1/trip-logs/{id}/unpublish', {
+        api.POST('/api/v1/trip-logs/{id}/state', {
           params: { path: { id } },
           headers: etag ? { 'If-Match': etag } : undefined,
+          body: { state },
         }),
       );
     },
     onSuccess: () => {
-      invalidate();
       invalidateHistory();
+      // As on the trip's own update: a move is checked against the version last read, so the
+      // move is not finished until the version it produced has been read.
+      return readBack();
     },
   });
 }
 
-export function usePublishTripLog() {
-  return useTripLogTransition('publish');
+export type TripCalloutState = components['schemas']['TripCalloutState'];
+
+export type TripCalloutArrangement = components['schemas']['TripCalloutRequest'];
+
+/**
+ * Arranges, changes or calls off the check that notices if a party does not come back.
+ *
+ * Part of planning the trip, so it is offered to whoever may change the trip and carries the
+ * precondition header every other write to a trip carries — two people arranging different hours
+ * is exactly the lost update it exists to catch. Clearing the alarm time is how the whole
+ * arrangement is called off; there is no separate route for that, and none is wanted.
+ *
+ * The answer is the trip as it now stands, so the page redraws from it directly.
+ */
+export function useArrangeTripCallout() {
+  const readBack = useReadTripLogsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & TripCalloutArrangement) => {
+      const etag = lastReadETag(`/api/v1/trip-logs/${id}`);
+      return unwrap(
+        api.POST('/api/v1/trip-logs/{id}/callout', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body,
+        }),
+      );
+    },
+    onSuccess: () => {
+      invalidateHistory();
+      // Checked against the version last read, as the trip's own update is, so the write is not
+      // finished until the version it produced has been read back.
+      return readBack();
+    },
+  });
 }
 
-export function useUnpublishTripLog() {
-  return useTripLogTransition('unpublish');
+/**
+ * Says the party is out, which stops the overdue check.
+ *
+ * No precondition header, unlike every other write to a trip, and that is the server's rule
+ * rather than an omission here: there is one value it can write, everybody entitled to call it is
+ * saying the same thing, and a stale version would refuse the message that says people are safe.
+ * The answer is the trip as it now stands, so the page redraws from it directly.
+ */
+export function useStandDownTripCallout() {
+  const readBack = useReadTripLogsBack();
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{id}/callout/stand-down', { params: { path: { id } } }),
+      ),
+    onSuccess: () => readBack(),
+  });
+}
+
+export type TripInvitationInfo = components['schemas']['TripInvitationDto'];
+export type TripInvitationList = components['schemas']['TripInvitationListDto'];
+export type TripInvitationAnswer = components['schemas']['TripInvitationResponse'];
+
+/**
+ * Everybody on a trip's list and what each has said, in the order the server put them in.
+ *
+ * Three things on this answer are the server's conclusions and not raw rows: the place each
+ * person holds in the order people answered in, whether they hold one of the trip's places or
+ * are waiting for one, and whether this caller may write an answer for that person. Each has a
+ * rule behind it that the client has no way to evaluate — the ordering skips anybody who has not
+ * said yes, a hand-picked person keeps their place even past the limit, and answering for
+ * somebody else depends on rights over the trip. Rendering them as they arrive is the whole
+ * point; re-deriving any of them here would be a second copy of a rule free to drift from the
+ * one that is enforced.
+ *
+ * The list is deliberately unpaged: a place in an order computed over some of the rows would not
+ * be a place in the order at all.
+ */
+export function useTripInvitations(tripLogId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripInvitations(tripLogId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/invitations', {
+          params: { path: { tripLogId: tripLogId! } },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+  });
+}
+
+function useInvalidateTripInvitations() {
+  const queryClient = useQueryClient();
+  const invalidateHistory = useInvalidateHistory();
+  return (tripLogId: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tripInvitations(tripLogId) });
+    // A row here is an audit child of the trip, so writing one moves the trip's own timeline.
+    invalidateHistory();
+  };
+}
+
+/**
+ * Puts somebody on the trip's list. The person is named by their entry in the club's directory
+ * and never by a bare name — a list of people to be told about a trip that could hold text
+ * nobody can resolve would be a list nobody can act on — so an id the directory does not know
+ * is refused rather than created.
+ */
+export function useInviteToTrip() {
+  const invalidate = useInvalidateTripInvitations();
+  return useMutation({
+    mutationFn: ({ tripLogId, caverId }: { tripLogId: string; caverId: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/invitations', {
+          params: { path: { tripLogId } },
+          body: { caverId },
+        }),
+      ),
+    onSuccess: (_data, { tripLogId }) => invalidate(tripLogId),
+  });
+}
+
+/**
+ * Records what one person says about coming.
+ *
+ * The note travels with the answer and is replaced by it: an answer given without words is an
+ * answer without words, not an answer still wearing the previous one's. So a cleared note is
+ * sent as an explicit absence rather than omitted.
+ */
+export function useAnswerTripInvitation() {
+  const invalidate = useInvalidateTripInvitations();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      caverId,
+      response,
+      note,
+    }: {
+      tripLogId: string;
+      caverId: string;
+      response: TripInvitationAnswer;
+      note: string | null;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-logs/{tripLogId}/invitations/{caverId}/response', {
+          params: { path: { tripLogId, caverId } },
+          body: { response, note },
+        }),
+      ),
+    onSuccess: (_data, { tripLogId }) => invalidate(tripLogId),
+  });
+}
+
+/** Picks one person out for the trip, or puts them back in the order. The order itself is unchanged. */
+export function useSelectForTrip() {
+  const invalidate = useInvalidateTripInvitations();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      caverId,
+      selected,
+    }: {
+      tripLogId: string;
+      caverId: string;
+      selected: boolean;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-logs/{tripLogId}/invitations/{caverId}/selection', {
+          params: { path: { tripLogId, caverId } },
+          body: { selected },
+        }),
+      ),
+    onSuccess: (_data, { tripLogId }) => invalidate(tripLogId),
+  });
+}
+
+/**
+ * Takes somebody off the list entirely, answer and all. For a person put on it by mistake —
+ * recording a "no" in their name instead would be writing down words they never said.
+ */
+export function useRemoveTripInvitation() {
+  const invalidate = useInvalidateTripInvitations();
+  return useMutation({
+    mutationFn: ({ tripLogId, caverId }: { tripLogId: string; caverId: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/trip-logs/{tripLogId}/invitations/{caverId}', {
+          params: { path: { tripLogId, caverId } },
+        }),
+      ),
+    onSuccess: (_data, { tripLogId }) => invalidate(tripLogId),
+  });
+}
+
+export type TripPromotion = components['schemas']['TripPromotionDto'];
+
+/**
+ * Writes everybody holding a place on the trip into the trip's own list of people.
+ *
+ * A deliberate act and not a consequence of the trip having happened: who turned up is not who
+ * said they would, and a roster nobody wrote is one an audit trail cannot account for.
+ *
+ * It moves the trip itself — its people change and its version with them — so the whole trip
+ * prefix is invalidated rather than the list alone, and the re-read is waited for. Leaving the
+ * trip as it was read would let a later save carry the roster somebody saw before this ran, pass
+ * its precondition, and quietly undo every row written here; not waiting would leave the same
+ * window open for as long as the re-read takes, with a confirmation already on screen.
+ */
+export function usePromoteTripInvitations() {
+  const readBack = useReadTripLogsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ tripLogId }: { tripLogId: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/invitations/promote', {
+          params: { path: { tripLogId } },
+        }),
+      ),
+    onSuccess: () => {
+      invalidateHistory();
+      // Waited for, as on the trip's own writes: this stamps the trip row, so a save sent
+      // between the confirmation and the re-read would be refused against the version it moved.
+      return readBack();
+    },
+  });
+}
+
+export type EventInvitationInfo = components['schemas']['EventInvitationDto'];
+export type EventInvitationList = components['schemas']['EventInvitationListDto'];
+
+/**
+ * Everybody on a club event's list and what each has said, in the order the server put them in.
+ *
+ * The same rows a trip's answers are, read through the shape that names an event: there is one
+ * answering mechanism and one table behind both. As on a trip, the place each person holds, in or
+ * waiting, and whether this caller may write an answer for them are the server's conclusions and
+ * never re-derived here.
+ *
+ * A kind of event that nobody comes to — a deadline — takes no answers at all and refuses this
+ * whole group under its own code, so nothing asks for a list it has no way to hold.
+ */
+export function useEventInvitations(eventId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.eventInvitations(eventId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/events/{eventId}/invitations', {
+          params: { path: { eventId: eventId! } },
+        }),
+      ),
+    enabled: !!eventId && enabled,
+  });
+}
+
+function useInvalidateEventInvitations() {
+  const queryClient = useQueryClient();
+  const invalidateHistory = useInvalidateHistory();
+  return (eventId: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.eventInvitations(eventId) });
+    // A row here is an audit child of the event, so writing one moves the event's own timeline.
+    invalidateHistory();
+  };
+}
+
+/**
+ * Puts somebody on an event's list. The person is named by their entry in the club's directory
+ * and never by a bare name, exactly as on a trip: a list of people to be told about something
+ * that could hold text nobody can resolve would be a list nobody can act on.
+ */
+export function useInviteToEvent() {
+  const invalidate = useInvalidateEventInvitations();
+  return useMutation({
+    mutationFn: ({ eventId, caverId }: { eventId: string; caverId: string }) =>
+      unwrap(
+        api.POST('/api/v1/events/{eventId}/invitations', {
+          params: { path: { eventId } },
+          body: { caverId },
+        }),
+      ),
+    onSuccess: (_data, { eventId }) => invalidate(eventId),
+  });
+}
+
+/**
+ * Records what one person says about coming to an event. The note travels with the answer and is
+ * replaced by it, so a cleared note is sent as an explicit absence rather than omitted.
+ */
+export function useAnswerEventInvitation() {
+  const invalidate = useInvalidateEventInvitations();
+  return useMutation({
+    mutationFn: ({
+      eventId,
+      caverId,
+      response,
+      note,
+    }: {
+      eventId: string;
+      caverId: string;
+      response: TripInvitationAnswer;
+      note: string | null;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/events/{eventId}/invitations/{caverId}/response', {
+          params: { path: { eventId, caverId } },
+          body: { response, note },
+        }),
+      ),
+    onSuccess: (_data, { eventId }) => invalidate(eventId),
+  });
+}
+
+/** Picks one person out for the event, or puts them back in the order. The order is unchanged. */
+export function useSelectForEvent() {
+  const invalidate = useInvalidateEventInvitations();
+  return useMutation({
+    mutationFn: ({
+      eventId,
+      caverId,
+      selected,
+    }: {
+      eventId: string;
+      caverId: string;
+      selected: boolean;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/events/{eventId}/invitations/{caverId}/selection', {
+          params: { path: { eventId, caverId } },
+          body: { selected },
+        }),
+      ),
+    onSuccess: (_data, { eventId }) => invalidate(eventId),
+  });
+}
+
+/**
+ * Takes somebody off an event's list entirely, answer and all. For a person put on it by mistake —
+ * recording a "no" in their name instead would be writing down words they never said.
+ */
+export function useRemoveEventInvitation() {
+  const invalidate = useInvalidateEventInvitations();
+  return useMutation({
+    mutationFn: ({ eventId, caverId }: { eventId: string; caverId: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/events/{eventId}/invitations/{caverId}', {
+          params: { path: { eventId, caverId } },
+        }),
+      ),
+    onSuccess: (_data, { eventId }) => invalidate(eventId),
+  });
 }
 
 export function useTags(search: string) {
@@ -2433,6 +3036,23 @@ function useInvalidateCavingGroups() {
   return () => void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
 }
 
+/**
+ * What a roster edit changes, which is more than the directory row.
+ *
+ * The list of clubs carries each one's member count, so it has to be refetched — but so does the
+ * roster the edit was made in, and so does how many people an announcement to that club would
+ * reach. Refetching only the directory leaves the drawer showing the roster as it was before the
+ * edit that was just made in it.
+ */
+function useInvalidateCavingGroupRoster(cavingGroupId: string) {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroupMembers(cavingGroupId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroupAudience(cavingGroupId) });
+  };
+}
+
 export function useCreateCavingGroup() {
   const invalidate = useInvalidateCavingGroups();
   return useMutation({
@@ -2443,7 +3063,7 @@ export function useCreateCavingGroup() {
 }
 
 export function useUpsertCavingGroupMember(cavingGroupId: string) {
-  const invalidate = useInvalidateCavingGroups();
+  const invalidate = useInvalidateCavingGroupRoster(cavingGroupId);
   return useMutation({
     mutationFn: (body: { caverId: string; role: CavingGroupMemberInfo['role'] }) =>
       unwrap(api.POST('/api/v1/caving-groups/{id}/members', { params: { path: { id: cavingGroupId } }, body })),
@@ -2451,8 +3071,43 @@ export function useUpsertCavingGroupMember(cavingGroupId: string) {
   });
 }
 
+/**
+ * How many people an announcement to this caving group would reach, asked before one is written.
+ *
+ * Not the roster's size: the members with no account have nowhere to receive anything and the
+ * person asking is never told their own announcement. It is the server's own count rather than
+ * one this page works out, so what somebody is shown and what is sent cannot drift apart.
+ *
+ * Left disabled for anyone who may not write to the group, so no 403 is provoked by opening a
+ * page: only the people the list already marks as able to announce ever ask.
+ */
+export function useCavingGroupAnnouncementAudience(cavingGroupId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.cavingGroupAudience(cavingGroupId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caving-groups/{id}/announcements/audience', {
+          params: { path: { id: cavingGroupId! } },
+        }),
+      ),
+    enabled: !!cavingGroupId,
+  });
+}
+
+export function useAnnounceToCavingGroup(cavingGroupId: string) {
+  return useMutation({
+    mutationFn: (body: { message: string }) =>
+      unwrap(
+        api.POST('/api/v1/caving-groups/{id}/announcements', {
+          params: { path: { id: cavingGroupId } },
+          body,
+        }),
+      ),
+  });
+}
+
 export function useRemoveCavingGroupMember(cavingGroupId: string) {
-  const invalidate = useInvalidateCavingGroups();
+  const invalidate = useInvalidateCavingGroupRoster(cavingGroupId);
   return useMutation({
     mutationFn: async (caverId: string) => {
       const { error, response } = await api.DELETE('/api/v1/caving-groups/{id}/members/{caverId}', {
@@ -4181,7 +4836,7 @@ export function useFilterResolve(world: string, ids: readonly string[]) {
 // ---------------------------------------------------------------------------
 
 /**
- * What a person, a cave or a club adds up to across trips.
+ * What a person, a cave, a club or a camp adds up to across trips.
  *
  * Every figure is counted over the trips the caller may read, so two people legitimately see
  * different totals for the same subject. That is a fact about the answer, not about the request —
@@ -4190,8 +4845,8 @@ export function useFilterResolve(world: string, ids: readonly string[]) {
  */
 export type TripStatistics = components['schemas']['TripStatisticsDto'];
 
-/** Which of the three things is being added up. */
-export type StatisticsSubject = 'caver' | 'cave' | 'cavingGroup';
+/** Which thing is being added up. */
+export type StatisticsSubject = 'caver' | 'cave' | 'cavingGroup' | 'expedition';
 
 export function useTripStatistics(
   subject: StatisticsSubject,
@@ -4202,13 +4857,18 @@ export function useTripStatistics(
     queryKey: queryKeys.tripStatistics(subject, id ?? ''),
     queryFn: () => {
       const path = { id: id! };
-      if (subject === 'caver') {
-        return unwrap(api.GET('/api/v1/stats/cavers/{id}', { params: { path } }));
+      // A named branch per subject rather than a trailing fallthrough: a subject added to the
+      // union without a branch of its own would otherwise be asked about as a club, and answered.
+      switch (subject) {
+        case 'caver':
+          return unwrap(api.GET('/api/v1/stats/cavers/{id}', { params: { path } }));
+        case 'cave':
+          return unwrap(api.GET('/api/v1/stats/caves/{id}', { params: { path } }));
+        case 'cavingGroup':
+          return unwrap(api.GET('/api/v1/stats/caving-groups/{id}', { params: { path } }));
+        case 'expedition':
+          return unwrap(api.GET('/api/v1/stats/expeditions/{id}', { params: { path } }));
       }
-      if (subject === 'cave') {
-        return unwrap(api.GET('/api/v1/stats/caves/{id}', { params: { path } }));
-      }
-      return unwrap(api.GET('/api/v1/stats/caving-groups/{id}', { params: { path } }));
     },
     enabled: enabled && !!id,
     // Derived on every request from trips that change slowly; a page revisited within the minute
@@ -4343,6 +5003,92 @@ export function useTerrainBuilds(params: TerrainBuildPageParams, enabled = true)
   });
 }
 
+// ---------------------------------------------------------------------------
+// Expeditions
+// ---------------------------------------------------------------------------
+
+export type ExpeditionInfo = components['schemas']['ExpeditionDto'];
+
+/**
+ * How the camp list is narrowed. The window asks what a camp overlapped rather than what it
+ * started inside, so a fortnight camp running across the end of a month is in both months; the
+ * word is looked for in the name; the state is one of the camp lifecycle's own, and a word the
+ * server does not have is refused rather than ignored.
+ */
+export interface ExpeditionListParams {
+  page?: number;
+  pageSize?: number;
+  from?: string;
+  to?: string;
+  search?: string;
+  state?: string;
+}
+
+/** Camps, most recent first, narrowed by the filters the list offers. */
+export function useExpeditions(params: ExpeditionListParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.expeditions(params),
+    queryFn: () => unwrap(api.GET('/api/v1/expeditions', { params: { query: params } })),
+    // Paging or retyping a filter keeps the rows on screen while the next answer arrives, rather
+    // than emptying the table under whoever is reading it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * One camp. A camp the caller may not read answers exactly as one that does not exist does —
+ * the server spells both `expedition.not_found` — so the page has no way to tell them apart and
+ * must not try: an address that answered differently for the two would be an address anybody
+ * could probe for the existence of a camp they cannot see.
+ */
+export function useExpedition(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.expedition(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/expeditions/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    // A refusal here is a settled answer about the caller, not a transient failure: retrying it
+    // three times only delays the page saying so.
+    retry: false,
+  });
+}
+
+export type ExpeditionRoster = components['schemas']['ExpeditionRosterDto'];
+export type ExpeditionRosterEntry = components['schemas']['ExpeditionRosterEntryDto'];
+export type ExpeditionRosterRole = components['schemas']['ExpeditionRosterRoleDto'];
+
+/** What somebody may be recorded as having been at a camp as. Seeded rows plus an installation's own. */
+export function useExpeditionRosterRoles() {
+  return useQuery({
+    queryKey: queryKeys.taxonomy('expedition-roster-roles'),
+    queryFn: () => unwrap(api.GET('/api/v1/expedition-roster-roles')),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Who was at a camp, and for which days.
+ *
+ * Two rights, not one: the right to read the camp *and* the right to read people. A caller
+ * holding the first and not the second is refused outright, with a code of its own, rather than
+ * being handed rows with the names struck out — a struck-out list still says how many people were
+ * there and when. That refusal is a designed answer and the surface showing it renders it as a
+ * state of the page, which is why it must not be retried: the identical request cannot produce
+ * anything else, and three attempts only hold the screen in its loading state meanwhile.
+ */
+export function useExpeditionRoster(expeditionId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.expeditionRoster(expeditionId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/expeditions/{expeditionId}/roster', {
+          params: { path: { expeditionId: expeditionId! } },
+        }),
+      ),
+    enabled: !!expeditionId,
+    retry: false,
+  });
+}
+
 /**
  * One build with its sources and the tail of what the tool itself said.
  *
@@ -4373,6 +5119,114 @@ export function useSubmitTerrainBuild() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
     },
+  });
+}
+
+/**
+ * Everything one camp draws on a map, as one answer.
+ *
+ * Three kinds of shape come back together — the camp's working area, the sketches of the member
+ * trips this caller may read, and the entrances of the caves those trips name whose positions
+ * this caller may see — because they are governed by three different rules and only the server
+ * can apply them. Nothing here filters what arrives: whatever reached the client was cleared to.
+ *
+ * Fetched only once the map tab is the one on screen, so opening a camp does not pay for a map
+ * nobody looked at.
+ */
+export function useExpeditionMap(expeditionId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.expeditionMap(expeditionId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/expeditions/{id}/map', { params: { path: { id: expeditionId! } } })),
+    enabled: !!expeditionId && enabled,
+    retry: false,
+  });
+}
+
+export type ExpeditionLeads = components['schemas']['ExpeditionLeadsDto'];
+export type ExpeditionLeadGroup = components['schemas']['ExpeditionLeadGroupDto'];
+export type ExpeditionLead = components['schemas']['ExpeditionLeadDto'];
+
+/**
+ * What a camp's trips left open, grouped by whether each way on is still going.
+ *
+ * Nothing here is derived on the client and nothing here is filtered on it: which leads are on
+ * the board is decided per lead on the server, against the same rule any single place is judged
+ * by, and a lead this caller may not place exactly never arrives. So the board is drawn from what
+ * came back and the count beside it is the count of what came back — two readers of the same camp
+ * see different boards, and the page says so rather than leaving the numbers to imply otherwise.
+ */
+export function useExpeditionLeads(expeditionId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.expeditionLeads(expeditionId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/expeditions/{id}/leads', { params: { path: { id: expeditionId! } } })),
+    enabled: !!expeditionId,
+    retry: false,
+  });
+}
+
+export type ChecklistInfo = components['schemas']['ChecklistDto'];
+export type ChecklistItemInfo = components['schemas']['ChecklistItemDto'];
+export type ChecklistWrite = components['schemas']['ChecklistWriteRequest'];
+export type TripChecklistInfo = components['schemas']['TripChecklistDto'];
+export type TripChecklistItemInfo = components['schemas']['TripChecklistItemDto'];
+
+/**
+ * The lists this caller may read, lines included.
+ *
+ * There is one kind of list. A list an administrator publishes for the whole installation
+ * arrives here beside a caver's own — it is the same row with a wider audience — so nothing
+ * here sorts them into two groups or asks which is "the default".
+ */
+export function useChecklists() {
+  return useQuery({
+    queryKey: queryKeys.checklists,
+    queryFn: () => unwrap(api.GET('/api/v1/checklists')),
+  });
+}
+
+function useInvalidateChecklists() {
+  const queryClient = useQueryClient();
+  return (id?: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.checklists });
+    if (id) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.checklist(id) });
+    }
+    // A trip's reading of how settled it is comes from these rows, so changing a list moves it.
+    void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+  };
+}
+
+export function useCreateChecklist() {
+  const invalidate = useInvalidateChecklists();
+  return useMutation({
+    mutationFn: (body: ChecklistWrite) => unwrap(api.POST('/api/v1/checklists', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateChecklist() {
+  const invalidate = useInvalidateChecklists();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ChecklistWrite }) =>
+      unwrap(api.PUT('/api/v1/checklists/{id}', { params: { path: { id } }, body })),
+    onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+export function useDeleteChecklist() {
+  const invalidate = useInvalidateChecklists();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/checklists/{id}', {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new ApiError(response.status, error);
+      }
+    },
+    onSuccess: () => invalidate(),
   });
 }
 
@@ -4417,6 +5271,201 @@ export function useTerrainSourceDirectories(enabled: boolean) {
 }
 
 /**
+ * The list one trip works through, its lines, who has confirmed each and when, and how much of
+ * it is settled.
+ *
+ * The count comes back on the answer rather than being worked out here. It is the server's
+ * reading of the lines and the confirmations, and a second count computed in the browser would
+ * be a copy free to disagree with it — over a list whose lines this caller may not even have
+ * been sent all of.
+ *
+ * A trip whose purpose names no list, and a trip naming one this caller may not read, answer the
+ * same way: no list. That is deliberate on the server, and nothing here tries to tell them apart.
+ */
+export function useTripChecklist(tripLogId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripChecklist(tripLogId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/checklist', {
+          params: { path: { tripLogId: tripLogId! } },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+  });
+}
+
+function useInvalidateTripChecklist() {
+  const queryClient = useQueryClient();
+  return (tripLogId: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tripChecklist(tripLogId) });
+    // The trip's own row carries the same figure, so a confirmation moves both.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tripLog(tripLogId) });
+  };
+}
+
+/**
+ * Confirms one line as settled for this trip, or takes the confirmation back.
+ *
+ * Confirming what is already confirmed changes nothing: the record is of who first said so and
+ * when, and an answer that moved every time somebody reopened the page would answer a different
+ * question.
+ */
+export function useSetTripChecklistItem() {
+  const invalidate = useInvalidateTripChecklist();
+  return useMutation({
+    mutationFn: async ({
+      tripLogId,
+      itemId,
+      ticked,
+    }: {
+      tripLogId: string;
+      itemId: string;
+      ticked: boolean;
+    }) => {
+      const params = { path: { tripLogId, itemId } };
+      if (!ticked) {
+        const { error, response } = await api.DELETE(
+          '/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}',
+          { params },
+        );
+        if (error) {
+          throw new ApiError(response.status, error);
+        }
+        return;
+      }
+
+      await unwrap(api.PUT('/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}', { params }));
+    },
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+export type CalendarEntry = components['schemas']['CalendarEntryDto'];
+export type CalendarResult = components['schemas']['CalendarResultDto'];
+export type CalendarSource = components['schemas']['CalendarSource'];
+export type CalendarPlacement = components['schemas']['CalendarPlacement'];
+
+/**
+ * What the caller asked of the calendar.
+ *
+ * The window is required, both ends of it, and that is the whole reason this answer can be one
+ * merged list rather than an approximation: within a bounded window each source's readable rows
+ * are a finite set, so merging them is exact. An unbounded question would have to read each
+ * source ahead and hope.
+ *
+ * There is deliberately no member naming a person. `mine` means whoever is making the request and
+ * is worked out on the server from the request itself; a parameter carrying somebody's identifier
+ * would let a reader assemble where a named person has been out of rows they may never open.
+ * `cavingGroupId` names a group and not a person, and it can only ever narrow what the reader
+ * could already read.
+ */
+export interface CalendarParams {
+  /** Inclusive, `YYYY-MM-DD`. Required. */
+  from: string;
+  /** Inclusive, `YYYY-MM-DD`. Required. */
+  to: string;
+  /**
+   * The families of dated record wanted, comma-separated. Omitted means all of them, which is
+   * the point of the surface; naming several is how "everything except one family" is asked for,
+   * which a single word cannot express once there are more than two families.
+   */
+  source?: string;
+  /** A lifecycle state spelled the way the contract spells it. */
+  state?: ActivityState;
+  /** One group's calendar: the trips it is running and the camps it owns. */
+  cavingGroupId?: string;
+  /** The rows the signed-in account is on. Takes no argument, and never will. */
+  mine?: boolean;
+  /** False narrows the window to begin no earlier than today, in the server's clock. */
+  includePast?: boolean;
+  /** False leaves out the rows that were called off. They are in by default. */
+  includeCancelled?: boolean;
+  /** One of the orders the server knows; anything else falls back to the calendar's own. */
+  sort?: string;
+}
+
+/**
+ * The dated records the reader may open whose days fall in one window.
+ *
+ * Its own key rather than a shape of any list's: it spans two families of row, so writing either
+ * of them should re-read it, and it goes stale as days pass rather than only as people edit.
+ */
+export function useCalendar(params: CalendarParams, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.calendar(params),
+    queryFn: () => unwrap(api.GET('/api/v1/calendar', { params: { query: params } })),
+    enabled: options?.enabled ?? true,
+    // Changing the window or a toggle keeps the rows on screen while the next answer arrives,
+    // rather than emptying the record under whoever is reading it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Calendar events
+// ---------------------------------------------------------------------------
+
+export type EventInfo = components['schemas']['EventDto'];
+export type EventWrite = components['schemas']['EventWriteRequest'];
+export type EventKind = components['schemas']['EventKind'];
+export type EventDefaults = components['schemas']['EventDefaultsDto'];
+/** How a repeating event comes round. A closed list the server steps by once, at creation. */
+export type EventRecurrenceFrequency = NonNullable<
+  components['schemas']['EventRecurrenceFrequency']
+>;
+
+/**
+ * How the event list is narrowed. The window asks what an event *overlapped* rather than what it
+ * started inside, so a training weekend running across the end of a month is in both months; the
+ * word is looked for in the title; and a kind or a state the server does not have is refused
+ * rather than quietly answered with an empty page.
+ */
+export interface EventListParams {
+  page?: number;
+  pageSize?: number;
+  from?: string;
+  to?: string;
+  search?: string;
+  kind?: string;
+  state?: string;
+  /**
+   * One repeating event's occurrences, by the key they share. A run is not a thing of its own —
+   * it is the ordinary events carrying this key — so it is asked for as a narrowing of the list
+   * and answered through the same visibility walk as every other narrowing.
+   */
+  seriesId?: string;
+}
+
+/** The events this reader may open, narrowed by the filters the list offers. */
+export function useEvents(params: EventListParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.events(params),
+    queryFn: () => unwrap(api.GET('/api/v1/events', { params: { query: params } })),
+    // Paging or retyping a filter keeps the rows on screen while the next answer arrives, rather
+    // than emptying the table under whoever is reading it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * One event. An event the caller may not read answers exactly as one that does not exist does —
+ * the server spells both `event.not_found` — so the page has no way to tell them apart and must
+ * not try: an address that answered differently for the two would be one anybody could probe for
+ * the existence of an event they cannot see.
+ */
+export function useEvent(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.event(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/events/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    // A refusal here is a settled answer about the caller, not a transient failure: retrying it
+    // three times only delays the page saying so.
+    retry: false,
+  });
+}
+
+/**
  * Everything that changes which elevation model the 3D scene draws.
  *
  * The invalidation is the load-bearing part, not decoration. What the scene draws arrives with the
@@ -4448,6 +5497,117 @@ export function useStopDrawingTerrainBuild() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.mapConfig });
       void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
     },
+  });
+}
+
+/**
+ * The audience a new event would get if its author names none.
+ *
+ * Read from the server rather than worked out here, because the write applies the same rule: a
+ * form that guessed would be guessing about who can read something, and the two answers would be
+ * free to disagree the day either changed.
+ */
+export function useEventDefaults(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.eventDefaults,
+    queryFn: () => unwrap(api.GET('/api/v1/events/defaults')),
+    enabled,
+  });
+}
+
+/**
+ * Re-reads everything a write to an event changes, and hands back the promise rather than
+ * starting it and forgetting it.
+ *
+ * The promise matters on the writes the server checks a precondition on. No write answers with
+ * the version it produced, so the token the next write must carry is only recorded by a read —
+ * and a mutation that settled before that read left the buttons live while the cached token was
+ * still the one from before. The second click then carries a spent version and is refused for a
+ * move that was perfectly legal.
+ */
+function useInvalidateEvents() {
+  const queryClient = useQueryClient();
+  return (id?: string) => {
+    const pending = [
+      queryClient.invalidateQueries({ queryKey: ['events'] }),
+      // An event is a row on the calendar, so writing one moves what that window answers.
+      queryClient.invalidateQueries({ queryKey: ['calendar'] }),
+    ];
+    if (id) {
+      pending.push(queryClient.invalidateQueries({ queryKey: queryKeys.event(id) }));
+    }
+    return Promise.all(pending);
+  };
+}
+
+export function useCreateEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: (body: EventWrite) => unwrap(api.POST('/api/v1/events', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * Stores an edited event. The server requires the version the form was loaded against; a full
+ * update is on the path the detail read captured that version under, so the precondition is
+ * threaded onto it without this call having to say so.
+ */
+export function useUpdateEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: EventWrite }) =>
+      unwrap(api.PUT('/api/v1/events/{id}', { params: { path: { id } }, body })),
+    // Handed back rather than started and forgotten: the next write on this event is checked
+    // against the version this one produced, and only the read records it.
+    onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+export function useDeleteEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error, response } = await api.DELETE('/api/v1/events/{id}', {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new ApiError(response.status, error);
+      }
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+export type EventSeriesEditResult = components['schemas']['EventSeriesEditResultDto'];
+export type EventSeriesDeleteResult = components['schemas']['EventSeriesDeleteResultDto'];
+
+/**
+ * Applies one edit to this occurrence of a repeating event and to every later one of its series.
+ *
+ * The precondition is set here by hand rather than left to the replay that threads it onto an
+ * ordinary update. That replay is keyed by the path a version was read under, and this write is
+ * addressed to a sub-path of the event rather than to the event itself, so nothing would be sent
+ * and a server that requires one would refuse every edit. It is honestly a precondition over the
+ * occurrence on the screen alone — one token cannot speak for a set — and it is still worth
+ * carrying: it says the evening the author was looking at has not moved underneath them.
+ */
+export function useEditEventSeriesFollowing() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: EventWrite }) => {
+      const etag = lastReadETag(`/api/v1/events/${id}`);
+      return unwrap(
+        api.PUT('/api/v1/events/{id}/series/following', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body,
+        }),
+      );
+    },
+    // Every occurrence of the series is an ordinary event on its own page and its own row of the
+    // calendar, so an edit reaching a dozen of them has moved a dozen things this cache holds.
+    onSuccess: (_data, variables) => invalidate(variables.id),
   });
 }
 
@@ -4501,6 +5661,30 @@ export function useFeatureMorphometry(id: string | undefined, enabled = true) {
 }
 
 /**
+ * Calls off this occurrence of a repeating event and every later one, keeping any that has
+ * already begun.
+ *
+ * It answers with both halves — what went and what stayed — because the half that stays is the
+ * surprising one: an occurrence that has already happened is the record of an evening and of who
+ * said they would come, and is never removed by an act aimed at the rest of the run.
+ */
+export function useDeleteEventSeriesFollowing() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error, response } = await api.DELETE('/api/v1/events/{id}/series/following', {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new ApiError(response.status, error);
+      }
+      return data as EventSeriesDeleteResult;
+    },
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
  * How close two caves come to each other: the shortest line between their line work in three
  * dimensions, split into its horizontal and vertical parts, with a bearing.
  *
@@ -4528,6 +5712,58 @@ export function useClosestApproach(id: string | undefined, other: string | undef
       ),
     enabled: !!id && !!other && id !== other,
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Moves an event to another lifecycle state — one endpoint naming the state to move to rather
+ * than a verb per move.
+ *
+ * The server requires the version the caller was looking at, so the move carries the token the
+ * detail read captured: two people announcing and un-announcing the same evening otherwise land
+ * in whichever order the database happens to see. Which moves are legal from which state is the
+ * server's to decide; the control only offers the ones a reader would expect, and one the table
+ * refuses comes back as a conflict rather than being prevented here.
+ */
+export function useMoveEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: ({ id, state }: { id: string; state: ActivityState }) => {
+      const etag = lastReadETag(`/api/v1/events/${id}`);
+      return unwrap(
+        api.POST('/api/v1/events/{id}/state', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body: { state },
+        }),
+      );
+    },
+    // As on the event's own update: a move is checked against the version last read, so the move
+    // is not finished until the version it produced has been read.
+    onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Work areas
+// ---------------------------------------------------------------------------
+
+export type WorkArea = components['schemas']['WorkAreaDto'];
+export type WorkAreaCollection = components['schemas']['WorkAreaCollectionDto'];
+
+/**
+ * Every work area this caller may read, as one answer.
+ *
+ * There are tens of these and not thousands — a club works the ground it can reach — so the whole
+ * tree is fetched once and levelled in the browser. That is what lets the dashboard list, the
+ * overview map and the zoom-to-area link share a cache entry instead of asking three times and
+ * risking three different answers.
+ */
+export function useWorkAreas(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.workAreas,
+    queryFn: () => unwrap(api.GET('/api/v1/work-areas', {})),
+    enabled,
     retry: false,
   });
 }

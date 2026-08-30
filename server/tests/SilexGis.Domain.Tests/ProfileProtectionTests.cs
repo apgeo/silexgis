@@ -266,4 +266,44 @@ public class ProfileProtectionTests
     public void Label_is_stable_for_the_same_user() =>
         ProfileProtection.Label(Subject, null, null, null)
             .ShouldBe(ProfileProtection.Label(Subject, null, null, null));
+
+    [Theory]
+    // A chosen display name.
+    [InlineData("Ana Pop", "ana@example.org", "ana@example.org")]
+    // A chosen user name that is not the address.
+    [InlineData(null, "anapop", "ana@example.org")]
+    // The shape every account is created with: the address as the user name, no display name.
+    [InlineData(null, "ana@example.org", "ana@example.org")]
+    // Nothing at all.
+    [InlineData(null, null, null)]
+    public void The_whole_profile_and_its_four_fields_produce_the_same_label(
+        string? displayName, string? userName, string? email)
+    {
+        // The token and userinfo claims read a whole user; every other surface passes the four
+        // fields. The two must never diverge, or one of them starts publishing the address again.
+        var profile = new FakeProfile { DisplayName = displayName, UserNameValue = userName, EmailValue = email };
+
+        ProfileProtection.Label(profile)
+            .ShouldBe(ProfileProtection.Label(Subject, displayName, userName, email));
+    }
+
+    [Fact]
+    public void The_label_of_a_freshly_registered_account_is_not_its_address()
+    {
+        // Registration sets the user name to the address and leaves the display name null, so
+        // this is the ordinary account, not an edge case.
+        var registered = new FakeProfile
+        {
+            DisplayName = null,
+            UserNameValue = "ana@example.org",
+            EmailValue = "ana@example.org",
+        };
+        var named = new FakeProfile { DisplayName = "Ana Pop" };
+
+        ProfileProtection.Label(registered).ShouldNotContain("@");
+        ProfileProtection.Label(registered).ShouldStartWith(ProfileProtection.AnonymousLabelPrefix);
+
+        // The positive half: an account that did choose a name still shows the name it chose.
+        ProfileProtection.Label(named).ShouldBe("Ana Pop");
+    }
 }

@@ -209,6 +209,108 @@ public sealed class TripTypeVocabularyTests : IAsyncLifetime, IDisposable
         (await admin.DeleteAsync($"/api/v1/trip-types/{typeId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
+    /// <summary>
+    /// A purpose may name the list its trips settle before setting off — but only a list that is
+    /// there and that the administrator naming it may read, and the identity it names is told
+    /// only to callers who may read that list.
+    /// </summary>
+    /// <remarks>
+    /// Reading this vocabulary is open to every account, so a purpose that published its list's
+    /// identity to everyone would hand out the one thing the trip's own checklist route withholds
+    /// — and knowing a list exists is enough to go and ask for it. The two surfaces answer the
+    /// same question, so they answer it the same way.
+    /// </remarks>
+    [Fact]
+    public async Task A_purpose_names_a_list_only_where_the_caller_may_read_it()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+
+        var list = await admin.PostAsJsonAsync("/api/v1/checklists", new
+        {
+            title = $"Before we go {suffix}",
+            description = (string?)null,
+            cavingGroupId = (Guid?)null,
+            visibility = "private",
+            items = new[] { new { text = "Permit obtained" } },
+        });
+        list.StatusCode.ShouldBe(HttpStatusCode.Created, await list.Content.ReadAsStringAsync());
+        var listId = (await ReadJsonAsync(list)).GetProperty("id").GetGuid();
+
+        // A reference to a list that is not there is refused with an answer rather than left to
+        // the foreign key, which would reach the caller as a fault with nothing to act on.
+        var missing = await admin.PostAsJsonAsync("/api/v1/trip-types", new
+        {
+            code = $"absent_{suffix}",
+            name = "Names nothing",
+            description = (string?)null,
+            sortOrder = 700,
+            defaultChecklistId = Guid.CreateVersion7(),
+        });
+        missing.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await missing.Content.ReadAsStringAsync());
+        (await ReadCodeAsync(missing)).ShouldBe("trip_type.checklist_not_found");
+
+        // The same request naming a list this administrator may read is not refused, so the
+        // refusal above is the reference and not the field.
+        var body = new
+        {
+            code = $"prepared_{suffix}",
+            name = "Prepared trip",
+            description = (string?)null,
+            sortOrder = 700,
+            defaultChecklistId = listId,
+        };
+        var created = await admin.PostAsJsonAsync("/api/v1/trip-types", body);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var purpose = await ReadJsonAsync(created);
+        purpose.GetProperty("defaultChecklistId").GetGuid().ShouldBe(listId);
+        var typeId = purpose.GetProperty("id").GetInt64();
+
+        // The owner of the list, reading the vocabulary, is told which list the purpose names.
+        var toAdmin = await FindPurposeAsync(admin, body.code);
+        toAdmin.GetProperty("defaultChecklistId").GetGuid().ShouldBe(listId);
+
+        // A caller who may not read the list is told the purpose names none — the same answer a
+        // purpose that names none gives, which is what keeps the two from being told apart.
+        var toViewer = await FindPurposeAsync(viewer, body.code);
+        toViewer.GetProperty("defaultChecklistId").ValueKind.ShouldBe(JsonValueKind.Null);
+        toViewer.GetProperty("name").GetString().ShouldBe("Prepared trip");
+
+        // Opened to any account, the same reader is told it — so what was withheld was the
+        // audience and not the field.
+        var opened = await admin.PutAsJsonAsync($"/api/v1/checklists/{listId}", new
+        {
+            title = $"Before we go {suffix}",
+            description = (string?)null,
+            cavingGroupId = (Guid?)null,
+            visibility = "authenticated",
+            items = new[] { new { text = "Permit obtained" } },
+        });
+        opened.StatusCode.ShouldBe(HttpStatusCode.OK, await opened.Content.ReadAsStringAsync());
+        (await FindPurposeAsync(viewer, body.code)).GetProperty("defaultChecklistId").GetGuid()
+            .ShouldBe(listId);
+
+        // The same refusal on the update path, which is the one a stale form actually takes.
+        var stale = await admin.PutAsJsonAsync($"/api/v1/trip-types/{typeId}", new
+        {
+            body.code,
+            body.name,
+            body.description,
+            body.sortOrder,
+            defaultChecklistId = Guid.CreateVersion7(),
+        });
+        stale.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await stale.Content.ReadAsStringAsync());
+        (await ReadCodeAsync(stale)).ShouldBe("trip_type.checklist_not_found");
+
+        (await admin.DeleteAsync($"/api/v1/trip-types/{typeId}")).StatusCode
+            .ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    private static async Task<JsonElement> FindPurposeAsync(HttpClient client, string code)
+    {
+        var listed = await client.GetFromJsonAsync<JsonElement>("/api/v1/trip-types");
+        return listed.EnumerateArray().Single(r => r.GetProperty("code").GetString() == code);
+    }
+
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage response) =>
         await response.Content.ReadFromJsonAsync<JsonElement>();
 

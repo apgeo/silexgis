@@ -1,45 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
-  ApartmentOutlined,
-  AppstoreOutlined,
-  CarOutlined,
-  CloudUploadOutlined,
-  CodeSandboxOutlined,
-  CompassOutlined,
-  DashboardOutlined,
-  DatabaseOutlined,
-  EnvironmentOutlined,
-  FileTextOutlined,
-  FileWordOutlined,
-  FolderOutlined,
-  GlobalOutlined,
-  GoldOutlined,
-  GroupOutlined,
-  HistoryOutlined,
-  IdcardOutlined,
   LogoutOutlined,
-  MailOutlined,
-  PictureOutlined,
-  ProfileOutlined,
-  SafetyCertificateOutlined,
   SettingOutlined,
-  TagsOutlined,
-  TeamOutlined,
-  TableOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { Avatar, Dropdown, Flex, Layout, Menu, Select, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useLanguageChoice } from '../i18n/languageChoice.ts';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { hasAccessAction, useCapabilities, useMe, type AccessDomainName } from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
+import NotificationBell from './NotificationBell.tsx';
 import { useIsFullAdmin } from './reslinks/permissions.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
+import { buildNavItems, isNavGroup } from './navItems.tsx';
 
 /** Application shell: slim header + collapsible icon sidebar (off-canvas on phones). */
 export default function AppLayout() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const { language, choose } = useLanguageChoice();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -57,6 +37,10 @@ export default function AppLayout() {
     }
   }, [isMobile]);
 
+  // Named from this account's own record rather than from the token. The user-name claim carries
+  // the protected label — a generated pseudonym for anyone who never set a display name — which
+  // is the right thing to hand a third party and the wrong thing to show somebody about
+  // themselves: on a shared machine it leaves no way to tell which account is signed in.
   const { data: me } = useMe();
   // Nav visibility follows the caller's domain-level capabilities. There is no
   // route-level guard on purpose: the server refuses, the nav simply doesn't offer.
@@ -67,33 +51,93 @@ export default function AppLayout() {
   // offered the page that authors it.
   const isFullAdmin = useIsFullAdmin();
 
-  // "settings" is listed so an unmatched path does not fall through to highlighting the map.
-  // It matches no menu item, so nothing lights up — settings is not a sidebar destination.
+  // "settings" and "notifications" are listed so an unmatched path does not fall through to
+  // highlighting the map; neither matches a menu item, so nothing lights up while one is open,
+  // which is deliberate — neither is a sidebar destination. Every other entry here is one,
+  // including a camp: the list is a destination and a camp's own page stays under it, so opening
+  // one keeps the camps item lit.
   const sections = [
-    'map3d', 'dashboard', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
-    'uploads', 'documents', 'trip-logs',
+    'map3d', 'dashboard', 'work-areas', 'caves', 'features', 'geodata', 'gallery', 'albums', 'cabinets',
+    'uploads', 'documents', 'calendar', 'events', 'trip-logs', 'expeditions', 'checklists',
     'caving-groups', 'cavers',
-    'admin/audit', 'admin/messaging', 'admin/message-templates', 'admin/permission-groups',
+    'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
+    'admin/permission-groups',
     'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
     'admin/terrain',
-    'settings',
+    // The three the rail offers under configuration. Missing here, they matched nothing and
+    // fell through to the map, so opening trip purposes lit the map item instead.
+    'admin/trip-types', 'admin/participant-roles', 'admin/report-templates',
+    'settings', 'notifications',
   ] as const;
   const section = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
   // A document's own page is not a sidebar destination of its own — documents are reached
   // through the cabinets they are filed in, so that is what stays lit while one is open.
   const selectedKey = section === 'documents' ? 'cabinets' : section;
 
+  const navItems = buildNavItems(t, {
+    can,
+    // Gated on write, not read: every account can read the taxonomies, so a read check would
+    // offer these pages to everyone. Authoring one decides what every row under it may say.
+    taxonomyWrite: hasAccessAction(capabilities?.domains.taxonomies, 'write'),
+    // Everyone with something to import has detection rules of their own to keep, so that page
+    // is not an administrator's — only promoting a set to what a group or the installation
+    // inherits is, and that is refused on the server.
+    featureCreate: hasAccessAction(capabilities?.domains.features, 'create'),
+    isFullAdmin,
+  });
+
+
+  // The group holding the page being shown, so arriving from a link — a dashboard tile, a
+  // notification — opens the rail on the page it landed on rather than on nothing.
+  const openGroup = navItems.find(
+    (item) => isNavGroup(item) && item.children.some((child) => child.key === selectedKey),
+  )?.key;
+
+  // Which groups are expanded. Controlled rather than left to antd's own state, because the
+  // group of the page being shown has to open on arrival however the reader got there; antd's
+  // `defaultOpenKeys` is read once at mount and would not reopen for a later navigation.
+  //
+  // Only ever added to. A group the reader collapsed by hand stays collapsed until they open a
+  // page inside it, and opening one group does not close the others — accordion behaviour here
+  // would keep shutting the group somebody had just opened to compare two of its pages.
+  const [openKeys, setOpenKeys] = useState<string[]>(openGroup ? [openGroup] : []);
+  useEffect(() => {
+    if (openGroup) {
+      setOpenKeys((keys) => (keys.includes(openGroup) ? keys : [...keys, openGroup]));
+    }
+  }, [openGroup]);
+
   return (
     <Layout style={{ height: '100%' }}>
-      <Layout.Header style={{ display: 'flex', alignItems: 'center', paddingInline: 16 }}>
-        <Typography.Title level={4} style={{ color: token.colorTextLightSolid, margin: 0, flex: 1 }}>
-          {t('app.name')}
-        </Typography.Title>
+      <Layout.Header style={{ display: 'flex', alignItems: 'center' }}>
+        <Flex align="center" gap={10} style={{ flex: 1 }}>
+          {/* On a light chip because the mark is mostly black line work: the passage drawn in it
+              is all but invisible against the dark header, and inverting the image would take the
+              red and blue of the survey marker with it. Width is left to follow the height so the
+              chip cannot squash the drawing if the mark is ever replaced by one a different shape
+              — only its own aspect ratio decides how wide it sits. */}
+          <img
+            src="/silexgis_1_op.png"
+            alt=""
+            height={26}
+            style={{
+              display: 'block',
+              width: 'auto',
+              background: token.colorBgContainer,
+              borderRadius: token.borderRadius,
+              padding: '2px 5px',
+            }}
+          />
+          <Typography.Title level={5} style={{ color: token.colorTextLightSolid, margin: 0 }}>
+            {t('app.name')}
+          </Typography.Title>
+        </Flex>
         <Flex gap={16} align="center">
+          <NotificationBell />
           <Select
             size="small"
-            value={i18n.resolvedLanguage}
-            onChange={(lng) => void i18n.changeLanguage(lng)}
+            value={language}
+            onChange={choose}
             options={[
               { value: 'en', label: 'EN' },
               { value: 'ro', label: 'RO' },
@@ -126,7 +170,7 @@ export default function AppLayout() {
                 icon={<UserOutlined />}
                 style={{ marginInlineEnd: 8 }}
               />
-              {user?.profile.preferred_username ?? user?.profile.email}
+              {me?.displayName ?? me?.email ?? user?.profile.email}
             </Typography.Text>
           </Dropdown>
         </Flex>
@@ -145,6 +189,14 @@ export default function AppLayout() {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
+            // Nothing is open while the rail is collapsed, and that is not cosmetic. Collapsed,
+            // antd draws an open group as a floating flyout beside the rail — and a flyout the
+            // reader never asked for sits over the page, silently swallowing clicks on whatever
+            // is beneath it. Auto-opening the current page's group therefore has to stop at the
+            // edge of the collapsed rail: the state is kept, so it reappears on expand, but it
+            // is not handed to antd while there is nowhere for it to go but on top of the page.
+            openKeys={navCollapsed ? [] : openKeys}
+            onOpenChange={setOpenKeys}
             // "/map" rather than "/": the root dispatches to the dashboard for users who
             // chose it as their landing page, which would make this item unable to reach the map.
             onClick={({ key }) => {
@@ -154,88 +206,7 @@ export default function AppLayout() {
                 setNavCollapsed(true);
               }
             }}
-            items={[
-              { key: 'map', icon: <EnvironmentOutlined />, label: t('nav.map') },
-              { key: 'map3d', icon: <CodeSandboxOutlined />, label: t('nav.map3d') },
-              { key: 'dashboard', icon: <DashboardOutlined />, label: t('nav.dashboard') },
-              { key: 'caves', icon: <TableOutlined />, label: t('nav.caves') },
-              { key: 'features', icon: <GoldOutlined />, label: t('nav.features') },
-              { key: 'geodata', icon: <DatabaseOutlined />, label: t('nav.geodata') },
-              // The filing tree is readable by anyone who may read documents at all; what
-              // is on a shelf is decided per document, not by hiding the shelf.
-              ...(can('documents')
-                ? [
-                    // The gallery sits beside the map data rather than under the filing tree:
-                    // photographs are browsed, and paperwork is filed.
-                    { key: 'gallery', icon: <PictureOutlined />, label: t('nav.gallery') },
-                    { key: 'albums', icon: <AppstoreOutlined />, label: t('nav.albums') },
-                    { key: 'cabinets', icon: <FolderOutlined />, label: t('nav.cabinets') },
-                    // The record of what arrived together, and — for whoever may — the way
-                    // to import a directory the server can already reach.
-                    { key: 'uploads', icon: <CloudUploadOutlined />, label: t('nav.uploads') },
-                  ]
-                : []),
-              { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
-              { key: 'caving-groups', icon: <TeamOutlined />, label: t('nav.cavingGroups') },
-              { key: 'cavers', icon: <UserOutlined />, label: t('nav.cavers') },
-              // Each admin destination follows its own domain — "admin" is not a rank
-              // any more, just the pages a person's rights happen to include.
-              ...(can('audit')
-                ? [{ key: 'admin/audit', icon: <HistoryOutlined />, label: t('nav.audit') }]
-                : []),
-              ...(can('settings')
-                ? [{ key: 'admin/messaging', icon: <MailOutlined />, label: t('nav.messaging') }]
-                : []),
-              ...(can('messageTemplates')
-                ? [{ key: 'admin/message-templates', icon: <FileTextOutlined />, label: t('nav.templates') }]
-                : []),
-              ...(can('permissionGroups')
-                ? [{
-                    key: 'admin/permission-groups',
-                    icon: <SafetyCertificateOutlined />,
-                    label: t('nav.permissionGroups'),
-                  }]
-                : []),
-              ...(can('featureSets')
-                ? [{ key: 'admin/feature-sets', icon: <GroupOutlined />, label: t('nav.featureSets') }]
-                : []),
-              // Gated on write, not read: every account can read the taxonomies, so a read
-              // check would offer this page to everyone. Authoring a kind's schema decides
-              // what every document of that kind may say, which is administration.
-              ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
-                ? [{ key: 'admin/document-types', icon: <ProfileOutlined />, label: t('nav.documentTypes') }]
-                : []),
-              // The same gate, for the same reason: what a trip purpose asks a report to
-              // record decides what every trip under it may say.
-              ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
-                ? [{ key: 'admin/trip-types', icon: <CompassOutlined />, label: t('nav.tripTypes') }]
-                : []),
-              // And again for what somebody did on a trip: every roster row renders its job
-              // from this list, so the wording here is what every trip reads by.
-              ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
-                ? [{ key: 'admin/participant-roles', icon: <IdcardOutlined />, label: t('nav.participantRoles') }]
-                : []),
-              // And once more for the layout a trip is written up in: a club's own layout
-              // decides what every write-up it circulates says, and how.
-              ...(hasAccessAction(capabilities?.domains.taxonomies, 'write')
-                ? [{ key: 'admin/report-templates', icon: <FileWordOutlined />, label: t('nav.reportTemplates') }]
-                : []),
-              ...(isFullAdmin
-                ? [{ key: 'admin/relation-types', icon: <ApartmentOutlined />, label: t('nav.relationTypes') }]
-                : []),
-              // Everyone with something to import has rules of their own to keep, so this is
-              // not an administrator's page — only promoting a set to what a group or the
-              // installation inherits is, and that is refused on the server.
-              ...(hasAccessAction(capabilities?.domains.features, 'create')
-                ? [{ key: 'admin/term-rules', icon: <TagsOutlined />, label: t('nav.termRules') }]
-                : []),
-              // The elevation surface is one installation-wide asset, not content anybody
-              // owns, so the right to see the builds is held over the domain and read is
-              // what the page needs — starting one is a separate right the page asks for.
-              ...(can('terrain')
-                ? [{ key: 'admin/terrain', icon: <GlobalOutlined />, label: t('nav.terrain') }]
-                : []),
-            ]}
+            items={navItems}
           />
         </Layout.Sider>
         <Layout.Content style={{ overflow: 'auto' }}>

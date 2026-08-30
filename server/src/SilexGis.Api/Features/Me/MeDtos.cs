@@ -68,17 +68,27 @@ public sealed record MeDto(
     DateTimeOffset CreatedAt);
 
 /// <summary>
-/// Profile save. Carries neither the email address nor the user name: both are credentials with
-/// their own endpoints, so a profile save can never move one.
+/// Profile save. Carries neither the email address, nor the user name, nor the phone number, nor
+/// the language: each has an endpoint of its own, and a profile save can never move one.
 /// </summary>
+/// <remarks>
+/// <para>
+/// There is one phone column and it is the sign-in phone, verified by a code texted to it before
+/// it takes effect. A profile save that could assign it would leave the confirmed flag standing
+/// on a number nobody proved — and the next sign-in code would go there.
+/// </para>
+/// <para>
+/// Nor the language, for a different reason: this is a full-DTO replace, and the language is
+/// switched from the application shell, far from any open profile form. Carrying it here would
+/// let a form that was opened before the switch put the old answer back when it is saved.
+/// </para>
+/// </remarks>
 public sealed record MeUpdateRequest(
     string? FirstName,
     string? LastName,
     string? DisplayName,
     string? Bio,
-    string? PhoneNumber,
     Guid? CavingClubId,
-    string Locale,
     ProfileVisibilityDto Visibility);
 
 public sealed record AvatarPresetRequest(string Preset);
@@ -105,20 +115,6 @@ public sealed class MeUpdateRequestValidator : AbstractValidator<MeUpdateRequest
         RuleFor(x => x.LastName).MaximumLength(100);
         RuleFor(x => x.DisplayName).MaximumLength(100);
         RuleFor(x => x.Bio).MaximumLength(2000);
-
-        // Permissive on purpose: international numbers are written many ways and the server has
-        // no way to verify one. This rejects free text, not formatting choices.
-        RuleFor(x => x.PhoneNumber)
-            .MaximumLength(30)
-            .Matches("^[0-9+ ()./-]*$").WithMessage("The phone number contains unexpected characters.")
-            .When(x => !string.IsNullOrEmpty(x.PhoneNumber));
-
-        // A language tag rather than an allow-list, so shipping a third translation needs no
-        // server change.
-        RuleFor(x => x.Locale)
-            .NotEmpty()
-            .MaximumLength(10)
-            .Matches("^[a-z]{2}(-[A-Z]{2})?$").WithMessage("The locale must be a language tag such as 'en' or 'ro'.");
 
         RuleFor(x => x.Visibility).NotNull();
         RuleFor(x => x.Visibility.RealName).IsInEnum().When(x => x.Visibility is not null);

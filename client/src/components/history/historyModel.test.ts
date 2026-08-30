@@ -87,6 +87,25 @@ describe('historyModel', () => {
     expect(restored.safety).toBeNull();
   });
 
+  it('applyTripRestore says nothing about the trip’s caves', () => {
+    // The list on a loaded trip is short of every cave that reader may not be told about, and it
+    // is not restorable in the first place. Echoing it back would be read as an instruction to
+    // drop the caves it does not mention — given by somebody who was never shown them.
+    const current = {
+      title: 'New title',
+      caveIds: ['5b4c3d2e-1111-4222-8333-444455556666'],
+      fieldData: null,
+      logistics: null,
+      safety: null,
+    };
+    const changes = { Title: { old: 'Old title', new: 'New title' } };
+
+    const restored = applyTripRestore(current, changes, ['Title']);
+
+    expect(restored.title).toBe('Old title');
+    expect(restored.caveIds).toBeNull();
+  });
+
   it('applyTripRestore restores a named section, parsed from the audit JSON string', () => {
     const current = { title: 'T', fieldData: { conditions: 'wet' }, logistics: {}, safety: {} };
     const changes = {

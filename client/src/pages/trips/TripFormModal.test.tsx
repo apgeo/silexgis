@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import dayjs from 'dayjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -92,6 +92,61 @@ describe('TripFormModal dates', () => {
     expect(body.tripDateEnd).toBe('2026-03-16');
   });
 
+  it('sends the number of places somebody typed, and an empty box as no limit at all', async () => {
+    // A limit is what makes the people past it a waiting list rather than everybody who said
+    // yes, so somewhere has to be able to set one — and clearing it has to mean a trip that
+    // turns nobody away, not a value silently left as it was.
+    show(trip({ maxParticipants: 8 } as Partial<TripLogInfo>));
+    expect(screen.getByTestId('trip-max-participants')).toHaveValue('8');
+
+    fireEvent.change(screen.getByTestId('trip-max-participants'), { target: { value: '6' } });
+    expect((await savedBody(updateTrip)).maxParticipants).toBe(6);
+
+    cleanup();
+    updateTrip.mockClear();
+    show(trip({ maxParticipants: 8 } as Partial<TripLogInfo>));
+    fireEvent.change(screen.getByTestId('trip-max-participants'), { target: { value: '' } });
+    expect((await savedBody(updateTrip)).maxParticipants).toBeNull();
+  });
+
+  it('carries the meeting point through a save that never touched it', async () => {
+    // The meeting point is a column like the sketch, written straight through with null meaning
+    // "cleared", so a save that only corrects a title must send it back — otherwise correcting a
+    // title erases where the party was told to be, and nothing on screen says it happened.
+    const meetingGeom = {
+      type: 'Point',
+      coordinates: [25.44, 45.53],
+    } as unknown as TripLogInfo['meetingGeom'];
+    show(trip({ meetingGeom }));
+
+    const body = await savedBody(updateTrip);
+    expect(body.meetingGeom).toEqual(meetingGeom);
+  });
+
+  it('sends no meeting point for a trip that states none', async () => {
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Quick look' } });
+
+    expect((await savedBody(createTrip)).meetingGeom).toBeNull();
+  });
+
+  it('drops the meeting point when it is cleared, and leaves the sketch alone', async () => {
+    // Two maps stand on this form and each clears only its own: a driver that reached for "the
+    // clear button" would be reaching for whichever rendered first.
+    const geom = { type: 'Point', coordinates: [25.6, 45.65] } as unknown as TripLogInfo['geom'];
+    const meetingGeom = {
+      type: 'Point',
+      coordinates: [25.44, 45.53],
+    } as unknown as TripLogInfo['meetingGeom'];
+    show(trip({ geom, meetingGeom }));
+
+    fireEvent.click(screen.getByTestId('trip-meeting-geometry-clear'));
+
+    const body = await savedBody(updateTrip);
+    expect(body.meetingGeom).toBeNull();
+    expect(body.geom).toEqual(geom);
+  });
+
   it('carries a sketch the editor never touched through a save', async () => {
     // The form owns the geometry now; an edit that changes only the title must not drop the shape.
     const geom = { type: 'Point', coordinates: [25.6, 45.65] } as unknown as TripLogInfo['geom'];
@@ -113,7 +168,7 @@ describe('TripFormModal dates', () => {
     const geom = { type: 'Point', coordinates: [25.6, 45.65] } as unknown as TripLogInfo['geom'];
     show(trip({ geom }));
 
-    fireEvent.click(screen.getByRole('button', { name: /Clear shape/ }));
+    fireEvent.click(screen.getByTestId('trip-geometry-clear'));
 
     const body = await savedBody(updateTrip);
     expect(body.geom).toBeNull();
@@ -141,6 +196,17 @@ describe('TripFormModal dates', () => {
     expect(body.surveyStations).toBe(47);
     expect(body.ropeMetres).toBe(260);
     expect(body.hadIncident).toBe(true);
+  });
+
+  it("keeps the trip's room for people through a save that never showed it", async () => {
+    // The write sets the whole trip, and this form draws no control for the limit, so leaving it
+    // out of the body clears it. Nothing would look wrong afterwards — an unlimited trip is what
+    // no limit means — while everybody who was waiting for a place is silently on the trip.
+    show(trip({ maxParticipants: 8 }));
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Digging weekend (4)' } });
+
+    const body = await savedBody(updateTrip);
+    expect(body.maxParticipants).toBe(8);
   });
 
   it('mentions no section at all, rather than three empty ones', async () => {
@@ -274,6 +340,28 @@ describe('TripFormModal dates', () => {
       newCaverName: 'Guest Caver',
       note: 'Turned back at the pitch head.',
     });
+  });
+
+  it('saves the job picked in a row’s own details, not the role of having merely been there', async () => {
+    // The picker is the only field in the row whose value is chosen rather than typed, and it
+    // was the only one not covered here: the note and the hours were, so a save that dropped
+    // the job alone went out looking entirely healthy. The server reads a missing job as
+    // "simply there", so the loss is silent — the trip's leader is stored as an attendee and
+    // nothing anywhere says so.
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Pitch rigging' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add participant/ }));
+    fireEvent.change(screen.getByPlaceholderText('Participant name'), { target: { value: 'Guest Caver' } });
+    fireEvent.click(screen.getByRole('button', { name: /Role, times and note/ }));
+
+    // Scoped to the row that was opened: the form draws several selects of its own, and the
+    // trip's type is a different question from this person's job.
+    const details = screen.getByTestId('roster-row-details');
+    fireEvent.mouseDown(within(details).getByRole('combobox'));
+    fireEvent.click(await screen.findByText('Leader'));
+
+    const body = await savedBody(createTrip);
+    expect(body.participants[0]).toMatchObject({ newCaverName: 'Guest Caver', roleId: 3 });
   });
 
   it('leaves a one-day trip without an end date rather than a range of itself', async () => {

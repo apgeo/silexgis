@@ -82,12 +82,12 @@ describe('the chart layer draws real elements', () => {
     await waitFor(() => expect(frame.querySelector('svg')).not.toBeNull());
 
     // The legend carries a second entry for the fitted line, which is how a reader tells a model
-    // from the data it was fitted to. Translations are not loaded in a unit test, so what appears
-    // is the key itself — and asserting on the key is the stronger check: it proves the label was
-    // asked for through the translator rather than written out in English at the call site, which
-    // is the mistake that would otherwise reach a Romanian reader.
-    const labels = Array.from(frame.querySelectorAll('text')).map((n) => n.textContent);
-    expect(labels).toContain('karstStats.regression');
+    // from the data it was fitted to. The setup loads English, so what appears is the translated
+    // sentence rather than the key — asserting on it proves both that the label goes through the
+    // translator and that the key it asks for actually exists, which a raw-key assertion cannot.
+    const labels = Array.from(frame.querySelectorAll('text')).map((n) => n.textContent ?? '');
+    expect(labels.some((l) => /Fit: slope/.test(l))).toBe(true);
+    expect(labels).not.toContain('karstStats.regression');
   });
 
   it('draws a curve inside a band', async () => {

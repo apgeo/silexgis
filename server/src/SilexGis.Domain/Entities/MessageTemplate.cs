@@ -7,10 +7,17 @@ namespace SilexGis.Domain.Entities;
 /// An operator's rewrite of one message in one language.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Only edited templates are stored. A missing row means "use the wording shipped with the
 /// product", which has two consequences worth keeping: an installation that never touches the
 /// text picks up improvements to it on upgrade, and resetting a template to the default is a
 /// delete rather than a copy of whatever the default happened to be when the row was written.
+/// </para>
+/// <para>
+/// The row carries no channel. Which transport a message travels on is a property of the message
+/// itself and is settled by the in-code catalogue, so storing a copy of it here could only ever
+/// disagree with the contract — and nothing read it.
+/// </para>
 /// </remarks>
 public class MessageTemplate : ITimestamped
 {
@@ -21,9 +28,6 @@ public class MessageTemplate : ITimestamped
 
     /// <summary>Language of this wording — one of <see cref="MessageTemplateCatalog.Locales"/>.</summary>
     public string Locale { get; set; } = MessageTemplateCatalog.FallbackLocale;
-
-    /// <summary>Denormalised from the catalogue so a query can filter by channel without it.</summary>
-    public MessageChannel Channel { get; set; }
 
     /// <summary>Null for SMS, which has no subject.</summary>
     public string? Subject { get; set; }

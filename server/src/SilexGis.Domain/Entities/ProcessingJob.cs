@@ -114,6 +114,23 @@ public static class ProcessingJobKinds
     public const string DocumentPurge = "document-purge";
 
     /// <summary>
+    /// Write the notifications for a notice sent to a caving group whose roster was too large to
+    /// write to inside the request that sent it.
+    /// </summary>
+    public const string CavingGroupAnnouncement = "caving-group-announcement";
+
+    /// <summary>
+    /// Look for parties past the hour they said they would be back, tell whoever the trip names,
+    /// and remind the people on a trip that is nearly here. Scheduled.
+    /// </summary>
+    /// <remarks>
+    /// Its rows are also the record that the check ran at all: a page showing an armed alarm reads
+    /// the last completed pass of this kind, so that a check nobody ran reads as unchecked rather
+    /// than as nothing wrong.
+    /// </remarks>
+    public const string TripCalloutSweep = "trip-callout-sweep";
+
+    /// <summary>
     /// Build the terrain the 3D scene draws over one rectangle: obtain the elevation rasters,
     /// prepare them, bake the pyramid, check it and publish it. One row drives the whole chain
     /// and reports which step it has reached.

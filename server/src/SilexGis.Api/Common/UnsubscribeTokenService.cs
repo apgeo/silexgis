@@ -13,8 +13,14 @@ namespace SilexGis.Api.Common;
 /// and a token cannot be forged or edited.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The lifetime is long because mail sits in inboxes for months, and an expired opt-out link is a
 /// worse failure than an old one — the recipient's only alternative is to keep receiving mail.
+/// </para>
+/// <para>
+/// The payload names what the link switches off as well as whose account it belongs to, so a
+/// summary's link cannot be read as a link for whichever category happened to be first in it.
+/// </para>
 /// </remarks>
 public sealed class UnsubscribeTokenService : IUnsubscribeTokens
 {
@@ -25,26 +31,43 @@ public sealed class UnsubscribeTokenService : IUnsubscribeTokens
     public UnsubscribeTokenService(IDataProtectionProvider provider) =>
         protector = provider.CreateProtector("SilexGis.Unsubscribe").ToTimeLimitedDataProtector();
 
-    public string Create(Guid userId, NotificationCategory category) =>
-        protector.Protect($"{userId:N}:{(short)category}", DateTimeOffset.UtcNow.Add(Lifetime));
+    public string CreateForCategory(Guid userId, NotificationCategory category) =>
+        Protect($"{userId:N}:{(short)UnsubscribeKind.Category}:{(short)category}");
 
-    public bool TryRead(string token, out Guid userId, out NotificationCategory category)
+    // The third field is written empty rather than omitted, so every token has the same shape and
+    // one parser reads both kinds.
+    public string CreateForDigest(Guid userId) =>
+        Protect($"{userId:N}:{(short)UnsubscribeKind.DailyDigest}:");
+
+    public bool TryRead(string token, out UnsubscribeSubject subject)
     {
-        userId = Guid.Empty;
-        category = default;
+        subject = default;
 
         try
         {
             var parts = protector.Unprotect(token).Split(':');
-            if (parts.Length != 2
-                || !Guid.TryParseExact(parts[0], "N", out userId)
-                || !short.TryParse(parts[1], CultureInfo.InvariantCulture, out var raw)
-                || !Enum.IsDefined(typeof(NotificationCategory), raw))
+            if (parts.Length != 3
+                || !Guid.TryParseExact(parts[0], "N", out var userId)
+                || !short.TryParse(parts[1], CultureInfo.InvariantCulture, out var rawKind)
+                || !Enum.IsDefined(typeof(UnsubscribeKind), rawKind))
             {
                 return false;
             }
 
-            category = (NotificationCategory)raw;
+            var kind = (UnsubscribeKind)rawKind;
+            if (kind != UnsubscribeKind.Category)
+            {
+                subject = new UnsubscribeSubject(userId, kind, default);
+                return true;
+            }
+
+            if (!short.TryParse(parts[2], CultureInfo.InvariantCulture, out var rawCategory)
+                || !Enum.IsDefined(typeof(NotificationCategory), rawCategory))
+            {
+                return false;
+            }
+
+            subject = new UnsubscribeSubject(userId, kind, (NotificationCategory)rawCategory);
             return true;
         }
         catch (CryptographicException)
@@ -53,4 +76,7 @@ public sealed class UnsubscribeTokenService : IUnsubscribeTokens
             return false;
         }
     }
+
+    private string Protect(string payload) =>
+        protector.Protect(payload, DateTimeOffset.UtcNow.Add(Lifetime));
 }

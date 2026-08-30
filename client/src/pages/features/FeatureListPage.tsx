@@ -17,6 +17,7 @@ import {
   type FeatureListItem,
   type FeatureListParams,
 } from '../../api/hooks.ts';
+import ConfigureLink from '../../components/ConfigureLink.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
@@ -40,6 +41,8 @@ export default function FeatureListPage() {
   const deleteFeature = useDeleteFeature();
 
   const canEdit = useCan('features', 'write');
+  const canReadFeatureSets = useCan('featureSets', 'read');
+  const canCreateFeatures = useCan('features', 'create');
   const typeName = (code: string | null) =>
     code === null ? '' : featureTypes?.find((x) => x.code === code)?.name ?? code;
 
@@ -89,17 +92,27 @@ export default function FeatureListPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('features.title')}
         </Typography.Title>
-        <Dropdown
-          menu={{
-            items: exportFormats.map((format) => ({
-              key: format,
-              label: format.toUpperCase(),
-              onClick: () => onExport(format),
-            })),
-          }}
-        >
-          <Button icon={<DownloadOutlined />}>{t('common.export')}</Button>
-        </Dropdown>
+        <Flex gap={8} align="center">
+          {/* The vocabularies this page reads by, reached from the page they govern rather than
+              only from the configuration group in the rail. */}
+          <ConfigureLink
+            items={[
+              ...(canReadFeatureSets ? [{ key: 'admin/feature-sets', label: t('nav.featureSets') }] : []),
+              ...(canCreateFeatures ? [{ key: 'admin/term-rules', label: t('nav.termRules') }] : []),
+            ]}
+          />
+          <Dropdown
+            menu={{
+              items: exportFormats.map((format) => ({
+                key: format,
+                label: format.toUpperCase(),
+                onClick: () => onExport(format),
+              })),
+            }}
+          >
+            <Button icon={<DownloadOutlined />}>{t('common.export')}</Button>
+          </Dropdown>
+        </Flex>
       </Flex>
       <Flex gap={8} wrap style={{ marginBottom: 12 }}>
         <Input.Search

@@ -30,6 +30,16 @@ export default function PhoneNumberCard() {
 
   if (!status) return null;
 
+  /**
+   * The stable code the server refused with, when it wrote one.
+   *
+   * Worth reading rather than collapsing every failure into one sentence: two of the refusals on
+   * these routes are terminal, and answering both with "the code is not valid" invites exactly
+   * the wrong reaction — retyping a correct code, or asking for another text — from someone who
+   * has no way to learn what actually happened.
+   */
+  const codeOf = (error: unknown) => (error as { code?: string } | undefined)?.code;
+
   const start = async () => {
     setBusy(true);
     try {
@@ -53,7 +63,14 @@ export default function PhoneNumberCard() {
     try {
       const { error } = await api.POST('/api/v1/me/phone/confirm', { body: { code: code.trim() } });
       if (error !== undefined) {
-        message.error(t('security.codeInvalid'));
+        const problem = codeOf(error);
+        message.error(
+          problem === 'auth.locked_out'
+            ? t('security.lockedOut')
+            : problem === 'me.phone_taken'
+              ? t('security.phoneTaken')
+              : t('security.codeInvalid'),
+        );
         return;
       }
       setNumber('');

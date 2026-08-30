@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Expeditions;
 using SilexGis.Domain.ResLinks;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
@@ -69,7 +70,17 @@ public static class DemoSeeder
         await db.SaveChangesAsync(ct);
 
         await SeedTripLogsAsync(db, ownerUserId, ct);
+        await SeedExpeditionsAsync(db, ownerUserId, ct);
         await SeedMapViewsAsync(db, ownerUserId, ct);
+        await db.SaveChangesAsync(ct);
+
+        // After the camps are saved and on its own guard, not inside theirs: a database seeded
+        // before this block existed already holds the camps, so anything gated on their absence
+        // would never run there — the demo would quietly stay as it was on every machine that had
+        // already seen it.
+        await SeedExpeditionRosterAsync(db, ct);
+        await SeedExpeditionTripsAsync(db, ct);
+        await SeedTripInvitationsAsync(db, ct);
         await db.SaveChangesAsync(ct);
 
         if (documents is not null && fileStore is not null)
@@ -469,10 +480,14 @@ public static class DemoSeeder
     private static async Task SeedTripLogsAsync(
         SilexGisDbContext db, Guid ownerUserId, CancellationToken ct)
     {
-        if (await db.TripLogs.AnyAsync(t => t.Title.StartsWith("Demo:"), ct))
-        {
-            return;
-        }
+        // Per trip rather than "any demo trip at all". A block that stops at the first sign of
+        // itself never runs again on an installation the earlier version was run on, so a trip
+        // added later would exist only on machines that had never seeded — and the section built
+        // over it would read as empty there, which is indistinguishable from broken.
+        var alreadySeeded = await db.TripLogs
+            .Where(t => t.Title.StartsWith("Demo:"))
+            .Select(t => t.Title)
+            .ToListAsync(ct);
 
         var caverIds = new List<Guid>();
         foreach (var fullName in new[] { "Ana Demo", "Bogdan Demo", "Cristina Demo", "Dan Demo" })
@@ -529,6 +544,23 @@ public static class DemoSeeder
                 ActivityState.Draft, null),
             ("Demo: maintenance and rebolting", "maintenance", new DateOnly(2026, 7, 18), Visibility.Public,
                 ActivityState.Cancelled, null),
+
+            // The three that were done from the long camp, and dated inside its fortnight so the
+            // camp reads as a fortnight of caving rather than as a folder somebody dropped
+            // unrelated trips into. They are prefixed so the block that joins them to the camp can
+            // find them by name and nothing else. Two of them carry figures, so the camp's totals
+            // are numbers rather than zeroes; one is only visible to accounts, so the same camp
+            // shows a signed-in reader a larger total than a visitor — which is the whole reason
+            // the totals are shown with a caveat instead of as bare truth.
+            (CampTripPrefix + "exploration push", "exploration", new DateOnly(2026, 7, 20),
+                Visibility.Public, ActivityState.Published,
+                new DateTimeOffset(2026, 7, 22, 18, 0, 0, TimeSpan.Zero)),
+            (CampTripPrefix + "survey day", "survey", new DateOnly(2026, 7, 24),
+                Visibility.Public, ActivityState.Published,
+                new DateTimeOffset(2026, 7, 26, 18, 0, 0, TimeSpan.Zero)),
+            (CampTripPrefix + "hydrology round", "science", new DateOnly(2026, 7, 28),
+                Visibility.Authenticated, ActivityState.Published,
+                new DateTimeOffset(2026, 7, 30, 18, 0, 0, TimeSpan.Zero)),
         };
 
         var index = 0;
@@ -537,6 +569,14 @@ public static class DemoSeeder
             if (!tripTypeIds.TryGetValue(typeCode, out var tripTypeId))
             {
                 throw new InvalidOperationException($"Trip type '{typeCode}' is not seeded.");
+            }
+
+            if (alreadySeeded.Contains(title))
+            {
+                // The counter still moves: which cave and which role a trip gets is read off it,
+                // and a top-up that shifted them would give the new trips somebody else's pairing.
+                index++;
+                continue;
             }
 
             var trip = new TripLog
@@ -551,6 +591,12 @@ public static class DemoSeeder
                 Visibility = visibility,
                 State = state,
                 PublishedAt = publishedAt,
+                // Where the camp's own trips went, sketched on the plateau the camp works. Only
+                // those trips carry one: a sketch is optional on every trip, and a demo where
+                // every trip had one would make a surface that ignores the empty case look right.
+                Geom = title.StartsWith(CampTripPrefix, StringComparison.Ordinal)
+                    ? new Point(25.42 + (index % 3 * 0.02), 45.51 + (index % 3 * 0.01)) { SRID = 4326 }
+                    : null,
             };
             // What a trip is counted by, on the trips that would plausibly produce numbers: a
             // demo where nothing is ever measured shows none of it, and a demo where everything
@@ -637,6 +683,345 @@ public static class DemoSeeder
 
             index++;
         }
+    }
+
+    /// <summary>
+    /// The long camp, named once: the roster block finds it by this and nothing else.
+    /// </summary>
+    private const string FortnightCampName = "Demo: Bihor summer camp";
+
+    /// <summary>
+    /// The one trip still being planned, named once so the block that seeds who was asked on it
+    /// finds it by name rather than by which state it happens to be in.
+    /// </summary>
+    private const string PlannedTripTitle = "Demo: training weekend";
+
+    /// <summary>
+    /// What the trips done from the long camp are called, so the block that joins them to it finds
+    /// them by name rather than by guessing from their dates.
+    /// </summary>
+    private const string CampTripPrefix = "Demo: camp ";
+
+    /// <summary>
+    /// A handful of camps spread across the lifecycle, so a page listing them shows every reading.
+    /// </summary>
+    private static async Task SeedExpeditionsAsync(
+        SilexGisDbContext db, Guid ownerUserId, CancellationToken ct)
+    {
+        if (await db.Expeditions.AnyAsync(x => x.Name.StartsWith("Demo:"), ct))
+        {
+            return;
+        }
+
+        // Fixed dates rather than relative to now, for the reason the trips above give: a demo
+        // that drifts is a demo whose screenshots stop matching it.
+        //
+        // The lifecycle spread is the point of the block. A camp exists long before it happens,
+        // so the demo shows one that has been written up and announced, one going ahead with its
+        // dates settled, one still somebody's idea, and one put back — the four readings that
+        // look different on a page, without anybody having to drive the transitions to see them.
+        // A single-day camp is here too, holding no end date at all, because that is the row
+        // every reader of the date range is written against.
+        var camps = new[]
+        {
+            (FortnightCampName, "A fortnight on the plateau: exploration, survey and rigging.",
+                new DateOnly(2026, 7, 18), (DateOnly?)new DateOnly(2026, 8, 1), Visibility.Public,
+                ActivityState.Published,
+                (DateTimeOffset?)new DateTimeOffset(2026, 8, 10, 18, 0, 0, TimeSpan.Zero)),
+            ("Demo: autumn survey camp", "Finishing the survey of the lower series.",
+                new DateOnly(2026, 10, 10), new DateOnly(2026, 10, 18), Visibility.Authenticated,
+                ActivityState.Confirmed, null),
+            ("Demo: winter recce", "One day looking at the entrances above the valley.",
+                new DateOnly(2026, 12, 5), null, Visibility.CavingGroup, ActivityState.Proposed, null),
+            ("Demo: spring camp (postponed)", "Put back until the access permit is renewed.",
+                new DateOnly(2027, 4, 3), new DateOnly(2027, 4, 12), Visibility.Public,
+                ActivityState.Delayed, null),
+        };
+
+        // Roughly the plateau the demo caves sit on. A working area is drawn on the plan and
+        // stays what it was drawn as — it is not derived from where the trips ended up.
+        var factory = new GeometryFactory(new PrecisionModel(), 4326);
+        var workingArea = factory.CreatePolygon(
+        [
+            new Coordinate(25.40, 45.50),
+            new Coordinate(25.50, 45.50),
+            new Coordinate(25.50, 45.56),
+            new Coordinate(25.40, 45.56),
+            new Coordinate(25.40, 45.50),
+        ]);
+
+        var index = 0;
+        foreach (var (name, description, start, end, visibility, state, publishedAt) in camps)
+        {
+            var camp = new Expedition
+            {
+                Name = name,
+                Description = description,
+                StartDate = start,
+                EndDate = DayRange.EndForStorage(start, end),
+                // Only the first carries one, so a surface that draws the area has something to
+                // draw and one that must cope with its absence has that too.
+                Geom = index == 0 ? workingArea : null,
+                OwnerUserId = ownerUserId,
+                Visibility = visibility,
+                State = state,
+                PublishedAt = publishedAt,
+            };
+            db.Expeditions.Add(camp);
+            index++;
+        }
+    }
+
+    /// <summary>
+    /// Which trips the fortnight camp gathered.
+    /// </summary>
+    /// <remarks>
+    /// Without this the demo's camps hold no trips at all, and every surface built over the
+    /// membership — the trips list, the totals, the map's sketches and the entrances of the caves
+    /// those trips name — reads as empty. An empty answer and a broken one look the same on a
+    /// page, so a demo that only ever shows the empty one proves nothing about either.
+    /// <para>
+    /// Not every demo trip: the ones left out include one dated the day the camp began, which is
+    /// what shows that a camp's trips are the ones joined to it and not simply the ones whose
+    /// dates happen to fall inside it. One of the three joined is visible to accounts only, so a
+    /// visitor and a signed-in reader get different totals for the same camp — the difference the
+    /// totals are captioned about.
+    /// </para>
+    /// <para>
+    /// Guarded on membership rows of its own rather than on the camps' absence, so a database
+    /// seeded before this block existed picks the rows up on the next run instead of being skipped
+    /// forever by a guard written about something else.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedExpeditionTripsAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var camp = await db.Expeditions.FirstOrDefaultAsync(x => x.Name == FortnightCampName, ct);
+        if (camp is null || await db.ExpeditionTrips.AnyAsync(m => m.ExpeditionId == camp.Id, ct))
+        {
+            return;
+        }
+
+        var tripIds = await db.TripLogs
+            .Where(t => t.Title.StartsWith(CampTripPrefix))
+            .OrderBy(t => t.TripDate)
+            .Select(t => t.Id)
+            .ToListAsync(ct);
+
+        // A trip is in at most one camp, and the database is what holds that rule. Skipping the
+        // ones already placed keeps a re-seed from being refused by the unique index.
+        var alreadyPlaced = await db.ExpeditionTrips
+            .Where(m => tripIds.Contains(m.TripLogId))
+            .Select(m => m.TripLogId)
+            .ToListAsync(ct);
+
+        var joinedAt = new DateTimeOffset(2026, 7, 17, 12, 0, 0, TimeSpan.Zero);
+        foreach (var tripId in tripIds.Except(alreadyPlaced))
+        {
+            db.ExpeditionTrips.Add(new ExpeditionTrip
+            {
+                ExpeditionId = camp.Id,
+                TripLogId = tripId,
+                JoinedAt = joinedAt,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Who was asked on the trip still being planned, and what each of them has said.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Against the one trip that is still a draft, because that is the only one where the question
+    /// is live: on a trip already run, who was asked is history and who was there is the roster.
+    /// It is given room for three against five yeses, so the two beyond the limit are waiting and
+    /// a surface that ignored the limit shows five people on a trip for three.
+    /// </para>
+    /// <para>
+    /// Every answer in the vocabulary appears, including somebody asked who has not replied, so a
+    /// reading that quietly counted silence as one of the real answers has a row to get wrong. One
+    /// person answered without ever being asked — the ordinary case of somebody seeing a trip
+    /// their club is running — and one was picked out of the order by whoever runs the trip, from
+    /// behind the limit, so the pick displaces somebody and the order underneath it stays visible.
+    /// </para>
+    /// <para>
+    /// The stamps are minutes apart and fixed rather than relative to now, because the order they
+    /// give is what decides who is on the trip: a demo whose queue came out differently on
+    /// different machines would not be showing the feature at all. The person who changed their
+    /// mind carries the later stamp, which is what puts them behind everybody who answered in
+    /// between.
+    /// </para>
+    /// <para>
+    /// Guarded per row rather than on any one of them, so a database seeded before this block
+    /// existed picks the answers up on the next run, and so an answer added here later reaches an
+    /// installation that already holds the rest.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedTripInvitationsAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var trip = await db.TripLogs.FirstOrDefaultAsync(t => t.Title == PlannedTripTitle, ct);
+        if (trip is null)
+        {
+            return;
+        }
+
+        // Set where nothing has been said about it rather than unconditionally, so an installation
+        // whose own limit was edited on the demo trip keeps what it chose.
+        trip.MaxParticipants ??= 3;
+
+        // Four more people than the trips themselves use, added here and guarded by name, because
+        // a list of who is considering a trip is only worth drawing when there are more people on
+        // it than there is room for — and a demo where the limit was never reached would show a
+        // surface that ignored the limit as working perfectly. They are ordinary directory
+        // entries with no account, which is what most of a club's roster is.
+        var caverIds = new List<Guid>();
+        foreach (var fullName in new[]
+        {
+            "Ana Demo", "Bogdan Demo", "Cristina Demo", "Dan Demo",
+            "Elena Demo", "Florin Demo", "Gabriela Demo", "Horia Demo",
+        })
+        {
+            var existing = await db.Cavers
+                .Where(c => c.FullName == fullName)
+                .Select(c => (Guid?)c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (existing is not null)
+            {
+                caverIds.Add(existing.Value);
+                continue;
+            }
+
+            var caver = new Caver { FullName = fullName };
+            db.Cavers.Add(caver);
+            caverIds.Add(caver.Id);
+        }
+
+        var asked = new DateTimeOffset(2026, 5, 30, 9, 0, 0, TimeSpan.Zero);
+        var answered = new DateTimeOffset(2026, 6, 1, 18, 0, 0, TimeSpan.Zero);
+
+        // Caver, what they said, how many minutes after the first answer they said it, whether
+        // anybody asked them, and whether they were picked.
+        var answers = new (int Caver, TripInvitationResponse Response, int Minutes, bool Invited, bool Picked)[]
+        {
+            (0, TripInvitationResponse.Yes, 0, true, false),
+            (1, TripInvitationResponse.Yes, 20, true, false),
+            (2, TripInvitationResponse.No, 35, true, false),
+            (3, TripInvitationResponse.Yes, 50, true, true),
+
+            // Asked and silent, which is a state somebody reads and acts on rather than an absence.
+            (4, TripInvitationResponse.Pending, -1, true, false),
+
+            // Said maybe first and yes much later, so their place in the queue is where the yes
+            // put them and not where the maybe did.
+            (5, TripInvitationResponse.Yes, 400, true, false),
+
+            // Nobody asked this one; they saw the trip and said they were coming.
+            (6, TripInvitationResponse.Yes, 90, false, false),
+
+            (7, TripInvitationResponse.Maybe, 120, true, false),
+        };
+
+        foreach (var (caver, response, minutes, invited, picked) in answers)
+        {
+            var caverId = caverIds[caver];
+            if (await db.TripInvitations.AnyAsync(x => x.TripLogId == trip.Id && x.CaverId == caverId, ct))
+            {
+                continue;
+            }
+
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = trip.Id,
+                CaverId = caverId,
+                Response = response,
+                InvitedAt = invited ? asked : null,
+                // Stamped only where there is an answer to stamp: somebody who has not replied has
+                // not replied at a time, and a date here would put them in the queue.
+                RespondedAt = minutes < 0 ? null : answered.AddMinutes(minutes),
+                SelectedAt = picked ? answered.AddMinutes(600) : null,
+                Note = response == TripInvitationResponse.Maybe
+                    ? "Only if we are back before dark."
+                    : null,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Who was at the fortnight camp, and for which days.
+    /// </summary>
+    /// <remarks>
+    /// Against the long camp because that is the one a camp's roster reads as anything: a single-day
+    /// recce with a presence list is a list of everybody who turned up, which shows none of what
+    /// the table is for.
+    /// <para>
+    /// Deliberately not the people on the demo trips. A camp's roster is not derived from its
+    /// trips — the cook and whoever kept the base camp went underground on none of it — and a demo
+    /// where the two lists matched would make a surface that quietly computed one from the other
+    /// look correct. Four people in six rows, one of them holding two roles over overlapping days
+    /// and one leaving and coming back, so anything counting rows instead of people reports six
+    /// where four were there.
+    /// </para>
+    /// <para>
+    /// Guarded on rows of its own rather than on the camps' absence, so a database seeded before
+    /// this block existed picks the rows up on the next run instead of being skipped forever by a
+    /// guard written about something else.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedExpeditionRosterAsync(SilexGisDbContext db, CancellationToken ct)
+    {
+        var camp = await db.Expeditions.FirstOrDefaultAsync(x => x.Name == FortnightCampName, ct);
+        if (camp is null || await db.ExpeditionRoster.AnyAsync(r => r.ExpeditionId == camp.Id, ct))
+        {
+            return;
+        }
+
+        var caverIds = await db.Cavers
+            .Where(c => c.FullName.EndsWith(" Demo"))
+            .OrderBy(c => c.FullName)
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+        if (caverIds.Count < 4)
+        {
+            return;
+        }
+
+        var roleIds = await db.ExpeditionRosterRoles.ToDictionaryAsync(r => r.Code, r => r.Id, ct);
+        long RoleId(string code) => roleIds.TryGetValue(code, out var id)
+            ? id
+            : throw new InvalidOperationException($"Camp-roster role '{code}' is not seeded.");
+
+        var start = camp.StartDate;
+        var end = camp.EndDate ?? camp.StartDate;
+
+        void Add(Guid caverId, string role, DateOnly from, DateOnly? to, string? note = null) =>
+            db.ExpeditionRoster.Add(new ExpeditionRosterEntry
+            {
+                ExpeditionId = camp.Id,
+                CaverId = caverId,
+                RoleId = RoleId(role),
+                FromDate = from,
+                ToDate = DayRange.EndForStorage(from, to),
+                Note = note,
+            });
+
+        // One person, two roles, over spans that overlap: nothing forbids it, and it is what a
+        // count of rows gets wrong.
+        Add(caverIds[0], ExpeditionRosterRoleSeeds.MemberCode, start, end);
+        Add(caverIds[0], "cook", start, start.AddDays(7));
+
+        // Left in the middle of the fortnight and came back for the last days — two rows for one
+        // person in one role, which is an ordinary record and not a duplicate.
+        Add(caverIds[1], ExpeditionRosterRoleSeeds.MemberCode, start, start.AddDays(4),
+            "Went back for the mid-camp resupply.");
+        Add(caverIds[1], ExpeditionRosterRoleSeeds.MemberCode, end.AddDays(-4), end);
+
+        // There for one day, which stores no end at all — the row every reader of the interval is
+        // written against.
+        Add(caverIds[2], "base_camp", start.AddDays(2), start.AddDays(2),
+            "Drove the food up and stayed the day.");
+
+        // A fourth person, so the six rows are four people and the gap between the two numbers is
+        // large enough to be obvious on a surface that counted the wrong one.
+        Add(caverIds[3], "driver", start, start.AddDays(1), "Brought the gear up and went home.");
     }
 
     /// <summary>

@@ -73,17 +73,17 @@ describe('the passage rose', () => {
     renderThemed(<RoseDiagram bins={chamberAndGallery} />);
 
     const description = () => screen.getByTestId('chart-rose').querySelector('desc')?.textContent;
-    expect(description()).toBe('statistics.orientation.roseDescriptionLength');
+    expect(description()).toContain('weighted by surveyed length');
 
-    fireEvent.click(screen.getByRole('radio', { name: 'statistics.orientation.byCount' }));
-    expect(description()).toBe('statistics.orientation.roseDescriptionCount');
+    fireEvent.click(screen.getByRole('radio', { name: 'By count' }));
+    expect(description()).toContain('weighted by the number of survey legs');
   });
 
   it('opens on the weighting it was told to open on', () => {
     renderThemed(<RoseDiagram bins={chamberAndGallery} defaultWeighting="count" />);
 
-    expect(screen.getByTestId('chart-rose').querySelector('desc')?.textContent).toBe(
-      'statistics.orientation.roseDescriptionCount',
+    expect(screen.getByTestId('chart-rose').querySelector('desc')?.textContent).toContain(
+      'weighted by the number of survey legs',
     );
   });
 
@@ -95,16 +95,16 @@ describe('the passage rose', () => {
     expect(labelled).toHaveLength(2);
     expect(svg.querySelector('title')?.id).toBe(labelled[0]);
     expect(svg.querySelector('desc')?.id).toBe(labelled[1]);
-    expect(svg.querySelector('title')?.textContent).toBe('statistics.orientation.rose');
+    expect(svg.querySelector('title')?.textContent).toBe('Passage rose');
   });
 
   it('puts north at the top of the drawing', () => {
     renderThemed(<RoseDiagram bins={chamberAndGallery} />);
 
     const labels = Array.from(screen.getByTestId('chart-rose').querySelectorAll('text'));
-    const north = labels.find((n) => n.textContent === 'statistics.orientation.north');
-    const south = labels.find((n) => n.textContent === 'statistics.orientation.south');
-    const east = labels.find((n) => n.textContent === 'statistics.orientation.east');
+    const north = labels.find((n) => n.textContent === 'N');
+    const south = labels.find((n) => n.textContent === 'S');
+    const east = labels.find((n) => n.textContent === 'E');
 
     expect(north).toBeDefined();
     expect(Number(north?.getAttribute('y'))).toBeLessThan(Number(south?.getAttribute('y')));
@@ -115,9 +115,9 @@ describe('the passage rose', () => {
     renderThemed(<RoseDiagram bins={chamberAndGallery} meanAxis={{ length: 88, count: null }} />);
 
     expect(screen.getByTestId('rose-mean-axis')).toBeTruthy();
-    expect(screen.getByText('statistics.orientation.meanAxis')).toBeTruthy();
+    expect(screen.getByText(/Mean trend/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('radio', { name: 'statistics.orientation.byCount' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'By count' }));
     expect(screen.queryByTestId('rose-mean-axis')).toBeNull();
   });
 

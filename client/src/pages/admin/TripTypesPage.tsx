@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
 import { CompassOutlined, PlusOutlined } from '@ant-design/icons';
-import { Alert, App, Button, Flex, Form, Input, InputNumber, Modal, Popconfirm, Table, Tag, Typography } from 'antd';
+import { Alert, App, Button, Flex, Form, Input, InputNumber, Modal, Popconfirm, Select, Table, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
   hasAccessAction,
   useCapabilities,
+  useChecklists,
   useCreateTripType,
   useDeleteTripType,
   useTripTypes,
@@ -24,6 +25,7 @@ const emptyDraft: TripTypeWrite = {
   fieldDataSchema: null,
   logisticsSchema: null,
   safetySchema: null,
+  defaultChecklistId: null,
 };
 
 /** The three schema boxes, in the order a report is written in. */
@@ -57,6 +59,7 @@ export default function TripTypesPage() {
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
   const { data: types, isLoading } = useTripTypes();
+  const { data: checklists } = useChecklists();
   const createType = useCreateTripType();
   const updateType = useUpdateTripType();
   const deleteType = useDeleteTripType();
@@ -239,6 +242,20 @@ export default function TripTypesPage() {
           </Form.Item>
           <Form.Item name="sortOrder" label={t('admin.tripTypes.sortOrder')}>
             <InputNumber precision={0} style={{ width: '100%' }} />
+          </Form.Item>
+          {/* A reference to a list, never a copy of one: correcting a line corrects it for every
+              trip of this purpose at once. Only the lists this administrator may read are
+              offered — naming one they cannot open would be choosing something they cannot see.
+              Pointing a purpose at a list confers nothing on anybody who reads a trip of it. */}
+          <Form.Item
+            name="defaultChecklistId"
+            label={t('admin.tripTypes.defaultChecklist')}
+            extra={t('admin.tripTypes.defaultChecklistHint')}
+          >
+            <Select
+              allowClear
+              options={(checklists ?? []).map((list) => ({ value: list.id, label: list.title }))}
+            />
           </Form.Item>
           {SCHEMA_FIELDS.map((field) => (
             <div key={field}>

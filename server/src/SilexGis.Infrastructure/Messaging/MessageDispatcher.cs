@@ -34,22 +34,39 @@ public sealed class MessageDispatcher(
     {
         var (definition, body, subject) = await ComposeAsync(templateKey, locale, values, ct);
 
-        var configured = definition.Channel == MessageChannel.Email
-            ? await emailDelivery.IsConfiguredAsync(ct)
-            : await smsDelivery.IsConfiguredAsync(ct);
+        // Exhaustive on purpose, and outside the try. A channel this method has no sender for is a
+        // programming error rather than a delivery failure: reporting it as a failed send would put
+        // it on the retry ladder forever, and an "or else" branch would quietly post a message meant
+        // for one transport down another. Both switches must name every channel the enum has.
+        var configured = definition.Channel switch
+        {
+            MessageChannel.Email => await emailDelivery.IsConfiguredAsync(ct),
+            MessageChannel.Sms => await smsDelivery.IsConfiguredAsync(ct),
+            _ => throw new NotSupportedException(UnknownChannel(definition.Channel)),
+        };
 
         try
         {
-            if (definition.Channel == MessageChannel.Email)
+            switch (definition.Channel)
             {
-                await emailSender.SendAsync(recipient, subject, body, ct);
-            }
-            else
-            {
-                await smsSender.SendAsync(recipient, body, ct);
+                case MessageChannel.Email:
+                    await emailSender.SendAsync(recipient, subject, body, ct);
+                    break;
+
+                case MessageChannel.Sms:
+                    await smsSender.SendAsync(recipient, body, ct);
+                    break;
+
+                default:
+                    throw new NotSupportedException(UnknownChannel(definition.Channel));
             }
 
             return configured ? MessageResult.Delivered() : MessageResult.LoggedOnly();
+        }
+        catch (NotSupportedException)
+        {
+            // Never softened into a MessageResult: see above.
+            throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -103,4 +120,7 @@ public sealed class MessageDispatcher(
     /// </summary>
     private string InstanceName =>
         configuration.GetValue("About:InstanceName", "SilexGIS") ?? "SilexGIS";
+
+    private static string UnknownChannel(MessageChannel channel) =>
+        $"No sender is wired up for the {channel} channel.";
 }

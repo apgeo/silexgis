@@ -62,6 +62,16 @@ public sealed class AccessEntryConfiguration : IEntityTypeConfiguration<AccessEn
                 "ck_access_entries_narrowing",
                 "(feature_kind IS NULL AND feature_type_id IS NULL) OR " +
                 "(domain = 0 AND scope_kind IN (0, 1) AND (feature_kind IS NULL OR feature_type_id IS NULL))");
+
+            // A camp's sharing reaches the trips it gathered, one rule per member trip and
+            // nothing else: a marked row is therefore always a trip-log rule at object reach
+            // (domain 1, scope kind 5). Structural, so a later writer that marks some other
+            // row is refused by the database rather than by whoever reviews it — the marker
+            // is what withdrawal and re-application key on, and a row it can reach but was
+            // never meant to would be withdrawn by an act that has nothing to do with it.
+            t.HasCheckConstraint(
+                "ck_access_entries_granted_via_expedition",
+                "granted_via_expedition_id IS NULL OR (domain = 1 AND scope_kind = 5)");
         });
 
         builder.Property(x => x.SubjectKind).HasConversion<short?>();
@@ -84,9 +94,21 @@ public sealed class AccessEntryConfiguration : IEntityTypeConfiguration<AccessEn
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.GrantedBy)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // RESTRICT, like every other thing a rule hangs on: a camp going away withdraws the
+        // rules its sharing wrote, and that withdrawal is loaded and removed by the delete
+        // handler so the trail records who lost what. A database cascade would remove them
+        // with nothing in the change tracker to say it had happened.
+        builder.HasOne<Expedition>().WithMany().HasForeignKey(x => x.GrantedViaExpeditionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(x => x.PermissionGroupId);
         builder.HasIndex(x => new { x.SubjectKind, x.SubjectId });
         builder.HasIndex(x => x.ScopeFeatureId);
+
+        // The non-feature anchor has no foreign key to bring an index with it, and every
+        // read of "the rules written on this object" — the object permissions tab, each
+        // delete flow that withdraws what pointed at the row it removes — filters on it.
+        builder.HasIndex(x => x.ScopeId);
     }
 }
 

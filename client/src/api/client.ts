@@ -3,6 +3,7 @@ import createClient from 'openapi-fetch';
 import type { paths } from './schema';
 import { userManager } from '../auth/auth.tsx';
 import { recordBreadcrumb } from '../diagnostics/breadcrumbs.ts';
+import i18n from '../i18n';
 
 /** Thrown by the unwrap helpers so callers can react to the HTTP status / problem code. */
 export class ApiError extends Error {
@@ -65,6 +66,26 @@ api.use({
     return request;
   },
 });
+
+// The language the person is reading the site in, on every request.
+//
+// Some answers are written by the server rather than by this client — the lines in the inbox are,
+// so that an operator who rewrites a message is read in the new wording without a client release.
+// The server picks the language from this header first and only then from the language the
+// account last saved, which is the right order: somebody who switches the site to Romanian on a
+// browser installed in English wants Romanian now, not at their next sign-in. Without the header
+// they would get their browser's language instead, and a page half in each.
+export const sendsTheReadingLanguage = {
+  onRequest({ request }: { request: Request }) {
+    const language = i18n.resolvedLanguage ?? i18n.language;
+    if (language) {
+      request.headers.set('Accept-Language', language);
+    }
+    return request;
+  },
+};
+
+api.use(sendsTheReadingLanguage);
 
 // Optimistic-concurrency threading: remember the ETag from each single-resource GET and
 // replay it as If-Match on the matching PUT/DELETE, so protected edits are checked against

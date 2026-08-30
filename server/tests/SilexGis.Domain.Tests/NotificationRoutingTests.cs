@@ -7,53 +7,29 @@ namespace SilexGis.Domain.Tests;
 
 public class NotificationRoutingTests
 {
-    /// <summary>Everything on and immediate, so each test names only what it varies.</summary>
-    private static NotificationRoute Decide(
-        NotificationCategory category = NotificationCategory.CavingGroupMembership,
-        bool categoryEnabled = true,
-        bool masterEmailEnabled = true,
-        NotificationDigest digest = NotificationDigest.Immediate,
-        bool hasAddress = true) =>
-        NotificationRouting.Decide(category, categoryEnabled, masterEmailEnabled, digest, hasAddress);
-
     [Fact]
-    public void Sends_when_everything_is_on() => Decide().ShouldBe(NotificationRoute.Send);
-
-    [Fact]
-    public void Suppresses_a_category_the_recipient_switched_off() =>
-        Decide(categoryEnabled: false).ShouldBe(NotificationRoute.Suppress);
-
-    [Fact]
-    public void Suppresses_everything_when_the_master_switch_is_off() =>
-        Decide(masterEmailEnabled: false).ShouldBe(NotificationRoute.Suppress);
-
-    [Fact]
-    public void Defers_to_the_digest_when_the_recipient_asked_for_a_daily_summary() =>
-        Decide(digest: NotificationDigest.Daily).ShouldBe(NotificationRoute.Defer);
-
-    [Fact]
-    public void Sends_a_security_alert_even_with_every_switch_off()
-    {
-        // A security alert warns someone their account is being taken over, and whoever is doing
-        // it may hold a live session. The settings page refuses to switch this category off for
-        // the same reason, so honouring the switches here would be a hole behind that refusal.
-        Decide(
-            NotificationCategory.SecurityAlerts,
-            categoryEnabled: false,
-            masterEmailEnabled: false,
-            digest: NotificationDigest.Daily)
+    public void Sends_what_the_recipient_asked_to_hear_as_it_happens() =>
+        NotificationRouting.Decide(NotificationChannelChoice.Immediate, hasAddress: true)
             .ShouldBe(NotificationRoute.Send);
-    }
 
     [Fact]
-    public void Suppresses_even_a_security_alert_when_there_is_no_address() =>
-        Decide(NotificationCategory.SecurityAlerts, hasAddress: false).ShouldBe(NotificationRoute.Suppress);
+    public void Suppresses_what_the_recipient_switched_off_here() =>
+        NotificationRouting.Decide(NotificationChannelChoice.Off, hasAddress: true)
+            .ShouldBe(NotificationRoute.Suppress);
 
     [Fact]
-    public void Every_ordinary_category_honours_the_switches() =>
-        NotificationCategories.All
-            .Where(c => !NotificationCategories.IsAlwaysImmediate(c))
-            .ShouldAllBe(c => Decide(c, categoryEnabled: false) == NotificationRoute.Suppress);
+    public void Defers_what_the_recipient_asked_for_as_a_daily_summary() =>
+        NotificationRouting.Decide(NotificationChannelChoice.Daily, hasAddress: true)
+            .ShouldBe(NotificationRoute.Defer);
+
+    [Theory]
+    [InlineData(NotificationChannelChoice.Off)]
+    [InlineData(NotificationChannelChoice.Immediate)]
+    [InlineData(NotificationChannelChoice.Daily)]
+    public void Suppresses_every_choice_when_there_is_nowhere_to_send(NotificationChannelChoice choice) =>
+        // Including a choice nobody may switch off: an address that is not there cannot be
+        // reached by insisting, and a delivery row would only fail its way to dead.
+        NotificationRouting.Decide(choice, hasAddress: false).ShouldBe(NotificationRoute.Suppress);
 
     [Fact]
     public void Retry_delay_widens_and_then_holds()

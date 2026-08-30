@@ -138,4 +138,28 @@ describe('TripGeometryField', () => {
     expect(screen.getByText(/never approximated/)).toBeInTheDocument();
     expect(screen.getByText(/discloses that entrance/)).toBeInTheDocument();
   });
+
+  /**
+   * A host drawing something other than the trip's sketch says so in the warning. The warning is
+   * the only place a reader who cannot edit the trip is told what the shape discloses, so one
+   * that described a different shape would be telling that reader the wrong thing about the one
+   * in front of them.
+   */
+  it('says what the host asked it to say, when the shape is not the sketch', () => {
+    render(
+      <TripGeometryField
+        value={point}
+        readOnly
+        testId="trip-meeting-geometry"
+        warningTitle="Exact position — where the party gathers is never approximated."
+        warningDetail="Everyone who may read this trip sees this position exactly as placed."
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('trip-meeting-geometry-warning'));
+
+    expect(screen.getByText(/where the party gathers/)).toBeInTheDocument();
+    expect(screen.getByText(/exactly as placed/)).toBeInTheDocument();
+    expect(screen.queryByText(/discloses that entrance/)).toBeNull();
+  });
 });

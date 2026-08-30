@@ -1,3 +1,9 @@
+# The fast tier: everything that answers in about a minute — build with warnings as errors,
+# Domain and Architecture tests, the whole client gate, the script tests, and the deployment
+# image build. The API integration suite deliberately does not run here: it is hours long,
+# outgrows the standard hosted runners, and has its own workflow (integration.yml) so that a
+# pull request gets a fast honest verdict instead of a timeout.
+
 name: CI
 
 on:
@@ -21,8 +27,11 @@ jobs:
       - name: Build (warnings as errors)
         run: dotnet build SilexGis.slnx
         working-directory: server
-      - name: Test (unit + architecture + Testcontainers integration)
-        run: dotnet test SilexGis.slnx --no-build
+      - name: Domain tests
+        run: dotnet test tests/SilexGis.Domain.Tests --no-build
+        working-directory: server
+      - name: Architecture tests
+        run: dotnet test tests/SilexGis.Architecture.Tests --no-build
         working-directory: server
 
   client:
@@ -34,7 +43,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # 24, not 22: @terrestris/react-geo declares node >=24, and below it the two
+          # CaveViewPanel tests fail on a Blob.stream() difference under jsdom whose error
+          # message names neither Blob nor the engine.
+          node-version: 24
           cache: npm
           cache-dependency-path: client/package-lock.json
       - run: npm ci
@@ -43,11 +55,15 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      # The deployment scripts are plain Node with no toolchain of their own, so they are
-      # exercised by the runner built into Node. The pattern is quoted because Node expands it
-      # itself; letting a shell do it would behave differently on different runners.
+      # The deployment and gate scripts are plain Node with no toolchain of their own, so they
+      # are exercised by the runner built into Node. The patterns are quoted because Node
+      # expands them itself; letting a shell do it would behave differently on different
+      # runners.
       - name: Test the deployment scripts
         run: node --test "deploy/**/*.test.mjs"
+        working-directory: ${{ github.workspace }}
+      - name: Test the gate scripts
+        run: node --test "scripts/**/*.test.mjs"
         working-directory: ${{ github.workspace }}
 
   docker:

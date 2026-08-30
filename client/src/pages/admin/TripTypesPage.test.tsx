@@ -48,6 +48,7 @@ vi.mock('../../api/hooks.ts', async () => {
     hasAccessAction: actual.hasAccessAction,
     useCapabilities: () => ({ data: capabilities }),
     useTripTypes: () => ({ data: tripTypes, isLoading: false }),
+    useChecklists: () => ({ data: [] }),
     useCreateTripType: () => ({ mutateAsync: createMutate, isPending: false }),
     useUpdateTripType: () => ({ mutateAsync: updateMutate, isPending: false }),
     useDeleteTripType: () => ({ mutateAsync: deleteMutate, isPending: false }),

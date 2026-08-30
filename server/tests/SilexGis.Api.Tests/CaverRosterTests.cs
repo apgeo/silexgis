@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -9,6 +10,8 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Expeditions;
+using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -89,13 +92,16 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
     {
         // The subject shares their phone with any signed-in user and keeps the email
         // private. The roster must serve exactly what the profile would.
+        //
+        // The number is a credential and the profile save has no field for it, so it arrives the
+        // only way it can: already verified. What is under test is who may read it.
+        var phoneNumber = await ConfirmViewerPhoneAsync();
         (await viewer.PutAsJsonAsync("/api/v1/me", new
         {
             firstName = (string?)null,
             lastName = (string?)null,
             displayName = $"Vio {suffix}",
             bio = (string?)null,
-            phoneNumber = "+40 700 000 002",
             cavingClub = (string?)null,
             locale = "en",
             visibility = new
@@ -127,14 +133,32 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
         foreach (var (client, who) in new[] { (keeper, "keeper"), (editor, "editor") })
         {
             var row = await GetCaverAsync(client, caverId);
-            row.GetProperty("phone").GetString().ShouldBe("+40 700 000 002", who);
+            row.GetProperty("phone").GetString().ShouldBe(phoneNumber, who);
             row.GetProperty("email").ValueKind.ShouldBe(JsonValueKind.Null, who);
         }
 
         // The subject reads their own contact in full through the self relation.
         var self = await GetCaverAsync(viewer, caverId);
         self.GetProperty("email").GetString().ShouldBe($"ros-view-{suffix}@t.local");
-        self.GetProperty("phone").GetString().ShouldBe("+40 700 000 002");
+        self.GetProperty("phone").GetString().ShouldBe(phoneNumber);
+    }
+
+    /// <summary>
+    /// Gives the subject a confirmed sign-in number, which is the only kind there is. Unique per
+    /// account because one number reaches exactly one account, and every class in this suite
+    /// shares one database.
+    /// </summary>
+    private async Task<string> ConfirmViewerPhoneAsync()
+    {
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+        var user = await userManager.FindByIdAsync(viewerId.ToString());
+        var number = "+4" + ((uint)viewerId.GetHashCode())
+            .ToString("D10", System.Globalization.CultureInfo.InvariantCulture);
+        user!.PhoneNumber = number;
+        user.PhoneNumberConfirmed = true;
+        (await userManager.UpdateAsync(user)).Succeeded.ShouldBeTrue();
+        return number;
     }
 
     [Fact]
@@ -293,6 +317,228 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
         }
     }
 
+    /// <summary>
+    /// Being asked about a trip is not being on one. Somebody who only ever said no left no
+    /// history to protect, and a list that exists to be sent to half a club would otherwise make
+    /// most of the directory permanent the first time anybody declined — so the delete guard is
+    /// deliberately not extended to these rows and the answer goes with the person. Asserted
+    /// beside the delete that is still refused, so a guard that stopped refusing anything at all
+    /// would fail here rather than look more permissive.
+    /// </summary>
+    [Fact]
+    public async Task Having_been_asked_about_a_trip_does_not_make_a_person_undeletable()
+    {
+        var tripId = await CreateTripWithGuestAsync(editor, $"Went {suffix}");
+        var onlyAskedId = await CreateCaverAsync($"Only Asked {suffix}");
+
+        Guid wentId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            wentId = await db.Cavers.Where(c => c.FullName == $"Went {suffix}").Select(c => c.Id).SingleAsync();
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = tripId,
+                CaverId = onlyAskedId,
+                Response = TripInvitationResponse.No,
+                RespondedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var refused = await admin.DeleteAsync($"/api/v1/cavers/{wentId}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("caver.referenced_by_trips");
+
+        (await admin.DeleteAsync($"/api/v1/cavers/{onlyAskedId}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripInvitations.CountAsync(x => x.CaverId == onlyAskedId)).ShouldBe(0);
+        }
+    }
+
+    /// <summary>
+    /// A person holds one standing answer about one trip, so a merge cannot carry both entries'
+    /// answers over the way it carries both entries' camp stays — two rows saying different things
+    /// is exactly what that uniqueness exists to prevent. Where both answered the same trip the
+    /// survivor's answer stands and the duplicate's goes; where only the duplicate answered, the
+    /// answer follows the person rather than being dropped with the entry.
+    /// </summary>
+    [Fact]
+    public async Task Merging_two_entries_leaves_one_answer_about_each_trip_and_it_is_the_survivor_s()
+    {
+        var bothId = await CreateTripWithGuestAsync(editor, $"Both Answered {suffix}");
+        var onlyDuplicateId = await CreateTripWithGuestAsync(editor, $"Duplicate Answered {suffix}");
+        var duplicateId = await CreateCaverAsync($"Both Answered {suffix} (2)");
+
+        Guid survivorId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            survivorId = await db.Cavers.Where(c => c.FullName == $"Both Answered {suffix}")
+                .Select(c => c.Id).SingleAsync();
+
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = bothId,
+                CaverId = survivorId,
+                Response = TripInvitationResponse.Yes,
+                Note = "deliberately recorded",
+            });
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = bothId,
+                CaverId = duplicateId,
+                Response = TripInvitationResponse.Maybe,
+                Note = "half-remembered",
+            });
+            db.TripInvitations.Add(new TripInvitation
+            {
+                TripLogId = onlyDuplicateId,
+                CaverId = duplicateId,
+                Response = TripInvitationResponse.No,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var merged = await keeper.PostAsJsonAsync($"/api/v1/cavers/{survivorId}/merge", new
+        {
+            sourceCaverId = duplicateId,
+        });
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var rows = await db.TripInvitations.AsNoTracking()
+                .Where(x => x.TripLogId == bothId || x.TripLogId == onlyDuplicateId)
+                .ToListAsync();
+
+            rows.ShouldAllBe(x => x.CaverId == survivorId);
+            rows.Count.ShouldBe(2);
+
+            var contested = rows.Single(x => x.TripLogId == bothId);
+            contested.Response.ShouldBe(TripInvitationResponse.Yes);
+            contested.Note.ShouldBe("deliberately recorded");
+            rows.Single(x => x.TripLogId == onlyDuplicateId).Response.ShouldBe(TripInvitationResponse.No);
+        }
+    }
+
+    /// <summary>
+    /// Being on a camp's roster blocks a delete for the same reason being on a trip does, and the
+    /// refusal is asserted beside the delete it does not refuse: a guard that answered "no" to
+    /// everything would pass a test that only checked the refusal.
+    /// </summary>
+    [Fact]
+    public async Task A_stay_at_a_camp_blocks_deletion_the_way_a_trip_does()
+    {
+        var stayedId = await CreateCaverAsync($"Cooked All Fortnight {suffix}");
+        var neverWentId = await CreateCaverAsync($"Never Went Anywhere {suffix}");
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var camp = NewCamp(db, $"Delete Camp {suffix}");
+            // Cooking is not a job underground, which is the whole reason the camp's roster is
+            // its own table: this person is on no trip at all and must still block the delete.
+            db.ExpeditionRoster.Add(new ExpeditionRosterEntry
+            {
+                ExpeditionId = camp.Id,
+                CaverId = stayedId,
+                RoleId = await RoleIdAsync(db, "cook"),
+                FromDate = new DateOnly(2026, 7, 18),
+                ToDate = new DateOnly(2026, 8, 1),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var refused = await admin.DeleteAsync($"/api/v1/cavers/{stayedId}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("caver.referenced_by_expeditions");
+
+        // The same request for somebody no record names goes through, so the refusal above is
+        // about the stay and not about deleting people.
+        (await admin.DeleteAsync($"/api/v1/cavers/{neverWentId}")).StatusCode
+            .ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// A merge repoints every stay and drops none. The camp's roster has no uniqueness to collide
+    /// with — overlapping stays are legal — so the survivor already having an overlapping stay on
+    /// the same camp in the same role is not a collision to resolve but two rows to keep.
+    /// </summary>
+    [Fact]
+    public async Task Merging_moves_every_stay_and_keeps_an_overlapping_one_beside_the_survivors()
+    {
+        var survivorId = await CreateCaverAsync($"Two Entries {suffix}");
+        var duplicateId = await CreateCaverAsync($"Two Entries {suffix} (2)");
+
+        Guid campId;
+        long memberRoleId;
+        long cookRoleId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var camp = NewCamp(db, $"Merge Camp {suffix}");
+            campId = camp.Id;
+            memberRoleId = await RoleIdAsync(db, ExpeditionRosterRoleSeeds.MemberCode);
+            cookRoleId = await RoleIdAsync(db, "cook");
+
+            // The survivor's own fortnight, and under the duplicate entry an overlapping stay in
+            // the same role plus one in another role. Nothing here may be lost by the fold.
+            db.ExpeditionRoster.AddRange(
+                new ExpeditionRosterEntry
+                {
+                    ExpeditionId = campId,
+                    CaverId = survivorId,
+                    RoleId = memberRoleId,
+                    FromDate = new DateOnly(2026, 7, 18),
+                    ToDate = new DateOnly(2026, 8, 1),
+                },
+                new ExpeditionRosterEntry
+                {
+                    ExpeditionId = campId,
+                    CaverId = duplicateId,
+                    RoleId = memberRoleId,
+                    FromDate = new DateOnly(2026, 7, 25),
+                    ToDate = new DateOnly(2026, 7, 30),
+                },
+                new ExpeditionRosterEntry
+                {
+                    ExpeditionId = campId,
+                    CaverId = duplicateId,
+                    RoleId = cookRoleId,
+                    FromDate = new DateOnly(2026, 7, 25),
+                });
+            await db.SaveChangesAsync();
+        }
+
+        var merged = await keeper.PostAsJsonAsync($"/api/v1/cavers/{survivorId}/merge", new
+        {
+            sourceCaverId = duplicateId,
+        });
+        merged.StatusCode.ShouldBe(HttpStatusCode.OK, await merged.Content.ReadAsStringAsync());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var rows = await db.ExpeditionRoster.AsNoTracking()
+                .Where(r => r.ExpeditionId == campId)
+                .ToListAsync();
+
+            rows.ShouldAllBe(r => r.CaverId == survivorId);
+            // Three rows, not two: the overlapping stay in the same role survived the fold, because
+            // two entries recording two fortnights is not evidence that they were one fortnight.
+            rows.Count.ShouldBe(3);
+            rows.Count(r => r.RoleId == memberRoleId).ShouldBe(2);
+            rows.Count(r => r.RoleId == cookRoleId).ShouldBe(1);
+            // And one person, however many rows and roles: a count of rows would report three.
+            rows.Select(r => r.CaverId).Distinct().Count().ShouldBe(1);
+        }
+    }
+
     [Fact]
     public async Task Two_accounts_are_two_people_and_refuse_to_merge()
     {
@@ -365,7 +611,7 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
 
         // And a grant to the club notifies exactly the members who exist as accounts —
         // the account-less member contributes no recipient, and no phantom row appears.
-        var lastOutboxId = await db.NotificationOutbox.AsNoTracking()
+        var lastNotificationId = await db.Notifications.AsNoTracking()
             .MaxAsync(n => (long?)n.Id) ?? 0;
         var caveId = await CreateCaveAsync(editor, $"X1 Cave {suffix}");
         (await editor.PutAsJsonAsync($"/api/v1/objects/feature/{caveId}/access", new
@@ -380,12 +626,12 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
             },
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        var newRows = await db.NotificationOutbox.AsNoTracking()
-            .Where(n => n.Id > lastOutboxId && n.Category == NotificationCategory.PermissionGranted)
+        var newRows = await db.Notifications.AsNoTracking()
+            .Where(n => n.Id > lastNotificationId && n.Category == NotificationCategory.PermissionGranted)
             .ToListAsync();
         // The granter themselves is not notified; the keeper (creator-member) is the
         // only other linked member. One account-less member, zero extra messages.
-        newRows.Select(n => n.UserId).ShouldBe([keeperId]);
+        newRows.Select(n => n.RecipientUserId).ShouldBe([keeperId]);
     }
 
     // ---- the catalogue reads every account holds ----
@@ -473,6 +719,26 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
+
+    private Expedition NewCamp(SilexGisDbContext db, string name)
+    {
+        var camp = new Expedition
+        {
+            Name = name,
+            StartDate = new DateOnly(2026, 7, 18),
+            EndDate = new DateOnly(2026, 8, 1),
+            OwnerUserId = keeperId,
+        };
+        db.Expeditions.Add(camp);
+        return camp;
+    }
+
+    /// <summary>
+    /// By code, the way every seeded vocabulary is reached here: the identity is an installation
+    /// detail and the code is what ships.
+    /// </summary>
+    private static Task<long> RoleIdAsync(SilexGisDbContext db, string code) =>
+        db.ExpeditionRosterRoles.Where(r => r.Code == code).Select(r => r.Id).SingleAsync();
 
     private async Task<Guid> CreateCaveAsync(HttpClient author, string name)
     {

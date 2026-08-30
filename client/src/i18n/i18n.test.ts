@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import i18next from 'i18next';
+import i18n from './index.ts';
+import { CHOICE_KEY } from './languageStorage.ts';
 import { describe, expect, it } from 'vitest';
 import type {
   AccessDomainName,
   AccessScopeKind,
   ActivityState,
   ClosestApproach,
+  NotificationCategoryName,
+  NotificationChannelName,
+  NotificationChoice,
+  NotificationDeliveryStatus,
+  NotificationRetryOutcome,
+  CalendarSource,
   SearchDocumentItem,
   TerrainBuildPhase,
   TerrainBuildSourceKind,
@@ -24,6 +32,8 @@ import {
   SEEDED_TRIP_SECTION_ENUM_VALUES,
   SEEDED_TRIP_SECTION_FIELD_CODES,
 } from '../components/trips/tripSectionFields.ts';
+import { SEEDED_CONTINUATION_STATE_CODES } from '../components/expeditions/continuationStates.ts';
+import { SEEDED_EXPEDITION_ROSTER_ROLE_CODES } from '../components/expeditions/rosterRoles.ts';
 import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRoles.ts';
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
 import { TERRAIN_PROBLEM_MESSAGE_KEYS } from '../pages/admin/terrain/terrainProblems.ts';
@@ -75,6 +85,9 @@ const accessDomains: Record<AccessDomainName, true> = {
   mapViews: true,
   files: true,
   documents: true,
+  expeditions: true,
+  checklists: true,
+  events: true,
   mapLayers: true,
   tags: true,
   hierarchies: true,
@@ -97,6 +110,70 @@ const accessDomains: Record<AccessDomainName, true> = {
  * up here, so a scope added on the server ships as a raw lookup key until it is named —
  * silently, because nothing else in the client mentions the vocabulary.
  */
+/**
+ * Every kind of event a person can be notified about. Three things read this vocabulary by name —
+ * the notification settings page, the page an opt-out link lands on, and the inbox — and none has
+ * any other mention of it, so a category added on the server ships showing its own lookup key in
+ * every language with nothing failing. The type closes it in both directions: a new category
+ * fails to compile here until it is named, and a name that is no longer a category fails too.
+ */
+const notificationCategories: Record<NotificationCategoryName, true> = {
+  cavingGroupMembership: true,
+  permissionGranted: true,
+  tripParticipation: true,
+  jobCompleted: true,
+  securityAlerts: true,
+  tripPlanning: true,
+  tripCallout: true,
+  commentReply: true,
+  commentOnMine: true,
+  groupAnnouncement: true,
+};
+
+/**
+ * Every channel the preference matrix has a column for, and every answer a cell can hold. Both are
+ * looked up by building the key from the value, which no check over literal lookups can see — and
+ * the matrix renders one column and three options per cell entirely from these, so a channel or an
+ * answer added on the server would show its own lookup key in every language with nothing failing.
+ * The channel list cannot come from the generated client: the server's channel type is bit flags
+ * and crosses the boundary as a plain string, so this is the only place it is closed.
+ */
+const notificationChannels: Record<NotificationChannelName, true> = {
+  inApp: true,
+  email: true,
+  sms: true,
+};
+
+const notificationChoices: Record<NotificationChoice, true> = {
+  off: true,
+  immediate: true,
+  daily: true,
+};
+
+/**
+ * Every state a delivery can be in, and every answer a hand-driven retry can give. The operator's
+ * delivery page builds both lookups from the value it was handed — a status badge, and the sentence
+ * an operator is shown after asking for one message to be sent again — so a state or an outcome
+ * added on the server would show its own lookup key in every language with nothing failing. The
+ * retry outcomes matter most: four of the six are refusals, and a refusal that renders as a key is
+ * a refusal nobody reads.
+ */
+const deliveryStatuses: Record<NotificationDeliveryStatus, true> = {
+  pending: true,
+  deferred: true,
+  sent: true,
+  dead: true,
+};
+
+const retryOutcomes: Record<NotificationRetryOutcome, true> = {
+  notFound: true,
+  notDead: true,
+  templateUnknown: true,
+  unreachable: true,
+  suppressed: true,
+  queued: true,
+};
+
 const accessScopeKinds: Record<AccessScopeKind, true> = {
   all: true,
   own: true,
@@ -224,6 +301,41 @@ const drawShapes: Record<DrawShape, true> = {
   LineString: true,
   Polygon: true,
 };
+/**
+ * Every family of dated record the calendar can answer with. The kind column looks its label up
+ * by the word the row carries, so a family added on the server puts a raw lookup key in the
+ * column until it is named — and a label left behind for a family that no longer exists is an
+ * offer nothing can take up.
+ */
+const calendarSources: Record<CalendarSource, true> = {
+  tripLog: true,
+  expedition: true,
+  event: true,
+};
+
+describe('the language this application opens in', () => {
+  // Asserted here because the tests themselves are pinned to English in the setup file, so no
+  // other assertion in the suite can see this — and every one of them would keep passing if the
+  // default silently went back to English.
+  it('is Romanian, for a browser that has never been told otherwise', () => {
+    // i18next normalises a string to an array.
+    expect(i18n.options.fallbackLng).toEqual(['ro']);
+  });
+
+  it('settles the language from a deliberate choice and from nothing else', () => {
+    // The detector's default order consults the browser's own languages, which on most machines
+    // says English — so leaving it in place would mean the fallback above was almost never
+    // reached and the application opened in English for nearly everybody.
+    expect(i18n.options.detection?.order).toEqual(['localStorage']);
+    // The one key the switch writes. If these two ever named different keys nothing would fail:
+    // every visit would re-detect, and the choice made last time would never be found again.
+    expect(i18n.options.detection?.lookupLocalStorage).toBe(CHOICE_KEY);
+    // The detector's own cache is not written; it would record what was detected rather than
+    // what was chosen, and the rule that adopts an account's language reads the absence of a
+    // choice to decide whether it may act at all.
+    expect(i18n.options.detection?.caches).toEqual([]);
+  });
+});
 
 // EN and RO must be maintained together.
 describe('i18n locales', () => {
@@ -331,6 +443,50 @@ describe('i18n locales', () => {
     expect(Object.keys(enScopes).sort()).toEqual(kinds.sort());
   });
 
+  it('every notification category the server publishes is named in both locales', () => {
+    const names = Object.keys(notificationCategories);
+    const enEvents: Record<string, string> = en.settings.notifications.events;
+    const roEvents: Record<string, string> = ro.settings.notifications.events;
+    expect(names.filter((name) => !enEvents[name])).toEqual([]);
+    expect(names.filter((name) => !roEvents[name])).toEqual([]);
+    // And the reverse: wording kept for a category the server no longer sends.
+    expect(Object.keys(enEvents).sort()).toEqual(names.sort());
+  });
+
+  it('every notification channel and answer the matrix offers is named in both locales', () => {
+    const channels = Object.keys(notificationChannels);
+    const enChannels: Record<string, string> = en.settings.notifications.channels;
+    const roChannels: Record<string, string> = ro.settings.notifications.channels;
+    expect(channels.filter((channel) => !enChannels[channel])).toEqual([]);
+    expect(channels.filter((channel) => !roChannels[channel])).toEqual([]);
+    // And the reverse: wording kept for a channel the matrix no longer has a column for.
+    expect(Object.keys(enChannels).sort()).toEqual(channels.sort());
+
+    const choices = Object.keys(notificationChoices);
+    const enChoices: Record<string, string> = en.settings.notifications.choices;
+    const roChoices: Record<string, string> = ro.settings.notifications.choices;
+    expect(choices.filter((choice) => !enChoices[choice])).toEqual([]);
+    expect(choices.filter((choice) => !roChoices[choice])).toEqual([]);
+    expect(Object.keys(enChoices).sort()).toEqual(choices.sort());
+  });
+
+  it('every delivery state and retry outcome is named in both locales', () => {
+    const statuses = Object.keys(deliveryStatuses);
+    const enStatuses: Record<string, string> = en.notificationHealth.statuses;
+    const roStatuses: Record<string, string> = ro.notificationHealth.statuses;
+    expect(statuses.filter((name) => !enStatuses[name])).toEqual([]);
+    expect(statuses.filter((name) => !roStatuses[name])).toEqual([]);
+    // And the reverse: wording kept for a state a delivery can no longer be in.
+    expect(Object.keys(enStatuses).sort()).toEqual(statuses.sort());
+
+    const outcomes = Object.keys(retryOutcomes);
+    const enOutcomes: Record<string, string> = en.notificationHealth.outcomes;
+    const roOutcomes: Record<string, string> = ro.notificationHealth.outcomes;
+    expect(outcomes.filter((name) => !enOutcomes[name])).toEqual([]);
+    expect(outcomes.filter((name) => !roOutcomes[name])).toEqual([]);
+    expect(Object.keys(enOutcomes).sort()).toEqual(outcomes.sort());
+  });
+
   it('every activity state the server publishes is named in both locales', () => {
     const states = Object.keys(activityStates);
     const enStates: Record<string, string> = en.trips.stateValues;
@@ -339,6 +495,15 @@ describe('i18n locales', () => {
     expect(states.filter((state) => !roStates[state])).toEqual([]);
     // And the reverse: a label kept for a state the server no longer has.
     expect(Object.keys(enStates).sort()).toEqual(states.sort());
+  });
+
+  it('every family of dated record the calendar answers with is named in both locales', () => {
+    const sources = Object.keys(calendarSources);
+    const enSources: Record<string, string> = en.calendar.sourceValues;
+    const roSources: Record<string, string> = ro.calendar.sourceValues;
+    expect(sources.filter((source) => !enSources[source])).toEqual([]);
+    expect(sources.filter((source) => !roSources[source])).toEqual([]);
+    expect(Object.keys(enSources).sort()).toEqual(sources.sort());
   });
 
   // A link chip labels its target by type. An unnamed type would render as a raw lookup
@@ -401,6 +566,30 @@ describe('i18n locales', () => {
     const expected = [...SEEDED_PARTICIPANT_ROLE_CODES].sort();
     for (const locale of [en, ro]) {
       expect(Object.keys(locale.trips.participantRoleValues).sort()).toEqual(expected);
+    }
+  });
+
+  // What somebody was at a camp as is a third vocabulary of the same kind, and a separate one on
+  // purpose: cooking and keeping the base camp are not jobs underground. Its wording is checked
+  // the same way and for the same two reasons — a shipped code with no wording renders as a raw
+  // key beside a person's name, and wording left behind for a code the application no longer
+  // ships is an offer nothing can take up.
+  it('every shipped camp-roster role has wording in both locales, and no wording outlives its code', () => {
+    const expected = [...SEEDED_EXPEDITION_ROSTER_ROLE_CODES].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.expeditions.rosterRoleValues).sort()).toEqual(expected);
+    }
+  });
+
+  // Whether a way on is still going is a fourth vocabulary of the same kind — declared by the
+  // shipped kind of place rather than by a table of rows, but read the same way and reached by a
+  // key built from the code, which is exactly the shape nothing else can check. A state renamed on
+  // the server would otherwise put a raw code on the leads board in both languages, and wording
+  // left behind for a state nothing records any more is an answer nobody can be given.
+  it('every recorded lead state has wording in both locales, and no wording outlives its state', () => {
+    const expected = [...SEEDED_CONTINUATION_STATE_CODES].sort();
+    for (const locale of [en, ro]) {
+      expect(Object.keys(locale.expeditions.leadStates).sort()).toEqual(expected);
     }
   });
 
@@ -527,6 +716,49 @@ describe('i18n locales', () => {
         .filter(({ key }) => typeof lookup(en, key) !== 'string')
         .map(({ key, where }) => `${where}: ${key}`),
     ).toEqual([]);
+  });
+
+  /**
+   * One panel draws the answers about a trip and the answers about a club event, because there is
+   * one answering mechanism behind both. It builds every label from the prefix it was handed, so
+   * the check over literal `t('…')` calls above cannot see any of them: a group missing a word
+   * would render its own lookup key on a shipped page, in both languages, with nothing failing.
+   */
+  it('the two subjects that share the answering panel name the same things', () => {
+    const shared = [
+      'title',
+      'invite',
+      'invitePlaceholder',
+      'empty',
+      'emptyWithheld',
+      'limit',
+      'noLimit',
+      'place',
+      'attending',
+      'waiting',
+      'selected',
+      'select',
+      'deselect',
+      'notePlaceholder',
+      'removeConfirm',
+      'withheld',
+      'withheldDetail',
+      'responseValues.pending',
+      'responseValues.yes',
+      'responseValues.no',
+      'responseValues.maybe',
+    ];
+    const missing = ['trips.invitations', 'events.responses'].flatMap((group) =>
+      shared.flatMap((leaf) =>
+        [
+          ['en', en],
+          ['ro', ro],
+        ]
+          .filter(([, locale]) => typeof lookup(locale as object, `${group}.${leaf}`) !== 'string')
+          .map(([language]) => `${language as string}: ${group}.${leaf}`),
+      ),
+    );
+    expect(missing).toEqual([]);
   });
 
   it('names every numbered division a content hit can carry, and no more', () => {

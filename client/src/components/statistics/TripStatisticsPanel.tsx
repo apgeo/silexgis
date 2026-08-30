@@ -19,7 +19,7 @@ interface Tile {
 }
 
 /**
- * What a person, a cave or a club adds up to across trips.
+ * What a person, a cave, a club or a camp adds up to across trips.
  *
  * Every figure here is counted over the trips this reader may see, and the panel says so in words
  * underneath them. That sentence is load-bearing, not decoration: two colleagues comparing their
@@ -132,6 +132,9 @@ function tilesFor(
     { key: 'rope', label: t('statistics.metresOfRope'), value: metres(data?.ropeMetresM) },
     { key: 'stations', label: t('statistics.surveyStations'), value: count(data?.surveyStations) },
     { key: 'incidents', label: t('statistics.incidents'), value: count(data?.incidents) },
+    // Counted over the pictures this reader may see, like everything beside it — the sentence
+    // under the tiles covers this one too.
+    { key: 'photographs', label: t('statistics.photographs'), value: count(data?.photographs) },
   );
 
   return tiles;

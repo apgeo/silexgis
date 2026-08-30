@@ -153,6 +153,61 @@ public static class TripRoleLinks
     }
 
     /// <summary>
+    /// Every (trip, feature) pair named by a trip role across a set of trips, deduplicated, in one
+    /// read, narrowed to the features of one data-level type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A sibling of the kind-narrowed read above rather than an extra parameter on it, because the
+    /// two narrow on different columns and neither can be asked the other's question. The schema
+    /// discriminator holds one member per subtype table plus a single member for everything
+    /// data-driven, so a continuation, a sinkhole and a spring all carry the same value there and
+    /// narrowing to it is no narrowing at all. What tells them apart is the type row the feature
+    /// points at, and that is what this one asks about.
+    /// </para>
+    /// <para>
+    /// Role-agnostic like every other reader here: a continuation somebody recorded as merely
+    /// visited is the same open way on as one recorded as a lead, and a read narrowed to the
+    /// obvious role would drop it silently.
+    /// </para>
+    /// <para>
+    /// The type is a database identity, so a caller resolves it from its code and never carries a
+    /// number — the same row has a different id on a fresh installation than on an upgraded one.
+    /// </para>
+    /// </remarks>
+    public static async Task<List<TripFeaturePair>> PairsOfTypeForAsync(
+        SilexGisDbContext db,
+        IReadOnlyCollection<Guid> tripIds,
+        long featureTypeId,
+        CancellationToken ct)
+    {
+        if (tripIds.Count == 0)
+        {
+            return [];
+        }
+
+        var roleIds = RoleIds(db);
+        var rows = from tripMember in db.ResLinkMembers.AsNoTracking()
+                   where tripMember.EntityType == AttachedEntityType.TripLog
+                       && tripMember.EntityId != null
+                       && tripIds.Contains(tripMember.EntityId.Value)
+                   join link in db.ResLinks.AsNoTracking() on tripMember.ResLinkId equals link.Id
+                   where link.RelationTypeId != null && roleIds.Contains(link.RelationTypeId.Value)
+                   join featureMember in db.ResLinkMembers.AsNoTracking()
+                       on tripMember.ResLinkId equals featureMember.ResLinkId
+                   where featureMember.FeatureId != null
+                       && db.Features.Any(f =>
+                           f.Id == featureMember.FeatureId && f.FeatureTypeId == featureTypeId)
+                   select new { TripId = tripMember.EntityId!.Value, FeatureId = featureMember.FeatureId!.Value };
+
+        return
+        [
+            .. (await rows.Distinct().ToListAsync(ct))
+                .Select(r => new TripFeaturePair(r.TripId, r.FeatureId)),
+        ];
+    }
+
+    /// <summary>
     /// Records that a trip did something to a feature, by extending the trip's existing link of
     /// that role or opening one when there is none. Extending is what a person doing it by hand
     /// would do — a second link of the same role between the same two ends says nothing the
@@ -405,8 +460,19 @@ public static class TripRoleLinks
             }
         }
 
+        // A link opened earlier in this same unit of work has no row to find, so it is looked for
+        // in the tracker — but only the ones this trip is a member of. A link of the same role
+        // opened for a different trip is not this trip's naming, and counting it would make two
+        // trips naming the same cave in one save leave the second trip naming nothing at all.
+        var pendingTripLinks = db.ChangeTracker.Entries<ResLinkMember>()
+            .Where(e => e.State == EntityState.Added)
+            .Select(e => e.Entity)
+            .Where(m => m.EntityType == AttachedEntityType.TripLog && m.EntityId == tripId)
+            .Select(m => m.ResLinkId)
+            .ToHashSet();
         var pendingLinks = db.ChangeTracker.Entries<ResLink>()
-            .Where(e => e.State == EntityState.Added && e.Entity.RelationTypeId == roleId)
+            .Where(e => e.State == EntityState.Added && e.Entity.RelationTypeId == roleId
+                && pendingTripLinks.Contains(e.Entity.Id))
             .Select(e => e.Entity.Id)
             .ToHashSet();
         return db.ChangeTracker.Entries<ResLinkMember>().Any(e =>

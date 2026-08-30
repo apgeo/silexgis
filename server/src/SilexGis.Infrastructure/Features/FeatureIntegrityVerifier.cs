@@ -241,6 +241,9 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
                     AccessDomain.MapViews => db.MapViews.Any(x => x.Id == id),
                     AccessDomain.Files => db.StoredFiles.Any(x => x.Id == id),
                     AccessDomain.Documents => db.Documents.Any(x => x.Id == id),
+                    AccessDomain.Expeditions => db.Expeditions.Any(x => x.Id == id),
+                    AccessDomain.Checklists => db.Checklists.Any(x => x.Id == id),
+                    AccessDomain.Events => db.Events.Any(x => x.Id == id),
                     AccessDomain.CavingGroups => cavingGroupIds.Contains(id),
                     AccessDomain.PermissionGroups => db.PermissionGroups.Any(x => x.Id == id),
                     AccessDomain.FeatureSets => featureSetIds.Contains(id),
@@ -346,7 +349,13 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
         await CheckAsync(AttachedEntityType.SurveyModel, db.SurveyModels.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.Caver, db.Cavers.Select(x => x.Id));
         await CheckAsync(AttachedEntityType.Cabinet, db.Cabinets.Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.Album, db.Albums.Select(x => x.Id));
+        await CheckAsync(AttachedEntityType.Expedition, db.Expeditions.Select(x => x.Id));
 
+        // Every entity-type value with a table of its own is listed above; the one that is
+        // not is the comment type, which is reserved for an entity that does not exist yet.
+        // A value left off this list is silently unchecked rather than loudly wrong, so the
+        // list is the thing to extend when the shared vocabulary gains a member.
         return problems;
     }
 }

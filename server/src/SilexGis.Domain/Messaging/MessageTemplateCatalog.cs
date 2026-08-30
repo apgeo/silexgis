@@ -62,9 +62,108 @@ public static class MessageTemplateCatalog
 
     public const string NotifyCavingGroupRemoved = "notify.caving-group-removed";
 
+    /// <summary>
+    /// Somebody wrote to a whole caving group. The one message here whose wording is partly the
+    /// sender's: everything else in this catalogue reports a fact the application already knows,
+    /// and this one carries a line a person typed. It arrives in the subject rather than the body
+    /// because that is the half a reader sees inside the application — the body is written for a
+    /// mailbox — and a notice nobody can read where they were told about it is not a notice.
+    /// </summary>
+    public const string NotifyGroupAnnouncement = "notify.group-announcement";
+
+    /// <summary>
+    /// The same announcement written to be read on a phone's lock screen. A second wording of
+    /// <see cref="NotifyGroupAnnouncement"/>, never queued by anything: a producer writes the
+    /// message it is reporting and knows nothing about how it will travel, and whatever carries a
+    /// message out of the system asks the catalogue for the wording its transport can read.
+    /// </summary>
+    public const string NotifyGroupAnnouncementSms = "notify.group-announcement.sms";
+
     public const string NotifyPermissionGranted = "notify.permission-granted";
 
     public const string NotifyTripParticipation = "notify.trip-participation";
+
+    // A trip being planned. All four name the trip and its date and nothing else: the places a
+    // trip is about are readable by fewer people than its roster, and a message is as much an
+    // outbound copy of that as anything the API returns.
+
+    /// <summary>Someone was asked whether they are coming on a trip being planned.</summary>
+    public const string NotifyTripPlanInvitation = "notify.trip-plan-invitation";
+
+    /// <summary>A trip somebody is on was changed while it was still being planned.</summary>
+    public const string NotifyTripPlanChanged = "notify.trip-plan-changed";
+
+    /// <summary>A trip somebody is on was called off.</summary>
+    public const string NotifyTripPlanCancelled = "notify.trip-plan-cancelled";
+
+    /// <summary>A trip somebody is on is coming up.</summary>
+    /// <remarks>
+    /// Sent by the pass that watches for overdue parties rather than written ahead of time onto
+    /// the queue, so that a trip put back or called off stops reminding people about a date that
+    /// is no longer true.
+    /// </remarks>
+    public const string NotifyTripPlanReminder = "notify.trip-plan-reminder";
+
+    /// <summary>
+    /// A party said when they would be back, the time has gone by, and nobody has said they are
+    /// out.
+    /// </summary>
+    /// <remarks>
+    /// It names the trip, the date and the hour that passed, and — like the four above and for the
+    /// same reason — no cave. The temptation is strongest here, because an overdue party feels
+    /// like the one message that ought to say where they are; but the message goes to everybody
+    /// the trip names, and where a cave is remains readable by fewer people than that. Whoever
+    /// runs a search reads the trip, where the answer is already kept for them.
+    /// It carries no opt-out line: nobody may switch this one off, so a link that could not work
+    /// would be a lie.
+    /// </remarks>
+    public const string NotifyTripCalloutOverdue = "notify.trip-callout-overdue";
+
+    /// <summary>
+    /// The overdue alarm written to be read on a phone with no data behind it. A second wording of
+    /// <see cref="NotifyTripCalloutOverdue"/>, never queued by anything: the pass that watches the
+    /// clock writes down the message, and whatever carries it out of the system asks the catalogue
+    /// for the wording its transport can read.
+    /// </summary>
+    public const string NotifyTripCalloutOverdueSms = "notify.trip-callout-overdue.sms";
+
+    /// <summary>
+    /// Somebody asked on a trip cannot open a cave the trip is about, and the people who could
+    /// change that are being told.
+    /// </summary>
+    /// <remarks>
+    /// The one message about a trip that names a cave, and it may only be sent to somebody whose
+    /// own access already opens that cave — which is what makes naming it there a reminder of
+    /// something they can see rather than a disclosure of something they cannot.
+    /// </remarks>
+    public const string NotifyTripInviteeCannotOpenCave = "notify.trip-invitee-cannot-open-cave";
+
+    /// <summary>A club event somebody was asked about is coming up.</summary>
+    /// <remarks>
+    /// <para>
+    /// Sent by the same pass that reminds people about a trip, and for the same reason: a message
+    /// written onto the queue when the event was arranged could not be recalled, so an evening put
+    /// back or called off would still remind everybody about a date that is no longer true.
+    /// </para>
+    /// <para>
+    /// It names the event and its date and nothing else, the way the trip messages do. An event
+    /// has no cave on it to name, and the placeholder list is what keeps that true: an operator
+    /// editing the wording may only use the names declared here, so one could not be written in.
+    /// </para>
+    /// </remarks>
+    public const string NotifyEventReminder = "notify.event-reminder";
+
+    // Somebody said something where this person can hear it. Both name the document and link to
+    // it, and neither carries a word of what was said: a comment body is free text a person
+    // typed, and a message leaves the installation entirely — once it is in a mailbox it obeys
+    // none of the rules that decided who could read it in the first place. Declaring no
+    // placeholder it could arrive in is what makes that structural rather than a habit.
+
+    /// <summary>Somebody replied to a comment this person wrote.</summary>
+    public const string NotifyCommentReply = "notify.comment-reply";
+
+    /// <summary>Somebody commented on something this person owns.</summary>
+    public const string NotifyCommentOnMine = "notify.comment-on-mine";
 
     public const string NotifyJobCompleted = "notify.job-completed";
 
@@ -95,6 +194,11 @@ public static class MessageTemplateCatalog
     private const string ActorName = "actorName";
 
     /// <summary>Notification placeholder: where the installation lives, for a "go and look" link.</summary>
+    /// <remarks>
+    /// A template that links to one particular thing does not need this: the sender resolves that
+    /// message's own "url" against the installation's address before rendering, so writing the two
+    /// side by side would produce the address twice.
+    /// </remarks>
     private const string SiteUrl = "siteUrl";
 
     /// <summary>
@@ -349,6 +453,63 @@ public static class MessageTemplateCatalog
             }),
 
         new(
+            NotifyGroupAnnouncement,
+            MessageChannel.Email,
+            "Someone with the right to do so wrote to everybody on a caving group's roster.",
+            [AppName, DisplayName, ActorName, "cavingGroupName", "announcement", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{actorName} wrote to {cavingGroupName}: {announcement}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} wrote to the caving group {cavingGroupName}:
+
+                    {announcement}
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{actorName} a scris grupului {cavingGroupName}: {announcement}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a scris grupului {cavingGroupName}:
+
+                    {announcement}
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        // Deliberately says less than the message it is a wording of, and the narrowing is the
+        // point rather than an economy. A text leaves the installation and obeys none of its rules
+        // afterwards — it does not expire, it cannot be withdrawn, and nothing re-checks the
+        // reader's access at the moment they look at it — so this says that an announcement
+        // arrived and where to read it, and resolves none of it into the message itself. Three
+        // things the mailbox wording carries are therefore absent: the announcement, which is a
+        // line somebody typed for a roster and is exactly what a reader who has since left the
+        // club must stop seeing; the greeting, because a phone already knows whose it is and every
+        // character is billed; and the one-click opt-out, because it is a signed link that would
+        // travel unrecallably beside the notice it opts out of, and this channel is switched off
+        // in the same settings that switched it on.
+        new(
+            NotifyGroupAnnouncementSms,
+            MessageChannel.Sms,
+            "The same announcement, written for a phone: that one arrived, and where to read it.",
+            [AppName, ActorName, "cavingGroupName", "url"],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(null, "{appName}: {actorName} wrote to {cavingGroupName}. Read it at {url}"),
+                ["ro"] = new(null, "{appName}: {actorName} a scris grupului {cavingGroupName}. Citiți mesajul la {url}"),
+            }),
+
+        new(
             NotifyPermissionGranted,
             MessageChannel.Email,
             "Someone was given access to a record — directly, or through a caving group they belong to.",
@@ -403,6 +564,336 @@ public static class MessageTemplateCatalog
                     Bună ziua {displayName},
 
                     {actorName} v-a trecut ca participant la {tripTitle} în data de {tripDate}:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripPlanInvitation,
+            MessageChannel.Email,
+            "Someone was asked whether they are coming on a trip being planned.",
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "You were invited to {tripTitle}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} invited you to {tripTitle} on {tripDate}. You can answer here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Ați fost invitat la {tripTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} v-a invitat la {tripTitle} în data de {tripDate}. Puteți răspunde aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripPlanChanged,
+            MessageChannel.Email,
+            "A trip someone is on was changed while it was still being planned.",
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{tripTitle} has changed",
+                    """
+                    Hello {displayName},
+
+                    {actorName} changed {tripTitle}, planned for {tripDate}:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "S-a modificat {tripTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a modificat {tripTitle}, planificată pentru {tripDate}:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripPlanCancelled,
+            MessageChannel.Email,
+            "A trip someone is on was called off.",
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{tripTitle} was called off",
+                    """
+                    Hello {displayName},
+
+                    {actorName} called off {tripTitle}, planned for {tripDate}. It is not going ahead.
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{tripTitle} a fost anulată",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a anulat {tripTitle}, planificată pentru {tripDate}. Tura nu mai are loc.
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripPlanReminder,
+            MessageChannel.Email,
+            "A trip someone is on is coming up.",
+            [AppName, DisplayName, "tripTitle", "tripDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{tripTitle} is coming up",
+                    """
+                    Hello {displayName},
+
+                    {tripTitle} is on {tripDate}. What has been arranged for it is here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Se apropie {tripTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {tripTitle} are loc în data de {tripDate}. Ce s-a stabilit pentru ea găsiți aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripCalloutOverdue,
+            MessageChannel.Email,
+            "A party is past the time they said they would be back, and nobody has stood the alarm down.",
+            [AppName, DisplayName, "tripTitle", "tripDate", "expectedReturn", "url"],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{tripTitle} is overdue",
+                    """
+                    Hello {displayName},
+
+                    {tripTitle} on {tripDate} was due back by {expectedReturn}, and nobody has said
+                    it is out. You are being told because the trip names you.
+
+                    If you know the party is safe, say so here — anyone the trip names can:
+
+                    {url}
+
+                    If nobody can reach them, the trip records what was arranged for this.
+                    """),
+                ["ro"] = new(
+                    "{tripTitle} a depășit ora de întoarcere",
+                    """
+                    Bună ziua {displayName},
+
+                    {tripTitle} din data de {tripDate} trebuia să se încheie până la
+                    {expectedReturn}, iar nimeni nu a confirmat că echipa a ieșit. Primiți acest
+                    mesaj pentru că tura vă numește.
+
+                    Dacă știți că echipa este în siguranță, confirmați aici — o poate face oricine
+                    este numit pe tură:
+
+                    {url}
+
+                    Dacă nimeni nu îi poate contacta, tura consemnează ce s-a stabilit pentru acest caz.
+                    """),
+            }),
+
+        // Written as its own text rather than as the mailbox wording shortened, because it is the
+        // one message here that has to work for somebody standing at a car park entrance with no
+        // data: what is legible before anything is opened is part of the safety argument, so the
+        // message leads with which party and what is wrong and puts the link last. Three things
+        // the mailbox wording carries are absent. The greeting, because a phone already knows
+        // whose it is and every character is billed. The date on its own, because the hour that
+        // passed already contains it. And the installation's name in front, because the ten
+        // characters it costs are worth more spent on the alarm, and the address inside the link
+        // says where this came from.
+        //
+        // The Romanian was written first and the English follows it, which is the only order that
+        // works: a text is carried in seven-bit form only while every character is in that
+        // alphabet, and Romanian's diacritics are not, so the whole Romanian message is carried
+        // two bytes to the character and fits 67 of them in a part-message where English fits 153.
+        // Fitting the half-capacity language first means both fit; the other way round, the second
+        // language quietly becomes the one that costs double.
+        new(
+            NotifyTripCalloutOverdueSms,
+            MessageChannel.Sms,
+            "The same overdue alarm, written for a phone: which party, what has not been confirmed, and by when.",
+            ["tripTitle", "expectedReturn", "url"],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(null, "{tripTitle}: nobody has confirmed the party is out. Due back {expectedReturn} {url}"),
+                ["ro"] = new(null, "{tripTitle}: ieșire neconfirmată. Termen {expectedReturn} {url}"),
+            }),
+
+        new(
+            NotifyTripInviteeCannotOpenCave,
+            MessageChannel.Email,
+            "Someone asked on a trip cannot open a cave the trip is about.",
+            [AppName, DisplayName, ActorName, "inviteeName", "caveName", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{inviteeName} cannot open {caveName}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} asked {inviteeName} on a trip to {caveName}, which {inviteeName} has
+                    no access to. Being asked on a trip grants none: only somebody who may change
+                    that cave's permissions can.
+
+                    {url}
+
+                    This message goes to the cave's owner and to full administrators, and to nobody
+                    else — somebody who may grant access to it in another way, through a club for
+                    instance, has not been told. Please pass it on if it is not yours to act on.
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{inviteeName} nu are acces la {caveName}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a invitat pe {inviteeName} la o tură în {caveName}, la care
+                    {inviteeName} nu are acces. Invitația la o tură nu acordă acces: numai cineva
+                    care poate schimba permisiunile peșterii poate face asta.
+
+                    {url}
+
+                    Acest mesaj ajunge la proprietarul peșterii și la administratorii deplini, și la
+                    nimeni altcineva — cineva care poate acorda acces altfel, printr-un club de
+                    exemplu, nu a fost înștiințat. Vă rugăm să-l transmiteți mai departe dacă nu vă
+                    revine dumneavoastră.
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyEventReminder,
+            MessageChannel.Email,
+            "A club event someone was asked about is coming up.",
+            [AppName, DisplayName, "eventTitle", "eventDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{eventTitle} is coming up",
+                    """
+                    Hello {displayName},
+
+                    {eventTitle} is on {eventDate}. What has been arranged for it is here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Se apropie {eventTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {eventTitle} are loc în data de {eventDate}. Ce s-a stabilit pentru el găsiți aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyCommentReply,
+            MessageChannel.Email,
+            "Someone replied to a comment this person wrote.",
+            [AppName, DisplayName, ActorName, "documentTitle", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{actorName} replied to your comment on {documentTitle}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} replied to your comment on {documentTitle}. You can read it here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{actorName} a răspuns la comentariul dumneavoastră de la {documentTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a răspuns la comentariul dumneavoastră de la {documentTitle}. Îl
+                    puteți citi aici:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyCommentOnMine,
+            MessageChannel.Email,
+            "Someone commented on something this person owns.",
+            [AppName, DisplayName, ActorName, "documentTitle", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "{actorName} commented on {documentTitle}",
+                    """
+                    Hello {displayName},
+
+                    {actorName} left a comment on {documentTitle}, which is yours. You can read it
+                    here:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "{actorName} a comentat la {documentTitle}",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a lăsat un comentariu la {documentTitle}, care vă aparține. Îl
+                    puteți citi aici:
 
                     {url}
 
@@ -617,6 +1108,78 @@ public static class MessageTemplateCatalog
                     """),
             }),
     ];
+
+    /// <summary>
+    /// Messages written twice, each paired with the entry carrying the second wording. The first
+    /// of a pair is the message a producer queues; the second exists only to be rendered when
+    /// that message travels on a transport the first was not written for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A text message is not a short email. It has no subject, it is billed by the character, and
+    /// it arrives on a screen with no formatting and no way to open a second thing — so a message
+    /// that may go both ways has to be written twice. The second wording is a catalogue entry of
+    /// its own rather than an extra field on the first, for three reasons that all point the same
+    /// way. It declares its own placeholders, and that list is the ceiling on what a wording may
+    /// emit, so one shared list would raise the ceiling for both to whatever the wider one needs.
+    /// It is rewritten by an operator through the same lookup as every other wording, which is a
+    /// key and a language and nothing else, so nothing about the editor, its route or its storage
+    /// has to learn that some messages are written more than once. And every guard over this
+    /// catalogue reads a definition's key, channel and declared placeholders — so wording added
+    /// this way is swept by all of them the day it lands, rather than after somebody remembers to
+    /// teach each one a new shape.
+    /// </para>
+    /// <para>
+    /// What must not follow from this is a producer choosing between two names. A producer writes
+    /// down what happened and who it concerns; which transports will carry that, and therefore
+    /// which wording is rendered, is settled far downstream of anything a feature knows. So the
+    /// pairing is resolved here, by whatever is about to hand the message over.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<(string Message, string Wording)> SecondWordings { get; } =
+    [
+        (NotifyGroupAnnouncement, NotifyGroupAnnouncementSms),
+        (NotifyTripCalloutOverdue, NotifyTripCalloutOverdueSms),
+    ];
+
+    /// <summary>
+    /// The wording of <paramref name="templateKey"/> that <paramref name="channel"/> can carry, or
+    /// null when this message has no form that travels that way.
+    /// </summary>
+    /// <remarks>
+    /// Asked twice by whatever sends: once to decide whether it is willing to carry the message at
+    /// all, and again to name the wording it renders. Both answers come from here, so they cannot
+    /// disagree, and a message with no wording for a transport is simply not carried by it rather
+    /// than carried badly.
+    /// </remarks>
+    public static MessageTemplateDefinition? On(string templateKey, MessageChannel channel)
+    {
+        var definition = Find(templateKey);
+        if (definition is null || definition.Channel == channel)
+        {
+            return definition;
+        }
+
+        foreach (var (message, wording) in SecondWordings)
+        {
+            if (string.Equals(message, templateKey, StringComparison.Ordinal)
+                && Find(wording) is { } second
+                && second.Channel == channel)
+            {
+                return second;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Whether this entry exists only as another message's wording. Nothing queues one: it is
+    /// reached through the message it belongs to, and carries that message's subject, target and
+    /// values rather than any of its own.
+    /// </summary>
+    public static bool IsSecondWording(string key) =>
+        SecondWordings.Any(pair => string.Equals(pair.Wording, key, StringComparison.Ordinal));
 
     public static MessageTemplateDefinition? Find(string key) =>
         All.FirstOrDefault(d => string.Equals(d.Key, key, StringComparison.Ordinal));

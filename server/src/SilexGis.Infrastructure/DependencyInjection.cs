@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SilexGis.Domain;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Settings;
@@ -127,7 +128,8 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Notification delivery: the outbox worker and the opt-out tokens it puts in each message.
+    /// Notification routing and delivery: the worker, its clock, and the opt-out tokens it
+    /// puts in each message.
     /// </summary>
     /// <remarks>
     /// Deliberately not folded into <see cref="AddSilexGisMessaging"/>, which is called from the
@@ -136,12 +138,35 @@ public static class DependencyInjection
     /// </remarks>
     public static IServiceCollection AddSilexGisNotifications(this IServiceCollection services)
     {
-        services.AddScoped<NotificationOutboxService>();
-        services.AddHostedService<NotificationOutboxWorker>();
+        // The one clock this pipeline reads. Introduced narrowly rather than swept through the
+        // solution: what it buys is a test able to assert that a failed send set the next attempt
+        // to exactly the backoff ladder's value. It cannot move a claim — whether a row is due is
+        // decided by the database's own now(), not by this.
+        services.TryAddSingleton(TimeProvider.System);
+
+        // The ways a notification can leave the system. One registration per transport, and the
+        // router asks all of them — so a second channel is this list growing by a line, not a
+        // branch appearing in the routing pass. In-app is deliberately not here: the notification
+        // row's own existence is its in-app presence and nothing about it can fail.
+        services.AddScoped<INotificationChannel, EmailNotificationChannel>();
+        services.AddScoped<INotificationChannel, SmsNotificationChannel>();
+        services.AddScoped<NotificationChannels>();
+
+        services.AddScoped<NotificationOptOut>();
+        services.AddScoped<NotificationDeliveryService>();
+
+        // Reading a notification needs the reader's own account row for the language to
+        // fall back to, which a feature slice may not touch — so the wording is written out
+        // here, on its behalf.
+        services.AddScoped<NotificationInboxRenderer>();
+        services.AddHostedService<NotificationWorker>();
         return services;
     }
 
-    /// <summary>File storage, vector format IO (GDAL) and the processing-job worker.</summary>
+    /// <summary>
+    /// File storage, vector format IO (GDAL), the processing-job worker, and the schedules that
+    /// queue work for it.
+    /// </summary>
     public static IServiceCollection AddSilexGisGeodata(
         this IServiceCollection services, IConfiguration configuration)
     {
@@ -201,6 +226,7 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, DirectoryImportHandler>();
         services.AddScoped<IProcessingJobHandler, UploadSessionSweepHandler>();
         services.AddScoped<IProcessingJobHandler, DocumentPurgeHandler>();
+        services.AddScoped<IProcessingJobHandler, CavingGroupAnnouncementHandler>();
 
         // The terrain chain: the handler that walks a build through the steps, and the directories
         // it works in. The steps themselves are registered as each is built — the walk runs the
@@ -266,6 +292,11 @@ public static class DependencyInjection
             configuration.GetSection(AccessHistoryOptions.SectionName));
         services.AddScoped<FileAccessRecorder>();
         services.AddHostedService<AccessHistoryScheduler>();
+
+        services.Configure<TripCalloutOptions>(
+            configuration.GetSection(TripCalloutOptions.SectionName));
+        services.AddScoped<IProcessingJobHandler, TripCalloutSweepHandler>();
+        services.AddHostedService<TripCalloutScheduler>();
         return services;
     }
 }

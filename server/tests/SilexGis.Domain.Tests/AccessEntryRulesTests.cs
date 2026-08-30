@@ -170,6 +170,59 @@ public class AccessEntryRulesTests
     }
 
     [Fact]
+    public void Expeditions_express_the_owned_content_scopes_and_no_others()
+    {
+        // An expedition row carries the owner/caving-group/visibility trio, so every scope
+        // keying on one of those columns has a faithful flat form here.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessActions.Everything, AccessScopeKind.All)).ShouldBeNull();
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessAction.Read | AccessAction.Write, AccessScopeKind.Own))
+            .ShouldBeNull();
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessAction.Read | AccessAction.Create,
+            AccessScopeKind.CavingGroup, scopeId: Anchor)).ShouldBeNull();
+
+        // The scope the domain exists for: "share this camp with that club" is one act on
+        // one object, and an entry scoped to that object is the only shape that says it.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessAction.Read | AccessAction.Share, AccessScopeKind.Object,
+            scopeId: Anchor)).ShouldBeNull();
+
+        // An expedition sits in no containment DAG, joins no named feature set and is filed
+        // in no cabinet, so those three collection scopes have no honest answer here.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessAction.Read, AccessScopeKind.Subtree, scopeFeatureId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessAction.Read, AccessScopeKind.FeatureSet, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessAction.Read, AccessScopeKind.Cabinet, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+
+        // Kind and type narrowing describe features; there is nothing to narrow here.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessAction.Read, AccessScopeKind.All, kind: FeatureKind.Cave))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+
+        // Outside the feature domain the object anchor is scope_id; the feature anchor
+        // column is not a second home for it.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessAction.Read, AccessScopeKind.Object, scopeFeatureId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+
+        // Nothing is created into an expedition that already exists, and an owned-row scope
+        // has no row yet to key ownership on.
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessAction.Create, AccessScopeKind.Object, scopeId: Anchor))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+        AccessEntryRules.Validate(Entry(
+            AccessDomain.Expeditions, AccessAction.Create, AccessScopeKind.Own))
+            .ShouldBe(AccessEntryRules.ScopeInvalidCode);
+    }
+
+    [Fact]
     public void Object_scope_is_rejected_in_domains_without_per_object_identity()
     {
         AccessEntryRules.Validate(Entry(

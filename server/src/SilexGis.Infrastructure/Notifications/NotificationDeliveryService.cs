@@ -1,0 +1,759 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
+using SilexGis.Domain.Notifications;
+using SilexGis.Domain.Settings;
+using SilexGis.Infrastructure.Identity;
+using SilexGis.Infrastructure.Persistence;
+
+namespace SilexGis.Infrastructure.Notifications;
+
+/// <summary>
+/// Decides which channels a notification goes out on, and gets it out of the system on them.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The only place that reads a recipient's address, language and preferences — producers write an
+/// id and the facts, and everything about the person is resolved here. That is what lets feature
+/// slices queue notifications at all without touching Identity types.
+/// </para>
+/// <para>
+/// Routing happens once per notification and produces zero or more deliveries: one row per channel
+/// that has to leave the system. Nothing is "suppressed" — a recipient who does not want email
+/// about something simply gets no email delivery for it, and the notification is still in their
+/// inbox, because the events somebody switched a transport off for are exactly the ones an inbox
+/// exists to show. The inbox is a cell of the same matrix and can be switched off too, but that
+/// is not decided here: the row is written whatever anybody has chosen, and the choice is applied
+/// where the inbox is read.
+/// </para>
+/// <para>
+/// This class knows no transport. Which channels exist, what each of them needs to reach somebody
+/// and how each hands a message over all live behind <see cref="INotificationChannel"/>; here
+/// there is only the loop that asks them and the rule that turns their answers into rows. So a
+/// second way out of the system is a new implementation, not an edit to this file.
+/// </para>
+/// <para>
+/// A plain service rather than logic inside the worker, so tests can drive a drain directly
+/// instead of waiting on a poll.
+/// </para>
+/// </remarks>
+public sealed class NotificationDeliveryService(
+    SilexGisDbContext db,
+    NotificationChannels channels,
+    IMessageDispatcher dispatcher,
+    IUnsubscribeTokens unsubscribeTokens,
+    IConfiguration configuration,
+    IAppSettingsService settings,
+    TimeProvider clock,
+    ILogger<NotificationDeliveryService> logger)
+{
+    /// <summary>Rows leased per drain pass. Small enough that a crash re-sends few, if any.</summary>
+    private const int BatchSize = 25;
+
+    /// <summary>Lines listed in a summary before it says how many more there were.</summary>
+    private const int MaxDigestItems = 50;
+
+    /// <summary>
+    /// Routes whatever has not been routed yet, then sends whatever is immediately due. Returns
+    /// how many rows it moved, so a caller can drain by looping until it returns zero.
+    /// </summary>
+    public async Task<int> RunOnceAsync(CancellationToken ct)
+    {
+        var routed = await RouteAsync(ct);
+        var delivered = await DeliverAsync(ct);
+        return routed + delivered;
+    }
+
+    /// <summary>
+    /// Decides the outbound channels for notifications that have none yet. One pass per
+    /// notification, ever: the claim stamps the row as routed.
+    /// </summary>
+    public async Task<int> RouteAsync(CancellationToken ct)
+    {
+        var ids = await NotificationDeliverySql.ClaimUnroutedAsync(db, BatchSize, ct);
+        if (ids.Count == 0)
+        {
+            return 0;
+        }
+
+        var rows = await db.Notifications.Where(n => ids.Contains(n.Id)).ToListAsync(ct);
+        foreach (var row in rows)
+        {
+            await RouteOneAsync(row, ct);
+        }
+
+        await db.SaveChangesAsync(ct);
+        return rows.Count;
+    }
+
+    /// <summary>Sends every immediately-due delivery. Returns how many it settled.</summary>
+    public async Task<int> DeliverAsync(CancellationToken ct)
+    {
+        var ids = await NotificationDeliverySql.ClaimDueAsync(db, BatchSize, ct);
+        if (ids.Count == 0)
+        {
+            return 0;
+        }
+
+        var deliveries = await db.NotificationDeliveries.Where(d => ids.Contains(d.Id)).ToListAsync(ct);
+        var notifications = await NotificationsOfAsync(deliveries, ct);
+        foreach (var delivery in deliveries)
+        {
+            await SendAsync(delivery, notifications[delivery.NotificationId], ct);
+        }
+
+        await db.SaveChangesAsync(ct);
+        return deliveries.Count;
+    }
+
+    /// <summary>
+    /// Sends one recipient's daily summary, if anyone's is due. Returns how many deliveries it
+    /// settled, so a caller can drain by looping until it returns zero.
+    /// </summary>
+    public async Task<int> RunDigestAsync(CancellationToken ct)
+    {
+        var ids = await NotificationDeliverySql.ClaimDueDigestAsync(db, ct);
+        if (ids.Count == 0)
+        {
+            return 0;
+        }
+
+        var claimed = await db.NotificationDeliveries
+            .Where(d => ids.Contains(d.Id)).OrderBy(d => d.Id).ToListAsync(ct);
+        var notifications = await NotificationsOfAsync(claimed, ct);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == claimed[0].RecipientUserId, ct);
+
+        // Preferences are read again here, not only when the delivery was deferred. A summary is
+        // written hours after the events it collects, and the link it carries is itself an
+        // invitation to switch it off — so between the deferral and the send the recipient may
+        // have done exactly that. Sending anyway would answer "the summary has stopped" with one
+        // more summary. Dropping the delivery is all that is needed: the notifications themselves
+        // stay in the inbox, which is where somebody who switched email off reads them.
+        if (user?.Email is null)
+        {
+            db.NotificationDeliveries.RemoveRange(claimed);
+            await db.SaveChangesAsync(ct);
+            return claimed.Count;
+        }
+
+        var paidChannelsAllowed = await PaidChannelsAllowedAsync(ct);
+
+        // The same second thought applied per category: a summary claimed for today may contain
+        // lines about something the recipient has since switched off, and those must not arrive.
+        var stored = await db.UserNotificationPreferences
+            .Where(p => p.UserId == user.Id && p.Channel == NotificationChannelKind.Email)
+            .ToDictionaryAsync(p => p.Category, p => p.Choice, ct);
+
+        var wanted = claimed
+            .Where(d => Resolve(
+                    notifications[d.NotificationId].Category, NotificationChannelKind.Email, stored, paidChannelsAllowed)
+                is not NotificationChannelChoice.Off)
+            .ToList();
+
+        var dropped = claimed.Where(d => !wanted.Contains(d)).ToList();
+        if (dropped.Count > 0)
+        {
+            db.NotificationDeliveries.RemoveRange(dropped);
+        }
+
+        if (wanted.Count == 0)
+        {
+            await db.SaveChangesAsync(ct);
+            return claimed.Count;
+        }
+
+        // Each line is that event's own subject: already a one-line summary, already translated,
+        // already editable by the operator. Single newlines — the renderer collapses blank ones.
+        var lines = new List<string>();
+        foreach (var delivery in wanted.Take(MaxDigestItems))
+        {
+            lines.Add("- " + await SubjectOfAsync(notifications[delivery.NotificationId], user, ct));
+        }
+
+        var values = BaseValues(user);
+        values["itemCount"] = wanted.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        values["items"] = string.Join("\n", lines);
+        // A summary has no category of its own, so its opt-out link cannot name one: it collects
+        // whatever the recipient still hears about, and a token for one of those would switch off
+        // something they never said anything about.
+        values["unsubscribeUrl"] = DigestUnsubscribeLine(user.Id);
+
+        // A summary is one channel's: every line in it was deferred by the same channel, and the
+        // claim gathers one recipient's due deferrals — which cannot span channels while only one
+        // of them defers at all. A second deferring channel has to make the claim name its own.
+        var result = await channels.Of(claimed[0].Channel)
+            .SendAsync(user, MessageTemplateCatalog.NotifyDigest, values, ct);
+
+        if (result.Sent)
+        {
+            MarkAllSent(wanted);
+        }
+        else
+        {
+            // The whole batch shares one outcome, so a failed summary is retried as a batch.
+            foreach (var delivery in wanted)
+            {
+                Fail(
+                    delivery,
+                    result.Error,
+                    NotificationDeliveryStatus.Deferred,
+                    notifications[delivery.NotificationId].Category,
+                    user);
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        return claimed.Count;
+    }
+
+    /// <summary>
+    /// Puts one dead delivery back in the queue by hand, after asking again every question routing
+    /// asked the first time.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A dead delivery is the one thing in this pipeline nothing will ever pick up again, so an
+    /// operator who has fixed whatever broke — a mail server that was refusing everything, an
+    /// address that was wrong — needs a way to say "try that one again". This is that way, and it
+    /// is deliberately not a bare status change.
+    /// </para>
+    /// <para>
+    /// Everything that decided whether the message should leave at all is decided again here,
+    /// against the recipient as they are now rather than as they were when the row was written.
+    /// Between the failure and the retry the recipient may have used the opt-out link the failed
+    /// message itself carried, or cleared the category on their settings page; a retry that only
+    /// flipped the status back would answer "stop telling me about this" with one more of exactly
+    /// that, and would do it under an operator's name. So the same two reads the send path makes
+    /// are made here, and a recipient who has since said no ends with the delivery dropped and the
+    /// operator told why, rather than with a message.
+    /// </para>
+    /// <para>
+    /// The answer is taken whole rather than reduced to yes-or-no. Somebody whose choice for this
+    /// category is a daily summary has asked for one message a day, so their dead rows go back to
+    /// waiting for the next summary rather than out as one immediate message each — the retry must
+    /// not be the single path that can turn a summary into a pile of individual mail.
+    /// </para>
+    /// <para>
+    /// It re-queues rather than sending in line. The instant a delivery becomes due is computed in
+    /// one place for every writer of it, so the hours a recipient asked not to be interrupted in
+    /// hold for a hand-driven attempt exactly as they do for an automatic one — an operator
+    /// working through a backlog in the evening must not be the one path that wakes people up.
+    /// </para>
+    /// <para>
+    /// Saving is left to the caller, so the record of who asked for this commits with the change
+    /// itself or not at all.
+    /// </para>
+    /// </remarks>
+    public async Task<NotificationRetryResult> RetryAsync(long deliveryId, CancellationToken ct)
+    {
+        var delivery = await db.NotificationDeliveries.FirstOrDefaultAsync(d => d.Id == deliveryId, ct);
+        if (delivery is null)
+        {
+            return NotificationRetryResult.Refused(NotificationRetryOutcome.NotFound);
+        }
+
+        if (delivery.Status != NotificationDeliveryStatus.Dead)
+        {
+            return NotificationRetryResult.Refused(NotificationRetryOutcome.NotDead);
+        }
+
+        var row = await db.Notifications.FirstOrDefaultAsync(n => n.Id == delivery.NotificationId, ct);
+        if (row is null)
+        {
+            // The parent goes with the account and with the retention window, taking its
+            // deliveries by cascade, so this is a row mid-deletion rather than a state to report.
+            return NotificationRetryResult.Refused(NotificationRetryOutcome.NotFound);
+        }
+
+        // Asked of the catalogue rather than matched against the recorded failure text: rows
+        // written before that text existed, or by an installation whose wording has since been
+        // restored, both answer this correctly and neither answers a string comparison correctly.
+        var definition = MessageTemplateCatalog.Find(row.TemplateKey);
+        if (definition is null)
+        {
+            return new NotificationRetryResult(
+                NotificationRetryOutcome.TemplateUnknown, row.Id, row.TemplateKey, null);
+        }
+
+        var channel = channels.Of(delivery.Channel);
+
+        // The second way a delivery is dead the moment it is written: the wording exists, but it
+        // was written for a transport nothing here sends on, so no installed channel is willing to
+        // carry it. Asked again rather than assumed away — the send path never re-tests it, so a
+        // retry that skipped this question would hand the message to the very channel that refused
+        // it and send it out as though it had always been welcome.
+        if (!channel.Carries(definition))
+        {
+            return new NotificationRetryResult(
+                NotificationRetryOutcome.TemplateUnknown, row.Id, row.TemplateKey, null);
+        }
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == delivery.RecipientUserId, ct);
+        if (user is null || !channel.CanReach(user))
+        {
+            return new NotificationRetryResult(
+                NotificationRetryOutcome.Unreachable, row.Id, row.TemplateKey, null);
+        }
+
+        // The whole of the routing question is asked again, not the off/on half of it. Somebody
+        // who has since chosen a daily summary for this category asked for one message a day, and
+        // putting their backlog back as immediate mail would answer that with one message per
+        // dead row — by an operator's hand, which is the one path with nobody to complain to.
+        var stored = await StoredAsync(user.Id, row.Category, ct);
+        var route = channel.Decide(
+            user, Resolve(row.Category, channel.Kind, stored, await PaidChannelsAllowedAsync(ct)));
+
+        if (route is NotificationRoute.Suppress)
+        {
+            db.NotificationDeliveries.Remove(delivery);
+            return new NotificationRetryResult(
+                NotificationRetryOutcome.Suppressed, row.Id, row.TemplateKey, null);
+        }
+
+        // The attempt count is the automatic pipeline's budget for one message and it is spent —
+        // that is what dead means here. An operator putting the row back is starting a new budget:
+        // leaving the count where it stands would let the first failure kill the row again
+        // immediately, with no back-off, which is a retry that can only ever work on the first try.
+        delivery.Attempts = 0;
+
+        // The recorded failure goes with it. It described an attempt that is over, and a row shown
+        // as waiting while carrying the text of a failure reads as a fresh one.
+        delivery.Error = null;
+
+        // The answer decides the status as it does when routing writes the row for the first time:
+        // a summary that failed goes back to waiting for the next summary, not out on its own.
+        var held = route is NotificationRoute.Defer;
+        var now = clock.GetUtcNow();
+        delivery.Status = held
+            ? NotificationDeliveryStatus.Deferred
+            : NotificationDeliveryStatus.Pending;
+        delivery.NotBefore = DueOutsideTheirNight(
+            held ? NotificationRouting.NextDigest(now, DigestHourUtc) : now, row.Category, user);
+
+        return new NotificationRetryResult(
+            NotificationRetryOutcome.Queued, row.Id, row.TemplateKey, delivery.NotBefore);
+    }
+
+    /// <summary>
+    /// Drops notifications once they are old enough to be of no further interest. One window over
+    /// the whole table, keyed on the notification's own age and taking read and unread alike;
+    /// deliveries go with it by cascade. Deliberately not keyed on a delivery outcome — an inbox
+    /// lists what happened, so keeping only what was successfully emailed would delete precisely
+    /// the events somebody had switched email off for.
+    /// </summary>
+    /// <remarks>
+    /// The window is an administrator's to set, over the deployment's own value, and is read on
+    /// every pass rather than held — so shortening it takes effect at the next hourly prune
+    /// without a restart. A value at or below zero is refused in favour of the default wherever it
+    /// came from: a mistyped setting must not be able to delete an installation's history.
+    /// </remarks>
+    public async Task PruneAsync(CancellationToken ct)
+    {
+        var retention = await settings.GetNotificationsAsync(ct);
+        _ = await NotificationDeliverySql.PruneAsync(db, retention.EffectiveRetentionDays, ct);
+
+        // A notice recorded for a caving group too large to write to inline carries the same words
+        // the notifications carry, so it goes under the same window. Without this it would be the
+        // one copy of somebody's message that outlived the installation's own answer about how
+        // long what it tells people is kept — and only for large clubs, which is the hardest case
+        // to notice. Ones never handed out go too: a pass that was going to happen would have
+        // happened long before the window closed.
+        var cutoff = clock.GetUtcNow().AddDays(-retention.EffectiveRetentionDays);
+        _ = await db.CavingGroupAnnouncements.Where(a => a.CreatedAt < cutoff).ExecuteDeleteAsync(ct);
+    }
+
+    private async Task<Dictionary<long, Notification>> NotificationsOfAsync(
+        List<NotificationDelivery> deliveries, CancellationToken ct)
+    {
+        var ids = deliveries.Select(d => d.NotificationId).Distinct().ToList();
+        return await db.Notifications.Where(n => ids.Contains(n.Id)).ToDictionaryAsync(n => n.Id, ct);
+    }
+
+    private async Task RouteOneAsync(Notification row, CancellationToken ct)
+    {
+        var definition = MessageTemplateCatalog.Find(row.TemplateKey);
+        if (definition is null)
+        {
+            // A delivery that is dead on arrival rather than no delivery at all: an unknown key is
+            // a fault an operator has to be able to see, and the health view is over deliveries.
+            AddDead(row, $"No message template named '{row.TemplateKey}'.");
+            return;
+        }
+
+        // Willing to carry this wording at all, which is a question about the message. A recipient
+        // who wants none of it answers below and produces no row; nothing being willing to carry
+        // it is a different thing entirely — a fault, recorded so an operator sees it.
+        var carriers = channels.All.Where(channel => channel.Carries(definition)).ToList();
+        if (carriers.Count == 0)
+        {
+            AddDead(row, $"No channel carries {definition.Channel} messages.");
+            return;
+        }
+
+        // Narrowed again by what this installation has actually been given for each transport.
+        // A transport with no settings is not here, so it writes no row — the same outcome as a
+        // channel nobody implemented, and for the same reason: a row that could only ever go to
+        // the log would still settle as sent, and on a transport that bills per message it would
+        // spend a day's ceiling on messages nobody was charged for. Not a fault, so it is asked
+        // after the question above and never turned into a dead row.
+        var installed = new List<INotificationChannel>(carriers.Count);
+        foreach (var carrier in carriers)
+        {
+            if (await carrier.IsUsableAsync(ct))
+            {
+                installed.Add(carrier);
+            }
+        }
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == row.RecipientUserId, ct);
+        if (user is null)
+        {
+            // Nothing to route to. The row itself goes when the account does, by cascade.
+            return;
+        }
+
+        // A user with no stored preference rows is the ordinary case, not "everything off": most
+        // accounts never open the settings page, and the documented defaults are what they get.
+        var stored = await StoredAsync(row.RecipientUserId, row.Category, ct);
+        var paidChannelsAllowed = await PaidChannelsAllowedAsync(ct);
+
+        // Every willing channel is asked, and the answers become rows. Zero rows is an ordinary
+        // outcome, not a failure: the notification has happened and is readable in the inbox
+        // whether or not any copy of it left the system.
+        var answers = installed
+            .Select(channel => (
+                channel.Channel,
+                Route: channel.Decide(user, Resolve(row.Category, channel.Kind, stored, paidChannelsAllowed))))
+            .ToList();
+
+        var now = clock.GetUtcNow();
+        foreach (var planned in NotificationFanOut.Plan(answers))
+        {
+            var due = planned.Status == NotificationDeliveryStatus.Deferred
+                ? NotificationRouting.NextDigest(now, DigestHourUtc)
+                : now;
+
+            Add(row, planned.Channel, planned.Status, DueOutsideTheirNight(due, row.Category, user));
+        }
+    }
+
+    private async Task SendAsync(NotificationDelivery delivery, Notification row, CancellationToken ct)
+    {
+        var channel = channels.Of(delivery.Channel);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == delivery.RecipientUserId, ct);
+        if (user is null || !channel.CanReach(user))
+        {
+            // The address went away between routing and sending. Retrying cannot help.
+            delivery.Status = NotificationDeliveryStatus.Dead;
+            delivery.Error = Truncate("The recipient cannot be reached on this channel.");
+            return;
+        }
+
+        // Preferences are read again here, not only when the delivery was routed. A failed send
+        // backs off over hours, and the message that failed carried an opt-out link of its own —
+        // so between the attempt that failed and the one that succeeds the recipient may have used
+        // it, or cleared the category on their settings page. Sending anyway would answer "stop
+        // telling me about this" with one more of exactly that. Dropping the delivery is all that
+        // is needed: the notification stays in the inbox, which is where somebody who switched a
+        // channel off reads it. The daily summary already re-asks the same question on its own way
+        // out; the immediate path asks it here.
+        if (await SuppressedNowAsync(user, row, channel, ct))
+        {
+            db.NotificationDeliveries.Remove(delivery);
+            return;
+        }
+
+        var result = await channel.SendAsync(user, row.TemplateKey, ValuesFor(row, user), ct);
+
+        if (result.Sent)
+        {
+            // Terminates the row even when nothing is configured: the message went to the log,
+            // which is what a mail-less installation does. Retrying it would never succeed.
+            delivery.Status = NotificationDeliveryStatus.Sent;
+            delivery.SentAt = clock.GetUtcNow();
+            delivery.Error = null;
+            return;
+        }
+
+        Fail(delivery, result.Error, NotificationDeliveryStatus.Pending, row.Category, user);
+    }
+
+    /// <summary>
+    /// Whether this channel would refuse this notification for this recipient as things stand now
+    /// — the same two reads routing does, asked again on the way out.
+    /// </summary>
+    private async Task<bool> SuppressedNowAsync(
+        SilexGisUser user, Notification row, INotificationChannel channel, CancellationToken ct)
+    {
+        // The transport's own settings are re-read here too, not only the recipient's answer. An
+        // operator can clear a gateway between the routing pass and the send, and a row that then
+        // went only to the log would settle as sent and be counted as money — so a transport that
+        // has stopped being here drops the delivery, which gives the day its spending back for
+        // the same reason a suppressed one does: nothing left.
+        if (!await channel.IsUsableAsync(ct))
+        {
+            return true;
+        }
+
+        var stored = await StoredAsync(user.Id, row.Category, ct);
+        return channel.Decide(
+                user, Resolve(row.Category, channel.Kind, stored, await PaidChannelsAllowedAsync(ct)))
+            is NotificationRoute.Suppress;
+    }
+
+    /// <summary>
+    /// One recipient's stored matrix row per channel for one category. Absent channels are absent
+    /// on purpose: what a missing row means is the resolver's business, not this query's.
+    /// </summary>
+    private async Task<Dictionary<NotificationChannelKind, NotificationChannelChoice>> StoredAsync(
+        Guid userId, NotificationCategory category, CancellationToken ct) =>
+        await db.UserNotificationPreferences
+            .Where(p => p.UserId == userId && p.Category == category)
+            .ToDictionaryAsync(p => p.Channel, p => p.Choice, ct);
+
+    /// <summary>
+    /// What one cell is worth here — the stored row if there is one, put through the rules that
+    /// can override it, against the channels this installation actually has.
+    /// </summary>
+    private NotificationChannelChoice Resolve(
+        NotificationCategory category,
+        NotificationChannelKind channel,
+        IReadOnlyDictionary<NotificationChannelKind, NotificationChannelChoice> stored,
+        NotificationChannelKind paidChannelsAllowed) =>
+        NotificationMatrix.Resolve(
+            category,
+            channel,
+            stored.TryGetValue(channel, out var choice) ? choice : null,
+            channels.Installed,
+            paidChannelsAllowed);
+
+    private NotificationChannelChoice Resolve(
+        NotificationCategory category,
+        NotificationChannelKind channel,
+        IReadOnlyDictionary<NotificationCategory, NotificationChannelChoice> stored,
+        NotificationChannelKind paidChannelsAllowed) =>
+        NotificationMatrix.Resolve(
+            category,
+            channel,
+            stored.TryGetValue(category, out var choice) ? choice : null,
+            channels.Installed,
+            paidChannelsAllowed);
+
+    /// <summary>
+    /// The channels that charge per message and that this installation has agreed to pay for.
+    /// Read on every pass rather than held: it is an administrator's answer, it is cached for
+    /// half a minute where it is stored, and a switch turned off has to start refusing without a
+    /// restart.
+    /// </summary>
+    private async ValueTask<NotificationChannelKind> PaidChannelsAllowedAsync(CancellationToken ct) =>
+        (await settings.GetAnnouncementsAsync(ct)).PaidChannelsAllowed;
+
+    /// <summary>
+    /// When a delivery may really leave: the instant it would otherwise be due, moved past the
+    /// hours the recipient asked not to be interrupted in.
+    /// </summary>
+    /// <remarks>
+    /// Only what leaves the installation is moved. The notification itself is in the reader's list
+    /// the moment it happens whatever the hour, because it interrupts nobody — which is what makes
+    /// holding the outbound copy back honest rather than a lie about what has happened.
+    /// <para>
+    /// A category that refuses to be held back for a summary refuses this for the same reason and
+    /// is asked the same way, from the category vocabulary rather than by name: the messages that
+    /// warn somebody about their own account, or that a party is overdue underground, are exactly
+    /// the ones worth waking them for.
+    /// </para>
+    /// </remarks>
+    private DateTimeOffset DueOutsideTheirNight(
+        DateTimeOffset due, NotificationCategory category, SilexGisUser user) =>
+        NotificationCategories.IsAlwaysImmediate(category)
+            ? due
+            : QuietHours.NextAllowed(due, QuietHoursFrom, QuietHoursTo, user.TimeZone ?? HouseTimeZone);
+
+    private void Add(
+        Notification row,
+        NotificationChannel channel,
+        NotificationDeliveryStatus status,
+        DateTimeOffset notBefore) =>
+        db.NotificationDeliveries.Add(new NotificationDelivery
+        {
+            NotificationId = row.Id,
+            RecipientUserId = row.RecipientUserId,
+            Channel = channel,
+            Status = status,
+            NotBefore = notBefore,
+            CreatedAt = clock.GetUtcNow(),
+        });
+
+    /// <summary>
+    /// Records a fault that stopped a notification being routed at all.
+    /// </summary>
+    /// <remarks>
+    /// It lands on a delivery row because an operator's view of what is going wrong is a view over
+    /// deliveries, and a fault with no row is a fault nobody can see. Which channel it names is not
+    /// arbitrary now that one of them charges: nothing was handed to anybody here, so naming a
+    /// channel that bills per message would put a charge in the day's spending for a message that
+    /// never left, and the operator's headroom would drift away from the sender's on faults alone.
+    /// So a fault names a transport that costs nothing.
+    /// </remarks>
+    private void AddDead(Notification row, string error) =>
+        db.NotificationDeliveries.Add(new NotificationDelivery
+        {
+            NotificationId = row.Id,
+            RecipientUserId = row.RecipientUserId,
+            Channel = NotificationChannel.Email,
+            Status = NotificationDeliveryStatus.Dead,
+            NotBefore = clock.GetUtcNow(),
+            CreatedAt = clock.GetUtcNow(),
+            Error = Truncate(error),
+        });
+
+    /// <summary>The subject line one notification would have carried on its own.</summary>
+    private async Task<string> SubjectOfAsync(Notification row, SilexGisUser user, CancellationToken ct)
+    {
+        if (MessageTemplateCatalog.Find(row.TemplateKey) is null)
+        {
+            return row.TemplateKey;
+        }
+
+        try
+        {
+            return await dispatcher.RenderSubjectAsync(row.TemplateKey, user.Locale, ValuesFor(row, user), ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogWarning(e, "Could not render a summary line for {TemplateKey}", row.TemplateKey);
+            return row.TemplateKey;
+        }
+    }
+
+    /// <summary>
+    /// What the producer recorded, plus the things only this layer knows: how to address the
+    /// recipient, where the installation lives, and how they opt out.
+    /// </summary>
+    private Dictionary<string, string> ValuesFor(Notification row, SilexGisUser user)
+    {
+        var values = BaseValues(user);
+
+        var stored = JsonSerializer.Deserialize<Dictionary<string, string>>(row.Placeholders, JsonSerializerOptions.Web);
+        if (stored is not null)
+        {
+            foreach (var (key, value) in stored)
+            {
+                values[key] = value;
+            }
+        }
+
+        // A producer writes the path to the thing it is reporting, because a feature slice knows
+        // its own routes and has no business knowing where the installation is deployed. Only this
+        // layer knows that, so this is where a path becomes a link a mail client can open — a
+        // message that printed a bare path would print something nobody can click. A value that is
+        // already a whole address is left exactly as it is.
+        if (values.TryGetValue("url", out var url))
+        {
+            values["url"] = Absolute(url);
+        }
+
+        // A category nobody may switch off carries no opt-out: the settings page refuses it, so a
+        // link that could not work would be a lie. The placeholder renders as nothing instead.
+        values["unsubscribeUrl"] = NotificationCategories.IsUserConfigurable(row.Category)
+            ? UnsubscribeLine(user.Id, row.Category)
+            : string.Empty;
+
+        return values;
+    }
+
+    private Dictionary<string, string> BaseValues(SilexGisUser user) => new(StringComparer.Ordinal)
+    {
+        ["displayName"] = RecipientGreeting.For(user),
+        ["siteUrl"] = SiteUrl,
+        ["unsubscribeUrl"] = string.Empty,
+    };
+
+    private string UnsubscribeLine(Guid userId, NotificationCategory category) =>
+        TokenLink(unsubscribeTokens.CreateForCategory(userId, category));
+
+    private string DigestUnsubscribeLine(Guid userId) =>
+        TokenLink(unsubscribeTokens.CreateForDigest(userId));
+
+    private string TokenLink(string token) =>
+        Link($"/unsubscribe?token={Uri.EscapeDataString(token)}");
+
+    /// <summary>Turns one of this installation's own paths into a whole address.</summary>
+    private string Link(string path) => SiteUrl + path;
+
+    /// <summary>
+    /// A path is resolved against the installation's address; anything else is left alone, so a
+    /// value that is already a whole address is not mangled into one that is not.
+    /// </summary>
+    private string Absolute(string url) => url.StartsWith('/') ? Link(url) : url;
+
+    private void MarkAllSent(List<NotificationDelivery> deliveries)
+    {
+        var now = clock.GetUtcNow();
+        foreach (var delivery in deliveries)
+        {
+            delivery.Status = NotificationDeliveryStatus.Sent;
+            delivery.SentAt = now;
+            delivery.Error = null;
+        }
+    }
+
+    /// <summary>
+    /// Records a failed attempt and says when the next one may happen.
+    /// </summary>
+    /// <remarks>
+    /// The retry instant goes through the same rule as the first one. A back-off that steps to
+    /// hours crosses into the night from an evening failure without trying to — an unreachable
+    /// mail server at nine in the evening is an entirely ordinary condition — and an installation
+    /// that promised nothing leaves in the small hours must keep that promise on the second
+    /// attempt as much as on the first. Every instant a delivery becomes due is therefore computed
+    /// in one place rather than only the one routing computes.
+    /// </remarks>
+    private void Fail(
+        NotificationDelivery delivery,
+        string? error,
+        NotificationDeliveryStatus retryStatus,
+        NotificationCategory category,
+        SilexGisUser user)
+    {
+        delivery.Error = Truncate(error);
+        if (delivery.Attempts >= NotificationRouting.MaxAttempts)
+        {
+            delivery.Status = NotificationDeliveryStatus.Dead;
+            return;
+        }
+
+        delivery.Status = retryStatus;
+        delivery.NotBefore = DueOutsideTheirNight(
+            clock.GetUtcNow() + NotificationRouting.RetryDelay(delivery.Attempts), category, user);
+    }
+
+    /// <summary>The column is capped, and this runs inside the path that records a failure.</summary>
+    private static string? Truncate(string? error) =>
+        error is null ? null : error.Length <= 1000 ? error : error[..1000];
+
+    private string SiteUrl =>
+        (configuration.GetValue("PublicUrl", "http://localhost:8080") ?? "http://localhost:8080").TrimEnd('/');
+
+    private int DigestHourUtc => configuration.GetValue("Notifications:DigestHourUtc", 7);
+
+    /// <summary>
+    /// The hours nothing may interrupt anybody in, as wall-clock times in each recipient's own
+    /// zone. Off unless the installation names both ends: an installation that has said nothing
+    /// about its members' nights keeps sending as it always has, rather than holding mail back
+    /// for hours nobody asked for.
+    /// </summary>
+    private TimeOnly? QuietHoursFrom => QuietHours.Parse(configuration["Notifications:QuietHoursFrom"]);
+
+    private TimeOnly? QuietHoursTo => QuietHours.Parse(configuration["Notifications:QuietHoursTo"]);
+
+    /// <summary>
+    /// Whose night to use for somebody who has never told the server where they are — the
+    /// installation's own, which for a club is where nearly all of its members are anyway.
+    /// </summary>
+    private string HouseTimeZone => configuration.GetValue("Notifications:TimeZone", "UTC") ?? "UTC";
+}

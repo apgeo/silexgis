@@ -24,7 +24,8 @@ public static class AccessEntryRules
     public static bool IsTrioDomain(AccessDomain domain) =>
         domain is AccessDomain.Features or AccessDomain.TripLogs or AccessDomain.Geofiles
             or AccessDomain.GeoreferencedMaps or AccessDomain.MapViews
-            or AccessDomain.Documents;
+            or AccessDomain.Documents or AccessDomain.Expeditions
+            or AccessDomain.Checklists or AccessDomain.Events;
 
     /// <summary>Domains where an entry may scope to exactly one object. The others have
     /// no per-object identity worth an entry (catalog rows, settings, the audit log).</summary>

@@ -37,6 +37,56 @@ public sealed record TripStarterSections(string? FieldData, string? Logistics, s
 /// The three are flat sibling keys rather than a nested object because the form that renders
 /// these schemas draws a flat object, and a nested one would store correctly and show nothing.
 /// </para>
+/// <para>
+/// What a party needs before it sets off — where it gathers, who drives, what gear is taken,
+/// whether the permit is in hand — lives here rather than in columns of its own, because
+/// nothing queries any of it: it is read by the people going and printed into the report, and
+/// a jsonb key costs a string literal where a column costs a migration. The one planning fact
+/// that is not here is where the party meets, which is a geometry a map must find.
+/// </para>
+/// <para>
+/// The two permit questions have three states and not two, and whatever reads them later must
+/// read them that way: the key absent means nobody has answered, <c>false</c> means somebody
+/// answered "no", and only the first is an unanswered question. A readiness check that treated
+/// an absent key as "no permit needed" would clear a trip nobody had thought about. The form
+/// that draws these bags therefore shows an unanswered question as neither ticked nor unticked
+/// and offers a way back to that state, so both answers and the absence of one are reachable.
+/// </para>
+/// <para>
+/// The gear note is free text and is not derived from anything the caves hold: this system
+/// stores no rigging data at all — not a pitch, not an anchor, not a rope length per drop — so
+/// there is nothing to seed such a list from, and a structured gear list that nothing could
+/// fill would be worse than a note somebody writes.
+/// </para>
+/// <para>
+/// The weather note sits beside the trip's own weather column and does not replace it: the
+/// column records what the weather turned out to be, and this key records what the forecast
+/// said while the trip was still being planned.
+/// </para>
+/// <para>
+/// Two things a party plans around are deliberately absent, and the reason belongs beside the
+/// keys rather than in a document nobody opens.
+/// </para>
+/// <para>
+/// Whether a cave floods, or is shut for part of the year, is answered nowhere in this system.
+/// A cave carries no such field, and the data-driven property bag that lets other kinds of
+/// feature grow attributes without a migration cannot reach one: a cave is a subtyped kind, and
+/// the database refuses a subtyped row a data-level type at all. So the flag would be two
+/// ordinary columns on the cave, beside the protection class that already lives there, plus
+/// their redaction in the change history, their fields on the cave form and their wording. That
+/// is cave work wearing a trip-planning label, and it carries a disclosure question of its own:
+/// "this entrance floods after rain" is a fact about a guarded cave, and would have to be
+/// withheld from exactly the people a plan invites. What ships instead is the note the party
+/// writes for itself, above.
+/// </para>
+/// <para>
+/// A discussion thread on the plan is likewise not built, and the group-chat link above is the
+/// whole of the answer, because a club's talking already happens somewhere else. If a thread is
+/// ever wanted it is not a new mechanism: the remarks on a document are a shipped one-level
+/// thread whose readership is decided entirely by its parent's — no per-remark grant and no
+/// second rule to keep in step — so it becomes a matter of letting that parent be either kind
+/// and addressing every route through the parent, so there is only ever one door onto the rows.
+/// </para>
 /// </summary>
 public static class TripTypeStarterSchemas
 {
@@ -82,6 +132,14 @@ public static class TripTypeStarterSchemas
     private const string Logistics =
         """
         {"type":"object","properties":{
+          "meeting_time":{"type":"string","title":"Meeting time"},
+          "meeting_description":{"type":"string","title":"Meeting point, described"},
+          "transport_drivers":{"type":"string","title":"Drivers"},
+          "transport_seats":{"type":"integer","title":"Seats available","minimum":0},
+          "transport_departure":{"type":"string","title":"Departure points"},
+          "equipment_note":{"type":"string","title":"Equipment and rigging"},
+          "permit_required":{"type":"boolean","title":"Permit required"},
+          "permit_obtained":{"type":"boolean","title":"Permit obtained"},
           "permit_reference":{"type":"string","title":"Permit reference"},
           "permit_holder_caver_id":{"type":"string","title":"Permit holder",
             "pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"},
@@ -92,7 +150,12 @@ public static class TripTypeStarterSchemas
           "landowner_caver_id":{"type":"string","title":"Landowner contact",
             "pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"},
           "landowner_note":{"type":"string","title":"Landowner contact, if not on the roster"},
+          "callout_contact_caver_id":{"type":"string","title":"Callout contact",
+            "pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"},
+          "callout_contact_note":{"type":"string","title":"Callout contact, if not on the roster"},
           "access_notes":{"type":"string","title":"Access notes"},
+          "weather_note":{"type":"string","title":"Weather note"},
+          "whatsapp_group_url":{"type":"string","title":"Group chat link"},
           "cost_amount":{"type":"number","title":"Cost","minimum":0},
           "cost_currency":{"type":"string","title":"Currency"},
           "cost_note":{"type":"string","title":"What the cost covered"}

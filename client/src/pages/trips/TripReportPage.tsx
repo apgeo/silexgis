@@ -35,7 +35,7 @@ import {
   type TripLogInfo,
   type TripParticipantRole,
 } from '../../api/hooks.ts';
-import TripCaveLink from '../../components/trips/TripCaveLink.tsx';
+import TripCaveList from '../../components/trips/TripCaveList.tsx';
 import TripCover from '../../components/trips/TripCover.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { participantRoleLabel } from '../../components/trips/participantRoles.ts';
@@ -199,6 +199,7 @@ export default function TripReportPage() {
     { key: 'ropeMetres', value: trip.ropeMetres },
   ].filter((row) => row.value != null);
   const sketch = tripGeometrySummary(trip.geom);
+  const meeting = tripGeometrySummary(trip.meetingGeom);
   const photos = photosQuery.data?.items ?? [];
 
   /** The values a section actually holds, in the order its purpose declares them. */
@@ -313,16 +314,13 @@ export default function TripReportPage() {
           {trip.locationText && (
             <Descriptions.Item label={t('trips.location')}>{trip.locationText}</Descriptions.Item>
           )}
-          {/* The caves this trip names, as the trip itself gives them: a cave whose position this
-              reader may not place is not in that list at all, and asking for one by another route
-              is how it would come back. */}
-          {trip.caveIds.length > 0 && (
+          {/* The caves this trip names, as the trip itself gives them: a cave this reader may not
+              open, and a cave whose position they may not place, are both off that list already,
+              and asking for one by another route is how either would come back. What was left off
+              arrives as a number beside it, so the shortfall is stated rather than shown. */}
+          {(trip.caveIds.length > 0 || trip.cavesWithheld > 0) && (
             <Descriptions.Item label={t('trips.caves')}>
-              <Flex gap={8} wrap>
-                {trip.caveIds.map((caveId) => (
-                  <TripCaveLink key={caveId} caveId={caveId} />
-                ))}
-              </Flex>
+              <TripCaveList caveIds={trip.caveIds} withheld={trip.cavesWithheld} />
             </Descriptions.Item>
           )}
           {trip.weatherConditions && (
@@ -405,6 +403,53 @@ export default function TripReportPage() {
             )}
             <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
               {t('trips.geometryWarning')}
+            </Typography.Paragraph>
+          </Part>
+        )}
+
+        {/* Where the party gathers, beside where it went. The document this page mirrors prints
+            both, and a write-up carrying the sketch but not the meeting point would leave whoever
+            printed the plan before setting off without the one thing the party has to agree on.
+            Its own warning, not the sketch's: a meeting point stands where people actually park,
+            which can be a few hundred metres from an entrance this reader was never told the trip
+            names. */}
+        {trip.meetingGeom && (
+          <Part title={t('trips.meetingGeometry')}>
+            <div className="trip-report-map">
+              <TripGeometryField
+                value={trip.meetingGeom}
+                readOnly
+                height={280}
+                testId="trip-meeting-geometry"
+                warningTitle={t('trips.meetingGeometryWarning')}
+                warningDetail={t('trips.meetingGeometryWarningDetail')}
+              />
+            </div>
+            {/* What the printer gets in its place, for the same reason the sketch has one: paper
+                carries no map tiles, and a position written down is what a driver can read. */}
+            {meeting && (
+              <div className="trip-report-map-fallback" data-testid="trip-report-meeting">
+                <Typography.Text>
+                  {t(
+                    meeting.positions === 1
+                      ? 'trips.report.meetingPoint'
+                      : 'trips.report.meetingShape',
+                    {
+                      shape: shapeLabel(meeting.type, t),
+                      position: formatPosition(meeting.center, {
+                        north: t('trips.report.north'),
+                        south: t('trips.report.south'),
+                        east: t('trips.report.east'),
+                        west: t('trips.report.west'),
+                      }),
+                      count: meeting.positions,
+                    },
+                  )}
+                </Typography.Text>
+              </div>
+            )}
+            <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+              {t('trips.meetingGeometryWarning')}
             </Typography.Paragraph>
           </Part>
         )}

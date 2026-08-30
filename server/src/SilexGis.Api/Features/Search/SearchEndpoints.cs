@@ -24,6 +24,12 @@ public sealed record SearchFeatureItemDto(Guid Id, FeatureKind Kind, string? Nam
 public sealed record SearchTripItemDto(Guid Id, string Title, DateOnly TripDate);
 
 /// <summary>
+/// A camp hit. <paramref name="EndDate"/> is null for a camp that lasted a single day, which is
+/// how the record stores it — the client shows one date rather than a range for those.
+/// </summary>
+public sealed record SearchExpeditionItemDto(Guid Id, string Name, DateOnly StartDate, DateOnly? EndDate);
+
+/// <summary>
 /// A document whose text matches, quoted at the stretch that matched it.
 /// </summary>
 /// <param name="FileId">
@@ -61,11 +67,12 @@ public sealed record SearchDocumentItemDto(
 public sealed record SearchResultDto(
     IReadOnlyList<SearchFeatureItemDto> Features,
     IReadOnlyList<SearchTripItemDto> Trips,
+    IReadOnlyList<SearchExpeditionItemDto> Expeditions,
     PagedResult<SearchDocumentItemDto> Documents);
 
 /// <summary>
 /// Unified search over every feature kind — caves, their entrances and centerlines, and the
-/// data-driven kinds — plus trip logs. Accent-insensitive (unaccent) so "pestera" matches
+/// data-driven kinds — plus trip logs and camps. Accent-insensitive (unaccent) so "pestera" matches
 /// "Peștera". Word matches use the GIN-indexed generated search_vector columns;
 /// substring/code matches fall back to ILIKE.
 ///
@@ -95,6 +102,7 @@ public static class SearchEndpoints
     private const int MinimumQueryLength = 2;
     private const int FeatureLimit = 20;
     private const int TripLimit = 10;
+    private const int ExpeditionLimit = 10;
 
     /// <summary>
     /// How many documents one page of content hits holds. Smaller than the feature budget and
@@ -108,7 +116,7 @@ public static class SearchEndpoints
     {
         api.MapGet("/search", SearchAsync)
             .WithTags("Search")
-            .WithSummary("Searches features of every kind, trip logs and document text (accent-insensitive).");
+            .WithSummary("Searches features of every kind, trip logs, camps and document text (accent-insensitive).");
         return api;
     }
 
@@ -222,6 +230,23 @@ public static class SearchEndpoints
             .Select(x => new SearchTripItemDto(x.Id, x.Title, x.TripDate))
             .ToListAsync(ct);
 
+        // Camps match on the same two free-text columns as a trip, and for the same reason: a
+        // camp carries no search vector either. Its working-area geometry is left out of the hit
+        // along with everything else positional — a section that named where a camp was would be
+        // a second way to ask where its caves are, and this whole surface is coordinate-free so
+        // that no such second path exists. The lifecycle state is not consulted: a draft is not a
+        // read rule anywhere else and inventing one here would hide a camp from the person who
+        // wrote it.
+        var expeditions = await db.Expeditions.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.Expeditions)
+            .Where(x => EF.Functions.ILike(EF.Functions.Unaccent(x.Name), EF.Functions.Unaccent(pattern))
+                || (x.Description != null && EF.Functions.ILike(EF.Functions.Unaccent(x.Description), EF.Functions.Unaccent(pattern))))
+            .OrderByDescending(x => x.StartDate)
+            .ThenByDescending(x => x.Id)
+            .Take(ExpeditionLimit)
+            .Select(x => new SearchExpeditionItemDto(x.Id, x.Name, x.StartDate, x.EndDate))
+            .ToListAsync(ct);
+
         // Document text is the one section with a total beside it, and the total comes out of
         // the same statement as the rows for the reason a number beside a filtered list always
         // has to: computed separately it would count rows the list declined to show and announce
@@ -278,6 +303,7 @@ public static class SearchEndpoints
                 h.Name,
                 h.FeatureTypeId is null ? null : typeCodes.GetValueOrDefault(h.FeatureTypeId.Value)))],
             trips,
+            expeditions,
             documents));
     }
 }

@@ -90,6 +90,20 @@ describe('member type registry', () => {
     ).toBe('/documents/d1');
   });
 
+  it('routes a camp to its own page, from either side', () => {
+    // Both halves, because either one alone decides where a chip goes: the server names the
+    // route for a camp it resolved, and this table answers for one it did not.
+    expect(memberRoute('expedition', 'e1', null)).toBe('/expeditions/e1');
+    expect(
+      memberRoute('expedition', 'e1', {
+        title: 'Bihor summer camp',
+        subtitle: null,
+        route: '/expeditions/e1',
+        thumbnailUrl: null,
+      }),
+    ).toBe('/expeditions/e1');
+  });
+
   it('leaves a chip un-navigable when neither side has a page for it', () => {
     expect(memberRoute('cabinet', 'c1', null)).toBeNull();
     expect(
@@ -256,7 +270,15 @@ describe('relation phrasing', () => {
     ]);
     expect(admittedAnchorKinds('geofile')).toEqual(['whole', 'waypoint', 'waypointRange']);
     // Types with no parts, and a type this client has never heard of, all link whole.
-    for (const type of ['tripLog', 'caver', 'cavingGroup', 'mapView', 'cabinet', 'somethingNew']) {
+    for (const type of [
+      'tripLog',
+      'caver',
+      'cavingGroup',
+      'mapView',
+      'cabinet',
+      'expedition',
+      'somethingNew',
+    ]) {
       expect(admittedAnchorKinds(type), type).toEqual(['whole']);
     }
     for (const type of RESLINK_TARGET_TYPES) {

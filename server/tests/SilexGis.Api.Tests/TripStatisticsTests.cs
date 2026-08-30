@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ImageMagick;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NPOI.SS.UserModel;
@@ -91,6 +92,8 @@ public sealed class TripStatisticsTests : IAsyncLifetime
         (await owner.GetAsync($"/api/v1/stats/caves/{Guid.NewGuid()}"))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await owner.GetAsync($"/api/v1/stats/caving-groups/{Guid.NewGuid()}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await owner.GetAsync($"/api/v1/stats/expeditions/{Guid.NewGuid()}"))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
@@ -693,6 +696,259 @@ public sealed class TripStatisticsTests : IAsyncLifetime
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
+    /// <summary>
+    /// The pictures counted are the ones this caller may see, and one picture is one picture
+    /// however many of the trips it hangs on.
+    ///
+    /// Both halves fail silently and pull in opposite directions. Counting the pins rather than the
+    /// photographs makes a total grow when somebody files one picture against a second trip, which
+    /// is bookkeeping reported as photography. And a count assembled outside the read rule states
+    /// how many pictures are being kept from the reader — the disclosure every other figure here is
+    /// composed to avoid. The withheld side is a Viewer, and the same picture is counted for the
+    /// Editor over the same fixture, so the smaller figure is a withholding rather than an empty
+    /// fixture.
+    /// </summary>
+    [Fact]
+    public async Task A_picture_is_counted_once_and_only_where_the_trip_it_hangs_on_may_be_read()
+    {
+        var clubId = await CreateCavingGroupAsync();
+        var shared = await CreateTripAsync(new TripSpec
+        {
+            Title = "Photographed openly",
+            TripDate = "2026-07-04",
+            Visibility = "authenticated",
+            OrganizingCavingGroupId = clubId,
+            People = [new PersonSpec("Ana", participantRoleId)],
+        });
+        var withheld = await CreateTripAsync(new TripSpec
+        {
+            Title = "Photographed privately",
+            TripDate = "2026-07-05",
+            Visibility = "private",
+            OrganizingCavingGroupId = clubId,
+            People = [new PersonSpec("Ana", participantRoleId)],
+        });
+        var sharedId = TripId(shared);
+        var withheldId = TripId(withheld);
+
+        // One picture, filed against both trips.
+        var onBoth = await UploadPhotographAsync("both.png");
+        await AttachToTripAsync(onBoth, sharedId);
+        await AttachToTripAsync(onBoth, withheldId);
+
+        // A second picture, on the trip the Viewer may not read.
+        await AttachToTripAsync(await UploadPhotographAsync("withheld.png"), withheldId);
+
+        var held = await StatsAsync(owner, $"caving-groups/{clubId}");
+        held.GetProperty("trips").GetInt32().ShouldBe(2);
+        held.GetProperty("photographs").GetInt32().ShouldBe(2);
+
+        var seen = await StatsAsync(reader, $"caving-groups/{clubId}");
+        seen.GetProperty("trips").GetInt32().ShouldBe(1);
+        seen.GetProperty("photographs").GetInt32().ShouldBe(1);
+
+        // And the file states what the page did, for each of them.
+        (await SheetAsync(owner, $"caving-groups/{clubId}"))["Photographs"].ShouldBe(2d);
+        (await SheetAsync(reader, $"caving-groups/{clubId}"))["Photographs"].ShouldBe(1d);
+    }
+
+    /// <summary>
+    /// A camp adds up the trips gathered into it, and both quiet double-counts are in the one
+    /// fixture because both were got wrong in this area before. Somebody who held two jobs on one
+    /// trip is two roster rows and one person; a cave named under two of the trip's roles is two
+    /// links and one place. Neither failure raises anything — the page simply states a larger
+    /// number, and a larger number is what a camp's page is expected to state.
+    ///
+    /// The second person and the second trip are what keep the assertions from passing on a build
+    /// that lost a row rather than reduced one: the answers are two and two, not one and one.
+    /// </summary>
+    [Fact]
+    public async Task A_camps_figures_count_each_person_once_and_each_place_once()
+    {
+        var campId = await CreateExpeditionAsync();
+        var caveId = await CreateCaveAsync();
+        var first = await CreateTripAsync(new TripSpec
+        {
+            Title = "Camp day one",
+            TripDate = "2026-07-19",
+            Visibility = "authenticated",
+            CaveIds = [caveId],
+            People = [new PersonSpec("Ana", participantRoleId), new PersonSpec("Bogdan", participantRoleId)],
+        });
+        var second = await CreateTripAsync(new TripSpec
+        {
+            Title = "Camp day two",
+            TripDate = "2026-07-20",
+            Visibility = "authenticated",
+            CaveIds = [caveId],
+            People = [new PersonSpec(CaverIdByName(first, "Ana"), participantRoleId)],
+        });
+        await JoinExpeditionAsync(campId, TripId(first));
+        await JoinExpeditionAsync(campId, TripId(second));
+
+        // Fixture proof, both halves. Ana holds two jobs on the first day — three roster rows over
+        // two people — and the cave is named by two of that day's roles, which is two links to one
+        // cave. A build that counted rows would say three people and two places.
+        await AddRoleAsync(first, CaverIdByName(first, "Ana"), surveyorRoleId);
+        await NameFeatureAsync(TripId(first), caveId, "trip-surveyed");
+        (await RosterRowCountAsync(TripId(first))).ShouldBe(3);
+        (await NamedFeatureRowCountAsync(TripId(first))).ShouldBe(2);
+
+        var camp = await StatsAsync(owner, $"expeditions/{campId}");
+        camp.GetProperty("trips").GetInt32().ShouldBe(2);
+        camp.GetProperty("people").GetInt32().ShouldBe(2);
+        camp.GetProperty("places").GetInt32().ShouldBe(1);
+
+        // Ana went twice and Bogdan once: three times somebody went, over two people.
+        camp.GetProperty("personTrips").GetInt32().ShouldBe(3);
+
+        // And the file says what the page said, through the same query rather than a second one.
+        var sheet = await SheetAsync(owner, $"expeditions/{campId}");
+        sheet["Trips"].ShouldBe(2d);
+        sheet["People"].ShouldBe(2d);
+        sheet["Places"].ShouldBe(1d);
+    }
+
+    /// <summary>
+    /// The property that makes the caveat part of the feature rather than decoration: the same camp
+    /// legitimately shows two people two sets of totals, because the roll-up runs over the member
+    /// trips each of them may read. Without the sentence on the surfaces, the difference is reported
+    /// as a defect and repaired by removing the filter.
+    ///
+    /// The withheld trip is a private one the Viewer is refused outright, and the camp itself is
+    /// readable to both — so the smaller figure is a trip being withheld rather than a camp being
+    /// closed or a fixture that saved nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_camps_totals_are_counted_over_the_trips_each_caller_may_read()
+    {
+        var campId = await CreateExpeditionAsync(visibility: "authenticated");
+        var open = await CreateTripAsync(new TripSpec
+        {
+            Title = "Camp trip anybody signed in may read",
+            TripDate = "2026-07-19",
+            Visibility = "authenticated",
+            People = [new PersonSpec("Ana", participantRoleId)],
+            LengthSurveyedM = 120m,
+            SurveyStations = 10,
+        });
+        var closed = await CreateTripAsync(new TripSpec
+        {
+            Title = "Camp trip kept private",
+            TripDate = "2026-07-21",
+            Visibility = "private",
+            People = [new PersonSpec("Bogdan", participantRoleId)],
+            LengthSurveyedM = 80m,
+            SurveyStations = 4,
+            HadIncident = true,
+        });
+        await JoinExpeditionAsync(campId, TripId(open));
+        await JoinExpeditionAsync(campId, TripId(closed));
+
+        // The unreadable state, constructed rather than assumed: the Viewer holds no grant on the
+        // private trip and the trip refuses them, while the camp itself opens to them.
+        (await reader.GetAsync($"/api/v1/trip-logs/{TripId(closed)}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await reader.GetAsync($"/api/v1/expeditions/{campId}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var held = await StatsAsync(owner, $"expeditions/{campId}");
+        held.GetProperty("trips").GetInt32().ShouldBe(2);
+        held.GetProperty("people").GetInt32().ShouldBe(2);
+        held.GetProperty("lengthSurveyedM").GetDecimal().ShouldBe(200m);
+        held.GetProperty("surveyStations").GetInt32().ShouldBe(14);
+        held.GetProperty("incidents").GetInt32().ShouldBe(1);
+        held.GetProperty("latestTripDate").GetString().ShouldBe("2026-07-21");
+
+        var seen = await StatsAsync(reader, $"expeditions/{campId}");
+        seen.GetProperty("trips").GetInt32().ShouldBe(1);
+        seen.GetProperty("people").GetInt32().ShouldBe(1);
+        seen.GetProperty("lengthSurveyedM").GetDecimal().ShouldBe(120m);
+        seen.GetProperty("surveyStations").GetInt32().ShouldBe(10);
+        seen.GetProperty("incidents").GetInt32().ShouldBe(0);
+        seen.GetProperty("latestTripDate").GetString().ShouldBe("2026-07-19");
+
+        // Each of them saves a file stating their own figures, and the file carries the sentence
+        // that says so — a spreadsheet is forwarded and read months later by somebody who never
+        // saw the page, and two copies that disagree without it leave one of them simply wrong.
+        (await SheetAsync(owner, $"expeditions/{campId}"))["Trips"].ShouldBe(2d);
+        (await SheetAsync(reader, $"expeditions/{campId}"))["Trips"].ShouldBe(1d);
+
+        var saved = await owner.GetAsync($"/api/v1/stats/expeditions/{campId}/export");
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var text = await SheetTextAsync(saved);
+        text.ShouldContain("Trip statistics for one expedition");
+        text.ShouldContain("Counted over the trips you may read");
+    }
+
+    /// <summary>
+    /// A camp gathering nothing yet is the ordinary state of a camp somebody has just written down,
+    /// and it answers with zeroes rather than with a refusal or an error. The grouped pass finds no
+    /// group at all in that case, which is the branch a camp reaches long before any other subject
+    /// does — a person or a cave with no trips is rarely asked about.
+    /// </summary>
+    [Fact]
+    public async Task A_camp_with_no_trips_in_it_adds_up_to_nothing()
+    {
+        var campId = await CreateExpeditionAsync();
+
+        var camp = await StatsAsync(owner, $"expeditions/{campId}");
+        camp.GetProperty("trips").GetInt32().ShouldBe(0);
+        camp.GetProperty("people").GetInt32().ShouldBe(0);
+        camp.GetProperty("places").GetInt32().ShouldBe(0);
+        camp.GetProperty("firstVisits").GetInt32().ShouldBe(0);
+        camp.GetProperty("photographs").GetInt32().ShouldBe(0);
+        camp.GetProperty("undergroundMinutes").GetInt32().ShouldBe(0);
+        camp.GetProperty("earliestTripDate").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The file is written too, rather than the empty case being a path only the screen has.
+        (await SheetAsync(owner, $"expeditions/{campId}"))["Trips"].ShouldBe(0d);
+    }
+
+    /// <summary>
+    /// A camp's figures are refused wherever reading the camp is, and refused as an absence: a camp
+    /// this caller may not read must answer exactly as one that does not exist, or the difference
+    /// between the two answers is an id anybody can go looking for.
+    ///
+    /// The readable camp answered over the same fixture is what makes the refusal this caller
+    /// rather than the endpoint having stopped working.
+    /// </summary>
+    [Fact]
+    public async Task A_camps_figures_are_refused_wherever_reading_the_camp_is()
+    {
+        var mine = await CreateExpeditionAsync();
+        var shared = await CreateExpeditionAsync(visibility: "authenticated");
+        var trip = await CreateTripAsync(new TripSpec
+        {
+            Title = "A trip in a camp of my own",
+            TripDate = "2026-07-19",
+            Visibility = "authenticated",
+            People = [new PersonSpec("Ana", participantRoleId)],
+        });
+        await JoinExpeditionAsync(mine, TripId(trip));
+
+        // The trip is readable to them — the positive half, and what makes the refusal below mean
+        // "not that camp" rather than "not that trip".
+        (await reader.GetAsync($"/api/v1/trip-logs/{TripId(trip)}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        foreach (var path in new[] { $"expeditions/{mine}", $"expeditions/{mine}/export" })
+        {
+            var refused = await reader.GetAsync($"/api/v1/stats/{path}");
+            refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        }
+
+        // Missing and forbidden read alike, which is the point.
+        var absent = await reader.GetAsync($"/api/v1/stats/expeditions/{Guid.NewGuid()}");
+        absent.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // A camp they may read is answered, and its owner is answered about the camp they refuse.
+        (await StatsAsync(reader, $"expeditions/{shared}")).GetProperty("trips").GetInt32().ShouldBe(0);
+        (await StatsAsync(owner, $"expeditions/{mine}")).GetProperty("trips").GetInt32().ShouldBe(1);
+
+        // And nobody signed out reaches either surface.
+        (await anonymous.GetAsync($"/api/v1/stats/expeditions/{shared}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
     // ---- helpers ----
 
     /// <summary>The figure rows of a saved workbook, by the label written beside them.</summary>
@@ -869,6 +1125,17 @@ public sealed class TripStatisticsTests : IAsyncLifetime
         return await TripRoleLinks.FeatureIdsNamedBy(db, tripId).Distinct().CountAsync();
     }
 
+    /// <summary>
+    /// How many times the trip's roles name a feature between them, without reducing repeats — the
+    /// fixture proof that a cave really is named twice, which a reduced count cannot give.
+    /// </summary>
+    private async Task<int> NamedFeatureRowCountAsync(Guid tripId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await TripRoleLinks.FeatureIdsNamedBy(db, tripId).CountAsync();
+    }
+
     private async Task<int> RosterRowCountAsync(Guid tripId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
@@ -892,6 +1159,31 @@ public sealed class TripStatisticsTests : IAsyncLifetime
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
     }
 
+    private async Task<Guid> CreateExpeditionAsync(string visibility = "private")
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/expeditions/", new
+        {
+            name = $"Camp {Guid.NewGuid():N}"[..30],
+            description = (string?)null,
+            startDate = "2026-07-18",
+            endDate = "2026-08-01",
+            geom = (object?)null,
+            cavingGroupId = (Guid?)null,
+            visibility,
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>Puts a trip in a camp through the camp's own door, as a page would.</summary>
+    private async Task JoinExpeditionAsync(Guid expeditionId, Guid tripLogId)
+    {
+        var response = await owner.PostAsJsonAsync(
+            $"/api/v1/expeditions/{expeditionId}/trips", new { tripLogId });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
     private async Task<Guid> CreateCavingGroupAsync()
     {
         var response = await owner.PostAsJsonAsync("/api/v1/caving-groups", new
@@ -904,6 +1196,39 @@ public sealed class TripStatisticsTests : IAsyncLifetime
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// A picture whose bytes are unique, so the store's deduplication does not decide a test: the
+    /// whole suite shares one database and a second upload of identical bytes is refused.
+    /// </summary>
+    private async Task<Guid> UploadPhotographAsync(string name)
+    {
+        using var image = new MagickImage(MagickColors.SlateGray, 32, 32) { Comment = $"{name} {Guid.NewGuid()}" };
+        var content = new ByteArrayContent(image.ToByteArray(MagickFormat.Png));
+        content.Headers.ContentType = new("image/png");
+        using var form = new MultipartFormDataContent { { content, "file", name } };
+
+        // Awaited inside the using: the form must outlive the request body being read.
+        var response = await owner.PostAsync("/api/v1/files/", form);
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    private async Task AttachToTripAsync(Guid fileId, Guid tripId)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/attachments/", new
+        {
+            fileId,
+            entityType = "tripLog",
+            entityId = tripId,
+            role = "photoInterior",
+            caption = (string?)null,
+            sortOrder = 0,
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
     }
 
     private static Guid TripId(JsonElement trip) => trip.GetProperty("id").GetGuid();

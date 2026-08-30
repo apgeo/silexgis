@@ -1,0 +1,44 @@
+# The API integration suite: the long pole, run on demand rather than on every push.
+#
+# This suite is measured in hours, not minutes, and GitHub's standard hosted runners
+# (4 cores) are slower than the machines it is developed on — on them it risks the job
+# time limit outright. So it runs here only when dispatched, and its intended permanent
+# home is a self-hosted runner triggered on push to trusted branches.
+#
+# If a self-hosted runner is registered: keep it OFF pull_request triggers. This repository
+# is public, and a pull_request workflow executes the contributor's code — on a self-hosted
+# runner that means a stranger's code running on the machine that hosts the runner. Restrict
+# any self-hosted trigger to `push` on branches only maintainers can write to, and leave
+# pull requests to the hosted fast tier in ci.yml.
+
+name: Integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs-on:
+        description: Runner label (self-hosted once a runner is registered)
+        required: false
+        default: ubuntu-latest
+      filter:
+        description: Optional dotnet test --filter expression (empty runs everything)
+        required: false
+        default: ''
+
+jobs:
+  api-integration:
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build (warnings as errors)
+        run: dotnet build SilexGis.slnx
+        working-directory: server
+      - name: API integration tests (Testcontainers)
+        run: >
+          dotnet test tests/SilexGis.Api.Tests --no-build
+          ${{ inputs.filter != '' && format('--filter "{0}"', inputs.filter) || '' }}
+        working-directory: server

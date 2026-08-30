@@ -235,6 +235,24 @@ describe('TripReportPage', () => {
   });
 
   /**
+   * The generated document prints where the party gathers, and this page is the copy somebody
+   * prints from the browser instead of downloading it. A plan carried on paper without the one
+   * position the party has to agree on is the whole point of the plan missing, so the two
+   * surfaces are asserted to say the same thing.
+   */
+  it('writes the meeting point out for the printed copy, and omits it when the trip states none', () => {
+    show(trip({ meetingGeom: { type: 'Point', coordinates: [25.44127, 45.53802] } as never }));
+
+    const meeting = screen.getByTestId('trip-report-meeting');
+    expect(meeting.textContent).toContain('45.53802° N');
+    expect(meeting.textContent).toContain('25.44127° E');
+    cleanup();
+
+    show(trip());
+    expect(screen.queryByTestId('trip-report-meeting')).toBeNull();
+  });
+
+  /**
    * A photograph goes into the report as the rendering the gallery shows, never as the stored
    * file: the original carries where it was taken, and a caller who may see the trip is not
    * thereby entitled to that.

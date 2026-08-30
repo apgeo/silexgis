@@ -27,6 +27,7 @@ import {
   type CabinetInfo,
 } from '../../api/hooks.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import ConfigureLink from '../../components/ConfigureLink.tsx';
 import BulkFilingBar from '../../components/uploads/BulkFilingBar.tsx';
 import UnfiledDocuments from '../../components/uploads/UnfiledDocuments.tsx';
 import UploadDrawer from '../../components/uploads/UploadDrawer.tsx';
@@ -257,6 +258,9 @@ export default function CabinetsPage() {
   // One right governs the tree: whoever may write documents may arrange where they live.
   // The server re-decides it per cabinet, so this only hides controls it would refuse.
   const canWrite = hasAccessAction(capabilities?.domains.documents, 'write');
+  // Write, not read: every account may read the taxonomies, so a read check would offer the
+  // page to everyone. Authoring a kind's schema decides what every document of it may say.
+  const canWriteTaxonomies = hasAccessAction(capabilities?.domains.taxonomies, 'write');
 
   const { data: cabinets, isPending } = useCabinets(canRead);
   const [selected, setSelected] = useState<string>();
@@ -504,6 +508,13 @@ export default function CabinetsPage() {
                   <Typography.Text type="secondary">{t('cabinets.includeSubtree')}</Typography.Text>
                 </Space>
               </Tooltip>
+              {/* What every document of a kind may say is decided by the kind's schema, which is
+                  worth reaching from the shelves the documents sit on. */}
+              <ConfigureLink
+                items={canWriteTaxonomies
+                  ? [{ key: 'admin/document-types', label: t('nav.documentTypes') }]
+                  : []}
+              />
               {canWrite && (
                 <Button
                   icon={<EditOutlined />}

@@ -1,15 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Features.Statistics;
 
-/// <summary>Which of the three things is being added up.</summary>
+/// <summary>Which thing is being added up.</summary>
 internal enum StatisticsSubject
 {
     Caver,
     Cave,
     CavingGroup,
+
+    /// <summary>
+    /// A camp, added up over the trips gathered into it. The same arithmetic as the three above
+    /// and deliberately so: a camp asked through a surface of its own would be a second body of
+    /// counting rules, and the day the two disagree is the day one page states a figure another
+    /// declines to give.
+    /// </summary>
+    Expedition,
 }
 
 /// <summary>
@@ -84,6 +93,11 @@ internal static class TripStatisticsWorkbook
             Figure("Metres of rope", (double)totals.RopeMetresM),
             Figure("Survey stations", totals.SurveyStations),
 
+            // The pictures this reader may see, which is why it belongs above the sentence's
+            // reach as much as any other figure here: two people saving this file legitimately
+            // get two different numbers.
+            Figure("Photographs", totals.Photographs),
+
             // Written out rather than left as date cells: a date cell with no format applied opens
             // as a five-digit number, and this one written form is read the same way everywhere.
             [SheetCell.Of("First trip"), SheetCell.Of(Day(totals.EarliestTripDate))],
@@ -99,10 +113,15 @@ internal static class TripStatisticsWorkbook
     private static string? Day(DateOnly? date) =>
         date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
+    // Every subject named, and an unnamed one refused loudly rather than labelled as whichever
+    // arm happened to be last. A file headed "for one club" over a camp's figures is wrong in a
+    // way nobody notices until the file has been forwarded.
     private static string Heading(StatisticsSubject subject) => subject switch
     {
         StatisticsSubject.Caver => "Trip statistics for one person",
         StatisticsSubject.Cave => "Trip statistics for one cave",
-        _ => "Trip statistics for one club",
+        StatisticsSubject.CavingGroup => "Trip statistics for one club",
+        StatisticsSubject.Expedition => "Trip statistics for one expedition",
+        _ => throw new ArgumentOutOfRangeException(nameof(subject)),
     };
 }

@@ -243,18 +243,19 @@ internal static class TripReportEndpoints
         // Which layout the document is written in. A layout that was named and is not there is a
         // refusal rather than a quiet fall back to another one: somebody asking for the club's
         // bulletin layout and being handed the shipped one would not be told.
-        var body = await TripReportTemplateEndpoints.BodyForAsync(db, templateId, ct);
+        var body = await ReportTemplateReads.BodyForAsync(db, templateId, ReportTemplateKind.Trip, ct);
         if (body is null)
         {
-            return new BuiltReport(
-                null, null, ApiProblems.NotFound(TripReportTemplateEndpoints.NotFoundCode));
+            return new BuiltReport(null, null, ApiProblems.NotFound(ReportTemplateReads.NotFoundCode));
         }
 
         // Read here rather than trusted: a layout is checked when it is stored, and one that has
         // since become unreadable falls back to the shipped layout so a broken row cannot stop a
         // club producing its write-ups.
-        var read = ReportTemplateFormat.Parse(body);
-        var parts = read.Ok ? read.Parts : ReportTemplateFormat.Parse(ReportTemplateFormat.Default).Parts;
+        var read = ReportTemplateFormat.Parse(body, ReportTemplateKind.Trip);
+        var parts = read.Ok
+            ? read.Parts
+            : ReportTemplateFormat.Parse(ReportTemplateFormat.Default, ReportTemplateKind.Trip).Parts;
 
         // The one read of the trip, exactly as the page makes it. Everything the document says
         // about who may see what was decided here.
@@ -268,14 +269,15 @@ internal static class TripReportEndpoints
                 .Where(x => x.Id == groupId).Select(x => x.Name).FirstOrDefaultAsync(ct)
             : null;
 
-        // Named, not placed. The identifiers are the list the trip read produced, which is the
-        // redacted one — a cave this reading may not place is not on it — and nothing here
-        // resolves a coordinate for any of them.
+        // Named, not placed. The identifiers are the list the trip read produced — which already
+        // had taken out of it every cave this reading may not open and every cave it may not
+        // place — and nothing here resolves a coordinate for any of them.
         //
-        // Naming one is still a read of the cave, and the trip's own list does not carry that
-        // right: a cave nobody but its owner may open can be named on a trip half the club reads.
-        // So the names come through the cave read, and a cave this reading cannot open keeps the
-        // identifier the trip carried — which is exactly what the screen shows for it.
+        // The names are still fetched through the cave read rather than off the link rows. That
+        // is not a second reading of the same rule but the only honest way to get a name at all,
+        // and asking for it under the reader's own visibility means the two answers cannot come
+        // apart: every identifier the trip handed over resolves, and a document that found one
+        // that did not would leave the cave out rather than print the identifier in its place.
         var caveNames = dto.CaveIds.Count == 0
             ? []
             : await db.Features.AsNoTracking()

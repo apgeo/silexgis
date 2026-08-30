@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import {
+  BorderOuterOutlined,
   CarOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
+  FlagOutlined,
   GoldOutlined,
   NodeIndexOutlined,
   PlusOutlined,
@@ -31,9 +33,14 @@ import {
   useCan,
   useDashboardSummary,
   useMapViews,
+  useMyTripLogs,
+  useWorkAreas,
   type DashboardActivityItem,
 } from '../../api/hooks.ts';
+import { topLevel } from '../../workareas/tree.ts';
 import { featureDetailPath } from '../../components/features/featureNavigation.ts';
+import TripStateTag from '../../components/trips/TripStateTag.tsx';
+import { formatTripDates } from '../../components/trips/tripDates.ts';
 import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
 const activityIcon: Record<DashboardActivityItem['kind'], ReactNode> = {
@@ -42,6 +49,7 @@ const activityIcon: Record<DashboardActivityItem['kind'], ReactNode> = {
   caveEntrance: <EnvironmentOutlined />,
   centerline: <NodeIndexOutlined />,
   tripLog: <CarOutlined />,
+  expedition: <FlagOutlined />,
 };
 
 export default function DashboardPage() {
@@ -50,6 +58,25 @@ export default function DashboardPage() {
   const { message } = App.useApp();
   const { data: summary, isLoading, isError, refetch } = useDashboardSummary();
   const { data: views } = useMapViews();
+  // Only the top of the tree here. The board is a way into a season, not the overview: the levels
+  // beneath are opened on the overview, which knows how to draw and frame them.
+  const { data: workAreas } = useWorkAreas();
+  const topLevelAreas = useMemo(() => topLevel(workAreas?.items ?? []), [workAreas]);
+  // A panel of its own, and a request of its own, rather than a fourth source in the activity
+  // feed. Two independent reasons, either of which is sufficient. The feed is ordered by when a
+  // record was last touched, in every source and in the merge that combines them; what somebody
+  // is going on is ordered by when it will happen, and a trip next Saturday edited a month ago
+  // sorts below ten caves touched today — the one row that most needed showing is the one the
+  // feed drops. And the feed's rows carry a closed set of kinds, each of which names a sort of
+  // record and routes to its page; "coming up" is not a new sort of record but the same trips
+  // asked a different question, so it would be a member that lies about what the set means.
+  // Only five: this is a glance at the next thing, not a list, and the panel says where the
+  // list is.
+  const {
+    data: upcoming,
+    isLoading: upcomingLoading,
+    isError: upcomingFailed,
+  } = useMyTripLogs({ pageSize: 5 });
   // Each quick action follows its own domain: a person who may log trips but not
   // create features still gets their button.
   const canCreateFeatures = useCan('features', 'create');
@@ -61,11 +88,17 @@ export default function DashboardPage() {
 
   const formatWhen = (iso: string) => new Date(iso).toLocaleString(i18n.resolvedLanguage);
 
-  // Feed rows link where the record lives. Trip logs have their own pages; everything else
-  // is a feature and resolves by kind (entrances/centerlines land on their parent cave).
+  // Feed rows link where the record lives. Trip logs and camps have their own pages; everything
+  // else is a feature and resolves by kind (entrances/centerlines land on their parent cave).
+  // The two named kinds are answered before the fallthrough deliberately: neither is a feature,
+  // so handing one to the feature resolver fails at the server and the row goes nowhere.
   const openActivity = (item: DashboardActivityItem) => {
     if (item.kind === 'tripLog') {
       navigate(`/trip-logs/${item.id}`);
+      return;
+    }
+    if (item.kind === 'expedition') {
+      navigate(`/expeditions/${item.id}`);
       return;
     }
     featureDetailPath(item.kind === 'feature' ? 'generic' : item.kind, item.id)
@@ -161,6 +194,55 @@ export default function DashboardPage() {
 
         <Col xs={24} lg={10}>
           <Flex vertical gap={16}>
+            <Card
+              title={t('dashboard.comingUp')}
+              extra={
+                <Button type="link" size="small" onClick={() => navigate('/trip-logs/mine')}>
+                  {t('dashboard.allMyTrips')}
+                </Button>
+              }
+            >
+              {upcomingLoading ? (
+                <Skeleton active paragraph={{ rows: 3 }} />
+              ) : upcomingFailed ? (
+                // Unknown, not empty: "nothing coming up" is a claim about this reader's diary
+                // that a request which never answered has not earned.
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('dashboard.comingUpFailed')} />
+              ) : upcoming?.items.length ? (
+                <List
+                  size="small"
+                  dataSource={upcoming.items}
+                  renderItem={(trip) => (
+                    <List.Item
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => navigate(`/trip-logs/${trip.id}`)}
+                    >
+                      <List.Item.Meta
+                        avatar={<CarOutlined />}
+                        title={trip.title}
+                        description={
+                          // The state is on the row because a trip that has been called off is
+                          // the one a person on it most needs to notice, and a list that showed
+                          // it as an ordinary future outing would be quietly lying.
+                          <Flex gap={8} align="center" wrap>
+                            <span>
+                              {formatTripDates(trip.tripDate, trip.tripDateEnd, i18n.resolvedLanguage)}
+                            </span>
+                            <TripStateTag state={trip.state} />
+                          </Flex>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              ) : (
+                // An account on nothing yet is the ordinary case for somebody who has just
+                // joined, so the words say what would put a trip here rather than reporting an
+                // absence as if something were missing.
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('dashboard.noComingUp')} />
+              )}
+            </Card>
+
             {canCreate && (
               <Card title={t('dashboard.quickActions')}>
                 <Flex vertical gap={8} align="stretch">
@@ -186,6 +268,34 @@ export default function DashboardPage() {
                 </Flex>
               </Card>
             )}
+
+            {/* The ground this club works, as the way into a season: the top level only, because
+                this is a jumping-off board and not the overview — the overview is one click away
+                and is where the levels beneath are opened. */}
+            <Card
+              title={t('workAreas.title')}
+              extra={(
+                <Button type="link" size="small" onClick={() => navigate('/work-areas')}>
+                  {t('workAreas.seeAll')}
+                </Button>
+              )}
+            >
+              {topLevelAreas.length ? (
+                <Flex vertical gap={8} align="stretch">
+                  {topLevelAreas.map((area) => (
+                    <Button
+                      key={area.id}
+                      icon={<BorderOuterOutlined />}
+                      onClick={() => navigate(`/map?area=${encodeURIComponent(area.id)}`)}
+                    >
+                      {area.name ?? t('workAreas.untitled')}
+                    </Button>
+                  ))}
+                </Flex>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('workAreas.none')} />
+              )}
+            </Card>
 
             <Card title={t('dashboard.myViews')}>
               {views?.length ? (

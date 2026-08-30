@@ -31,4 +31,17 @@ public static class TestHttp
         request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
         return client.SendAsync(request);
     }
+
+    /// <summary>
+    /// The same, with a body — the shape a transition takes when the state to move to is named
+    /// in the request rather than in the route, which is how an activity with more than a couple
+    /// of moves asks for one.
+    /// </summary>
+    public static Task<HttpResponseMessage> PostWithIfMatchAsync(
+        this HttpClient client, string url, object body, string ifMatch = "*")
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(body) };
+        request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
+        return client.SendAsync(request);
+    }
 }

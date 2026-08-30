@@ -10,6 +10,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Select,
   Switch,
   Table,
   Tag,
@@ -31,10 +32,18 @@ import {
   type TripReportTemplateWrite,
 } from '../../api/hooks.ts';
 
-const emptyDraft: TripReportTemplateWrite = { name: '', body: '', isDefault: false };
+/**
+ * Which kind of thing a layout writes up. Named on every save rather than defaulted: the kind
+ * decides which vocabulary the body is read under and which write-ups may use it, and a save that
+ * left it out would have one chosen for it — quietly retyping a camp layout as a trip layout and
+ * taking the club's chosen trip layout with it.
+ */
+type ReportTemplateKind = NonNullable<TripReportTemplateWrite['kind']>;
+
+const emptyDraft: TripReportTemplateWrite = { name: '', body: '', isDefault: false, kind: 'trip' };
 
 /**
- * The layouts a trip is written up in.
+ * The layouts a trip or a camp is written up in.
  *
  * The work happens in a text editor, not here: somebody downloads the layout the system ships,
  * edits it where they can see the whole thing at once, and brings it back. So this page is a way
@@ -62,14 +71,27 @@ export default function TripReportTemplatesPage() {
   const deleteTemplate = useDeleteTripReportTemplate();
   const [editing, setEditing] = useState<TripReportTemplate | null>(null);
   const [creating, setCreating] = useState(false);
+  const [shippedKind, setShippedKind] = useState<ReportTemplateKind>('trip');
   const [form] = Form.useForm<TripReportTemplateWrite>();
+
+  const kindOptions: { value: ReportTemplateKind; label: string }[] = [
+    { value: 'trip', label: t('admin.reportTemplates.kindTrip') },
+    { value: 'expedition', label: t('admin.reportTemplates.kindExpedition') },
+  ];
+  const kindLabel = (kind: ReportTemplateKind) =>
+    kindOptions.find((option) => option.value === kind)?.label ?? kind;
 
   const open = editing !== null || creating;
   useEffect(() => {
     if (open) {
       form.setFieldsValue(
         editing
-          ? { name: editing.name, body: editing.body, isDefault: editing.isDefault }
+          ? {
+              name: editing.name,
+              body: editing.body,
+              isDefault: editing.isDefault,
+              kind: editing.kind,
+            }
           : emptyDraft,
       );
     }
@@ -86,6 +108,7 @@ export default function TripReportTemplatesPage() {
       name: values.name.trim(),
       body: values.body,
       isDefault: values.isDefault,
+      kind: values.kind,
     };
 
     try {
@@ -135,12 +158,22 @@ export default function TripReportTemplatesPage() {
         {t('admin.reportTemplates.intro')}
       </Typography.Paragraph>
 
-      <Flex gap={8} wrap>
+      <Flex gap={8} wrap align="center">
+        {/* Which shipped layout to start from. The two vocabularies are different, and the file
+            is the only place either of them is written down. */}
+        <Select
+          value={shippedKind}
+          onChange={setShippedKind}
+          options={kindOptions}
+          style={{ minWidth: 180 }}
+          aria-label={t('admin.reportTemplates.kind')}
+          data-testid="report-template-shipped-kind"
+        />
         <Button
           icon={<DownloadOutlined />}
           data-testid="report-template-shipped"
           onClick={() => {
-            downloadFile(tripReportTemplateDefaultUrl()).catch(() =>
+            downloadFile(tripReportTemplateDefaultUrl(shippedKind)).catch(() =>
               message.error(t('admin.reportTemplates.downloadFailed')),
             );
           }}
@@ -164,6 +197,14 @@ export default function TripReportTemplatesPage() {
         locale={{ emptyText: t('admin.reportTemplates.none') }}
         columns={[
           { title: t('admin.reportTemplates.name'), dataIndex: 'name' },
+          {
+            // Both kinds are listed together, so the column is what tells them apart — and each
+            // kind has a chosen layout of its own, which would otherwise read as two rows
+            // contradicting each other about which one is used.
+            title: t('admin.reportTemplates.kind'),
+            key: 'kind',
+            render: (_: unknown, template: TripReportTemplate) => kindLabel(template.kind),
+          },
           {
             title: t('admin.reportTemplates.used'),
             key: 'isDefault',
@@ -210,6 +251,14 @@ export default function TripReportTemplatesPage() {
         <Form form={form} layout="vertical" initialValues={emptyDraft}>
           <Form.Item name="name" label={t('admin.reportTemplates.name')} rules={[{ required: true, max: 120 }]}>
             <Input />
+          </Form.Item>
+          <Form.Item
+            name="kind"
+            label={t('admin.reportTemplates.kind')}
+            extra={t('admin.reportTemplates.kindHint')}
+            rules={[{ required: true }]}
+          >
+            <Select options={kindOptions} data-testid="report-template-kind" />
           </Form.Item>
           <Form.Item label={t('admin.reportTemplates.fromFile')} extra={t('admin.reportTemplates.fromFileHint')}>
             <Upload

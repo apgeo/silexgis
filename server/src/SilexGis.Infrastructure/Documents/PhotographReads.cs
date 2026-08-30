@@ -37,14 +37,44 @@ public static class PhotographReads
     /// <summary>
     /// Photographs this caller may read: the ordinary document rule, narrowed to pictures.
     /// </summary>
-    public static async Task<IQueryable<Document>> VisiblePhotographsAsync(
+    public static Task<IQueryable<Document>> VisiblePhotographsAsync(
         SilexGisDbContext db, AccessContext ctx, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(db);
+        return VisibleAsync(db, ctx, photographs => photographs, ct);
+    }
 
-        var photographs = db.Documents.AsNoTracking().Where(d => db.StoredFiles.Any(f =>
+    /// <summary>
+    /// The same rule, asked only about the pictures hanging on a set of trips.
+    /// </summary>
+    /// <remarks>
+    /// Narrowing before the rule rather than after it is what keeps the cost proportional to the
+    /// subject. Reach-through-an-attachment cannot be composed into a query — it resolves a set of
+    /// (document, file) pairs and hands the answer back as a parameter — so asked over every
+    /// picture in the installation it costs the same whether two trips are being counted or forty.
+    /// Asked over the pictures on those trips, it costs what the subject is worth.
+    ///
+    /// It narrows and cannot widen: the reach question is asked per document and its answer for a
+    /// document does not depend on which other documents were asked about, so restricting the
+    /// candidates only removes documents this query would have dropped anyway.
+    /// </remarks>
+    public static Task<IQueryable<Document>> VisiblePhotographsOnTripsAsync(
+        SilexGisDbContext db, AccessContext ctx, IQueryable<Guid> tripIds, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(tripIds);
+        return VisibleAsync(db, ctx, photographs => photographs.AttachedToAnyTrip(db, tripIds), ct);
+    }
+
+    private static async Task<IQueryable<Document>> VisibleAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        Func<IQueryable<Document>, IQueryable<Document>> narrow,
+        CancellationToken ct)
+    {
+        var photographs = narrow(db.Documents.AsNoTracking().Where(d => db.StoredFiles.Any(f =>
             f.Kind == FileKind.Image
-            && db.DocumentVersions.Any(v => v.Id == f.DocumentVersionId && v.IsCurrent && v.DocumentId == d.Id)));
+            && db.DocumentVersions.Any(v => v.Id == f.DocumentVersionId && v.IsCurrent && v.DocumentId == d.Id))));
 
         // Reach through an attachment is resolved before the query rather than by dropping rows
         // after it, for the same reason the cabinet listing does it: resolved afterwards, the
@@ -73,6 +103,35 @@ public static class PhotographReads
         return photographs.Where(d => db.Attachments.Any(a =>
             a.EntityType == AttachedEntityType.TripLog
             && a.EntityId == tripId
+            && db.StoredFiles.Any(f => f.Id == a.FileId
+                && db.DocumentVersions.Any(v =>
+                    v.Id == f.DocumentVersionId && v.IsCurrent && v.DocumentId == d.Id))));
+    }
+
+    /// <summary>
+    /// Narrows a photograph query to the pictures hanging on any of a set of trips.
+    /// </summary>
+    /// <remarks>
+    /// The trips arrive as a query rather than as a list of ids so that whatever narrowed them —
+    /// the caller's own visibility walk, above all — stays inside one statement. A trip the caller
+    /// may not read then contributes nothing, in the same way that naming one singly answers empty
+    /// rather than refused, and a count taken over the result cannot exceed what the galleries on
+    /// those trips would show.
+    ///
+    /// The condition is on the photograph, not on the pin, so counting the result counts pictures:
+    /// one picture hanging on three of the trips is one picture, and a figure built by counting
+    /// pins would grow by re-pinning rather than by photography.
+    /// </remarks>
+    public static IQueryable<Document> AttachedToAnyTrip(
+        this IQueryable<Document> photographs, SilexGisDbContext db, IQueryable<Guid> tripIds)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(tripIds);
+
+        return photographs.Where(d => db.Attachments.Any(a =>
+            a.EntityType == AttachedEntityType.TripLog
+            && a.EntityId != null
+            && tripIds.Contains(a.EntityId.Value)
             && db.StoredFiles.Any(f => f.Id == a.FileId
                 && db.DocumentVersions.Any(v =>
                     v.Id == f.DocumentVersionId && v.IsCurrent && v.DocumentId == d.Id))));

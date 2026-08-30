@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
+using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -51,11 +52,24 @@ public static class AdminSettingsEndpoints
         admin.MapPut("/interface", SaveInterfaceAsync)
             .WithValidation<InterfaceSettingsDto>()
             .WithSummary("Saves the starting interface arrangement new users begin from; a default, never a policy.");
+        admin.MapPut("/notifications", SaveNotificationsAsync)
+            .WithValidation<NotificationSettingsDto>()
+            .WithSummary("Saves how long notifications are kept before they and the record of how they were sent are deleted.");
+        admin.MapPut("/announcements", SaveAnnouncementsAsync)
+            .WithValidation<AnnouncementSettingsDto>()
+            .WithSummary("Saves whether an announcement to a caving group may cost money, and how much in a day.");
+        // The two routes here that make the installation send something to a destination the
+        // caller types in, so both carry the per-address budget the credential surfaces use.
+        // "May change the settings" is not "may message any address in the world as fast as a
+        // script can ask". The text one costs the operator real money on every call, so it has a
+        // second, durable cooldown of its own inside the handler.
         admin.MapPost("/mail/test", TestMailAsync)
             .WithValidation<TestMessageRequest>()
+            .RequireRateLimiting("auth")
             .WithSummary("Sends a test message to prove the mail server works.");
         admin.MapPost("/sms/test", TestSmsAsync)
             .WithValidation<TestMessageRequest>()
+            .RequireRateLimiting("auth")
             .WithSummary("Sends a test text to prove the gateway works.");
 
         return api;
@@ -227,6 +241,69 @@ public static class AdminSettingsEndpoints
         return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
     }
 
+    /// <summary>
+    /// Saves the retention window. It was a deployment key alone, and stays readable as one: an
+    /// installation that never opens this page keeps whatever its environment says, and one that
+    /// saves here stops having to think about the environment for this value.
+    /// </summary>
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveNotificationsAsync(
+        NotificationSettingsDto request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(
+            AppSettingSections.Notifications,
+            new NotificationSettings { RetentionDays = request.RetentionDays },
+            ct);
+
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+    }
+
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveAnnouncementsAsync(
+        AnnouncementSettingsDto request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(
+            AppSettingSections.Announcements,
+            new AnnouncementSettings
+            {
+                PaidChannelsEnabled = request.PaidChannelsEnabled,
+                DailyPaidMessageCap = request.DailyPaidMessageCap,
+            },
+            ct);
+
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+    }
+
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveImportAsync(
         ImportSettingsDto request,
         IAccessContextAccessor accessAccessor,
@@ -336,6 +413,7 @@ public static class AdminSettingsEndpoints
     private static async Task<Results<Ok<TestMessageResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> TestSmsAsync(
         TestMessageRequest request,
         IAccessContextAccessor accessAccessor,
+        AdminTestSendThrottle throttle,
         ISmsSender smsSender,
         ISmsDelivery smsDelivery,
         CancellationToken ct)
@@ -355,6 +433,18 @@ public static class AdminSettingsEndpoints
         {
             return ApiProblems.BadRequest("admin.sms_not_configured", "No SMS gateway is configured.");
         }
+
+        // A durable cooldown, not the per-address request budget: that budget is shared with the
+        // sign-in routes, it refills every minute, and a second replica of this application keeps
+        // a second copy of it — while every call it lets through sends a text the operator pays
+        // for. The budget stays as the outer guard; this is the bound.
+        if (await throttle.TooSoonAsync(ctx.UserId))
+        {
+            return ApiProblems.BadRequest(
+                "admin.sms_test_too_soon", "Wait a moment before sending another test text.");
+        }
+
+        await throttle.MarkSentAsync(ctx.UserId);
 
         try
         {
@@ -379,6 +469,8 @@ public static class AdminSettingsEndpoints
         var disclosure = await settings.GetProtectionAsync(ct);
         var import = await settings.GetImportAsync(ct);
         var ui = await settings.GetInterfaceAsync(ct);
+        var notifications = await settings.GetNotificationsAsync(ct);
+        var announcements = await settings.GetAnnouncementsAsync(ct);
 
         return new AdminSettingsDto(
             new MailSettingsDto(
@@ -419,6 +511,9 @@ public static class AdminSettingsEndpoints
                 import.PhotoProximityRadiusMeters,
                 import.PhotoClusterRadiusMeters),
             new InterfaceSettingsDto(ui.PanelDefaults),
+            new NotificationSettingsDto(notifications.EffectiveRetentionDays),
+            new AnnouncementSettingsDto(
+                announcements.PaidChannelsEnabled, announcements.EffectiveDailyPaidMessageCap),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }

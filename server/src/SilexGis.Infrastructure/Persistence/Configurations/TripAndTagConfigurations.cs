@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Identity;
 
 namespace SilexGis.Infrastructure.Persistence.Configurations;
@@ -39,7 +40,12 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
             .OnDelete(DeleteBehavior.SetNull);
         builder.Property(x => x.Visibility).HasConversion<short>();
         builder.Property(x => x.State).HasConversion<short>();
+        // Defaulted in the database as well as in the entity so a row written by anything that
+        // does not know about the column says "nobody arranged a callout" rather than leaving a
+        // null that a pass watching for overdue parties would have to guard.
+        builder.Property(x => x.CalloutState).HasConversion<short>().HasDefaultValue(TripCalloutState.None);
         builder.Property(x => x.Geom).HasColumnType("geometry(Geometry, 4326)");
+        builder.Property(x => x.MeetingGeom).HasColumnType("geometry(Geometry, 4326)");
 
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CavingGroup>().WithMany().HasForeignKey(x => x.CavingGroupId).OnDelete(DeleteBehavior.SetNull);
@@ -51,8 +57,17 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => x.Geom).HasMethod("gist");
+        // Its own spatial index rather than a shared one: the map layer asks the two columns
+        // separately, and a trip whose only position is where its party meets has to be found by
+        // the same window query that finds a trip with a sketch.
+        builder.HasIndex(x => x.MeetingGeom).HasMethod("gist");
         builder.HasIndex(x => x.TripDate);
         builder.HasIndex(x => x.OwnerUserId);
+        // The one selection a scheduled pass makes over this table: parties whose alarm time has
+        // gone by and whose check is still live. Leading with the state keeps that pass reading a
+        // handful of rows rather than every trip ever recorded, and it is the state that stays
+        // small — almost every row is a trip that already happened.
+        builder.HasIndex(x => new { x.CalloutState, x.CalloutAlarmAt });
     }
 }
 
@@ -79,6 +94,52 @@ public sealed class TripLogParticipantConfiguration : IEntityTypeConfiguration<T
         // One person, one job, one row — so being the leader and the surveyor is two rows and
         // neither displaces the other.
         builder.HasIndex(x => new { x.TripLogId, x.RoleId, x.CaverId }).IsUnique();
+    }
+}
+
+public sealed class TripInvitationConfiguration : IEntityTypeConfiguration<TripInvitation>
+{
+    public void Configure(EntityTypeBuilder<TripInvitation> builder)
+    {
+        // Exactly one subject per row, decided by the database. The alternative — one column
+        // naming a kind and one holding an id — would give up both foreign keys and both
+        // cascades, so deleting an event would leave its answers behind pointing at nothing and
+        // nothing in the schema could say so.
+        builder.ToTable("trip_invitations", t => t.HasCheckConstraint(
+            "ck_trip_invitations_one_subject",
+            "(trip_log_id IS NOT NULL AND event_id IS NULL) OR "
+            + "(trip_log_id IS NULL AND event_id IS NOT NULL)"));
+        // The remark beside an answer, bounded to the same length a roster remark gets so the
+        // two surfaces never disagree about what fits.
+        builder.Property(x => x.Note).HasMaxLength(TripInvitationRules.MaxNoteLength);
+        // Stored as its number, which is what makes "invited and silent" a value with a column
+        // behind it rather than a null standing in for two different facts.
+        builder.Property(x => x.Response).HasConversion<short>();
+        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // The second subject, with its own foreign key and the same cascade: an event that is
+        // deleted takes the answers about it with it, exactly as a trip does.
+        builder.HasOne<Event>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
+        // Cascade, and deliberately not the Restrict the roster above uses. Being named on a
+        // trip is a fact about what happened and must survive the roster being tidied, so that
+        // row refuses to go; having once been asked whether you were coming is not, and
+        // somebody who only ever declined an invitation must not thereby become undeletable.
+        builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Cascade);
+        // The people who did the asking and the writing-down are attribution, so a closed
+        // account leaves the answer standing and takes only the name off it.
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.InvitedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.RespondedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.TripLogId);
+        builder.HasIndex(x => x.EventId);
+        builder.HasIndex(x => x.CaverId);
+        // One person, one subject, one standing answer — so changing your mind rewrites the
+        // answer you already gave instead of leaving you holding two that disagree. One index per
+        // subject rather than one over both, because a unique index treats every row whose
+        // subject is null as distinct from every other, so a single index over the pair would
+        // hold nobody to anything.
+        builder.HasIndex(x => new { x.TripLogId, x.CaverId }).IsUnique().HasFilter("trip_log_id IS NOT NULL");
+        builder.HasIndex(x => new { x.EventId, x.CaverId }).IsUnique().HasFilter("event_id IS NOT NULL");
     }
 }
 

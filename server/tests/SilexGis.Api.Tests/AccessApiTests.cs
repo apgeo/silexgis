@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using SilexGis.Api.Features.Permissions;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -101,6 +102,14 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
         ScopesOf(documents).ShouldBe(
             ["all", "own", "cavingGroup", "cabinet", "object"], ignoreOrder: true);
         documents.GetProperty("supportsKindNarrowing").GetBoolean().ShouldBeFalse();
+
+        // An expedition is owned content too, and the object scope is the reason it has a
+        // domain of its own: sharing one camp with a partner club is one act on one object,
+        // and only a rule scoped to that object says it. It belongs to no collection of any
+        // kind, so all three collection scopes stay off its menu.
+        var expeditions = DomainOf("expeditions");
+        ScopesOf(expeditions).ShouldBe(["all", "own", "cavingGroup", "object"], ignoreOrder: true);
+        expeditions.GetProperty("supportsKindNarrowing").GetBoolean().ShouldBeFalse();
 
         List<string> ActionsOf(JsonElement domain, string scopeKind) =>
             [.. domain.GetProperty("scopes").EnumerateArray()
@@ -487,6 +496,273 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable
             },
         });
         refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// Owning a row is a reason to hold every action on it, and sharing it is one of them —
+    /// on a trip, a saved view and every other row that is not a feature, exactly as it
+    /// already was on features. Both halves are here because only the pair proves anything:
+    /// the owner may share what is theirs, and somebody holding nothing over the same row
+    /// still may not. The strangers are Viewers on purpose — the seeded editing group reads
+    /// and writes every content domain at the widest scope, so an editor authoring on their
+    /// own row would pass on that rule alone and prove nothing about ownership.
+    /// </summary>
+    [Fact]
+    public async Task An_owner_may_grant_on_their_own_object_and_somebody_holding_nothing_may_not()
+    {
+        var strangerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"acc-api-str-{suffix}@t.local");
+        using var stranger = await AuthHelper.BearerClientAsync(factory, $"acc-api-str-{suffix}@t.local");
+
+        // Written straight to storage: a Viewer holds no right to author a trip, and what
+        // is under test is that owning the row is by itself enough to share it.
+        Guid tripId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var trip = new TripLog
+            {
+                Title = $"Owned Trip {suffix}",
+                TripDate = new DateOnly(2026, 1, 1),
+                OwnerUserId = viewerId,
+                Visibility = Visibility.Private,
+            };
+            db.TripLogs.Add(trip);
+            await db.SaveChangesAsync();
+            tripId = trip.Id;
+        }
+
+        // Nobody who neither owns the trip nor holds a rule over it may write rules on it,
+        // and they are told it does not exist rather than that they are not allowed.
+        var strangerAttempt = await stranger.PutAsJsonAsync($"/api/v1/objects/tripLog/{tripId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = strangerId, effect = "allow", actions = "read", scopeKind = "object" },
+            },
+        });
+        strangerAttempt.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await strangerAttempt.Content.ReadAsStringAsync()).ShouldContain(ObjectAccessEndpoints.NotFoundCode);
+
+        // The owner holds no rule at all over trips — only the row itself — and that is
+        // enough to share it.
+        var granted = await viewer.PutAsJsonAsync($"/api/v1/objects/tripLog/{tripId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = strangerId, effect = "allow", actions = "read", scopeKind = "object" },
+            },
+        });
+        granted.StatusCode.ShouldBe(HttpStatusCode.OK, await granted.Content.ReadAsStringAsync());
+
+        // The grant is real, not merely accepted.
+        var readBack = await stranger.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}");
+        readBack.GetProperty("id").GetGuid().ShouldBe(tripId);
+
+        // …and reading it is not managing it: the grantee still cannot write rules there.
+        (await stranger.PutAsJsonAsync($"/api/v1/objects/tripLog/{tripId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = viewerId, effect = "allow", actions = "read", scopeKind = "object" },
+            },
+        })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // The same is true of every other kind that anchors a rule on itself rather than
+        // on a feature. A saved view is the one a caller with no editing rights can author
+        // outright, so it is proved end to end.
+        var created = await stranger.PostAsJsonAsync("/api/v1/map-views/", new
+        {
+            name = $"Owned View {suffix}",
+            description = (string?)null,
+            config = new { },
+            isHome = false,
+            cavingGroupId = (Guid?)null,
+            visibility = "private",
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var viewId = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        (await viewer.PutAsJsonAsync($"/api/v1/objects/mapView/{viewId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = viewerId, effect = "allow", actions = "read", scopeKind = "object" },
+            },
+        })).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var sharedView = await stranger.PutAsJsonAsync($"/api/v1/objects/mapView/{viewId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = viewerId, effect = "allow", actions = "read", scopeKind = "object" },
+            },
+        });
+        sharedView.StatusCode.ShouldBe(HttpStatusCode.OK, await sharedView.Content.ReadAsStringAsync());
+        var visibleViews = await viewer.GetFromJsonAsync<JsonElement>("/api/v1/map-views/");
+        visibleViews.EnumerateArray().Select(v => v.GetProperty("id").GetGuid()).ShouldContain(viewId);
+    }
+
+    /// <summary>
+    /// The other half of reading a row's own facts at a rule's anchor: its audience counts
+    /// too, and only for reading. Somebody who may administer a trip everybody signed in
+    /// can already read may pass that reading on — it confers nothing the grantee did not
+    /// have — but the same audience is no reason to hand out writing, which is why both
+    /// halves are asserted together.
+    /// </summary>
+    [Fact]
+    public async Task An_audience_that_admits_a_reader_lets_a_delegate_pass_reading_on_and_nothing_more()
+    {
+        var delegateId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"acc-api-del-{suffix}@t.local");
+        using var delegated = await AuthHelper.BearerClientAsync(factory, $"acc-api-del-{suffix}@t.local");
+
+        Guid tripId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var trip = new TripLog
+            {
+                Title = $"Open Trip {suffix}",
+                TripDate = new DateOnly(2026, 1, 1),
+                OwnerUserId = viewerId,
+                Visibility = Visibility.Authenticated,
+            };
+            db.TripLogs.Add(trip);
+            await db.SaveChangesAsync();
+            tripId = trip.Id;
+        }
+
+        // The delegate is given the administering of the trip and nothing else — no rule of
+        // theirs mentions reading it, so what they may pass on comes from the trip itself.
+        (await viewer.PutAsJsonAsync($"/api/v1/objects/tripLog/{tripId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = delegateId, effect = "allow", actions = "managePermissions", scopeKind = "object" },
+            },
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var passedOn = await delegated.PutAsJsonAsync($"/api/v1/objects/tripLog/{tripId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = delegateId, effect = "allow", actions = "managePermissions", scopeKind = "object" },
+                new { subjectKind = "user", subjectId = editorId, effect = "allow", actions = "read", scopeKind = "object" },
+            },
+        });
+        passedOn.StatusCode.ShouldBe(HttpStatusCode.OK, await passedOn.Content.ReadAsStringAsync());
+
+        // Writing is not something an audience confers, whoever it admits.
+        var overreach = await delegated.PutAsJsonAsync($"/api/v1/objects/tripLog/{tripId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = editorId, effect = "allow", actions = "read, write", scopeKind = "object" },
+            },
+        });
+        overreach.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await overreach.Content.ReadAsStringAsync()).ShouldContain(AccessEntryRules.ExceedsOwnRightsCode);
+    }
+
+    /// <summary>
+    /// The same for a document, which has no per-object tab of its own — a rule anchored on
+    /// one is written in a ruleset — so the write-time gate is driven where both surfaces
+    /// meet it. Owning the document is the whole of the author's claim here, and somebody
+    /// who owns nothing and holds nothing is refused at the same gate: without the document's
+    /// own columns in the facts, the owner is refused too, and the refusal reads as a
+    /// permission bug rather than as an unbuilt fact.
+    /// </summary>
+    [Fact]
+    public async Task A_documents_own_owner_may_author_a_rule_on_it_and_somebody_holding_nothing_may_not()
+    {
+        var strangerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"acc-api-dstr-{suffix}@t.local");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var access = scope.ServiceProvider.GetRequiredService<IAccessService>();
+
+        var document = new Document
+        {
+            Title = $"Owned Document {suffix}",
+            OwnerUserId = viewerId,
+            Visibility = Visibility.Private,
+        };
+        db.Documents.Add(document);
+        await db.SaveChangesAsync();
+
+        var proposed = new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = strangerId,
+            Effect = AccessEffect.Allow,
+            Domain = AccessDomain.Documents,
+            Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeId = document.Id,
+            GrantedBy = viewerId,
+        };
+
+        // The owner holds no rule at all over documents — a Viewer holds none — and owning
+        // the row is by itself enough to share the reading of it.
+        var owner = await RosterHelper.AccessContextOfAsync(db, viewerId);
+        (await AccessEntryMapping.RejectAsync(db, access, owner, proposed, CancellationToken.None))
+            .ShouldBeNull();
+
+        // Somebody who neither owns it nor holds a rule reaching it may not.
+        var stranger = await RosterHelper.AccessContextOfAsync(db, strangerId);
+        var refused = await AccessEntryMapping.RejectAsync(db, access, stranger, proposed, CancellationToken.None);
+        refused.ShouldNotBeNull();
+        refused.ProblemDetails.Extensions["code"].ShouldBe(AccessEntryRules.ExceedsOwnRightsCode);
+    }
+
+    /// <summary>
+    /// A feature is readable when its own audience or anything above it admits the caller,
+    /// so what an author may pass on at a rule's anchor has to be judged with the same
+    /// cascade. A private entrance inside a cave everybody signed in may see is such a row:
+    /// its delegate may share the reading of it — which discloses nothing, the cave already
+    /// does — and still may not share writing it.
+    /// </summary>
+    [Fact]
+    public async Task An_ancestors_audience_counts_at_a_features_anchor_too()
+    {
+        var delegateId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"acc-api-anc-{suffix}@t.local");
+        using var delegated = await AuthHelper.BearerClientAsync(factory, $"acc-api-anc-{suffix}@t.local");
+
+        var caveId = await CreateCaveAsync(editor, $"Open Cave {suffix}", "authenticated");
+        var entranceId = await AddEntranceAsync(editor, caveId);
+
+        // The entrance itself is private — only the cave above it is open — and the
+        // delegate is given the administering of the entrance and nothing else.
+        (await editor.PutAsJsonAsync($"/api/v1/objects/feature/{entranceId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = delegateId, effect = "allow", actions = "managePermissions", scopeKind = "object" },
+            },
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var passedOn = await delegated.PutAsJsonAsync($"/api/v1/objects/feature/{entranceId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = delegateId, effect = "allow", actions = "managePermissions", scopeKind = "object" },
+                new { subjectKind = "user", subjectId = viewerId, effect = "allow", actions = "read", scopeKind = "object" },
+            },
+        });
+        passedOn.StatusCode.ShouldBe(HttpStatusCode.OK, await passedOn.Content.ReadAsStringAsync());
+
+        var overreach = await delegated.PutAsJsonAsync($"/api/v1/objects/feature/{entranceId}/access", new
+        {
+            entries = new[]
+            {
+                new { subjectKind = "user", subjectId = viewerId, effect = "allow", actions = "read, write", scopeKind = "object" },
+            },
+        });
+        overreach.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await overreach.Content.ReadAsStringAsync()).ShouldContain(AccessEntryRules.ExceedsOwnRightsCode);
     }
 
     [Fact]

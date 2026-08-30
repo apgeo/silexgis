@@ -1406,12 +1406,17 @@ public static class ResLinkEndpoints
             }
         }
 
-        // Trip members carrying a sketch of their own. A trip's geometry is served exactly
+        // Trip members carrying a position of their own. A trip's geometry is served exactly
         // to everyone who may read the trip — it is never snapped or omitted the way a
         // protected feature's is — so a readable positioned trip standing in a link puts
         // coordinates in front of the caller just as a placeable feature member does. A
         // resolved display is the proof the caller may read the trip; only the geometry is
         // left to ask about, and it is asked in one batched query.
+        //
+        // Either shape counts, and asking only about the sketch would be a hole rather than a
+        // simplification: a trip that states only where its party meets is positioned, and a
+        // link standing it in front of a caller discloses that position exactly as a sketch
+        // would. Every column on this row that can carry coordinates belongs in this test.
         var tripMembers = members
             .Where(m => m.EntityType == AttachedEntityType.TripLog && displays.ContainsKey(m.Id))
             .ToList();
@@ -1419,7 +1424,7 @@ public static class ResLinkEndpoints
         if (tripIds.Count > 0)
         {
             var positionedTrips = await db.TripLogs.AsNoTracking()
-                .Where(t => tripIds.Contains(t.Id) && t.Geom != null)
+                .Where(t => tripIds.Contains(t.Id) && (t.Geom != null || t.MeetingGeom != null))
                 .Select(t => t.Id)
                 .ToHashSetAsync(ct);
             exposing.UnionWith(tripMembers

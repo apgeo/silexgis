@@ -14,8 +14,21 @@ using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.CavingGroups;
 
+/// <param name="MemberCount">
+/// Everybody on the roster, including the people who hold no account. It is the size of the club,
+/// not the size of an audience: what an announcement would reach is a smaller number and is asked
+/// for separately, because reading them as the same number is how somebody is told they are
+/// writing to more people than exist to be written to.
+/// </param>
+/// <param name="CanAnnounce">
+/// Whether this reader may write to everyone on this roster. It is decided against this group
+/// rather than the domain, so it cannot be answered from the account's domain-wide capabilities:
+/// a rule that names one club is invisible to a check that names none, and a page that gated on
+/// the domain-wide answer would hide the composer from exactly the person a club gave it to.
+/// </param>
 public sealed record CavingGroupDto(
-    Guid Id, string Name, string Slug, CavingGroupType Type, string? Description, string? Website, int MemberCount);
+    Guid Id, string Name, string Slug, CavingGroupType Type, string? Description, string? Website,
+    int MemberCount, bool CanAnnounce);
 
 /// <summary>A roster row: the person, their account when they have one, and their label.</summary>
 public sealed record CavingGroupMemberDto(Guid CaverId, string Name, Guid? UserId, CavingGroupRole Role);
@@ -94,9 +107,15 @@ public static class CavingGroupEndpoints
         var cavingGroups = await db.CavingGroups.AsNoTracking()
             .OrderBy(t => t.Name)
             .Select(t => new CavingGroupDto(t.Id, t.Name, t.Slug, t.Type, t.Description, t.Website,
-                db.CavingGroupMemberships.Count(m => m.CavingGroupId == t.Id)))
+                db.CavingGroupMemberships.Count(m => m.CavingGroupId == t.Id), false))
             .ToListAsync(ct);
-        return TypedResults.Ok(cavingGroups);
+
+        // Decided here rather than in the query: the rights this reader holds are already loaded,
+        // so answering it per row costs nothing and asking the database would cost a join per row
+        // to re-derive what the request already knows.
+        return TypedResults.Ok(cavingGroups
+            .Select(t => t with { CanAnnounce = Holds(ctx, AccessAction.Execute, t.Id) })
+            .ToList());
     }
 
     private static async Task<Results<Ok<CavingGroupDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
@@ -116,9 +135,11 @@ public static class CavingGroupEndpoints
         var cavingGroup = await db.CavingGroups.AsNoTracking()
             .Where(t => t.Id == id)
             .Select(t => new CavingGroupDto(t.Id, t.Name, t.Slug, t.Type, t.Description, t.Website,
-                db.CavingGroupMemberships.Count(m => m.CavingGroupId == t.Id)))
+                db.CavingGroupMemberships.Count(m => m.CavingGroupId == t.Id), false))
             .FirstOrDefaultAsync(ct);
-        return cavingGroup is null ? ApiProblems.NotFound("caving_group.not_found") : TypedResults.Ok(cavingGroup);
+        return cavingGroup is null
+            ? ApiProblems.NotFound("caving_group.not_found")
+            : TypedResults.Ok(cavingGroup with { CanAnnounce = Holds(ctx, AccessAction.Execute, id) });
     }
 
     private static async Task<Results<Created<CavingGroupDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
@@ -170,7 +191,12 @@ public static class CavingGroupEndpoints
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Created($"/api/v1/caving-groups/{cavingGroup.Id}",
-            new CavingGroupDto(cavingGroup.Id, cavingGroup.Name, cavingGroup.Slug, cavingGroup.Type, cavingGroup.Description, cavingGroup.Website, 1));
+            new CavingGroupDto(cavingGroup.Id, cavingGroup.Name, cavingGroup.Slug, cavingGroup.Type,
+                cavingGroup.Description, cavingGroup.Website, 1,
+                // The starter ruleset just staged above gives the creator this, but the context
+                // this request was resolved with was read before it existed, so it is stated
+                // rather than asked for — the next read of the group asks properly.
+                CanAnnounce: true));
     }
 
     private static async Task<Results<Ok<CavingGroupDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -199,7 +225,9 @@ public static class CavingGroupEndpoints
         await db.SaveChangesAsync(ct);
 
         var count = await db.CavingGroupMemberships.CountAsync(m => m.CavingGroupId == id, ct);
-        return TypedResults.Ok(new CavingGroupDto(cavingGroup.Id, cavingGroup.Name, cavingGroup.Slug, cavingGroup.Type, cavingGroup.Description, cavingGroup.Website, count));
+        return TypedResults.Ok(new CavingGroupDto(cavingGroup.Id, cavingGroup.Name, cavingGroup.Slug,
+            cavingGroup.Type, cavingGroup.Description, cavingGroup.Website, count,
+            Holds(ctx, AccessAction.Execute, id)));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> DeleteAsync(
@@ -376,7 +404,11 @@ public static class CavingGroupEndpoints
                 {
                     ["actorName"] = actorLabels.GetValueOrDefault(user.UserId) ?? string.Empty,
                     ["cavingGroupName"] = cavingGroupName,
-                });
+                },
+                // The group's name above is what it was called at the time. Whether this reader
+                // may still be shown it is decided when they read the message, against this.
+                NotificationTargetKind.CavingGroup,
+                id);
         }
 
         await db.SaveChangesAsync(ct);
@@ -436,7 +468,9 @@ public static class CavingGroupEndpoints
                 {
                     ["actorName"] = actorLabels.GetValueOrDefault(user.UserId) ?? string.Empty,
                     ["cavingGroupName"] = cavingGroupName,
-                });
+                },
+                NotificationTargetKind.CavingGroup,
+                id);
         }
 
         // Leaving a group can sever someone's only path into Full Administrators; the
@@ -459,7 +493,7 @@ public static class CavingGroupEndpoints
     /// level is consulted whenever an id is in hand; without one the check is domain-wide and only
     /// unnarrowed global rules can answer it.
     /// </summary>
-    private static bool Holds(AccessContext? ctx, AccessAction action, Guid? cavingGroupId = null) =>
+    internal static bool Holds(AccessContext? ctx, AccessAction action, Guid? cavingGroupId = null) =>
         AccessEvaluator.Decide(
             ctx,
             AccessDomain.CavingGroups,

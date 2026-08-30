@@ -19,6 +19,7 @@ import LegacySecurityRedirect from './pages/settings/LegacySecurityRedirect.tsx'
 const MapPage = lazy(() => import('./pages/MapPage.tsx'));
 const Scene3DPage = lazy(() => import('./pages/Scene3DPage.tsx'));
 const DashboardPage = lazy(() => import('./pages/dashboard/DashboardPage.tsx'));
+const WorkAreasPage = lazy(() => import('./pages/workareas/WorkAreasPage.tsx'));
 const CaveListPage = lazy(() => import('./pages/caves/CaveListPage.tsx'));
 const CaveFormPage = lazy(() => import('./pages/caves/CaveFormPage.tsx'));
 const CaveDetailPage = lazy(() => import('./pages/caves/CaveDetailPage.tsx'));
@@ -29,12 +30,20 @@ const GeodataPage = lazy(() => import('./pages/geodata/GeodataPage.tsx'));
 const ImportWorkspacePage = lazy(() => import('./pages/geodata/ImportWorkspacePage.tsx'));
 const PhotoImportWorkspacePage = lazy(() => import('./pages/geodata/PhotoImportWorkspacePage.tsx'));
 const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
+const ChecklistsPage = lazy(() => import('./pages/checklists/ChecklistsPage.tsx'));
+const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
+const MyTripsPage = lazy(() => import('./pages/trips/MyTripsPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const TripReportPage = lazy(() => import('./pages/trips/TripReportPage.tsx'));
+const EventListPage = lazy(() => import('./pages/events/EventListPage.tsx'));
+const EventDetailPage = lazy(() => import('./pages/events/EventDetailPage.tsx'));
+const ExpeditionListPage = lazy(() => import('./pages/expeditions/ExpeditionListPage.tsx'));
+const ExpeditionDetailPage = lazy(() => import('./pages/expeditions/ExpeditionDetailPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const MessagingSettingsPage = lazy(() => import('./pages/admin/MessagingSettingsPage.tsx'));
 const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPage.tsx'));
+const NotificationHealthPage = lazy(() => import('./pages/admin/NotificationHealthPage.tsx'));
 const PermissionGroupsPage = lazy(() => import('./pages/admin/permissionGroups/PermissionGroupsPage.tsx'));
 const FeatureSetsPage = lazy(() => import('./pages/admin/FeatureSetsPage.tsx'));
 const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx'));
@@ -55,6 +64,7 @@ const SharedAlbumPage = lazy(() =>
 const LinkPage = lazy(() => import('./pages/links/LinkPage.tsx'));
 const CavingGroupsPage = lazy(() => import('./pages/cavingGroups/CavingGroupsPage.tsx'));
 const CaversPage = lazy(() => import('./pages/cavers/CaversPage.tsx'));
+const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage.tsx'));
 const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
 const PanelPage = lazy(() => import('./pages/panel/PanelPage.tsx'));
 const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout.tsx'));
@@ -74,10 +84,15 @@ function Loadable({ children }: { children: ReactNode }) {
 }
 
 /**
- * The route table, named so it can be checked against what the sidebar offers. There is no
- * catch-all and no error element by design — an unmatched path is a bug in whoever linked to
- * it, and it costs the entire shell, so what must be guaranteed is that nothing the
- * application itself navigates to is missing from this list.
+ * Every address this application answers, named so it can be checked from both directions.
+ *
+ * There is no catch-all and no error element by design, which is what makes both checks worth
+ * running. An unmatched path does not land on an empty page — it costs the entire shell and
+ * replaces it with the router's own error screen, leaving no way back inside the application.
+ *
+ * So the sidebar is checked against this table, and this table against the addresses the
+ * application *hands out* — a chip's route, the link in a notification about a grant. A route
+ * named somewhere and missing here does not fail to navigate; it strands the reader.
  */
 export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
@@ -106,6 +121,7 @@ export const routes: RouteObject[] = [
           { path: '/map', element: <Loadable><MapPage /></Loadable> },
           { path: '/map3d', element: <Loadable><Scene3DPage /></Loadable> },
           { path: '/dashboard', element: <Loadable><DashboardPage /></Loadable> },
+          { path: '/work-areas', element: <Loadable><WorkAreasPage /></Loadable> },
           { path: '/caves', element: <Loadable><CaveListPage /></Loadable> },
           { path: '/caves/new', element: <Loadable><CaveFormPage /></Loadable> },
           { path: '/caves/:id', element: <Loadable><CaveDetailPage /></Loadable> },
@@ -116,11 +132,19 @@ export const routes: RouteObject[] = [
           { path: '/geodata/:geofileId/import', element: <Loadable><ImportWorkspacePage /></Loadable> },
           { path: '/geodata/photo-import', element: <Loadable><PhotoImportWorkspacePage /></Loadable> },
           { path: '/admin/term-rules', element: <Loadable><TermRulesPage /></Loadable> },
+          { path: '/checklists', element: <Loadable><ChecklistsPage /></Loadable> },
+          { path: '/calendar', element: <Loadable><CalendarPage /></Loadable> },
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
+          { path: '/trip-logs/mine', element: <Loadable><MyTripsPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/trip-logs/:id/report', element: <Loadable><TripReportPage /></Loadable> },
+          { path: '/events', element: <Loadable><EventListPage /></Loadable> },
+          { path: '/events/:id', element: <Loadable><EventDetailPage /></Loadable> },
+          { path: '/expeditions', element: <Loadable><ExpeditionListPage /></Loadable> },
+          { path: '/expeditions/:id', element: <Loadable><ExpeditionDetailPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
+          { path: '/admin/notification-health', element: <Loadable><NotificationHealthPage /></Loadable> },
           { path: '/admin/message-templates', element: <Loadable><MessageTemplatesPage /></Loadable> },
           { path: '/admin/permission-groups', element: <Loadable><PermissionGroupsPage /></Loadable> },
           { path: '/admin/feature-sets', element: <Loadable><FeatureSetsPage /></Loadable> },
@@ -140,6 +164,7 @@ export const routes: RouteObject[] = [
           { path: '/links/:code', element: <Loadable><LinkPage /></Loadable> },
           { path: '/caving-groups', element: <Loadable><CavingGroupsPage /></Loadable> },
           { path: '/cavers', element: <Loadable><CaversPage /></Loadable> },
+          { path: '/notifications', element: <Loadable><NotificationsPage /></Loadable> },
           {
             path: '/settings',
             element: <Loadable><SettingsLayout /></Loadable>,
