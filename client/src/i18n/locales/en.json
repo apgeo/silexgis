@@ -2102,11 +2102,11 @@
       "notificationsIntro": "How long this installation keeps what it has told people. What is saved here replaces the deployment's own setting; leave it alone and that setting stays in force.",
       "retentionDays": "Keep notifications for (days)",
       "retentionDaysHint": "A notification is deleted after this, read or unread alike, and whether or not an email ever went out for it. The record of how it was sent goes with it.",
-      "announcementsIntro": "What an announcement to a whole caving group may cost this installation. Text messages are charged for one by one and cannot be recalled once sent, so they reach nobody until this is switched on, and stop for the day once the limit below is reached.",
-      "paidChannelsEnabled": "Allow announcements on channels that charge per message",
+      "announcementsIntro": "What an announcement to a whole caving group may cost this installation. Text messages are charged for by the segment and cannot be recalled once sent, so they reach nobody until this is switched on, and stop for the day once the limit below is reached.",
+      "paidChannelsEnabled": "Allow announcements on channels that charge for what they send",
       "paidChannelsEnabledHint": "Off means off: while it is off, nobody can choose such a channel, no saved preference for one resolves to anything, and no outbound copy on one is ever created.",
-      "dailyPaidMessageCap": "Charged messages a day",
-      "dailyPaidMessageCapHint": "An announcement that would take the day past this is refused outright rather than sent to half the roster. Messages already committed today count, including ones still waiting to go out."
+      "dailyPaidMessageCap": "Charged message segments a day",
+      "dailyPaidMessageCapHint": "A carrier bills a text message by the segment, not by the message: 160 characters of the plain Latin alphabet travel in one segment, but a single accented letter re-encodes the whole message into segments of 70, so the same wording costs twice as much in Romanian as in English. An announcement that would take the day past this is refused outright rather than sent to half the roster. Segments already committed today count, including ones still waiting to go out."
     },
     "documentTypes": {
       "title": "Document kinds",
@@ -2964,7 +2964,7 @@
     "stalledHint": "The oldest message still waiting was queued that long ago. Check the mail server settings and the test send on the messaging page.",
     "oldestPending": "Oldest still waiting",
     "nothingWaiting": "Nothing waiting",
-    "paidToday": "Charged messages today",
+    "paidToday": "Charged message segments today",
     "paidTodayValue": "{{spent}} of {{cap}}",
     "byChannel": "By channel",
     "noDeliveries": "Nothing has been sent yet.",

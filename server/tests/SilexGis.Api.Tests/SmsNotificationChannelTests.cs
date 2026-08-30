@@ -47,6 +47,18 @@ namespace SilexGis.Api.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
 {
+    /// <summary>
+    /// What one copy of this fixture's notice is weighed at before anybody is handed it: the
+    /// pieces the announcement wording splits into when it names this club.
+    /// </summary>
+    /// <remarks>
+    /// Two, because the wording is weighed in every language the installation writes and the
+    /// dearest answer stands — and the language whose marks fall outside the narrow alphabet packs
+    /// 67 characters to a piece, where this notice needs a second one. The same notice really
+    /// handed to an English reader costs one, which is what the tests above are about.
+    /// </remarks>
+    private const int WeighedPerCopy = 2;
+
     private readonly string connectionString;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];
     private readonly List<Guid> mine = [];
@@ -289,6 +301,146 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task A_text_in_romanian_costs_the_day_two_where_the_same_one_in_english_costs_one()
+    {
+        await StartAsync();
+        var operatorClient = await OperatorClientAsync();
+
+        // Two accounts sent the same announcement, differing in one thing: the language each of
+        // them reads it in. Both halves are asserted here rather than in two tests, because
+        // either alone is satisfied by a counter that never looks at the text — the English half
+        // agrees with counting rows, and the Romanian half alone could be any constant.
+        var english = await NewAccountAsync("gsm");
+        var englishNumber = await ConfirmAsync(english, Number(20));
+        await ChooseTextAsync(english);
+
+        var romanian = await NewAccountAsync("wide");
+        var romanianNumber = await ConfirmAsync(romanian, Number(21));
+        await ChooseTextAsync(romanian);
+        await ReadsRomanianAsync(romanian);
+
+        await ClearTodaysSpendingAsync();
+        factory.Messages.Clear();
+        await QueueAnnouncementAsync(english.Id);
+        await DrainAsync();
+
+        // Every character of the English wording is in the seven-bit alphabet a carrier packs
+        // 160 of into one piece, so the message travels in one and costs one.
+        factory.Messages.LastTo(englishNumber).Channel.ShouldBe("sms");
+        (await TextRowAsync(english.Id)).Segments.ShouldBe(1);
+        (await HealthAsync(operatorClient)).GetProperty("paidMessagesToday").GetInt32().ShouldBe(1);
+
+        await QueueAnnouncementAsync(romanian.Id);
+        await DrainAsync();
+
+        var wide = factory.Messages.LastTo(romanianNumber).Body;
+
+        // The wording that actually left, in the language the account reads. Asserted on the
+        // rendered text and not on the catalogue, because what is billed is what was handed over
+        // — and asserted on a word carrying the marks, so that stripping them anywhere in the
+        // wording would fail this test rather than quietly halve the bill.
+        wide.ShouldContain("Citiți");
+
+        // Not length. The Romanian message is well inside what a single seven-bit piece would
+        // have held, so a counter that only divided by 160 would have answered one. What doubles
+        // it is that one character is outside that alphabet, which re-encodes the whole message
+        // into pieces of 70.
+        wide.Length.ShouldBeLessThan(TextMessageSegments.SevenBitSegment);
+        (await TextRowAsync(romanian.Id)).Segments.ShouldBe(2);
+
+        // Three pieces for two messages — what the carrier bills, and what the ceiling has to be
+        // counting for it to mean anything to an installation whose members read Romanian.
+        (await HealthAsync(operatorClient)).GetProperty("paidMessagesToday").GetInt32().ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_hand_over_the_gateway_refused_still_costs_and_a_delivery_dropped_gives_it_back()
+    {
+        await StartAsync();
+        var operatorClient = await OperatorClientAsync();
+        var account = await NewAccountAsync("refused");
+        var number = await ConfirmAsync(account, Number(22));
+        await ChooseTextAsync(account);
+
+        await ClearTodaysSpendingAsync();
+        factory.Messages.Clear();
+        try
+        {
+            // Taken by the gateway and then refused. The only honest reading of that is that it
+            // may well have gone, so it is charged — and charged what it weighed.
+            //
+            // This account reads English, and that is what makes the assertion below mean
+            // anything: a row is written with what its message was weighed at before anybody was
+            // handed anything, which is two here, and one piece is a number nothing but the
+            // hand-over itself can have written. An account reading Romanian would be charged the
+            // same two either way, and this test would pass over a failure path that reported no
+            // amount at all.
+            factory.Messages.FailSendsTo = number;
+            await QueueAnnouncementAsync(account.Id);
+            await DrainAsync();
+        }
+        finally
+        {
+            factory.Messages.FailSendsTo = null;
+        }
+
+        var text = await TextRowAsync(account.Id);
+        text.Status.ShouldBe(NotificationDeliveryStatus.Pending);
+        text.Error.ShouldNotBeNullOrWhiteSpace();
+        text.Segments.ShouldBe(1);
+        (await HealthAsync(operatorClient)).GetProperty("paidMessagesToday").GetInt32().ShouldBe(1);
+
+        // And the other side of the same line: the recipient answers differently before the retry
+        // comes round, so the row goes and nothing was ever handed over on it again. The day gets
+        // back what the row was charged — all of it, whatever that amount was — because there is
+        // nothing left to be billed for.
+        await StopTextsAsync(account);
+        await MakeDueAsync(account.Id);
+        await DrainAsync();
+
+        (await DeliveriesAsync(account.Id)).ShouldNotContain(d => d.Channel == NotificationChannel.Sms);
+        (await HealthAsync(operatorClient)).GetProperty("paidMessagesToday").GetInt32().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task The_shipped_ceiling_is_reached_by_what_the_carrier_bills_and_not_by_the_message_count()
+    {
+        await StartAsync();
+        var leaderClient = await LeaderClientAsync();
+        var member = await NewAccountAsync("halved");
+        await ConfirmAsync(member, Number(23));
+        await ChooseTextAsync(member);
+        await JoinAsync(member.Id);
+
+        // Half as many messages as the shipped ceiling allows, each of them two pieces — which is
+        // what one text in Romanian weighs. Counted as messages this installation has spent half
+        // its day and has room for fifty more; counted as the carrier bills, the day is gone.
+        // Nothing about the ceiling is injected: the number that binds is the one that ships.
+        await SpendTodayAsync(AnnouncementSettings.DefaultDailyPaidMessageCap / 2, segments: 2);
+
+        var refused = await AnnounceAsync(leaderClient, "over the line");
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        (await refused.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("caving_group.announcement_paid_cap_reached");
+
+        // Refused before anything was written, so it cost nothing: no notice for anybody to read
+        // and no row for the day to count.
+        (await NoticesForAsync(member.Id)).ShouldBeEmpty();
+
+        // The control that makes the refusal above mean something, and the reason this test is
+        // not the shipped-ceiling one over again: exactly the same number of messages, each of
+        // them one piece instead of two, and the announcement goes. What refused it was the
+        // amount the carrier bills and not the number of rows in the day.
+        await SpendTodayAsync(AnnouncementSettings.DefaultDailyPaidMessageCap / 2, segments: 1);
+
+        var allowed = await AnnounceAsync(leaderClient, "under the line");
+
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+        (await NoticesForAsync(member.Id)).ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public async Task The_ceiling_the_product_ships_with_refuses_the_announcement_that_would_pass_it()
     {
         await StartAsync();
@@ -315,9 +467,11 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
         // read and no delivery row for the day to count.
         (await NoticesForAsync(member.Id)).ShouldBeEmpty();
 
-        // The positive half, one message of headroom apart. The leader still has their turn
-        // because a refusal does not spend the cooldown a sender gets between announcements.
-        await SpendTodayAsync(AnnouncementSettings.DefaultDailyPaidMessageCap - 1);
+        // The positive half, one notice's worth of headroom apart — which is what this club's
+        // notice weighs, and not one: the wording is weighed in the language that costs most, and
+        // that one needs the wide alphabet. The leader still has their turn because a refusal does
+        // not spend the cooldown a sender gets between announcements.
+        await SpendTodayAsync(AnnouncementSettings.DefaultDailyPaidMessageCap - WeighedPerCopy);
 
         var allowed = await AnnounceAsync(leaderClient, "under the line");
 
@@ -491,6 +645,38 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
         return response;
     }
 
+    /// <summary>Stores Romanian as the language this account reads, as its own settings page does.</summary>
+    /// <remarks>
+    /// Through the route rather than by writing the column, because what is under test downstream
+    /// is the text that a real account's stored language produces — and the language a message is
+    /// rendered in is the one thing that decides what it weighs.
+    /// </remarks>
+    private static async Task ReadsRomanianAsync(Account account)
+    {
+        var response = await account.Client.PutAsJsonAsync(
+            "/api/v1/me/locale", new { language = "ro", timeZone = (string?)null });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>Withdraws the choice that lets an announcement leave as a text.</summary>
+    private static async Task StopTextsAsync(Account account)
+    {
+        var response = await account.Client.PutAsJsonAsync(
+            "/api/v1/me/notifications/",
+            new
+            {
+                categories = new[]
+                {
+                    new
+                    {
+                        category = "groupAnnouncement",
+                        channels = new[] { new { channel = "sms", choice = "off" } },
+                    },
+                },
+            });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
     private async Task<string> ConfirmAsync(Account account, string number)
     {
         var change = await account.Client.PostAsJsonAsync(
@@ -653,7 +839,15 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
     /// reason. What they carry is the real charged channel, because the set the day is counted on
     /// is derived from what is registered rather than named anywhere.
     /// </remarks>
-    private async Task SpendTodayAsync(int count)
+    /// <param name="count">How many messages the day has already sent.</param>
+    /// <param name="segments">
+    /// What each of them weighed. One is the cheapest a text can be and is what a day of English
+    /// wording costs; two is what the same wording costs an account reading a language whose
+    /// letters are outside the seven-bit alphabet. Separating the two is the whole point of
+    /// letting a caller say it: a helper that assumed one would be asserting that a message is a
+    /// message, which is the belief under test.
+    /// </param>
+    private async Task SpendTodayAsync(int count, int segments = 1)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -685,8 +879,36 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
             CreatedAt = now,
             NotBefore = now,
             SentAt = now,
+
+            // Written by hand for the same reason the timestamp is. A row costs what the carrier
+            // split its text into, so a row seeded without an amount is a message that was sent
+            // and charged for nothing — and every count around it would come out short while
+            // reading as if the arithmetic worked. One apiece is the cheapest a text can be, which
+            // is what keeps this helper meaning "this many messages" to the tests that use it.
+            Segments = segments,
         }));
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Takes the day's spending back to nothing, leaving what this test then does as the whole of
+    /// it.
+    /// </summary>
+    /// <remarks>
+    /// Three deletes and not one, because what the day has committed to is not only what it has
+    /// handed over: an announcement another class left unrouted, or one accepted and not yet
+    /// handed out, is spending a test here would see and could not account for. Every class in
+    /// this suite shares one database and none of them run at the same time as each other.
+    /// </remarks>
+    private async Task ClearTodaysSpendingAsync()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.NotificationDeliveries.ExecuteDeleteAsync();
+        await db.Notifications
+            .Where(n => n.RoutedAt == null && n.Category == NotificationCategory.GroupAnnouncement)
+            .ExecuteDeleteAsync();
+        await db.CavingGroupAnnouncements.Where(a => a.ExpandedAt == null).ExecuteDeleteAsync();
     }
 
     /// <summary>Gives up on this account's text, and answers with the row an operator would click.</summary>

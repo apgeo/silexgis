@@ -44,6 +44,13 @@ public static class NotificationQueue
     /// reason against each entry, pinned by a test.
     /// </param>
     /// <param name="targetId">Which one. Pass it with <paramref name="targetKind"/> or not at all.</param>
+    /// <param name="segmentsPerCopy">
+    /// What one outbound copy of this is expected to cost on a transport that bills by the piece,
+    /// for a producer that has already weighed the wording it is queuing. Left out by every
+    /// producer whose message cannot travel that way, and by any that has not weighed it: the
+    /// guard on the day's spending then falls back to its own floor rather than reading the
+    /// message as free.
+    /// </param>
     public static void Enqueue(
         SilexGisDbContext db,
         Guid recipientUserId,
@@ -51,7 +58,8 @@ public static class NotificationQueue
         string templateKey,
         IReadOnlyDictionary<string, string> placeholders,
         NotificationTargetKind? targetKind = null,
-        Guid? targetId = null) =>
+        Guid? targetId = null,
+        int segmentsPerCopy = 0) =>
         db.Notifications.Add(new Notification
         {
             RecipientUserId = recipientUserId,
@@ -60,5 +68,6 @@ public static class NotificationQueue
             Placeholders = JsonSerializer.Serialize(placeholders, JsonSerializerOptions.Web),
             TargetKind = targetKind,
             TargetId = targetId,
+            SegmentsPerCopy = segmentsPerCopy,
         });
 }

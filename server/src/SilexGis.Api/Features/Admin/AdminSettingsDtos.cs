@@ -150,16 +150,18 @@ public sealed class NotificationSettingsDtoValidator : AbstractValidator<Notific
 /// or written to at all — it is not a hidden option, it is an absent one.
 /// </param>
 /// <param name="DailyPaidMessageCap">
-/// How many paid messages a day the installation will send before it refuses. Read back as the
-/// ceiling actually in force, so a page never shows a number nothing would count against.
+/// How much a day the installation will send before it refuses, counted in the pieces a carrier
+/// splits a text message into and bills for rather than in messages — the same wording costs two
+/// pieces in a language with diacritics where it costs one without them. Read back as the ceiling
+/// actually in force, so a page never shows a number nothing would count against.
 /// </param>
 public sealed record AnnouncementSettingsDto(bool PaidChannelsEnabled, int DailyPaidMessageCap);
 
 public sealed class AnnouncementSettingsDtoValidator : AbstractValidator<AnnouncementSettingsDto>
 {
     /// <summary>
-    /// A thousand messages in a day. Far past what any club's roster needs and near enough to a
-    /// real invoice that a slipped digit is refused here rather than sent.
+    /// A thousand charged pieces in a day. Far past what any club's roster needs and near enough
+    /// to a real invoice that a slipped digit is refused here rather than sent.
     /// </summary>
     private const int MaxDailyPaidMessageCap = 1000;
 

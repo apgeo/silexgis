@@ -67,11 +67,7 @@ public sealed class CavingGroupAnnouncementHandler(
             ["actorName"] = announcement.SenderName,
             ["cavingGroupName"] = announcement.CavingGroupName,
             ["announcement"] = announcement.Message,
-            // The inbox, because that is the one page an announcement can be read on. The
-            // group's own page is where one is written, not where one arrives, and a text
-            // message carries nothing but this link — so a link that landed anywhere else
-            // would be the whole message failing to keep its promise.
-            ["url"] = "/notifications",
+            ["url"] = NotificationLinks.Inbox,
         };
 
         foreach (var recipient in recipients)
@@ -83,7 +79,13 @@ public sealed class CavingGroupAnnouncementHandler(
                 MessageTemplateCatalog.NotifyGroupAnnouncement,
                 placeholders,
                 NotificationTargetKind.CavingGroup,
-                announcement.CavingGroupId);
+                announcement.CavingGroupId,
+
+                // Carried over rather than weighed again, so that what the day has promised does
+                // not change as the notice turns into notifications: the sender was measured
+                // against this figure, and a second announcement made in between is refused
+                // against the same one.
+                announcement.SegmentsPerCopy);
         }
 
         announcement.ExpandedAt = DateTimeOffset.UtcNow;

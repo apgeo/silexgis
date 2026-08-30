@@ -46,6 +46,22 @@ public class CavingGroupAnnouncement
     /// <summary>How many people it was meant for, counted when it was sent.</summary>
     public int RecipientCount { get; set; }
 
+    /// <summary>
+    /// What one copy of this notice was weighed at when it was accepted, in the pieces a carrier
+    /// splits a text message into.
+    /// </summary>
+    /// <remarks>
+    /// Recorded because the day's spending has to answer for a notice that has been accepted and
+    /// not yet handed to anybody, and at that moment there is no text on any row to count. It is
+    /// the number the sender was measured against, kept so that what the guard promised and what
+    /// the next sender is refused against are the same figure — a projection that re-guessed would
+    /// hand back headroom the first announcement had already taken. Weighed from the wording that
+    /// would actually leave, with this notice's own group and sender names in it, in every
+    /// language the installation writes: the recipients' languages are not known here, and the
+    /// same sentence costs twice as much in one whose marks fall outside the narrow alphabet.
+    /// </remarks>
+    public int SegmentsPerCopy { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>

@@ -81,6 +81,27 @@ internal sealed class ChargingTestChannel : INotificationChannel
 [Collection(PostgresCollection.Name)]
 public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDisposable
 {
+    /// <summary>
+    /// What one copy of this fixture's notice is weighed at: the pieces the announcement wording
+    /// splits into when it carries this club's short name.
+    /// </summary>
+    /// <remarks>
+    /// Two, and not because two is anybody's default. The wording that would leave is rendered in
+    /// every language the installation writes and the largest answer stands, and the language whose
+    /// marks fall outside the narrow alphabet packs 67 characters to a piece — so this club's
+    /// notice, comfortably inside what one piece would hold in English, travels in two. A club
+    /// named at any length worth having is more, which is what the test below is about.
+    /// </remarks>
+    private const int WeighedPerCopy = 2;
+
+    /// <summary>
+    /// A club name of the ordinary sort, long enough that the notice naming it needs a third
+    /// piece. Sixty characters, well inside what the roster form accepts, and written without a
+    /// single mark outside the narrow alphabet on purpose — see the test that uses it.
+    /// </summary>
+    private const string LongClubName =
+        "Speleological Society of the Western Carpathians and Apuseni";
+
     private readonly string connectionString;
     private readonly List<Guid> mine = [];
 
@@ -173,8 +194,8 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
     {
         await StartAsync();
 
-        // The day is already at the shipped ceiling: a hundred messages committed on a charging
-        // channel, nothing injected, nothing configured down.
+        // The day is already at the shipped ceiling: a hundred charged pieces committed on a
+        // charging channel, nothing injected, nothing configured down.
         await SpendAsync(AnnouncementSettings.DefaultDailyPaidMessageCap);
 
         var refused = await AnnounceAsync("One more and the bill goes up.");
@@ -208,10 +229,12 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
     {
         await StartAsync();
 
-        // One short of the shipped ceiling, and one person to reach: exactly at it, which is not
-        // past it. An off-by-one here would refuse the hundredth message an installation said it
-        // would pay for.
-        await SpendAsync(AnnouncementSettings.DefaultDailyPaidMessageCap - 1);
+        // One message's worth short of the shipped ceiling, and one person to reach: exactly at
+        // it, which is not past it. A message's worth is what a text is assumed to weigh before
+        // it has been rendered, so the subtraction is that assumption and not one — an off-by-one
+        // here would refuse the last message an installation said it would pay for.
+        await SpendAsync(
+            AnnouncementSettings.DefaultDailyPaidMessageCap - WeighedPerCopy);
 
         var response = await AnnounceAsync("The meet is on.");
 
@@ -227,18 +250,22 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
         // Nothing spent today at all, and still refused: the ceiling is the installation's own
         // answer, not a fixed hundred, and the count of what this one announcement would cost is
         // part of the sum rather than something checked afterwards.
+        //
+        // Two people to reach, and a ceiling of three: enough for two messages if a message were
+        // the unit, and not enough for what two of them are assumed to weigh. That is the whole
+        // difference this pins — a guard counting messages lets this one through.
         await SpendAsync(0);
-        await SetCeilingAsync(1);
+        await SetCeilingAsync(3);
         await AddCrowdAsync(1);
 
-        var refused = await AnnounceAsync("Two of you, one message allowed.");
+        var refused = await AnnounceAsync("Two of you, three pieces allowed.");
 
         refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
         (await refused.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("code").GetString().ShouldBe("caving_group.announcement_paid_cap_reached");
 
-        await SetCeilingAsync(2);
-        (await AnnounceAsync("Two of you, two messages allowed.")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        await SetCeilingAsync(2 * WeighedPerCopy);
+        (await AnnounceAsync("Two of you, four pieces allowed.")).StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -246,21 +273,32 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
     {
         await StartAsync();
         await SpendAsync(0);
-        await SetCeilingAsync(2);
+        await SetCeilingAsync(2 * WeighedPerCopy);
+        using var operatorClient = await OperatorClientAsync();
 
         // A second sender, because what is being pinned is two announcements racing each other
         // and not one sender's own cooldown, which would refuse the second with a different
         // answer entirely.
         using var other = await SecondSenderAsync();
 
-        // Accepted: two people to reach and two messages allowed. Nothing has routed — the
-        // sending worker is stopped here exactly as it is briefly stopped in life, between the
-        // request that accepts an announcement and the pass that turns it into outbound copies.
+        // Accepted: two people to reach and exactly what two messages are assumed to weigh
+        // allowed. Nothing has routed — the sending worker is stopped here exactly as it is
+        // briefly stopped in life, between the request that accepts an announcement and the pass
+        // that turns it into outbound copies.
         (await AnnounceAsync("The meet is on.")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // What that work is estimated at, read through the operator's view because it is the same
+        // number the guard reads. Four and not two: nothing has been handed over, so nobody knows
+        // which language these will be read in, and what was promised is what the wording weighs
+        // in the dearest of them. An estimate of one apiece here would leave exactly the headroom
+        // this whole ceiling exists to deny.
+        var health = await operatorClient.GetFromJsonAsync<JsonElement>(
+            "/api/v1/admin/notifications/health");
+        health.GetProperty("paidMessagesToday").GetInt32().ShouldBe(2 * WeighedPerCopy);
 
         // The window the ceiling used to be blind in. Counting only what has been handed over
         // reads the same empty headroom the first announcement already took, and lets a second
-        // one through — four charged messages against a ceiling of two.
+        // one through — two announcements' worth of charge against one announcement's ceiling.
         var refused = await AnnounceAsAsync(other, "And so is the other one.");
 
         refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
@@ -269,8 +307,63 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
 
         // And the positive half: the refusal is arithmetic about the ceiling rather than a second
         // sender being unable to announce at all.
-        await SetCeilingAsync(4);
+        await SetCeilingAsync(4 * WeighedPerCopy);
         (await AnnounceAsAsync(other, "And so is the other one."))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// What an announcement costs is weighed from the wording that would leave, not assumed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The club's name travels inside the message, so a club with a name costs more to write to
+    /// than a club with a short one — and the guard has to know that before it accepts anything,
+    /// because afterwards is an invoice. Nothing else changes between the two halves here: same
+    /// roster, same message, same ceiling arithmetic.
+    /// </para>
+    /// <para>
+    /// <b>The name below carries no mark outside the narrow alphabet, deliberately.</b> The third
+    /// piece is spent entirely by the Romanian wording, which needs the wide alphabet whatever it
+    /// is naming — so a guard that weighed only the English form of this message would answer one
+    /// piece and let this through, and stripping the marks out of the Romanian wording would do
+    /// the same. Either way this test fails, which is the point of it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_club_whose_name_fills_the_message_costs_more_of_the_day_than_one_whose_name_does_not()
+    {
+        await StartAsync();
+        await SpendAsync(0);
+
+        // The control: the club as this fixture names it, and a ceiling of exactly what one copy
+        // of its notice weighs. One person to reach, and it goes.
+        await SetCeilingAsync(WeighedPerCopy);
+        (await AnnounceAsync("The meet is on."))
+            .StatusCode.ShouldBe(HttpStatusCode.OK, "a short club name costs what it weighs");
+
+        await SpendAsync(0);
+        await RenameAsync(LongClubName);
+
+        // A second sender, because the first has just used their turn under the cooldown, and a
+        // refusal for the wrong reason would prove nothing. Two people on the roster to reach now.
+        using var other = await SecondSenderAsync();
+        await SetCeilingAsync(2 * WeighedPerCopy);
+
+        // Refused: two copies at what the longer name really weighs is six pieces, and the day
+        // will pay for four. A guard charging a flat two apiece — the floor for a message nobody
+        // has weighed — computes four, finds a clean day, and accepts.
+        var refused = await AnnounceAsAsync(other, "The meet is on.");
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await refused.Content.ReadAsStringAsync());
+        (await refused.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("code").GetString().ShouldBe("caving_group.announcement_paid_cap_reached");
+
+        // And the positive half, one piece apiece higher: the refusal was the arithmetic and not
+        // the longer name being unsendable. Exactly this ceiling, so the weighed amount is three
+        // and not merely "more than two".
+        await SetCeilingAsync(2 * (WeighedPerCopy + 1));
+        (await AnnounceAsAsync(other, "The meet is on."))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
@@ -344,10 +437,7 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
         await StartAsync();
         await SpendAsync(7);
 
-        var suffix = Guid.NewGuid().ToString("N")[..8];
-        var adminEmail = $"cap-admin-{suffix}@t.local";
-        mine.Add(await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, adminEmail));
-        using var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+        using var admin = await OperatorClientAsync();
 
         var health = await admin.GetFromJsonAsync<JsonElement>("/api/v1/admin/notifications/health");
 
@@ -359,7 +449,9 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
             .ShouldBe(AnnouncementSettings.DefaultDailyPaidMessageCap);
     }
 
-    /// <summary>Puts <paramref name="count"/> charged messages into today, and nothing into any other day.</summary>
+    /// <summary>
+    /// Puts <paramref name="count"/> charged pieces into today, and nothing into any other day.
+    /// </summary>
     /// <remarks>
     /// Written straight into the outbox rather than produced by a hundred announcements, because
     /// what is under test here is the arithmetic and not the transport, and the day's rows left by
@@ -416,8 +508,24 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
             Status = NotificationDeliveryStatus.Pending,
             CreatedAt = now,
             NotBefore = now,
+
+            // And what it costs, for the same reason: a row is charged for the pieces its text
+            // was split into, so one seeded without an amount would be spending that reads as
+            // nothing and would leave the ceiling below it looking further away than it is. One
+            // apiece is the cheapest a message can be, which keeps this helper meaning "this many
+            // messages" for the arithmetic these tests are about.
+            Segments = 1,
         }));
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>Somebody who may read the operator's view of what the day has cost.</summary>
+    private async Task<HttpClient> OperatorClientAsync()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var adminEmail = $"cap-admin-{suffix}@t.local";
+        mine.Add(await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, adminEmail));
+        return await AuthHelper.BearerClientAsync(factory, adminEmail);
     }
 
     /// <summary>Saves the installation's own ceiling, as the administrator's form would.</summary>
@@ -428,6 +536,15 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
         await settings.SaveAsync(
             AppSettingSections.Announcements,
             new AnnouncementSettings { PaidChannelsEnabled = true, DailyPaidMessageCap = cap });
+    }
+
+    /// <summary>Renames the club under test, which renames it inside every notice it sends.</summary>
+    private async Task RenameAsync(string name)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.CavingGroups.Where(c => c.Id == cavingGroupId)
+            .ExecuteUpdateAsync(c => c.SetProperty(g => g.Name, name));
     }
 
     /// <summary>Adds more account-holding members to the club under test.</summary>

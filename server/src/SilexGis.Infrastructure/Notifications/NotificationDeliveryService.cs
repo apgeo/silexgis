@@ -469,6 +469,17 @@ public sealed class NotificationDeliveryService(
 
         var result = await channel.SendAsync(user, row.TemplateKey, ValuesFor(row, user), ct);
 
+        // What the day is charged for this row, from what the transport was actually handed. Zero
+        // says nothing billed by the piece changed hands — a channel that is not billed that way,
+        // or a fault before any text existed — and the row keeps the amount it was written with
+        // rather than being talked down to nothing by a channel that has no opinion about it.
+        // Anything else replaces whatever an earlier attempt cost: one row is one charge, and what
+        // it charges is what the attempt that stuck handed over, not what an earlier one did.
+        if (result.Segments > 0)
+        {
+            delivery.Segments = result.Segments;
+        }
+
         if (result.Sent)
         {
             // Terminates the row even when nothing is configured: the message went to the log,
@@ -586,7 +597,31 @@ public sealed class NotificationDeliveryService(
             Status = status,
             NotBefore = notBefore,
             CreatedAt = clock.GetUtcNow(),
+            Segments = Committed(channel, row),
         });
+
+    /// <summary>
+    /// What a row is expected to cost before anything has been rendered for it.
+    /// </summary>
+    /// <remarks>
+    /// A row exists before its text does, and the day's spending counts it from the moment it is
+    /// written, so the amount cannot wait for the send: a fan-out that routed a thousand copies
+    /// and has not sent them yet is a thousand copies' worth of money committed. A channel nobody
+    /// is billed by the piece for carries nothing; one that is carries what the producer weighed
+    /// this message at, which the hand-over then replaces with what actually left.
+    /// <para>
+    /// A producer that weighed nothing leaves the floor below, which is a guess and is documented
+    /// as one. Never less than that floor even when a producer weighed less: the amount is a
+    /// promise about money and the cheap answer is the one that hurts.
+    /// </para>
+    /// </remarks>
+    private int Committed(NotificationChannel channel, Notification row)
+    {
+        var kind = channels.Of(channel).Kind;
+        return kind is not NotificationChannelKind.None && (NotificationChannelKinds.Paid & kind) == kind
+            ? Math.Max(row.SegmentsPerCopy, TextMessageSegments.Unrendered)
+            : 0;
+    }
 
     /// <summary>
     /// Records a fault that stopped a notification being routed at all.
@@ -689,7 +724,7 @@ public sealed class NotificationDeliveryService(
     /// A path is resolved against the installation's address; anything else is left alone, so a
     /// value that is already a whole address is not mangled into one that is not.
     /// </summary>
-    private string Absolute(string url) => url.StartsWith('/') ? Link(url) : url;
+    private string Absolute(string url) => NotificationLinks.Absolute(configuration, url);
 
     private void MarkAllSent(List<NotificationDelivery> deliveries)
     {
@@ -736,8 +771,7 @@ public sealed class NotificationDeliveryService(
     private static string? Truncate(string? error) =>
         error is null ? null : error.Length <= 1000 ? error : error[..1000];
 
-    private string SiteUrl =>
-        (configuration.GetValue("PublicUrl", "http://localhost:8080") ?? "http://localhost:8080").TrimEnd('/');
+    private string SiteUrl => NotificationLinks.SiteUrl(configuration);
 
     private int DigestHourUtc => configuration.GetValue("Notifications:DigestHourUtc", 7);
 

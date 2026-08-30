@@ -29,6 +29,7 @@ export const groups = {
     'EventLifecycleTests', 'EventReminderSweepTests', 'EventSeriesBulkTests', 'EventSeriesTests',
     'TripInvitationSubjectTests',
   ],
+  events: ['EventAuthoringTests', 'EventLifecycleTests'],
   expeditions: [
     'ExpeditionDiscoveryTests', 'ExpeditionEntityTests', 'ExpeditionLeadsTests',
     'ExpeditionListFilterTests', 'ExpeditionMapTests', 'ExpeditionMembershipTests',
@@ -51,8 +52,9 @@ export const groups = {
   ],
   checklists: ['ChecklistAccessTests', 'ChecklistAuthoringTests', 'TripChecklistTickTests'],
   notifications: [
-    'AccountEmailTests', 'AdminMessagingTests', 'EmailVerificationTests',
-    'NotificationDeliveryTests', 'TripPlanNotificationTests',
+    'AccountEmailTests', 'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests',
+    'EmailVerificationTests', 'NotificationDeliveryTests', 'SmsNotificationChannelTests',
+    'TripPlanNotificationTests',
   ],
   calendar: ['CalendarTests', 'CalendarWindowTests'],
   access: [
@@ -65,7 +67,9 @@ export const groups = {
     'SurveyMeshTests', 'SurveyModelTests',
   ],
   cavers: ['CaverRosterTests', 'ProfileVisibilityTests'],
-  cavingGroups: ['AclAndCavingGroupTests', 'SeededGroupUpgradeTests'],
+  cavingGroups: [
+    'AclAndCavingGroupTests', 'CavingGroupAnnouncementPaidCapTests', 'SeededGroupUpgradeTests',
+  ],
   geoFeatures: [
     'FeatureFilterCompilerTests', 'FeatureHierarchyTests', 'FeatureIntegrityTests',
     'FeatureLinkTests', 'FeatureTests', 'GeoJsonGeometryTests',
@@ -114,7 +118,10 @@ export const groups = {
   audit: ['AccessHistoryTests', 'HistoryTests'],
   admin: ['AdminMessagingTests', 'SeededGroupUpgradeTests'],
   settings: ['AccountSettingsTests', 'TerrainOptionsTests', 'UiDefaultsTests'],
-  messaging: ['AdminMessagingTests', 'NotificationDeliveryTests'],
+  messaging: [
+    'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests', 'NotificationDeliveryTests',
+    'SmsNotificationChannelTests',
+  ],
   sms: ['MfaAndRateLimitTests', 'TwoFactorChannelTests'],
   surveys: ['SurveyMeshTests', 'SurveyModelTests'],
   metadata: ['ContentMetadataTests', 'DocumentMetadataTests'],

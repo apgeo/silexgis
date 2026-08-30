@@ -21,10 +21,11 @@ public enum NotificationChannel : short
     Email = 0,
 
     /// <summary>
-    /// Text message. The one value here that charges the installation per message, which is why a
-    /// row naming it is also a unit of spending: a day's cost is counted over the rows created
-    /// that day, so a row that exists has been committed to whether or not the gateway has taken
-    /// it yet.
+    /// Text message. The one value here that charges the installation for what it sends, which is
+    /// why a row naming it carries an amount rather than merely being one: a carrier bills a text
+    /// by the pieces it splits into, not by the message, and a day's cost is the sum of the
+    /// amounts on the rows created that day — so a row that exists has been committed to whether
+    /// or not the gateway has taken it yet.
     /// </summary>
     Sms = 1,
 }
@@ -96,4 +97,17 @@ public class NotificationDelivery
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? SentAt { get; set; }
+
+    /// <summary>
+    /// What this row costs the day, in the pieces a carrier splits a text message into and bills
+    /// for.
+    /// </summary>
+    /// <remarks>
+    /// Written as a conservative assumption when the row is created, because at that moment the
+    /// message has no text and the row is already a commitment; replaced by the true count the
+    /// moment a transport is handed the text, and replaced again by every later attempt, because
+    /// what a retry hands over is what a retry costs. Zero on a channel nobody is billed by the
+    /// piece for — the day's spending is summed only over the ones that are.
+    /// </remarks>
+    public int Segments { get; set; }
 }

@@ -177,6 +177,7 @@ public static class CavingGroupAnnouncementEndpoints
         GroupAnnouncementThrottle throttle,
         IAppSettingsService settings,
         NotificationChannels channels,
+        IMessageDispatcher dispatcher,
         IConfiguration configuration,
         TimeProvider clock,
         CancellationToken ct)
@@ -219,16 +220,23 @@ public static class CavingGroupAnnouncementEndpoints
             return TypedResults.Ok(new CavingGroupAnnouncementResultDto(0, false));
         }
 
+        var message = request.Message.Trim();
+        var labels = await ProfileDirectory.ResolveLabelsAsync(db, user, [user.UserId], ct);
+        var senderName = labels.GetValueOrDefault(user.UserId) ?? string.Empty;
+
+        // What one copy of this particular notice weighs, before it is decided whether it may be
+        // sent — the names it will carry are known here, and they are most of what makes one
+        // announcement cost more than another.
+        var segmentsPerCopy = await PaidMessageBudget.AnnouncementSegmentsAsync(
+            dispatcher, configuration, senderName, cavingGroupName, ct);
+
         var announcements = await settings.GetAnnouncementsAsync(ct);
-        var refusal = await PaidSpendingRefusalAsync(db, channels, announcements, clock, recipients.Count, ct);
+        var refusal = await PaidSpendingRefusalAsync(
+            db, channels, announcements, clock, recipients.Count, segmentsPerCopy, ct);
         if (refusal is not null)
         {
             return refusal;
         }
-
-        var message = request.Message.Trim();
-        var labels = await ProfileDirectory.ResolveLabelsAsync(db, user, [user.UserId], ct);
-        var senderName = labels.GetValueOrDefault(user.UserId) ?? string.Empty;
 
         // Stamped before the work rather than after. A save that reports a failure may still have
         // committed, and somebody retrying a "failure" in a loop is exactly what this bounds.
@@ -246,6 +254,12 @@ public static class CavingGroupAnnouncementEndpoints
                 CavingGroupName = cavingGroupName,
                 SenderName = senderName,
                 RecipientCount = recipients.Count,
+
+                // Kept rather than re-derived when the fan-out runs: what the day's ceiling has
+                // already promised has to be the figure this sender was measured against, or a
+                // second announcement made in the meantime would be handed back headroom the
+                // first one had taken.
+                SegmentsPerCopy = segmentsPerCopy,
             };
             db.CavingGroupAnnouncements.Add(announcement);
 
@@ -268,11 +282,7 @@ public static class CavingGroupAnnouncementEndpoints
                 ["actorName"] = senderName,
                 ["cavingGroupName"] = cavingGroupName,
                 ["announcement"] = message,
-                // The inbox, because that is the one page an announcement can be read on. The
-                // group's own page is where one is written, not where one arrives, and a text
-                // message carries nothing but this link — so a link that landed anywhere else
-                // would be the whole message failing to keep its promise.
-                ["url"] = "/notifications",
+                ["url"] = NotificationLinks.Inbox,
             };
 
             foreach (var recipient in recipients)
@@ -288,7 +298,8 @@ public static class CavingGroupAnnouncementEndpoints
                     // again against this reference at the moment they read, which is the same
                     // question, of the same row, that decided they were told in the first place.
                     NotificationTargetKind.CavingGroup,
-                    id);
+                    id,
+                    segmentsPerCopy);
             }
         }
 
@@ -305,15 +316,27 @@ public static class CavingGroupAnnouncementEndpoints
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The ceiling is counted in messages that leave by a channel charging for each one, over rows
-    /// already written today — pending ones included, because a message the installation has
-    /// committed to sending is money committed whether or not the gateway has taken it yet.
+    /// The ceiling is counted in what a carrier bills for, which is not messages: a text is split
+    /// into pieces and charged by the piece, and a single character outside the narrow alphabet
+    /// re-encodes a whole message into pieces less than half the size — so the same wording costs
+    /// twice as much to somebody who reads Romanian as to somebody who reads English. What has
+    /// already been written today counts, pending rows included, because a message the
+    /// installation has committed to sending is money committed whether or not the gateway has
+    /// taken it yet.
     /// </para>
     /// <para>
     /// What this announcement would cost is counted at its worst: everybody it reaches, on every
     /// paid channel the category may use here. Each of those people may have switched that channel
     /// off, so fewer messages usually leave — but a bound on spending that assumed the usual case
     /// would let the unusual one through, and the unusual one is the expensive one.
+    /// </para>
+    /// <para>
+    /// At its worst in pieces, too, and that is weighed rather than assumed: the wording that
+    /// would leave is rendered with this announcement's own names in it, in every language the
+    /// installation writes, and the largest answer is what each copy is charged. An audience who
+    /// all read the language that packs cheaply is therefore charged more than they cost — the
+    /// recipients' languages are the one thing not known here, and a ceiling that guessed the
+    /// cheap answer would admit work the installation has said it will not pay for.
     /// </para>
     /// <para>
     /// What has already been promised counts as well as what has already left, because an
@@ -334,6 +357,7 @@ public static class CavingGroupAnnouncementEndpoints
         AnnouncementSettings announcements,
         TimeProvider clock,
         int recipientCount,
+        int segmentsPerCopy,
         CancellationToken ct)
     {
         var paidChannels = PaidMessageBudget.ChannelsFor(channels, announcements);
@@ -342,13 +366,15 @@ public static class CavingGroupAnnouncementEndpoints
             return null;
         }
 
-        var wouldSend = recipientCount * paidChannels.Count;
+        var wouldSend = recipientCount * paidChannels.Count * segmentsPerCopy;
         var committedToday = await PaidMessageBudget.CommittedTodayAsync(db, paidChannels, clock, ct);
 
         return committedToday + wouldSend > announcements.EffectiveDailyPaidMessageCap
             ? ApiProblems.BadRequest(
                 "caving_group.announcement_paid_cap_reached",
-                "This installation has reached what it will spend on messages today.")
+                "This installation has reached what it will spend today. The ceiling counts the "
+                + "pieces a carrier splits a text message into, so a message costs more than one "
+                + "where the language it is read in needs the wide alphabet.")
             : null;
     }
 }

@@ -266,10 +266,13 @@ public sealed record NotificationSettings
 public sealed record AnnouncementSettings
 {
     /// <summary>
-    /// How many paid messages a day the installation is willing to send before it refuses. A
-    /// hundred: enough for one announcement to a large club and something left over, small enough
-    /// that a mistake costs a noticeable amount rather than a bill. An installation that means to
-    /// spend more raises it; one that does not should not discover the default by being invoiced.
+    /// How much a day the installation is willing to spend before it refuses, in the pieces a
+    /// carrier splits a text message into and bills for. A hundred: enough for one announcement
+    /// to a large club and something left over, small enough that a mistake costs a noticeable
+    /// amount rather than a bill. An installation that means to spend more raises it; one that
+    /// does not should not discover the default by being invoiced. Note that it buys fewer
+    /// messages where the wording carries diacritics, because one character outside the narrow
+    /// alphabet re-encodes a whole message into pieces less than half the size.
     /// </summary>
     public const int DefaultDailyPaidMessageCap = 100;
 
@@ -282,7 +285,7 @@ public sealed record AnnouncementSettings
     /// </summary>
     public bool PaidChannelsEnabled { get; init; }
 
-    /// <summary>How many paid messages a day this installation will send.</summary>
+    /// <summary>How many charged message pieces a day this installation will send.</summary>
     /// <remarks>
     /// Zero and below are refused in favour of the default rather than read as "send nothing",
     /// because a mistyped environment variable and a mistyped form field must fail the same way,

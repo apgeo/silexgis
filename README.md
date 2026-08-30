@@ -271,9 +271,11 @@ Previous versions:
   it, and the two are granted separately; a club's founder can write to their own club from the start.
   Before you send it you are told how many people it reaches, and confirming is a step of its own, so a
   message to two hundred people is never one careless click. An installation can also say that
-  announcements may travel on a channel that charges per message — it is off unless switched on, one
-  person cannot send them in a stream, and a day's charged messages have a ceiling an administrator sets
-  and can see on the delivery page.
+  announcements may travel on a channel that charges for what it sends — it is off unless switched on,
+  one person cannot send them in a stream, and a day's spending has a ceiling an administrator sets and
+  can see on the delivery page. That ceiling counts the pieces a carrier splits a text message into
+  rather than messages: one diacritic makes the same wording cost two of them, so a ceiling means half
+  as many messages to members who read Romanian as to members who read English.
 - **A trip can say when its party is due back, and be told the party is out** — a plan records when
   the party expects to be out and the hour to raise the alarm if nobody has said so. A pass runs on
   a schedule; when that hour goes by with nothing said, everyone the trip concerns who may read it
