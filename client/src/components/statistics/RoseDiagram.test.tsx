@@ -27,7 +27,8 @@ function renderThemed(node: React.ReactNode, dark = false) {
   );
 }
 
-// No auto-cleanup is configured in this project, so each test tidies up after itself.
+// Stated here as well as in the shared setup, which now unmounts after every test: these queries
+// would otherwise match a previous test's diagram as well as this one's.
 afterEach(cleanup);
 
 function bin(fromDegrees: number, count: number, lengthM: number): RoseBin {
@@ -120,28 +121,34 @@ describe('the passage rose', () => {
     expect(screen.queryByTestId('rose-mean-axis')).toBeNull();
   });
 
-  it('draws in the dark theme without being remounted', () => {
-    const { rerender } = render(
-      <ConfigProvider theme={buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'light' })}>
+  it('is restyled by a theme change rather than redrawn', () => {
+    // The claim is that the colours come from the theme bridge, and it takes two halves to check:
+    // the colours must actually change with the theme — a hardcoded fill would not — and the very
+    // same element must carry them afterwards, because a component that tore itself down and built
+    // a new diagram would also show the new colours while losing the reader's chosen weighting.
+    const tree = (dark: boolean) => (
+      <ConfigProvider theme={buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: dark ? 'dark' : 'light' })}>
         <App>
           <RoseDiagram bins={chamberAndGallery} />
         </App>
-      </ConfigProvider>,
+      </ConfigProvider>
     );
-    const lightFill = screen.getByTestId('chart-rose').querySelector('path[data-petal]')?.getAttribute('fill');
+    const petal = () => screen.getByTestId('chart-rose').querySelector('path[data-petal]');
+    const ring = () => screen.getByTestId('chart-rose').querySelector('circle');
 
-    rerender(
-      <ConfigProvider theme={buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark' })}>
-        <App>
-          <RoseDiagram bins={chamberAndGallery} />
-        </App>
-      </ConfigProvider>,
-    );
-    const darkFill = screen.getByTestId('chart-rose').querySelector('path[data-petal]')?.getAttribute('fill');
+    const { rerender } = render(tree(false));
+    const before = petal();
+    const lightFill = before?.getAttribute('fill');
+    const lightRing = ring()?.getAttribute('stroke');
+
+    rerender(tree(true));
+    const after = petal();
+    const darkFill = after?.getAttribute('fill');
+    const darkRing = ring()?.getAttribute('stroke');
 
     expect(lightFill).toBeTruthy();
-    expect(darkFill).toBeTruthy();
-    // The colours come from the theme bridge, so a theme change restyles what is already drawn.
-    expect(screen.getAllByTestId('chart-rose')).toHaveLength(1);
+    expect(darkFill).not.toBe(lightFill);
+    expect(darkRing).not.toBe(lightRing);
+    expect(after).toBe(before);
   });
 });

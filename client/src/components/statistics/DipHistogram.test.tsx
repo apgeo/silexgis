@@ -82,9 +82,32 @@ describe('DipHistogram', () => {
     expect(frame.querySelectorAll('text').length).toBe(0);
   });
 
-  it('restyles for the dark theme without being remounted', async () => {
-    renderThemed(<DipHistogram bins={mostlyLevel} />, true);
-    const frame = await svgOf('chart-dip');
-    expect(frame.querySelectorAll('text').length).toBeGreaterThan(0);
+  it('is restyled by a theme change rather than redrawn', async () => {
+    // Two halves, both needed: the labels must actually take their colour from the theme — a
+    // chart drawing its axis in a fixed grey is unreadable in one of the two themes and that is
+    // the whole reason the theme bridge exists — and the drawing must be re-styled in place,
+    // because tearing the chart down would lose the reader's choice of count axis and flash.
+    const tree = (dark: boolean) => (
+      <ConfigProvider theme={buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: dark ? 'dark' : 'light' })}>
+        <App>
+          <DipHistogram bins={mostlyLevel} />
+        </App>
+      </ConfigProvider>
+    );
+    const labelFills = () =>
+      Array.from(screen.getByTestId('chart-dip').querySelectorAll('text')).map((n) => n.getAttribute('fill'));
+
+    const { rerender } = render(tree(false));
+    const beforeFrame = await svgOf('chart-dip');
+    const beforeSvg = beforeFrame.querySelector('svg');
+    const light = labelFills();
+    expect(light.length).toBeGreaterThan(0);
+
+    rerender(tree(true));
+    await waitFor(() => expect(labelFills()).not.toEqual(light));
+
+    const afterFrame = screen.getByTestId('chart-dip');
+    expect(afterFrame).toBe(beforeFrame);
+    expect(afterFrame.querySelector('svg')).toBe(beforeSvg);
   });
 });

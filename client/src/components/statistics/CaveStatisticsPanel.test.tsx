@@ -5,10 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { CaveSurveyStatistics } from '../../api/hooks.ts';
 
-const { statisticsSpy } = vi.hoisted(() => ({ statisticsSpy: vi.fn() }));
+const { statisticsSpy, modelsSpy } = vi.hoisted(() => ({ statisticsSpy: vi.fn(), modelsSpy: vi.fn() }));
 
 vi.mock('../../api/hooks.ts', () => ({
   useCaveSurveyStatistics: (...args: unknown[]) => statisticsSpy(...args),
+  useSurveyModels: (...args: unknown[]) => modelsSpy(...args),
 }));
 
 const { default: CaveStatisticsPanel } = await import('./CaveStatisticsPanel.tsx');
@@ -35,7 +36,10 @@ const surveyed: CaveSurveyStatistics = {
     lengthToDepthRatio: 15.3,
     sinuosity: null,
   },
-  paths: [],
+  paths: [
+    { pathIndex: 0, lengthM: 1200, straightLineM: 400, sinuosity: 3 },
+    { pathIndex: 1, lengthM: 640.25, straightLineM: 600, sinuosity: 1.07 },
+  ],
   length: {
     computedM: 1840.25,
     declaredM: 1200,
@@ -49,6 +53,9 @@ const surveyed: CaveSurveyStatistics = {
 
 function show(data: CaveSurveyStatistics | undefined, { isError = false, isLoading = false } = {}) {
   statisticsSpy.mockReturnValue({ data, isLoading, isError });
+  modelsSpy.mockReturnValue({
+    data: [{ id: 'model-1', name: 'Corrected re-export, March' }],
+  });
   return render(
     <App>
       <CaveStatisticsPanel caveId="cave-1" />
@@ -66,6 +73,51 @@ describe('CaveStatisticsPanel', () => {
     expect(screen.getByText('1,840.3 m')).toBeTruthy();
     // antd splits a decimal figure across two spans, so the tile is read whole.
     expect(screen.getByText('Horizontality').closest('.ant-statistic')?.textContent).toContain('0.92');
+  });
+
+  it('shows the altitudes the vertical figures were measured between', () => {
+    show(surveyed);
+
+    expect(screen.getByText('Highest point').closest('.ant-statistic')?.textContent).toContain('940 m');
+    expect(screen.getByText('Lowest point').closest('.ant-statistic')?.textContent).toContain('820 m');
+    // The number cavers quote, and the one nothing on this card showed before.
+    expect(screen.getByText('Length to depth').closest('.ant-statistic')?.textContent).toContain('15.30');
+  });
+
+  it('names which of the cave\'s uploaded surveys answered', () => {
+    // A corrected re-export is a new upload rather than a replacement, so a cave can hold several
+    // and exactly one of them produced these figures. Without this, a reader comparing today's
+    // numbers with the ones they wrote down last week cannot tell a changed survey from a changed
+    // choice of survey.
+    show(surveyed);
+
+    expect(screen.getByText(/Corrected re-export, March/)).toBeTruthy();
+  });
+
+  it('breaks sinuosity down by passage, longest first', () => {
+    // The single sinuosity figure cannot say whether one wandering passage carries all of it.
+    show(surveyed);
+
+    const rows = screen.getAllByRole('row').map((r) => r.textContent ?? '');
+    expect(rows.some((r) => r.includes('#1') && r.includes('1,200 m') && r.includes('3.00'))).toBe(true);
+    expect(rows.some((r) => r.includes('#2') && r.includes('1.07'))).toBe(true);
+  });
+
+  it('says whether the line work carries altitudes at all', () => {
+    show(surveyed);
+    expect(screen.getByText(/carries altitudes/)).toBeTruthy();
+
+    cleanup();
+    // A plan drawing is not a flat cave, and a column of dashes says neither. Without this
+    // sentence the reader takes the blanks for missing data rather than for a drawing that
+    // cannot answer — the same distinction the orientation panel spells out for steepness.
+    show({
+      ...surveyed,
+      hasAltitudes: false,
+      indices: { ...surveyed.indices, hasAltitudes: false, highestZM: null, lowestZM: null },
+    });
+    expect(screen.getByText(/carries no altitudes/)).toBeTruthy();
+    expect(screen.queryByText(/carries altitudes/)).toBeNull();
   });
 
   it('warns when the survey and the record disagree, without saying which is wrong', () => {

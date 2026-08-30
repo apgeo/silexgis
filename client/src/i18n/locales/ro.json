@@ -1164,7 +1164,9 @@
       "loading": "Se calculează valorile.",
       "meanSteepness": "Înclinarea medie {{value}}° față de orizontală, indiferent dacă viza urcă sau coboară.",
       "dipRefusedTitle": "Înclinarea nu poate fi calculată",
-      "dipRefusedReason": "Aceste trasee nu au altitudini, deci nimic din ele nu spune dacă o galerie urcă sau coboară. Desenarea lor oricum ar arăta peștera ca fiind orizontală peste tot, ceea ce este o afirmație despre peșteră pe care acest desen nu o poate face."
+      "dipRefusedReason": "Aceste trasee nu au altitudini, deci nimic din ele nu spune dacă o galerie urcă sau coboară. Desenarea lor oricum ar arăta peștera ca fiind orizontală peste tot, ceea ce este o afirmație despre peșteră pe care acest desen nu o poate face.",
+      "noTrendTitle": "Nu se poate calcula nicio direcție",
+      "noTrendReason": "Nimic din aceste trasee nu se deplasează pe hartă: fiecare viză fie coboară vertical, fie urcă vertical, fie este marcată ca galerie deja cartată într-o altă tură. O peșteră formată numai din puțuri este cazul obișnuit pentru aceasta. Nu există nicio direcție de desenat aici, ceea ce este o afirmație despre trasee și nu despre peșteră — lungimile de alături au fost măsurate din aceeași cartare și rămân valabile."
     },
     "cave": {
       "title": "Statistici din cartare",
@@ -1179,6 +1181,14 @@
       "sinuosity": "Sinuozitate",
       "segments": "Segmente",
       "paths": "Trasee",
+      "highest": "Punctul cel mai înalt",
+      "lowest": "Punctul cel mai jos",
+      "lengthToDepth": "Lungime raportată la denivelare",
+      "pathSinuosityTitle": "Sinuozitatea celor mai lungi galerii",
+      "path": "Galerie",
+      "pathNumber": "#{{value}}",
+      "pathLength": "Lungime",
+      "straightLine": "Linie dreaptă",
       "lengthAgainstRecord": "Lungimea față de fișă",
       "depthAgainstRecord": "Denivelarea față de fișă",
       "notComputed": "Nu poate fi calculată din traseele acestei peșteri.",
@@ -1187,6 +1197,9 @@
       "disagreementTitle": "Cartarea și fișa nu sunt de acord",
       "disagreementBody": "O valoare calculată din traseele acestei peșteri diferă de cea scrisă în fișa ei. Niciuna nu este automat cea greșită: o morfometrie scrisă de mână este adesea mai veche decât cartarea cu care este comparată, iar o cartare poate fi incompletă. Verificați care este mai recentă înainte de a modifica vreuna.",
       "basisSurveyFlags": "Măsurat din cartarea compilată, folosind marcajele topografului pentru a decide care vize sunt galerie. Aceasta este definiția acestor valori.",
+      "hasAltitudes": "Aceste trasee au altitudini, deci valorile verticale de mai sus sunt măsurate din ele, nu presupuse.",
+      "noAltitudes": "Aceste trasee nu au altitudini — planul unei peșteri nu înseamnă o peșteră orizontală. De aceea fiecare valoare verticală de mai sus este lăsată goală în loc să fie arătată ca zero: nimic de aici nu spune cât de mult coboară peștera, ceea ce este o afirmație despre desen și nu despre peșteră.",
+      "measuredFromModel": "Măsurat din cartarea „{{name}}”. O peșteră poate avea mai multe cartări încărcate, iar valorile luate din două cartări diferite nu sunt aceeași măsurătoare.",
       "basisSkeletonHeuristic": "Aproximat din traseul stocat, pentru că această peșteră nu are o cartare compilată cu marcaje pe fiecare viză. Forma traseului ține locul marcajelor topografului: păstrează cea mai mare parte din lungimea cartată, dar pierde vizele razante dintr-un punct și, odată cu ele, ultimii metri ai fiecărui fund de sac. Aceste valori nu ar trebui puse alături de cele ale unei peșteri măsurate din cartarea ei ca și cum ar fi aceeași măsurătoare."
     }
   },

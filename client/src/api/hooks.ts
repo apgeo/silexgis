@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
 import { api, ApiError, lastReadETag } from './client.ts';
 import type { components, paths } from './schema';
@@ -687,6 +688,23 @@ export function surveyModelPollInterval(
     : SURVEY_MODEL_URL_REFRESH_MS;
 }
 
+/**
+ * The survey figures a cave's page works out from its line work, dropped whenever that line work
+ * changes.
+ *
+ * These two queries are computed per request from a cave's segments, so every upload, deletion or
+ * finished background extraction that changes the segments changes the answers — but they are
+ * keyed under the cave rather than under the centerlines or the survey models, so none of the
+ * invalidations that refresh those lists reaches them. Without this a reader who drops a file into
+ * the centerline card watches that card fill in while the two panels directly beneath it go on
+ * reporting the cave as it was before the upload, with nothing on screen to say the figures are
+ * stale.
+ */
+function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveyStatistics(caveId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
+}
+
 export function useSurveyModels(caveId: string | undefined) {
   const queryClient = useQueryClient();
   const query = useQuery({
@@ -711,6 +729,7 @@ export function useSurveyModels(caveId: string | undefined) {
   useEffect(() => {
     if (wasOutstanding.current && !outstanding && caveId) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.centerlines(caveId) });
+      invalidateCaveSurveyFigures(queryClient, caveId);
     }
     wasOutstanding.current = outstanding;
   }, [outstanding, caveId, queryClient]);
@@ -735,8 +754,10 @@ export async function fetchSurveyModels(caveId: string): Promise<SurveyModelInfo
 
 function useInvalidateSurveyModels() {
   const queryClient = useQueryClient();
-  return (caveId: string) =>
+  return (caveId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModels(caveId) });
+    invalidateCaveSurveyFigures(queryClient, caveId);
+  };
 }
 
 /** The multipart body the upload endpoint declares, as the generated contract states it. */
@@ -891,8 +912,10 @@ export function useCenterlines(caveId: string | undefined) {
 
 function useInvalidateCenterlines() {
   const queryClient = useQueryClient();
-  return (caveId: string) =>
+  return (caveId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.centerlines(caveId) });
+    invalidateCaveSurveyFigures(queryClient, caveId);
+  };
 }
 
 export function useUploadCenterline() {

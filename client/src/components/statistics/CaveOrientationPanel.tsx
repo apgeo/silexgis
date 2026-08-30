@@ -16,6 +16,12 @@ import SurveyBasisNote from './SurveyBasisNote.tsx';
  * descends along it.
  * </p>
  * <p>
+ * Trend is refused the same way, and for a case that is easy to mistake for an empty cave: a
+ * bearing exists only where a leg moves in plan, so a cave surveyed as pure vertical pitches has
+ * a surveyed length, a depth and no measurable direction at all. That is not "no line work", and
+ * saying so here would contradict the figures the panel above is showing from the same survey.
+ * </p>
+ * <p>
  * Steepness is refused rather than reported when the line work carries no altitudes. That refusal
  * is drawn as a stated reason and never as an empty chart or a mean of zero — a plan drawing shown
  * as a histogram piled on 0° would say the cave is level everywhere, which is a claim about the
@@ -32,20 +38,38 @@ export default function CaveOrientationPanel({ caveId }: { caveId: string }) {
 
   const body = () => {
     if (isLoading || !data) return <Empty description={t('statistics.orientation.loading')} />;
-    if (data.basis === 'unavailable' || data.segmentCount === 0) {
+    // No line work at all, which is a different statement from line work that cannot be asked
+    // this question — and only this branch may say the cave has nothing to measure.
+    if (data.basis === 'unavailable') {
       return <Empty description={t('statistics.cave.nothingMeasured')} />;
     }
+
+    // A bearing is only measured where a leg moves in plan. A cave surveyed as pure vertical
+    // pitches moves not at all, and a survey whose every leg is marked as already surveyed on
+    // another trip contributes none, so both arrive here with a real basis, a real surveyed
+    // length and no trend whatsoever. Saying "no line work to measure" for those would flatly
+    // contradict the surveyed length the panel above is showing at the same moment.
+    const hasTrend = data.segmentCount > 0 && data.bins.some((b) => b.count > 0);
 
     return (
       <Row gutter={[16, 16]}>
         <Col xs={24} md={10}>
-          <RoseDiagram
-            bins={data.bins}
-            meanAxis={{
-              length: data.byLength.meanAxisDegrees,
-              count: data.byCount.meanAxisDegrees,
-            }}
-          />
+          {hasTrend ? (
+            <RoseDiagram
+              bins={data.bins}
+              meanAxis={{
+                length: data.byLength.meanAxisDegrees,
+                count: data.byCount.meanAxisDegrees,
+              }}
+            />
+          ) : (
+            <div data-testid="rose-refused">
+              <Empty description={t('statistics.orientation.noTrendTitle')} />
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                {t('statistics.orientation.noTrendReason')}
+              </Typography.Paragraph>
+            </div>
+          )}
         </Col>
         <Col xs={24} md={14}>
           {data.dip ? (

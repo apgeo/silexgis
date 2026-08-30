@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  axialBinIndex,
   bearingPoint,
   foldAxisDegrees,
   rosePetals,
@@ -34,8 +33,6 @@ describe('the axial rule', () => {
     // in opposite sectors and look entirely plausible while doing it.
     expect(foldAxisDegrees(10)).toBe(foldAxisDegrees(190));
     expect(foldAxisDegrees(10)).toBe(10);
-    expect(axialBinIndex(10, 18)).toBe(axialBinIndex(190, 18));
-    expect(axialBinIndex(10, 18)).toBe(1);
   });
 
   it('folds the whole circle, including the turns either side of it', () => {
@@ -44,13 +41,6 @@ describe('the axial rule', () => {
     expect(foldAxisDegrees(360)).toBe(0);
     expect(foldAxisDegrees(-10)).toBe(170);
     expect(foldAxisDegrees(370)).toBe(10);
-  });
-
-  it('puts a bearing on a sector boundary in the sector that starts there', () => {
-    expect(axialBinIndex(0, 18)).toBe(0);
-    expect(axialBinIndex(9.99, 18)).toBe(0);
-    expect(axialBinIndex(170, 18)).toBe(17);
-    expect(axialBinIndex(179.99, 18)).toBe(17);
   });
 });
 

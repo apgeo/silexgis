@@ -74,6 +74,11 @@ test('a cave measured from its compiled survey shows its passage rose and its fi
   // the same measurement, and a reader who never sees it will compare the two as though it were.
   await expect(figures.getByText(/Measured from the compiled survey/)).toBeVisible();
 
+  // And which upload it measured. A corrected re-export is a new upload rather than a replacement,
+  // so a cave can hold several and only one of them produced these figures; two sets of numbers
+  // about one cave are the same measurement only if they came from the same upload.
+  await expect(figures.getByText(/Measured from the survey/)).toBeVisible();
+
   const rose = page.getByTestId('chart-rose');
   await expect(rose).toBeVisible();
 
@@ -148,6 +153,13 @@ test('a cave whose line work carries no altitudes is refused a steepness, in wor
   await expect(refused.getByText(/carries no altitudes/)).toBeVisible();
   await expect(page.getByTestId('chart-dip')).toHaveCount(0);
   await expect(page.getByTestId('cave-orientation').getByText(/Mean steepness/)).toHaveCount(0);
+
+  // A dash on its own reads as missing data. The panel says why the vertical figures are blank,
+  // in the same register as the steepness refusal beside it: a plan drawing of a cave is not a
+  // flat cave, and neither the reader nor the panel may turn one into the other.
+  await expect(
+    page.getByTestId('cave-survey-statistics').getByText(/carries no altitudes/),
+  ).toBeVisible();
 
   // A vertical extent nothing measured is a dash, never a zero.
   const vertical = page

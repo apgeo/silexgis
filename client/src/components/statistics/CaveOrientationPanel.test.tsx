@@ -116,6 +116,27 @@ describe('CaveOrientationPanel', () => {
     expect(screen.queryByText(/using the surveyor's own flags/)).toBeNull();
   });
 
+  it('refuses a trend with its reason for a cave of pure pitches, without calling it unmeasured', () => {
+    // A plumbed shot moves nowhere on the map, so the server measures no bearing from it and
+    // sends no sector — while the same survey still has a length, a depth and a steepness. The
+    // panel must not answer that with "this cave has no line work to measure": the card directly
+    // above it is showing figures from that very survey at the same moment.
+    show({
+      ...surveyed,
+      segmentCount: 0,
+      bins: roseBins().map((b) => ({ ...b, count: 0, lengthM: 0, countFraction: 0, lengthFraction: 0 })),
+      byCount: { ...measure, meanAxisDegrees: null },
+      byLength: { ...measure, meanAxisDegrees: null },
+    });
+
+    expect(screen.getByTestId('rose-refused')).toBeTruthy();
+    expect(screen.getByText('No direction can be worked out')).toBeTruthy();
+    expect(screen.queryByText(/no line work to measure/)).toBeNull();
+    expect(screen.queryByTestId('chart-rose')).toBeNull();
+    // Steepness is exactly the figure such a cave does answer, so it is still drawn.
+    expect(screen.getByText(/Mean steepness 7°/)).toBeTruthy();
+  });
+
   it('shows nothing measured rather than an empty set of rings', () => {
     show({
       ...surveyed,

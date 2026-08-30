@@ -90,21 +90,6 @@ export function foldAxisDegrees(azimuthDegrees: number): number {
   return wrapped;
 }
 
-/**
- * Which sector of the folded half-circle a bearing belongs to.
- *
- * Offered for callers that bin bearings themselves; the sectors this application draws are binned
- * by the server, and both must agree on where a boundary bearing falls — it goes into the sector
- * that starts there.
- */
-export function axialBinIndex(azimuthDegrees: number, binCount: number): number {
-  if (binCount < 1) return -1;
-  const folded = foldAxisDegrees(azimuthDegrees);
-  if (!Number.isFinite(folded)) return -1;
-  const width = HALF_TURN / binCount;
-  return Math.min(binCount - 1, Math.floor(folded / width));
-}
-
 function weightOf(bin: RoseBin, weighting: RoseWeighting): number {
   return weighting === 'length' ? bin.lengthM : bin.count;
 }
