@@ -97,15 +97,36 @@ export default function AppLayout() {
   // group of the page being shown has to open on arrival however the reader got there; antd's
   // `defaultOpenKeys` is read once at mount and would not reopen for a later navigation.
   //
-  // Only ever added to. A group the reader collapsed by hand stays collapsed until they open a
-  // page inside it, and opening one group does not close the others — accordion behaviour here
-  // would keep shutting the group somebody had just opened to compare two of its pages.
-  const [openKeys, setOpenKeys] = useState<string[]>(openGroup ? [openGroup] : []);
+  // Only ever added to by the arrival below. A group the reader collapsed by hand stays
+  // collapsed until they open a page inside it, and opening one group does not close the
+  // others — accordion behaviour here would keep shutting the group somebody had just opened
+  // to compare two of its pages.
+  //
+  // Starts empty even when the landing page sits in a group, because the rail starts collapsed;
+  // see the two effects below for why an open group and a collapsed rail must not coincide.
+  const [openKeys, setOpenKeys] = useState<string[]>([]);
+
+  // Arriving on a page opens the group holding it — but only once there is room to draw it
+  // inline. Collapsed, antd renders an open group as a floating flyout beside the rail, and one
+  // the reader never asked for sits over the page and swallows clicks on whatever is beneath
+  // it. So the arrival waits for the rail rather than being suppressed at the point of use:
+  // expand it and the group of the page being shown is open, which is what it is for.
   useEffect(() => {
-    if (openGroup) {
+    if (openGroup && !navCollapsed) {
       setOpenKeys((keys) => (keys.includes(openGroup) ? keys : [...keys, openGroup]));
     }
-  }, [openGroup]);
+  }, [openGroup, navCollapsed]);
+
+  // Narrowing the rail closes what was open, for that same reason from the other direction: a
+  // group left open inline becomes a flyout over the page the moment the rail collapses under
+  // it. Only on the transition — a group the reader opens *while* collapsed is their own
+  // deliberate act and is theirs to keep, which is the whole difference between this and
+  // refusing to hand antd any open key at all while the rail is narrow.
+  useEffect(() => {
+    if (navCollapsed) {
+      setOpenKeys([]);
+    }
+  }, [navCollapsed]);
 
   return (
     <Layout style={{ height: '100%' }}>
@@ -189,13 +210,12 @@ export default function AppLayout() {
           <Menu
             mode="inline"
             selectedKeys={[selectedKey]}
-            // Nothing is open while the rail is collapsed, and that is not cosmetic. Collapsed,
-            // antd draws an open group as a floating flyout beside the rail — and a flyout the
-            // reader never asked for sits over the page, silently swallowing clicks on whatever
-            // is beneath it. Auto-opening the current page's group therefore has to stop at the
-            // edge of the collapsed rail: the state is kept, so it reappears on expand, but it
-            // is not handed to antd while there is nowhere for it to go but on top of the page.
-            openKeys={navCollapsed ? [] : openKeys}
+            // Handed over as it stands, collapsed or not. Which groups may be open while the
+            // rail is narrow is decided where the state is kept, not here: filtering it out at
+            // this point cannot tell a group that opened itself on arrival from one the reader
+            // clicked the icon for, so it suppressed both and the collapsed rail — which is how
+            // the rail opens — stopped opening any group at all.
+            openKeys={openKeys}
             onOpenChange={setOpenKeys}
             // "/map" rather than "/": the root dispatches to the dashboard for users who
             // chose it as their landing page, which would make this item unable to reach the map.

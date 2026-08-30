@@ -189,6 +189,49 @@ describe('AppLayout collapsed rail', () => {
     expandRail();
     expect(selectedItem()).toBe('Checklists');
   });
+
+  it('opens a group the reader clicks, collapsed rail and all', async () => {
+    // The other half of the rule above, and the one it cost. Suppressing every open key while
+    // the rail was narrow could not tell a group that opened itself on arrival from one the
+    // reader had just clicked, so it refused both: the rail opens collapsed, which made every
+    // group in it unopenable, and the destinations under them unreachable without first
+    // finding the expand trigger. Nothing said so — the click was recorded, simply never drawn.
+    capabilities = { checklists: 'read' };
+    renderShell();
+
+    // Collapsed, as the rail opens, and with nothing open in it.
+    expect(sider()).toHaveStyle({ width: '80px' });
+    expect(document.querySelectorAll('.ant-menu-submenu-open')).toHaveLength(0);
+
+    // By pointer, not by `openGroup`: collapsed, antd draws the group as a popup and opens it
+    // on hover, so a bare click event carries nothing it listens to. A real click opens one
+    // because the pointer arrives first — which is exactly what this reproduces, and why the
+    // reader reports it as a click that does nothing.
+    fireEvent.mouseEnter(screen.getByText('Activity'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    // On the marked-open class for the same reason the sibling test gives: jsdom draws no
+    // flyout, so the popup itself cannot be asserted on either way. This class is what antd
+    // sets from the open state, and with the defect present it stays off.
+    expect(document.querySelectorAll('.ant-menu-submenu-open')).toHaveLength(1);
+  });
+
+  it('closes an open group when the rail narrows under it', () => {
+    // The flyout arrives by this route too: a group opened inline is over the page the moment
+    // the rail collapses beneath it, with no arrival involved to blame for it.
+    capabilities = { checklists: 'read' };
+    renderShell('/checklists');
+    expandRail();
+    expect(document.querySelectorAll('.ant-menu-submenu-open')).toHaveLength(1);
+
+    // The same trigger, back the other way.
+    expandRail();
+
+    expect(sider()).toHaveStyle({ width: '80px' });
+    expect(document.querySelectorAll('.ant-menu-submenu-open')).toHaveLength(0);
+  });
 });
 
 describe('AppLayout nav gating', () => {
