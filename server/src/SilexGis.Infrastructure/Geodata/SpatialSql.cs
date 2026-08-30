@@ -60,4 +60,24 @@ public static class SpatialSql
     /// </summary>
     public static string WithinMetres(string left, string right, string metresParameter) =>
         $"ST_DWithin({left}::geography, {right}::geography, @{metresParameter})";
+
+    /// <summary>
+    /// A test for line work that carries real altitudes, as opposed to line work that merely has
+    /// room for them.
+    ///
+    /// <para>
+    /// A survey uploaded as a plan drawing has no third coordinate at all, and the upload path
+    /// gives it one anyway — writing zero where the file said nothing — so that the result can be
+    /// stored, indexed and drawn like every other shape. The consequence is that asking the
+    /// database how many dimensions a geometry has answers "three" for a drawing that recorded no
+    /// depth whatever. Anything vertical computed from such a shape is not a small error, it is a
+    /// flat cave invented out of the storage format. So the honest test is whether any altitude is
+    /// actually something, and the reduction that turns stored line work into measurable segments
+    /// applies exactly this test to each coordinate it reads; this is that same rule where a query
+    /// needs it, not a second and looser one.
+    /// </para>
+    /// </summary>
+    public static string HasAltitudes(string geometryExpression) =>
+        $"(ST_NDims({geometryExpression}) = 3 "
+        + $"AND (ST_ZMin({geometryExpression}) <> 0 OR ST_ZMax({geometryExpression}) <> 0))";
 }

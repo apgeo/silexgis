@@ -299,7 +299,8 @@
     "centerlineMaxPaths": "Line budget",
     "centerlineLimitsHint": "Leave empty to follow this installation's defaults. Higher detail costs more to draw.",
     "features": "Features",
-    "locationWithheld": "Location withheld — exact geometry is protected."
+    "locationWithheld": "Location withheld — exact geometry is protected.",
+    "closestApproach": "Closest approach"
   },
   "dialog": {
     "dockToSide": "Dock to the side of the map",
@@ -837,6 +838,11 @@
       "line": "Lines",
       "polygon": "Areas",
       "any": "Other"
+    },
+    "shapes": {
+      "Point": "Marker",
+      "LineString": "Line",
+      "Polygon": "Outline"
     }
   },
   "trips": {
@@ -2684,5 +2690,42 @@
     "viewHistogram": "Length",
     "viewLengthDepth": "Length vs depth",
     "viewRankSize": "Rank–size"
+  },
+  "morphometry": {
+    "title": "Measured shape",
+    "area": "Area",
+    "perimeter": "Perimeter",
+    "circularity": "Circularity",
+    "longAxis": "Long axis",
+    "shortAxis": "Short axis",
+    "elongation": "Elongation",
+    "longAxisAzimuth": "Long-axis bearing",
+    "centroid": "Centre",
+    "unitMetres": "m",
+    "unitSquareMetres": "m²",
+    "unitDegrees": "°",
+    "invalidGeometry": "This outline crosses itself, so it has no measurable area or shape. Redraw it before reading anything from it.",
+    "measuredInWorkingSystem": "Measured in metres in this installation's working coordinate system, not in the degrees the outline is stored in.",
+    "axisIsNotABearing": "The long-axis bearing is an alignment, not a direction: it runs from 0° to 180°, so 170° and 350° are the same alignment."
+  },
+  "closestApproach": {
+    "title": "Closest approach",
+    "pickOther": "Choose another cave",
+    "pickOtherHint": "Choose a second cave to measure how close the two come to each other.",
+    "distance": "Shortest distance",
+    "horizontal": "Horizontal",
+    "vertical": "Vertical",
+    "bearing": "Bearing",
+    "unitMetres": "m",
+    "unitDegrees": "°",
+    "between": "From {{from}} to {{to}}.",
+    "horizontalIsOfTheSameLine": "The horizontal and vertical figures are the two parts of that same shortest line, not the shortest distance across and the shortest distance down, which are different pairs of points.",
+    "unavailable": "No distance for this pair",
+    "unavailableWhy": "A distance between two caves places each of them from the other, so it is given only to a reader who may see exactly where both are.",
+    "absence": {
+      "noLineWork": "At least one of these two caves has no line work to measure from.",
+      "noAltitudes": "At least one of these two caves was drawn in plan and recorded no depths, so there is no honest distance in three dimensions."
+    },
+    "drawnOnMap": "The shortest line is drawn on the map and in the 3D view. On the map you see its plan only; in 3D it runs through the rock at the depths its two ends were surveyed at."
   }
 }

@@ -53,6 +53,11 @@ import {
   setFeatureTypeSymbols,
   setSelectedSurfaceFeature,
 } from '../map/featureLayer.ts';
+import {
+  CLOSEST_APPROACH_LAYER_ID,
+  attachClosestApproachLine,
+  createClosestApproachLayer,
+} from '../map/closestApproachLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer } from '../map/heatmapLayer.ts';
 import { GEOFILE_LAYER_PREFIX, attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer, setPhotosEnabled } from '../map/photoLayer.ts';
@@ -181,12 +186,18 @@ export default function MapPage() {
       [ENTRANCE_LAYER_ID, createEntranceLayer],
       [CENTERLINE_LAYER_ID, createCenterlineLayer],
       [PHOTO_LAYER_ID, createPhotoLayer],
+      // On top of the data it is drawn over: it is one short line answering a question somebody
+      // asked, and it is of no use at all under the surveys it joins.
+      [CLOSEST_APPROACH_LAYER_ID, createClosestApproachLayer],
     ] as const) {
       if (!findOverlayLayer(id)) {
         getOverlayGroup().getLayers().push(create());
       }
     }
 
+    // Nothing camera-driven about it: it draws what was last measured, wherever that is, and
+    // stays until a different pair is measured or the panel clears it.
+    const detachApproach = attachClosestApproachLine();
     const detachLoader = attachEntranceLoader(map);
     const detachFeatureLoader = attachSurfaceFeatureLoader(map);
     const detachCenterlineLoader = attachCenterlineLoader(map);
@@ -233,6 +244,7 @@ export default function MapPage() {
       detachCamera();
       controller.dispose();
       setEditController(null);
+      detachApproach();
       detachLoader();
       detachFeatureLoader();
       detachCenterlineLoader();

@@ -87,4 +87,20 @@ public class SpatialOptionsTests
         fragment.ShouldContain("::geography");
         fragment.ShouldNotContain("ST_Transform");
     }
+
+    [Fact]
+    public void The_altitude_test_asks_whether_there_are_altitudes_and_not_whether_there_is_room_for_them()
+    {
+        var sql = SpatialSql.HasAltitudes("f.geom");
+
+        // Counting the dimensions is the tempting test and is the wrong one: a survey drawn in
+        // plan is stored with a third ordinate of zero so it can be held and drawn like any other
+        // shape, so the count says three for line work that recorded no depth at all. The values
+        // have to be looked at, or every vertical figure derived from a drawing is a flat cave
+        // invented out of the storage format.
+        sql.ShouldContain("ST_NDims");
+        sql.ShouldContain("ST_ZMin");
+        sql.ShouldContain("ST_ZMax");
+        sql.ShouldContain("<> 0");
+    }
 }

@@ -51,6 +51,7 @@ import CaveStatisticsPanel from '../../components/statistics/CaveStatisticsPanel
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
+import CaveClosestApproachSection from './CaveClosestApproachSection.tsx';
 import CaveTripsSection from './CaveTripsSection.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
@@ -338,6 +339,7 @@ export default function CaveDetailPage() {
       {id && <CaveStatisticsPanel caveId={id} />}
 
       {id && <CaveOrientationPanel caveId={id} />}
+      {id && <CaveClosestApproachSection caveId={id} />}
 
       {id && <CaveTripsSection caveId={id} />}
 

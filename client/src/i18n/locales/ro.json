@@ -299,7 +299,8 @@
     "centerlineMaxPaths": "Limită de linii",
     "centerlineLimitsHint": "Lasă gol pentru valorile implicite ale instalării. Detaliul mai mare costă mai mult la desenare.",
     "features": "Elemente",
-    "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată."
+    "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată.",
+    "closestApproach": "Cea mai mică distanță"
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",
@@ -837,6 +838,11 @@
       "line": "Linii",
       "polygon": "Suprafețe",
       "any": "Altele"
+    },
+    "shapes": {
+      "Point": "Marcaj",
+      "LineString": "Linie",
+      "Polygon": "Contur"
     }
   },
   "trips": {
@@ -2684,5 +2690,42 @@
     "viewHistogram": "Lungime",
     "viewLengthDepth": "Lungime vs denivelare",
     "viewRankSize": "Rang–mărime"
+  },
+  "morphometry": {
+    "title": "Formă măsurată",
+    "area": "Suprafață",
+    "perimeter": "Perimetru",
+    "circularity": "Circularitate",
+    "longAxis": "Axa lungă",
+    "shortAxis": "Axa scurtă",
+    "elongation": "Alungire",
+    "longAxisAzimuth": "Orientarea axei lungi",
+    "centroid": "Centru",
+    "unitMetres": "m",
+    "unitSquareMetres": "m²",
+    "unitDegrees": "°",
+    "invalidGeometry": "Conturul se intersectează cu el însuși, deci nu are o suprafață sau o formă măsurabilă. Redesenează-l înainte de a citi ceva din el.",
+    "measuredInWorkingSystem": "Măsurat în metri, în sistemul de coordonate de lucru al acestei instalări, nu în gradele în care este stocat conturul.",
+    "axisIsNotABearing": "Orientarea axei lungi este o aliniere, nu o direcție: merge de la 0° la 180°, deci 170° și 350° sunt aceeași aliniere."
+  },
+  "closestApproach": {
+    "title": "Cea mai mică distanță",
+    "pickOther": "Alege altă peșteră",
+    "pickOtherHint": "Alege o a doua peșteră pentru a măsura cât de aproape ajung una de cealaltă.",
+    "distance": "Distanța cea mai mică",
+    "horizontal": "Orizontal",
+    "vertical": "Vertical",
+    "bearing": "Azimut",
+    "unitMetres": "m",
+    "unitDegrees": "°",
+    "between": "De la {{from}} la {{to}}.",
+    "horizontalIsOfTheSameLine": "Valorile orizontală și verticală sunt cele două componente ale aceleiași linii minime, nu distanța orizontală minimă și distanța verticală minimă, care sunt alte perechi de puncte.",
+    "unavailable": "Nicio distanță pentru această pereche",
+    "unavailableWhy": "O distanță între două peșteri o localizează pe fiecare pornind de la cealaltă, așa că este dată doar unui cititor care poate vedea exact unde se află amândouă.",
+    "absence": {
+      "noLineWork": "Cel puțin una dintre aceste două peșteri nu are traseu topografic din care să se măsoare.",
+      "noAltitudes": "Cel puțin una dintre aceste două peșteri a fost desenată în plan și nu a înregistrat adâncimi, deci nu există o distanță tridimensională onestă."
+    },
+    "drawnOnMap": "Linia cea mai scurtă este desenată pe hartă și în vizualizarea 3D. Pe hartă vedeți doar proiecția ei în plan; în 3D trece prin rocă, la adâncimile la care au fost măsurate cele două capete."
   }
 }

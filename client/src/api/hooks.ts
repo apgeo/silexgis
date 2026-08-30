@@ -149,6 +149,8 @@ export const queryKeys = {
   cavers: ['cavers'] as const,
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
+  featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
+  closestApproach: (id: string, other: string) => ['caves', id, 'closest-approach', other] as const,
   objectAccess: (entityType: string, entityId: string) => ['object-access', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
   mfa: ['mfa'] as const,
@@ -4465,5 +4467,67 @@ export function useDeleteTerrainBuild() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.terrainBuilds });
       void queryClient.invalidateQueries({ queryKey: queryKeys.mapConfig });
     },
+  });
+}
+
+/**
+ * The measured shape of a drawn outline — a doline's area, how round it is, how long and how wide,
+ * which way it lies, and where its middle is.
+ *
+ * Every length is metres and every area square metres. They are measured in the installation's
+ * working coordinate system rather than in the degrees the outline is stored in, because a degree
+ * is not a unit of length and its size on the ground changes with latitude.
+ */
+export type FeatureMorphometry = components['schemas']['FeatureMorphometryDto'];
+
+/**
+ * Asks for one outline's measurements.
+ *
+ * A reader who may see the feature but may not be told where it is gets no answer at all — the
+ * server spells that as "no such feature", because a shape and a bearing place a doline as surely
+ * as a coordinate does. So a failure here means the card simply does not appear; it is never an
+ * empty set of figures, which would read as "this doline has no size".
+ */
+export function useFeatureMorphometry(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.featureMorphometry(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/features/{id}/morphometry', { params: { path: { id: id! } } })),
+    enabled: enabled && !!id,
+    // Measured from geometry that only changes when somebody redraws the outline.
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/**
+ * How close two caves come to each other: the shortest line between their line work in three
+ * dimensions, split into its horizontal and vertical parts, with a bearing.
+ *
+ * `absence` says why there is no measurement when there is none, and is never blank — a cave with
+ * no line work and a cave whose line work was drawn in plan with no depths are different answers,
+ * and both are different from "these two have not been compared".
+ */
+export type ClosestApproach = components['schemas']['ClosestApproachDto'];
+
+/**
+ * Asks how close two caves come.
+ *
+ * Withheld entirely unless this caller may place both caves exactly — not rounded, not snapped.
+ * The refusal is spelled "no such cave", so a guarded cave and a cave that never existed answer
+ * alike and the query simply fails; whatever shows this shows nothing rather than a blank number.
+ */
+export function useClosestApproach(id: string | undefined, other: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.closestApproach(id ?? '', other ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caves/{id}/closest-approach/{other}', {
+          params: { path: { id: id!, other: other! } },
+        }),
+      ),
+    enabled: !!id && !!other && id !== other,
+    staleTime: 60_000,
+    retry: false,
   });
 }
