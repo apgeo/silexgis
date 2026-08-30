@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { theme } from 'antd';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildThemeConfig, resolveDark } from './theme.ts';
+import { buildThemeConfig, resolveDark, calendarDayContentStyle } from './theme.ts';
 import { DEFAULT_APPEARANCE } from './stores/uiPrefsStore.ts';
 
 function systemPrefersDark(dark: boolean) {
@@ -57,5 +57,20 @@ describe('buildThemeConfig', () => {
 
   it('keeps the brand colour whatever the appearance', () => {
     expect(buildThemeConfig({ ...DEFAULT_APPEARANCE, theme: 'dark' }).token?.colorPrimary).toBe('#146262');
+  });
+
+  /**
+   * The calendar's shipped day cell is three rows tall and scrolls the rest of the day away, so a
+   * Saturday with four records shows three of them and hides the fourth behind a scrollbar inside
+   * a table cell. This is the override that stops it, and it is pinned because the failure it
+   * prevents is invisible: a clipped cell looks exactly like a day with less on it.
+   */
+  it('lets a day cell grow to hold everything on that day', () => {
+    expect(calendarDayContentStyle.height).toBe('auto');
+    expect(calendarDayContentStyle.overflowY).not.toBe('auto');
+    expect(calendarDayContentStyle.overflowY).not.toBe('scroll');
+    expect(calendarDayContentStyle.maxHeight).toBe('none');
+    // A floor, so that a month of quiet days still reads as a grid rather than as ragged strips.
+    expect(calendarDayContentStyle.minHeight).toBeGreaterThan(0);
   });
 });

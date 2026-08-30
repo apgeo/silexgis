@@ -194,6 +194,8 @@ export const queryKeys = {
     ['cabinets', id, 'documents', params] as const,
   rasterMaps: (params: RasterMapListParams) => ['raster-maps', 'list', params] as const,
   calendar: (params: CalendarParams) => ['calendar', params] as const,
+  tripLogMap: (bbox: string, from: string, to: string) =>
+    ['map', 'trip-logs', bbox, from, to] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
@@ -5222,6 +5224,41 @@ export function useCalendar(params: CalendarParams, options?: { enabled?: boolea
     enabled: options?.enabled ?? true,
     // Changing the window or a toggle keeps the rows on screen while the next answer arrives,
     // rather than emptying the record under whoever is reading it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Where the trips in a window of days went, for one rectangle of the world.
+ *
+ * **Two answers, correlated here rather than joined on the server, and that is a decision.** The
+ * calendar answers which dated records fall in a window and carries no position of any kind; this
+ * answers which trip shapes fall inside a rectangle over the same days. Asking one endpoint for
+ * both would put a third expression of who may read what beside the two that already exist — the
+ * calendar's merge and this map's own filter — and the two would then have to be kept saying the
+ * same thing forever. They already agree by construction: both walk the same visibility rule over
+ * the same table, so nothing can arrive on one side that the other would have refused. Matching
+ * them on the identifier each carries is therefore exact, and costs one request that was going to
+ * be made anyway.
+ *
+ * The rectangle is the caller's own view. There is deliberately no way to ask for the whole world:
+ * the answer is capped, and a capped answer over the world is a scatter of whichever rows sorted
+ * first, drawn as though it were everything in view.
+ */
+export function useTripLogMap(
+  bbox: string | undefined,
+  from: string,
+  to: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.tripLogMap(bbox ?? '', from, to),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/map/trip-logs', { params: { query: { bbox: bbox!, from, to } } })),
+    enabled: enabled && !!bbox,
+    retry: false,
+    // Panning keeps the shapes already drawn on screen while the next rectangle is answered,
+    // rather than blanking the map under whoever is moving it.
     placeholderData: keepPreviousData,
   });
 }

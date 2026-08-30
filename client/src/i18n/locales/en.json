@@ -2949,6 +2949,23 @@
     "emptyFiltered": "Nothing in these days matches what you asked for.",
     "emptyNoKind": "No kind of record is selected.",
     "failed": "The calendar could not be read.",
+    "views": {
+      "record": "Record",
+      "month": "Month",
+      "week": "Week",
+      "year": "Year",
+      "agenda": "Agenda"
+    },
+    "weekPrevious": "Previous week",
+    "weekNext": "Next week",
+    "weekToday": "This week",
+    "weekDayEmpty": "Nothing",
+    "monthCount": "{{count}} records",
+    "mapToggle": "Map",
+    "mapEmpty": "No trip in view has a position recorded. Pan or zoom the map to look elsewhere.",
+    "mapFailed": "The map of these days could not be read, so nothing is drawn on it — which is not the same as there being nothing there. Try again in a moment.",
+    "mapDrawn": "{{count}} of the trips in these days are drawn here.",
+    "mapCaveat": "Only trips are drawn, and only the ones inside this view: camps and club dates carry no shape here, and a trip outside the view is drawn once you move to it. A hollow ring is where a party meets, a filled one is where it worked.",
     "sourceValues": {
       "tripLog": "Trip",
       "expedition": "Camp",

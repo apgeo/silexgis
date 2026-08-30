@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import dayjs from 'dayjs';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -19,6 +20,9 @@ vi.mock('../../api/hooks.ts', () => ({
   useCalendar: (params: CalendarParams, options?: { enabled?: boolean }) =>
     calendarSpy(params, options),
   useCavingGroups: () => ({ data: [] }),
+  // The pane under the record builds an OpenLayers map of its own; what it asks for is proved
+  // where it lives, and here it is only required not to interfere with the record above it.
+  useTripLogMap: () => ({ data: undefined }),
 }));
 
 const { default: CalendarPage } = await import('./CalendarPage.tsx');
@@ -317,5 +321,308 @@ describe('the calendar record', () => {
 
     fireEvent.click(screen.getByTestId('calendar-toggle-mine'));
     expect(screen.getByTestId('calendar-empty').textContent).toContain('matches what you asked');
+  });
+});
+
+
+/**
+ * The grids are drawn over the month or the year they are showing, so a fixture has to fall in
+ * the panel the page opens on rather than on a date somebody wrote down once.
+ */
+const inThisMonth = (offsetDays: number): string =>
+  dayjs().startOf('month').add(offsetDays, 'day').format('YYYY-MM-DD');
+
+function showMonth() {
+  const rendered = show();
+  fireEvent.click(screen.getByText('Month'));
+  return rendered;
+}
+
+/** Every chip drawn in one day's cell, in the order the grid drew them. */
+function chipsOn(day: string): HTMLElement[] {
+  return within(screen.getByTestId(`calendar-day-${day}`)).queryAllByTestId('calendar-chip');
+}
+
+describe('the calendar as a grid of days', () => {
+  /**
+   * The reason the grid overrides the height of a day's contents rather than using the calendar
+   * as it ships. The shipped day cell reserves exactly three rows and scrolls the rest inside
+   * itself, so a Saturday carrying four records shows three of them and hides the fourth behind a
+   * scrollbar a few pixels wide — a clash the reader is never told about. The count is asserted,
+   * not the presence of a cell, because three-of-four is precisely the failure.
+   */
+  it('shows every record on a day, and not the first three of them', () => {
+    const saturday = inThisMonth(10);
+    answer([
+      row({ id: 'a', title: 'Coiba Mare recce', start: saturday }),
+      row({ id: 'b', title: 'Huda lui Papară', start: saturday }),
+      row({ id: 'c', title: 'Vântului derig', start: saturday }),
+      row({ id: 'd', title: 'Scărișoara survey', start: saturday }),
+    ]);
+    showMonth();
+
+    const chips = chipsOn(saturday);
+    expect(chips).toHaveLength(4);
+    expect(chips.map((chip) => chip.textContent)).toEqual([
+      'Coiba Mare recce',
+      'Huda lui Papară',
+      'Vântului derig',
+      'Scărișoara survey',
+    ]);
+  });
+
+  /**
+   * The other half of that, and the half no count can see. Nothing renders a stylesheet here, so
+   * all four chips are in the document whether or not the clip is turned off — the clip is a
+   * height and an overflow applied by the calendar's own styling to the box the contents sit in.
+   * What this asserts is that the override reached that box: if it stops being handed over, the
+   * shipped three-row clip comes back and every count above stays green while a reader loses the
+   * fourth record on a day.
+   */
+  it('hands the height override to the box the calendar would have clipped', () => {
+    const day = inThisMonth(10);
+    answer([row({ start: day })]);
+    showMonth();
+
+    const box = screen.getByTestId(`calendar-day-${day}`).parentElement!;
+    // The calendar's own element for a cell's contents — the one it sizes at three rows.
+    expect(box.className).toContain('date-content');
+    expect(box.style.height).toBe('auto');
+    expect(box.style.overflowY).toBe('visible');
+  });
+
+  /**
+   * A record lasting four days is drawn in all four of them, because a grid answers "what is
+   * happening on this day". The first and the last cell are marked and the two between are not,
+   * which is what stops the repetition reading as four separate trips.
+   */
+  it('draws a record in every day it spans, marked where it starts and where it ends', () => {
+    const first = inThisMonth(3);
+    const last = inThisMonth(6);
+    answer([row({ title: 'Ponorul camp', start: first, end: last })]);
+    showMonth();
+
+    const days = [3, 4, 5, 6].map((offset) => inThisMonth(offset));
+    const marks = days.map((day) => {
+      const chip = chipsOn(day)[0];
+      expect(chip).toBeTruthy();
+      expect(chip.textContent).toBe('Ponorul camp');
+      return [chip.dataset.spanStart, chip.dataset.spanEnd];
+    });
+
+    expect(marks).toEqual([
+      ['true', 'false'],
+      ['false', 'false'],
+      ['false', 'false'],
+      ['false', 'true'],
+    ]);
+  });
+
+  /**
+   * A day with nothing on it is an empty day and not a hole. The cell and its content box are
+   * still drawn, so the month reads as a grid; what is missing is the records, not the day.
+   */
+  it('draws a day with nothing on it as an empty day', () => {
+    const busy = inThisMonth(10);
+    answer([row({ start: busy })]);
+    showMonth();
+
+    const quiet = screen.getByTestId(`calendar-day-${inThisMonth(11)}`);
+    expect(quiet).toBeTruthy();
+    expect(within(quiet).queryAllByTestId('calendar-chip')).toHaveLength(0);
+    expect(chipsOn(busy)).toHaveLength(1);
+  });
+
+  /**
+   * A day in the grid is read the same way down as a day in the week strip: what claims no time
+   * of day first, in the order the answer gave, then what claims one, earliest first. The answer
+   * arranges rows by the day they fall on and separates rows sharing a day only by an identifier
+   * that means nothing, so there is no order inside a day for the grid to have preserved — and
+   * two views of the same Saturday that disagreed about which trip came first would be worse than
+   * either of them alone.
+   */
+  it('reads a day down by the time each record claims, whichever way the answer listed them', () => {
+    const day = inThisMonth(8);
+    answer([
+      row({ id: 'a', title: 'Zulu', start: day, startTime: '18:00:00' }),
+      row({ id: 'b', title: 'Alpha', start: day, startTime: '07:00:00' }),
+      row({ id: 'c', title: 'Ponorul camp', start: day }),
+    ]);
+    showMonth();
+
+    expect(chipsOn(day).map((chip) => chip.textContent)).toEqual([
+      'Ponorul camp',
+      '07:00 Alpha',
+      '18:00 Zulu',
+    ]);
+  });
+
+  /** A grid is drawn over the days it shows, so the window it asks for is the panel's own. */
+  it('asks for the month it is showing rather than the window the record used', () => {
+    showMonth();
+
+    const asked = lastParams();
+    expect(asked.from <= dayjs().startOf('month').format('YYYY-MM-DD')).toBe(true);
+    expect(asked.to >= dayjs().endOf('month').format('YYYY-MM-DD')).toBe(true);
+  });
+
+  /**
+   * A year is twelve cells an inch wide, so each says how much is in it rather than naming any of
+   * it — a record that spans two months is counted in both, for the same reason it is drawn in
+   * every day it covers.
+   */
+  it('counts a year by month rather than naming what is in it', () => {
+    const day = dayjs().startOf('year').add(1, 'month');
+    answer([
+      row({ id: 'a', start: day.format('YYYY-MM-DD') }),
+      row({ id: 'b', start: day.add(2, 'day').format('YYYY-MM-DD') }),
+    ]);
+    show();
+    fireEvent.click(screen.getByText('Year'));
+
+    const cell = screen.getByTestId(`calendar-month-${day.format('YYYY-MM')}`);
+    expect(cell.textContent).toContain('2');
+  });
+
+  /**
+   * An empty grid cannot say why it is empty. The sentence that can is drawn above it, so a read
+   * that failed is never mistaken for a stretch of days with nothing on them.
+   */
+  it('says why a grid is empty rather than leaving blank cells to say it', () => {
+    answer([]);
+    showMonth();
+
+    expect(screen.getByTestId('calendar-empty').textContent).toContain('Nothing is recorded');
+  });
+});
+
+/** A day of the week the page opens on, so a fixture falls in the strip rather than beside it. */
+const inThisWeek = (offsetDays: number): string =>
+  dayjs().startOf('week').add(offsetDays, 'day').format('YYYY-MM-DD');
+
+function showWeek() {
+  const rendered = show();
+  fireEvent.click(screen.getByText('Week'));
+  return rendered;
+}
+
+/** Every chip drawn in one day's column of the strip, in the order the strip drew them. */
+function chipsInColumn(day: string): HTMLElement[] {
+  return within(screen.getByTestId(`calendar-week-day-${day}`)).queryAllByTestId('calendar-chip');
+}
+
+describe('the calendar as a week of days', () => {
+  /**
+   * The strip covers the week the day it is given falls in, and that week is the reader's
+   * language's week — Monday-first in Romanian, Sunday-first in English — decided once by the
+   * date library for every date this application draws. Seven columns, and the window asked for
+   * is those same seven days: a strip drawn over days the answer did not cover would have columns
+   * saying "nothing is happening" about days nobody asked about.
+   */
+  it('draws the seven days of the week it is showing, and asks for exactly those days', () => {
+    showWeek();
+
+    const days = Array.from({ length: 7 }, (_, offset) => inThisWeek(offset));
+    days.forEach((day) => {
+      expect(screen.getByTestId(`calendar-week-day-${day}`)).toBeTruthy();
+    });
+    expect(screen.queryByTestId(`calendar-week-day-${inThisWeek(7)}`)).toBeNull();
+    expect(screen.queryByTestId(`calendar-week-day-${inThisWeek(-1)}`)).toBeNull();
+
+    expect(lastParams().from).toBe(days[0]);
+    expect(lastParams().to).toBe(days[6]);
+  });
+
+  /**
+   * A day is read down: the things that claim no time of day first, then the ones that do, at
+   * their time. Most records here claim none — a trip states the times its party was under ground
+   * and a camp states days — so a column that ordered only on times would have nowhere to put
+   * most of what is on it. The untimed row is asserted present, because losing it is the failure
+   * this guards.
+   */
+  it('stacks a day by the time each record claims, and keeps the ones that claim none', () => {
+    const day = inThisWeek(3);
+    answer([
+      row({ id: 'a', title: 'Zulu', start: day, startTime: '18:00:00' }),
+      row({ id: 'b', title: 'Ponorul camp', start: day }),
+      row({ id: 'c', title: 'Alpha', start: day, startTime: '07:00:00' }),
+    ]);
+    showWeek();
+
+    expect(chipsInColumn(day).map((chip) => chip.textContent)).toEqual([
+      'Ponorul camp',
+      '07:00 Alpha',
+      '18:00 Zulu',
+    ]);
+  });
+
+  /**
+   * A record lasting several days stands in every column it covers, marked where it begins and
+   * where it ends, and states its time only in the column it begins in — it started once, not
+   * once a morning.
+   */
+  it('stands a record in every day of the week it covers', () => {
+    const first = inThisWeek(1);
+    const last = inThisWeek(4);
+    answer([row({ title: 'Ponorul camp', start: first, end: last, startTime: '09:00:00' })]);
+    showWeek();
+
+    const marks = [1, 2, 3, 4].map((offset) => {
+      const chip = chipsInColumn(inThisWeek(offset))[0];
+      expect(chip).toBeTruthy();
+      return [chip.textContent, chip.dataset.spanStart, chip.dataset.spanEnd];
+    });
+
+    expect(marks).toEqual([
+      ['09:00 Ponorul camp', 'true', 'false'],
+      ['Ponorul camp', 'false', 'false'],
+      ['Ponorul camp', 'false', 'false'],
+      ['Ponorul camp', 'false', 'true'],
+    ]);
+  });
+
+  /** Moving a week moves the days drawn and the days asked for together. */
+  it('moves a week at a time', () => {
+    showWeek();
+    fireEvent.click(screen.getByTestId('calendar-week-next'));
+
+    expect(screen.getByTestId(`calendar-week-day-${inThisWeek(7)}`)).toBeTruthy();
+    expect(lastParams().from).toBe(inThisWeek(7));
+    expect(lastParams().to).toBe(inThisWeek(13));
+  });
+});
+
+describe('the calendar as an agenda', () => {
+  /**
+   * The agenda is the record read forwards: the same answer, the same paging and the same click
+   * through to the record, with each row drawn as one entry instead of as a set of cells to
+   * compare across. The column headings go with the cells — there is nothing left to head.
+   */
+  it('draws each row as one entry rather than as a row of cells', () => {
+    answer([row({ title: 'Coiba Mare recce', start: '2026-09-05', startTime: '08:30:00' })]);
+    show();
+    fireEvent.click(screen.getByText('Agenda'));
+
+    const entry = screen.getByTestId('calendar-agenda-row');
+    expect(entry.textContent).toContain('Coiba Mare recce');
+    expect(entry.textContent).toContain('08:30');
+    expect(entry.textContent).toContain('Trip');
+    expect(screen.queryByText('When')).toBeNull();
+  });
+
+  /** The window stays the reader's own: the agenda is a way of reading the record, not of days. */
+  it('keeps the window the reader picked, and the way through to the record', () => {
+    answer([row({ id: 'a', source: 'expedition', title: 'Ponorul camp' })]);
+    show();
+    const chosenBefore = lastParams();
+    fireEvent.click(screen.getByText('Agenda'));
+
+    expect(lastParams().from).toBe(chosenBefore.from);
+    expect(lastParams().to).toBe(chosenBefore.to);
+    // The range control names itself on each end of the window it offers.
+    expect(screen.getAllByTestId('calendar-window').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByText('Ponorul camp'));
+    expect(navigateSpy).toHaveBeenCalledWith('/expeditions/a');
   });
 });

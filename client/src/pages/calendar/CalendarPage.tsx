@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { Alert, Checkbox, DatePicker, Empty, Flex, Select, Table, Tag, Typography } from 'antd';
+import { Alert, Checkbox, DatePicker, Empty, Flex, Segmented, Select, Table, Tag, Typography } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +14,9 @@ import {
 } from '../../api/hooks.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
+import CalendarGrid from './CalendarGrid.tsx';
+import CalendarMapPane from './CalendarMapPane.tsx';
+import CalendarWeekStrip from './CalendarWeekStrip.tsx';
 
 const asDay = (value: Dayjs): string => value.format('YYYY-MM-DD');
 
@@ -51,6 +55,44 @@ const detailPath: Record<CalendarSource, (id: string) => string> = {
 const CALENDAR_SOURCES = Object.keys(detailPath) as CalendarSource[];
 
 /**
+ * The ways the same window of days may be read, offered in the order they narrow: the whole
+ * record, then a year, a month and a week of it, then the agenda.
+ *
+ * The record is the list — sortable, paged, and the only one that carries a column of each thing.
+ * The two grids and the week strip are the same rows laid out as the days they fall on. The
+ * agenda is the same list again with each row drawn as one entry rather than as a set of cells,
+ * which is what a reader wants who is reading forwards rather than looking something up.
+ */
+const VIEWS = ['record', 'month', 'week', 'year', 'agenda'] as const;
+type CalendarView = (typeof VIEWS)[number];
+
+/** The views that are a list of rows rather than a layout of days. */
+const isList = (view: CalendarView): boolean => view === 'record' || view === 'agenda';
+
+/**
+ * The window each view asks the server for. The record's window is the reader's own, picked and
+ * shown; a grid's is decided by the panel it is showing, because a grid drawn over a window that
+ * does not cover it would have empty cells that say "nothing happened" about days nobody asked
+ * about — the one thing a calendar must not do. The month's window reaches a fortnight either side
+ * so that the days of the neighbouring months the grid draws in its corners are answered too.
+ */
+function windowFor(view: CalendarView, panel: Dayjs, chosen: [Dayjs, Dayjs]): [Dayjs, Dayjs] {
+  if (isList(view)) {
+    return chosen;
+  }
+  if (view === 'year') {
+    return [panel.startOf('year'), panel.endOf('year')];
+  }
+  if (view === 'week') {
+    // Exactly the week the strip draws. The week a day falls in is the reader's language's
+    // week — Monday-first for a Romanian reader, Sunday-first for an English one — and it is
+    // settled once, for every date this application draws, by the date library's locale.
+    return [panel.startOf('week'), panel.endOf('week')];
+  }
+  return [panel.startOf('month').subtract(14, 'day'), panel.endOf('month').add(14, 'day')];
+}
+
+/**
  * The club's dated records over a window of days — every trip and every camp the reader may open,
  * read as one list.
  *
@@ -79,6 +121,8 @@ const CALENDAR_SOURCES = Object.keys(detailPath) as CalendarSource[];
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const [view, setView] = useState<CalendarView>('record');
+  const [panel, setPanel] = useState<Dayjs>(() => dayjs());
   const [range, setRange] = useState<[Dayjs, Dayjs]>(openingWindow);
   const [showTrips, setShowTrips] = useState(true);
   const [showOther, setShowOther] = useState(true);
@@ -87,6 +131,10 @@ export default function CalendarPage() {
   const [mine, setMine] = useState(false);
   const [cavingGroupId, setCavingGroupId] = useState<string | undefined>(undefined);
   const [sort, setSort] = useState<string | undefined>(undefined);
+  // On, because a calendar that has to be asked for its map is a calendar whose map nobody
+  // finds. It is a toggle rather than a fixture so a reader working down a long record can put
+  // the tiles away.
+  const [showMap, setShowMap] = useState(true);
   const { data: cavingGroups } = useCavingGroups();
 
   // Two toggles over three families of record, so "the rest" names more than one family and the
@@ -103,10 +151,12 @@ export default function CalendarPage() {
     : undefined;
   const nothingChosen = !showTrips && !showOther;
 
+  const asked = windowFor(view, panel, range);
+
   const { data, isFetching, isError } = useCalendar(
     {
-      from: asDay(range[0]),
-      to: asDay(range[1]),
+      from: asDay(asked[0]),
+      to: asDay(asked[1]),
       source,
       cavingGroupId,
       mine: mine || undefined,
@@ -126,6 +176,53 @@ export default function CalendarPage() {
     const field = single?.field ? sortableFields[String(single.field)] : undefined;
     setSort(field && single.order ? `${single.order === 'descend' ? '-' : ''}${field}` : undefined);
   };
+
+  /**
+   * A row read forwards rather than looked up: one entry to a line, its own words first and the
+   * day it falls on under them.
+   *
+   * **It is the same table, given a different renderer for its rows.** The list and the agenda are
+   * one answer read two ways, so they share the paging, the empty sentence that says why there is
+   * nothing, the click that opens the record and the shortfall warning above them all; what
+   * differs is whether a row is a set of cells to compare across or a line to read down. Written
+   * as a second set of columns rather than as a second component, because a second component
+   * would be a second place for all of that to drift out of step.
+   *
+   * The header is dropped with it: a single column of whole rows has nothing to head, and the
+   * sorting a header offers is the record's job, which is one click away.
+   */
+  const agendaColumns: ColumnsType<CalendarEntry> = [
+    {
+      title: t('calendar.what'),
+      key: 'agenda',
+      render: (_, entry) => (
+        <Flex vertical gap={2} data-testid="calendar-agenda-row">
+          <Flex gap={8} align="center" wrap>
+            <Typography.Text strong>{entry.title}</Typography.Text>
+            <Tag>
+              {entry.kind
+                ? t(`events.kindValues.${entry.kind}`)
+                : t(`calendar.sourceValues.${entry.source}`)}
+            </Tag>
+            <TripStateTag state={entry.state} />
+            {entry.placement === 'putBack' ? (
+              <Tag color="orange" data-testid="calendar-postponed">
+                {t('calendar.postponed')}
+              </Tag>
+            ) : null}
+          </Flex>
+          <Typography.Text type="secondary">
+            {formatTripDates(entry.start, entry.end, i18n.resolvedLanguage)}
+            {/* The time is stated where the row states one, and nothing is filled in where it
+                does not: most of these records carry no time of day at all, and a blank is the
+                truthful reading of that rather than a gap somebody forgot. */}
+            {entry.startTime ? ` · ${entry.startTime.slice(0, 5)}` : ''}
+            {entry.startTime && entry.endTime ? `–${entry.endTime.slice(0, 5)}` : ''}
+          </Typography.Text>
+        </Flex>
+      ),
+    },
+  ];
 
   const isNarrowed =
     !showTrips || !showOther || !showPast || !showCancelled || mine || cavingGroupId !== undefined;
@@ -148,18 +245,29 @@ export default function CalendarPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('calendar.title')}
         </Typography.Title>
+        <Segmented<CalendarView>
+          data-testid="calendar-view"
+          value={view}
+          onChange={setView}
+          options={VIEWS.map((name) => ({ value: name, label: t(`calendar.views.${name}`) }))}
+        />
       </Flex>
       <Flex gap={12} wrap align="center" style={{ marginBottom: 12 }}>
-        <DatePicker.RangePicker
-          allowClear={false}
-          data-testid="calendar-window"
-          value={range}
-          onChange={(next) => {
-            if (next?.[0] && next[1]) {
-              setRange([next[0], next[1]]);
-            }
-          }}
-        />
+        {/* The window is the reader's to pick only where it is theirs to pick: a grid is drawn
+            over the month or the year it is showing, and offering a range control beside it would
+            be offering a second answer to a question the grid has already answered. */}
+        {isList(view) ? (
+          <DatePicker.RangePicker
+            allowClear={false}
+            data-testid="calendar-window"
+            value={range}
+            onChange={(next) => {
+              if (next?.[0] && next[1]) {
+                setRange([next[0], next[1]]);
+              }
+            }}
+          />
+        ) : null}
         <Checkbox
           data-testid="calendar-toggle-past"
           checked={showPast}
@@ -195,6 +303,13 @@ export default function CalendarPage() {
         >
           {t('calendar.toggleMine')}
         </Checkbox>
+        <Checkbox
+          data-testid="calendar-toggle-map"
+          checked={showMap}
+          onChange={(e) => setShowMap(e.target.checked)}
+        >
+          {t('calendar.mapToggle')}
+        </Checkbox>
         <Select<string | undefined>
           allowClear
           placeholder={t('calendar.groupFilter')}
@@ -217,6 +332,42 @@ export default function CalendarPage() {
           message={t('calendar.omitted', { count: data.omitted })}
         />
       ) : null}
+      {!isList(view) ? (
+        nothingChosen || (data?.entries.length ?? 0) === 0 ? (
+          // A grid of empty cells cannot say why it is empty — whether nothing was asked for,
+          // whether the read failed, or whether these really are days with nothing on them — so
+          // the sentence that can say it is drawn above the grid rather than instead of it.
+          <Empty
+            data-testid="calendar-empty"
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={emptyText}
+            style={{ marginBottom: 12 }}
+          />
+        ) : null
+      ) : null}
+      {view === 'month' || view === 'year' ? (
+        <CalendarGrid
+          mode={view}
+          value={panel}
+          onPanelChange={(next, nextMode) => {
+            setPanel(next);
+            setView(nextMode);
+          }}
+          entries={nothingChosen ? [] : (data?.entries ?? [])}
+          from={asDay(asked[0])}
+          to={asDay(asked[1])}
+          onOpen={(entry) => void navigate(detailPath[entry.source](entry.id))}
+        />
+      ) : view === 'week' ? (
+        <CalendarWeekStrip
+          value={panel}
+          onChange={setPanel}
+          entries={nothingChosen ? [] : (data?.entries ?? [])}
+          from={asDay(asked[0])}
+          to={asDay(asked[1])}
+          onOpen={(entry) => void navigate(detailPath[entry.source](entry.id))}
+        />
+      ) : (
       <Table<CalendarEntry>
         scroll={{ x: 'max-content' }}
         rowKey={(row) => `${row.source}:${row.id}`}
@@ -241,7 +392,8 @@ export default function CalendarPage() {
         // already in hand. Paging that spanned the sources would make "row forty of the combined
         // record" mean nothing, which is the one thing this record is for.
         pagination={{ pageSize: 25, showSizeChanger: true }}
-        columns={[
+        showHeader={view !== 'agenda'}
+        columns={view === 'agenda' ? agendaColumns : [
           {
             title: t('calendar.when'),
             // Named by the field the row carries, not only by a key: the table reports which
@@ -291,6 +443,18 @@ export default function CalendarPage() {
           },
         ]}
       />
+      )}
+      {/* One pane, under whichever way the same rows are being read, because it answers the same
+          question about the same rows: it is handed what is on screen and matches the shapes to
+          it, so it narrows with every toggle above without knowing what any of them mean. */}
+      {showMap ? (
+        <CalendarMapPane
+          entries={nothingChosen ? [] : (data?.entries ?? [])}
+          from={asDay(asked[0])}
+          to={asDay(asked[1])}
+          active={showMap}
+        />
+      ) : null}
     </div>
   );
 }

@@ -2949,6 +2949,23 @@
     "emptyFiltered": "Nimic din aceste zile nu corespunde cererii.",
     "emptyNoKind": "Nu este selectat niciun tip de înregistrare.",
     "failed": "Calendarul nu a putut fi citit.",
+    "views": {
+      "record": "Listă",
+      "month": "Lună",
+      "week": "Săptămână",
+      "year": "An",
+      "agenda": "Agendă"
+    },
+    "weekPrevious": "Săptămâna precedentă",
+    "weekNext": "Săptămâna următoare",
+    "weekToday": "Săptămâna aceasta",
+    "weekDayEmpty": "Nimic",
+    "monthCount": "{{count}} înregistrări",
+    "mapToggle": "Hartă",
+    "mapEmpty": "Nicio tură din câmpul vizual nu are o poziție înregistrată. Deplasează sau apropie harta ca să cauți în altă parte.",
+    "mapFailed": "Harta acestor zile nu a putut fi citită, așa că nu este desenat nimic pe ea — ceea ce nu înseamnă că nu este nimic acolo. Încercați din nou peste un moment.",
+    "mapDrawn": "{{count}} dintre turele din aceste zile sunt desenate aici.",
+    "mapCaveat": "Sunt desenate doar turele, și doar cele din acest câmp vizual: taberele și datele clubului nu au nicio formă aici, iar o tură din afara câmpului vizual apare după ce te deplasezi la ea. Un inel gol este locul de întâlnire, unul plin este locul unde s-a lucrat.",
     "sourceValues": {
       "tripLog": "Tură",
       "expedition": "Tabără",
