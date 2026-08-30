@@ -45,6 +45,42 @@ Authorization: Bearer <token>
 Ask this first, once per server, and keep the answer. It is also the cheapest place to discover that
 a stored credential has lapsed: it answers `401` like everything else here.
 
+### 1.1 What a version bump means, and what it does not
+
+**A client must ignore fields it does not recognise, everywhere in this protocol**, and must not
+treat an unexpected member as a malformed response. That rule is what makes the version below stable:
+adding an optional field to a response, or accepting a new optional field on a request, is
+deliberately **not** a contract change, and a build that fails on one would break on a server upgrade
+it was never meant to notice.
+
+**`contractVersion` moves only for a change that breaks a client pinned to the previous value** —
+a field removed or renamed, a meaning changed, a value that used to be accepted and is not. New
+capability is announced through `features` instead, which is why that list exists.
+
+This is worth stating in full because it is an exception to how the rest of this project works. The
+server is pre-alpha and deliberately waives backward compatibility of its schema, its model, its API
+and its stored data: a wrong shape is rewritten rather than preserved. **The sync contract is the one
+place that waiver does not reach.** A phone in the field pins what it was built against, cannot be
+redeployed on the server's schedule, and has no way to discover a change except by being told. So
+this surface is versioned, the version is answered before anything else is asked, and an upload that
+states a version this build cannot serve is refused with the server's own version in the message
+rather than being interpreted generously.
+
+### 1.2 The settings an installation can change under a device
+
+Three of the numbers above are configuration rather than code, and an operator may set them per
+installation with an environment variable. A client that reads them from `capabilities` at every
+sign-in rather than compiling them in is unaffected by any of it.
+
+| Setting | Default | What it changes for the client |
+|---|---|---|
+| `SILEXGIS__Sync__PageSizeMax` | 500 | The ceiling in `pageSizeMax`. A larger `pageSize` on a download is clamped to it, silently — count the rows you got rather than assuming you got what you asked for |
+| `SILEXGIS__Sync__UploadRowsMax` | 500 | The ceiling in `uploadRowsMax`. A batch above it is refused whole, before any row is looked at |
+| `SILEXGIS__Sync__DuplicateRadiusMeters` | 50 metres, the same default a file import uses | How near an existing row a newly written one has to be to appear in the duplicate report. **Zero turns the report off entirely**, so an empty report is not evidence of no duplicates |
+
+Both ceilings are themselves clamped by the server to a sane range, so a misconfigured installation
+cannot answer a `pageSizeMax` of zero or of a million.
+
 ## 2. Naming what a device carries
 
 A device does not download "everything visible". It carries an explicit **sync set**: a named
@@ -141,7 +177,7 @@ and re-read the set from the beginning periodically; a full read is always corre
 | `visibility` | The audience the row is stored with |
 | `parents` | The containment edges above it, `{ parentId, isPrimary }`, restricted to parents this caller may read — so **not necessarily a complete ancestry** |
 | `createdAt`, `updatedAt` | Server-stamped |
-| `clientUpdatedAt` | The moment a device believed it last wrote the row, by that device's own clock — `null` on everything the web interface made, which today is everything |
+| `clientUpdatedAt` | The moment a device believed it last wrote the row, by that device's own clock. It is `null` on every row the web interface wrote, and carries whatever the device sent on every row an upload wrote |
 
 **`updatedAt` is this row's revision on the server, and the value to send back as the base revision
 when writing it.** It is the server's own stamp, and the only value the server compares.
@@ -491,16 +527,36 @@ than merely parse.
 | `14-upload-conflict-withheld` | The same refusal for a row this caller may not place: the decision is there and the echo is **absent** |
 | `15-upload-delete` | A tombstone going up, arbitrated on `baseRevision` exactly as an edit is |
 
+Three cover refusals, under `16-errors/`. A refusal carries a `status.txt` beside its body, holding
+the status line: the status is what a client branches on before it has read a single field, and it
+travels in the status line rather than in the payload. A successful exchange has no such file — its
+status is 200 by construction.
+
+| Directory | What it shows |
+|---|---|
+| `16-errors/cursor-invalid` | `400`, `sync.cursor_invalid`. A resume position this server never issued: the device throws the position away rather than retrying |
+| `16-errors/cursor-stale` | `409`, `sync.cursor_stale`. A position that was good until the selection moved. A different status and code for what is the same decision on the device — drop it and read the set from the beginning |
+| `16-errors/contract-unsupported` | `409`, `sync.contract_unsupported`. A build pinned to a version this server does not speak. The batch is refused whole, and **there are no per-row results at all** — a client that reads `rows` without first checking the status crashes here |
+
 **What no recording covers yet, stated so it is not read as absence of the thing:** there is no
-fixture showing a `centerline` row, none showing a read refusal — neither `sync.cursor_invalid` nor
-`sync.cursor_stale` has a recorded exchange — and none showing a whole-batch refusal or a duplicate
-report. All of them are asserted by the test suite and described above; they are simply not among
-the bodies committed as bytes.
+fixture showing a `centerline` row, none showing a duplicate report, and none showing a row-level
+refusal that is not a conflict. All of them are asserted by the test suite and described above; they
+are simply not among the bodies committed as bytes.
+
+Two files in that directory are about the recordings rather than part of them. `manifest.json`
+carries a digest for every file and one roll-up over all of them, which is how a copy of the
+directory living in another repository tells whether it is current without diffing it — and, because
+it is generated from a walk of the directory rather than from what the tests name, it is also the
+only thing that notices a file left behind by an exchange that was renamed or deleted.
+`CHANGELOG.md` is written for somebody whose build pins a contract version: every entry says whether
+that build still works.
 
 Three kinds of value are replaced in those files, because they differ on every run and would
 otherwise make the comparison meaningless: identifiers (minted server-side as each row is written,
 so there is nothing to pin), timestamps (stamped from the server's own clock) and the resume cursor
-(opaque, and it moves with the data). `contract/speleoloc-sync/v1/README.md` lists them. Everything
+(opaque, and it moves with the data) — and, in a refusal, the correlation identifier the framework
+attaches to every problem document, which is for reading a server log with rather than for a client
+to act on. `contract/speleoloc-sync/v1/README.md` lists them. Everything
 else — field names, field order, nesting, and every value not in that list — is exactly as sent.
 
 ## 10. Generating a client from the served description
@@ -523,6 +579,8 @@ generates code from it, and both are recent:
   part of the contract. Naming the rest of the server's operations is a larger change than this one
   and has not been made, so do not expect an identifier on any operation outside this slice.
 
-The failure responses this slice can produce are declared alongside them, which is what puts the
-`sync.*` codes into the description. What each one means, and whether retrying could ever change the
-answer, is in the errors document.
+Failure statuses are declared alongside those names, which is what puts the sync failures into the
+description at all. **The declaration is orientation, not a contract**: it is incomplete in at least
+one place — the delete route declares the `404` it can answer and not the `409` it can also answer —
+and it never carries the `code`, which is a value rather than a type. The errors document is the
+authority for both, and it says what each code means and what the client is supposed to do about it.

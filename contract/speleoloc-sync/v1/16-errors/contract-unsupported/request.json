@@ -1,0 +1,24 @@
+{
+  "batchId": "<batch>",
+  "contractVersion": 99,
+  "rows": [
+    {
+      "id": "<uuid-1>",
+      "kind": "generic",
+      "baseRevision": null,
+      "deleted": false,
+      "parentId": "<uuid-2>",
+      "name": "Version place <marker>",
+      "featureTypeCode": "cave_place",
+      "isMain": false,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          25.481,
+          45.571
+        ]
+      },
+      "clientUpdatedAt": null
+    }
+  ]
+}

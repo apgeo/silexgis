@@ -167,10 +167,23 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable
         // A resume position this server never issued is refused rather than read as "start
         // again", which would hand a device a full re-download it could not tell from an
         // incremental one.
-        var bad = await owner.GetAsync($"/api/v1/sync/sets/{set}/download?cursor=not-a-cursor");
+        var badUrl = $"/api/v1/sync/sets/{set}/download?cursor=not-a-cursor";
+        var bad = await owner.GetAsync(badUrl);
         bad.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await bad.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("code").GetString().ShouldBe("sync.cursor_invalid");
+
+        // Recorded, because a refusal is as much of the contract as an answer: the other
+        // application has to tell "your stored position is worthless, throw it away" apart from
+        // "the server is unwell, try again later", and the only thing carrying that distinction
+        // is the status and the code in this body.
+        using (bad)
+        {
+            await new ContractFixture()
+                .Literal(marker, "marker").Name(set, "set")
+                .AssertRefusalAsync(
+                    Path.Combine("16-errors", "cursor-invalid"), $"GET {badUrl}", bad);
+        }
 
         // Recorded from a fresh first page and the page that resumes from it, so the file shows a
         // resume doing its work rather than whichever page happened to come second above.
@@ -211,11 +224,23 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable
 
         await ReplaceRootsAsync(set, [carried, added]);
 
-        var stale = await owner.GetAsync(
-            $"/api/v1/sync/sets/{set}/download?cursor={Uri.EscapeDataString(cursor!)}");
+        var staleUrl = $"/api/v1/sync/sets/{set}/download?cursor={Uri.EscapeDataString(cursor!)}";
+        var stale = await owner.GetAsync(staleUrl);
         stale.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await stale.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("code").GetString().ShouldBe("sync.cursor_stale");
+
+        // Recorded next to the invalid-cursor refusal: the two are one decision for the device —
+        // drop the position and read the set from the beginning — and they arrive as different
+        // statuses with different codes, which is exactly the kind of difference prose loses.
+        using (stale)
+        {
+            await new ContractFixture()
+                .Literal(marker, "marker").Name(set, "set")
+                .Literal(Uri.EscapeDataString(cursor!), "cursor")
+                .AssertRefusalAsync(
+                    Path.Combine("16-errors", "cursor-stale"), $"GET {staleUrl}", stale);
+        }
 
         // And the answer the device is told to give: drop the position, read the set again, and
         // the cave it added is there — along with what is inside it.
@@ -226,6 +251,66 @@ public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable
         // not left refusing its own cursor for ever.
         var resumed = await DownloadAsync(set, restarted.GetProperty("nextCursor").GetString());
         Features(resumed).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A build that pins a contract version older or newer than the one this server speaks is
+    /// told so before anything it sent is looked at, and the answer names the version that would
+    /// have worked. Recorded because it is the whole-batch refusal a device is most likely to
+    /// meet in the field — a phone that has not been updated for a year — and because the shape
+    /// of a refused batch differs from a batch whose rows were refused one by one: there are no
+    /// per-row results at all, so a client that reads `rows` unconditionally crashes here.
+    /// </summary>
+    [Fact]
+    public async Task An_upload_pinned_to_another_contract_version_is_refused_whole()
+    {
+        var cave = await CreateCaveAsync($"Version cave {marker}");
+        var set = await CreateSetAsync([cave]);
+        var batchId = Guid.NewGuid();
+        var rowId = Guid.CreateVersion7();
+
+        var url = $"/api/v1/sync/sets/{set}/upload";
+        var body = JsonSerializer.Serialize(
+            new
+            {
+                batchId,
+                contractVersion = 99,
+                rows = new[] { Place(rowId, cave, $"Version place {marker}", 25.481, 45.571) },
+            },
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        using var response = await owner.PostAsync(
+            url, new StringContent(body, Encoding.UTF8, "application/json"));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        problem.GetProperty("code").GetString().ShouldBe("sync.contract_unsupported");
+
+        await new ContractFixture()
+            .Literal(marker, "marker").Name(set, "set").Name(batchId, "batch")
+            .AssertRefusalAsync(
+                Path.Combine("16-errors", "contract-unsupported"), $"POST {url}", body, response);
+
+        // "Refused whole" is the half of this that the status and the code do not say, and it is
+        // the half a client is told to rely on. Move the version check below the row loop and
+        // every assertion above still passes while a pinned build quietly writes rows and leaves
+        // an import batch behind, so the database is asked directly. Query filters are ignored:
+        // a row written and then hidden by visibility is still a row that was written.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.Features.IgnoreQueryFilters().AnyAsync(f => f.Id == rowId))
+                .ShouldBeFalse("the refused batch's row was written despite the whole-batch refusal");
+            (await db.ImportBatches.IgnoreQueryFilters().AnyAsync(b => b.SyncBatchId == batchId))
+                .ShouldBeFalse("the refused batch left an import batch behind");
+        }
+
+        // The positive arm, so the two absences above are a refusal rather than a fixture that
+        // built nothing: the same row, in the same set, at the version this server speaks.
+        var accepted = await UploadAsync(
+            owner, set, Guid.CreateVersion7(),
+            Place(rowId, cave, $"Version place {marker}", 25.481, 45.571));
+        Row(accepted, rowId).GetProperty("status").GetString().ShouldBe("created");
     }
 
     /// <summary>

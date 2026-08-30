@@ -127,8 +127,47 @@ public sealed class ContractFixture
     /// device mints for its own rows appear on both sides of the exchange, and a recording that
     /// pinned them on one side and named them on the other would read as two different rows.
     /// </remarks>
-    public async Task AssertAsync(
+    public Task AssertAsync(
+        string caseName, string requestLine, string? requestBody, HttpResponseMessage response) =>
+        WriteExchangeAsync(caseName, requestLine, requestBody, response, status: null);
+
+    /// <summary>
+    /// Writes or checks one exchange the server refused.
+    /// </summary>
+    /// <remarks>
+    /// A refusal is not described by its body alone. The status is what a client branches on
+    /// before it has looked at a single field, and it travels in the status line rather than in
+    /// the payload, so it lands in a <c>status.txt</c> beside the answer. A successful exchange
+    /// gets no such file: its status is 200 by construction, and a file saying so on every case
+    /// would be noise that hid the ones where the value is the point.
+    /// </remarks>
+    public Task AssertRefusalAsync(
+        string caseName, string requestLine, HttpResponseMessage response) =>
+        AssertRefusalAsync(caseName, requestLine, requestBody: null, response);
+
+    /// <inheritdoc cref="AssertRefusalAsync(string, string, HttpResponseMessage)"/>
+    public Task AssertRefusalAsync(
         string caseName, string requestLine, string? requestBody, HttpResponseMessage response)
+    {
+        ((int)response.StatusCode).ShouldBeGreaterThanOrEqualTo(
+            400,
+            $"{caseName} is recorded as a refusal, so the server answering it successfully is the "
+            + "thing that has changed, not the recorded bytes.");
+
+        return WriteExchangeAsync(
+            caseName,
+            requestLine,
+            requestBody,
+            response,
+            status: $"{(int)response.StatusCode} {response.StatusCode}\n");
+    }
+
+    private async Task WriteExchangeAsync(
+        string caseName,
+        string requestLine,
+        string? requestBody,
+        HttpResponseMessage response,
+        string? status)
     {
         var raw = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(raw);
@@ -144,6 +183,11 @@ public sealed class ContractFixture
         if (sent is not null)
         {
             await CompareOrWriteAsync(Path.Combine(directory, "request.json"), sent);
+        }
+
+        if (status is not null)
+        {
+            await CompareOrWriteAsync(Path.Combine(directory, "status.txt"), status);
         }
 
         await CompareOrWriteAsync(Path.Combine(directory, "response.json"), body);
@@ -177,25 +221,42 @@ public sealed class ContractFixture
         return Encoding.UTF8.GetString(buffer.ToArray()).ReplaceLineEndings("\n") + "\n";
     }
 
-    private static async Task CompareOrWriteAsync(string path, string content)
+    /// <summary>
+    /// Holds one file in the contract directory against what is committed, or rewrites it when
+    /// the suite is recording. Shared so that everything in that directory changes by one act and
+    /// obeys one rule about line endings, placeholders and encoding.
+    /// </summary>
+    internal static Task CompareOrWriteAsync(string path, string content) =>
+        CompareOrWriteAsync(path, content, Recording);
+
+    /// <summary>
+    /// The same, with the decision to write made by the caller rather than read from the
+    /// recording switch. The manifest needs it: it is generated from a walk of the directory
+    /// these files live in, so it is taken in a pass of its own rather than in the pass that is
+    /// rewriting them, and that pass is not a recording run.
+    /// </summary>
+    internal static async Task CompareOrWriteAsync(
+        string path, string content, bool write, string? remedy = null)
     {
-        if (Recording)
+        if (write)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, content, new UTF8Encoding(false));
             return;
         }
 
+        var howToRewrite = remedy
+            ?? $"re-run with {RecordVariable}=1 and review the rewritten file as a contract change "
+            + "— the application on the other side of this protocol is written against these bytes";
+
         File.Exists(path).ShouldBeTrue(
-            $"No recorded contract file at {path}. Re-run with {RecordVariable}=1 to write it, "
-            + "then read the diff before committing it.");
+            $"No recorded contract file at {path}. To write it, {howToRewrite}.");
 
         var recorded = (await File.ReadAllTextAsync(path)).ReplaceLineEndings("\n");
         recorded.ShouldBe(
             content,
-            $"{path} no longer matches what the server sends. If the change is intended, re-run "
-            + $"with {RecordVariable}=1 and review the rewritten file as a contract change — the "
-            + "application on the other side of this protocol is written against these bytes.");
+            $"{path} no longer matches what the server sends. If the change is intended, "
+            + $"{howToRewrite}.");
     }
 
     /// <summary>
@@ -203,7 +264,7 @@ public sealed class ContractFixture
     /// hard-coding a depth. The assembly runs from a build output directory, and writing the
     /// recording there would leave it where nothing can commit it.
     /// </summary>
-    private static string ContractRoot()
+    internal static string ContractRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null
@@ -232,6 +293,16 @@ public sealed class ContractFixture
                     if (property.Name is "nextCursor" && property.Value.ValueKind is JsonValueKind.String)
                     {
                         writer.WriteStringValue("<cursor>");
+                        continue;
+                    }
+
+                    // The correlation identifier the framework attaches to every problem
+                    // document. It is a fresh trace on every request by definition, and it is
+                    // for reading a server log with, not for a client to act on.
+                    if (property.Name is "traceId" or "requestId"
+                        && property.Value.ValueKind is JsonValueKind.String)
+                    {
+                        writer.WriteStringValue("<trace>");
                         continue;
                     }
 

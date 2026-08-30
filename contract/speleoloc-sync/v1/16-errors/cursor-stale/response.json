@@ -1,0 +1,8 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "The selection changed after that resume position was issued. Drop the cursor and read the set from the beginning.",
+  "code": "sync.cursor_stale",
+  "traceId": "<trace>"
+}

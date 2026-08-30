@@ -20,6 +20,29 @@ nothing else.
 
 ---
 
+## 0. The three landings, before the kinds
+
+A device's records land in three different shapes, and the `kind` field on an uploaded row is what
+says which:
+
+| Device record | `kind` | What it becomes |
+|---|---|---|
+| A cave | `cave` | A cave feature. It carries the club's own cave record — a code, a type, and the thirty-odd fields the web interface maintains — and its map point is **not a field anybody writes**: it is a copy of the main entrance's, kept in step by the server |
+| An entrance of a cave | `caveEntrance` | An entrance feature contained by its cave. This is the row that carries a real position: a point, with an altitude and a position quality. `isMain` says whether it is the cave's main entrance, which is what the cave's own map point follows |
+| Anything else a device holds — an area in a cave, a place in a cave, a named surface area | `generic` | A feature of one of the three kinds in §1, chosen by `featureTypeCode` |
+
+A fourth value exists in the field's type and is **not carried by this contract**: a centerline. A
+row naming it is refused with `sync.kind_unsupported`.
+
+**Coordinates are optional on every row, not only on the ones that usually have them.** A cave place
+recorded without ever taking a fix is a legitimate row and uploads fine with no geometry; so does an
+entrance whose position has not been surveyed yet. Absent is a value, and it is not the same as
+withheld — see the protocol document, which describes how a device tells the two apart.
+
+**An upload never nulls a field it did not mention.** A device may send one changed field and leave
+the rest of the row alone. That matters most on caves: the club's cave record carries many fields no
+device knows about, and a partial write from a phone leaves every one of them exactly as it was.
+
 ## 1. The kinds
 
 A device's world has three kinds of object beyond the caves themselves. Each is a SilexGIS
@@ -118,3 +141,29 @@ the reasoning is recorded here so that a later change can find what it would be 
 **Both halves have to stay true.** Adding any locating value to `properties` — which §4 forbids for
 its own reasons — would also silently defeat this, because history redaction would go on removing
 only the geometry while the property document carrying the position went out untouched.
+
+---
+
+## 6. What never travels, in either direction
+
+Some of what a device holds is about the device, and some is about how the device talks to other
+machines. None of it belongs on a server, and none of it is carried by this contract.
+
+- **`device_uuid` and `current_user_uuid`.** Facts about one installation of the application on one
+  phone. They are not identity and they do not leave it.
+- **Beacon health and sensor telemetry.** Hardware state, of interest to the device and nobody else.
+- **The local change log.** It is how the device drives its own transfers; it is not data about
+  caves. A downloaded row must not produce entries in it — see the standalone rules, which explain
+  what happens when it does.
+- **FTP profiles and their credentials.** Server addresses and passwords, and a channel this contract
+  does not touch.
+
+And two exceptions worth naming, because they look like identity and are not:
+
+- **User identifiers are provenance strings, never accounts.** A device allocates user identifiers
+  itself and merges them by username; they are not stable across devices. The server stores what it
+  is sent as an opaque provenance label and **never maps one to a SilexGIS account**. Do not expect a
+  device user to become a server user, in either direction.
+- **The code-strategy configuration rows travel, but not as records.** They are title-keyed rather
+  than identified by a uuid, and they move with the sync set as its settings document rather than as
+  rows in a batch. The protocol document describes that document and how it is arbitrated.

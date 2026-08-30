@@ -222,9 +222,35 @@ to set it up is in [Encryption at rest](docs/INSTALL.md#encryption-at-rest).
 server/   ASP.NET Core API (.NET solution: Api / Domain / Infrastructure + tests)
 client/   React + TypeScript SPA (Vite, Ant Design, OpenLayers)
 deploy/   Docker Compose, TLS and terrain overlays (serving, and the optional tile-making
-          worker), reverse-proxy configs, backup/restore and terrain pre-bake scripts
-docs/     Installation and operations documentation
+          worker), reverse-proxy configs, backup/restore, terrain pre-bake and the
+          mobile-sync development server scripts
+docs/     Installation and operations documentation, and the mobile-sync integration
+          contract in docs/speleoloc-sync/
+contract/ Recorded HTTP exchanges that are the mobile-sync contract, asserted byte for
+          byte by the API test suite
 ```
+
+### The mobile-sync integration
+
+SilexGIS serves a row-level sync API for the SpeleoLoc cave-navigation application: a phone signs in
+as an installed application, names the caves it carries, reads them a page at a time and writes its
+own edits back, with the server arbitrating each row. A code printed on a cave label also resolves
+to a public landing address.
+
+Whoever writes a client for it starts at [docs/speleoloc-sync/README.md](docs/speleoloc-sync/README.md).
+The recorded exchanges under `contract/speleoloc-sync/` are the specification of the wire; they are
+compared byte for byte by the test suite, so the way anyone finds out the contract moved is that the
+server's own tests fail.
+
+For a server to write that client against — its own database container, its own ports, seeded with
+the group, the second account and the protected cave that make the rules observable:
+
+```bash
+node deploy/speleoloc-dev.mjs up
+```
+
+It prints the accounts, the client id and the whole sign-in sequence when it is up.
+[docs/speleoloc-sync/07-dev-server.md](docs/speleoloc-sync/07-dev-server.md) has the rest.
 
 ## Development
 

@@ -26,6 +26,7 @@ comparison meaningless, so they are replaced before anything is written or compa
 | `<timestamp>` | an ISO-8601 instant | Every time in a payload is stamped by the server from its own clock |
 | `<cursor>` | an opaque resume token | It encodes a position that moves with the data. It is opaque by contract — store it, send it back, never parse it — so recording its bytes would publish an internal shape as though it were promised |
 | `<marker>` | eight hex characters | The suite suffixes every name it creates so several runs can share one database |
+| `<trace>` | a correlation identifier | The framework attaches a fresh one to every problem document. It is for reading a server log with, not for a client to act on |
 
 Two consequences worth stating, because they are easy to misread:
 
@@ -52,6 +53,39 @@ Two consequences worth stating, because they are easy to misread:
 | `13-upload-conflict` | A row whose `baseRevision` is no longer the server's. It is refused, and the server's own version of it rides back in `conflicts` so the device can show a caver what to merge against without fetching it |
 | `14-upload-conflict-withheld` | Two rows lose the same conflict, and one of them is a position this caller may not place. Both are named in `rows`; only the readable one appears in `conflicts`. The other is **absent**, exactly as it would be from a download — the conflict answer is a second place this server hands a device a coordinate, and it asks the same question in the same place |
 | `15-upload-delete` | A device removing a row it holds. A removal is arbitrated exactly as an edit is: it carries the revision the device last saw, and a stale one loses the same way |
+| `16-errors/cursor-invalid` | A resume position this server never issued. The device is told to throw the position away rather than to try again, and the status says so before a single field is read |
+| `16-errors/cursor-stale` | A resume position that was good until the selection moved. A different status and a different code from the one above, for what is nonetheless the same decision on the device: drop the position and read the set from the beginning |
+| `16-errors/contract-unsupported` | A build pinned to a contract version this server does not speak. The batch is refused whole and the answer names the version that would have worked — note that there are no per-row results at all, so a client that reads `rows` without checking the status crashes here |
+
+A refusal is recorded with a `status.txt` beside its body, holding the status line. A successful
+exchange has no such file: its status is 200 by construction, and a file saying so on every case
+would be noise hiding the three where the value is the whole point.
+
+`manifest.json` describes every file here — a digest per file and one roll-up over all of them —
+so that a copy of this directory living in another repository can tell whether it is current
+without diffing it. It is generated from a walk of the directory as it stands, which is also the
+only thing that notices a file nothing asserts about: the byte comparison looks only at files a
+test names, so an exchange left behind by a case that was renamed or deleted is invisible to it and
+visible to the manifest. `manifest.json` and `CHANGELOG.md` are the two files outside it, and it
+names them.
+
+**Rewriting these files is therefore two passes, not one.** The walk cannot run while the
+recordings are being written — the tests that rewrite them run in parallel with it, and each write
+empties its file before refilling it, so a walk crossing that window hashes a half-written file or
+misses one that does not exist yet. The manifest pass is separate, needs no database, and is
+deliberately not a recording run:
+
+```
+SILEXGIS_CONTRACT_RECORD=1   dotnet test                                    # rewrite the exchanges
+SILEXGIS_CONTRACT_MANIFEST=1 dotnet test --filter FullyQualifiedName~ContractManifestTests
+```
+
+The suite refuses the first pass's manifest rather than taking a wrong one, and says this. Anything
+else in this directory that changes by hand — this file included — needs the second pass too, since
+everything but the changelog and the manifest itself is hashed.
+
+`CHANGELOG.md` is written for somebody whose build pins a contract version. Every entry says
+whether that build still works.
 
 Numbering starts at 07, and the gap is deliberate rather than a set of missing files. Steps 01–06
 are reserved for the exchanges that come before a download — signing in (`01-login`,

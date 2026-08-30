@@ -29,6 +29,20 @@ is not a code and is answered as an unknown one is.
 **This is a path route, not a hash route.** See §4 — a code carried in a `#` fragment is discarded
 by the scanner before anything could resolve it, so the fragment form must never be printed.
 
+**The address above is the page a person opens.** The SPA serves it and asks the API behind it:
+
+```
+GET /api/v1/public/qr/<code>
+```
+
+That is the call to make from anything that is not a browser. It is anonymous — no bearer token, and
+sending one changes nothing — and it is the only route in this package that is. The two answers in
+§2 are its answers; the page is a rendering of them.
+
+**There is a third response, and it carries no body**: `429`, from the rate limiter described in §3,
+which answers before the route does. It has no problem document and no `code`, so a client that
+branches on `code` must handle a bodyless status here. Back off and retry; the window is a minute.
+
 ## 2. What it answers
 
 Two answers, and only two.

@@ -311,6 +311,27 @@ Set-Cookie: silexgis.session=CfDJ8NvV1s5YgPJBoqqGChLgSfGWIWUt…
 From there the flow is the ordinary one: the two-factor gate is on the login step alone and changes
 nothing about the authorization request or the exchange.
 
+**A code that has to be *sent* is asked for on a separate call.** `authenticator` is read from the
+caver's own application and needs nothing; `email` and `sms` do not arrive on their own. Ask for one
+with the half-finished sign-in's cookie — the one the `401` above set — and no account named in the
+body, because naming one would let this call be used to discover addresses or to send mail to
+somebody else's:
+
+```
+POST /api/v1/auth/2fa/send
+Content-Type: application/json
+Cookie: Identity.TwoFactorUserId=…
+
+{ "method": "email" }
+
+--> 200 OK
+{ "method": "email", "destination": "s•••@example.org", "expiresMinutes": 10 }
+```
+
+Then send the login again with `twoFactorCode` set, exactly as above. The call is rate-limited per
+address like the rest of `/auth/*`, and it is throttled a second time per account and method, so a
+caver hammering "resend" is refused by the second limit long before the first.
+
 ### 3.5 A spent refresh token must not be presented twice
 
 Refresh tokens roll: each refresh redeems the one presented and issues a new one. Presenting a
@@ -363,6 +384,17 @@ to ask for a password, not a reason to discard or re-download anything.
 | `401` | `auth.locked_out` | Too many failed attempts. The lock lifts by itself after a few minutes — say so, and do not retry in a loop. |
 | `401` | `auth.email_not_confirmed` | The installation requires a confirmed address and this one is not. Only the account holder can fix it, from their mailbox. |
 | `429` | — | Too many requests from this address in a minute. Back off; the window is one minute. This limit is per installation and can be tightened by an operator, so a client that retries hard can lock itself out of a shared connection. |
+
+### At `POST /api/v1/auth/2fa/send`
+
+| Status | `code` | What it means, and what the client should do |
+|---|---|---|
+| `401` | — | The half-finished sign-in has expired or its cookie was not sent. Start again from the password. |
+| `400` | `auth.mfa_method_not_delivered` | `authenticator` was asked for. Nothing is sent for it — read the code from the caver's application. A client that offers a "send code" button for every method meets this one. |
+| `400` | `auth.mfa_method_unavailable` | The method is not one this account can currently use — turned off, disallowed by the installation, or its channel is not configured. Offer what the `401` listed in `methods`, and always the recovery path. |
+| `400` | `auth.mfa_resend_too_soon` | A code for this method was sent a moment ago. Disable the button for a while rather than retrying; the throttle is per account, so retrying from another address does not help. |
+| `400` | `auth.mfa_send_failed` | The installation could not deliver it — mail or SMS is misconfigured or refused it. Offer another method, and the recovery path. Only an administrator can fix the channel. |
+| `429` | — | Too many requests from this address in a minute. Back off. |
 
 ### At `GET /connect/authorize`
 

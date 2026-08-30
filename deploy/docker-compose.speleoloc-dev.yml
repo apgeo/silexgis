@@ -1,0 +1,81 @@
+# DEVELOPMENT ONLY — a throwaway installation for writing a mobile client against the sync API.
+#
+# It is a standalone stack, not an overlay: its own project name, its own container names, its
+# own named volume and its own ports. That is the point. The shared development database
+# (docker-compose.dev.yml) belongs to whoever is working on the web application, is published on
+# every interface, and migrating or seeding it would break their work; this one touches nothing
+# of theirs.
+#
+# Usage — the database only, with the API run from source (`node deploy/speleoloc-dev.mjs up`
+# does this for you, and prints the accounts and a sign-in transcript afterwards):
+#   docker compose -f docker-compose.speleoloc-dev.yml up -d db
+#
+# Usage — database and API as images, for a machine with no .NET SDK installed:
+#   docker compose -f docker-compose.speleoloc-dev.yml --profile api up -d --build
+#   → http://127.0.0.1:5205/api/v1/sync/capabilities
+# The first build pulls the .NET SDK and ASP.NET runtime images and compiles the server, which
+# costs roughly 3 GB of image storage and several minutes. Image layers live on the disk that
+# holds /var/lib/containerd, not on the Docker named-volume disk, so watch the former.
+#
+# Throw the whole thing away, volume included:
+#   docker compose -f docker-compose.speleoloc-dev.yml down -v
+name: silexgis-speleoloc-dev
+
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    container_name: silexgis-speleoloc-db
+    environment:
+      POSTGRES_DB: silexgis
+      POSTGRES_USER: silexgis
+      POSTGRES_PASSWORD: silexgis
+    ports:
+      # Loopback only, and a port of its own. A LAN-reachable database would be one guessed
+      # password away from every row in the installation, entrance coordinates included — and
+      # this one's password is written down in a public document.
+      - "127.0.0.1:${SILEXGIS_SPELEOLOC_DB_PORT:-5434}:5432"
+    volumes:
+      - silexgis-speleoloc-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U silexgis -d silexgis"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    # Only started when the `api` profile is named, so `up -d db` stays the fast path for a
+    # machine that has the SDK and runs the server from source.
+    profiles: ["api"]
+    build: ../server
+    container_name: silexgis-speleoloc-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SILEXGIS__Db__ConnectionString: Host=db;Port=5432;Database=silexgis;Username=silexgis;Password=silexgis
+      SILEXGIS__PublicUrl: http://127.0.0.1:${SILEXGIS_SPELEOLOC_API_PORT:-5205}
+      # The bootstrap administrator. Development credentials, printed in the documentation —
+      # which is exactly why this stack is never reachable off the loopback interface.
+      SILEXGIS__Admin__Email: admin@dev.local
+      SILEXGIS__Admin__Password: dev-admin-pass-1
+      # The seeder that mints the second, non-administrator account refuses to run outside a
+      # development host. Both halves are stated: the host posture, and the explicit consent.
+      ASPNETCORE_ENVIRONMENT: Development
+      SILEXGIS__SpeleoLocDev__Allow: "true"
+      ASPNETCORE_URLS: http://+:8080
+      SILEXGIS__Files__Root: /data/files
+      SILEXGIS__Keys__Path: /data/keys
+    ports:
+      # The shipped production stack gives the API no host port at all — it is reached only
+      # through the web container's proxy. A client developer needs the API and does not need
+      # the React application, so this stack publishes it directly rather than making them
+      # build a front end to reach a JSON route.
+      - "127.0.0.1:${SILEXGIS_SPELEOLOC_API_PORT:-5205}:8080"
+    volumes:
+      - silexgis-speleoloc-files:/data/files
+      - silexgis-speleoloc-keys:/data/keys
+
+volumes:
+  silexgis-speleoloc-db:
+  silexgis-speleoloc-files:
+  silexgis-speleoloc-keys:
