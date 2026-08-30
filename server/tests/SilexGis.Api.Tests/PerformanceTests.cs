@@ -479,11 +479,90 @@ public sealed class PerformanceTests : IDisposable
             SELECT count(*) FROM closure
             """);
 
+        // One survey model per seeded cave, so the plan pins over the survey tables measure
+        // something. They cannot otherwise: a pin forbidding a sequential scan of an EMPTY table
+        // asserts nothing about scale — the planner is right to scan nothing sequentially, and
+        // whether it says so depends on when autoanalyze last ran, which made the pin fail or
+        // pass by luck. The point of those pins is that choosing one cave's survey must not walk
+        // every survey in the installation, and only a populated table can show that.
+        //
+        // Every model points at the same stored file. The file is real enough to satisfy its
+        // foreign keys (a document and one revision) and nothing here reads its bytes, because
+        // what is being measured is which rows the planner visits, not what they contain.
+        await db.Database.ExecuteSqlAsync(
+            $$"""
+            WITH doc AS (
+                INSERT INTO documents (
+                    id, title, metadata, owner_user_id, visibility, created_at, updated_at)
+                VALUES (
+                    gen_random_uuid(), 'Perf survey source', '{}', {{ownerId}},
+                    {{(short)Visibility.Authenticated}}, now(), now())
+                RETURNING id
+            ),
+            version AS (
+                INSERT INTO document_versions (
+                    id, document_id, version_number, is_current, created_at, updated_at)
+                SELECT gen_random_uuid(), doc.id, 1, true, now(), now() FROM doc
+                RETURNING id
+            ),
+            file AS (
+                INSERT INTO files (
+                    id, storage_path, original_name, mime_type, sha256, size_bytes,
+                    document_version_id, kind, metadata, position_source, conversion,
+                    text_extraction, direction_is_magnetic, orientation_quarter_turns,
+                    created_at, updated_at)
+                SELECT
+                    gen_random_uuid(), 'perf/none', 'perf.3d', 'application/octet-stream',
+                    repeat('0', 64), 0, version.id, {{(short)FileKind.Survey}}, '{}',
+                    0, 0, 0, false, 0, now(), now()
+                FROM version
+                RETURNING id
+            ),
+            centerline_features AS (
+                INSERT INTO features (
+                    id, kind, category, name, geom, location_protected, is_protected_effective,
+                    ancestor_ids, owner_user_id, visibility, created_at, updated_at)
+                SELECT
+                    gen_random_uuid(), {{(short)FeatureKind.Centerline}},
+                    {{(short)FeatureCategory.Underground}}, 'Perf centerline',
+                    ST_Force3D(ST_Multi(ST_MakeLine(f.geom, ST_Translate(f.geom, 0.001, 0.001)))),
+                    false, false, ARRAY[f.id], {{ownerId}},
+                    {{(short)Visibility.Authenticated}}, now(), now()
+                FROM features f
+                WHERE f.kind = {{(short)FeatureKind.Cave}}
+                RETURNING id
+            ),
+            centerline_rows AS (
+                INSERT INTO centerlines (
+                    id, cave_feature_id, kind, is_default, skeleton, path_count,
+                    source, length_m)
+                SELECT
+                    cf.id, c.id, {{(short)FeatureKind.Centerline}}, true,
+                    ST_Multi(ST_MakeLine(c.geom, ST_Translate(c.geom, 0.001, 0.001))), 1,
+                    {{(short)CenterlineSource.Uploaded}}, 100
+                FROM (SELECT id, geom, row_number() OVER (ORDER BY id) rn
+                      FROM features WHERE kind = {{(short)FeatureKind.Cave}}) c
+                JOIN (SELECT id, row_number() OVER (ORDER BY id) rn FROM centerline_features) cf
+                  ON cf.rn = c.rn
+                RETURNING id
+            )
+            INSERT INTO survey_models (
+                id, cave_feature_id, name, file_id, format, status,
+                source_precision_lost, created_at, updated_at)
+            SELECT
+                gen_random_uuid(), f.id, 'Perf survey', file.id,
+                {{(short)SurveyModelFormat.Survex3d}}, {{(short)SurveyModelStatus.Ready}},
+                false, now(), now()
+            FROM features f, file
+            WHERE f.kind = {{(short)FeatureKind.Cave}}
+            """);
+
         // Fresh bulk-loaded tables have no statistics yet (autoanalyze hasn't run) and the
         // planner picks pathological plans (measured 50x). Real databases are analyzed.
         await db.Database.ExecuteSqlRawAsync(
             "ANALYZE features; ANALYZE caves; ANALYZE cave_entrances; "
             + "ANALYZE feature_hierarchy_edges; ANALYZE feature_ancestors; "
+            + "ANALYZE survey_models; ANALYZE centerlines; "
             + "ANALYZE access_entries; ANALYZE permission_group_members; ANALYZE feature_set_members;");
 
         output.WriteLine(
