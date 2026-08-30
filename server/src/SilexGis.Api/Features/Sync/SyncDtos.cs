@@ -30,7 +30,11 @@ public sealed record SyncCapabilitiesDto(
     int UploadRowsMax,
     IReadOnlyList<string> Features);
 
-/// <summary>One sync set as its owner sees it. There is no other reader.</summary>
+/// <summary>
+/// One sync set as its owner sees it — and, where an installation has turned that on, as a full
+/// administrator sees somebody else's. Every field here is disclosed by that widening, the list of
+/// carried caves included, which is why it is off until an installation asks for it.
+/// </summary>
 public sealed record SyncSetDto(
     Guid Id,
     string Name,

@@ -17,20 +17,6 @@ namespace SilexGis.Api.Features.Sync;
 /// </summary>
 public static class SyncDownloadEndpoints
 {
-    /// <summary>
-    /// The page a device gets when it does not ask for a size. Well under the announced ceiling:
-    /// a first sync happens on whatever connection a car park has, and a page that has to be
-    /// retried whole is cheaper to retry small.
-    /// </summary>
-    /// <remarks>
-    /// A page is a count of rows and not a budget of bytes, and the two are not close: a selection
-    /// carries everything contained in its roots, so a synced cave brings its surveyed centerline,
-    /// whose geometry is the whole survey as a multi-line string and can be larger on its own than
-    /// the other ninety-nine rows together. Nothing here bounds that, which is why the size is a
-    /// request a device is expected to lower rather than a promise that a page is small.
-    /// </remarks>
-    public const int DefaultPageSize = 100;
-
     public static void MapSyncDownloadEndpoints(this RouteGroupBuilder sets)
     {
         sets.MapGet("/{id:guid}/download", DownloadAsync)
@@ -58,8 +44,11 @@ public static class SyncDownloadEndpoints
             return TypedResults.Unauthorized();
         }
 
-        // A sync set has exactly one reader, its owner, and a set somebody else owns is answered
-        // like one that is not there — the same rule the rest of this slice keeps.
+        // Resolved by owner, deliberately and unconditionally. This is the route a phone pulls
+        // rows through, and a phone authenticates as exactly one account: a set somebody else owns
+        // is answered like one that is not there, whatever that account is otherwise allowed. An
+        // installation may let a full administrator read another caver's selection through the
+        // set's own address; it may not let one pull that selection down onto a device.
         var set = await db.SyncSets.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id && x.OwnerUserId == ctx.UserId, ct);
         if (set is null)
@@ -93,7 +82,10 @@ public static class SyncDownloadEndpoints
             from = decoded;
         }
 
-        var size = Math.Clamp(pageSize ?? DefaultPageSize, 1, options.Value.ResolvedPageSizeMax);
+        // A device that names no size gets the installation's default, and any size at all is held
+        // inside the ceiling that same installation announces.
+        var size = Math.Clamp(
+            pageSize ?? options.Value.ResolvedDefaultPageSize, 1, options.Value.ResolvedPageSizeMax);
         var settings = JsonSerializer.Deserialize<JsonElement>(set.Settings);
 
         var roots = await db.SyncSetMembers.AsNoTracking()

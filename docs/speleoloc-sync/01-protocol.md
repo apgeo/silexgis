@@ -68,18 +68,22 @@ rather than being interpreted generously.
 
 ### 1.2 The settings an installation can change under a device
 
-Three of the numbers above are configuration rather than code, and an operator may set them per
-installation with an environment variable. A client that reads them from `capabilities` at every
-sign-in rather than compiling them in is unaffected by any of it.
+Four of this installation's numbers are configuration rather than code, and an operator may set
+them per installation with an environment variable. Two of them are the ceilings answered in
+`capabilities`; the other two change what an answer contains without being announced anywhere,
+which is why they are listed here as well. A client that reads the ceilings from `capabilities` at
+every sign-in rather than compiling them in is unaffected by any of it.
 
 | Setting | Default | What it changes for the client |
 |---|---|---|
 | `SILEXGIS__Sync__PageSizeMax` | 500 | The ceiling in `pageSizeMax`. A larger `pageSize` on a download is clamped to it, silently — count the rows you got rather than assuming you got what you asked for |
+| `SILEXGIS__Sync__DefaultPageSize` | 100 | The page a download hands back when the request names no `pageSize` at all. **It is announced nowhere**, so a device that needs to know its page size sends one rather than inferring this. Set above `PageSizeMax` it is served as that maximum |
 | `SILEXGIS__Sync__UploadRowsMax` | 500 | The ceiling in `uploadRowsMax`. A batch above it is refused whole, before any row is looked at |
 | `SILEXGIS__Sync__DuplicateRadiusMeters` | 50 metres, the same default a file import uses | How near an existing row a newly written one has to be to appear in the duplicate report. **Zero turns the report off entirely**, so an empty report is not evidence of no duplicates |
 
 Both ceilings are themselves clamped by the server to a sane range, so a misconfigured installation
-cannot answer a `pageSizeMax` of zero or of a million.
+cannot answer a `pageSizeMax` of zero or of a million; the default page is in turn held inside
+whichever ceiling is in force, so it can never hand back more than the announced maximum.
 
 ## 2. Naming what a device carries
 
@@ -91,8 +95,16 @@ to the transfer is:
 - **A set names roots, not rows.** Whatever is contained in a named root is in the set, including
   anything added under it later. There is no list of synced objects to keep up to date on either
   side.
-- **A set is private to the account that owns it.** Nobody else can read it, administrators
-  included, and a set somebody else owns is reported exactly like one that does not exist.
+- **A set is private to the account that owns it**, and a set somebody else owns is reported
+  exactly like one that does not exist. One narrow exception exists and is off unless an
+  installation switches it on: `SILEXGIS__Sync__AllowAdministratorRead` lets a full administrator
+  *read* a set whose identifier they already know, so that somebody can answer "which caves does
+  this phone hold?". It turns on the account rather than on the client, so a device signed in as a
+  full administrator reaches it too — but it widens that one route and nothing else: no listing
+  widens, no set becomes editable by anyone but its owner, and **the download and upload routes
+  always resolve a set by its owner**, so a device can never transfer through a set the account it
+  is signed in as does not own. It is not announced in `capabilities` for that reason: it says
+  something about the people running an installation, not about the protocol.
 - **Membership is a choice, not a right.** What actually leaves the server is decided at read time
   against the caller's own visibility, so a root that stops being readable simply stops producing
   rows. Naming a cave in a set never widens what the account may see.
@@ -133,7 +145,9 @@ can be written without.
   position it asked from.
 - **`hasMore` false means level with the server as of this read**, not "stop asking". It is the
   signal to stop looping now, not to stop syncing.
-- **`pageSize` is optional**, defaults to 100 and is clamped to the announced `pageSizeMax`.
+- **`pageSize` is optional.** Omitting it asks for the installation's own default page — 100 unless
+  an operator has changed it, and never more than the announced `pageSizeMax`. Any size that is
+  named is clamped to that same maximum.
 - **The order is the change order**, and both halves of the payload share it: a page can carry live
   rows and tombstones together, and the single cursor resumes either. Do not sort the arrays.
 

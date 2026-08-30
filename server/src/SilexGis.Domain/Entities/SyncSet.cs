@@ -9,10 +9,13 @@ namespace SilexGis.Domain.Entities;
 /// <remarks>
 /// <para>
 /// A sync set is per-account configuration, not shared content. It is deliberately outside
-/// the access model — no domain, no rulesets, no caving-group reads: only its owner can see
-/// it or change it, and that includes administrators. Nothing is gained by letting one caver
-/// read another's device list, and the list is a statement about a person's habits and where
-/// they go, which is exactly the kind of thing this application protects elsewhere.
+/// the access model — no domain, no rulesets, no caving-group reads: only its owner can change
+/// it, administrators included, and only its owner reads it unless the installation has allowed
+/// a full administrator to read one set by an identifier they already hold. Nothing is gained by
+/// letting one caver read another's device list, and the list is a statement about a person's
+/// habits and where they go, which is exactly the kind of thing this application protects
+/// elsewhere — which is why the one widening an operator can switch on covers reading a single
+/// named set and nothing else.
 /// </para>
 /// <para>
 /// The set names roots, not rows. There is no registry of what has been synced: a feature row
@@ -24,9 +27,10 @@ namespace SilexGis.Domain.Entities;
 /// Deliberately not audited. The audit trail is a shared read: it is gated on a right over the
 /// audit domain and not on the row the entry describes, so an audited create would publish this
 /// set's name, its group binding and its whole settings document to every account holding that
-/// right — the very thing the paragraph above says cannot happen. There is nothing to reconcile
-/// here: an audit entry and "the owner is the only reader" cannot both be true, and the second
-/// is the promise the endpoints are written to keep.
+/// right — the very thing the paragraph above says cannot happen. An installation may allow a full
+/// administrator to read one set by an identifier they already hold, and that changes nothing here:
+/// it is a decision an operator makes, revocable, about a named few, while an audit entry hands the
+/// same contents to whoever holds an unrelated right on every installation for ever.
 /// </para>
 /// </remarks>
 public class SyncSet : ITimestamped
@@ -36,7 +40,10 @@ public class SyncSet : ITimestamped
     /// <summary>What the caver calls this device or this selection.</summary>
     public required string Name { get; set; }
 
-    /// <summary>The account this set belongs to. The only reader and the only writer.</summary>
+    /// <summary>
+    /// The account this set belongs to: its only writer, and its only reader unless the
+    /// installation has allowed a full administrator to read one set by its identifier.
+    /// </summary>
     public Guid OwnerUserId { get; set; }
 
     /// <summary>

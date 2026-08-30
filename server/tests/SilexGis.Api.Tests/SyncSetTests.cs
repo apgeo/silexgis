@@ -15,7 +15,8 @@ namespace SilexGis.Api.Tests;
 /// <summary>
 /// The mobile sync surface as it stands before any row moves: what a device is told it may
 /// expect, and the lifecycle of the selection a caver keeps on it. The load-bearing
-/// assertions here are that a sync set is reachable by nobody but its owner, that naming a
+/// assertions here are that a sync set is reachable by nobody but its owner on the defaults this
+/// build ships, that naming a
 /// root is checked against the caller's own reads, and that the announced contract version
 /// is a fixed statement about this build rather than something an installation may set.
 /// </summary>

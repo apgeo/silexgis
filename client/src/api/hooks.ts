@@ -4394,7 +4394,10 @@ export function useSyncCapabilities() {
   });
 }
 
-/** The caller's own sync sets. Nobody else can read them, administrators included. */
+/**
+ * The caller's own sync sets. This listing is never widened: it answers with the sets the signed-in
+ * account owns and no others, whatever an installation allows an administrator to read one set by.
+ */
 export function useSyncSets() {
   return useQuery({
     queryKey: queryKeys.syncSets,

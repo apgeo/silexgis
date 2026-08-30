@@ -97,12 +97,18 @@ also carries the `auth.*` codes the sign-in and two-factor calls answer with —
 here.
 
 **There is no `403` for a sync set somebody else owns.** It is a `404` — see the next section.
+The one thing an installation can change about that is whether a full administrator, reading a set
+by an identifier they already hold, gets it back instead of the `404`
+(`SILEXGIS__Sync__AllowAdministratorRead`, off by default). It is decided by the account, not by
+the client: any caller holding a full-administrator account gets it, a device included. Nothing
+else widens — every other route, the transfer routes included, answers `sync.set_not_found` for a
+set the signed-in account does not own however that setting stands.
 
 ## 3. Reading
 
 | Status | Code | Means | Action |
 |---|---|---|---|
-| 404 | `sync.set_not_found` | No sync set with that id belongs to this account. **A set that exists but belongs to somebody else answers exactly this**, so the route cannot be used to count other people's devices | `surface-to-user` — the set was deleted, or the device is signed in as a different account. A caver picks a set again |
+| 404 | `sync.set_not_found` | No sync set with that id belongs to this account. **A set that exists but belongs to somebody else answers exactly this**, so the route cannot be used to count other people's devices. The single exception is an administrator reading one set on an installation that has allowed it, which turns on the account and not on the client, so a device signed in as a full administrator gets it too — a download or an upload, by contrast, answers this for a set the signed-in account does not own, unconditionally | `surface-to-user` — the set was deleted, or the device is signed in as a different account. A caver picks a set again |
 | 400 | `sync.cursor_invalid` | The `cursor` was not issued by this server: truncated, re-encoded, hand-made, or from an older contract | `apply-and-resubmit` — drop the cursor and start the set again from the beginning, accepting that this is a full re-read. Never resend it as sent |
 | 409 | `sync.cursor_stale` | The `cursor` was issued by this server, but against an older revision of the sync set: the selection or its settings have been edited since | `apply-and-resubmit` — drop the cursor and read the set from the beginning. Retrying the same cursor will never succeed |
 

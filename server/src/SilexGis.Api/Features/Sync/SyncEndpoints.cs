@@ -63,7 +63,9 @@ public static class SyncEndpoints
             .WithSummary("Creates a sync set owned by the caller.");
         sets.MapGet("/{id:guid}", GetAsync).WithName("syncGetSet")
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .WithSummary("One of the caller's own sync sets.");
+            .WithSummary(
+                "One sync set the caller owns, or any set at all where the installation lets a "
+                + "full administrator read one.");
         sets.MapPut("/{id:guid}", UpdateAsync).WithValidation<SyncSetWriteRequest>()
             .WithName("syncReplaceSet")
             .ProducesProblem(StatusCodes.Status400BadRequest)
@@ -127,6 +129,7 @@ public static class SyncEndpoints
         Guid id,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
+        IOptions<SyncOptions> options,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -135,7 +138,9 @@ public static class SyncEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var set = await OwnedBy(db, ctx.UserId).AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+        // The one route in this slice an installation may widen. Everything else here — the
+        // listing, the replacement, the deletion — resolves by owner whatever that setting says.
+        var set = await ReadableBy(db, ctx, options.Value).FirstOrDefaultAsync(x => x.Id == id, ct);
         if (set is null)
         {
             return NotFound();
@@ -294,13 +299,39 @@ public static class SyncEndpoints
     }
 
     /// <summary>
-    /// The whole visibility rule for this table, in one place: a sync set is per-account
-    /// configuration and its owner is its only reader — administrators included. There is no
-    /// domain to evaluate and no ruleset that reaches it, and a set somebody else owns is
-    /// reported exactly like one that does not exist, so listing cannot be used to count them.
+    /// The rule for this table, in one place: a sync set is per-account configuration, and every
+    /// act on it except reading one by its identifier belongs to its owner alone — administrators
+    /// included. There is no domain to evaluate and no ruleset that reaches it, and a set somebody
+    /// else owns is reported exactly like one that does not exist. That covers the listing too, so
+    /// no caller can be handed a count of anybody else's sets however privileged they are.
     /// </summary>
     private static IQueryable<SyncSet> OwnedBy(SilexGisDbContext db, Guid userId) =>
         db.SyncSets.Where(x => x.OwnerUserId == userId);
+
+    /// <summary>
+    /// The single read an installation may widen: one set, named by an identifier the caller
+    /// already holds. It answers a support question no other route answers — which caves a
+    /// caver's phone is carrying — and it is off unless the installation turned it on, because
+    /// the answer is a statement about where that person goes rather than about the registry.
+    /// </summary>
+    /// <remarks>
+    /// The widening is a branch here rather than a term in the query on purpose: with the setting
+    /// off this emits exactly the query the write paths emit, so an installation that never turned
+    /// it on cannot be reading anything through a predicate it does not use. Reading is all it
+    /// widens. A replacement or a deletion still has to be the owner's, and the transfer routes
+    /// resolve a set by owner in their own files rather than through anything here, because a
+    /// device authenticates as a single account and must never be able to pull another account's
+    /// selection onto itself — being held by an administrator does not make a phone less of a
+    /// phone.
+    /// </remarks>
+    private static IQueryable<SyncSet> ReadableBy(
+        SilexGisDbContext db, AccessContext ctx, SyncOptions options)
+    {
+        var sets = db.SyncSets.AsNoTracking();
+        return options.AllowAdministratorRead && ctx.IsFullAdmin
+            ? sets
+            : sets.Where(x => x.OwnerUserId == ctx.UserId);
+    }
 
     private static ProblemHttpResult NotFound() => ApiProblems.NotFound("sync.set_not_found");
 

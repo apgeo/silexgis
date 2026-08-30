@@ -11883,7 +11883,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One of the caller's own sync sets. */
+        /** One sync set the caller owns, or any set at all where the installation lets a full administrator read one. */
         get: operations["syncGetSet"];
         /** Replaces a sync set the caller owns; bumps its revision when anything changed. */
         put: operations["syncReplaceSet"];

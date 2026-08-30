@@ -102,8 +102,10 @@ public static class SyncUploadEndpoints
                 $"An upload carries at most {options.Value.ResolvedUploadRowsMax} rows.");
         }
 
-        // A sync set has exactly one reader and one writer, its owner; somebody else's is answered
-        // like one that is not there, the same rule the rest of this slice keeps.
+        // Resolved by owner, deliberately and unconditionally, for the same reason the download
+        // is: a phone authenticates as one account, and somebody else's set is answered like one
+        // that is not there whatever that account is otherwise allowed. Nothing an installation
+        // can configure widens a write of a set — only reading one by its own address.
         var set = await db.SyncSets.AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id && x.OwnerUserId == ctx.UserId, ct);
         if (set is null)
