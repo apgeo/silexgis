@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Flex, Input, Table, Typography } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import {
   surveyModelReadableByViewer,
   useCave,
@@ -17,6 +17,7 @@ import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
 import SelectionPanel from '../../components/map/SelectionPanel.tsx';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import Scene3DView from '../../components/scene3d/Scene3DView.tsx';
+import AnnotatedTextPanel from '../../textlink/AnnotatedTextPanel.tsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import { publish, subscribe } from '../../workspace/workspaceBus.ts';
 
@@ -43,6 +44,8 @@ export default function PanelPage() {
       return <Scene3dScenePanel />;
     case 'selection':
       return <SelectionPopout />;
+    case 'text':
+      return <TextPopout />;
     default:
       return (
         <Flex align="center" justify="center" style={{ height: '100vh' }}>
@@ -50,6 +53,39 @@ export default function PanelPage() {
         </Flex>
       );
   }
+}
+
+/**
+ * One annotated text in a window of its own — the second monitor holding the report while the
+ * first holds the map it is about.
+ *
+ * The document is named in the address rather than followed from the bus, which is the opposite
+ * of what the other pop-outs do and is right for this one: the others watch whatever is selected,
+ * while this window was opened to read one particular text and must go on showing it while the
+ * reader clicks through everything it links to.
+ *
+ * Its view controls are whatever this window has, which is none — so following a link from here
+ * reaches the map in the window it was opened from, over the bus. That is the arrangement the
+ * cross-window roster exists for.
+ */
+function TextPopout() {
+  const { t } = useTranslation();
+  const [params] = useSearchParams();
+  const documentId = params.get('document');
+
+  if (documentId === null) {
+    return (
+      <Flex align="center" justify="center" style={{ height: '100vh' }}>
+        <Typography.Text type="secondary">{t('panel.unknown')}</Typography.Text>
+      </Flex>
+    );
+  }
+
+  return (
+    <div style={{ height: '100vh' }}>
+      <AnnotatedTextPanel documentId={documentId} mayPopOut={false} />
+    </div>
+  );
 }
 
 /**
@@ -176,6 +212,9 @@ function Viewer3dPanel() {
             fileName={`${model.name}.${model.format === 'lox' ? 'lox' : '3d'}`}
             height="100%"
             onEntrancePick={onEntrancePick}
+            // Named so this window can answer a link that points at a station of *this* model,
+            // and decline one that points at another cave's.
+            surveyModelId={model.id}
           />
         </div>
       ) : (

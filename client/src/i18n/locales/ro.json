@@ -1664,7 +1664,8 @@
       "attachments": "Fișiere",
       "links": "Legături",
       "history": "Istoric",
-      "permissions": "Permisiuni"
+      "permissions": "Permisiuni",
+      "text": "Text"
     },
     "reorder": "Mută {{section}}",
     "reorderHint": "Trage pentru a reordona sau ține Alt și apasă săgețile sus și jos",
@@ -2486,6 +2487,10 @@
       "trip-follows-on-from": {
         "name": "Continuă tura",
         "inverse": "Urmată de"
+      },
+      "text-of": {
+        "name": "Textul lui",
+        "inverse": "Are textul"
       }
     },
     "members": "Elemente",
@@ -3288,5 +3293,49 @@
       "noAltitudes": "Cel puțin una dintre aceste două peșteri a fost desenată în plan și nu a înregistrat adâncimi, deci nu există o distanță tridimensională onestă."
     },
     "drawnOnMap": "Linia cea mai scurtă este desenată pe hartă și în vizualizarea 3D. Pe hartă vedeți doar proiecția ei în plan; în 3D trece prin rocă, la adâncimile la care au fost măsurate cele două capete."
+  },
+  "viewLinks": {
+    "controls": {
+      "map2d": "Harta",
+      "scene3d": "Scena 3D",
+      "caveview": "Vizualizatorul de ridicări",
+      "imageView": "Imagine"
+    }
+  },
+  "textLink": {
+    "notAnnotated": "Acest document nu este un text cu legături.",
+    "empty": "Textul nu conține încă nimic.",
+    "popOut": "Deschide într-o fereastră separată",
+    "controls": {
+      "title": "Unde duc legăturile",
+      "hint": "Urmărirea unui pasaj evidențiat mută aceste vizualizări. Oprește una ca să rămână pe loc.",
+      "none": "Nu este deschisă nicio hartă, scenă sau vizualizator, deci urmărirea unui pasaj nu are ce muta. Deschide una sau desprinde textul lângă ea."
+    },
+    "edit": {
+      "start": "Editează legăturile",
+      "stop": "Oprește editarea",
+      "hint": "Selectează orice parte din text ca să o legi de o peșteră, un document, o tură sau altceva.",
+      "deleteTitle": "Ștergi această legătură?",
+      "deleteBody": "Pasajul nu va mai fi evidențiat. Lucrurile pe care le lega nu sunt afectate."
+    },
+    "card": {
+      "uncertain": "S-ar putea să se fi mutat",
+      "uncertainDetail": "Aceste cuvinte nu se află unde le-a înregistrat legătura, deci evidențierea poate fi pe alt pasaj.",
+      "noTargets": "Legătura nu indică încă nimic altceva.",
+      "openLink": "Legătura",
+      "reveal": "Arată",
+      "revealHint": "Mută vizualizările deschise la acest lucru, fără a părăsi textul.",
+      "revealIn": "Arată în…",
+      "otherWindow": "altă fereastră",
+      "open": "Deschide",
+      "openNewWindow": "Deschide într-o fereastră nouă"
+    },
+    "section": {
+      "none": "Nu s-a scris încă nimic despre acest lucru.",
+      "write": "Scrie unul",
+      "newTitle": "Notițe despre {{name}}",
+      "newTitleBare": "Notițe",
+      "newBody": "Scrie aici, apoi selectează orice parte din text ca să o legi."
+    }
   }
 }

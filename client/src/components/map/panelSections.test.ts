@@ -20,6 +20,10 @@ describe('panel section order', () => {
       'tags',
       'attachments',
       'links',
+      // Stored before the annotated-text section existed. A known id the stored order never
+      // mentioned is appended rather than dropped, which is what makes shipping a section a line
+      // in the vocabulary instead of a migration of everybody's arrangement.
+      'text',
     ]);
   });
 

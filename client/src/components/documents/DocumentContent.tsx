@@ -8,6 +8,8 @@ import MediaDocumentView from './MediaDocumentView.tsx';
 import PagedDocumentView from './PagedDocumentView.tsx';
 import PdfDocumentView from './PdfDocumentView.tsx';
 import TextDocumentView from './TextDocumentView.tsx';
+import AnnotatedTextDocumentView from '../../textlink/AnnotatedTextDocumentView.tsx';
+import { ANNOTATED_TEXT_MEDIA_TYPE } from '../../textlink/mediaType.ts';
 
 /**
  * What to say about a document nothing can draw pages of, when the reason is worth saying.
@@ -82,11 +84,33 @@ export const maxBrowserPdfBytes = 64 * 1024 * 1024;
 export default function DocumentContent({
   file,
   initialPage,
+  documentId,
 }: {
   file: FileInfo;
   initialPage?: number;
+  /**
+   * The document this file is the current content of, where the caller knows it.
+   *
+   * Only the link-annotated reader needs it — everything else here draws the file itself, while a
+   * text's links are anchored to the document, which is the identity that survives a revision.
+   * Optional because the attachment surfaces show a file without always having the document in
+   * hand; without it that one branch is not taken and the general answer is given instead.
+   */
+  documentId?: string;
 }) {
   const { t } = useTranslation();
+
+  // A link-annotated text is read by the component that draws its links, never as the source it
+  // is stored as. It is checked before every other branch because its bytes are JSON: left to
+  // fall through, it would be offered as a download of a file whose format means nothing outside
+  // this application, which is the least useful of the available answers.
+  //
+  // Its own read is gated by the document rules like everything else here — no branch is taken on
+  // the strength of a media type alone — and the reader says so itself when the caller may not
+  // have it.
+  if (file.mimeType.split(';')[0].trim() === ANNOTATED_TEXT_MEDIA_TYPE && documentId !== undefined) {
+    return <AnnotatedTextDocumentView documentId={documentId} />;
+  }
 
   if (file.kind === 'image') {
     const src = displayableImageUrl(file);

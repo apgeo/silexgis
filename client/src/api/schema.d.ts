@@ -7595,6 +7595,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/annotated-texts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Writes a new link-annotated text document. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AnnotatedTextCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AnnotatedTextDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/annotated-texts/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A link-annotated text document's blocks, with the file its anchors are measured against. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AnnotatedTextDto"];
+                    };
+                };
+            };
+        };
+        /** Replaces the body with a new revision and re-measures the links over it; passages that survive stay exact, passages that are gone read as degraded. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AnnotatedTextReplaceRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AnnotatedTextWriteDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/document-types": {
         parameters: {
             query?: never;
@@ -15002,6 +15106,52 @@ export interface components {
         };
         /** @enum {unknown} */
         AnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange" | "modelStation" | "modelStationRange" | "modelSurvey" | "modelSurveyRange" | "modelPoint" | "waypoint" | "waypointRange";
+        AnnotatedBlock: {
+            type: components["schemas"]["AnnotatedBlockType"];
+            text: string;
+            marks?: null | components["schemas"]["AnnotatedMark"][];
+        };
+        /** @enum {unknown} */
+        AnnotatedBlockType: "p" | "h1" | "h2" | "h3" | "ul" | "ol" | "quote" | "code";
+        AnnotatedMark: {
+            /** Format: int32 */
+            start: number;
+            /** Format: int32 */
+            end: number;
+            kind: components["schemas"]["AnnotatedMarkKind"];
+        };
+        /** @enum {unknown} */
+        AnnotatedMarkKind: "b" | "i" | "u" | "code";
+        AnnotatedTextCreateRequest: {
+            title: string;
+            blocks: components["schemas"]["AnnotatedBlock"][];
+            visibility?: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+        };
+        AnnotatedTextDto: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            fileId: string;
+            title: string;
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            /** Format: int32 */
+            versionNumber: number;
+            /** Format: int32 */
+            canonicalLength: number;
+            mayWrite: boolean;
+            blocks: components["schemas"]["AnnotatedBlock"][];
+        };
+        AnnotatedTextReplaceRequest: {
+            blocks: components["schemas"]["AnnotatedBlock"][];
+        };
+        AnnotatedTextWriteDto: {
+            text: components["schemas"]["AnnotatedTextDto"];
+            reanchoring: components["schemas"]["ReanchorReportDto"];
+        };
         AnnouncementSettingsDto: {
             paidChannelsEnabled: boolean;
             /** Format: int32 */
@@ -18095,6 +18245,14 @@ export interface components {
         };
         /** @enum {unknown} */
         RasterStatus: "uploaded" | "processing" | "ready" | "failed";
+        ReanchorReportDto: {
+            /** Format: int32 */
+            unmoved: number;
+            /** Format: int32 */
+            moved: number;
+            /** Format: int32 */
+            lost: number;
+        };
         RegisterRequest: {
             email: string;
             password: string;
@@ -18223,6 +18381,7 @@ export interface components {
             route: null | string;
             thumbnailUrl: null | string;
             path?: null | string[];
+            mediaType?: null | string;
         };
         ResLinkTargetHitDto: {
             /** Format: uuid */

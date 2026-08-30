@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using SilexGis.Domain;
+using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Expeditions;
 using SilexGis.Domain.ResLinks;
@@ -87,6 +88,14 @@ public static class DemoSeeder
         {
             await SeedDocumentsAsync(db, documents, fileStore, ownerUserId, demoCaveId.Value, ct);
             await db.SaveChangesAsync(ct);
+
+            // After the documents block and outside it, on a guard of its own. That block is
+            // gated on the demo archive not existing, so anything nested inside it never runs
+            // again on a database that has already seen the demo — the dataset would quietly
+            // stay as it was on every machine that had one, which is the same trap the camp
+            // roster above is hoisted out of.
+            await SeedAnnotatedTextAsync(db, documents, fileStore, ownerUserId, demoCaveId.Value, ct);
+            await db.SaveChangesAsync(ct);
         }
     }
 
@@ -165,6 +174,208 @@ public static class DemoSeeder
         });
 
         await SeedResourceLinkAsync(db, ownerUserId, demoCaveId, report, ct);
+    }
+
+    /// <summary>
+    /// The demonstration link-annotated text: a page of prose about the demo cave, with three of
+    /// its passages linked — to the cave, to a feature on the surface above it, and to the 1987
+    /// report the text is the reading of.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every anchor here is computed from the body rather than written down, by finding the quote
+    /// in the same canonical stream the format defines. That is not tidiness: an offset typed into
+    /// this file would be a constant that has to be re-derived by hand whenever a word of the
+    /// prose above it changes, and the failure when somebody forgets is a demonstration in which
+    /// the highlights sit a few characters off the sentences they belong to — which reads as the
+    /// feature not working rather than as the seed being stale.
+    /// </para>
+    /// <para>
+    /// Three passages and not one, because what is worth showing is what one passage cannot: that
+    /// a passage may point at something with a position and move the map, that another may point
+    /// at a document and open a reader, and that the relation each carries is what colours it.
+    /// The middle one overlaps nothing; that case has its own tests rather than a seeded example.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedAnnotatedTextAsync(
+        SilexGisDbContext db,
+        DocumentWriteService documents,
+        IFileStore fileStore,
+        Guid ownerUserId,
+        Guid demoCaveId,
+        CancellationToken ct)
+    {
+        const string title = "Peștera Demo Mare — notes on the 1987 survey";
+        if (await db.Documents.AnyAsync(d => d.Title == title, ct))
+        {
+            return;
+        }
+
+        // The report this text is the reading of, and the shelf it is filed on, looked up by
+        // name rather than handed in — that is what lets this run on a database seeded before
+        // it existed. Without the report there is nothing for the text to be the text *of*, so
+        // there is nothing worth demonstrating and the block does not run at all.
+        var report = await (from version in db.DocumentVersions.AsNoTracking()
+                            join reported in db.Documents.AsNoTracking() on version.DocumentId equals reported.Id
+                            join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
+                            where version.IsCurrent && reported.Title.EndsWith("1987 survey report")
+                            select new { reported.Id, FileId = file.Id }).FirstOrDefaultAsync(ct);
+        if (report is null)
+        {
+            return;
+        }
+
+        var cabinetId = await db.Cabinets.AsNoTracking()
+            .Where(c => c.Name == "Survey reports")
+            .Select(c => (Guid?)c.Id)
+            .FirstOrDefaultAsync(ct);
+
+        AnnotatedBlock[] blocks =
+        [
+            new(AnnotatedBlockType.Heading2, "Peștera Demo Mare"),
+            new(
+                AnnotatedBlockType.Paragraph,
+                "The cave was surveyed over three weekends in August 1987. The entrance series is "
+                + "reached from the plateau, past Dolina Demo, and drops through a boulder choke "
+                + "into the main gallery.",
+                [new AnnotatedMark(45, 56, AnnotatedMarkKind.Italic)]),
+            new(
+                AnnotatedBlockType.Paragraph,
+                "Beyond the second sump the passage widens into a chamber some forty metres "
+                + "across, described in the 1987 survey report as the largest known volume in the "
+                + "system.",
+                null),
+            new(AnnotatedBlockType.Heading3, "Still to do"),
+            new(AnnotatedBlockType.BulletItem, "Re-survey the connection to the upper series.", null),
+            new(AnnotatedBlockType.BulletItem, "Photograph the flowstone in the far chamber.", null),
+        ];
+
+        var body = new AnnotatedTextBody(blocks);
+        var bytes = AnnotatedText.Serialize(body);
+        var storagePath = await StoreAsync(fileStore, bytes, AnnotatedText.FileExtension, ct);
+        var content = new StoredContent(
+            storagePath,
+            "pestera-demo-mare-notes" + AnnotatedText.FileExtension,
+            AnnotatedText.MediaType,
+            bytes.LongLength,
+            Convert.ToHexStringLower(SHA256.HashData(bytes)),
+            FileKind.Document);
+
+        var text = documents.Create(
+            content, title, ownerUserId: ownerUserId, uploadedBy: ownerUserId);
+        var document = db.Documents.Local.Single(d => d.Id == text.Version.DocumentId);
+        document.Visibility = Visibility.Public;
+
+        // Filed beside the report it reads, because that is where somebody would look for it —
+        // and because an unfiled document is reachable only through the inbox, which is a
+        // different surface from the one this demonstrates.
+        if (cabinetId is { } shelf)
+        {
+            db.CabinetDocuments.Add(new CabinetDocument
+            {
+                CabinetId = shelf,
+                DocumentId = text.Version.DocumentId,
+            });
+        }
+
+        var stream = AnnotatedText.CanonicalText(blocks);
+        var dolinaId = await db.Features
+            .Where(f => f.Name == "Dolina Demo")
+            .Select(f => (Guid?)f.Id)
+            .FirstOrDefaultAsync(ct);
+
+        await LinkPassageAsync(
+            db, ownerUserId, text, stream, "the main gallery", "documents",
+            feature: demoCaveId, document: null, ct);
+
+        if (dolinaId is not null)
+        {
+            await LinkPassageAsync(
+                db, ownerUserId, text, stream, "Dolina Demo", "related-to",
+                feature: dolinaId.Value, document: null, ct);
+        }
+
+        await LinkPassageAsync(
+            db, ownerUserId, text, stream, "the 1987 survey report", "text-of",
+            feature: null, document: report.Id, ct);
+    }
+
+    /// <summary>
+    /// One passage of the demonstration text, linked to one thing.
+    /// </summary>
+    /// <remarks>
+    /// The context on either side of the quote is recorded exactly as the browser would record it,
+    /// so these anchors behave like authored ones when the text is later edited — including
+    /// finding themselves again after a passage above them grows.
+    /// </remarks>
+    private static async Task LinkPassageAsync(
+        SilexGisDbContext db,
+        Guid ownerUserId,
+        DocumentFile text,
+        string stream,
+        string quote,
+        string relationCode,
+        Guid? feature,
+        Guid? document,
+        CancellationToken ct)
+    {
+        var start = stream.IndexOf(quote, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            // The prose was edited and this quote no longer occurs in it. Skipped rather than
+            // anchored at a guess: a seeded link pointing at the wrong words would demonstrate
+            // the failure the whole anchoring design exists to prevent.
+            return;
+        }
+
+        var end = start + quote.Length;
+        var relationTypeId = await db.ResLinkRelationTypes
+            .Where(r => r.Code == relationCode)
+            .Select(r => (long?)r.Id)
+            .FirstOrDefaultAsync(ct);
+
+        var link = new ResLink
+        {
+            ShortCode = ResLinkRules.NewShortCode(),
+            RelationTypeId = relationTypeId,
+            CreatedBy = ownerUserId,
+        };
+        db.ResLinks.Add(link);
+
+        db.ResLinkMembers.Add(new ResLinkMember
+        {
+            ResLinkId = link.Id,
+            EntityType = AttachedEntityType.Document,
+            EntityId = text.Version.DocumentId,
+            // The text is the end a directed relation reads from for "text-of"; for the others
+            // the marker goes to what is being described, below.
+            IsMain = relationCode == "text-of",
+            AnchorKind = AnchorKind.TextRange,
+            Anchor = JsonSerializer.Serialize(
+                new
+                {
+                    start,
+                    end,
+                    quote,
+                    prefix = stream[Math.Max(0, start - 32)..start],
+                    suffix = stream[end..Math.Min(stream.Length, end + 32)],
+                },
+                JsonSerializerOptions.Web),
+            AnchorFileId = text.File.Id,
+            SortOrder = 0,
+            AddedBy = ownerUserId,
+        });
+
+        db.ResLinkMembers.Add(new ResLinkMember
+        {
+            ResLinkId = link.Id,
+            FeatureId = feature,
+            EntityType = document is null ? null : AttachedEntityType.Document,
+            EntityId = document,
+            IsMain = relationCode != "text-of",
+            SortOrder = 1,
+            AddedBy = ownerUserId,
+        });
     }
 
     /// <summary>

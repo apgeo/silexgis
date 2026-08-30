@@ -1664,7 +1664,8 @@
       "attachments": "Files",
       "links": "Links",
       "history": "History",
-      "permissions": "Permissions"
+      "permissions": "Permissions",
+      "text": "Text"
     },
     "reorder": "Move {{section}}",
     "reorderHint": "Drag to reorder, or hold Alt and press the up and down arrows",
@@ -2486,6 +2487,10 @@
       "trip-follows-on-from": {
         "name": "Follows on from",
         "inverse": "Followed up by"
+      },
+      "text-of": {
+        "name": "Text of",
+        "inverse": "Has text"
       }
     },
     "members": "Members",
@@ -3288,5 +3293,49 @@
       "noAltitudes": "At least one of these two caves was drawn in plan and recorded no depths, so there is no honest distance in three dimensions."
     },
     "drawnOnMap": "The shortest line is drawn on the map and in the 3D view. On the map you see its plan only; in 3D it runs through the rock at the depths its two ends were surveyed at."
+  },
+  "viewLinks": {
+    "controls": {
+      "map2d": "Map",
+      "scene3d": "3D scene",
+      "caveview": "Survey viewer",
+      "imageView": "Image"
+    }
+  },
+  "textLink": {
+    "notAnnotated": "This document is not a link-annotated text.",
+    "empty": "This text has nothing in it yet.",
+    "popOut": "Open in a window of its own",
+    "controls": {
+      "title": "Where links go",
+      "hint": "Following a highlighted passage moves these views. Turn one off to leave it where it is.",
+      "none": "No map, scene or viewer is open, so following a passage has nothing to move. Open one, or pop this text out beside it."
+    },
+    "edit": {
+      "start": "Edit links",
+      "stop": "Stop editing",
+      "hint": "Select any part of the text to link it to a cave, a document, a trip or anything else.",
+      "deleteTitle": "Delete this link?",
+      "deleteBody": "The passage stops being highlighted. The things it linked are not affected."
+    },
+    "card": {
+      "uncertain": "May have moved",
+      "uncertainDetail": "These words are not where this link recorded them, so the highlight may be on the wrong passage.",
+      "noTargets": "This link points at nothing else yet.",
+      "openLink": "The link",
+      "reveal": "Show",
+      "revealHint": "Move the open views to this, without leaving the text.",
+      "revealIn": "Show in…",
+      "otherWindow": "another window",
+      "open": "Open",
+      "openNewWindow": "Open in a new window"
+    },
+    "section": {
+      "none": "Nothing has been written about this yet.",
+      "write": "Write one",
+      "newTitle": "Notes on {{name}}",
+      "newTitleBare": "Notes",
+      "newBody": "Write here, then select any part of the text to link it."
+    }
   }
 }

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -113,11 +115,24 @@ function withWebGl2(available: boolean) {
   );
 }
 
+/**
+ * Everything the view needs around it. The query client is here because the scene registers
+ * itself as somewhere a link can be sent, and answering one means asking where the thing it
+ * names is — a read, through the same cache every other read goes through.
+ */
+function Around({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
 function renderView() {
   return render(
-    <MemoryRouter>
+    <Around>
       <Scene3DView />
-    </MemoryRouter>,
+    </Around>,
   );
 }
 
@@ -183,10 +198,10 @@ describe('Scene3DView', () => {
     // are alive — so the second view joins this one, and says so rather than showing a blank box.
     withWebGl2(true);
     const first = render(
-      <MemoryRouter>
+      <Around>
         <Scene3DView />
         <Scene3DView />
-      </MemoryRouter>,
+      </Around>,
     );
 
     await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
@@ -965,9 +980,9 @@ describe('the ground the caves are drawn against', () => {
       terrain: { url: '/elevation/', attribution: null, surveyHeightOffsetM: 0 },
     };
     view.rerender(
-      <MemoryRouter>
+      <Around>
         <Scene3DView />
-      </MemoryRouter>,
+      </Around>,
     );
 
     expect(await screen.findByText(/does not hold a terrain tile set/)).toBeInTheDocument();

@@ -16,6 +16,7 @@ export const PANEL_SECTION_IDS = [
   'tags',
   'attachments',
   'links',
+  'text',
   'history',
   'permissions',
 ] as const;
@@ -31,6 +32,7 @@ export const DEFAULT_SECTION_ORDER: PanelSectionId[] = [
   'tags',
   'attachments',
   'links',
+  'text',
   'history',
 ];
 
@@ -41,7 +43,7 @@ export const DEFAULT_SECTION_ORDER: PanelSectionId[] = [
  * left open it pushes the fields people do read below the fold. Attachments start closed too —
  * a gallery is tall, and with lazy loading a closed section costs nothing at all.
  */
-export const DEFAULT_COLLAPSED: PanelSectionId[] = ['history', 'attachments'];
+export const DEFAULT_COLLAPSED: PanelSectionId[] = ['history', 'attachments', 'text'];
 
 /**
  * Sections not shown until somebody turns them on. Permissions is a modal everywhere else in the

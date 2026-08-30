@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LayoutOutlined } from '@ant-design/icons';
 import { Alert, Button, Popover, Result, Spin, Typography } from 'antd';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useFeatureTypes, useMapConfig, useMapLayers } from '../../api/hooks.ts';
@@ -64,6 +65,8 @@ import { supportsWebGl2 } from '../../scene3d/webglSupport.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
+import { geometryFor, isGeographic } from '../../viewlinks/geoTargets.ts';
+import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
 import Scene3DLayerPanel from './Scene3DLayerPanel.tsx';
 import Scene3DOverlay from './Scene3DOverlay.tsx';
@@ -111,6 +114,28 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // effects below that the handle in the ref has changed.
   const engineRef = useRef<Scene3DCore | null>(null);
   const [engineVersion, setEngineVersion] = useState(0);
+  const queryClient = useQueryClient();
+
+  // Somewhere a hyperlink in a text panel can be sent, for as long as there is a scene to send
+  // it to. Off while another mount in this window holds the one scene, and off before the scene
+  // has arrived: a control that accepted a reveal it could not draw would look, to the reader,
+  // exactly like a link that does not work.
+  useViewControl({
+    id: 'scene3d',
+    kind: 'scene3d',
+    labelKey: 'viewLinks.controls.scene3d',
+    enabled: showingHere && engineVersion > 0,
+    canReveal: isGeographic,
+    reveal: (ref) => {
+      void geometryFor(queryClient, ref).then((geometry) => {
+        const engine = engineRef.current;
+        const bounds = geometry === null ? null : geoJsonBounds(geometry);
+        if (engine !== null && bounds) {
+          engine.fitBounds(bounds, { animate: true });
+        }
+      });
+    },
+  });
 
   useEffect(() => {
     if (!webGl2) {

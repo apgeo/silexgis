@@ -49,6 +49,19 @@ public static class ResLinkRelationTypeSeeds
         new("trip-searched-not-found", "Searched, not found", true, "Searched for on trip, not found"),
         new("trip-lead", "Left lead", true, "Lead left on trip"),
         new("trip-follows-on-from", "Follows on from", true, "Followed up by"),
+
+        // A link-annotated text and the scanned or word-processed document it is the reading
+        // of. Directed with the annotated text as the main member, so the forward name reads
+        // out of it ("Text of") and the inverse reads back from the file it transcribes ("Has
+        // text"). Distinct from "documents", which relates a document to the thing in the
+        // world it is about; this relates two representations of the same words.
+        //
+        // At the end, rather than beside the other document relations where it would read
+        // better, because the list says append only and means it: a row's sort order is its
+        // position here, so inserting it in the middle silently renumbered every trip role
+        // below it — and only on a fresh installation, so a new database and an upgraded one
+        // would disagree about the vocabulary's order with nothing on screen to say why.
+        new("text-of", "Text of", true, "Has text"),
     ];
 
     /// <summary>
