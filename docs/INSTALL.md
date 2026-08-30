@@ -67,7 +67,35 @@ docker compose exec api dotnet SilexGis.Api.dll seed-demo
 
 ## Enabling HTTPS
 
-TLS is not on by default. Two easy options:
+**Anything other than `localhost` needs it, or nobody can sign in.** This is worth reading
+before you expose an installation on an address, because the way it fails points away from the
+cause.
+
+Signing in uses OpenID Connect authorization-code with PKCE, and the PKCE challenge is a SHA-256
+computed by the browser's Web Crypto API. Browsers publish that API only in a **secure
+context**: an `https://` origin, or `localhost`. Reached at `http://192.168.1.20` or
+`http://203.0.113.10`, the page has no `crypto.subtle` at all, and sign-in fails in the browser
+before any request is sent.
+
+What you see is a site that loads, an API answering `/health/ready`, a valid discovery document
+— and "Cannot reach the server / Sign-in could not be started", with an empty browser console.
+Nothing is wrong with the server. This is also why the quick start above works: `http://localhost:8080`
+is a secure context by definition, and an IP address is not.
+
+If you have no domain yet, you do not have to wait for one. A wildcard DNS service resolves an
+IP-derived name with nothing to set up, and Let's Encrypt issues for it normally — for a host at
+`203.0.113.10`:
+
+```
+SILEXGIS_DOMAIN=203-0-113-10.sslip.io
+SILEXGIS_PUBLIC_URL=https://203-0-113-10.sslip.io
+SILEXGIS_TLS_EMAIL=admin@203-0-113-10.sslip.io
+```
+
+Moving to your own domain later is the same three lines: the OIDC client registration is
+re-seeded from `SILEXGIS_PUBLIC_URL` each time the API starts, so its redirect URI follows.
+
+Two easy options:
 
 **Bundled Caddy (automatic Let's Encrypt).** Point a domain's DNS at the host, open ports 80
 and 443, then set all three in `.env` (each is required by this overlay):

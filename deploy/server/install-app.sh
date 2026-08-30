@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Clone (or refresh) the SilexGIS checkout and write the deployment's .env.
+#
+# Run as the deploy account created by provision-host.sh, not as root: the checkout and the
+# compose project have to belong to the account that will later update them.
+#
+# Idempotent, with one deliberate exception -- an existing .env is never overwritten. It holds
+# generated passwords, and a re-run that quietly minted new ones would leave the API unable to
+# reach a database that still expects the old one.
+#
+# Usage:
+#   SILEXGIS_HOST=203.0.113.10 bash install-app.sh
+#
+# Overrides (environment):
+#   SILEXGIS_HOST          required unless SILEXGIS_PUBLIC_URL is given
+#   SILEXGIS_DOMAIN        hostname to serve over HTTPS; enables the Caddy TLS overlay
+#   SILEXGIS_TLS_EMAIL     Let's Encrypt contact; default admin@$SILEXGIS_DOMAIN
+#   SILEXGIS_PUBLIC_URL    default https://$SILEXGIS_DOMAIN, else http://$SILEXGIS_HOST
+#   SILEXGIS_HTTP_PORT     default 80
+#   SILEXGIS_ADMIN_EMAIL   default admin@silexgis.local
+#   SILEXGIS_REPO          default https://github.com/apgeo/silexgis
+#   SILEXGIS_REF           default master
+#   SILEXGIS_WITH_TERRAIN  default 1   include the terrain bake worker overlay
+#   SILEXGIS_WITH_CONVERT  default 1   include the document conversion overlay
+#   SILEXGIS_TERRAIN_MEM   default 4g  terrain worker memory limit (see note below)
+set -euo pipefail
+
+APP_DIR="${SILEXGIS_APP_DIR:-/opt/silexgis}"
+REPO="${SILEXGIS_REPO:-https://github.com/apgeo/silexgis}"
+REF="${SILEXGIS_REF:-master}"
+HTTP_PORT="${SILEXGIS_HTTP_PORT:-80}"
+ADMIN_EMAIL="${SILEXGIS_ADMIN_EMAIL:-admin@silexgis.local}"
+WITH_TERRAIN="${SILEXGIS_WITH_TERRAIN:-1}"
+WITH_CONVERT="${SILEXGIS_WITH_CONVERT:-1}"
+TERRAIN_MEM="${SILEXGIS_TERRAIN_MEM:-4g}"
+DOMAIN="${SILEXGIS_DOMAIN:-}"
+TLS_EMAIL="${SILEXGIS_TLS_EMAIL:-}"
+[ -n "$DOMAIN" ] && [ -z "$TLS_EMAIL" ] && TLS_EMAIL="admin@$DOMAIN"
+
+say() { printf '\n==> %s\n' "$*"; }
+
+if [ -n "${SILEXGIS_PUBLIC_URL:-}" ]; then
+	PUBLIC_URL="$SILEXGIS_PUBLIC_URL"
+elif [ -n "$DOMAIN" ]; then
+	PUBLIC_URL="https://$DOMAIN"
+else
+	[ -n "${SILEXGIS_HOST:-}" ] || { echo "set SILEXGIS_HOST, SILEXGIS_DOMAIN or SILEXGIS_PUBLIC_URL" >&2; exit 1; }
+	if [ "$HTTP_PORT" = 80 ]; then
+		PUBLIC_URL="http://${SILEXGIS_HOST}"
+	else
+		PUBLIC_URL="http://${SILEXGIS_HOST}:${HTTP_PORT}"
+	fi
+	# Not a preference. The browser withholds the Web Crypto API on a non-secure origin, and
+	# the sign-in flow needs it to compute its PKCE challenge, so an installation reached over
+	# plain HTTP at anything other than localhost cannot be logged into at all -- by anyone.
+	cat >&2 <<-WARN
+
+		WARNING: no SILEXGIS_DOMAIN given, so this installation will be served over plain
+		HTTP at $PUBLIC_URL. Nobody will be able to sign in: browsers expose crypto.subtle
+		only in a secure context, and the sign-in flow needs it for PKCE. Use HTTPS -- with
+		no domain of your own, a wildcard DNS service gives you one:
+
+		  SILEXGIS_DOMAIN=<dashed-ip>.sslip.io bash install-app.sh
+
+	WARN
+fi
+
+[ "$(id -u)" -ne 0 ] || { echo "run as the deploy account, not root" >&2; exit 1; }
+docker ps >/dev/null || { echo "cannot reach the container engine" >&2; exit 1; }
+
+say "Checkout: $REPO ($REF) -> $APP_DIR"
+if [ -d "$APP_DIR/.git" ]; then
+	git -C "$APP_DIR" remote set-url origin "$REPO"
+	git -C "$APP_DIR" fetch --quiet origin "$REF"
+	git -C "$APP_DIR" checkout --quiet -B "$REF" "origin/$REF"
+else
+	git clone --quiet --recurse-submodules --branch "$REF" "$REPO" "$APP_DIR"
+fi
+
+# The cave-survey readers are a submodule, and a checkout without it does not fail at clone
+# time -- it fails much later, as a C# compile error about a missing namespace, inside the
+# Docker build. Initialise it unconditionally so re-running this repairs a checkout that was
+# cloned without --recurse-submodules.
+git -C "$APP_DIR" submodule update --init --recursive --quiet
+echo "    at $(git -C "$APP_DIR" rev-parse --short HEAD)"
+
+ENV_FILE="$APP_DIR/deploy/.env"
+if [ -f "$ENV_FILE" ]; then
+	say ".env exists -- left untouched (delete it by hand to regenerate)"
+else
+	say "Writing $ENV_FILE"
+	DB_PASSWORD="$(openssl rand -base64 30 | tr -d '/+=' | cut -c1-32)"
+	ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-20)"
+
+	# COMPOSE_FILE is read by Compose itself from this file, so the overlays this
+	# installation runs are recorded once here instead of being retyped -- and a plain
+	# `docker compose up -d` in this directory then means the same thing as the update
+	# script means by it. Getting that wrong is how an overlay silently stops being applied.
+	COMPOSE_FILES="docker-compose.yml"
+	[ "$WITH_TERRAIN" = 1 ] && COMPOSE_FILES="$COMPOSE_FILES:docker-compose.terrain-worker.yml"
+	[ "$WITH_CONVERT" = 1 ] && COMPOSE_FILES="$COMPOSE_FILES:docker-compose.convert.yml"
+	[ -n "$DOMAIN" ] && COMPOSE_FILES="$COMPOSE_FILES:docker-compose.tls.yml"
+
+	umask 077
+	{
+		echo "# SilexGIS deployment configuration. Generated by deploy/server/install-app.sh."
+		echo "# Holds credentials: keep it mode 600 and out of version control."
+		echo
+		echo "COMPOSE_FILE=$COMPOSE_FILES"
+		echo
+		echo "SILEXGIS_DB_PASSWORD=$DB_PASSWORD"
+		echo "SILEXGIS_HTTP_PORT=$HTTP_PORT"
+		echo "SILEXGIS_PUBLIC_URL=$PUBLIC_URL"
+		echo
+		echo "# Seeded on first start and placed in Full Administrators."
+		echo "SILEXGIS_ADMIN_EMAIL=$ADMIN_EMAIL"
+		echo "SILEXGIS_ADMIN_PASSWORD=$ADMIN_PASSWORD"
+		echo
+		echo "# Accounts are created by an administrator; visitors cannot sign themselves up."
+		echo "SILEXGIS_OPEN_REGISTRATION=false"
+		if [ -n "$DOMAIN" ]; then
+			echo
+			echo "# TLS front (Caddy, automatic Let's Encrypt). Ports 80 and 443 must be"
+			echo "# reachable from the internet for the certificate challenge."
+			echo "SILEXGIS_DOMAIN=$DOMAIN"
+			echo "SILEXGIS_TLS_EMAIL=$TLS_EMAIL"
+		fi
+		if [ "$WITH_CONVERT" = 1 ]; then
+			echo
+			echo "# Office documents get a page image to look at. Both lines are required."
+			echo "SILEXGIS__Conversion__Enabled=true"
+			echo "SILEXGIS__Conversion__Url=http://convert:3000"
+		fi
+		if [ "$WITH_TERRAIN" = 1 ]; then
+			echo
+			echo "# Terrain baking. The memory limit is the only heap control the baker has --"
+			echo "# it takes its heap as a percentage of this figure -- and short of memory it"
+			echo "# does not fail but writes coarser tiles. Sized against this host's total RAM"
+			echo "# rather than the 8g default, which on a small machine exceeds the whole box."
+			echo "SILEXGIS__Terrain__BakeEnabled=true"
+			echo "SILEXGIS_TERRAIN_WORKER_MEMORY=$TERRAIN_MEM"
+		fi
+	} > "$ENV_FILE"
+	chmod 600 "$ENV_FILE"
+fi
+
+say "Configuration"
+grep -E '^(COMPOSE_FILE|SILEXGIS_PUBLIC_URL|SILEXGIS_HTTP_PORT|SILEXGIS_ADMIN_EMAIL|SILEXGIS_OPEN_REGISTRATION|SILEXGIS__)' "$ENV_FILE" | sed 's/^/    /'
+echo
+echo "Next: cd $APP_DIR/deploy && docker compose build && docker compose up -d"
