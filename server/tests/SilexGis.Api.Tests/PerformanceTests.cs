@@ -518,38 +518,50 @@ public sealed class PerformanceTests : IDisposable
                 FROM version
                 RETURNING id
             ),
+            centerline_ids AS MATERIALIZED (
+                SELECT gen_random_uuid() AS centerline_id, c.id AS cave_id, c.geom
+                FROM features c
+                WHERE c.kind = {{(short)FeatureKind.Cave}}
+                  AND c.name LIKE 'Perf Cave %'
+                  AND c.geom IS NOT NULL
+            ),
             centerline_features AS (
                 INSERT INTO features (
                     id, kind, category, name, geom, location_protected, is_protected_effective,
                     ancestor_ids, owner_user_id, visibility, created_at, updated_at)
                 SELECT
-                    gen_random_uuid(), {{(short)FeatureKind.Centerline}},
+                    ci.centerline_id, {{(short)FeatureKind.Centerline}},
                     {{(short)FeatureCategory.Underground}}, 'Perf centerline',
-                    ST_Force3D(ST_Multi(ST_MakeLine(f.geom, ST_Translate(f.geom, 0.001, 0.001)))),
-                    false, false, ARRAY[f.id], {{ownerId}},
-                    {{(short)Visibility.Authenticated}}, now(), now()
-                FROM features f
-                WHERE f.kind = {{(short)FeatureKind.Cave}}
-                  AND f.name LIKE 'Perf Cave %'
-                  AND f.geom IS NOT NULL
+                    ST_Force3D(ST_Multi(ST_MakeLine(ci.geom, ST_Translate(ci.geom, 0.001, 0.001)))),
+                    false, false,
+                    ARRAY[ci.centerline_id, ci.cave_id],
+                    {{ownerId}}, {{(short)Visibility.Authenticated}}, now(), now()
+                FROM centerline_ids ci
                 RETURNING id
             ),
             centerline_rows AS (
                 INSERT INTO centerlines (
-                    id, cave_feature_id, kind, is_default, skeleton, path_count,
-                    source, length_m)
+                    id, cave_feature_id, kind, is_default, skeleton, path_count, source, length_m)
                 SELECT
-                    cf.id, c.id, {{(short)FeatureKind.Centerline}}, true,
-                    ST_Multi(ST_MakeLine(c.geom, ST_Translate(c.geom, 0.001, 0.001))), 1,
+                    ci.centerline_id, ci.cave_id, {{(short)FeatureKind.Centerline}}, true,
+                    ST_Multi(ST_MakeLine(ci.geom, ST_Translate(ci.geom, 0.001, 0.001))), 1,
                     {{(short)CenterlineSource.Uploaded}}, 100
-                FROM (SELECT id, geom, row_number() OVER (ORDER BY id) rn
-                      FROM features
-                      WHERE kind = {{(short)FeatureKind.Cave}}
-                        AND name LIKE 'Perf Cave %'
-                        AND geom IS NOT NULL) c
-                JOIN (SELECT id, row_number() OVER (ORDER BY id) rn FROM centerline_features) cf
-                  ON cf.rn = c.rn
+                FROM centerline_ids ci
                 RETURNING id
+            ),
+            centerline_edges AS (
+                INSERT INTO feature_hierarchy_edges (
+                    parent_id, child_id, is_primary, created_at, updated_at)
+                SELECT ci.cave_id, ci.centerline_id, true, now(), now()
+                FROM centerline_ids ci
+                RETURNING id
+            ),
+            centerline_closure AS (
+                INSERT INTO feature_ancestors (feature_id, ancestor_id)
+                SELECT ci.centerline_id, ci.centerline_id FROM centerline_ids ci
+                UNION ALL
+                SELECT ci.centerline_id, ci.cave_id FROM centerline_ids ci
+                RETURNING feature_id
             )
             INSERT INTO survey_models (
                 id, cave_feature_id, name, file_id, format, status,
