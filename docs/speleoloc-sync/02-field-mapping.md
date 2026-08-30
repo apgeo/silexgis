@@ -11,12 +11,14 @@ sends its own back. What this document fixes is the vocabulary, because a device
 codes against one set of names cannot be repointed at another later without renumbering everything
 it holds.
 
-**A kind's "must sit inside something" column is the rule the upload applies too.** A row of a kind
-that needs a container and names none is refused; a row of a kind that does not — a `surface_area`,
-which is what a selection is rooted in and what a device's general-area segment is allocated from —
-is written with nothing above it. A container that *is* named is always made into a real containment
-edge, never dropped, because protection and visibility are inherited along that edge and along
-nothing else.
+**A kind's "must sit inside something" column is the rule the upload applies too — when the row is
+new.** A new row of a kind that needs a container and names none is refused; a new row of a kind that
+does not — a `surface_area`, which is what a selection is rooted in and what a device's general-area
+segment is allocated from — is written with nothing above it. A container named on a new row is
+always made into a real containment edge, never dropped, because protection and visibility are
+inherited along that edge and along nothing else. **On a row that already exists the field is
+inert**: an upload does not move a row to another container, and does not refuse one that tries —
+see the protocol document's section on partial writes.
 
 ---
 

@@ -411,10 +411,17 @@ still be refused its deletion — a delete takes the row's whole containment sub
 | `properties` | The property document, stored verbatim. Where the device's own identifiers and codes live |
 | `clientUpdatedAt` | When the device believes it last wrote the row. Stored as provenance; **never consulted in the arbitration** |
 
-**An upload is a partial write.** `name`, `description`, `properties`, the position and the
-containment are what a device owns. The thirty-odd server-only cave fields — the survey figures, the
-exploration status, the descriptive text somebody typed in the browser — are **never cleared** by an
-upload that does not mention them, because there is no way for a device to mention them.
+**An upload is a partial write.** `name`, `description`, `properties` and the position are what a
+device owns on a row that already exists. **Containment and kind are set when a row is created and
+are not carried by this contract afterwards**: on an update `parentId`, `caveTypeCode`,
+`entranceTypeCode` and `featureTypeCode` are read by nothing, so a row sent with a different
+container comes back `updated` — honestly, for the fields that were written — while the edge stays
+where it was. Moving a row to another container, or changing its kind, is not something version 1
+carries; do it in the browser.
+
+The thirty-odd server-only cave fields — the survey figures, the exploration status, the descriptive
+text somebody typed in the browser — are **never cleared** by an upload that does not mention them,
+because there is no way for a device to mention them.
 
 **No coordinate may ever go in `properties`.** That document is handed to every reader of a row with
 no protection filter anywhere on its path, so a position stored in it would be published to exactly
@@ -427,7 +434,8 @@ containment and along nothing else — a client-declared edge would be a client-
 container has to exist and be one this account may add to, or the row is refused
 (`sync.parent_not_found`, `sync.parent_forbidden`). Whether a row *needs* one is a property of its
 kind: `cave_area` and `cave_place` do; `surface_area` does not and is written with nothing above it.
-A container that is named is always made into a real edge, never quietly dropped.
+A container named on a **new** row is always made into a real edge, never quietly dropped. On an
+existing row the field is inert, as above.
 
 **A cave's own `geometry` is not a field.** It is a copy of its main entrance's, kept in step by the
 server, so a cave that arrives carrying a point is stored without it rather than refused — the

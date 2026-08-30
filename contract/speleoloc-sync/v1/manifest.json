@@ -14,11 +14,10 @@
     "06-sync-set-create"
   ],
   "notCovered": [
-    "CHANGELOG.md",
     "manifest.json"
   ],
-  "fileCount": 34,
-  "digest": "10d39f254cb0f99b024771877ca94e567b4c833515fdae3a3a34469c95c1555d",
+  "fileCount": 35,
+  "digest": "bc14872f76235e9fc19f7ad5f530298d02f6cb99f4a1e53b41ce834f59b8c7a8",
   "files": {
     "07-download-first-page/request.txt": {
       "bytes": 37,
@@ -152,9 +151,13 @@
       "bytes": 13,
       "sha256": "b5250d764721aa67681630221c6398cdaecb4cc961bf39d4b84764036242a3d8"
     },
+    "CHANGELOG.md": {
+      "bytes": 5346,
+      "sha256": "812010a1e12df94ace7e00860bc8c0e5a949ebe86a88b8d5173129e7acbaa441"
+    },
     "README.md": {
-      "bytes": 8736,
-      "sha256": "8c18396cfbd410e2ec78bb6f2bdd649db919ab72e02e3fa8c02db3af4c6460d2"
+      "bytes": 8990,
+      "sha256": "c04f47c97ab90d766dfff277c8f67b3a2db48533f3cec3dd45dd3ac68ee1502b"
     }
   }
 }

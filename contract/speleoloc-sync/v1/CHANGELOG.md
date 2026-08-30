@@ -78,5 +78,8 @@ should do about each, is in `docs/speleoloc-sync/04-errors.md`.
 
 `manifest.json` was added in this entry. It is how a copy of this directory in another repository
 tells whether it is current: a digest per file, and one roll-up over all of them to compare first.
-Taking it is a second pass over the directory rather than part of the recording run; `README.md`
-gives the two commands.
+It covers every file here except itself — **this changelog included**, because an entry can change
+without any recording changing, and that is precisely the case a copy would otherwise report itself
+current through. Taking it is a second pass over the directory rather than part of the recording
+run, so an entry is written first and hashed with everything else; `README.md` gives the two
+commands.

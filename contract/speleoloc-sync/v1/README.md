@@ -66,8 +66,10 @@ so that a copy of this directory living in another repository can tell whether i
 without diffing it. It is generated from a walk of the directory as it stands, which is also the
 only thing that notices a file nothing asserts about: the byte comparison looks only at files a
 test names, so an exchange left behind by a case that was renamed or deleted is invisible to it and
-visible to the manifest. `manifest.json` and `CHANGELOG.md` are the two files outside it, and it
-names them.
+visible to the manifest. `manifest.json` itself is the only file outside it — it cannot state its
+own digest — and it names that exclusion. `CHANGELOG.md` is covered like everything else, because a
+changelog entry can be added without any recording changing, and a copy holding the old changelog
+would otherwise match on every digest and call itself current.
 
 **Rewriting these files is therefore two passes, not one.** The walk cannot run while the
 recordings are being written — the tests that rewrite them run in parallel with it, and each write

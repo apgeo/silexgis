@@ -33,16 +33,19 @@ import {
   MEMBER_EMAIL,
   MEMBER_PASSWORD,
   REDIRECT_URI,
+  apiExitProblem,
   authorizeUrl,
   baseUrlFor,
   capabilitiesProblem,
   composeEnvironment,
   connectionStringFor,
+  detachApi,
   dotnetRun,
   foreignContainerProblem,
   parseArgs,
   pkcePair,
   signInAndReadCapabilities,
+  stopApiTree,
   tokenDanceCurl,
 } from './speleoloc-dev.mjs';
 
@@ -51,6 +54,34 @@ const read = (...parts) => readFileSync(join(deployDir, ...parts), 'utf8');
 
 const compose = read('docker-compose.speleoloc-dev.yml');
 const script = read('speleoloc-dev.mjs');
+
+/**
+ * Every entry under a `ports:` key, whatever form compose allows it to be written in: quoted or
+ * bare, `host:container`, `addr:host:container`, or a lone container port.
+ */
+function publishedPorts(text) {
+  const entries = [];
+  let indent = null;
+  for (const line of text.split('\n')) {
+    if (line.trim() === '' || /^\s*#/.test(line)) {
+      continue;
+    }
+
+    const item = /^(\s*)-\s*(.+?)\s*$/.exec(line);
+    if (indent !== null && item !== null && item[1].length > indent) {
+      entries.push(item[2].replace(/^["']|["']$/g, ''));
+      continue;
+    }
+
+    const key = /^(\s*)([\w.-]+):\s*$/.exec(line);
+    indent = key !== null && key[2] === 'ports' ? key[1].length : null;
+  }
+  return entries;
+}
+
+/** The published ports that are not bound to the loopback address. */
+const notLoopback = (text) =>
+  publishedPorts(text).filter((entry) => !entry.startsWith('127.0.0.1:'));
 
 describe('the stack is its own, not the shared development one', () => {
   it('runs under its own compose project name', () => {
@@ -92,14 +123,24 @@ describe('both published ports are loopback only', () => {
 
   it('publishes nothing on every interface', () => {
     // The host firewall drops non-tailnet traffic, but Docker's published ports bypass that
-    // chain, so a binding without an address really is reachable from the network.
-    for (const line of compose.split('\n')) {
-      const published = /^\s+- "([^"]+)"$/.exec(line);
-      if (published && /:\d+\s*$/.test(published[1]) && published[1].includes(':')) {
-        assert.match(published[1], /^127\.0\.0\.1:/,
-          `port mapping ${published[1]} is not bound to loopback`);
-      }
-    }
+    // chain, so a binding without an address really is reachable from the network — and this
+    // stack's database password is `silexgis`, printed in the handoff documentation.
+    assert.deepEqual(notLoopback(compose), []);
+    // Not vacuous: it did read the two mappings this file has.
+    assert.equal(publishedPorts(compose).length, 2);
+  });
+
+  it('would catch the forms an edit is most likely to introduce', () => {
+    // Every one of these publishes on 0.0.0.0. The short form carries no colon at all and the
+    // unquoted form is not the shape the file uses today, so a guard written around today's
+    // literals passes them all.
+    assert.deepEqual(notLoopback('services:\n  db:\n    ports:\n      - "5434"\n'), ['5434']);
+    assert.deepEqual(notLoopback('services:\n  db:\n    ports:\n      - 5434:5432\n'),
+      ['5434:5432']);
+    assert.deepEqual(notLoopback('services:\n  db:\n    ports:\n      - "0.0.0.0:5434:5432"\n'),
+      ['0.0.0.0:5434:5432']);
+    assert.deepEqual(notLoopback('services:\n  db:\n    ports:\n      - "127.0.0.1:5434:5432"\n'),
+      []);
   });
 
   it('agrees with the ports the script defaults to', () => {
@@ -137,6 +178,75 @@ describe('the server is started on the port this script published', () => {
     assert.equal((script.match(/spawnSync\(|spawn\(/g) ?? []).length >= 2, true);
     assert.equal((script.match(/dotnetRun\(\)/g) ?? []).length, 3);
     assert.doesNotMatch(script, /'run', '--project', apiProject/);
+  });
+});
+
+describe('stopping the server it started', () => {
+  // The teardown is the half of this script that runs on somebody else's machine and is never
+  // watched. On Windows the POSIX form is not merely ineffective — a negative pid is rejected —
+  // and the throw is swallowed, so a Ctrl-C there leaves `dotnet run` holding the port while the
+  // script prints nothing at all.
+  const calls = () => {
+    const seen = [];
+    return {
+      seen,
+      signalGroup: (pid) => seen.push(['group', pid]),
+      killTree: (pid) => seen.push(['tree', pid]),
+    };
+  };
+
+  it('signals the whole process group on POSIX', () => {
+    const spy = calls();
+    stopApiTree({ pid: 4321 }, { platform: 'linux', ...spy });
+    assert.deepEqual(spy.seen, [['group', 4321]]);
+  });
+
+  it('stops the process tree on Windows, where there is no group to signal', () => {
+    const spy = calls();
+    stopApiTree({ pid: 4321 }, { platform: 'win32', ...spy });
+    assert.deepEqual(spy.seen, [['tree', 4321]]);
+  });
+
+  it('asks for a process group only where one exists', () => {
+    assert.equal(detachApi('linux'), true);
+    assert.equal(detachApi('darwin'), true);
+    assert.equal(detachApi('win32'), false);
+  });
+
+  it('is untroubled by a child that has already gone', () => {
+    stopApiTree({ pid: 4321 }, {
+      platform: 'linux',
+      signalGroup: () => { throw new Error('ESRCH'); },
+    });
+  });
+});
+
+describe('the wait for the API refuses a server this script did not start', () => {
+  // The stale-server case: an API left over from an earlier run still holds the port, the one
+  // just started dies on the bind, and the leftover answers the readiness probe with exactly the
+  // 401 the probe is looking for. Everything downstream then passes against a server whose
+  // database may since have been thrown away.
+  it('says nothing while the child is alive', () => {
+    assert.equal(apiExitProblem({ exitCode: null, signalCode: null }, baseUrlFor(5205)), null);
+  });
+
+  it('names the port and the likely cause when the child has exited', () => {
+    const problem = apiExitProblem({ exitCode: 134, signalCode: null }, baseUrlFor(5205));
+    assert.match(problem, /134/);
+    assert.match(problem, /127\.0\.0\.1:5205/);
+    assert.match(problem, /already listening/);
+  });
+
+  it('notices a child killed by a signal, which reports no exit code', () => {
+    assert.match(apiExitProblem({ exitCode: null, signalCode: 'SIGKILL' }, baseUrlFor(5205)),
+      /SIGKILL/);
+  });
+
+  it('is what the wait actually consults', () => {
+    // Pinned on the call as well as on the helper: a guard the wait never asks would keep its
+    // own test green while the stale server went on answering.
+    assert.match(script, /apiExitProblem\(api, baseUrl\)/);
+    assert.match(script, /await waitForApi\(baseUrl, \{ api \}\)/);
   });
 });
 
@@ -336,7 +446,7 @@ describe('the server this script starts', () => {
     // goes wrong, which is the only time anybody wants to read it.
     child = spawn(process.execPath, [SCRIPT, 'up'], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      detached: true,
+      detached: detachApi(),
     });
     let exited = false;
     child.on('exit', () => { exited = true; });
@@ -371,11 +481,9 @@ describe('the server this script starts', () => {
 
     // Ctrl-C is what a developer sends it, and it is the path the script handles: the API stops
     // and the database is left running. `down` then stops the container, keeping its volume.
-    try {
-      process.kill(-child.pid, 'SIGINT');
-    } catch {
-      // Already gone.
-    }
+    // Stopped through the script's own teardown, so this hook cannot work on a platform the
+    // script itself does not.
+    stopApiTree(child);
 
     await Promise.race([once(child, 'exit'), new Promise((done) => setTimeout(done, 30_000))]);
     spawnSync(process.execPath, [SCRIPT, 'down'], { stdio: ['ignore', 'ignore', 'inherit'] });

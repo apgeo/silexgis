@@ -12,7 +12,14 @@
 #
 # Usage — database and API as images, for a machine with no .NET SDK installed:
 #   docker compose -f docker-compose.speleoloc-dev.yml --profile api up -d --build
+#   docker compose -f docker-compose.speleoloc-dev.yml run --rm api seed-demo
+#   docker compose -f docker-compose.speleoloc-dev.yml run --rm api seed-speleoloc-dev
 #   → http://127.0.0.1:5205/api/v1/sync/capabilities
+# The two `run` lines are not optional. Serving migrates and seeds the reference data, and
+# nothing else: the demonstration caves and the second, non-administrator account are commands
+# that run and exit, so without them the installation comes up healthy and empty and the
+# documented member credentials are refused with a 401 that looks like a wrong password. The
+# image entrypoint already names the assembly, so the bare command word is the whole argument.
 # The first build pulls the .NET SDK and ASP.NET runtime images and compiles the server, which
 # costs roughly 3 GB of image storage and several minutes. Image layers live on the disk that
 # holds /var/lib/containerd, not on the Docker named-volume disk, so watch the former.
@@ -60,6 +67,7 @@ services:
       SILEXGIS__Admin__Password: dev-admin-pass-1
       # The seeder that mints the second, non-administrator account refuses to run outside a
       # development host. Both halves are stated: the host posture, and the explicit consent.
+      # They permit that seeder to run; they do not run it — see the `run --rm api` lines above.
       ASPNETCORE_ENVIRONMENT: Development
       SILEXGIS__SpeleoLocDev__Allow: "true"
       ASPNETCORE_URLS: http://+:8080

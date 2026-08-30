@@ -104,6 +104,37 @@ public sealed class SyncSetTests : IAsyncLifetime, IDisposable
             .ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    /// <summary>
+    /// What a device actually receives when its token has lapsed, asserted on the body rather than
+    /// on the status alone: a problem document that carries no <c>code</c>.
+    /// </summary>
+    /// <remarks>
+    /// The published catalogue of failures has to describe this exactly, because two plausible
+    /// descriptions of it are both dangerous. If it said the refusal were empty, a client told to
+    /// treat an unparseable body as a broken transport would retry a dead token for ever instead of
+    /// refreshing it — sync would stop within the access token's lifetime with nothing in the log
+    /// but retries. If it said every problem document carries a <c>code</c>, a client branching on
+    /// <c>code</c> would fall through to its unknown-failure path here. So the shape is pinned, and
+    /// the catalogue is transcribed from it.
+    /// </remarks>
+    [Fact]
+    public async Task The_refusal_without_a_token_is_a_problem_document_with_no_code()
+    {
+        var response = await anonymous.GetAsync("/api/v1/sync/capabilities");
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("status").GetInt32().ShouldBe(401);
+        body.GetProperty("title").GetString().ShouldBe("Unauthorized");
+
+        // The whole point of pinning it. Every refusal this surface mints carries a stable `code`;
+        // this one does not, because it is answered before any route runs.
+        body.TryGetProperty("code", out _).ShouldBeFalse(
+            "a 401 is answered before the route and mints no code, and the catalogue says so");
+    }
+
     [Fact]
     public async Task A_set_is_created_read_replaced_and_deleted_and_only_a_real_change_moves_the_revision()
     {

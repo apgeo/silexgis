@@ -14,8 +14,10 @@
 //       stops the API and leaves the database running.
 //
 //   node deploy/speleoloc-dev.mjs down
-//       Stops the API if this script left one running and stops the database container. The
-//       volume survives, so `up` comes back with the same data.
+//       Stops the database container. The volume survives, so `up` comes back with the same
+//       data. It does not reach an API: `up` stops the one it started when it exits, and an
+//       API from an earlier run that somehow outlived it has to be stopped by hand — `up`
+//       refuses to report success against one, rather than mistaking it for its own.
 //
 //   node deploy/speleoloc-dev.mjs reset
 //       Removes the container and its volume, so the next `up` starts from an empty database.
@@ -285,15 +287,73 @@ async function waitForPort(port, { timeoutMs = 120_000, label } = {}) {
 }
 
 /**
+ * Whether a child started for the API should be given a process group of its own.
+ *
+ * POSIX only. Windows has no process groups, so there `detached` buys nothing the teardown can
+ * use and only lets the server outlive the script that started it.
+ */
+export const detachApi = (platform = process.platform) => platform !== 'win32';
+
+/**
+ * Why the wait below must not accept an answer, or null while the API is still alive.
+ *
+ * The failure it names is the quiet one: a previous run whose API outlived it still holds the
+ * port, the one just started dies on the bind, and the old server answers every probe here
+ * exactly as a healthy new one would — including from a database that has since been reset.
+ */
+export function apiExitProblem(api, baseUrl) {
+  if (api.exitCode === null && api.signalCode === null) {
+    return null;
+  }
+
+  const how = api.exitCode === null ? `on ${api.signalCode}` : `with code ${api.exitCode}`;
+  return `The API exited ${how} before answering. If it could not bind its port, something `
+    + `else is already listening on ${baseUrl} — stop it, or run \`down\`, and try again.`;
+}
+
+/**
+ * Stops the server and everything it launched.
+ *
+ * The two arms are the same intent on platforms that express it differently, and the callers of
+ * the injected pair are what its test drives: a Windows box has no process groups, so signalling
+ * a negative pid there is rejected rather than merely ineffective.
+ */
+export function stopApiTree(api, {
+  platform = process.platform,
+  signalGroup = (pid) => process.kill(-pid, 'SIGINT'),
+  killTree = (pid) => spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' }),
+} = {}) {
+  try {
+    if (detachApi(platform)) {
+      signalGroup(api.pid);
+    } else {
+      killTree(api.pid);
+    }
+  } catch {
+    // Already gone, or never started. Either way there is nothing left to stop.
+  }
+}
+
+/**
  * Waits for the API. It waits for a *sync* route rather than for the health endpoint, and it
  * expects 401: an unauthenticated sync route answering 401 proves the routing, the
  * authentication middleware and the database connection are all up, whereas a health endpoint
  * can answer while the sync slice is broken.
  */
-async function waitForApi(baseUrl, { timeoutMs = 180_000 } = {}) {
+async function waitForApi(baseUrl, { timeoutMs = 180_000, api = null } = {}) {
   const deadline = Date.now() + timeoutMs;
   process.stdout.write(`Waiting for ${baseUrl}/api/v1/sync/capabilities `);
   for (;;) {
+    // Asked before the fetch, so a server this script did not start can never be mistaken for
+    // the one it did. The ordinary way that happens is a previous run whose API outlived it and
+    // still holds the port: the new one dies on the bind, the old one answers 401, and every
+    // check below passes against a server whose database may since have been thrown away.
+    const exited = api === null ? null : apiExitProblem(api, baseUrl);
+    if (exited !== null) {
+      console.log(' failed');
+      fail(exited,
+        'Look at the output above: a migration or a seeding step usually fails loudly first.');
+    }
     try {
       const res = await fetch(`${baseUrl}/api/v1/sync/capabilities`, { redirect: 'manual' });
       if (res.status === 401) {
@@ -537,29 +597,28 @@ async function upCommand(options) {
 
   console.log(`\n$ dotnet run --project ${apiProject} (serving on ${baseUrl})`);
 
-  // `detached` so the server gets a process group of its own, and the stop below signals the
-  // whole group rather than just `dotnet run`. It matters: `dotnet run` is a launcher, the
-  // server is a separate child of it, and a SIGINT delivered only to the launcher leaves that
+  // The whole tree has to be stopped, not just the launcher: `dotnet run` is a launcher, the
+  // server is a separate child of it, and a signal delivered only to the launcher leaves that
   // child running. The symptom is an API still holding this port after Ctrl-C, with its
   // database container already stopped — a server that answers every request with a failure and
   // looks, to the next person who runs this script, like a port conflict.
+  //
+  // How the tree is reached differs by platform, and the difference is not cosmetic. On POSIX
+  // the child gets a process group of its own and the group is signalled. Windows has no
+  // process groups: a negative pid is rejected there, and `detached` would only let the child
+  // outlive this process — so the tree is stopped with `taskkill /T`, and `detached` is not
+  // asked for.
   const api = spawn('dotnet', dotnetRun(), {
     cwd: serverDir,
     env: environment,
     stdio: 'inherit',
-    detached: true,
+    detached: detachApi(),
   });
-  const stop = () => {
-    try {
-      process.kill(-api.pid, 'SIGINT');
-    } catch {
-      // Already gone, or never started. Either way there is nothing left to stop.
-    }
-  };
+  const stop = () => stopApiTree(api);
   process.on('SIGINT', () => { stop(); process.exit(0); });
   process.on('exit', stop);
 
-  await waitForApi(baseUrl);
+  await waitForApi(baseUrl, { api });
   const capabilities = await signInAndReadCapabilities(baseUrl, MEMBER_EMAIL, MEMBER_PASSWORD)
     .catch((error) => fail(error.message,
       'Both seeding commands exit zero when they refuse, so the reason is a line in the output '

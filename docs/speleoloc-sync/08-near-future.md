@@ -121,7 +121,10 @@ Stated so nobody goes looking:
   copied into the application's repository and nothing else was: these documents, under
   `docs/integrations/silexgis/`, and the recorded traffic, under
   `test_data/silexgis_contract/v1/` — both byte-identical to the copies in the server repository,
-  which are the current ones. The client side is a separate piece of work.
+  which are the current ones. **The copy is placed in a working tree and is not committed there**:
+  the first commit in that repository for this integration belongs to the application effort, so a
+  clone of it will not carry these files until that effort commits them. The client side is a
+  separate piece of work.
 - **No generated client library.** Deliberate, and the evidence is worth keeping: the served
   description has no operation identifiers outside this slice, declared no security scheme until this
   work added one, declares no error responses anywhere, and types the property document as an

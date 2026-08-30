@@ -697,6 +697,70 @@ public sealed class SyncUploadTests : IAsyncLifetime, IDisposable
         positionQuality = "Gps",
     };
 
+    /// <summary>
+    /// Containment and kind are set when a row is created and are read by nothing afterwards. The
+    /// documented catalogue of refusals says so, and this is what makes that statement checkable:
+    /// the two are neither applied nor refused on an update, so the honest answer is
+    /// <c>updated</c> for the fields that were written, with the edge where it was.
+    /// </summary>
+    /// <remarks>
+    /// A test is here rather than only prose because the failure it describes is silent on both
+    /// sides. A device that moved a row to another container is told the write succeeded, keeps
+    /// its own model of where the row lives, and disagrees with the server for ever — and
+    /// containment is the sole axis protection and visibility are inherited along, so the two
+    /// sides then disagree about who may see it.
+    /// </remarks>
+    [Fact]
+    public async Task An_update_naming_another_container_or_another_kind_is_answered_updated_and_moves_nothing()
+    {
+        var first = Guid.CreateVersion7();
+        var second = Guid.CreateVersion7();
+        var entranceId = Guid.CreateVersion7();
+
+        var created = await UploadAsync(owner, set, Guid.CreateVersion7(),
+            Cave(first, $"Peștera dintâi {marker}"),
+            Cave(second, $"Peștera a doua {marker}"),
+            Entrance(entranceId, first, OpenLon, OpenLat, altitude: 800));
+        Row(created, entranceId).GetProperty("status").GetString().ShouldBe("created");
+        var revision = Row(created, entranceId).GetProperty("revision").GetDateTimeOffset();
+
+        var moved = await UploadAsync(owner, set, Guid.CreateVersion7(), new
+        {
+            id = entranceId,
+            kind = "caveEntrance",
+            parentId = second,
+            baseRevision = revision,
+            deleted = false,
+            name = "Intrare redenumită",
+            entranceTypeCode = "excavated",
+            isMain = true,
+            geometry = new { type = "Point", coordinates = new[] { OpenLon, OpenLat } },
+            altitude = 800.0,
+            positionQuality = "Unknown",
+        });
+
+        // Not refused, and not a conflict: the fields a device owns on an existing row were
+        // written, and the answer says so.
+        var answered = Row(moved, entranceId);
+        answered.GetProperty("status").GetString().ShouldBe("updated");
+        (answered.TryGetProperty("code", out var code) && code.ValueKind is not JsonValueKind.Null)
+            .ShouldBeFalse("an update carries no code, so nothing tells a device the move was dropped");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var entrance = await db.CaveEntrances.AsNoTracking().SingleAsync(e => e.Id == entranceId);
+
+        // The two inert fields. If either of these ever starts being applied, the catalogue of
+        // refusals is wrong in the other direction and has to say so.
+        entrance.CaveFeatureId.ShouldBe(first);
+        entrance.EntranceTypeId.ShouldBe(entranceTypeId);
+
+        // The rename did land, which is what makes `updated` an honest answer rather than a
+        // no-op reported as a success.
+        (await db.Features.AsNoTracking().SingleAsync(f => f.Id == entranceId)).Name
+            .ShouldBe("Intrare redenumită");
+    }
+
     private static object Cave(
         Guid id,
         string name,

@@ -37,11 +37,12 @@ namespace SilexGis.Api.Tests;
 /// is not when it was made but whether it matches, which the digests answer exactly.
 /// </para>
 /// <para>
-/// Two files in the directory are outside the manifest and are named inside it as such. The
-/// changelog is one, because its whole purpose is to be written when the recordings change:
-/// hashing it would mean every entry describing a change also changed the manifest and needed a
-/// second pass to describe itself. The manifest is the other, because a file cannot state its
-/// own digest.
+/// One file in the directory is outside the manifest and is named inside it as such: the manifest
+/// itself, because a file cannot state its own digest. Everything else is covered, the changelog
+/// included — it is the one file a stale copy can differ in while every recording matches, and it
+/// is written for exactly the reader who is asking whether their copy is current. It costs
+/// nothing to cover: the manifest is already taken in a deliberate second pass after recording,
+/// so an entry describing a change is written before that pass and is hashed with the rest.
 /// </para>
 /// <para>
 /// <b>It is taken in a pass of its own, and this class refuses to take it in a recording run.</b>
@@ -67,11 +68,10 @@ namespace SilexGis.Api.Tests;
 public sealed class ContractManifestTests
 {
     /// <summary>
-    /// Files that are about the recordings rather than part of them. Held here rather than
-    /// inferred from an extension: the prose in the directory is part of the package and is
-    /// covered, and only these two have a reason not to be.
+    /// The only file the walk leaves out, because it is the walk's own output and cannot state
+    /// its own digest. Everything else in the directory is covered, prose included.
     /// </summary>
-    private static readonly string[] Excluded = ["CHANGELOG.md", "manifest.json"];
+    private static readonly string[] Excluded = ["manifest.json"];
 
     /// <summary>Set to <c>1</c> in the second pass, the one that rewrites the manifest.</summary>
     private const string ManifestVariable = "SILEXGIS_CONTRACT_MANIFEST";

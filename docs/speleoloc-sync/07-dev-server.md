@@ -100,7 +100,12 @@ what lets that cave through, and the protection flag is what keeps the other one
 same member account, with the same token, reaches a **grid-snapped** position for `DEMO-0002` through
 `/api/v1/caves`, `/api/v1/features` and `/api/v1/export`, which are unchanged and are not part of
 this contract — that cave comes back from the cave list with `approximateLocation: true` and a
-coordinate a few hundred metres from the real one, rather than not at all. The sync channel is stricter than the rest of the installation on purpose: a phone
+coordinate on a grid, rather than not at all. The grid is **5 km** on this installation
+(`SILEXGIS__Access__LocationGridMeters`, default `5000`), and the position is rounded to the nearest
+intersection on both axes, so the snapped point is typically kilometres from the true one: for
+`DEMO-0002`'s entrance the answer is `25.19763, 45.49946`, about **2.4 km** away. Read it as "somewhere
+in this massif", never as a position anybody can walk to, and do not write a client test asserting a
+tighter bound — the server does not promise one, and an installation may set that grid wider still. The sync channel is stricter than the rest of the installation on purpose: a phone
 keeps what it downloads, in cleartext, and re-shares it over offline archives, so an approximate
 position delivered there would be permanent. Do not read the sync behaviour as a statement about
 what the account may see anywhere else.

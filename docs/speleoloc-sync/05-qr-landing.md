@@ -36,12 +36,17 @@ GET /api/v1/public/qr/<code>
 ```
 
 That is the call to make from anything that is not a browser. It is anonymous — no bearer token, and
-sending one changes nothing — and it is the only route in this package that is. The two answers in
+sending one changes nothing — and it is the only route in this package that carries cave data and is.
+The sign-in routes are anonymous too, by nature: `POST /api/v1/auth/login`, `GET /connect/authorize`,
+`POST /connect/token` and `POST /api/v1/auth/2fa/send`, all described in `03-auth.md`. Everything
+else this package documents requires a bearer token. The two answers in
 §2 are its answers; the page is a rendering of them.
 
-**There is a third response, and it carries no body**: `429`, from the rate limiter described in §3,
-which answers before the route does. It has no problem document and no `code`, so a client that
-branches on `code` must handle a bodyless status here. Back off and retry; the window is a minute.
+**There is a third response, and it carries no `code`**: `429`, from the rate limiter described in
+§3, which answers before the route does. It is still a problem document — `application/problem+json`,
+carrying `status`, `title` (`Too Many Requests`) and a `traceId` — but nothing mints a code for it,
+so a client that branches on `code` must branch on the status here instead. Back off and retry; the
+window is a minute.
 
 ## 2. What it answers
 

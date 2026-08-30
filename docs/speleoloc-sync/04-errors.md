@@ -54,17 +54,34 @@ what this document is a list of. `detail` is a sentence for a human reading a lo
 translated, it is not stable, and it is sometimes absent. `status` is the HTTP status and is
 meaningful, but several different codes share one status.
 
-**A response with no `code` is not from this API.** A proxy, a captive portal or a load balancer
-between the device and the server produces its own errors, usually as HTML. Treat a body that does
-not parse as a problem document as a transport failure, not as a server verdict. There are two
-deliberate exceptions on this surface, and both are listed below: a `401`, which is bodyless, and
-the QR route's `429`, which is bodyless too.
+**Two answers are problem documents without a `code`, and they are the exceptions to everything
+below.** A `401`, and the QR route's `429`. Both are produced before the route runs — the first by
+authentication, the second by the rate limiter — so there is no handler to mint a code. They arrive
+as `application/problem+json` all the same, carrying `status`, `title` and a `traceId` and no
+`detail`. The `401` carries a `type` as well; the `429` does not, which is one more reason not to
+key anything off that field:
+
+```json
+{"type": "https://tools.ietf.org/html/rfc9110#section-15.5.2", "title": "Unauthorized", "status": 401,
+ "traceId": "00-f755a89a14e9ed9515a25af937676607-36e31dc4d28ba6ed-00"}
+```
+
+**So branch on the status first, and on `code` only afterwards.** A client that reaches for `code`
+before looking at the status finds none on these two and falls through to whatever it does with an
+answer it does not understand — which for a `401` means never refreshing the credential.
+
+**On any other status, a response with no `code` is not from this API.** A proxy, a captive portal
+or a load balancer between the device and the server produces its own errors, usually as HTML. On a
+`4xx` or `5xx` that is neither `401` nor `429`, treat a body that does not parse as a problem
+document as a transport failure, not as a server verdict — but never let that rule reach a `401`,
+because a token that has expired would then be retried for ever instead of refreshed, and sync would
+stop within the access token's lifetime with nothing in the log but retries.
 
 ## 2. Authentication and authorisation
 
 | Status | Code | Means | Action |
 |---|---|---|---|
-| 401 | *(none)* | No token, an expired token, or a token this server did not issue. There is no body at all. **Every route in this slice answers this** — none of them is anonymous | `re-auth` — refresh the credential, then send the request again. Never resend with the same token |
+| 401 | *(none)* | No token, an expired token, or a token this server did not issue. **A problem document with no `code`** — `status`, `title` (`Unauthorized`) and a `traceId`, nothing more. **Every route in this slice answers this** — none of them is anonymous | `re-auth` — refresh the credential, then send the request again. Never resend with the same token, and never treat this as a transport failure to retry |
 
 **There is no general `403` code on this surface.** Every refusal a sync route can answer with a
 `403` names its own reason — `sync.caving_group_forbidden` is the only one today, in section 4 and
@@ -179,9 +196,9 @@ Each entry in `rows` carries a `status`, and a `code` when there is a reason wor
 | `rejected` | `sync.row_forbidden` | The account may read the row but not write it | `stop` for this row |
 | `rejected` | `sync.row_delete_forbidden` | The account may write the row but not remove it. Editing and removing are separate rights here exactly as they are in the web interface, because a delete takes the row's whole containment subtree with it | `stop` for this row |
 | `rejected` | `access.create_forbidden` | The account may not create a row of this shape in this place. This is the only non-`sync.` code the row loop mints itself | `stop` for this row |
-| `rejected` | `sync.parent_required` | The row named no container, and **this kind** only exists inside one. Whether a kind does is a property of the kind: `cave_area` and `cave_place` do, `surface_area` does not and is written with nothing above it | `apply-and-resubmit` — send the container's identifier. Protection and visibility are inherited along containment and along nothing else, so a row of such a kind with nothing above it would be unguarded whatever guards the cave it belongs to |
-| `rejected` | `sync.parent_not_found` | The named container is not on this server, or is not readable by this account — answered alike, so the field cannot be used to ask whether a cave exists | `apply-and-resubmit` — send the container in the same batch, before the row, or drop the row |
-| `rejected` | `sync.parent_forbidden` | The account may read the container but not add to it | `stop` for this row |
+| `rejected` | `sync.parent_required` | On **a new row**: it named no container, and **this kind** only exists inside one. Whether a kind does is a property of the kind: `cave_area` and `cave_place` do, `surface_area` does not and is written with nothing above it | `apply-and-resubmit` — send the container's identifier. Protection and visibility are inherited along containment and along nothing else, so a row of such a kind with nothing above it would be unguarded whatever guards the cave it belongs to |
+| `rejected` | `sync.parent_not_found` | On **a new row**: the named container is not on this server, or is not readable by this account — answered alike, so the field cannot be used to ask whether a cave exists | `apply-and-resubmit` — send the container in the same batch, before the row, or drop the row |
+| `rejected` | `sync.parent_forbidden` | On **a new row**: the account may read the container but not add to it | `stop` for this row |
 | `rejected` | `sync.location_forbidden` | **A new entrance** was sent for a cave whose position this account may not see exactly. It is refused rather than half-applied, because a cave's own map point is its main entrance's and writing one would move the other | `stop` for this row. The coordinate may be one this server handed the device blurred or not at all, and it must not travel back as truth |
 | `rejected` | `sync.geometry_invalid` | The geometry could not be read, or is the wrong shape for the kind — an entrance carries a point | `apply-and-resubmit` after fixing it, if the client can; otherwise `surface-to-user` |
 | `rejected` | `sync.type_unknown` | On **a new row**, `caveTypeCode`, `entranceTypeCode` or `featureTypeCode` names a kind this installation does not have. **Codes, never numeric identifiers**: the number standing for "cave" here stands for something else on the next server | `surface-to-user` — an administrator adds the kind, or the caver picks a different one |
@@ -194,11 +211,15 @@ geometry, the altitude and the position quality — the row comes back `updated`
 `updated` honestly. The alternative is losing a caver's rename to protect a coordinate that was
 never going to move.
 
-**That is why two rows above say "a new row".** The refusals `sync.location_forbidden` and
-`sync.type_unknown` are raised while a row is being **created**. On an update the server does not
-refuse: an update carrying a position the caller may not set has that position dropped and the rest
-of the edit applied, and an update is not re-checked against the taxonomy for a type code it is not
-changing. So a device that meets `sync.location_forbidden` is always looking at a create, and a
+**Five of the refusals above can only be met on a create.** `sync.location_forbidden`,
+`sync.type_unknown`, `sync.parent_required`, `sync.parent_not_found` and `sync.parent_forbidden` are
+all raised while a row is being **created**. On an update the server does not refuse: an update
+carrying a position the caller may not set has that position dropped and the rest of the edit
+applied, and an update reads neither `parentId` nor the three type-code fields at all — they are
+ignored rather than applied or refused, so a row uploaded with a different container comes back
+`updated` with its containment unchanged. **Changing a row's container or its kind is not something
+this contract version carries**; do not build a re-parenting gesture on top of it and expect the
+server to follow. So a device that meets `sync.location_forbidden` is always looking at a create, and a
 device whose entrance edit comes back `updated` with the coordinate unchanged on the next download
 is looking at the write-right rule working, not at a lost message.
 
@@ -230,7 +251,7 @@ it belongs in one catalogue with the rest because the same application calls bot
 | Status | Code | Means | Action |
 |---|---|---|---|
 | 404 | `qr.not_found` | Nothing resolves here. **Four different facts share this one answer on purpose**: the code is malformed, the code is longer than this server will look up, no cave carries it, or the cave that carries it is not published. They are indistinguishable so the address cannot be used to enumerate caves | `surface-to-user` — tell the visitor the code does not resolve at this installation, and say nothing about why |
-| 429 | *(none)* | The per-address rate limit. **There is no body and no `code`** — the limiter answers before the route does | `retry` — after a wait. The window is one minute and the allowance is per installation |
+| 429 | *(none)* | The per-address rate limit. **A problem document with no `code`** — the limiter answers before the route does, so the body is `status`, `title` (`Too Many Requests`) and a `traceId` | `retry` — after a wait. The window is one minute and the allowance is per installation |
 | 200 | — | The code resolves and the cave is published. The answer is deliberately contentless: it says the code resolves at this installation and nothing else, so it carries no cave name and no coordinate | — |
 
 ## 8. Codes this document deliberately does not carry

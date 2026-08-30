@@ -58,10 +58,14 @@ which is what makes withholding and group targeting observable from a client at 
 ## Where these documents live
 
 They are maintained in the SilexGIS repository, under `docs/speleoloc-sync/`, alongside the recorded
-traffic in `contract/speleoloc-sync/v1/`. **That is the copy that is current.** A copy in the
-application's repository is a convenience for anyone who clones it without the server checkout to
-hand; it is refreshed when these documents change, and the manifest beside the recorded traffic is
-how a copy tells whether it is stale.
+traffic in `contract/speleoloc-sync/v1/`. **That is the copy that is current**, and the manifest
+beside the recorded traffic is how any other copy tells whether it is stale.
+
+A copy has been placed in the application's repository, under `docs/integrations/silexgis/` and
+`test_data/silexgis_contract/v1/`. **It is in a working tree and is not committed**, so a fresh clone
+of that repository does not get it: until somebody on the application side commits it, read the
+server repository. Whoever commits it should also decide how it is refreshed, because a copy nobody
+refreshes is worse than no copy — the manifest is what makes that decidable rather than a guess.
 
 ## The eight other documents
 
