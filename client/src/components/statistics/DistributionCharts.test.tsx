@@ -32,8 +32,9 @@ function renderThemed(node: React.ReactNode, dark = false) {
   );
 }
 
-// No auto-cleanup is configured in this project, so each test tidies up after itself; without
-// this a later query finds the previous test's chart as well as its own.
+// Stated here as well as in the shared setup, which now unmounts after every test: without a
+// cleanup a later query finds the previous test's chart as well as its own, and this file's
+// queries are the kind that would then match two charts and pick the wrong one.
 afterEach(cleanup);
 
 const lengths = [12, 40, 55, 120, 260, 300, 480, 900, 1500, 2600, 4100, 9000];

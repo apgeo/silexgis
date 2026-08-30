@@ -1,5 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { cleanup } from '@testing-library/react';
+import { afterEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
+
+// Testing Library only registers its own automatic cleanup when the test runner exposes
+// afterEach as a global, which this project deliberately does not do. Without it every
+// component rendered by a test file stays mounted for the life of that file, and React's
+// concurrent scheduler keeps posting work for them on the macrotask queue. When the DOM
+// environment is torn down at the end of the file, a callback that is still queued wakes
+// up to find no `window` and throws an unhandled `ReferenceError` — attributed to
+// whichever file happened to be running, which is why it moved between runs and never
+// pointed at a real defect. Unmounting after each test drains that work while the
+// environment still exists.
+afterEach(() => {
+  cleanup();
+});
 
 // antd relies on browser APIs that jsdom does not implement.
 //

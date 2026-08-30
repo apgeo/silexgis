@@ -1,0 +1,45 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Main gallery" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [22.700000, 46.500000, 980.0],
+          [22.700600, 46.500900, 968.0],
+          [22.701200, 46.501800, 955.0],
+          [22.701800, 46.502700, 941.0],
+          [22.702400, 46.503600, 926.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Side branch" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [22.701200, 46.501800, 955.0],
+          [22.702300, 46.501500, 950.0],
+          [22.703400, 46.501200, 944.0],
+          [22.704500, 46.500900, 937.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Lower series" },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [22.702400, 46.503600, 926.0],
+          [22.702900, 46.504600, 909.0],
+          [22.703400, 46.505600, 891.0],
+          [22.703900, 46.506600, 872.0]
+        ]
+      }
+    }
+  ]
+}

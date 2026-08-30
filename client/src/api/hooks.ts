@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
 import { api, ApiError, lastReadETag } from './client.ts';
 import type { components, paths } from './schema';
@@ -177,6 +178,8 @@ export const queryKeys = {
   resLinkTargets: (targetType: string, q: string) => ['reslinks', 'targets', targetType, q] as const,
   resLinkRelationTypes: ['reslinks', 'relation-types'] as const,
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
+  caveSurveyStatistics: (caveId: string) => ['caves', caveId, 'survey-statistics'] as const,
+  caveOrientation: (caveId: string) => ['caves', caveId, 'orientation'] as const,
   // Every terrain key starts with this list key, so the mutations that invalidate it also reach
   // the paged list and each build's own detail. A key that did not would leave the page showing
   // a build's old phase for as long as its query stayed fresh.
@@ -685,6 +688,23 @@ export function surveyModelPollInterval(
     : SURVEY_MODEL_URL_REFRESH_MS;
 }
 
+/**
+ * The survey figures a cave's page works out from its line work, dropped whenever that line work
+ * changes.
+ *
+ * These two queries are computed per request from a cave's segments, so every upload, deletion or
+ * finished background extraction that changes the segments changes the answers — but they are
+ * keyed under the cave rather than under the centerlines or the survey models, so none of the
+ * invalidations that refresh those lists reaches them. Without this a reader who drops a file into
+ * the centerline card watches that card fill in while the two panels directly beneath it go on
+ * reporting the cave as it was before the upload, with nothing on screen to say the figures are
+ * stale.
+ */
+function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveyStatistics(caveId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
+}
+
 export function useSurveyModels(caveId: string | undefined) {
   const queryClient = useQueryClient();
   const query = useQuery({
@@ -709,6 +729,7 @@ export function useSurveyModels(caveId: string | undefined) {
   useEffect(() => {
     if (wasOutstanding.current && !outstanding && caveId) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.centerlines(caveId) });
+      invalidateCaveSurveyFigures(queryClient, caveId);
     }
     wasOutstanding.current = outstanding;
   }, [outstanding, caveId, queryClient]);
@@ -733,8 +754,10 @@ export async function fetchSurveyModels(caveId: string): Promise<SurveyModelInfo
 
 function useInvalidateSurveyModels() {
   const queryClient = useQueryClient();
-  return (caveId: string) =>
+  return (caveId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.surveyModels(caveId) });
+    invalidateCaveSurveyFigures(queryClient, caveId);
+  };
 }
 
 /** The multipart body the upload endpoint declares, as the generated contract states it. */
@@ -889,8 +912,10 @@ export function useCenterlines(caveId: string | undefined) {
 
 function useInvalidateCenterlines() {
   const queryClient = useQueryClient();
-  return (caveId: string) =>
+  return (caveId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.centerlines(caveId) });
+    invalidateCaveSurveyFigures(queryClient, caveId);
+  };
 }
 
 export function useUploadCenterline() {
@@ -4188,6 +4213,60 @@ export function useTripStatistics(
     // does not need to ask again.
     staleTime: 30_000,
     // A caller who may not read the subject is refused, and the surface simply does not appear.
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cave survey statistics
+// ---------------------------------------------------------------------------
+
+/** What a cave's line work measures, and how it compares with what the record claims. */
+export type CaveSurveyStatistics = components['schemas']['CaveStatisticsDto'];
+
+/** Which way and how steeply a cave's passages run. */
+export type CaveOrientation = components['schemas']['CaveOrientationDto'];
+
+/** One sector of a rose, or one band of a dip histogram. The range comes from the response. */
+export type OrientationBin = components['schemas']['OrientationBin'];
+
+/** How steep the passages are, or absent when the line work carries no altitudes. */
+export type DipSummary = components['schemas']['DipSummary'];
+
+/** A computed figure set against the one typed into the record. */
+export type MorphometryComparison = components['schemas']['MorphometryComparison'];
+
+/**
+ * Which body of line work a survey statistic was measured from.
+ *
+ * This is not decoration. `surveyFlags` means the surveyor's own per-leg flags decided what
+ * counts, which is what these statistics are defined as; `skeletonHeuristic` means the shape of a
+ * stored centerline was used to guess the same thing, which keeps most of the length but is a
+ * different measurement. Comparing one cave measured the first way against another measured the
+ * second, as though they were the same figure, is the mistake this field exists to prevent —
+ * so whatever renders these numbers has to say which one it got.
+ */
+export type SurveySegmentBasis = components['schemas']['SurveySegmentBasis'];
+
+export function useCaveSurveyStatistics(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveSurveyStatistics(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/statistics', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    // Recomputed per request from line work that changes only when a survey is uploaded.
+    staleTime: 5 * 60_000,
+    // A cave the caller may not read — or may read but not place exactly — is refused with the
+    // same answer as a cave that does not exist, and asking again will not change it.
+    retry: false,
+  });
+}
+
+export function useCaveOrientation(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveOrientation(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/orientation', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
     retry: false,
   });
 }
