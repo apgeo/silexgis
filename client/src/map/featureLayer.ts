@@ -15,6 +15,7 @@ import {
 } from './featureTypeCatalog.ts';
 import { getMapTagFilter } from './mapFilters.ts';
 import { featureSymbolUrl, surfaceFeaturePalette as palette } from './markerPalette.ts';
+import { declutterOption } from './declutter.ts';
 
 // The cross-kind features overlay. The layer id keeps its historical string:
 // saved views persist overlay ids (visibility, opacity, stacking), and renaming
@@ -55,7 +56,7 @@ export function setSelectedSurfaceFeature(id: string | null): void {
 
 export function createSurfaceFeatureLayer(): VectorLayer {
   // Stacking comes from the overlay group's collection order, not a fixed zIndex.
-  const layer = new VectorLayer({ source, style: featureStyle });
+  const layer = new VectorLayer({ source, style: featureStyle, declutter: declutterOption() });
   layer.set('id', SURFACE_FEATURE_LAYER_ID);
   return layer;
 }
@@ -119,7 +120,11 @@ function featureStyle(feature: FeatureLike): Style | Style[] {
     // A translucent halo behind the symbol marks the selected feature.
     const halo = selected
       ? [new Style({
+          // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
+          // way. Left at the default, decluttering would hide overlapping markers themselves, which
+          // would mean switching it on made features vanish — the opposite of what it is for.
           image: new CircleStyle({
+            declutterMode: 'obstacle',
             radius: 14,
             fill: new Fill({ color: palette.highlightHalo }),
             stroke: new Stroke({ color: palette.highlight, width: 2 }),
@@ -134,13 +139,18 @@ function featureStyle(feature: FeatureLike): Style | Style[] {
     if (symbol) {
       let icon = iconCache.get(symbol);
       if (!icon) {
-        icon = new Icon({ src: featureSymbolUrl(symbol), scale: 0.5 });
+        // Always drawn, for the same reason as the plain circles below.
+        icon = new Icon({ src: featureSymbolUrl(symbol), scale: 0.5, declutterMode: 'obstacle' });
         iconCache.set(symbol, icon);
       }
       return [...halo, new Style({ image: icon })];
     }
     return [...halo, new Style({
+      // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
+      // way. Left at the default, decluttering would hide overlapping markers themselves, which
+      // would mean switching it on made features vanish — the opposite of what it is for.
       image: new CircleStyle({
+        declutterMode: 'obstacle',
         radius: 6,
         fill: new Fill({ color: palette.point }),
         stroke: new Stroke({ color: palette.stroke, width: 2 }),

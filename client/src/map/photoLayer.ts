@@ -20,7 +20,12 @@ const cameraSvg =
   "<rect x='9' y='6.8' width='6' height='2.2' rx='0.8' fill='#fff'/>" +
   "<circle cx='12' cy='12.7' r='2.6' fill='#7b2ff7'/></svg>";
 
-const pin = new Icon({ src: `data:image/svg+xml;utf8,${encodeURIComponent(cameraSvg)}`, scale: 1 });
+// Always drawn: a photo pin that vanished under decluttering would be a photo nobody can open.
+const pin = new Icon({
+  src: `data:image/svg+xml;utf8,${encodeURIComponent(cameraSvg)}`,
+  scale: 1,
+  declutterMode: 'obstacle',
+});
 
 /**
  * A photograph's pin, plus a wedge showing which way the camera looked where the picture

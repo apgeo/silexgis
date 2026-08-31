@@ -9,6 +9,7 @@ import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
 import { fetchEntranceFeatures } from '../api/hooks.ts';
 import { getMapTagFilter } from './mapFilters.ts';
 import { entrancePalette as palette } from './markerPalette.ts';
+import { declutterOption } from './declutter.ts';
 
 export const ENTRANCE_LAYER_ID = 'entrances';
 
@@ -22,7 +23,7 @@ export function getEntranceSource(): VectorSource {
 
 export function createEntranceLayer(): VectorLayer {
   // Stacking comes from the overlay group's collection order, not a fixed zIndex.
-  const layer = new VectorLayer({ source, style: entranceStyle });
+  const layer = new VectorLayer({ source, style: entranceStyle, declutter: declutterOption() });
   layer.set('id', ENTRANCE_LAYER_ID);
   return layer;
 }
@@ -85,7 +86,11 @@ function entranceStyle(feature: FeatureLike): Style {
   if (props.cluster === true) {
     const count = Number(props.count ?? 0);
     return new Style({
+      // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
+      // way. Left at the default, decluttering would hide overlapping markers themselves, which
+      // would mean switching it on made features vanish — the opposite of what it is for.
       image: new CircleStyle({
+        declutterMode: 'obstacle',
         radius: Math.min(24, 12 + Math.sqrt(count)),
         fill: new Fill({ color: palette.cluster }),
         stroke: new Stroke({ color: palette.stroke, width: 2 }),
@@ -94,13 +99,19 @@ function entranceStyle(feature: FeatureLike): Style {
         text: String(count),
         fill: new Fill({ color: palette.stroke }),
         font: 'bold 12px sans-serif',
+        // Part of the bubble it is written in, not a label competing for space beside it.
+        declutterMode: 'none',
       }),
     });
   }
 
   const approximate = props.approximate === true;
   return new Style({
+    // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
+    // way. Left at the default, decluttering would hide overlapping markers themselves, which
+    // would mean switching it on made features vanish — the opposite of what it is for.
     image: new CircleStyle({
+      declutterMode: 'obstacle',
       radius: approximate ? 8 : 7,
       fill: new Fill({ color: approximate ? palette.approximate : palette.point }),
       stroke: new Stroke({ color: palette.stroke, width: 2, lineDash: approximate ? [2, 2] : undefined }),
