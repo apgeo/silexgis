@@ -90,6 +90,13 @@ public enum ImportSource : short
 
     /// <summary>Photographs, placed by what the camera recorded or by the person reviewing them.</summary>
     Photos = 1,
+
+    /// <summary>
+    /// Rows a mobile device pushed up. There is no file and nobody reviewed the candidates one
+    /// by one: a batch is one upload request, recorded here so that a device which sent the
+    /// wrong survey can have it taken back in a single act, the same way a bad file can.
+    /// </summary>
+    DeviceSync = 2,
 }
 
 /// <summary>How the objects in a batch came to exist.</summary>
@@ -137,6 +144,32 @@ public class ImportBatch : ITimestamped, IAuditable
 
     /// <summary>The trip a photo drop was filed under, when it named one.</summary>
     public Guid? TripLogId { get; set; }
+
+    /// <summary>
+    /// The identifier the device minted for the upload this batch records. Null for every batch
+    /// that did not come from a device.
+    /// </summary>
+    /// <remarks>
+    /// A phone in a cave sends a batch, loses signal before the answer arrives, and sends the
+    /// same batch again when it surfaces. Without this the second send is a second import, and
+    /// the caver ends up with every cave twice. It is minted by the device rather than by the
+    /// server because only the device knows that the two requests are the same intention; it is
+    /// unique per account rather than globally so that one account cannot probe for another's.
+    /// </remarks>
+    public Guid? SyncBatchId { get; set; }
+
+    /// <summary>
+    /// What the device was told the first time it sent this batch (jsonb), so that a resend is
+    /// answered instead of applied. Null for every batch that did not come from a device.
+    /// </summary>
+    /// <remarks>
+    /// Decisions only — which rows were written, which were refused and why. Deliberately not
+    /// the rows themselves: a stored position would be handed back on every later resend under
+    /// whatever rights the account has by then, and an account's right to see a position can be
+    /// taken away. Anything the answer needs to say about a row as it stands now is read from
+    /// the row when the resend arrives.
+    /// </remarks>
+    public string? SyncResult { get; set; }
 
     /// <summary>The rule set that ran. Null when the set has since been deleted, or none was used.</summary>
     public Guid? TermRuleSetId { get; set; }

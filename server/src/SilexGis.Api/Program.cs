@@ -44,8 +44,10 @@ using SilexGis.Api.Features.Features;
 using SilexGis.Api.Features.Filters;
 using SilexGis.Api.Features.ResLinks;
 using SilexGis.Api.Features.FeatureShares;
+using SilexGis.Api.Features.QrLanding;
 using SilexGis.Api.Features.Search;
 using SilexGis.Api.Features.Statistics;
+using SilexGis.Api.Features.Sync;
 using SilexGis.Api.Features.Tags;
 using SilexGis.Api.Features.Taxonomies;
 using SilexGis.Api.Features.Terrain;
@@ -111,7 +113,11 @@ try
         options => options.MultipartBodyLengthLimit = multipartBodyLengthLimit);
 
     builder.Services.AddProblemDetails();
-    builder.Services.AddOpenApi();
+    builder.Services.AddOpenApi(options =>
+    {
+        options.AddDocumentTransformer<SilexGis.Api.Common.BearerSecurityDocumentTransformer>();
+        options.AddOperationTransformer<SilexGis.Api.Common.AnonymousRouteSecurityOperationTransformer>();
+    });
     builder.Services.AddSilexGisPersistence(builder.Configuration);
     builder.Services.AddSilexGisGeodata(builder.Configuration);
     builder.Services.AddSilexGisAuth(builder.Configuration);
@@ -145,6 +151,8 @@ try
         .BindConfiguration(SpatialOptions.SectionName)
         .ValidateOnStart();
     builder.Services.AddSingleton<IValidateOptions<SpatialOptions>, SpatialOptionsValidator>();
+    builder.Services.AddOptions<SyncOptions>()
+        .BindConfiguration(SyncOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<AdminTestSendThrottle>();
 builder.Services.AddScoped<GroupAnnouncementThrottle>();
@@ -165,6 +173,13 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // Credential-guessing protection: per-IP fixed window on the auth surface.
     // Limit is configurable for installations behind shared NATs.
     var authPermitLimit = builder.Configuration.GetValue("Auth:RateLimitPerMinute", 60);
+    // Abuse and cost control on the printed-code landing route, and deliberately not a
+    // confidentiality control: a printed code is short and reproducible outside this server, so
+    // its space is exhaustible at any rate a person would tolerate. What makes that pointless is
+    // that a resolving code discloses nothing but the installation's own name. A window of its
+    // own so that a group scanning labels from behind one connection cannot spend the sign-in
+    // allowance of everyone else behind it.
+    var qrPermitLimit = builder.Configuration.GetValue("Qr:RateLimitPerMinute", 60);
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -175,6 +190,15 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
                 {
                     Window = TimeSpan.FromMinutes(1),
                     PermitLimit = authPermitLimit,
+                    QueueLimit = 0,
+                }));
+        options.AddPolicy(PublicQrEndpoints.RateLimitPolicy, context =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = qrPermitLimit,
                     QueueLimit = 0,
                 }));
     });
@@ -251,6 +275,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapFeatureHierarchyEndpoints();
     api.MapFeatureLinkEndpoints();
     api.MapFeatureShareEndpoints();
+    api.MapCaveQrPublicationEndpoints();
     api.MapMapDataEndpoints();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
@@ -273,6 +298,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapPhotoEndpoints();
     api.MapAlbumEndpoints();
     api.MapPublicPhotoEndpoints();
+    api.MapPublicQrEndpoints();
     api.MapResLinkEndpoints();
     api.MapResLinkRelationTypeEndpoints();
     api.MapGeoreferencedMapEndpoints();
@@ -310,6 +336,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapAdminSettingsEndpoints();
     api.MapAdminTemplateEndpoints();
     api.MapTerrainBuildEndpoints();
+    api.MapSyncEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
     {
@@ -370,6 +397,35 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
             scope.ServiceProvider.GetRequiredService<IFileStore>());
         Log.Information("Demo data seeded (owner: {Email})", admins[0].Email);
         return;
+    }
+
+    // `dotnet run -- seed-speleoloc-dev`: add the second party the demo dataset lacks — a caving
+    // group, a plain account in it that owns nothing, and the administrator alongside — then exit.
+    // Without it every object on the installation belongs to the one administrator account, so
+    // nothing here can show what location protection actually does.
+    if (args.Contains("seed-speleoloc-dev"))
+    {
+        using var scope = app.Services.CreateScope();
+        switch (await SpeleoLocDevSeeder.SeedAsync(scope.ServiceProvider))
+        {
+            case SpeleoLocDevSeedOutcome.NotPermitted:
+                // It creates a login whose password is printed in the installation guide, so it
+                // is refused rather than trusted to the operator having read the warning.
+                Log.Error(
+                    "seed-speleoloc-dev creates a development login and runs only on a "
+                    + "development host (set SILEXGIS__SpeleoLocDev__Allow=true to override)");
+                return;
+            case SpeleoLocDevSeedOutcome.NoAdministrator:
+                Log.Error(
+                    "seed-speleoloc-dev requires a bootstrap admin (set SILEXGIS__Admin__Email/Password)");
+                return;
+            default:
+                Log.Information(
+                    "Development sync data seeded (group: {Group}, member: {Email})",
+                    SpeleoLocDevSeeder.GroupName,
+                    SpeleoLocDevSeeder.MemberEmail);
+                return;
+        }
     }
 
     await app.RunAsync();

@@ -25,7 +25,9 @@ public static class HierarchyEndpoints
         features.MapGet("/{id:guid}/parents", GetParentsAsync)
             .WithSummary("The feature's parent edges (readable parents only).");
         features.MapPut("/{id:guid}/parents", SetParentsAsync).WithValidation<SetParentsRequest>()
-            .WithSummary("Replaces the feature's parent edges (Write permission; exactly one primary edge).");
+            .WithSummary(
+                "Replaces the feature's parent edges (Write permission; exactly one primary edge, "
+                + "and never an empty list for a kind that only exists inside a containing feature).");
         features.MapGet("/{id:guid}/children", GetChildrenAsync)
             .WithSummary("Paged children of the feature; visibility-filtered.");
 

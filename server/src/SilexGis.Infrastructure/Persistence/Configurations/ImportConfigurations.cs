@@ -110,8 +110,21 @@ public sealed class ImportBatchConfiguration : IEntityTypeConfiguration<ImportBa
         // erase the record of what that drop created.
         builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.SetNull);
 
+        builder.Property(x => x.SyncResult).HasColumnType("jsonb");
+
         builder.HasIndex(x => x.GeofileId);
         builder.HasIndex(x => x.ConfirmedByUserId);
+
+        // What makes a resent upload answerable rather than applied twice, and the database's
+        // job rather than the handler's: two copies of the same request can be in flight at
+        // once, so a check-then-insert would let both through. Scoped to the account because a
+        // device identifier is only ever meaningful inside the account that minted it, and
+        // because a batch identifier that collided across accounts would say that somebody
+        // else's batch exists.
+        builder.HasIndex(x => new { x.ConfirmedByUserId, x.SyncBatchId })
+            .IsUnique()
+            .HasFilter("sync_batch_id is not null")
+            .HasDatabaseName("ux_import_batches_user_sync_batch");
     }
 }
 

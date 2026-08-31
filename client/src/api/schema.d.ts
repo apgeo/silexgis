@@ -5392,7 +5392,7 @@ export interface paths {
                 };
             };
         };
-        /** Replaces the feature's parent edges (Write permission; exactly one primary edge). */
+        /** Replaces the feature's parent edges (Write permission; exactly one primary edge, and never an empty list for a kind that only exists inside a containing feature). */
         put: {
             parameters: {
                 query?: never;
@@ -5613,6 +5613,86 @@ export interface paths {
                 path: {
                     id: string;
                     shareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/qr-publication": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether this cave's codes resolve for a visitor who is not signed in (Share permission). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveQrPublicationDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Lets this cave's codes resolve for visitors who are not signed in (Share permission). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveQrPublicationDto"];
+                    };
+                };
+            };
+        };
+        /** Stops this cave's codes resolving for visitors who are not signed in (Share permission). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
                 };
                 cookie?: never;
             };
@@ -9130,6 +9210,44 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["PublicAlbumDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/qr/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resolves a printed cave code for a visitor who is not signed in. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    code: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicQrDto"];
                     };
                 };
             };
@@ -14943,6 +15061,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The contract version and limits a device sizes itself to (authenticated). */
+        get: operations["syncCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own sync sets. */
+        get: operations["syncListSets"];
+        put?: never;
+        /** Creates a sync set owned by the caller. */
+        post: operations["syncCreateSet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/sets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One sync set the caller owns, or any set at all where the installation lets a full administrator read one. */
+        get: operations["syncGetSet"];
+        /** Replaces a sync set the caller owns; bumps its revision when anything changed. */
+        put: operations["syncReplaceSet"];
+        post?: never;
+        /** Deletes a sync set the caller owns. */
+        delete: operations["syncDeleteSet"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/sets/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page of the features a sync set carries, and the rows that have gone. */
+        get: operations["syncDownload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/sets/{id}/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Applies one batch of device rows, arbitrated row by row; resends are answered, not re-applied. */
+        post: operations["syncUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -15490,6 +15696,17 @@ export interface components {
             canShare: boolean;
             canManagePermissions: boolean;
             canViewExactLocation: boolean;
+        };
+        CaveQrPublicationDto: {
+            published: boolean;
+            /** Format: uuid */
+            publicationId: null | string;
+            /** Format: uuid */
+            publishedBy: null | string;
+            /** Format: date-time */
+            publishedAt: null | string;
+            /** Format: date-time */
+            revokedAt: null | string;
         };
         CaverAccountLinkRequest: {
             /** Format: uuid */
@@ -17177,7 +17394,7 @@ export interface components {
             photoClusterRadiusMeters: number;
         };
         /** @enum {unknown} */
-        ImportSource: "vectorFile" | "photos";
+        ImportSource: "vectorFile" | "photos" | "deviceSync";
         /** @enum {unknown} */
         ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
         /** @enum {unknown} */
@@ -18192,6 +18409,14 @@ export interface components {
         PositionConfidenceBand: "unknown" | "excellent" | "good" | "moderate" | "poor";
         /** @enum {unknown} */
         PositionQuality: "unknown" | "gps" | "map" | "estimated";
+        ProblemDetails: {
+            type?: null | string;
+            title?: null | string;
+            /** Format: int32 */
+            status?: null | number;
+            detail?: null | string;
+            instance?: null | string;
+        };
         ProcessingJobDto: {
             /** Format: int64 */
             id: number;
@@ -18242,6 +18467,9 @@ export interface components {
             height: null | number;
             thumbnailUrl: string;
             previewUrl: string;
+        };
+        PublicQrDto: {
+            instanceName: string;
         };
         /** @enum {unknown} */
         RasterStatus: "uploaded" | "processing" | "ready" | "failed";
@@ -18705,6 +18933,154 @@ export interface components {
             flags: string[];
             isEntrance: boolean;
             isFixed: boolean;
+        };
+        SyncCapabilitiesDto: {
+            /** Format: int32 */
+            contractVersion: number;
+            /** Format: int32 */
+            pageSizeMax: number;
+            /** Format: int32 */
+            uploadRowsMax: number;
+            features: string[];
+        };
+        SyncDownloadPageDto: {
+            /** Format: int64 */
+            setRevision: number;
+            settings: components["schemas"]["JsonElement"];
+            features: components["schemas"]["SyncFeatureDto"][];
+            tombstones: components["schemas"]["SyncTombstoneDto"][];
+            nextCursor: null | string;
+            hasMore: boolean;
+        };
+        SyncDuplicateCandidateDto: {
+            /** Format: uuid */
+            id: string;
+            name: null | string;
+            kind: components["schemas"]["FeatureKind"];
+            /** Format: double */
+            distanceMeters: number;
+            /** Format: uuid */
+            caveFeatureId: null | string;
+        };
+        SyncDuplicateDto: {
+            /** Format: uuid */
+            id: string;
+            nearby: components["schemas"]["SyncDuplicateCandidateDto"][];
+        };
+        SyncFeatureDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeatureKind"];
+            featureTypeCode: null | string;
+            category: components["schemas"]["FeatureCategory"];
+            name: null | string;
+            description: null | string;
+            geometry: null | components["schemas"]["GeoJsonGeometry"];
+            properties: components["schemas"]["JsonElement"];
+            /** Format: int32 */
+            propertiesSchemaVersion: null | number;
+            locationProtected: boolean;
+            protectedEffective: boolean;
+            visibility: components["schemas"]["Visibility"];
+            parents: components["schemas"]["SyncParentDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            clientUpdatedAt: null | string;
+        };
+        SyncParentDto: {
+            /** Format: uuid */
+            parentId: string;
+            isPrimary: boolean;
+        };
+        /** @enum {unknown} */
+        SyncRowStatus: "created" | "updated" | "deleted" | "unchanged" | "conflict" | "rejected";
+        SyncSetDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            uploadVisibility: components["schemas"]["Visibility"];
+            rootFeatureIds: string[];
+            settings: components["schemas"]["JsonElement"];
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SyncSetWriteRequest: {
+            name: string;
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            uploadVisibility: components["schemas"]["Visibility"];
+            rootFeatureIds: string[];
+            settings: components["schemas"]["JsonElement"];
+            /** Format: int64 */
+            baseRevision?: null | number;
+        };
+        SyncTombstoneDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            deletedAt: string;
+        };
+        SyncUploadRequest: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            contractVersion: number;
+            rows: components["schemas"]["SyncUploadRowDto"][];
+        };
+        SyncUploadResultDto: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: uuid */
+            importBatchId: string;
+            replayed: boolean;
+            /** Format: int32 */
+            written: number;
+            /** Format: int32 */
+            refused: number;
+            rows: components["schemas"]["SyncUploadRowResultDto"][];
+            conflicts: components["schemas"]["SyncFeatureDto"][];
+            duplicates: components["schemas"]["SyncDuplicateDto"][];
+        };
+        SyncUploadRowDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeatureKind"];
+            /** Format: date-time */
+            baseRevision: null | string;
+            deleted: boolean;
+            /** Format: uuid */
+            parentId: null | string;
+            name: null | string;
+            description: null | string;
+            featureTypeCode: null | string;
+            caveTypeCode: null | string;
+            entranceTypeCode: null | string;
+            isMain: boolean;
+            geometry: null | components["schemas"]["GeoJsonGeometry"];
+            /** Format: double */
+            altitude: null | number;
+            positionQuality: null | components["schemas"]["PositionQuality"];
+            properties: null | components["schemas"]["JsonElement"];
+            /** Format: date-time */
+            clientUpdatedAt: null | string;
+        };
+        SyncUploadRowResultDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["SyncRowStatus"];
+            /** Format: date-time */
+            revision: null | string;
+            code: null | string;
+            detail: null | string;
         };
         TagDto: {
             /** Format: int64 */
@@ -19462,4 +19838,323 @@ export interface components {
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    syncCapabilities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncCapabilitiesDto"];
+                };
+            };
+        };
+    };
+    syncListSets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncSetDto"][];
+                };
+            };
+        };
+    };
+    syncCreateSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncSetWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncSetDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncGetSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncSetDto"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncReplaceSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncSetWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncSetDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncDeleteSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncDownload: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncDownloadPageDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    syncUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncUploadResultDto"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+}

@@ -6,6 +6,7 @@ import {
   EnvironmentOutlined,
   LockOutlined,
   PlusOutlined,
+  QrcodeOutlined,
   ShareAltOutlined,
 } from '@ant-design/icons';
 import {
@@ -50,6 +51,8 @@ import CaveOrientationPanel from '../../components/statistics/CaveOrientationPan
 import CaveStatisticsPanel from '../../components/statistics/CaveStatisticsPanel.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
+import QrPublicationModal from '../../components/qr/QrPublicationModal.tsx';
+import { printedCode } from '../../components/qr/printedCode.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
 import CaveClosestApproachSection from './CaveClosestApproachSection.tsx';
 import CaveTripsSection from './CaveTripsSection.tsx';
@@ -86,6 +89,7 @@ export default function CaveDetailPage() {
   const [editingEntrance, setEditingEntrance] = useState<Entrance | null>(null);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   if (isPending || !cave) {
     return (
@@ -164,6 +168,11 @@ export default function CaveDetailPage() {
           {canShare && (
             <Button icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)}>
               {t('shares.button')}
+            </Button>
+          )}
+          {canShare && (
+            <Button icon={<QrcodeOutlined />} onClick={() => setQrOpen(true)}>
+              {t('qr.button')}
             </Button>
           )}
           {canManagePermissions && (
@@ -402,6 +411,15 @@ export default function CaveDetailPage() {
       )}
 
       {id && <ShareLinksModal featureId={id} open={shareOpen} onClose={() => setShareOpen(false)} />}
+
+      {id && (
+        <QrPublicationModal
+          caveId={id}
+          code={printedCode(cave.properties)}
+          open={qrOpen}
+          onClose={() => setQrOpen(false)}
+        />
+      )}
 
       {id && (
         <EntranceEditorModal

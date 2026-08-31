@@ -75,6 +75,8 @@ if (!window.ResizeObserver) {
 // completes, so the labels, boxes and paths become elements a test can look at. Anything
 // that did depend on a true width would be depending on which fonts happen to be
 // installed on the machine running the tests.
+//
+// The drawing no-ops below cover the same need for a component that paints a QR square.
 if (typeof HTMLCanvasElement !== 'undefined') {
   HTMLCanvasElement.prototype.getContext = function stubGetContext(this: HTMLCanvasElement) {
     const gradient = { addColorStop() {} };

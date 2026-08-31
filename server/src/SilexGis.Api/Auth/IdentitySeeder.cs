@@ -11,12 +11,19 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace SilexGis.Api.Auth;
 
 /// <summary>
-/// Startup seeding: global roles, the bootstrap administrator,
-/// and the first-party SPA OAuth client. Idempotent — safe on every start.
+/// Startup seeding: global roles, the bootstrap administrator, and the two first-party OAuth
+/// clients — the web application and the SpeleoLoc mobile app. Idempotent — safe on every start.
 /// </summary>
 public static class IdentitySeeder
 {
     public const string SpaClientId = "silexgis-spa";
+
+    /// <summary>
+    /// The mobile app's own client id. It is deliberately not the web client's: separate ids are
+    /// what make a phone's tokens distinguishable rows in the token store, which is the
+    /// precondition for both a lifetime of its own and for revoking one device without the others.
+    /// </summary>
+    public const string SpeleoLocClientId = "silexgis-speleoloc";
 
     public static async Task SeedAsync(IServiceProvider services, IConfiguration configuration)
     {
@@ -25,10 +32,11 @@ public static class IdentitySeeder
             services.GetRequiredService<UserManager<SilexGisUser>>(),
             services.GetRequiredService<IOptions<AdminBootstrapOptions>>().Value,
             services.GetRequiredService<SilexGisDbContext>());
-        await SeedSpaClientAsync(
-            services.GetRequiredService<IOpenIddictApplicationManager>(),
-            configuration,
-            services.GetRequiredService<IOptions<AuthOptions>>().Value);
+
+        var applications = services.GetRequiredService<IOpenIddictApplicationManager>();
+        var authOptions = services.GetRequiredService<IOptions<AuthOptions>>().Value;
+        await SeedSpaClientAsync(applications, configuration, authOptions);
+        await SeedSpeleoLocClientAsync(applications, authOptions);
     }
 
     private static async Task SeedRolesAsync(RoleManager<SilexGisRole> roleManager)
@@ -113,7 +121,68 @@ public static class IdentitySeeder
             descriptor.RedirectUris.Add(new Uri(uri));
         }
 
-        if (await applications.FindByClientIdAsync(SpaClientId) is { } existing)
+        await UpsertAsync(applications, descriptor);
+    }
+
+    private static async Task SeedSpeleoLocClientAsync(
+        IOpenIddictApplicationManager applications, AuthOptions options)
+    {
+        var descriptor = new OpenIddictApplicationDescriptor
+        {
+            ClientId = SpeleoLocClientId,
+            ClientType = ClientTypes.Public,
+
+            // Native, not Web, and the value is load-bearing rather than descriptive: it is what
+            // lets a redirect back to a loopback address match whatever ephemeral port the app
+            // happened to bind, which is how a desktop or mobile app receives an authorization
+            // code from a system browser.
+            ApplicationType = ApplicationTypes.Native,
+            DisplayName = "SpeleoLoc",
+            Permissions =
+            {
+                Permissions.Endpoints.Authorization,
+                Permissions.Endpoints.Token,
+                Permissions.GrantTypes.AuthorizationCode,
+                Permissions.GrantTypes.RefreshToken,
+                Permissions.ResponseTypes.Code,
+                Permissions.Scopes.Email,
+                Permissions.Scopes.Profile,
+                Permissions.Scopes.Roles,
+            },
+
+            // No end-session endpoint: signing out of an installed app is a local act plus the
+            // revocation of what it holds, not a browser round trip to the server. A public client
+            // holds no secret, so proof of possession of the code is the only thing standing
+            // between an intercepted redirect and a token.
+            Requirements = { Requirements.Features.ProofKeyForCodeExchange },
+        };
+
+        // Both forms an installed app can be handed a code through are registered now, because
+        // registering one later would mean an installation has to be re-seeded before a client
+        // build that uses it can sign in at all. The loopback entry carries no port: a native
+        // client binds an ephemeral one, and the port is excluded from the comparison.
+        descriptor.RedirectUris.Add(new Uri("http://127.0.0.1/callback"));
+        descriptor.RedirectUris.Add(new Uri("speleoloc://auth"));
+
+        // The lifetime is set per client rather than by widening the server-wide one. The browser
+        // discards its refresh token on unload, so raising its window would only extend the life of
+        // stored rows no one can redeem; the phone is the client that keeps a credential across
+        // weeks offline, and it is the only one that needs the longer window.
+        descriptor.SetRefreshTokenLifetime(options.SpeleoLocRefreshTokenLifetime);
+
+        await UpsertAsync(applications, descriptor);
+    }
+
+    /// <summary>
+    /// Writes a client registration, reconciling one that already exists rather than only creating
+    /// a missing one — otherwise a changed lifetime or a new redirect URI would reach a fresh
+    /// installation and never reach one that had already started once. The update replaces the
+    /// stored row wholesale from the descriptor, so anything the descriptor omits is cleared.
+    /// </summary>
+    private static async Task UpsertAsync(
+        IOpenIddictApplicationManager applications, OpenIddictApplicationDescriptor descriptor)
+    {
+        if (await applications.FindByClientIdAsync(descriptor.ClientId!) is { } existing)
         {
             await applications.UpdateAsync(existing, descriptor);
         }

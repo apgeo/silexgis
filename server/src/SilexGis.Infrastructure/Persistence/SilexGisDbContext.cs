@@ -54,6 +54,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<FeatureShare> FeatureShares => Set<FeatureShare>();
 
+    public DbSet<CaveQrPublication> CaveQrPublications => Set<CaveQrPublication>();
+
     public DbSet<MapLayer> MapLayers => Set<MapLayer>();
 
     public DbSet<Document> Documents => Set<Document>();
@@ -192,6 +194,10 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     public DbSet<TerrainBuild> TerrainBuilds => Set<TerrainBuild>();
 
     public DbSet<TerrainBuildSource> TerrainBuildSources => Set<TerrainBuildSource>();
+
+    public DbSet<SyncSet> SyncSets => Set<SyncSet>();
+
+    public DbSet<SyncSetMember> SyncSetMembers => Set<SyncSetMember>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

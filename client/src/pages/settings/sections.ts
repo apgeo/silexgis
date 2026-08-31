@@ -11,6 +11,7 @@ export const SETTINGS_SECTIONS = [
   'notifications',
   'security',
   'accessibility',
+  'sync',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];

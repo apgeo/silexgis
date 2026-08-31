@@ -1,0 +1,13 @@
+{
+  "setRevision": 1,
+  "settings": {},
+  "features": [],
+  "tombstones": [
+    {
+      "id": "<place>",
+      "deletedAt": "<timestamp>"
+    }
+  ],
+  "nextCursor": "<cursor>",
+  "hasMore": false
+}

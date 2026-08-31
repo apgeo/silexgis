@@ -101,6 +101,57 @@ test.describe('settings', () => {
       .click();
   });
 
+  test('a selection of caves for a phone can be made, reviewed and revoked', async ({ page }) => {
+    await page.goto('/settings/sync');
+
+    // Unique per run and revoked at the end: the dev database persists between runs, so a fixed
+    // name would accumulate and make every later assertion ambiguous.
+    const name = `Weekend-${Date.now()}`;
+
+    await expect(page.getByTestId('sync-set-new')).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId('sync-set-new').click();
+
+    const dialog = page.getByRole('dialog');
+    await dialog.getByTestId('sync-set-name').fill(name);
+
+    // One real cave, chosen from the list the server answered — the server refuses a root the
+    // caller cannot read, so a made-up id would fail the write rather than the selection.
+    await dialog.getByTestId('sync-set-caves').click();
+    const option = page.locator('.ant-select-dropdown:visible .ant-select-item-option').first();
+    await expect(option).toBeVisible({ timeout: 15_000 });
+    const caveName = (await option.textContent())?.trim() ?? '';
+
+    // Chosen by typing the name and pressing Enter rather than by clicking the row. The menu
+    // re-renders its rows as it finishes measuring itself, and a click dispatched in that window
+    // lands on a row that no longer exists, so the choice is silently dropped; the keyboard path
+    // goes through the same selection handler without depending on a row surviving the click.
+    await page.keyboard.type(caveName);
+    await expect(page.locator('.ant-select-dropdown:visible .ant-select-item-option')).toHaveCount(1);
+    await page.keyboard.press('Enter');
+    // The selection has to be real before the form is submitted, so a dropped choice fails here
+    // rather than as an empty selection several steps later.
+    await expect(dialog.locator('.ant-select-selection-item')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Saved.')).toBeVisible({ timeout: 15_000 });
+
+    // Reviewing it is the half a phone cannot do, so it is asserted after a reload: what is on
+    // screen has to have come back from the server, not from the form that was just submitted.
+    await page.reload();
+    const row = page.locator('.silex-list-item').filter({ hasText: name });
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await expect(row).toContainText('Caves carried: 1');
+    if (caveName) {
+      await expect(row).toContainText(caveName);
+    }
+
+    await row.getByRole('button', { name: 'Revoke' }).click();
+    await page.getByRole('button', { name: 'Revoke' }).last().click();
+    await expect(page.getByText('Selection revoked.')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.silex-list-item').filter({ hasText: name })).toHaveCount(0);
+  });
+
   test('the notification matrix is per channel, locks what cannot be switched off, and says when a category reaches nobody', async ({
     page,
   }) => {

@@ -30,6 +30,8 @@ import HistoryPanel from '../../components/history/HistoryPanel.tsx';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
+import QrCodeSquare from '../../components/qr/QrCodeSquare.tsx';
+import { printedCode } from '../../components/qr/printedCode.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
 import { fitGeoJsonGeometry } from '../../map/mapContext.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
@@ -113,6 +115,10 @@ export default function FeatureDetailPage() {
     feature.properties && typeof feature.properties === 'object' && !Array.isArray(feature.properties)
       ? Object.entries(feature.properties as Record<string, unknown>)
       : [];
+  // The codes the caving app prints live on the places inside a cave, not on the cave, so this
+  // is the surface where a stored one actually exists. Whether it resolves for a visitor is a
+  // decision taken about the cave above it; the square only shows what is on the label.
+  const labelCode = printedCode(feature.properties);
 
   // Typed subtypes have their own full page; this page shows a compact summary
   // plus the shared hierarchy/links panels and points at the typed page.
@@ -328,6 +334,11 @@ export default function FeatureDetailPage() {
       )}
 
       <FeatureMorphometryCard featureId={id} geometryType={feature.geometry?.type ?? null} />
+      {labelCode && (
+        <Card title={t('qr.cardTitle')} style={{ marginBottom: 16 }}>
+          <QrCodeSquare code={labelCode} />
+        </Card>
+      )}
 
       <HierarchyCard featureId={id} canEdit={canEdit} />
       <LinksCard featureId={id} canEdit={canEdit} />

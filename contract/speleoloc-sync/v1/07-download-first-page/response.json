@@ -1,0 +1,59 @@
+{
+  "setRevision": 1,
+  "settings": {
+    "digits": 4,
+    "pciStrategy": "ro-default"
+  },
+  "features": [
+    {
+      "id": "<cave>",
+      "kind": "cave",
+      "featureTypeCode": null,
+      "category": "underground",
+      "name": "Sync cave <marker>",
+      "description": null,
+      "geometry": null,
+      "properties": {},
+      "propertiesSchemaVersion": null,
+      "locationProtected": false,
+      "protectedEffective": false,
+      "visibility": "private",
+      "parents": [],
+      "createdAt": "<timestamp>",
+      "updatedAt": "<timestamp>",
+      "clientUpdatedAt": null
+    },
+    {
+      "id": "<place>",
+      "kind": "generic",
+      "featureTypeCode": "cave_place",
+      "category": "underground",
+      "name": "Sync place <marker>",
+      "description": null,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          25.441,
+          45.531
+        ]
+      },
+      "properties": {},
+      "propertiesSchemaVersion": 1,
+      "locationProtected": false,
+      "protectedEffective": false,
+      "visibility": "private",
+      "parents": [
+        {
+          "parentId": "<cave>",
+          "isPrimary": true
+        }
+      ],
+      "createdAt": "<timestamp>",
+      "updatedAt": "<timestamp>",
+      "clientUpdatedAt": null
+    }
+  ],
+  "tombstones": [],
+  "nextCursor": "<cursor>",
+  "hasMore": false
+}

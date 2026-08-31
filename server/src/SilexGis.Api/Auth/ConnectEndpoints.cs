@@ -102,8 +102,9 @@ public static class ConnectEndpoints
             return Forbidden(Errors.InvalidGrant, "The token is no longer valid.");
         }
 
-        // A refresh token lasts thirty days, so the same policy is re-checked here rather than
-        // trusted from whenever the token was first issued.
+        // A refresh token outlives this check by weeks — how many depends on the client it was
+        // issued to — so the same policy is re-checked here rather than trusted from whenever
+        // the token was first issued.
         if (await ConfirmationRequiredAsync(user, settings, emailDelivery, ct))
         {
             return Forbidden(Errors.InvalidGrant, "The account's email address is not confirmed.");

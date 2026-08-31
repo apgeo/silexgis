@@ -1324,6 +1324,49 @@ namespace SilexGis.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.CaveQrPublication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("FeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("feature_id");
+
+                    b.Property<Guid>("PublishedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_by");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cave_qr_publications");
+
+                    b.HasIndex("PublishedBy")
+                        .HasDatabaseName("ix_cave_qr_publications_published_by");
+
+                    b.HasIndex(new[] { "FeatureId" }, "ix_cave_qr_publications_feature")
+                        .HasDatabaseName("ix_cave_qr_publications_feature");
+
+                    b.HasIndex(new[] { "FeatureId" }, "ux_cave_qr_publications_live")
+                        .IsUnique()
+                        .HasDatabaseName("ux_cave_qr_publications_live")
+                        .HasFilter("revoked_at IS NULL");
+
+                    b.ToTable("cave_qr_publications", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.CaveType", b =>
                 {
                     b.Property<long>("Id")
@@ -2556,6 +2599,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("caving_group_id");
 
+                    b.Property<DateTimeOffset?>("ClientUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("client_updated_at");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -2627,6 +2674,11 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasAlternateKey("Id", "Kind")
                         .HasName("ak_features_id_kind");
+
+                    b.HasIndex("AncestorIds")
+                        .HasDatabaseName("ix_features_ancestor_ids");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("AncestorIds"), "gin");
 
                     b.HasIndex("Category")
                         .HasDatabaseName("ix_features_category");
@@ -3477,6 +3529,14 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("source");
 
+                    b.Property<Guid?>("SyncBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sync_batch_id");
+
+                    b.Property<string>("SyncResult")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("sync_result");
+
                     b.Property<Guid?>("TermRuleSetId")
                         .HasColumnType("uuid")
                         .HasColumnName("term_rule_set_id");
@@ -3508,6 +3568,11 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("TripLogId")
                         .HasDatabaseName("ix_import_batches_trip_log_id");
+
+                    b.HasIndex("ConfirmedByUserId", "SyncBatchId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_import_batches_user_sync_batch")
+                        .HasFilter("sync_batch_id is not null");
 
                     b.ToTable("import_batches", (string)null);
                 });
@@ -5003,6 +5068,95 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_survey_stations_survey_model_id_name");
 
                     b.ToTable("survey_stations", (string)null);
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SyncSet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CavingGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("caving_group_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("revision");
+
+                    b.Property<string>("Settings")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("settings")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<short>("UploadVisibility")
+                        .HasColumnType("smallint")
+                        .HasColumnName("upload_visibility");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sync_sets");
+
+                    b.HasIndex("CavingGroupId")
+                        .HasDatabaseName("ix_sync_sets_caving_group_id");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_sync_sets_owner_user_id");
+
+                    b.ToTable("sync_sets", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_sync_sets_revision_positive", "revision >= 1");
+                        });
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SyncSetMember", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("RootFeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("root_feature_id");
+
+                    b.Property<Guid>("SyncSetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sync_set_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sync_set_members");
+
+                    b.HasIndex("RootFeatureId")
+                        .HasDatabaseName("ix_sync_set_members_root_feature_id");
+
+                    b.HasIndex("SyncSetId", "RootFeatureId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_sync_set_members_set_root");
+
+                    b.ToTable("sync_set_members", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Tag", b =>
@@ -6841,6 +6995,23 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Navigation("Feature");
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.CaveQrPublication", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                        .WithMany()
+                        .HasForeignKey("FeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_cave_qr_publications_features_feature_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_cave_qr_publications_users_published_by");
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Caver", b =>
                 {
                     b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
@@ -7579,6 +7750,39 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_survey_stations_survey_models_survey_model_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SyncSet", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.CavingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CavingGroupId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_sync_sets_caving_groups_caving_group_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sync_sets_users_owner_user_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SyncSetMember", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                        .WithMany()
+                        .HasForeignKey("RootFeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sync_set_members_features_root_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.SyncSet", null)
+                        .WithMany()
+                        .HasForeignKey("SyncSetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sync_set_members_sync_sets_sync_set_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Tagging", b =>

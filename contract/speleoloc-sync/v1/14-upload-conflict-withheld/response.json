@@ -1,0 +1,55 @@
+{
+  "batchId": "<batch>",
+  "importBatchId": "<uuid-1>",
+  "replayed": false,
+  "written": 0,
+  "refused": 2,
+  "rows": [
+    {
+      "id": "<place-readable>",
+      "status": "conflict",
+      "revision": "<timestamp>",
+      "code": "sync.conflict",
+      "detail": "This row changed on the server after you last read it."
+    },
+    {
+      "id": "<place-withheld>",
+      "status": "conflict",
+      "revision": "<timestamp>",
+      "code": "sync.conflict",
+      "detail": "This row changed on the server after you last read it."
+    }
+  ],
+  "conflicts": [
+    {
+      "id": "<place-readable>",
+      "kind": "generic",
+      "featureTypeCode": "cave_place",
+      "category": "underground",
+      "name": "Echo open <marker>",
+      "description": null,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          25.511,
+          45.611
+        ]
+      },
+      "properties": {},
+      "propertiesSchemaVersion": 1,
+      "locationProtected": false,
+      "protectedEffective": false,
+      "visibility": "authenticated",
+      "parents": [
+        {
+          "parentId": "<cave>",
+          "isPrimary": true
+        }
+      ],
+      "createdAt": "<timestamp>",
+      "updatedAt": "<timestamp>",
+      "clientUpdatedAt": null
+    }
+  ],
+  "duplicates": []
+}

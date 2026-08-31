@@ -38,6 +38,7 @@ import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRo
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
 import { TERRAIN_PROBLEM_MESSAGE_KEYS } from '../pages/admin/terrain/terrainProblems.ts';
 import { SURVEY_MODEL_PROBLEM_MESSAGE_KEYS } from '../pages/caves/surveyModelProblems.ts';
+import { SETTINGS_SECTIONS } from '../pages/settings/sections.ts';
 import type { TerrainDepthBand } from '../pages/admin/terrain/terrainDepth.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
@@ -350,6 +351,18 @@ describe('i18n locales', () => {
       );
     expect(empty(en)).toEqual([]);
     expect(empty(ro)).toEqual([]);
+  });
+
+  // The section list builds its label key from a template, which the "every key the code asks
+  // for" scan below cannot see. Without this, a section added with no label ships as the raw
+  // key `settings.nav.<name>` in the menu and every test stays green.
+  it('every settings section is named in both locales, and none is left over', () => {
+    const names = [...SETTINGS_SECTIONS];
+    const enNames: Record<string, string> = en.settings.nav;
+    const roNames: Record<string, string> = ro.settings.nav;
+    expect(names.filter((name) => !enNames[name])).toEqual([]);
+    expect(names.filter((name) => !roNames[name])).toEqual([]);
+    expect(Object.keys(enNames).sort()).toEqual([...names].sort());
   });
 
   it('every access domain the server publishes is named in both locales', () => {

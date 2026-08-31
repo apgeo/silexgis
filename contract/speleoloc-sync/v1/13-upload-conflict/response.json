@@ -1,0 +1,48 @@
+{
+  "batchId": "<batch>",
+  "importBatchId": "<uuid-1>",
+  "replayed": false,
+  "written": 0,
+  "refused": 1,
+  "rows": [
+    {
+      "id": "<place>",
+      "status": "conflict",
+      "revision": "<timestamp>",
+      "code": "sync.conflict",
+      "detail": "This row changed on the server after you last read it."
+    }
+  ],
+  "conflicts": [
+    {
+      "id": "<place>",
+      "kind": "generic",
+      "featureTypeCode": "cave_place",
+      "category": "underground",
+      "name": "Sump lower <marker>",
+      "description": null,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          25.501,
+          45.601
+        ]
+      },
+      "properties": {},
+      "propertiesSchemaVersion": 1,
+      "locationProtected": false,
+      "protectedEffective": false,
+      "visibility": "private",
+      "parents": [
+        {
+          "parentId": "<cave>",
+          "isPrimary": true
+        }
+      ],
+      "createdAt": "<timestamp>",
+      "updatedAt": "<timestamp>",
+      "clientUpdatedAt": null
+    }
+  ],
+  "duplicates": []
+}

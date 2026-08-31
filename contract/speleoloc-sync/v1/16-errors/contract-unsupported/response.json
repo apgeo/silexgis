@@ -1,0 +1,8 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+  "title": "Conflict",
+  "status": 409,
+  "detail": "This server speaks contract version 1.",
+  "code": "sync.contract_unsupported",
+  "traceId": "<trace>"
+}

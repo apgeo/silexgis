@@ -1,0 +1,42 @@
+{
+  "batchId": "<batch>",
+  "contractVersion": 1,
+  "rows": [
+    {
+      "id": "<place-readable>",
+      "kind": "generic",
+      "baseRevision": "<timestamp>",
+      "deleted": false,
+      "parentId": "<cave>",
+      "name": "Echo open renamed <marker>",
+      "featureTypeCode": "cave_place",
+      "isMain": false,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          25.511,
+          45.611
+        ]
+      },
+      "clientUpdatedAt": null
+    },
+    {
+      "id": "<place-withheld>",
+      "kind": "generic",
+      "baseRevision": "<timestamp>",
+      "deleted": false,
+      "parentId": "<cave>",
+      "name": "Echo guarded renamed <marker>",
+      "featureTypeCode": "cave_place",
+      "isMain": false,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          25.512,
+          45.612
+        ]
+      },
+      "clientUpdatedAt": null
+    }
+  ]
+}

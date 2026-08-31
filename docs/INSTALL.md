@@ -57,13 +57,36 @@ The first start creates the database schema, seeds taxonomies, default map layer
 built-in permission groups, and creates the admin account as a member of **Full
 Administrators**. Sign in at `SILEXGIS_PUBLIC_URL` with the admin credentials.
 
-To load a small demo dataset (2 caves, entrances, features, a geofile and a raster, plus a
-two-shelf archive holding a survey report and a link joining that report to the cave it
-describes):
+To load a small demo dataset (six caves with their entrances, a containing karst area and two
+surface features, five trips with the people on them, two saved map views, plus a two-shelf
+archive holding a survey report and a link joining that report to the cave it describes):
 
 ```bash
 docker compose exec api dotnet SilexGis.Api.dll seed-demo
 ```
+
+Everything the demo set creates belongs to the admin account, which is also a full
+administrator — so on a stock demo installation every signed-in caller is exempt from location
+protection twice over, and a protected cave shows its exact position to everyone. For
+development and for anyone building a client against this server, a second command adds the
+party that is not exempt: a caving group called **Demo Caving Club**, the admin in it, and a
+plain account `member@dev.local` that belongs to the group and owns nothing. It also stamps the
+group onto the demo cave that was created club-visible without naming a club. Safe to run more
+than once:
+
+```bash
+docker compose exec api dotnet SilexGis.Api.dll seed-speleoloc-dev
+```
+
+Unlike `seed-demo`, this one creates a **login**, so it refuses to run on anything but a
+development host. On a normal installation it exits with an error and writes nothing. An
+installation that wants it anyway has to set `SILEXGIS__SpeleoLocDev__Allow=true`, and should
+also set `SILEXGIS__SpeleoLocDev__MemberPassword` rather than take the default printed in this
+guide.
+
+The account holds the Viewer role and belongs to Demo Caving Club, so it can read everything
+public, everything visible to signed-in accounts, and everything that club may see. Treat it as
+what it is: a second party that exists so location protection can be watched working.
 
 ## Enabling HTTPS
 
@@ -1111,6 +1134,16 @@ the reasoning beside each one.
 | `SILEXGIS__Admin__Email` / `__Password` | — | first-run administrator |
 | `SILEXGIS__Auth__OpenRegistration` | `false` | allow self-registration |
 | `SILEXGIS__Auth__ExternalOnly` | `false` | hide the password form when providers exist |
+| `SILEXGIS__Auth__RateLimitPerMinute` | `60` | sign-in, password-reset and token requests one IP address may make per minute. Raise it for an installation whose users share an outbound address |
+| `SILEXGIS__Qr__RateLimitPerMinute` | `60` | requests to the printed-cave-code landing address one IP address may make per minute. Its own window rather than the sign-in one, so that a group scanning labels at a cave entrance from behind a single connection cannot spend everyone else's sign-in allowance. **This is abuse and cost control, not a confidentiality control** — a printed code is short and reproducible outside this server, so its space is exhaustible at any rate a person would tolerate; what makes that pointless is that a code which resolves discloses only this installation's own name |
+| `SILEXGIS__Auth__SpeleoLocRefreshTokenDays` | `45` | how long the SpeleoLoc mobile app may stay offline before a caver has to sign in on it again. The clock restarts at every successful sync, not at sign-in. Values outside 1 to 365 days are brought back inside that range |
+| `SILEXGIS__Sync__PageSizeMax` | `500` | the largest page of rows the mobile sync surface hands back in one response. A phone asks for this figure before it starts and sizes its own requests to it. Values outside 1 to 5000 are brought back inside that range |
+| `SILEXGIS__Sync__DefaultPageSize` | `100` | the page a phone gets when it asks the mobile sync surface for one without naming a size. Deliberately well under the ceiling above: a first sync happens on whatever connection a cave's car park has, and a page that has to be retried whole is cheaper to retry small. A value above `SILEXGIS__Sync__PageSizeMax` is served as that maximum rather than refused, because the request it applies to named no size to argue with; values below 1 are brought back to 1 |
+| `SILEXGIS__Sync__AllowAdministratorRead` | `false` | lets a full administrator read a sync set belonging to another account — the named selection of caves a caver's phone carries, the club its uploads are created for, its code-generation settings and when it was last edited. Off unless you turn it on: a sync set is the one thing in the installation that says where a particular person goes, so an installation opts into that support ability deliberately rather than inheriting it. It widens **reading one set whose identifier the administrator already knows**, and nothing else — the listing still answers with the caller's own sets so it cannot be used to count anybody's, replacing and deleting a set stay the owner's alone, and no device can download or upload through a set it does not own however privileged the account it is signed in as. The identifier has to come from the caver, their phone or the database — nothing in the web interface shows another account's set identifier, and this setting deliberately adds no way to find one: it answers "what does this set carry?" for somebody already handed the identifier, never "which sets does that caver have?" |
+| `SILEXGIS__Sync__UploadRowsMax` | `500` | the most rows one upload batch from a phone may carry. A batch is applied as a unit, so this bounds what a single failed or repeated request costs. Values outside 1 to 5000 are brought back inside that range |
+| `SILEXGIS__Sync__DuplicateRadiusMeters` | `50` | how close something already in the registry has to be to a row a phone just created before the answer mentions it. Reporting only — it never refuses a row. `0` turns the report off; values above 5000 are brought back to 5000. The same figure a file import uses, because how close two entrances can be before they are probably one is a property of the karst rather than of the channel |
+| `SILEXGIS__SpeleoLocDev__Allow` | `false` | permits `seed-speleoloc-dev` on a host that is not in development. That command creates a login, so it is refused without this |
+| `SILEXGIS__SpeleoLocDev__MemberPassword` | `dev-member-pass-1` | the password `member@dev.local` is created with. The default is printed in this guide, so set your own if you allow the command at all |
 | `SILEXGIS__Mail__Enabled` / `__Host` / `__Port` | `false` / — / `587` | SMTP server; unset means messages go to the log |
 | `SILEXGIS__Mail__Security` | `Auto` | `Auto`, `StartTls`, `SslOnConnect` (465) or `None` |
 | `SILEXGIS__Mail__FromAddress` / `__FromName` | — / `SilexGIS` | sender of every message |

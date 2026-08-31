@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
 import {
@@ -152,6 +152,7 @@ export const queryKeys = {
   featureChildren: (id: string, params: FeatureChildrenParams) => ['features', id, 'children', params] as const,
   featureLinks: (id: string) => ['features', id, 'links'] as const,
   featureShares: (id: string) => ['features', id, 'shares'] as const,
+  caveQrPublication: (id: string) => ['caves', id, 'qr-publication'] as const,
   geofiles: (params: GeofileListParams) => ['geofiles', 'list', params] as const,
   geofile: (id: string) => ['geofiles', 'detail', id] as const,
   geofileColumns: (id: string) => ['geofile-columns', id] as const,
@@ -213,6 +214,8 @@ export const queryKeys = {
   taggings: (entityType: string, entityId: string) => ['taggings', entityType, entityId] as const,
   tags: (search: string) => ['tags', search] as const,
   cavingGroups: ['cavingGroups'] as const,
+  syncCapabilities: ['sync', 'capabilities'] as const,
+  syncSets: ['sync', 'sets'] as const,
   cavers: ['cavers'] as const,
   cavingGroupMembers: (cavingGroupId: string) => ['teams', cavingGroupId, 'members'] as const,
   cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
@@ -806,6 +809,33 @@ export function useCave(id: string | undefined) {
     queryKey: queryKeys.cave(id ?? ''),
     queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id: id! } } })),
     enabled: !!id,
+  });
+}
+
+/**
+ * Names for caves known only by id — the ones a stored selection points at that a paged, searched
+ * list did not happen to return.
+ *
+ * Worth its own hook because the alternative is worse than untidy: falling back to "a cave you can
+ * no longer read" for anything simply absent from the current page tells a caver their access was
+ * revoked when nothing of the kind happened. Asking for each id by name distinguishes the two —
+ * what comes back is named, and what genuinely cannot be read stays unnamed. A failure is not
+ * retried, because the expected failure here is a definite "you cannot read this".
+ */
+export function useCaveNames(ids: readonly string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.cave(id),
+      queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+      staleTime: 300_000,
+      retry: false,
+    })),
+    combine: (results) =>
+      new Map(
+        results.flatMap((result) =>
+          result.data ? ([[result.data.id, result.data.name]] as [string, string][]) : [],
+        ),
+      ),
   });
 }
 
@@ -1504,6 +1534,59 @@ export function useRevokeFeatureShare() {
 /** Imperative fetch for the anonymous shared-feature page (no auth required for public shares). */
 export async function fetchSharedFeature(token: string): Promise<SharedFeatureEnvelope> {
   return unwrap(api.GET('/api/v1/shared/features/{token}', { params: { path: { token } } }));
+}
+
+export type CaveQrPublication = components['schemas']['CaveQrPublicationDto'];
+export type PublicQr = components['schemas']['PublicQrDto'];
+
+/**
+ * Whether a cave's printed codes resolve for a visitor with no account, and the record of the
+ * decision that last governed it. Not published is an answer rather than an absence, so this
+ * always resolves to a document for a caller allowed to ask at all.
+ */
+export function useCaveQrPublication(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.caveQrPublication(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{id}/qr-publication', { params: { path: { id: id! } } })),
+    enabled: !!id && enabled,
+    // Requires the right to share the cave; a 403 is a settled answer, not worth retrying.
+    retry: false,
+  });
+}
+
+function useInvalidateCaveQrPublication() {
+  const queryClient = useQueryClient();
+  return (id: string) =>
+    void queryClient.invalidateQueries({ queryKey: queryKeys.caveQrPublication(id) });
+}
+
+/** Lets the cave's printed codes resolve for anyone. Publishing an already-published cave is the state asked for. */
+export function usePublishCaveQr() {
+  const invalidate = useInvalidateCaveQrPublication();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/api/v1/caves/{id}/qr-publication', { params: { path: { id } } })),
+    onSuccess: (_, id) => invalidate(id),
+  });
+}
+
+/** Stops them resolving. Withdrawing a cave nobody published is the state asked for, not an error. */
+export function useRevokeCaveQr() {
+  const invalidate = useInvalidateCaveQrPublication();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/caves/{id}/qr-publication', { params: { path: { id } } })),
+    onSuccess: (_, id) => invalidate(id),
+  });
+}
+
+/**
+ * Imperative fetch for the anonymous printed-code landing page. No account is involved: a person
+ * holding a phone at a cave entrance has none, which is the entire reason the route exists.
+ */
+export async function fetchPublicQr(code: string): Promise<PublicQr> {
+  return unwrap(api.GET('/api/v1/public/qr/{code}', { params: { path: { code } } }));
 }
 
 export type GeofileInfo = components['schemas']['GeofileDto'];
@@ -5737,6 +5820,23 @@ export function useDeleteEventSeriesFollowing() {
   });
 }
 
+export type SyncSet = components['schemas']['SyncSetDto'];
+export type SyncSetWrite = components['schemas']['SyncSetWriteRequest'];
+export type SyncCapabilities = components['schemas']['SyncCapabilitiesDto'];
+
+/**
+ * What this installation's sync protocol can do. Read by the settings page for the same reason a
+ * phone reads it first: the parts of the protocol a server actually serves are announced by name,
+ * so a page can say what a device will and will not be able to do here instead of guessing.
+ */
+export function useSyncCapabilities() {
+  return useQuery({
+    queryKey: queryKeys.syncCapabilities,
+    queryFn: () => unwrap(api.GET('/api/v1/sync/capabilities')),
+    staleTime: 300_000,
+  });
+}
+
 /**
  * How close two caves come to each other: the shortest line between their line work in three
  * dimensions, split into its horizontal and vertical parts, with a bearing.
@@ -5857,6 +5957,34 @@ export function useCreateAnnotatedText() {
 }
 
 /**
+ * The caller's own sync sets. This listing is never widened: it answers with the sets the signed-in
+ * account owns and no others, whatever an installation allows an administrator to read one set by.
+ */
+export function useSyncSets() {
+  return useQuery({
+    queryKey: queryKeys.syncSets,
+    queryFn: () => unwrap(api.GET('/api/v1/sync/sets')),
+  });
+}
+
+export function useCreateSyncSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SyncSetWrite) => unwrap(api.POST('/api/v1/sync/sets', { body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.syncSets }),
+  });
+}
+
+export function useUpdateSyncSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: SyncSetWrite }) =>
+      unwrap(api.PUT('/api/v1/sync/sets/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.syncSets }),
+  });
+}
+
+/**
  * Replaces the body with a new revision.
  *
  * Both link caches are dropped as well as the text's own, because rewriting the words re-measures
@@ -5879,5 +6007,18 @@ export function useReplaceAnnotatedText() {
       void queryClient.invalidateQueries({ queryKey: ['reslinks'] });
       void queryClient.invalidateQueries({ queryKey: ['documents'] });
     },
+  });
+}
+
+/**
+ * Revokes a selection. Nothing that was synced is touched — a sync set names caves, it never owned
+ * any of them — so what this ends is a device's licence to keep asking for them.
+ */
+export function useDeleteSyncSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/sync/sets/{id}', { params: { path: { id } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.syncSets }),
   });
 }
