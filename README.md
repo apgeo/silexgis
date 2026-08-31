@@ -11,6 +11,10 @@ Previous versions:
 - **v1** (PHP/MySQL/OpenLayers 3) — live at [speosilex.ro/silexgis](https://speosilex.ro/silexgis/en/index.php)
 - **v2** (2022, React/Laravel, partial) — archived on the [`v2-archive`](../../tree/v2-archive) branch
 
+**Using it?** The handbook for cavers, archivists and whoever runs the installation is
+**[docs/user-guide/](docs/user-guide/README.md)** — what the application is, the workflows,
+and a page per feature. The list below is the summary.
+
 ## Features
 
 - **Cave registry** — caves, entrances with precise coordinates, taxonomies, morphometry,
