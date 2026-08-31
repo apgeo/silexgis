@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutOutlined } from '@ant-design/icons';
 import { Alert, Button, Popover, Result, Spin, Typography } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { useFeatureTypes, useMapConfig, useMapLayers } from '../../api/hooks.ts';
+import { useFeatureTypes, useMapConfig, useMapLayers, useRasterMaps } from '../../api/hooks.ts';
 import {
   onFeatureTypeCatalogChanged,
   setFeatureTypeCatalog,
 } from '../../map/featureTypeCatalog.ts';
 import { ANCHORED_TO_SURFACE, type Altitude3DPlacement } from '../../scene3d/altitude3d.ts';
-import { baseImageryLayerId, syncBaseImagery } from '../../scene3d/baseImagery3d.ts';
+import { baseImageryLayerId, syncBaseImagery, syncTileOverlayImagery } from '../../scene3d/baseImagery3d.ts';
+import { syncRasterImagery } from '../../scene3d/rasterOverlay3d.ts';
 import {
   applyCamera3D,
   readCamera3D,
@@ -244,6 +245,44 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // Nothing moved the camera, and the scene only draws when asked to.
     engine.requestRender();
   }, [layers, activeBaseId, engineVersion]);
+
+  // ---- catalogue overlays and this installation's own georeferenced maps ----
+
+  const visibleTileOverlayIds = useWorkspaceStore((s) => s.visibleTileOverlayIds);
+  const setTileOverlayVisible = useWorkspaceStore((s) => s.setTileOverlayVisible);
+  const tileOverlayOpacity = useWorkspaceStore((s) => s.tileOverlayOpacity);
+  const setTileOverlayOpacity = useWorkspaceStore((s) => s.setTileOverlayOpacity);
+  const visibleRasterIds = useWorkspaceStore((s) => s.visibleRasterIds);
+  const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
+  const rasterOpacity = useWorkspaceStore((s) => s.rasterOpacity);
+  // The same page size the flat map asks for, so the two views offer the same list.
+  const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
+  const rasters = useMemo(() => rasterPage?.items ?? [], [rasterPage]);
+
+  // After the basemap effect above and never before it, because a globe composites its imagery in
+  // the order the layers were added: an overlay created first would be drawn under an opaque
+  // picture of the ground, which nothing reports and nothing on screen explains.
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || !layers) {
+      return;
+    }
+    syncTileOverlayImagery(engine, layers, new Set(visibleTileOverlayIds), tileOverlayOpacity);
+    engine.requestRender();
+  }, [layers, visibleTileOverlayIds, tileOverlayOpacity, engineVersion, activeBaseId]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) {
+      return;
+    }
+    // Flattening a raster takes seconds and touches a second drawing context, so this is the one
+    // imagery effect that is asynchronous. Nothing is awaited by the caller: the scene is usable
+    // throughout and each sheet appears when it is ready.
+    void syncRasterImagery(engine, rasters, new Set(visibleRasterIds), rasterOpacity).then(() =>
+      engineRef.current?.requestRender(),
+    );
+  }, [rasters, visibleRasterIds, rasterOpacity, engineVersion]);
 
   // ---- what a viewer can turn off, fade and cut into ----
 
@@ -550,7 +589,16 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // ---- the ground's elevation ----
 
   /** Why the configured elevation model is not being drawn, when one is configured and is not. */
-  const [terrainProblem, setTerrainProblem] = useState<TerrainSourceProblem>();
+  /**
+   * What is wrong with the elevation source this installation named, and whether a second source
+   * was drawn in its place. Two facts rather than one because they answer different people: the
+   * problem is for whoever repairs the configuration, the fallback is for whoever is looking at
+   * the screen and needs to know whether the ground under the caves is real.
+   */
+  const [terrainProblem, setTerrainProblem] = useState<{
+    problem: TerrainSourceProblem;
+    fellBack: boolean;
+  }>();
   /**
    * Where surveyed altitudes go. It follows what is actually drawn rather than what is configured:
    * a cave placed at its real altitude over a globe that turned out to have no relief on it would
@@ -559,6 +607,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const [placement, setPlacement] = useState<Altitude3DPlacement>(ANCHORED_TO_SURFACE);
 
   const terrain = mapConfig?.terrain;
+  const terrainFallback = mapConfig?.terrainFallback;
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -582,45 +631,69 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // the sentence on screen sends the operator to look at the wrong thing entirely.
     const refuse = (problem: TerrainSourceProblem) => {
       void engine.setTerrainSource(undefined);
-      setTerrainProblem(problem);
+      setTerrainProblem({ problem, fellBack: false });
       setPlacement(ANCHORED_TO_SURFACE);
     };
+
+    // In preference order: what this installation named, then whatever whole pyramid it has of
+    // its own. The second is almost always absent — it exists only when configuration named an
+    // address AND a checked build sits at a different one, which is the shape of a stale
+    // configuration line outliving the setup it described.
+    const candidates = [terrain, ...(terrainFallback ? [terrainFallback] : [])];
 
     void (async () => {
       // Looked at before the engine is handed it, and this order is the whole point. A pyramid
       // served in a form the engine cannot parse produces a globe with no ground, every tile
       // answering 200 and not one error anywhere — so the only way anybody finds out is to check
       // first and refuse. Refusing leaves the ordinary smooth globe, which works.
-      const problem = await checkTerrainSource(terrain.url);
-      if (cancelled) {
-        return;
-      }
-      if (problem) {
-        refuse(problem);
-        return;
-      }
-      try {
-        await engine.setTerrainSource({
-          url: terrain.url,
-          ...(terrain.attribution ? { attribution: terrain.attribution } : {}),
-        });
-      } catch {
+      //
+      // Every candidate is checked the same way, and the verdict reported is the FIRST one's.
+      // That is deliberate: falling back keeps the scene usable, but the thing an operator has to
+      // repair is the source they configured, and reporting the fallback's verdict — or none at
+      // all, because the fallback worked — is how a broken configuration line survives for months.
+      let firstProblem: TerrainSourceProblem | undefined;
+      for (const candidate of candidates) {
+        const problem = await checkTerrainSource(candidate.url);
+        if (cancelled) {
+          return;
+        }
+        if (problem) {
+          firstProblem ??= problem;
+          continue;
+        }
+        try {
+          await engine.setTerrainSource({
+            url: candidate.url,
+            ...(candidate.attribution ? { attribution: candidate.attribution } : {}),
+          });
+        } catch {
+          if (cancelled) {
+            return;
+          }
+          firstProblem ??= 'unreachable';
+          continue;
+        }
         if (!cancelled) {
-          refuse('unreachable');
+          // Only now, and only because the ground is really there: the correction comes from the
+          // server, which resolved it from what THIS source says its heights mean. Taking it from
+          // the configured source while drawing the fallback's ground is the forty-metre error
+          // this whole chain of offsets exists to prevent.
+          setPlacement({ absolute: true, offsetM: candidate.surveyHeightOffsetM });
+          // A source that was fallen back to is still a source that failed. The notice stays up,
+          // naming what went wrong with the one the operator has to fix.
+          setTerrainProblem(firstProblem ? { problem: firstProblem, fellBack: true } : undefined);
         }
         return;
       }
-      if (!cancelled) {
-        // Only now, and only because the ground is really there: the correction comes from the
-        // server, which resolved it from what the source says its heights mean.
-        setPlacement({ absolute: true, offsetM: terrain.surveyHeightOffsetM });
+      if (!cancelled && firstProblem) {
+        refuse(firstProblem);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [terrain, engineVersion]);
+  }, [terrain, terrainFallback, engineVersion]);
 
   // Applied through its own effect rather than from the one above, so that a scene rebuilt — or a
   // second view taking the surface over — comes back with the caves where the ground is instead of
@@ -739,7 +812,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // The fourth is not about the data at all: this installation was configured with an elevation
     // model that cannot be drawn, and the globe a viewer is looking at is the smooth one. Said
     // here because there is nowhere else it would ever show up.
-    terrainProblem ? t(terrainProblemMessage(terrainProblem)) : undefined,
+    terrainProblem
+      ? t(terrainProblemMessage(terrainProblem.problem, terrainProblem.fellBack))
+      : undefined,
   ].filter((notice): notice is string => notice !== undefined);
 
   return (
@@ -823,6 +898,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
                 onBaseChange={setActiveBaseId}
                 baseOpacity={baseOpacity}
                 onBaseOpacityChange={setBaseOpacity}
+                visibleTileOverlayIds={visibleTileOverlayIds}
+                onTileOverlayVisibleChange={setTileOverlayVisible}
+                tileOverlayOpacity={tileOverlayOpacity}
+                onTileOverlayOpacityChange={setTileOverlayOpacity}
+                rasters={rasters}
+                visibleRasterIds={visibleRasterIds}
+                onRasterVisibleChange={setRasterVisible}
                 overlayVisible={overlayVisible}
                 onOverlayVisibleChange={setOverlayVisible}
                 overlayOpacity={overlayOpacity}

@@ -25,14 +25,22 @@ export function cutawayPauseMessage(pausedBy: Scene3DCutawayPause): string {
  * ordinary smooth globe, which works — but somebody who can fix it will eventually look, and the
  * difference between "it is not where you said" and "your web server is describing the files
  * wrongly" is the whole of the fix.
+ *
+ * <p><code>fellBack</code> says a second source was drawn after this one was refused, which changes
+ * what the viewer is looking at without changing what is broken. The notice stays up either way:
+ * a configured source that silently stopped being used is exactly how a stale configuration line
+ * outlives the setup it described.</p>
  */
-export function terrainProblemMessage(problem: TerrainSourceProblem): string {
-  switch (problem) {
-    case 'unreachable':
-      return 'scene3d.terrainUnreachable';
-    case 'encodingMismatch':
-      return 'scene3d.terrainEncodingMismatch';
-    default:
-      return 'scene3d.terrainMalformed';
-  }
+export function terrainProblemMessage(problem: TerrainSourceProblem, fellBack = false): string {
+  const key =
+    problem === 'unreachable'
+      ? 'terrainUnreachable'
+      : problem === 'encodingMismatch'
+        ? 'terrainEncodingMismatch'
+        : 'terrainMalformed';
+  // The diagnosis is the same either way; the consequence is not, and saying "the ground is shown
+  // as a smooth globe" over ground that is visibly there is the kind of wrongness that teaches a
+  // reader to stop believing the notices. Six keys rather than a composed sentence because the two
+  // halves decline together in Romanian.
+  return `scene3d.${key}${fellBack ? 'FellBack' : ''}`;
 }
