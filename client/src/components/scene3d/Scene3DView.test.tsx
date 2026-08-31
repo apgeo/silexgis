@@ -20,6 +20,11 @@ vi.mock('../../api/hooks.ts', () => ({
   useMapLayers: () => ({ data: mapLayers }),
   useMapConfig: () => ({ data: mapConfig }),
   useFeatureTypes: () => ({ data: featureTypes }),
+  // Named for the same reason as fetchSurveyModels below: the factory replaces the whole module,
+  // so an unnamed export is not an empty answer but a property access that raises during render.
+  // This installation has no georeferenced maps in these tests, which is the case the scene must
+  // handle without asking for one.
+  useRasterMaps: () => ({ data: undefined }),
   fetchCenterlineFeatures: (...args: unknown[]) => {
     centerlineRequests.push(args);
     return Promise.resolve(centerlineResponse);

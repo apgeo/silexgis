@@ -80,6 +80,26 @@ export interface Scene3DImageryOptions {
   opacity?: number;
 }
 
+/**
+ * One already-rendered picture draped over a stated patch of ground — a scanned survey sheet, an
+ * old cadastral map, anything the 2D view calls a georeferenced map.
+ *
+ * A single image rather than a tile template, because that is what these are: the source is one
+ * cloud-optimised GeoTIFF, and the 2D map reads it directly with a WebGL tile layer that has no
+ * counterpart in a globe engine. What is handed over here is that raster already flattened to a
+ * picture, with the ground it covers stated in degrees.
+ */
+export interface Scene3DImageOverlayOptions {
+  /** The picture, as anything an `<img>` accepts — including a `data:` or `blob:` URL. */
+  imageUrl: string;
+  /** The ground it covers: west, south, east, north, in degrees. */
+  bounds: Scene3DBounds;
+  attribution?: string;
+  visible?: boolean;
+  /** 0..1; 1 is fully opaque. */
+  opacity?: number;
+}
+
 // ---- lifecycle --------------------------------------------------------------
 
 export interface Scene3DLifecycle {
@@ -146,6 +166,11 @@ export interface Scene3DLifecycle {
  */
 export interface Scene3DImagery {
   addImageryLayer(id: string, options: Scene3DImageryOptions): void;
+  /**
+   * Adds a single picture pinned to a rectangle of ground. Same id space as the tiled layers, so
+   * a caller holds one list and the ordering rules are the same for both.
+   */
+  addImageOverlayLayer(id: string, options: Scene3DImageOverlayOptions): void;
   removeImageryLayer(id: string): void;
   hasImageryLayer(id: string): boolean;
   /** Ids of the imagery layers currently in the scene, bottom→top. */

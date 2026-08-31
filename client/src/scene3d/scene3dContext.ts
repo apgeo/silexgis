@@ -40,6 +40,7 @@ import {
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   Transforms,
+  SingleTileImageryProvider,
   UrlTemplateImageryProvider,
   VerticalOrigin,
   WallGeometry,
@@ -70,6 +71,7 @@ import type {
   Scene3DCameraState,
   Scene3DCore,
   Scene3DCutawayFootprint,
+  Scene3DImageOverlayOptions,
   Scene3DImageryOptions,
   Scene3DMarker,
   Scene3DModelAnchor,
@@ -112,6 +114,13 @@ import type {
 Ion.defaultAccessToken = '';
 
 /** Southern Carpathians, the same opening view the 2D workspace map uses. */
+/**
+ * The size a georeferenced picture is rasterised to, and therefore the size the scene is told to
+ * expect. Stated once here so the rasteriser and the engine cannot disagree about it — they would
+ * disagree silently, as an image stretched to the wrong corner of its own footprint.
+ */
+const SINGLE_TILE_SIZE = 2048;
+
 const DEFAULT_LONGITUDE = 25.3;
 const DEFAULT_LATITUDE = 45.7;
 const DEFAULT_ZOOM = 8;
@@ -646,6 +655,27 @@ class CesiumScene3D implements Scene3DCore {
       // Nothing in this application picks features out of a raster basemap, and leaving it on
       // invites a request to a per-tile feature-info URL the catalog never configured.
       enablePickFeatures: false,
+    });
+    const layer = this.widget.scene.imageryLayers.addImageryProvider(provider);
+    layer.show = options.visible ?? true;
+    layer.alpha = options.opacity ?? 1;
+    this.imageryById.set(id, layer);
+  }
+
+  addImageOverlayLayer(id: string, options: Scene3DImageOverlayOptions): void {
+    if (this.imageryById.has(id)) {
+      return;
+    }
+    const [west, south, east, north] = options.bounds;
+    const provider = new SingleTileImageryProvider({
+      url: options.imageUrl,
+      rectangle: Rectangle.fromDegrees(west, south, east, north),
+      // The engine would otherwise fetch the image once purely to measure it, before fetching it
+      // again to draw it. These are pinned to a rectangle that came from the raster's own
+      // footprint, so its pixel size tells the scene nothing it does not already know.
+      tileWidth: SINGLE_TILE_SIZE,
+      tileHeight: SINGLE_TILE_SIZE,
+      credit: options.attribution ? new Credit(options.attribution, true) : undefined,
     });
     const layer = this.widget.scene.imageryLayers.addImageryProvider(provider);
     layer.show = options.visible ?? true;
