@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+  The tile sources this installation offers, in the order they are listed.
+
+  Read once when the application starts. Entries are matched to the catalogue by name: an entry
+  here replaces the stored copy of the source with that name, and a stored source this file does
+  not name is left alone. Editing this file and restarting is the whole of the workflow.
+
+  Point somewhere else with  SILEXGIS__MapLayers__CatalogPath=/path/to/your.xml  to keep your own
+  catalogue outside the image; the file shipped here is then not read at all.
+
+  ATTRIBUTES
+    name          Required. The catalogue key, and what the layer selector shows.
+    url           Required. XYZ template with {z}/{x}/{y}. Some services order it {z}/{y}/{x}.
+    group         Heading to list it under. Groups collapse in the panel; ungrouped entries sit
+                  at the top, always open.
+    attribution   Credit shown on the map. Most of these sources REQUIRE it — it is not a nicety.
+    base          true (default) for a basemap, one at a time; false for an overlay drawn on top
+                  of whichever basemap is chosen.
+    default       The basemap a viewer who has chosen nothing gets. Exactly one should have it.
+    enabled       false ships the entry declared but switched off. Used for sources whose terms
+                  forbid the way this application would consume them — see the last group.
+    minZoom       Lowest zoom the source holds tiles for. Default 0.
+    maxZoom       Highest. Default 19. Getting this WRONG IS VISIBLE: a tile server asked past its
+                  range answers 404 for every tile at once, and the map goes blank on zoom-in,
+                  which reads as the application breaking rather than as the source ending.
+    apiKey        Names a key set as SILEXGIS__MapLayers__ApiKeys__<name>. The url must contain
+                  {apikey} where it goes. An entry whose key is not set is not published at all,
+                  rather than published with the placeholder still in it — a url like that answers
+                  401 for every tile, which on screen is indistinguishable from a source that is
+                  simply down.
+
+  EVERY maxZoom BELOW WAS MEASURED, not copied from documentation: each source was asked for a
+  tile over Romanian karst (22.85E 46.55N) at every zoom from 10 to 20, and the value here is the
+  last zoom that answered with real data rather than a placeholder or a 404. Several disagree with
+  what their own documentation claims, and two candidate sources were dropped outright because the
+  measurement contradicted them:
+    - Wikimedia Maps answers 403 to anything that is not a Wikimedia project.
+    - Esri World Terrain Base answers a 2521-byte "no data" placeholder at every zoom here.
+  Re-measure before changing one of these, and prefer measuring your own area of interest.
+-->
+<silexgis-map-layers version="1">
+
+  <!-- ============================ General purpose ============================ -->
+
+  <layer name="OpenStreetMap"
+         group="General"
+         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+         attribution="© OpenStreetMap contributors"
+         default="true"
+         maxZoom="19" />
+
+  <layer name="OpenStreetMap Humanitarian"
+         group="General"
+         url="https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
+         attribution="© OpenStreetMap contributors, tiles by Humanitarian OSM Team"
+         maxZoom="20" />
+
+  <layer name="OpenStreetMap France"
+         group="General"
+         url="https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png"
+         attribution="© OpenStreetMap contributors, tiles by OpenStreetMap France"
+         maxZoom="20" />
+
+  <!-- Muted basemaps: worth having because cave data is drawn ON TOP of the basemap, and a
+       busy one makes an entrance marker hard to see. -->
+  <layer name="Carto Positron (light)"
+         group="General"
+         url="https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+         attribution="© OpenStreetMap contributors © CARTO"
+         maxZoom="20" />
+
+  <layer name="Carto Dark Matter"
+         group="General"
+         url="https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+         attribution="© OpenStreetMap contributors © CARTO"
+         maxZoom="20" />
+
+  <layer name="Carto Voyager"
+         group="General"
+         url="https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+         attribution="© OpenStreetMap contributors © CARTO"
+         maxZoom="20" />
+
+  <!-- ============================== Topographic ============================== -->
+  <!-- The group that matters most here: karst is read off relief and contours. -->
+
+  <layer name="OpenTopoMap"
+         group="Topographic"
+         url="https://tile.opentopomap.org/{z}/{x}/{y}.png"
+         attribution="© OpenStreetMap contributors, SRTM | © OpenTopoMap (CC-BY-SA)"
+         maxZoom="17" />
+
+  <layer name="Esri World Topographic"
+         group="Topographic"
+         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"
+         attribution="Esri, HERE, Garmin, Intermap, USGS, METI/NASA, and the GIS User Community"
+         maxZoom="18" />
+
+  <layer name="Freemap Outdoor"
+         group="Topographic"
+         url="https://outdoor.tiles.freemap.sk/{z}/{x}/{y}.jpeg"
+         attribution="© OpenStreetMap contributors, tiles by Freemap Slovakia (CC-BY-SA)"
+         maxZoom="19" />
+
+  <layer name="CyclOSM"
+         group="Topographic"
+         url="https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png"
+         attribution="© OpenStreetMap contributors, tiles by CyclOSM, hosted by OpenStreetMap France"
+         maxZoom="20" />
+
+  <!-- ================================ Imagery ================================ -->
+
+  <layer name="Esri World Imagery"
+         group="Imagery"
+         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+         attribution="Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+         maxZoom="18" />
+
+  <layer name="Esri World Street Map"
+         group="Imagery"
+         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+         attribution="Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan"
+         maxZoom="18" />
+
+  <!-- Cloud-free composite. Coarser than the Esri imagery but never obscured, which is what makes
+       it useful for a doline survey where the one clear pass over your area is a decade old. -->
+  <layer name="Sentinel-2 cloudless"
+         group="Imagery"
+         url="https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg"
+         attribution="Sentinel-2 cloudless 2020 by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2020)"
+         maxZoom="18" />
+
+  <!-- ============================ Relief and terrain =========================== -->
+
+  <layer name="Esri Shaded Relief"
+         group="Relief"
+         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}"
+         attribution="Esri, NASA, NGA, USGS"
+         maxZoom="13" />
+
+  <layer name="Esri National Geographic"
+         group="Relief"
+         url="https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}"
+         attribution="National Geographic, Esri, DeLorme, HERE, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC"
+         maxZoom="12" />
+
+  <!-- Elevation encoded as colour rather than drawn as a picture, so it looks like noise on
+       screen. Off by default for that reason; switched on it is a quick way to see whether a
+       height reading is plausible without leaving the map. -->
+  <layer name="Terrarium elevation (raw)"
+         group="Relief"
+         url="https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+         attribution="Elevation tiles by Mapzen and contributors, hosted by AWS Open Data"
+         enabled="false"
+         maxZoom="15" />
+
+  <!-- ================================ Overlays =============================== -->
+  <!-- Drawn on top of whichever basemap is chosen, several at once. Mostly transparent: a tile
+       with nothing in it is correct, not a failure. -->
+
+  <layer name="Hiking routes"
+         group="Overlays"
+         base="false"
+         url="https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png"
+         attribution="© waymarkedtrails.org, © OpenStreetMap contributors (CC-BY-SA)"
+         maxZoom="18" />
+
+  <layer name="Cycling routes"
+         group="Overlays"
+         base="false"
+         url="https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png"
+         attribution="© waymarkedtrails.org, © OpenStreetMap contributors (CC-BY-SA)"
+         maxZoom="18" />
+
+  <layer name="Mountain biking routes"
+         group="Overlays"
+         base="false"
+         url="https://tile.waymarkedtrails.org/mtb/{z}/{x}/{y}.png"
+         attribution="© waymarkedtrails.org, © OpenStreetMap contributors (CC-BY-SA)"
+         maxZoom="18" />
+
+  <layer name="Ski routes"
+         group="Overlays"
+         base="false"
+         url="https://www.opensnowmap.org/pistes/{z}/{x}/{y}.png"
+         attribution="© OpenSnowMap.org, © OpenStreetMap contributors (CC-BY-SA)"
+         maxZoom="18" />
+
+  <layer name="Railways"
+         group="Overlays"
+         base="false"
+         url="https://a.tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png"
+         attribution="© OpenRailwayMap, © OpenStreetMap contributors (CC-BY-SA)"
+         maxZoom="19" />
+
+  <!-- ========================= Needing an access key ========================== -->
+  <!--
+    None of these appear until the matching key is set. Register with the provider, then set e.g.
+
+      SILEXGIS__MapLayers__ApiKeys__Thunderforest=your-key-here
+
+    in the environment (a line in deploy/.env is the usual place). The key is substituted into the
+    url when the catalogue is published, so it is never stored in the database and never written
+    into this file — which is why this file can be committed and shared as it stands.
+
+    The key does end up in the browser, because the browser is what fetches the tiles. That is
+    inherent to XYZ tiles and true of every client of these services; restrict the key by referer
+    in the provider's own console if they offer it.
+  -->
+
+  <layer name="Thunderforest Outdoors"
+         group="Needs an access key"
+         url="https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey={apikey}"
+         apiKey="Thunderforest"
+         attribution="Maps © Thunderforest, Data © OpenStreetMap contributors"
+         maxZoom="22" />
+
+  <layer name="Thunderforest Landscape"
+         group="Needs an access key"
+         url="https://tile.thunderforest.com/landscape/{z}/{x}/{y}.png?apikey={apikey}"
+         apiKey="Thunderforest"
+         attribution="Maps © Thunderforest, Data © OpenStreetMap contributors"
+         maxZoom="22" />
+
+  <layer name="Thunderforest Cycle"
+         group="Needs an access key"
+         url="https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey={apikey}"
+         apiKey="Thunderforest"
+         attribution="Maps © Thunderforest, Data © OpenStreetMap contributors"
+         maxZoom="22" />
+
+  <layer name="Thunderforest Transport"
+         group="Needs an access key"
+         url="https://tile.thunderforest.com/transport/{z}/{x}/{y}.png?apikey={apikey}"
+         apiKey="Thunderforest"
+         attribution="Maps © Thunderforest, Data © OpenStreetMap contributors"
+         maxZoom="22" />
+
+  <layer name="Stadia Outdoors"
+         group="Needs an access key"
+         url="https://tiles.stadiamaps.com/tiles/outdoors/{z}/{x}/{y}.png?api_key={apikey}"
+         apiKey="Stadia"
+         attribution="© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors"
+         maxZoom="20" />
+
+  <layer name="Stamen Terrain"
+         group="Needs an access key"
+         url="https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key={apikey}"
+         apiKey="Stadia"
+         attribution="© Stadia Maps, © Stamen Design, © OpenMapTiles, © OpenStreetMap contributors"
+         maxZoom="18" />
+
+  <layer name="MapTiler Topo"
+         group="Needs an access key"
+         url="https://api.maptiler.com/maps/topo-v2/{z}/{x}/{y}.png?key={apikey}"
+         apiKey="MapTiler"
+         attribution="© MapTiler © OpenStreetMap contributors"
+         maxZoom="20" />
+
+  <layer name="MapTiler Satellite"
+         group="Needs an access key"
+         url="https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key={apikey}"
+         apiKey="MapTiler"
+         attribution="© MapTiler © OpenStreetMap contributors"
+         maxZoom="20" />
+
+  <layer name="Mapbox Outdoors"
+         group="Needs an access key"
+         url="https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/{z}/{x}/{y}?access_token={apikey}"
+         apiKey="Mapbox"
+         attribution="© Mapbox © OpenStreetMap contributors"
+         maxZoom="22" />
+
+  <!-- ====================== Restricted by their own terms ===================== -->
+  <!--
+    SHIPPED SWITCHED OFF, AND THAT IS THE POINT. These endpoints work, and they are in every
+    QGIS layer collection passed around, but fetching them as plain XYZ tiles is not a use their
+    terms of service permit: Google's require their tiles be used through the Google Maps APIs,
+    which this is not. Switching one on is a decision about YOUR installation's licensing, taken
+    by somebody who has read the terms — not a default this project can ship on anyone's behalf.
+
+    Bing is deliberately ABSENT rather than present-and-disabled. Its tile addresses are keyed by
+    a quadkey rather than by z/x/y, which the tile source used here cannot build; an entry for it
+    would be one that could not work even when enabled, which is worse than no entry at all.
+  -->
+
+  <layer name="Google Road"
+         group="Restricted terms of use"
+         url="https://mt1.google.com/vt/lyrs=m&amp;x={x}&amp;y={y}&amp;z={z}"
+         attribution="Map data © Google"
+         enabled="false"
+         maxZoom="20" />
+
+  <layer name="Google Satellite"
+         group="Restricted terms of use"
+         url="https://mt1.google.com/vt/lyrs=s&amp;x={x}&amp;y={y}&amp;z={z}"
+         attribution="Imagery © Google"
+         enabled="false"
+         maxZoom="20" />
+
+  <layer name="Google Hybrid"
+         group="Restricted terms of use"
+         url="https://mt1.google.com/vt/lyrs=y&amp;x={x}&amp;y={y}&amp;z={z}"
+         attribution="Map data and imagery © Google"
+         enabled="false"
+         maxZoom="20" />
+
+  <layer name="Google Terrain"
+         group="Restricted terms of use"
+         url="https://mt1.google.com/vt/lyrs=p&amp;x={x}&amp;y={y}&amp;z={z}"
+         attribution="Map data © Google"
+         enabled="false"
+         maxZoom="20" />
+
+</silexgis-map-layers>

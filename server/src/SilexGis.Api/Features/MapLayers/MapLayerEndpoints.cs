@@ -8,9 +8,20 @@ using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.MapLayers;
 
+/// <param name="GroupName">
+/// The heading to list this source under, or null for the ungrouped top of the list. Presentation
+/// only — the client decides what a group looks like and which ones start collapsed.
+/// </param>
+/// <param name="MinZoom">Lowest zoom the source holds tiles for.</param>
+/// <param name="MaxZoom">
+/// Highest. Sent to the client so the layer stops being drawn rather than asking for tiles that
+/// are not there: past its range a tile server answers 404 for the whole viewport at once, and a
+/// map that goes blank on zoom-in reads as the application breaking.
+/// </param>
 public sealed record MapLayerDto(
     long Id, string Name, MapLayerKind LayerKind, string UrlTemplate, string? Options,
-    string? Attribution, bool IsBase, bool IsDefault, int SortOrder);
+    string? Attribution, string? GroupName, int MinZoom, int MaxZoom,
+    bool IsBase, bool IsDefault, int SortOrder);
 
 /// <summary>
 /// The base and overlay layers the map workspace offers. Every account reads them
@@ -48,7 +59,8 @@ public static class MapLayerEndpoints
             .OrderBy(l => l.SortOrder)
             .Select(l => new MapLayerDto(
                 l.Id, l.Name, l.LayerKind, l.UrlTemplate, l.Options,
-                l.Attribution, l.IsBase, l.IsDefault, l.SortOrder))
+                l.Attribution, l.GroupName, l.MinZoom, l.MaxZoom,
+                l.IsBase, l.IsDefault, l.SortOrder))
             .ToListAsync(ct));
     }
 }

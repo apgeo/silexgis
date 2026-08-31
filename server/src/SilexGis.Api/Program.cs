@@ -142,6 +142,8 @@ try
         .BindConfiguration(AccessOptions.SectionName);
     builder.Services.AddOptions<MapOptions>()
         .BindConfiguration(MapOptions.SectionName);
+    builder.Services.AddOptions<MapLayerOptions>()
+        .BindConfiguration(MapLayerOptions.SectionName);
     builder.Services.AddOptions<TerrainOptions>()
         .BindConfiguration(TerrainOptions.SectionName);
     // Checked while starting rather than when first used: an unresolvable working system would
@@ -344,7 +346,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.Database.MigrateAsync();
         await TaxonomySeeder.SeedAsync(db);
-        await MapLayerSeeder.SeedAsync(db);
+        await MapLayerStartup.SeedAsync(app.Environment.ContentRootPath, scope.ServiceProvider, db);
         await TermRuleSeeder.SeedAsync(db);
         // Permission groups must exist before the bootstrap admin joins Full Administrators.
         await PermissionGroupSeeder.SeedAsync(db);
@@ -442,3 +444,50 @@ finally
 
 /// <summary>Exposes the implicit entry-point class to WebApplicationFactory-based tests.</summary>
 public partial class Program;
+
+
+/// <summary>
+/// Reading this installation's tile-source catalogue on start, and saying out loud what it found.
+/// </summary>
+/// <remarks>
+/// Every outcome here is announced, including the boring ones, because the catalogue's failures are
+/// all invisible on screen: a source withheld for a missing key, an entry dropped for a typo and a
+/// source the operator never added at all produce exactly the same thing — a layer list one item
+/// shorter than expected — and nobody counts the layer list. The log line is the only place the
+/// difference exists.
+/// </remarks>
+internal static class MapLayerStartup
+{
+    public static async Task SeedAsync(string contentRoot, IServiceProvider services, SilexGisDbContext db)
+    {
+        var options = services.GetRequiredService<IOptions<MapLayerOptions>>().Value;
+        var path = options.ResolvedCatalogPath(contentRoot);
+
+        string xml;
+        try
+        {
+            xml = await File.ReadAllTextAsync(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Not fatal, and deliberately not. An installation whose catalogue file has gone
+            // missing still has every layer it seeded on a previous start, so the map keeps
+            // working; refusing to start would turn a cosmetic problem into an outage.
+            Log.Warning(ex, "Map layer catalogue could not be read from {Path}; the stored catalogue is unchanged", path);
+            return;
+        }
+
+        var report = await MapLayerSeeder.SeedAsync(xml, options.ApiKeys, db);
+        foreach (var problem in report.Problems)
+        {
+            Log.Warning("Map layer catalogue {Path}: {Problem}", path, problem);
+        }
+
+        Log.Information(
+            "Map layer catalogue read from {Path}: {Added} added, {Updated} updated, {Withheld} withheld for want of an access key",
+            path,
+            report.Added,
+            report.Updated,
+            report.WithheldForMissingKey);
+    }
+}
