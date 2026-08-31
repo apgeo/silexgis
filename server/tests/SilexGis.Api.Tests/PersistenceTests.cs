@@ -6,6 +6,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
@@ -206,8 +207,12 @@ public sealed class PersistenceTests : IDisposable
         featureTypeOrderAfter.ShouldBe(featureTypeOrderBefore);
 
         // The landing kinds sort after every kind that shipped before them, in list order.
+        // Anchored on the work area rather than on the building it once followed: the work area
+        // was appended to the palette by other work and now stands between them, and an anchor
+        // naming a kind with anything after it asserts the gap rather than the rule.
         var featureTypeByCode = featureTypeOrderAfter.ToDictionary(x => x.Code, x => x.SortOrder);
-        var lastShippedKind = featureTypeByCode["building"];
+        var lastShippedKind = featureTypeByCode[FeatureTypeSeeds.WorkArea];
+        featureTypeByCode["building"].ShouldBeLessThan(lastShippedKind);
         featureTypeByCode["cave_area"].ShouldBe(lastShippedKind + 10);
         featureTypeByCode["cave_place"].ShouldBe(lastShippedKind + 20);
         featureTypeByCode["surface_area"].ShouldBe(lastShippedKind + 30);
