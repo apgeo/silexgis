@@ -5,6 +5,8 @@ import Overlay from 'ol/Overlay';
 import { ENTRANCE_LAYER_ID } from './entranceLayer.ts';
 import { entranceLabel, surfaceFeatureLabel } from './featureLabels.ts';
 import { SURFACE_FEATURE_LAYER_ID } from './featureLayer.ts';
+import { GEOFILE_LAYER_PREFIX } from './geofileLayers.ts';
+import { geofileLabel } from './geofileProperties.ts';
 import { isHitTestable } from './hitTesting.ts';
 
 /**
@@ -44,6 +46,17 @@ export function attachHoverTooltip(map: Map): () => void {
         if (layerId === SURFACE_FEATURE_LAYER_ID) {
           clickable = true;
           label = surfaceFeatureLabel(props);
+          return true;
+        }
+        // A point of an imported file. Named by the server, from the same rule that decides what
+        // an import proposes to call it — so a waypoint reads the same here, in the review screen
+        // and in the object it eventually becomes.
+        //
+        // Clickable even when the file gave it no name: the click opens the property list, and a
+        // row with no name is exactly the row somebody needs to look inside.
+        if (layerId?.startsWith(GEOFILE_LAYER_PREFIX)) {
+          clickable = true;
+          label = geofileLabel(props);
           return true;
         }
         return false;

@@ -4,8 +4,11 @@ import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
 import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
-import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
+import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
+import type { FeatureLike } from 'ol/Feature';
 import { fetchGeofileFeatureCollection, type GeofileInfo } from '../api/hooks.ts';
+import { declutterOption } from './declutter.ts';
+import { GEOFILE_LABEL_PROPERTY } from './geofileProperties.ts';
 import { getOverlayGroup } from './mapContext.ts';
 
 // One vector layer per visible geofile, keyed by geofile id, living in the shared
@@ -22,19 +25,89 @@ interface GeofileStyleOverrides {
   point?: string;
 }
 
-function layerStyle(overrides: GeofileStyleOverrides | null): Style {
+/**
+ * The zoom from which an imported point is drawn with its name beside it.
+ *
+ * Chosen against what the data is: at 15 a screen holds roughly a kilometre across, which is the
+ * scale at which individual waypoints stop being a cloud and start being places somebody is
+ * navigating between. Below it the names are drawn on top of one another and say nothing; above
+ * it there is room, and reading a waypoint's name without clicking it is most of why the layer is
+ * on at all.
+ *
+ * Expressed as a zoom and converted to a resolution once, because a style function is handed a
+ * resolution and asking the view for its zoom inside one is a lookup per feature per frame.
+ */
+const LABEL_FROM_ZOOM = 15;
+
+/**
+ * Web-Mercator resolution at {@link LABEL_FROM_ZOOM}: the width of one screen pixel in metres.
+ * 156543.03392804097 is the resolution at zoom 0 (the equator's circumference over 256 pixels),
+ * halving with every zoom level.
+ */
+const LABEL_RESOLUTION = 156543.03392804097 / 2 ** LABEL_FROM_ZOOM;
+
+function labelStyle(feature: FeatureLike, colour: string): Text | undefined {
+  const label = feature.get(GEOFILE_LABEL_PROPERTY) as unknown;
+  if (typeof label !== 'string' || label.trim().length === 0) {
+    return undefined;
+  }
+
+  return new Text({
+    text: label,
+    font: '12px system-ui, sans-serif',
+    offsetY: -14,
+    fill: new Fill({ color: colour }),
+    // A halo rather than a background plate: these are drawn over aerial imagery as often as over
+    // a map, and dark text on light imagery is as unreadable as light on dark. An outline is
+    // legible over both without covering the ground it sits on.
+    stroke: new Stroke({ color: 'rgba(255, 255, 255, 0.9)', width: 3 }),
+    // Only the label competes for space when decluttering is on. The marker underneath is always
+    // drawn, so switching decluttering on can never make a point disappear — it can only make its
+    // name give way to a neighbour's.
+    declutterMode: 'declutter',
+    overflow: false,
+  });
+}
+
+/**
+ * The style for one imported file's features.
+ *
+ * A function rather than a fixed style, because the label depends on both the feature (its name)
+ * and the view (whether there is room for it). Geometry other than a point is left unlabelled: a
+ * track's name would be drawn at the middle of a line that may run off both edges of the screen.
+ */
+function layerStyle(overrides: GeofileStyleOverrides | null): (feature: FeatureLike, resolution: number) => Style {
   const stroke = overrides?.stroke ?? '#2f54eb';
   const fill = overrides?.fill ?? 'rgba(47, 84, 235, 0.12)';
   const point = overrides?.point ?? overrides?.stroke ?? '#2f54eb';
-  return new Style({
+
+  // Built once and reused across every feature and every frame. A style object allocated per
+  // feature per redraw is what turns a few thousand waypoints into a map that will not pan.
+  const base = new Style({
     stroke: new Stroke({ color: stroke, width: 2 }),
     fill: new Fill({ color: fill }),
+    // An obstacle, not a competitor: the marker is ALWAYS drawn, and labels move out of its
+    // way. Left at the default, decluttering would hide overlapping markers themselves, which
+    // would mean switching it on made features vanish — the opposite of what it is for.
     image: new CircleStyle({
+      declutterMode: 'obstacle',
       radius: 5,
       fill: new Fill({ color: point }),
       stroke: new Stroke({ color: '#ffffff', width: 1.5 }),
     }),
   });
+
+  return (feature, resolution) => {
+    const labelled =
+      resolution <= LABEL_RESOLUTION && feature.getGeometry()?.getType() === 'Point'
+        ? labelStyle(feature, stroke)
+        : undefined;
+    // Assigned rather than branching between two Style objects: setText(undefined) is how a style
+    // stops carrying a label, and keeping one object means the layer is not rebuilt on every
+    // zoom step across the threshold.
+    base.setText(labelled);
+    return base;
+  };
 }
 
 function parseOverrides(geofile: GeofileInfo): GeofileStyleOverrides | null {
@@ -81,6 +154,10 @@ export function syncGeofileLayers(
       source: new VectorSource(),
       opacity,
       style: layerStyle(parseOverrides(geofile)),
+      // Read at construction because that is the only time it can be given, and read from the
+      // shared setting rather than passed in, so a file made visible while decluttering is on
+      // comes up under the same rule as everything already drawn.
+      declutter: declutterOption(),
     });
     layer.set('id', layerId);
     layer.set('name', geofile.name);
