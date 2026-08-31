@@ -40,6 +40,31 @@ public enum ImportTrackHandling
     ImportAsLine = 1,
 }
 
+/// <summary>What becomes of a point no term rule claimed.</summary>
+/// <remarks>
+/// The counterpart of <see cref="ImportTrackHandling"/> for points, and it exists for a measured
+/// reason: a rule set recognises the names a group actually writes down, and the file a GPS unit
+/// produces at the end of a season is mostly <c>WPT0142</c>. Those rows arrive proposing nothing,
+/// and a row proposing nothing cannot be selected — so "select everything and import it" quietly
+/// selects the fraction the rules happened to name, and the reviewer's only other route is to give
+/// several thousand rows a kind one row at a time. Naming the fallback once, here, is the whole of
+/// the fix, and it stays a deliberate choice rather than a default because importing every stray
+/// waypoint as a registry object is the wrong answer just as often as it is the right one.
+/// </remarks>
+public enum ImportUnmatchedPoints
+{
+    /// <summary>
+    /// Leave them for the reviewer, one at a time. What happened before this setting existed.
+    /// </summary>
+    Ignore = 0,
+
+    /// <summary>Propose a surface feature of the chosen type.</summary>
+    ImportAsSurfaceFeature = 1,
+
+    /// <summary>Propose a cave entrance of the chosen type.</summary>
+    ImportAsCaveEntrance = 2,
+}
+
 /// <summary>What the reviewer decided about one candidate.</summary>
 public enum ImportDecisionAction
 {
@@ -108,6 +133,15 @@ public sealed record ImportOptions
 
     /// <summary>Feature-type code line work becomes when <see cref="Tracks"/> imports it.</summary>
     public string? TrackFeatureTypeCode { get; init; }
+
+    /// <summary>What to propose for a point no rule claimed. See <see cref="ImportUnmatchedPoints"/>.</summary>
+    public ImportUnmatchedPoints UnmatchedPoints { get; init; } = ImportUnmatchedPoints.Ignore;
+
+    /// <summary>
+    /// Type code an unclaimed point takes when <see cref="UnmatchedPoints"/> proposes something for
+    /// it — a feature type or an entrance type, according to which kind was chosen.
+    /// </summary>
+    public string? UnmatchedTypeCode { get; init; }
 
     /// <summary>
     /// Visibility every created object starts with. Defaults to the most restrictive value

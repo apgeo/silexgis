@@ -18,6 +18,11 @@ interface Props {
   decisions: Record<string, ImportDecision>;
   selected: ReadonlySet<number>;
   onSelectedChange: (next: ReadonlySet<number>) => void;
+  /**
+   * Every row the current filter matches that something says what to become — across all pages,
+   * computed by the server. What the cross-page entries in the header menu act on.
+   */
+  selectableIds: number[];
   onDecision: (sourceId: number, decision: ImportDecision | null) => void;
   onFocus: (sourceId: number | null) => void;
   page: number;
@@ -44,6 +49,7 @@ export default function CandidateTable({
   decisions,
   selected,
   onSelectedChange,
+  selectableIds,
   onDecision,
   onFocus,
   page,
@@ -109,6 +115,38 @@ export default function CandidateTable({
         // A row nothing proposes anything for cannot be created, so it cannot be selected —
         // the reviewer gives it a kind first, which is the decision that makes it selectable.
         getCheckboxProps: (row) => ({ disabled: effectiveKind(row) === null }),
+        // The header checkbox ticks this page and only this page, which is what a table's header
+        // checkbox means everywhere and is not worth surprising anybody about. What a file of
+        // several thousand waypoints needs is the menu beside it, whose entries say how many rows
+        // they are about — because "select all" over a paged table is exactly the phrase that
+        // means two different things to the person clicking it and the table underneath.
+        selections: [
+          {
+            key: 'silexgis-all-pages',
+            text: t('vectorImport.selectAllPages', { count: selectableIds.length }),
+            onSelect: () => onSelectedChange(new Set(selectableIds)),
+          },
+          {
+            key: 'silexgis-invert-all-pages',
+            text: t('vectorImport.selectInvertPages', { count: selectableIds.length }),
+            onSelect: () => {
+              const next = new Set(selected);
+              for (const id of selectableIds) {
+                if (next.has(id)) {
+                  next.delete(id);
+                } else {
+                  next.add(id);
+                }
+              }
+              onSelectedChange(next);
+            },
+          },
+          {
+            key: 'silexgis-none',
+            text: t('vectorImport.selectNone'),
+            onSelect: () => onSelectedChange(new Set()),
+          },
+        ],
       }}
       pagination={{
         current: page,

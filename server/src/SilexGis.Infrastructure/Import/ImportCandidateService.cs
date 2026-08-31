@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
-using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Import;
+using SilexGis.Domain;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using System.Text.Json;
 
 namespace SilexGis.Infrastructure.Import;
 
@@ -102,15 +103,11 @@ public sealed record RuleHit(string RuleId, string RuleName, int Count);
 /// scan, not a re-parse, and until a batch is confirmed the registry has not moved.
 /// </para>
 /// </summary>
-public sealed class ImportCandidateService(SilexGisDbContext db, VisibleProximitySearch proximity)
+public sealed class ImportCandidateService(
+    SilexGisDbContext db,
+    VisibleProximitySearch proximity,
+    IOptions<ImportLimitOptions> limits)
 {
-    /// <summary>
-    /// How many rows one scan reads. A file larger than this is still imported and still drawn
-    /// as a layer — only the review is bounded, and the caller is told it was, because a
-    /// silently truncated candidate list reads exactly like a complete one.
-    /// </summary>
-    public const int MaxScanRows = 50_000;
-
     /// <summary>
     /// Every row of the file, classified by the rule set. The whole file rather than a page:
     /// the hit counts are an answer about the file, and filtering "by rule" or "by kind" needs
@@ -123,7 +120,7 @@ public sealed class ImportCandidateService(SilexGisDbContext db, VisibleProximit
         CancellationToken ct = default)
     {
         var totalRows = await ImportSql.CountAsync(db, geofileId, ct);
-        var rows = await ImportSql.ScanAsync(db, geofileId, MaxScanRows, ct);
+        var rows = await ImportSql.ScanAsync(db, geofileId, limits.Value.MaxScanRows, ct);
 
         var candidates = new List<CandidateSummary>(rows.Count);
         foreach (var row in rows)
@@ -230,7 +227,25 @@ public sealed class ImportCandidateService(SilexGisDbContext db, VisibleProximit
 
         if (proposal.Winner is not { } winner)
         {
-            return summary;
+            // Nothing named it. What the import was told to do with such a point applies here and
+            // nowhere else — a row a rule DID claim keeps what the rule said, so switching the
+            // fallback on can never overwrite a recognised name with a generic one.
+            return options.UnmatchedPoints switch
+            {
+                ImportUnmatchedPoints.ImportAsSurfaceFeature => summary with
+                {
+                    ProposedKind = ImportTargetKind.SurfaceFeature,
+                    ProposedFeatureTypeCode = options.UnmatchedTypeCode,
+                    ProposedName = ImportNameCleaner.WithPrefix(options.NamePrefix, attributes.Name),
+                },
+                ImportUnmatchedPoints.ImportAsCaveEntrance => summary with
+                {
+                    ProposedKind = ImportTargetKind.CaveEntrance,
+                    ProposedEntranceTypeCode = options.UnmatchedTypeCode,
+                    ProposedName = ImportNameCleaner.WithPrefix(options.NamePrefix, attributes.Name),
+                },
+                _ => summary,
+            };
         }
 
         // Stripping only ever touches the name, and only what the winning rule matched there.

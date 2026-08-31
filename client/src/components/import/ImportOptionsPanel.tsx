@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Card, Checkbox, Col, Collapse, Form, Input, Row, Select, Slider } from 'antd';
+import { Card, Checkbox, Col, Collapse, Form, Input, Row, Select, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   useCavingGroups,
+  useEntranceTypes,
   useFeatureTypes,
   useGeofileColumns,
   useTermRuleSets,
@@ -30,6 +31,7 @@ export default function ImportOptionsPanel({ options, onChange, geofileId, isDel
   const { t } = useTranslation();
   const ruleSets = useTermRuleSets();
   const featureTypes = useFeatureTypes();
+  const entranceTypes = useEntranceTypes();
   const cavingGroups = useCavingGroups();
   // Asked only of a delimited upload. Everything else names its fields inside its own rows, and
   // asking anyway would put a refused request in the browser's console on every review of a GPX.
@@ -164,6 +166,53 @@ export default function ImportOptionsPanel({ options, onChange, geofileId, isDel
                   >
                     {t('vectorImport.locationProtected')}
                   </Checkbox>
+                </Col>
+              </Row>
+            ),
+          },
+          {
+            key: 'unmatched',
+            label: t('vectorImport.optionsUnmatched'),
+            children: (
+              <Row gutter={[16, 8]}>
+                <Col xs={24}>
+                  {/* Said before the controls rather than after, because the choice looks
+                      innocuous and is not: it is what decides whether "select everything" means
+                      the whole file or the fraction the rules happened to recognise. */}
+                  <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                    {t('vectorImport.unmatchedHint')}
+                  </Typography.Paragraph>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label={t('vectorImport.unmatched')} style={{ marginBottom: 8 }}>
+                    <Select
+                      value={options.unmatchedPoints ?? 'ignore'}
+                      onChange={(value) => set('unmatchedPoints', value)}
+                      data-testid="import-unmatched"
+                      options={[
+                        { value: 'ignore', label: t('vectorImport.unmatchedIgnore') },
+                        { value: 'importAsSurfaceFeature', label: t('vectorImport.unmatchedAsFeature') },
+                        { value: 'importAsCaveEntrance', label: t('vectorImport.unmatchedAsEntrance') },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label={t('vectorImport.unmatchedKind')} style={{ marginBottom: 8 }}>
+                    <Select
+                      allowClear
+                      disabled={(options.unmatchedPoints ?? 'ignore') === 'ignore'}
+                      value={options.unmatchedTypeCode ?? undefined}
+                      onChange={(value?: string) => set('unmatchedTypeCode', value ?? null)}
+                      options={
+                        options.unmatchedPoints === 'importAsCaveEntrance'
+                          ? (entranceTypes.data ?? []).map((type) => ({ value: type.code, label: type.name }))
+                          : (featureTypes.data ?? [])
+                              .filter((type) => type.acceptedGeometryClasses.some((c) => c.includes('oint')))
+                              .map((type) => ({ value: type.code, label: type.name }))
+                      }
+                    />
+                  </Form.Item>
                 </Col>
               </Row>
             ),

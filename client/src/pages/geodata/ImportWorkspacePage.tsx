@@ -245,6 +245,7 @@ export default function ImportWorkspacePage() {
               decisions={decisions}
               selected={selected}
               onSelectedChange={setSelected}
+              selectableIds={preview.data?.selectableSourceIds ?? []}
               onDecision={setDecision}
               onFocus={setFocused}
               page={preview.data?.page ?? 1}

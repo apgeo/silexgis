@@ -61,6 +61,8 @@ public static class DependencyInjection
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Import.TermRuleSetStore>();
         services.AddScoped<Import.VisibleProximitySearch>();
+        services.Configure<Import.ImportLimitOptions>(
+            configuration.GetSection(Import.ImportLimitOptions.SectionName));
         services.AddScoped<Import.ImportCandidateService>();
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.PhotoCandidateService>();

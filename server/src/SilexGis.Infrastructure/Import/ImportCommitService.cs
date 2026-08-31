@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
-using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
+using SilexGis.Domain;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 
@@ -68,16 +69,9 @@ public sealed class ImportCommitService(
     SilexGisDbContext db,
     FeatureWriteService writer,
     ImportCandidateService candidates,
-    IAccessService access)
+    IAccessService access,
+    IOptions<ImportLimitOptions> limits)
 {
-    /// <summary>
-    /// The most a single confirmation creates. Not a storage limit — the write service
-    /// recomputes the containment closure once per created object, so a confirmation of
-    /// thousands is a slow request rather than a cheap one, and splitting it also splits the
-    /// undo unit into something a person can reason about.
-    /// </summary>
-    public const int MaxCommitItems = 1000;
-
     /// <summary>Entrance type a cave built around an imported waypoint gets when no rule said otherwise.</summary>
     private const string DefaultEntranceTypeCode = "natural";
 
@@ -94,11 +88,12 @@ public sealed class ImportCommitService(
         AccessContext ctx,
         CancellationToken ct = default)
     {
-        if (selection.Count > MaxCommitItems)
+        var maxCommitItems = limits.Value.MaxCommitItems;
+        if (selection.Count > maxCommitItems)
         {
             throw new ImportCommitException(
                 "import.selection_too_large",
-                $"A single confirmation creates at most {MaxCommitItems} objects; {selection.Count} were selected. "
+                $"A single confirmation creates at most {maxCommitItems} objects; {selection.Count} were selected. "
                 + "Confirm them in smaller batches — each one reverts on its own.");
         }
 
