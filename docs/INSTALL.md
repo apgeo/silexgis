@@ -299,6 +299,55 @@ Notes worth knowing before you turn it on:
   `SILEXGIS__Conversion__Enabled` from `.env`, or uploads keep queuing conversions for a
   service that is no longer there.
 
+## Map backgrounds
+
+The maps behind your caves — OpenStreetMap, topographic maps, aerial imagery, hiking-route overlays — are
+listed in one file, `map-layers.xml`, which the application reads when it starts. A stock installation
+comes with about thirty of them already grouped and ready to use, so most groups never need to touch it.
+
+**To add your own** — a national mapping agency's tile server, a regional topographic service — copy the
+shipped file somewhere the container can read and point at it:
+
+```
+SILEXGIS__MapLayers__CatalogPath=/data/config/map-layers.xml
+```
+
+Do that rather than editing the file inside the image, or your addition disappears the next time you
+upgrade — quietly, with the map still working and one fewer background on it than yesterday.
+
+An entry looks like this:
+
+```xml
+<layer name="My national topo"
+       group="Topographic"
+       url="https://tiles.example.gov/{z}/{x}/{y}.png"
+       attribution="© National Mapping Agency"
+       maxZoom="18" />
+```
+
+`group` decides which foldable heading it appears under in the layer panel. `base="false"` makes it an
+overlay drawn on top of whichever background is chosen, several at a time — that is how the hiking, cycling
+and ski route layers work. **`maxZoom` matters more than it looks**: a tile server asked to go closer than
+it can answers nothing for the whole screen at once, and a map that goes blank when you zoom in looks like
+the application breaking. Every value in the shipped file was measured against the real servers rather than
+copied from their documentation.
+
+**Backgrounds that need an account.** Some services — Thunderforest, Stadia Maps, MapTiler, Mapbox — need a
+key you register for. The catalogue names the key, and you supply its value:
+
+```
+SILEXGIS__MapLayers__ApiKeys__Thunderforest=your-key-here
+```
+
+That way the file itself holds no secrets and can be shared with the group next door. Until you set the
+key, those entries simply do not appear.
+
+**Backgrounds that are switched off on purpose.** Google's map and satellite tiles are in the file with
+`enabled="false"`. They work, and you will find them in every collection of layer definitions passed
+around — but using them this way is not something Google's terms permit, and that is a decision about your
+installation's licensing, not one this project can make for you. Turn one on only if you have read those
+terms and concluded it applies to you.
+
 ## Terrain (optional)
 
 By default the 3D view draws the globe as a smooth mathematical sphere. That needs nothing
@@ -1178,6 +1227,11 @@ the reasoning beside each one.
 | `SILEXGIS__Terrain__SpoolRoot` | `data/terrain/spool` (the compose stack sets `/data/terrain/spool`) | the directory the application and the terrain worker leave files for each other in. Both sides must name the same directory, on a volume they share, and both compose files already do |
 | `SILEXGIS__Terrain__BakePickupSeconds` | `300` (5 min) | how long a build waits for the worker to take its bake before deciding nothing is going to. Generous, because an image this size takes a while to start and a request left waiting costs nothing. Values outside 5 s to 1 h are brought back inside that range — `0` does **not** mean "wait indefinitely" and becomes 5 s, which reports a worker that is merely starting as absent |
 | `SILEXGIS__Terrain__BakeTimeoutSeconds` | `43200` (12 h) | how long one bake may run before it is abandoned. The queue a build runs on has no limit of its own, so this is the only one there is, and it is meant to catch a bake that has stopped making progress rather than to cap a large one. Values outside 60 s to 7 days are brought back inside that range — `0` does **not** mean "no limit" and becomes 60 s, which abandons every real bake after a minute |
+| `SILEXGIS__MapLayers__CatalogPath` | — (the file shipped in the image) | the XML file listing the tile sources this installation offers. Set it to a path outside the image — that is the only way an edit of yours survives an upgrade. Start from a copy of the shipped `map-layers.xml` |
+| `SILEXGIS__MapLayers__ApiKeys__<name>` | — | the access key a catalogue entry names, e.g. `SILEXGIS__MapLayers__ApiKeys__Thunderforest`. An entry whose key is not set is **not offered at all**, rather than offered and broken: a tile address still carrying the placeholder answers 401 for every tile, which on screen looks exactly like a source that is down |
+| `SILEXGIS__Map__MaxPoints` | `10000` | the most points one map layer request answers with. Raise it if you import GPS recordings of tens of thousands of points and want to see all of them at once; the cost is the browser's memory and drawing time, not the server's |
+| `SILEXGIS__Import__MaxCommitItems` | `10000` | the most objects one confirmation of a reviewed import creates. Larger confirmations are slower requests, not bigger risks; the practical reason for a limit is that it keeps an undo unit to something a person can reason about |
+| `SILEXGIS__Import__MaxScanRows` | `50000` | the most rows one upload's review list reads. A bigger file is still imported whole and still drawn as a layer — only the review is bounded, and it says so |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |
