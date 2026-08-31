@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Checkbox, Divider, Radio, Slider, Typography } from 'antd';
+import { Checkbox, Collapse, Divider, Radio, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import type { MapLayerInfo } from '../../api/hooks.ts';
+import type { MapLayerInfo, RasterMapInfo } from '../../api/hooks.ts';
 import {
   CAVE_DATA_3D_LAYERS,
   CENTERLINE_SOURCE_ID,
@@ -29,6 +29,19 @@ export interface Scene3DLayerPanelProps {
   /** Per-base-layer opacity (0..1) keyed by catalog id; missing = fully opaque. */
   baseOpacity: Record<number, number>;
   onBaseOpacityChange: (id: number, opacity: number) => void;
+  /**
+   * Catalogue tile overlays drawn over the basemap, several at a time — the same set and the same
+   * choice as the flat map, so a viewer moving between the two views is not shown two different
+   * maps of the same place.
+   */
+  visibleTileOverlayIds: number[];
+  onTileOverlayVisibleChange: (id: number, visible: boolean) => void;
+  tileOverlayOpacity: Record<number, number>;
+  onTileOverlayOpacityChange: (id: number, opacity: number) => void;
+  /** This installation's georeferenced maps, and which of them are draped on the globe. */
+  rasters: RasterMapInfo[];
+  visibleRasterIds: string[];
+  onRasterVisibleChange: (id: string, visible: boolean) => void;
   /** Keyed by layer; a missing key means shown. */
   overlayVisible: Record<string, boolean>;
   onOverlayVisibleChange: (layer: CaveData3DLayer, visible: boolean) => void;
@@ -57,6 +70,13 @@ export default function Scene3DLayerPanel({
   onBaseChange,
   baseOpacity,
   onBaseOpacityChange,
+  visibleTileOverlayIds,
+  onTileOverlayVisibleChange,
+  tileOverlayOpacity,
+  onTileOverlayOpacityChange,
+  rasters,
+  visibleRasterIds,
+  onRasterVisibleChange,
   overlayVisible,
   onOverlayVisibleChange,
   overlayOpacity,
@@ -134,6 +154,60 @@ export default function Scene3DLayerPanel({
   };
 
   const baseLayers = layers.filter((layer) => layer.isBase);
+  const tileOverlays = layers.filter((layer) => !layer.isBase && layer.layerKind === 'xyz');
+  // Only rasters that finished converting have anything to drape. The others are shown in the
+  // georeferenced-maps screen with their status; offering them here would be offering a switch
+  // that does nothing and says nothing about why.
+  const readyRasters = rasters.filter((raster) => raster.status === 'ready' && raster.cogUrl);
+
+  const tileOverlayRow = (layer: MapLayerInfo) => {
+    const id = Number(layer.id);
+    return (
+      <div key={id} className="scene3d-layer-row">
+        <Checkbox
+          checked={visibleTileOverlayIds.includes(id)}
+          onChange={(e) => onTileOverlayVisibleChange(id, e.target.checked)}
+        >
+          {layer.name}
+        </Checkbox>
+        <Slider
+          className="scene3d-layer-opacity"
+          min={0}
+          max={100}
+          value={percent(tileOverlayOpacity[id])}
+          onChange={(value) => onTileOverlayOpacityChange(id, value / 100)}
+          tooltip={opacityTooltip}
+          ariaLabelForHandle={t('map.baseOpacity', { name: layer.name })}
+        />
+      </div>
+    );
+  };
+
+  /**
+   * The catalogue's groups, in the order the catalogue first mentions each.
+   *
+   * Same rule as the flat map's panel and for the same reason: this panel is narrower than that
+   * one, so a catalogue of forty sources has to fold up or it is the only thing on screen.
+   */
+  const groupsOf = (entries: MapLayerInfo[]) => {
+    const grouped = new globalThis.Map<string, MapLayerInfo[]>();
+    const loose: MapLayerInfo[] = [];
+    for (const entry of entries) {
+      const name = entry.groupName?.trim();
+      if (!name) {
+        loose.push(entry);
+        continue;
+      }
+      const bucket = grouped.get(name);
+      if (bucket) {
+        bucket.push(entry);
+      } else {
+        grouped.set(name, [entry]);
+      }
+    }
+    return { grouped, loose };
+  };
+
 
   return (
     <div className="scene3d-layer-panel" data-testid="scene3d-layer-panel">
@@ -151,27 +225,106 @@ export default function Scene3DLayerPanel({
             value={activeBaseId}
             onChange={(e) => onBaseChange(e.target.value as number)}
           >
-            {baseLayers.map((layer) => {
-              const id = Number(layer.id);
-              return (
-                <div key={id} className="scene3d-layer-row">
-                  <Radio value={id}>{layer.name}</Radio>
-                  <Slider
-                    className="scene3d-layer-opacity"
-                    min={0}
-                    max={100}
-                    value={percent(baseOpacity[id])}
-                    onChange={(value) => onBaseOpacityChange(id, value / 100)}
-                    tooltip={opacityTooltip}
-                    // Named on the handle rather than on the control: the handle is the element
-                    // that carries the slider role, and a label on the wrapper reaches nothing.
-                    ariaLabelForHandle={t('map.baseOpacity', { name: layer.name })}
-                  />
-                </div>
+            {(() => {
+              const { grouped, loose } = groupsOf(baseLayers);
+              const baseRow = (layer: MapLayerInfo) => {
+                const id = Number(layer.id);
+                return (
+                  <div key={id} className="scene3d-layer-row">
+                    <Radio value={id}>{layer.name}</Radio>
+                    <Slider
+                      className="scene3d-layer-opacity"
+                      min={0}
+                      max={100}
+                      value={percent(baseOpacity[id])}
+                      onChange={(value) => onBaseOpacityChange(id, value / 100)}
+                      tooltip={opacityTooltip}
+                      // Named on the handle rather than on the control: the handle is the element
+                      // that carries the slider role, and a label on the wrapper reaches nothing.
+                      ariaLabelForHandle={t('map.baseOpacity', { name: layer.name })}
+                    />
+                  </div>
+                );
+              };
+              const open = [...grouped].find(([, entries]) =>
+                entries.some((l) => Number(l.id) === activeBaseId),
               );
-            })}
+              return (
+                <>
+                  {loose.map(baseRow)}
+                  {grouped.size > 0 && (
+                    <Collapse
+                      ghost
+                      size="small"
+                      className="layer-group-collapse"
+                      defaultActiveKey={open ? [open[0]] : []}
+                      items={[...grouped].map(([name, entries]) => ({
+                        key: name,
+                        label: `${name} (${entries.length})`,
+                        children: <div className="layer-group-body">{entries.map(baseRow)}</div>,
+                      }))}
+                    />
+                  )}
+                </>
+              );
+            })()}
           </Radio.Group>
 
+          <Divider style={{ margin: '12px 0' }} />
+        </>
+      )}
+
+      {tileOverlays.length > 0 && (
+        <>
+          <Typography.Text strong>{t('map.tileOverlays')}</Typography.Text>
+          <div className="scene3d-layer-rows">
+            {(() => {
+              const { grouped, loose } = groupsOf(tileOverlays);
+              return (
+                <>
+                  {loose.map(tileOverlayRow)}
+                  {grouped.size > 0 && (
+                    <Collapse
+                      ghost
+                      size="small"
+                      className="layer-group-collapse"
+                      items={[...grouped].map(([name, entries]) => ({
+                        key: name,
+                        label: `${name} (${entries.length})`,
+                        children: <div className="layer-group-body">{entries.map(tileOverlayRow)}</div>,
+                      }))}
+                    />
+                  )}
+                </>
+              );
+            })()}
+          </div>
+          <Divider style={{ margin: '12px 0' }} />
+        </>
+      )}
+
+      {readyRasters.length > 0 && (
+        <>
+          <Typography.Text strong>{t('map.georeferencedMaps')}</Typography.Text>
+          {/* Said once, here, because it is the one thing about these that differs between the two
+              views and a viewer comparing them WILL notice: on the globe each sheet is flattened
+              to a single picture, so it softens under close zoom where the flat map keeps reading
+              the file's own pyramid. */}
+          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
+            {t('scene3d.rasterOverlayHint')}
+          </Typography.Paragraph>
+          <div className="scene3d-layer-rows">
+            {readyRasters.map((raster) => (
+              <div key={raster.id} className="scene3d-layer-row">
+                <Checkbox
+                  checked={visibleRasterIds.includes(raster.id)}
+                  onChange={(e) => onRasterVisibleChange(raster.id, e.target.checked)}
+                >
+                  {raster.name}
+                </Checkbox>
+              </div>
+            ))}
+          </div>
           <Divider style={{ margin: '12px 0' }} />
         </>
       )}

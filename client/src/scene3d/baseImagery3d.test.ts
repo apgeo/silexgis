@@ -1,15 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import type { MapLayerInfo } from '../api/hooks.ts';
-import { baseImageryLayerId, setActiveBaseImagery, syncBaseImagery } from './baseImagery3d.ts';
-import type { Scene3DImagery, Scene3DImageryOptions } from './scene3dEngine.ts';
+import {
+  baseImageryLayerId,
+  setActiveBaseImagery,
+  syncBaseImagery,
+  syncTileOverlayImagery,
+  tileOverlayImageryLayerId,
+} from './baseImagery3d.ts';
+import type {
+  Scene3DImageOverlayOptions,
+  Scene3DImagery,
+  Scene3DImageryOptions,
+} from './scene3dEngine.ts';
 
 // A plain object standing in for the scene — the point of the engine contract is that everything
 // around it is testable without a graphics context.
 class FakeImagery implements Scene3DImagery {
-  readonly layers = new Map<string, Scene3DImageryOptions & { visible: boolean; opacity: number }>();
+  readonly layers = new Map<
+    string,
+    Partial<Scene3DImageryOptions & Scene3DImageOverlayOptions> & { visible: boolean; opacity: number }
+  >();
 
   addImageryLayer(id: string, options: Scene3DImageryOptions) {
+    if (this.layers.has(id)) return;
+    this.layers.set(id, { ...options, visible: options.visible ?? true, opacity: options.opacity ?? 1 });
+  }
+  addImageOverlayLayer(id: string, options: Scene3DImageOverlayOptions) {
     if (this.layers.has(id)) return;
     this.layers.set(id, { ...options, visible: options.visible ?? true, opacity: options.opacity ?? 1 });
   }
@@ -124,5 +141,59 @@ describe('setActiveBaseImagery', () => {
     setActiveBaseImagery(engine, 99);
 
     expect([...engine.layers.values()].every((l) => !l.visible)).toBe(true);
+  });
+});
+
+describe('syncTileOverlayImagery', () => {
+  const overlay = (id: number) => layer({ id, isBase: false });
+
+  it('shows every wanted overlay at once, unlike the basemaps', () => {
+    // The whole reason overlays are not a second radio group: hiking routes and ski routes over
+    // one topographic map are three answers about one place.
+    const engine = new FakeImagery();
+    syncTileOverlayImagery(engine, [overlay(7), overlay(8), overlay(9)], new Set([7, 9]), {});
+
+    expect(engine.layers.get(tileOverlayImageryLayerId(7))!.visible).toBe(true);
+    expect(engine.layers.get(tileOverlayImageryLayerId(8))!.visible).toBe(false);
+    expect(engine.layers.get(tileOverlayImageryLayerId(9))!.visible).toBe(true);
+  });
+
+  it('keeps overlay ids clear of basemap ids', () => {
+    // A shared prefix would leave "hide every catalogue layer that is not the chosen basemap"
+    // unable to tell the two apart, and it would switch the overlays off with them.
+    const engine = new FakeImagery();
+    syncBaseImagery(engine, [layer({ id: 1 })], 1);
+    syncTileOverlayImagery(engine, [overlay(1)], new Set([1]), {});
+
+    expect(engine.getImageryLayerIds()).toHaveLength(2);
+    expect(baseImageryLayerId(1)).not.toEqual(tileOverlayImageryLayerId(1));
+  });
+
+  it('leaves the overlays alone when the basemap changes', () => {
+    const engine = new FakeImagery();
+    syncBaseImagery(engine, [layer({ id: 1 }), layer({ id: 2 })], 1);
+    syncTileOverlayImagery(engine, [overlay(7)], new Set([7]), {});
+
+    setActiveBaseImagery(engine, 2);
+
+    expect(engine.layers.get(tileOverlayImageryLayerId(7))!.visible).toBe(true);
+  });
+
+  it('applies per-overlay opacity, defaulting to opaque', () => {
+    const engine = new FakeImagery();
+    syncTileOverlayImagery(engine, [overlay(7), overlay(8)], new Set([7, 8]), { 7: 0.4 });
+
+    expect(engine.layers.get(tileOverlayImageryLayerId(7))!.opacity).toBe(0.4);
+    expect(engine.layers.get(tileOverlayImageryLayerId(8))!.opacity).toBe(1);
+  });
+
+  it('does not rebuild a layer it already made', () => {
+    // Rebuilding would restart every tile request in the viewport on each re-render.
+    const engine = new FakeImagery();
+    syncTileOverlayImagery(engine, [overlay(7)], new Set([7]), {});
+    const first = engine.layers.get(tileOverlayImageryLayerId(7));
+    syncTileOverlayImagery(engine, [overlay(7)], new Set([7]), {});
+
+    expect(engine.layers.get(tileOverlayImageryLayerId(7))).toBe(first);
   });
 });

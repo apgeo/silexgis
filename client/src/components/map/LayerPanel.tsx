@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import LayerTree from '@terrestris/react-geo/dist/LayerTree/LayerTree';
 import LayerTransparencySlider from '@terrestris/react-geo/dist/Slider/LayerTransparencySlider/LayerTransparencySlider';
-import { Alert, Checkbox, Divider, InputNumber, Radio, Select, Slider, Typography } from 'antd';
+import { Alert, Checkbox, Collapse, Divider, InputNumber, Radio, Select, Slider, Typography } from 'antd';
 import type OlLayerBase from 'ol/layer/Base';
 import { useTranslation } from 'react-i18next';
 import { useTags, type GeofileInfo, type MapConfig, type MapLayerInfo, type RasterMapInfo } from '../../api/hooks.ts';
@@ -29,6 +29,14 @@ interface LayerPanelProps {
   geofiles: GeofileInfo[];
   visibleGeofileIds: string[];
   onGeofileVisibleChange: (id: string, visible: boolean) => void;
+  /** Catalogue tile overlays drawn over the basemap, several at a time. */
+  visibleTileOverlayIds: number[];
+  onTileOverlayVisibleChange: (id: number, visible: boolean) => void;
+  tileOverlayOpacity: Record<number, number>;
+  onTileOverlayOpacityChange: (id: number, opacity: number) => void;
+  /** Whether crowded labels give way to each other rather than overprinting. */
+  declutterLabels: boolean;
+  onDeclutterLabelsChange: (value: boolean) => void;
   rasters: RasterMapInfo[];
   visibleRasterIds: string[];
   onRasterVisibleChange: (id: string, visible: boolean) => void;
@@ -62,6 +70,12 @@ export default function LayerPanel({
   geofiles,
   visibleGeofileIds,
   onGeofileVisibleChange,
+  visibleTileOverlayIds,
+  onTileOverlayVisibleChange,
+  tileOverlayOpacity,
+  onTileOverlayOpacityChange,
+  declutterLabels,
+  onDeclutterLabelsChange,
   rasters,
   visibleRasterIds,
   onRasterVisibleChange,
@@ -82,6 +96,101 @@ export default function LayerPanel({
   // The overlay reports what its limits held back; the panel is where that gets explained.
   const [centerlineLoad, setCenterlineLoad] = useState<CenterlineLoadState>(getCenterlineLoadState);
   useEffect(() => subscribeCenterlineLoadState(setCenterlineLoad), []);
+
+  /**
+   * The catalogue split into the two things this panel draws differently: basemaps, of which one
+   * is chosen, and tile overlays, of which any number are.
+   *
+   * Each is then split again into what the catalogue put in a group and what it did not. Ungrouped
+   * entries stay in the open, always visible, because that is where an installation's own handful
+   * of everyday sources belongs; a catalogue of forty is what the groups are for, and a panel that
+   * needed scrolling past thirty-five sources to reach the overlay controls would have made the
+   * catalogue worse than the three hardcoded layers it replaced.
+   */
+  const { baseGroups, looseBases, overlayGroups, looseOverlays } = useMemo(() => {
+    const bases = layers.filter((l) => l.isBase);
+    const overlays = layers.filter((l) => !l.isBase && l.layerKind === 'xyz');
+    // Insertion-ordered, so groups appear in the order the catalogue first mentions them rather
+    // than alphabetically — the file's order is the operator's stated preference.
+    const group = (entries: MapLayerInfo[]) => {
+      const grouped = new globalThis.Map<string, MapLayerInfo[]>();
+      const loose: MapLayerInfo[] = [];
+      for (const entry of entries) {
+        const name = entry.groupName?.trim();
+        if (!name) {
+          loose.push(entry);
+          continue;
+        }
+        const bucket = grouped.get(name);
+        if (bucket) {
+          bucket.push(entry);
+        } else {
+          grouped.set(name, [entry]);
+        }
+      }
+      return { grouped, loose };
+    };
+    const b = group(bases);
+    const o = group(overlays);
+    return { baseGroups: b.grouped, looseBases: b.loose, overlayGroups: o.grouped, looseOverlays: o.loose };
+  }, [layers]);
+
+  /**
+   * Which base group starts open: the one holding the basemap currently drawn, and no other.
+   *
+   * Computed rather than remembered, so that a viewer who restores a saved view using a source
+   * from a collapsed group can see which source is active without opening groups one at a time —
+   * a checked radio inside a closed panel is a state with nothing on screen to explain it.
+   */
+  const openBaseGroups = useMemo(() => {
+    for (const [name, entries] of baseGroups) {
+      if (entries.some((l) => Number(l.id) === activeBaseId)) {
+        return [name];
+      }
+    }
+    return [];
+  }, [baseGroups, activeBaseId]);
+
+  const baseRow = (l: MapLayerInfo) => {
+    const id = Number(l.id);
+    return (
+      <div key={id} className="base-layer-row">
+        <Radio value={id}>{l.name}</Radio>
+        <Slider
+          className="base-layer-opacity"
+          min={0}
+          max={100}
+          value={Math.round((baseOpacity[id] ?? 1) * 100)}
+          onChange={(value) => onBaseOpacityChange(id, (value as number) / 100)}
+          tooltip={{ formatter: (value) => `${value ?? 0}%` }}
+          aria-label={t('map.baseOpacity', { name: l.name })}
+        />
+      </div>
+    );
+  };
+
+  const overlayRow = (l: MapLayerInfo) => {
+    const id = Number(l.id);
+    return (
+      <div key={id} className="base-layer-row">
+        <Checkbox
+          checked={visibleTileOverlayIds.includes(id)}
+          onChange={(e) => onTileOverlayVisibleChange(id, e.target.checked)}
+        >
+          {l.name}
+        </Checkbox>
+        <Slider
+          className="base-layer-opacity"
+          min={0}
+          max={100}
+          value={Math.round((tileOverlayOpacity[id] ?? 1) * 100)}
+          onChange={(value) => onTileOverlayOpacityChange(id, (value as number) / 100)}
+          tooltip={{ formatter: (value) => `${value ?? 0}%` }}
+          aria-label={t('map.baseOpacity', { name: l.name })}
+        />
+      </div>
+    );
+  };
 
   const overlayName = (layer: OlLayerBase): string => {
     const id = layer.get('id') as string | undefined;
@@ -136,28 +245,63 @@ export default function LayerPanel({
         value={activeBaseId}
         onChange={(e) => onBaseChange(e.target.value as number)}
       >
-        {layers
-          .filter((l) => l.isBase)
-          .map((l) => {
-            const id = Number(l.id);
-            return (
-              <div key={id} className="base-layer-row">
-                <Radio value={id}>{l.name}</Radio>
-                <Slider
-                  className="base-layer-opacity"
-                  min={0}
-                  max={100}
-                  value={Math.round((baseOpacity[id] ?? 1) * 100)}
-                  onChange={(value) => onBaseOpacityChange(id, (value as number) / 100)}
-                  tooltip={{ formatter: (value) => `${value ?? 0}%` }}
-                  aria-label={t('map.baseOpacity', { name: l.name })}
-                />
-              </div>
-            );
-          })}
+        {looseBases.map(baseRow)}
+        {baseGroups.size > 0 && (
+          // Inside the radio group, so a source in a collapsed panel is still part of the same
+          // single choice — collapsing is about room on screen and nothing else.
+          <Collapse
+            ghost
+            size="small"
+            className="layer-group-collapse"
+            defaultActiveKey={openBaseGroups}
+            items={[...baseGroups].map(([name, entries]) => ({
+              key: name,
+              label: `${name} (${entries.length})`,
+              children: <div className="layer-group-body">{entries.map(baseRow)}</div>,
+            }))}
+          />
+        )}
       </Radio.Group>
+
+      {(looseOverlays.length > 0 || overlayGroups.size > 0) && (
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          <Typography.Text strong>{t('map.tileOverlays')}</Typography.Text>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+            {looseOverlays.map(overlayRow)}
+            {overlayGroups.size > 0 && (
+              <Collapse
+                ghost
+                size="small"
+                className="layer-group-collapse"
+                items={[...overlayGroups].map(([name, entries]) => ({
+                  key: name,
+                  label: `${name} (${entries.length})`,
+                  children: <div className="layer-group-body">{entries.map(overlayRow)}</div>,
+                }))}
+              />
+            )}
+          </div>
+        </>
+      )}
+
       <Divider style={{ margin: '12px 0' }} />
       <Typography.Text strong>{t('map.activeOverlays')}</Typography.Text>
+      {/* Sits with the overlays rather than in a settings screen, because what it changes is what
+          this map looks like right now and the only way to judge it is to watch the map while
+          toggling it. */}
+      <div style={{ marginTop: 8 }}>
+        <Checkbox
+          checked={declutterLabels}
+          onChange={(e) => onDeclutterLabelsChange(e.target.checked)}
+          data-testid="map-declutter-toggle"
+        >
+          {t('map.declutterLabels')}
+        </Checkbox>
+        <Typography.Paragraph type="secondary" style={{ margin: '2px 0 0 24px', fontSize: 12 }}>
+          {t('map.declutterLabelsHint')}
+        </Typography.Paragraph>
+      </div>
       <Select
         allowClear
         showSearch

@@ -9,9 +9,21 @@ import type { Scene3DImagery } from './scene3dEngine.ts';
 /** Namespaced so a scene layer created from the catalog can never collide with a data overlay. */
 const BASE_LAYER_PREFIX = 'base:';
 
+/**
+ * Namespaced separately from the basemaps, and that separation is what makes the two rules
+ * coexist: exactly one basemap is shown, while any number of overlays are, and a single prefix
+ * would leave "hide every catalogue layer that is not the chosen one" unable to tell them apart.
+ */
+const TILE_OVERLAY_PREFIX = 'tile-overlay:';
+
 /** Scene layer id for a catalog entry. */
 export function baseImageryLayerId(catalogId: number): string {
   return `${BASE_LAYER_PREFIX}${catalogId}`;
+}
+
+/** Scene layer id for a catalogue entry drawn over the basemap. */
+export function tileOverlayImageryLayerId(catalogId: number): string {
+  return `${TILE_OVERLAY_PREFIX}${catalogId}`;
 }
 
 /**
@@ -40,6 +52,38 @@ export function syncBaseImagery(
     });
   }
   setActiveBaseImagery(engine, activeId);
+}
+
+/**
+ * Creates any missing tile overlays from the catalogue and leaves exactly the wanted ones showing.
+ *
+ * Called after {@link syncBaseImagery} and never before it, because a globe composites its imagery
+ * in the order the layers were added: an overlay created before the basemap would be drawn
+ * underneath an opaque picture of the ground, which is not an error anything reports and not a
+ * state anything on screen explains.
+ */
+export function syncTileOverlayImagery(
+  engine: Scene3DImagery,
+  catalog: readonly MapLayerInfo[],
+  visibleIds: ReadonlySet<number>,
+  opacityById: Readonly<Record<number, number>>,
+): void {
+  for (const entry of catalog) {
+    const catalogId = Number(entry.id);
+    if (entry.layerKind !== 'xyz' || entry.isBase) {
+      continue;
+    }
+    const layerId = tileOverlayImageryLayerId(catalogId);
+    if (!engine.hasImageryLayer(layerId)) {
+      engine.addImageryLayer(layerId, {
+        urlTemplate: entry.urlTemplate,
+        attribution: entry.attribution ?? undefined,
+        visible: false,
+      });
+    }
+    engine.setImageryLayerVisible(layerId, visibleIds.has(catalogId));
+    engine.setImageryLayerOpacity(layerId, opacityById[catalogId] ?? 1);
+  }
 }
 
 /** Shows exactly one catalog basemap and hides the rest. */
