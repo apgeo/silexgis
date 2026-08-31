@@ -13,6 +13,26 @@ public sealed class MapOptions
     public const string SectionName = "Map";
 
     /// <summary>
+    /// The most point features any one map layer request answers with — entrances, surface
+    /// features, photos, trip logs and the rows of an imported GPS file alike.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A cap rather than a page: these endpoints answer a viewport, and a viewport holding more
+    /// than this is one nobody can read anyway. What it protects is the browser, which draws every
+    /// feature it is given whether or not two of them land on the same pixel.
+    /// </para>
+    /// <para>
+    /// Configurable because the number that is generous for a map of caves is mean for a map of an
+    /// imported track log: a single day's GPS recording is routinely tens of thousands of points,
+    /// and an installation that imports those should be able to see all of them without a rebuild.
+    /// Raising it costs browser memory and draw time, not server work — the query is bounded by
+    /// the viewport long before it is bounded by this.
+    /// </para>
+    /// </remarks>
+    public int MaxPoints { get; set; } = 10000;
+
+    /// <summary>
     /// From this zoom up the map serves bbox-clipped full detail (splays included) instead of
     /// the skeleton — provided the clipped result fits <see cref="CenterlineMaxPaths"/>.
     /// The default is where the splays start to be visible at all.

@@ -10,6 +10,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
+using SilexGis.Domain.Import;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -45,13 +46,25 @@ public sealed record CenterlineFeatureCollection(
 public sealed record TerrainSourceDto(string Url, string? Attribution, double SurveyHeightOffsetM);
 
 /// <summary>Map rendering limits published to the client.</summary>
+/// <param name="MaxPoints">
+/// The most features any one map layer request answers with. Published rather than kept to the
+/// server because a layer that stopped at a limit and a layer that ended looks identical on
+/// screen, and the client is the only place that can say which happened.
+/// </param>
+/// <param name="TerrainFallback">
+/// The elevation model to try when <paramref name="Terrain"/> cannot be drawn, or nothing when
+/// there is no second one. Only ever set when the first came from configuration and a checked
+/// build exists at a different address; see the resolver for why a second answer is needed at all.
+/// </param>
 public sealed record MapConfigDto(
     int CenterlineDetailZoom,
     int CenterlineMaxPaths,
     int CenterlineMaxPathsLimit,
     int CenterlineGateZoom,
     int ClusterMaxZoom,
-    TerrainSourceDto? Terrain);
+    int MaxPoints,
+    TerrainSourceDto? Terrain,
+    TerrainSourceDto? TerrainFallback);
 
 /// <summary>
 /// GeoJSON layer endpoints for the map workspace. Always visibility-filtered; protected
@@ -64,14 +77,12 @@ public static class MapEndpoints
     /// <summary>Below this zoom the entrance endpoint returns clusters instead of points.</summary>
     public const int ClusterMaxZoom = 11;
 
-    /// <summary>Safety cap for individual point features per request.</summary>
-    /// <remarks>
-    /// Every query that applies the cap orders by id first. Without an order the database is
-    /// free to return any rows it likes once the cap bites, and it need not pick the same ones
-    /// twice — so a dense viewport would show a different arbitrary subset on each pan back to
-    /// it, and features would appear to flicker in and out of a map that had not changed.
-    /// </remarks>
-    private const int MaxPoints = 5000;
+    // The safety cap for individual point features per request now lives in MapOptions, so that
+    // an installation importing a survey of tens of thousands of waypoints can raise it without a
+    // rebuild. Every query that applies it orders by id first: without an order the database is
+    // free to return any rows it likes once the cap bites, and it need not pick the same ones
+    // twice — so a dense viewport would show a different arbitrary subset on each pan back to it,
+    // and features would appear to flicker in and out of a map that had not changed.
 
     public static RouteGroupBuilder MapMapDataEndpoints(this RouteGroupBuilder api)
     {
@@ -125,13 +136,16 @@ public static class MapEndpoints
         }
 
         var options = mapOptions.Value;
+        var (terrain, terrainFallback) = await TerrainSourceResolver.ResolveAsync(terrainOptions.Value, db, ct);
         return TypedResults.Ok(new MapConfigDto(
             options.CenterlineDetailZoom,
             options.CenterlineMaxPaths,
             options.CenterlineMaxPathsLimit,
             options.CenterlineGateZoom,
             ClusterMaxZoom,
-            await TerrainSourceResolver.ResolveAsync(terrainOptions.Value, db, ct)));
+            options.MaxPoints,
+            terrain,
+            terrainFallback));
     }
 
     /// <summary>
@@ -148,6 +162,7 @@ public static class MapEndpoints
         IFileAccessTokenService tokens,
         IAccessContextAccessor accessAccessor,
         PhotoPositionDisclosure photos,
+        IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -184,7 +199,7 @@ public static class MapEndpoints
                                     file.PositionSource,
                                     Document = document,
                                 })
-            .Take(MaxPoints)
+            .Take(mapOptions.Value.MaxPoints)
             .ToListAsync(ct);
         if (candidates.Count == 0)
         {
@@ -434,6 +449,7 @@ public static class MapEndpoints
         DateOnly? to,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
+        IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -459,7 +475,7 @@ public static class MapEndpoints
 
         query = query.OverlappingDays(x => x.TripDate, x => x.TripDateEnd, from, to);
 
-        var rows = await query.OrderBy(x => x.Id).Take(MaxPoints).ToListAsync(ct);
+        var rows = await query.OrderBy(x => x.Id).Take(mapOptions.Value.MaxPoints).ToListAsync(ct);
 
         // One feature per shape the trip states, each saying which it is, rather than one feature
         // carrying whichever happened to be there. The two mean different things — where the trip
@@ -503,6 +519,7 @@ public static class MapEndpoints
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -527,7 +544,7 @@ public static class MapEndpoints
         var rows = await db.GeofileFeatures.AsNoTracking()
             .Where(f => f.GeofileId == id && f.Geom.Intersects(polygon))
             .OrderBy(f => f.Id)
-            .Take(MaxPoints)
+            .Take(mapOptions.Value.MaxPoints)
             .ToListAsync(ct);
 
         var features = rows.Select(f =>
@@ -535,10 +552,77 @@ public static class MapEndpoints
             var properties = JsonSerializer.Deserialize<Dictionary<string, object?>>(f.Properties)
                 ?? [];
             properties["id"] = f.Id;
+
+            // What to call this row on screen, decided HERE rather than in the browser. The rule
+            // for which of a source's columns is its name is a domain rule with one home — a GPX
+            // writes `name`, a shapefile abbreviates to ten characters, a spreadsheet is whatever
+            // somebody typed, and the folded-key search that copes with all three already exists.
+            // A second copy of it in the client would drift, and the way it would show is one view
+            // labelling a waypoint by its comment while another labels it by its name.
+            var attributes = SourceAttributeReader.Read(AsText(properties), new ImportAttributeMapping());
+            if (attributes.Name is { } label)
+            {
+                properties[GeofileLabelProperty] = label;
+            }
+
+            if (attributes.Description is { } description)
+            {
+                properties[GeofileDescriptionProperty] = description;
+            }
+
+            if (attributes.Elevation is { } elevation)
+            {
+                properties[GeofileElevationProperty] = elevation;
+            }
+
             return GeoFeature.Of(f.Geom, properties);
         }).ToList();
 
         return TypedResults.Ok(FeatureCollection.Of(features));
+    }
+
+    /// <summary>
+    /// Where the resolved name, description and altitude of an imported row are carried, alongside
+    /// the row's own untouched columns.
+    /// </summary>
+    /// <remarks>
+    /// Prefixed, because the row's own columns are spread into the same object and a source with a
+    /// column called <c>label</c> is not hypothetical. A viewer looking at the popup sees the
+    /// original columns exactly as the file had them; these three are what the map itself reads.
+    /// </remarks>
+    public const string GeofileLabelProperty = "silexgis:label";
+
+    /// <inheritdoc cref="GeofileLabelProperty"/>
+    public const string GeofileDescriptionProperty = "silexgis:description";
+
+    /// <inheritdoc cref="GeofileLabelProperty"/>
+    public const string GeofileElevationProperty = "silexgis:elevationM";
+
+    /// <summary>
+    /// A row's columns as text, which is the form the attribute reader answers about.
+    /// </summary>
+    /// <remarks>
+    /// Numbers and booleans are stringified rather than dropped: an altitude column holding 812
+    /// arrives as a JSON number, and a reader that only looked at strings would decide the row has
+    /// no altitude at all.
+    /// </remarks>
+    private static Dictionary<string, string?> AsText(Dictionary<string, object?> properties)
+    {
+        var text = new Dictionary<string, string?>(properties.Count, StringComparer.Ordinal);
+        foreach (var (key, value) in properties)
+        {
+            text[key] = value switch
+            {
+                null => null,
+                string s => s,
+                JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+                JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => null,
+                JsonElement element => element.ToString(),
+                _ => value.ToString(),
+            };
+        }
+
+        return text;
     }
 
     /// <summary>
@@ -560,6 +644,7 @@ public static class MapEndpoints
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         IOptions<AccessOptions> accessOptions,
+        IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -616,7 +701,7 @@ public static class MapEndpoints
         var rows = await query
             .Select(f => new { f.Id, f.Kind, f.Name, f.Geom, f.FeatureTypeId, f.IsProtectedEffective })
             .OrderBy(f => f.Id)
-            .Take(MaxPoints)
+            .Take(mapOptions.Value.MaxPoints)
             .ToListAsync(ct);
         if (rows.Count == 0)
         {
@@ -682,6 +767,7 @@ public static class MapEndpoints
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
         IOptions<AccessOptions> accessOptions,
+        IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -698,7 +784,8 @@ public static class MapEndpoints
         var effectiveZoom = Math.Clamp(zoom ?? 14, 0, 24);
         return effectiveZoom < ClusterMaxZoom
             ? TypedResults.Ok(await MapSql.ClustersAsync(db, ctx, box, effectiveZoom, accessOptions.Value.LocationGridMeters, tag, ct))
-            : TypedResults.Ok(await PointsAsync(db, protection, ctx, box, accessOptions.Value.LocationGridMeters, tag, ct));
+            : TypedResults.Ok(await PointsAsync(
+                db, protection, ctx, box, accessOptions.Value.LocationGridMeters, tag, mapOptions.Value.MaxPoints, ct));
     }
 
     private static async Task<FeatureCollection> PointsAsync(
@@ -708,6 +795,7 @@ public static class MapEndpoints
         Bbox box,
         double gridMeters,
         string? tag,
+        int maxPoints,
         CancellationToken ct)
     {
         var polygon = box.ToPolygon();
@@ -736,7 +824,7 @@ public static class MapEndpoints
                 f.Entrance!.IsMain,
             })
             .OrderBy(f => f.Id)
-            .Take(MaxPoints)
+            .Take(maxPoints)
             .ToListAsync(ct);
         if (rows.Count == 0)
         {

@@ -67,6 +67,27 @@ interface WorkspaceState {
   /** Geofile overlays currently shown on the map (ids only). */
   visibleGeofileIds: string[];
   setGeofileVisible: (id: string, visible: boolean) => void;
+  /**
+   * Tile overlays from the layer catalogue that are drawn on top of the basemap (catalogue ids),
+   * with per-layer opacity. Several at once, unlike the basemap: hiking routes and ski routes over
+   * one topographic map are three answers about one place, and picking between them defeats the
+   * point of having them.
+   */
+  visibleTileOverlayIds: number[];
+  setTileOverlayVisible: (id: number, visible: boolean) => void;
+  tileOverlayOpacity: Record<number, number>;
+  setTileOverlayOpacity: (id: number, opacity: number) => void;
+  /**
+   * Whether labels and markers that would land on top of each other are thinned out.
+   *
+   * On by default, because the case it answers is the ordinary one — a few thousand imported
+   * waypoints, whose names at any zoom that shows the whole file are a grey smear. Off is a real
+   * choice rather than a debugging aid: somebody checking that every station in a file arrived
+   * needs every name on screen at once, however ugly, and a view that quietly drops some of them
+   * cannot answer that question at all.
+   */
+  declutterLabels: boolean;
+  setDeclutterLabels: (value: boolean) => void;
   /** Georeferenced raster overlays shown on the map, with per-map opacity overrides. */
   visibleRasterIds: string[];
   setRasterVisible: (id: string, visible: boolean) => void;
@@ -175,6 +196,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         ? [...new Set([...state.visibleGeofileIds, id])]
         : state.visibleGeofileIds.filter((x) => x !== id),
     })),
+  visibleTileOverlayIds: [],
+  setTileOverlayVisible: (id, visible) =>
+    set((state) => ({
+      visibleTileOverlayIds: visible
+        ? [...new Set([...state.visibleTileOverlayIds, id])]
+        : state.visibleTileOverlayIds.filter((x) => x !== id),
+    })),
+  tileOverlayOpacity: {},
+  setTileOverlayOpacity: (id, opacity) =>
+    set((state) => ({ tileOverlayOpacity: { ...state.tileOverlayOpacity, [id]: opacity } })),
+  declutterLabels: true,
+  setDeclutterLabels: (declutterLabels) => set({ declutterLabels }),
   visibleRasterIds: [],
   setRasterVisible: (id, visible) =>
     set((state) => ({

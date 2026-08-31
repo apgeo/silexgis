@@ -17311,6 +17311,8 @@ export interface components {
             elevation?: components["schemas"]["ImportElevationPolicy"];
             tracks?: components["schemas"]["ImportTrackHandling"];
             trackFeatureTypeCode?: null | string;
+            unmatchedPoints?: components["schemas"]["ImportUnmatchedPoints"];
+            unmatchedTypeCode?: null | string;
             visibility?: components["schemas"]["Visibility"];
             /** Format: uuid */
             cavingGroupId?: null | string;
@@ -17399,6 +17401,8 @@ export interface components {
         ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
         /** @enum {unknown} */
         ImportTrackHandling: "ignore" | "importAsLine";
+        /** @enum {unknown} */
+        ImportUnmatchedPoints: "ignore" | "importAsSurfaceFeature" | "importAsCaveEntrance";
         InterfaceSettingsDto: {
             panelDefaults: string;
         };
@@ -17462,7 +17466,10 @@ export interface components {
             centerlineGateZoom: number;
             /** Format: int32 */
             clusterMaxZoom: number;
+            /** Format: int32 */
+            maxPoints: number;
             terrain: null | components["schemas"]["TerrainSourceDto"];
+            terrainFallback: null | components["schemas"]["TerrainSourceDto"];
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
@@ -17474,6 +17481,11 @@ export interface components {
             urlTemplate: string;
             options: null | string;
             attribution: null | string;
+            groupName: null | string;
+            /** Format: int32 */
+            minZoom: number;
+            /** Format: int32 */
+            maxZoom: number;
             isBase: boolean;
             isDefault: boolean;
             /** Format: int32 */

@@ -273,7 +273,10 @@
   },
   "map": {
     "baseLayers": "Hărți de bază",
+    "tileOverlays": "Hărți suprapuse",
     "activeOverlays": "Straturi pe hartă",
+    "declutterLabels": "Rărește etichetele aglomerate",
+    "declutterLabelsHint": "Numele care s-ar suprapune se cedează reciproc. Marcajele sunt întotdeauna desenate — doar etichetele lor concurează pentru spațiu.",
     "changeBaseLayer": "Schimbă harta de bază",
     "entrances": "Intrări în peșteri",
     "searchPlaceholder": "Caută fenomene, ture sau locuri…",
@@ -324,7 +327,8 @@
     "centerlineLimitsHint": "Lasă gol pentru valorile implicite ale instalării. Detaliul mai mare costă mai mult la desenare.",
     "features": "Elemente",
     "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată.",
-    "closestApproach": "Cea mai mică distanță"
+    "closestApproach": "Cea mai mică distanță",
+    "georeferencedMaps": "Hărți georeferențiate"
   },
   "dialog": {
     "dockToSide": "Andochează lângă hartă",
@@ -1725,8 +1729,11 @@
     "meshFailedBecause": "Pereții nu au putut fi desenați: {{reason}}",
     "meshPrecisionLost": "Fișierul încărcat pierduse deja detalii înainte de a ajunge aici. Reexportarea lui în jurul unei origini locale le recuperează.",
     "terrainUnreachable": "Datele de altitudine ale acestei instalări nu au putut fi accesate, așa că terenul este afișat ca un glob neted. Verifică dacă directorul cu teren este servit la adresa configurată.",
+    "terrainUnreachableFellBack": "Datele de altitudine ale acestei instalări nu au putut fi accesate la adresa configurată, așa că terenul este desenat din piramida generată de instalare. Verifică dacă directorul cu teren este servit acolo unde spune configurația sau elimină acea setare.",
     "terrainMalformed": "Adresa configurată pentru datele de altitudine nu conține un set de dale de teren, așa că terenul este afișat ca un glob neted. Verifică dacă piramida generată, împreună cu layer.json, este servită acolo.",
+    "terrainMalformedFellBack": "Adresa configurată pentru datele de altitudine nu conține un set de dale de teren, așa că terenul este desenat din piramida generată de instalare. Verifică dacă piramida generată, împreună cu layer.json, este servită acolo sau elimină acea setare.",
     "terrainEncodingMismatch": "Dalele de altitudine sunt servite cu o compresie care nu corespunde conținutului lor, așa că terenul este afișat ca un glob neted. Serverul web trebuie să declare exact codificarea în care sunt fișierele de pe disc și nimic altceva.",
+    "terrainEncodingMismatchFellBack": "Dalele de altitudine de la adresa configurată sunt servite cu o compresie care nu corespunde conținutului lor, așa că terenul este desenat din piramida generată de instalare. Serverul web trebuie să declare exact codificarea în care sunt fișierele de pe disc și nimic altceva.",
     "depthLegend": "Adâncimea sub partea de sus a peșterii",
     "depthLegendBand": "{{meters}} m",
     "showingElsewhere": "Scena 3D este deschisă în alt panou al acestei ferestre.",
@@ -1752,7 +1759,8 @@
     },
     "contextLostTitle": "Vizualizarea 3D s-a oprit",
     "contextLostHint": "Browserul a eliberat resursele grafice folosite de această vizualizare, de două ori la scurt timp. De obicei, reîncărcarea paginii o restabilește.",
-    "contextLostReload": "Reîncarcă"
+    "contextLostReload": "Reîncarcă",
+    "rasterOverlayHint": "Pe glob fiecare planșă este aplatizată într-o singură imagine, așa că devine mai neclară la apropiere. Harta plană citește fișierul în sine și rămâne clară."
   },
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat"
@@ -2683,6 +2691,13 @@
     "dryRun": "Ce revendică fiecare regulă",
     "optionsRules": "Reguli și denumire",
     "optionsCreated": "Ce se creează",
+    "optionsUnmatched": "Puncte nerecunoscute de nicio regulă",
+    "unmatched": "Ce se face cu ele",
+    "unmatchedHint": "Un set de reguli recunoaște numele pe care le scrie grupul tău; un GPS golit la finalul unui sezon conține mai ales WPT0142. Punctele pe care nu le recunoaște nimic nu propun nimic, iar un rând care nu propune nimic nu poate fi bifat — așa că lăsând această opțiune pe „lasă pentru verificare”, selectarea tuturor selectează doar rândurile numite de reguli.",
+    "unmatchedIgnore": "Lasă-le pentru verificare, unul câte unul",
+    "unmatchedAsFeature": "Propune un element de suprafață",
+    "unmatchedAsEntrance": "Propune o intrare de peșteră",
+    "unmatchedKind": "De acest tip",
     "optionsTracks": "Trasee și rute",
     "optionsMapping": "Ce câmp este ce",
     "ruleSet": "Set de reguli",
@@ -2708,6 +2723,8 @@
       "elevationField": "Altitudine"
     },
     "selectAll": "Toate",
+    "selectAllPages": "Selectează toate cele {{count}} de pe toate paginile",
+    "selectInvertPages": "Inversează pe toate paginile ({{count}})",
     "selectNone": "Niciuna",
     "selectInvert": "Inversează",
     "selectedCount": "{{count}} din {{total}} selectate",

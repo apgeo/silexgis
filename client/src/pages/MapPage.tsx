@@ -39,7 +39,15 @@ import ViewsPanel from '../components/map/ViewsPanel.tsx';
 import MapObjectSelector from '../components/map/MapObjectSelector.tsx';
 import MapSearch from '../components/map/MapSearch.tsx';
 import SelectionPanel from '../components/map/SelectionPanel.tsx';
-import { getBaseLayerId, getBaseLayers, setActiveBaseLayer, syncBaseLayers } from '../map/baseLayers.ts';
+import {
+  getBaseLayerId,
+  getBaseLayers,
+  setActiveBaseLayer,
+  syncBaseLayers,
+  syncTileOverlays,
+} from '../map/baseLayers.ts';
+import { setMapDeclutter } from '../map/declutter.ts';
+import { attachGeofilePopup } from '../map/geofilePopup.ts';
 import {
   CENTERLINE_LAYER_ID,
   attachCenterlineLoader,
@@ -164,6 +172,12 @@ export default function MapPage() {
     () => (geofilePage?.items ?? []).filter((g) => g.importStatus === 'imported'),
     [geofilePage],
   );
+  const visibleTileOverlayIds = useWorkspaceStore((s) => s.visibleTileOverlayIds);
+  const setTileOverlayVisible = useWorkspaceStore((s) => s.setTileOverlayVisible);
+  const tileOverlayOpacity = useWorkspaceStore((s) => s.tileOverlayOpacity);
+  const setTileOverlayOpacity = useWorkspaceStore((s) => s.setTileOverlayOpacity);
+  const declutterLabels = useWorkspaceStore((s) => s.declutterLabels);
+  const setDeclutterLabels = useWorkspaceStore((s) => s.setDeclutterLabels);
   const visibleRasterIds = useWorkspaceStore((s) => s.visibleRasterIds);
   const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
   const rasterOpacity = useWorkspaceStore((s) => s.rasterOpacity);
@@ -231,6 +245,10 @@ export default function MapPage() {
     const detachGeofileLoader = attachGeofileLoader(map);
     const detachPhotoLoader = attachPhotoLoader(map);
     const detachPhotoPopup = attachPhotoPopup(map);
+    // Clicking a point of an imported file opens what the file recorded beside it. Attached here,
+    // beside the photo popup, because the two are the same kind of thing and share the rule that
+    // a click landing on neither dismisses whichever is open.
+    const detachGeofilePopup = attachGeofilePopup(map);
     // The map's end of the two-way sync with the 3D scene: it announces the ground it is showing
     // and follows the ground the scene reports, in degrees rather than in cameras. The selection
     // is read back out of the store as well as written into it, because the panels beside this map
@@ -278,6 +296,7 @@ export default function MapPage() {
       detachGeofileLoader();
       detachPhotoLoader();
       detachPhotoPopup();
+      detachGeofilePopup();
       detachSelection();
       detachHover();
       detachUrlHash();
@@ -305,6 +324,20 @@ export default function MapPage() {
       setLayerOpacity(id, overlayOpacity[id] ?? 1);
     }
   }, [overlayOpacity]);
+
+  // Tile overlays from the catalogue: several at once, above the basemap and below the data.
+  useEffect(() => {
+    if (layers) {
+      syncTileOverlays(getWorkspaceMap(), layers, new Set(visibleTileOverlayIds), tileOverlayOpacity);
+    }
+  }, [layers, visibleTileOverlayIds, tileOverlayOpacity]);
+
+  // Whether crowded labels give way to each other. Applied to the map rather than held only in the
+  // store, and applied on mount as well as on change, because a layer built before this ran would
+  // otherwise be drawn under whatever the module last remembered.
+  useEffect(() => {
+    setMapDeclutter(getWorkspaceMap(), declutterLabels);
+  }, [declutterLabels]);
 
   // Raster overlays likewise, with per-map opacity.
   useEffect(() => {
@@ -723,6 +756,12 @@ export default function MapPage() {
       geofiles={importedGeofiles}
       visibleGeofileIds={visibleGeofileIds}
       onGeofileVisibleChange={setGeofileVisible}
+      visibleTileOverlayIds={visibleTileOverlayIds}
+      onTileOverlayVisibleChange={setTileOverlayVisible}
+      tileOverlayOpacity={tileOverlayOpacity}
+      onTileOverlayOpacityChange={setTileOverlayOpacity}
+      declutterLabels={declutterLabels}
+      onDeclutterLabelsChange={setDeclutterLabels}
       rasters={readyRasters}
       visibleRasterIds={visibleRasterIds}
       onRasterVisibleChange={setRasterVisible}

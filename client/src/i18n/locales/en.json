@@ -273,7 +273,10 @@
   },
   "map": {
     "baseLayers": "Base layers",
+    "tileOverlays": "Overlay maps",
     "activeOverlays": "Map layers",
+    "declutterLabels": "Thin out crowded labels",
+    "declutterLabelsHint": "Names that would overlap give way to each other. Markers are always drawn — only their labels compete for space.",
     "changeBaseLayer": "Change the base map",
     "entrances": "Cave entrances",
     "searchPlaceholder": "Search features, trips or places…",
@@ -324,7 +327,8 @@
     "centerlineLimitsHint": "Leave empty to follow this installation's defaults. Higher detail costs more to draw.",
     "features": "Features",
     "locationWithheld": "Location withheld — exact geometry is protected.",
-    "closestApproach": "Closest approach"
+    "closestApproach": "Closest approach",
+    "georeferencedMaps": "Georeferenced maps"
   },
   "dialog": {
     "dockToSide": "Dock to the side of the map",
@@ -1725,8 +1729,11 @@
     "meshFailedBecause": "The walls could not be drawn: {{reason}}",
     "meshPrecisionLost": "The uploaded file had already lost detail before it arrived. Re-exporting it about a local origin recovers it.",
     "terrainUnreachable": "This installation's elevation data could not be reached, so the ground is shown as a smooth globe. Check that the terrain directory is served at the configured address.",
+    "terrainUnreachableFellBack": "This installation's elevation data could not be reached at the configured address, so the ground is drawn from the pyramid this installation baked for itself instead. Check that the terrain directory is served where the configuration says, or remove that setting.",
     "terrainMalformed": "The address configured for elevation data does not hold a terrain tile set, so the ground is shown as a smooth globe. Check that the baked pyramid, including its layer.json, is served there.",
+    "terrainMalformedFellBack": "The address configured for elevation data does not hold a terrain tile set, so the ground is drawn from the pyramid this installation baked for itself instead. Check that the baked pyramid, including its layer.json, is served there, or remove that setting.",
     "terrainEncodingMismatch": "The elevation tiles are being served with a compression that does not match their contents, so the ground is shown as a smooth globe. The web server must declare exactly the encoding the files on disk are in, and nothing else.",
+    "terrainEncodingMismatchFellBack": "The elevation tiles at the configured address are being served with a compression that does not match their contents, so the ground is drawn from the pyramid this installation baked for itself instead. The web server must declare exactly the encoding the files on disk are in, and nothing else.",
     "depthLegend": "Depth below the top of the cave",
     "depthLegendBand": "{{meters}} m",
     "showingElsewhere": "The 3D scene is open in another panel of this window.",
@@ -1752,7 +1759,8 @@
     },
     "contextLostTitle": "The 3D view stopped",
     "contextLostHint": "The browser released the graphics resources this view was using, twice in quick succession. Reloading the page usually restores it.",
-    "contextLostReload": "Reload"
+    "contextLostReload": "Reload",
+    "rasterOverlayHint": "On the globe each sheet is flattened to a single picture, so it softens under close zoom. The flat map reads the file itself and stays sharp."
   },
   "caveview": {
     "loadError": "Failed to load the 3D model"
@@ -2683,6 +2691,13 @@
     "dryRun": "What each rule claims",
     "optionsRules": "Rules and naming",
     "optionsCreated": "What gets created",
+    "optionsUnmatched": "Points no rule recognised",
+    "unmatched": "What to do with them",
+    "unmatchedHint": "A rule set recognises the names your group writes down; a GPS unit emptied at the end of a season is mostly WPT0142. Points nothing recognised propose nothing, and a row proposing nothing cannot be ticked — so leaving this at 'leave for review' means selecting everything selects only the rows the rules named.",
+    "unmatchedIgnore": "Leave them for review, one at a time",
+    "unmatchedAsFeature": "Propose a surface feature",
+    "unmatchedAsEntrance": "Propose a cave entrance",
+    "unmatchedKind": "Of this type",
     "optionsTracks": "Tracks and routes",
     "optionsMapping": "Which field is which",
     "ruleSet": "Rule set",
@@ -2708,6 +2723,8 @@
       "elevationField": "Altitude"
     },
     "selectAll": "All",
+    "selectAllPages": "Select all {{count}} across every page",
+    "selectInvertPages": "Invert across every page ({{count}})",
     "selectNone": "None",
     "selectInvert": "Invert",
     "selectedCount": "{{count}} of {{total}} selected",
