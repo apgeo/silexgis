@@ -4929,6 +4929,249 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/hypsometry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How one cave's passage length is distributed by height, and the levels it appears to be cut at. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveHypsometryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/level-bands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The levels somebody recorded for this cave, or the fact that nobody has. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveLevelBandsDto"];
+                    };
+                };
+            };
+        };
+        /** Record a reading of this cave's levels, superseding any earlier one. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SaveCaveLevelBandsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveLevelBandsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Withdraw the recorded reading of this cave's levels. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveLevelBandsDto"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/entrance-hypsometry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How the altitudes of the cave entrances under one area are distributed, with the spring altitudes among them. Counts only entrances this caller may place. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AreaHypsometryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/structure-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The cave's passage rose against the length-weighted rose of the fracture traces mapped within reach of it, with how far apart the two are. */
+        get: {
+            parameters: {
+                query?: {
+                    RadiusMetres?: number;
+                    AreaId?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveStructureComparisonDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/structure-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The rose of the depression long axes under one area against the length-weighted rose of the fracture traces mapped in it, with how far apart the two are. */
+        get: {
+            parameters: {
+                query?: {
+                    FeatureTypeId?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AreaStructureComparisonDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{id}/closest-approach/{other}": {
         parameters: {
             query?: never;
@@ -15363,6 +15606,25 @@ export interface components {
             /** Format: int32 */
             dailyPaidMessageCap: number;
         };
+        AreaHypsometryDto: {
+            /** Format: uuid */
+            areaId: string;
+            /** Format: int32 */
+            entranceCount: number;
+            springAltitudesM: number[];
+            proposal: components["schemas"]["ElevationBandProposal"];
+        };
+        AreaStructureComparisonDto: {
+            /** Format: uuid */
+            areaId: string;
+            /** Format: int32 */
+            dolineCount: number;
+            /** Format: int32 */
+            structureFeatureCount: number;
+            dolines: null | components["schemas"]["OrientationSummary"];
+            structure: null | components["schemas"]["OrientationSummary"];
+            divergence: null | components["schemas"]["RoseDivergence"];
+        };
         AttachmentCreateRequest: {
             /** Format: uuid */
             fileId: string;
@@ -15608,6 +15870,17 @@ export interface components {
             thumbnailUrl: string;
             caption: null | string;
         };
+        CaveHypsometryDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            proposal: null | components["schemas"]["ElevationBandProposal"];
+            springAltitudesM: number[];
+        };
         CaveIndexSummary: {
             /** Format: int32 */
             segmentCount: number;
@@ -15636,6 +15909,17 @@ export interface components {
             lengthToDepthRatio: null | number;
             /** Format: double */
             sinuosity: null | number;
+        };
+        CaveLevelBandsDto: {
+            /** Format: uuid */
+            caveId: string;
+            confirmed: boolean;
+            bands: components["schemas"]["SavedElevationBand"][];
+            note: null | string;
+            /** Format: uuid */
+            confirmedBy: null | string;
+            /** Format: date-time */
+            confirmedAt: null | string;
         };
         CaveListItemDto: {
             /** Format: uuid */
@@ -15752,6 +16036,21 @@ export interface components {
             length: components["schemas"]["MorphometryComparison"];
             depth: components["schemas"]["MorphometryComparison"];
             declaredDisagrees: boolean;
+        };
+        CaveStructureComparisonDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            /** Format: double */
+            radiusMetres: number;
+            /** Format: int32 */
+            structureFeatureCount: number;
+            passage: null | components["schemas"]["OrientationSummary"];
+            structure: null | components["schemas"]["OrientationSummary"];
+            divergence: null | components["schemas"]["RoseDivergence"];
         };
         CaveSummaryDto: {
             /** Format: uuid */
@@ -16196,6 +16495,48 @@ export interface components {
         EffectiveTermRuleSetDto: {
             set: null | components["schemas"]["TermRuleSetDetailDto"];
             source: null | components["schemas"]["TermRuleScope"];
+        };
+        ElevationBand: {
+            /** Format: double */
+            fromM: number;
+            /** Format: double */
+            toM: number;
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            weightM: number;
+            /** Format: double */
+            weightFraction: number;
+        };
+        ElevationBandProposal: {
+            /** Format: int32 */
+            sampleCount: number;
+            /** Format: double */
+            totalWeightM: number;
+            /** Format: double */
+            lowestM: null | number;
+            /** Format: double */
+            highestM: null | number;
+            /** Format: double */
+            binWidthM: number;
+            bins: components["schemas"]["ElevationBin"][];
+            bands: components["schemas"]["ElevationBand"][];
+            /** Format: double */
+            goodnessOfVarianceFit: null | number;
+        };
+        ElevationBin: {
+            /** Format: double */
+            fromM: number;
+            /** Format: double */
+            toM: number;
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            weightM: number;
+            /** Format: double */
+            countFraction: number;
+            /** Format: double */
+            weightFraction: number;
         };
         EmailChangeRequest: {
             newEmail: string;
@@ -17818,6 +18159,15 @@ export interface components {
             /** Format: double */
             entropyNormalized: null | number;
         };
+        OrientationSummary: {
+            /** Format: int32 */
+            sampleCount: number;
+            /** Format: double */
+            totalLengthM: number;
+            byCount: components["schemas"]["OrientationMeasure"];
+            byLength: components["schemas"]["OrientationMeasure"];
+            bins: components["schemas"]["OrientationBin"][];
+        };
         /** @enum {unknown} */
         PageDivision: "whole" | "page" | "sheet" | "slide";
         PagedResultOfAlbumDto: {
@@ -18636,11 +18986,30 @@ export interface components {
             /** Format: uuid */
             mainMemberId: null | string;
         };
+        RoseDivergence: {
+            /** Format: double */
+            transportDegrees: number;
+            /** Format: double */
+            normalized: number;
+            /** Format: double */
+            meanAxisSeparationDegrees: null | number;
+        };
         RuleHitDto: {
             ruleId: string;
             ruleName: string;
             /** Format: int32 */
             count: number;
+        };
+        SaveCaveLevelBandsRequest: {
+            bands: null | components["schemas"]["SavedElevationBand"][];
+            note: null | string;
+        };
+        SavedElevationBand: {
+            /** Format: double */
+            fromM: number;
+            /** Format: double */
+            toM: number;
+            label: null | string;
         };
         SearchDocumentItemDto: {
             /** Format: uuid */

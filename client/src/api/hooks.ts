@@ -221,6 +221,12 @@ export const queryKeys = {
   cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
+  caveHypsometry: (id: string) => ['caves', id, 'hypsometry'] as const,
+  caveLevelBands: (id: string) => ['caves', id, 'level-bands'] as const,
+  areaHypsometry: (id: string) => ['features', id, 'entrance-hypsometry'] as const,
+  caveStructureComparison: (id: string, areaId: string) =>
+    ['caves', id, 'structure-comparison', areaId] as const,
+  areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
   closestApproach: (id: string, other: string) => ['caves', id, 'closest-approach', other] as const,
   objectAccess: (entityType: string, entityId: string) => ['object-access', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
@@ -5020,6 +5026,139 @@ export function useCaveSurveyStatistics(caveId: string | undefined) {
     staleTime: 5 * 60_000,
     // A cave the caller may not read — or may read but not place exactly — is refused with the
     // same answer as a cave that does not exist, and asking again will not change it.
+    retry: false,
+  });
+}
+
+/** Where a cave's passage sits vertically, and the levels it appears to be cut at. */
+export type CaveHypsometry = components['schemas']['CaveHypsometryDto'];
+
+/** Where the entrances under an area sit vertically. */
+export type AreaHypsometry = components['schemas']['AreaHypsometryDto'];
+
+/** The histogram and the levels proposed from it. */
+export type ElevationBandProposal = components['schemas']['ElevationBandProposal'];
+
+/** One interval of height in an elevation histogram. */
+export type ElevationBin = components['schemas']['ElevationBin'];
+
+/** One proposed level. */
+export type ElevationBand = components['schemas']['ElevationBand'];
+
+/** What somebody decided one cave's levels are, or the fact that nobody has. */
+export type CaveLevelBands = components['schemas']['CaveLevelBandsDto'];
+
+/** One level of a saved reading, as a person wrote it down. */
+export type SavedElevationBand = components['schemas']['SavedElevationBand'];
+
+/** A cave's passage trends against the structure mapped around it. */
+export type CaveStructureComparison = components['schemas']['CaveStructureComparisonDto'];
+
+/** An area's depression alignments against the structure mapped in it. */
+export type AreaStructureComparison = components['schemas']['AreaStructureComparisonDto'];
+
+/** How far apart two roses are. */
+export type RoseDivergence = components['schemas']['RoseDivergence'];
+
+export function useCaveHypsometry(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveHypsometry(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{id}/hypsometry', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    // A cave this caller may read but not place exactly is refused with the same answer as one
+    // that does not exist. Retrying asks the same question again.
+    retry: false,
+  });
+}
+
+export function useAreaHypsometry(areaId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.areaHypsometry(areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/features/{id}/entrance-hypsometry', {
+          params: { path: { id: areaId! } },
+        }),
+      ),
+    enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useCaveLevelBands(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveLevelBands(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{id}/level-bands', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    retry: false,
+  });
+}
+
+export function useSaveCaveLevelBands(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { bands: SavedElevationBand[]; note: string | null }) =>
+      unwrap(
+        api.PUT('/api/v1/caves/{id}/level-bands', {
+          params: { path: { id: caveId } },
+          body,
+        }),
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.caveLevelBands(caveId) }),
+  });
+}
+
+export function useClearCaveLevelBands(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      unwrap(api.DELETE('/api/v1/caves/{id}/level-bands', { params: { path: { id: caveId } } })),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.caveLevelBands(caveId) }),
+  });
+}
+
+/**
+ * A cave's passage rose against the structure mapped around it.
+ *
+ * `areaId` scopes the structure to an area of the containment hierarchy instead of a buffer; it is
+ * part of the query key because the two scopes are two different answers to two different
+ * questions, and caching them together would show one under the other's heading.
+ */
+export function useCaveStructureComparison(caveId: string | undefined, areaId?: string) {
+  return useQuery({
+    queryKey: queryKeys.caveStructureComparison(caveId ?? '', areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caves/{id}/structure-comparison', {
+          // The contract names its query parameters as the request record does; spelled here the
+          // way the generated types spell them rather than lower-cased and left to the server's
+          // case-insensitive binding to rescue.
+          params: { path: { id: caveId! }, query: areaId ? { AreaId: areaId } : {} },
+        }),
+      ),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useAreaStructureComparison(areaId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.areaStructureComparison(areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/features/{id}/structure-comparison', {
+          params: { path: { id: areaId! } },
+        }),
+      ),
+    enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
     retry: false,
   });
 }

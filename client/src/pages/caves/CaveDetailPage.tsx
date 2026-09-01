@@ -47,6 +47,8 @@ import HistoryPanel, { type HistoryRestore } from '../../components/history/Hist
 import { applyRestore } from '../../components/history/historyModel.ts';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
+import CaveHypsometryPanel from '../../components/statistics/CaveHypsometryPanel.tsx';
+import CaveStructurePanel from '../../components/statistics/CaveStructurePanel.tsx';
 import CaveOrientationPanel from '../../components/statistics/CaveOrientationPanel.tsx';
 import CaveStatisticsPanel from '../../components/statistics/CaveStatisticsPanel.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
@@ -348,6 +350,13 @@ export default function CaveDetailPage() {
       {id && <CaveStatisticsPanel caveId={id} />}
 
       {id && <CaveOrientationPanel caveId={id} />}
+
+      {/* Beside the trend rather than beside the map: which way the passages run and whether the
+          rock around them runs the same way are one reading, and separating them puts the two
+          roses on different screens. */}
+      {id && <CaveStructurePanel caveId={id} />}
+
+      {id && <CaveHypsometryPanel caveId={id} canEdit={canEdit} />}
       {id && <CaveClosestApproachSection caveId={id} />}
 
       {id && <CaveTripsSection caveId={id} />}
