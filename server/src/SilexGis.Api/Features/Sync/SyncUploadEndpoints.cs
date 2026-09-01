@@ -667,7 +667,11 @@ public static class SyncUploadEndpoints
             Name = row.Name,
             Description = row.Description,
             Properties = row.Properties?.GetRawText() ?? "{}",
-            Geom = geom,
+            // Mirrored into Z on the way in, the same as an entrance's, so an altitude a device
+            // recorded on a place inside a cave is kept rather than accepted and discarded. A row
+            // that sent none keeps a plain two-dimensional point: "no altitude" and "at sea
+            // level" are different answers and must stay so.
+            Geom = geom is Point createdPoint ? WithAltitude(createdPoint, AltitudeOf(row, geom)) : geom,
             OwnerUserId = ctx.UserId,
             CavingGroupId = set.CavingGroupId,
             Visibility = set.UploadVisibility,
@@ -696,10 +700,11 @@ public static class SyncUploadEndpoints
                         return (refusedCave, null);
                     }
 
-                    if (!MayCreate(ctx, await CreateContext.ParentCreateFactsAsync(
-                            db, ctx, caveContainer.Feature?.Id, set.CavingGroupId, FeatureKind.Cave, ct)))
+                    var caveFacts = await CreateContext.ParentCreateFactsAsync(
+                        db, ctx, caveContainer.Feature?.Id, set.CavingGroupId, FeatureKind.Cave, ct);
+                    if (!MayCreate(ctx, caveFacts))
                     {
-                        return (RefuseCreate(row.Id), null);
+                        return (RefuseCreate(row.Id, set, ctx, caveFacts), null);
                     }
 
                     // A cave's own point is a cache of its main entrance and is written by the
@@ -761,10 +766,11 @@ public static class SyncUploadEndpoints
                         return (Refuse(row.Id, "sync.type_unknown", "This installation has no such entrance kind."), null);
                     }
 
-                    if (!MayCreate(ctx, await CreateContext.ParentCreateFactsAsync(
-                            db, ctx, parent.Feature.Id, set.CavingGroupId, FeatureKind.CaveEntrance, ct)))
+                    var entranceFacts = await CreateContext.ParentCreateFactsAsync(
+                        db, ctx, parent.Feature.Id, set.CavingGroupId, FeatureKind.CaveEntrance, ct);
+                    if (!MayCreate(ctx, entranceFacts))
                     {
-                        return (RefuseCreate(row.Id), null);
+                        return (RefuseCreate(row.Id, set, ctx, entranceFacts), null);
                     }
 
                     var altitude = AltitudeOf(row, geom);
@@ -807,10 +813,11 @@ public static class SyncUploadEndpoints
                         return (refusedPlace, null);
                     }
 
-                    if (!MayCreate(ctx, await CreateContext.ParentCreateFactsAsync(
-                            db, ctx, parent.Feature?.Id, set.CavingGroupId, FeatureKind.Generic, ct, typeId)))
+                    var placeFacts = await CreateContext.ParentCreateFactsAsync(
+                        db, ctx, parent.Feature?.Id, set.CavingGroupId, FeatureKind.Generic, ct, typeId);
+                    if (!MayCreate(ctx, placeFacts))
                     {
-                        return (RefuseCreate(row.Id), null);
+                        return (RefuseCreate(row.Id, set, ctx, placeFacts), null);
                     }
 
                     feature.FeatureTypeId = typeId;
@@ -845,8 +852,35 @@ public static class SyncUploadEndpoints
     private static bool MayCreate(AccessContext ctx, AccessTargetFacts? facts) =>
         facts is not null && CreateRules.MayCreate(ctx, AccessDomain.Features, facts);
 
-    private static SyncUploadRowResultDto RefuseCreate(Guid id) => Refuse(
-        id, CreateRules.ForbiddenCode, "You may not create rows here.");
+    /// <summary>
+    /// A create this caller may not make. When the selection names no caving group the refusal
+    /// says so, because that is the field a caver can actually act on and it is not part of the
+    /// request that failed — it was chosen when the selection was made, and a client told only
+    /// "you may not create rows here" sends its author to inspect the row's kind and its
+    /// container, which are the two things they did choose and neither of which is the cause.
+    /// The distinct code states a fact about the selection rather than a diagnosis: a caller may
+    /// hold no create right at all, and then binding a group would not help them either.
+    /// </summary>
+    private static SyncUploadRowResultDto RefuseCreate(
+        Guid id, SyncSet set, AccessContext ctx, AccessTargetFacts? facts) =>
+        set.CavingGroupId is null && facts is not null && BindingWouldHaveAllowed(ctx, facts)
+            ? Refuse(
+                id,
+                "sync.set_unbound",
+                "This selection names no caving group, and creating through it needs one.")
+            : Refuse(id, CreateRules.ForbiddenCode, "You may not create rows here.");
+
+    /// <summary>
+    /// Whether the missing binding is actually the reason. Asked by re-deciding the same create
+    /// against each club the caller belongs to: if any of them would have carried it, the
+    /// selection's empty binding is the thing standing in the way, and the caver can fix it by
+    /// choosing one. If none would, the caller holds no create right here at all and saying
+    /// "pick a group" would send them to do something that changes nothing — so the ordinary
+    /// refusal stands. A wrong diagnosis is worse than a general one.
+    /// </summary>
+    private static bool BindingWouldHaveAllowed(AccessContext ctx, AccessTargetFacts facts) =>
+        ctx.CavingGroupIds.Any(groupId =>
+            CreateRules.MayCreate(ctx, AccessDomain.Features, facts with { CavingGroupId = groupId }));
 
     private static async Task<(SyncUploadRowResultDto, ImportBatchItem?)> UpdateAsync(
         SilexGisDbContext db,
@@ -861,8 +895,27 @@ public static class SyncUploadEndpoints
         // protection. The guard below is stated per field for exactly this reason — a caller who
         // may not move a cave may still rename it, and a rule that refused the whole row would
         // throw away the half of the edit that was never in question.
-        feature.Name = row.Name;
-        feature.Description = row.Description;
+        //
+        // Applied only when sent. An upload is a partial write: a device may correct one field
+        // and leave the rest of the row alone, and the fields it did not mention must survive.
+        // Writing these two unconditionally emptied whichever one the device had not named, which
+        // is how a correction to a description used to leave a nameless cave in the registry.
+        //
+        // The consequence, which is the other half of this decision: an absent JSON member and an
+        // explicit null arrive here as the same value, so this generation of the protocol cannot
+        // express "the caver cleared this description". Clearing needs a shape that distinguishes
+        // the two — a sentinel, or a members-present list — and that is a contract change, not a
+        // behaviour change, because a phone in the field pins the generation it was built against.
+        if (row.Name is not null)
+        {
+            feature.Name = row.Name;
+        }
+
+        if (row.Description is not null)
+        {
+            feature.Description = row.Description;
+        }
+
         feature.ClientUpdatedAt = row.ClientUpdatedAt;
 
         // The property document goes in unguarded, and that is safe only because no coordinate is
@@ -930,7 +983,16 @@ public static class SyncUploadEndpoints
                     return (Refuse(row.Id, "sync.geometry_invalid", "That geometry could not be read."), null);
                 }
 
-                feature.Geom = geom;
+                feature.Geom = geom is Point movedPoint
+                    ? WithAltitude(movedPoint, AltitudeOf(row, geom))
+                    : geom;
+
+                // Said explicitly, because comparing two points is a two-dimensional question:
+                // an edit that moves nothing but the altitude leaves a point that compares equal
+                // to the stored one, and the change would be dropped before it reached the
+                // database. The altitude is the whole of what a place inside a cave has to say
+                // about depth, so losing it silently is worse than writing an unchanged row.
+                db.Entry(feature).Property(f => f.Geom).IsModified = true;
             }
 
             // A cave feature is deliberately absent from the two arms above. Its geometry is not

@@ -29,6 +29,10 @@ namespace SilexGis.Api.Tests;
 public sealed class SyncUploadTests : IAsyncLifetime, IDisposable
 {
     private const double OpenLon = 25.11223;
+    // Deliberately far from the coordinates the proximity assertions use: a test about an
+    // altitude must not put rows where a sibling test counts what is near what.
+    private const double AltLon = 22.54321;
+    private const double AltLat = 46.98765;
     private const double OpenLat = 45.33445;
     private const double HiddenLon = 24.87654;
     private const double HiddenLat = 45.12345;
@@ -800,6 +804,229 @@ public sealed class SyncUploadTests : IAsyncLifetime, IDisposable
         positionQuality = "Unknown",
     };
 
+
+    /// <summary>
+    /// The partial-write promise, made twice in the handed-over documents and stated as something
+    /// a client "may build on": a field the device did not send is a field the server leaves
+    /// alone. It is asserted here per field and in both directions, because the failure it guards
+    /// is silent — an update that corrects a description and never mentions the name would
+    /// otherwise leave a nameless cave in the club's registry, and nothing would say so.
+    /// </summary>
+    /// <remarks>
+    /// Deliberate clearing is not expressible in this contract generation: an absent JSON member
+    /// and an explicit null arrive as the same value, so the rule that makes omission safe also
+    /// makes "the caver emptied this description" unsendable. That is the other half of this
+    /// decision and it is written down in the protocol document rather than left to be found.
+    /// </remarks>
+    [Fact]
+    public async Task A_field_the_device_did_not_send_is_left_alone()
+    {
+        var caveId = Guid.CreateVersion7();
+        await UploadAsync(owner, set, Guid.NewGuid(), new
+        {
+            id = caveId,
+            kind = "cave",
+            baseRevision = (DateTimeOffset?)null,
+            deleted = false,
+            name = $"Named {marker}",
+            description = "The description the device sent when it made the row.",
+            caveTypeCode = "cave",
+            isMain = false,
+        });
+
+        // Only the name is mentioned. The description must survive untouched.
+        var renamed = await UploadAsync(owner, set, Guid.NewGuid(), new
+        {
+            id = caveId,
+            kind = "cave",
+            baseRevision = await RevisionAsync(caveId),
+            deleted = false,
+            name = $"Renamed {marker}",
+        });
+        Row(renamed, caveId).GetProperty("status").GetString().ShouldBe("updated");
+
+        var afterRename = await FeatureAsync(caveId);
+        afterRename.Name.ShouldBe($"Renamed {marker}");
+        afterRename.Description.ShouldBe("The description the device sent when it made the row.");
+
+        // And the mirror case, which is the one that loses a name.
+        var redescribed = await UploadAsync(owner, set, Guid.NewGuid(), new
+        {
+            id = caveId,
+            kind = "cave",
+            baseRevision = await RevisionAsync(caveId),
+            deleted = false,
+            description = "Resurveyed 2026; the entrance series was re-measured.",
+        });
+        Row(redescribed, caveId).GetProperty("status").GetString().ShouldBe("updated");
+
+        var afterRedescribe = await FeatureAsync(caveId);
+        afterRedescribe.Description.ShouldBe("Resurveyed 2026; the entrance series was re-measured.");
+        afterRedescribe.Name.ShouldBe($"Renamed {marker}");
+
+        // The endpoint still writes what it IS given, so the assertions above cannot be satisfied
+        // by a path that had quietly stopped applying either field.
+        var both = await UploadAsync(owner, set, Guid.NewGuid(), new
+        {
+            id = caveId,
+            kind = "cave",
+            baseRevision = await RevisionAsync(caveId),
+            deleted = false,
+            name = $"Both {marker}",
+            description = "Both fields, sent together.",
+        });
+        Row(both, caveId).GetProperty("status").GetString().ShouldBe("updated");
+
+        var afterBoth = await FeatureAsync(caveId);
+        afterBoth.Name.ShouldBe($"Both {marker}");
+        afterBoth.Description.ShouldBe("Both fields, sent together.");
+    }
+
+    private async Task<Feature> FeatureAsync(Guid id)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Features.AsNoTracking().SingleAsync(f => f.Id == id);
+    }
+
+
+    /// <summary>
+    /// An altitude a device sends on a place inside a cave is kept, and is readable back the same
+    /// way an entrance's is — as the stored point's third ordinate. It used to be accepted and
+    /// discarded, so a phone that recorded a depth below the entrance had nowhere to put it and a
+    /// second device syncing through the server never saw it.
+    /// </summary>
+    [Fact]
+    public async Task An_altitude_on_a_place_inside_a_cave_is_kept_as_the_points_third_ordinate()
+    {
+        var caveId = await CreateCaveAsync($"Altitude host {marker}");
+        var placeId = Guid.CreateVersion7();
+
+        await UploadAsync(owner, set, Guid.NewGuid(), new
+        {
+            id = placeId,
+            kind = "generic",
+            parentId = caveId,
+            baseRevision = (DateTimeOffset?)null,
+            deleted = false,
+            name = $"Deep chamber {marker}",
+            featureTypeCode = "cave_place",
+            isMain = false,
+            geometry = new { type = "Point", coordinates = new[] { AltLon, AltLat } },
+            altitude = -137.5,
+        });
+
+        var created = (Point)await GeometryAsync(placeId);
+        created.Coordinate.Z.ShouldBe(-137.5, 1e-9);
+
+        // And on an edit, which travels a different arm of the same handler.
+        var edited = await UploadAsync(owner, set, Guid.NewGuid(), new
+        {
+            id = placeId,
+            kind = "generic",
+            baseRevision = await RevisionAsync(placeId),
+            deleted = false,
+            // Deliberately the SAME point: only the altitude moves. Comparing points is a
+            // two-dimensional question, so an edit that changes nothing but the third ordinate is
+            // the one that used to be accepted and then quietly not saved.
+            geometry = new { type = "Point", coordinates = new[] { AltLon, AltLat } },
+            altitude = -142.25,
+        });
+        Row(edited, placeId).GetProperty("status").GetString().ShouldBe("updated");
+
+        ((Point)await GeometryAsync(placeId)).Coordinate.Z.ShouldBe(-142.25, 1e-9);
+
+        // A row sent without an altitude keeps a plain two-dimensional point rather than gaining
+        // a zero, so "no altitude" and "at sea level" stay different things.
+        var flatId = Guid.CreateVersion7();
+        await UploadAsync(owner, set, Guid.NewGuid(), new
+        {
+            id = flatId,
+            kind = "generic",
+            parentId = caveId,
+            baseRevision = (DateTimeOffset?)null,
+            deleted = false,
+            name = $"Flat {marker}",
+            featureTypeCode = "cave_place",
+            isMain = false,
+            geometry = new { type = "Point", coordinates = new[] { AltLon, AltLat } },
+        });
+        double.IsNaN(((Point)await GeometryAsync(flatId)).Coordinate.Z).ShouldBeTrue();
+    }
+
+
+    /// <summary>
+    /// A create refused because the selection names no caving group says so, instead of the
+    /// general refusal that sends a client author to inspect the row's kind and its container —
+    /// neither of which is the cause, and both of which the device did choose. The deciding
+    /// field is on the selection, which was written earlier and is not part of the failing
+    /// request, so without a distinct code there is nothing in the answer to point at.
+    /// </summary>
+    /// <remarks>
+    /// Asserted in both directions on purpose. The distinct code is a claim about causation, and
+    /// a claim that "binding a group would fix this" is wrong for a caller who holds no create
+    /// right at all — they would bind a group and be refused exactly as before. The second half
+    /// of this test is the existing viewer, who stays on the general refusal.
+    /// </remarks>
+    [Fact]
+    public async Task A_create_refused_only_for_want_of_a_club_says_so_and_one_refused_outright_does_not()
+    {
+        var adminEmail = $"up-adm-{marker}@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, adminEmail);
+        var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
+
+        Guid clubId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var club = new CavingGroup { Name = $"Club {marker}", Slug = $"club-{marker}" };
+            db.CavingGroups.Add(club);
+            await db.SaveChangesAsync();
+            clubId = club.Id;
+            await RosterHelper.AddMemberAsync(db, clubId, viewerId);
+        }
+
+        // The viewer may create, but only for this club's own content. With a selection that
+        // names no club there is nothing for that right to attach to.
+        var ruleset = await admin.PostAsJsonAsync("/api/v1/permission-groups/",
+            new { name = $"Club creators {marker}", description = (string?)null });
+        ruleset.StatusCode.ShouldBe(HttpStatusCode.Created, await ruleset.Content.ReadAsStringAsync());
+        var rulesetId = (await ruleset.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        (await admin.PutAsJsonAsync($"/api/v1/permission-groups/{rulesetId}/entries", new
+        {
+            entries = new[]
+            {
+                new
+                {
+                    effect = "allow",
+                    domain = "features",
+                    actions = "read, write, create",
+                    scopeKind = "cavingGroup",
+                    scopeId = clubId,
+                },
+            },
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await admin.PostAsJsonAsync($"/api/v1/permission-groups/{rulesetId}/members",
+            new { memberKind = "user", memberId = viewerId })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Through a selection naming no club: refused, and the answer names the reason.
+        var unboundId = Guid.CreateVersion7();
+        var unbound = await UploadAsync(viewer, viewerSet, Guid.CreateVersion7(),
+            Cave(unboundId, $"Through an unbound selection {marker}"));
+        Row(unbound, unboundId).GetProperty("status").GetString().ShouldBe("rejected");
+        Row(unbound, unboundId).GetProperty("code").GetString().ShouldBe("sync.set_unbound");
+
+        // The same account, the same row, through a selection that names the club: written. So
+        // the refusal above really was about the binding and not about the account.
+        var boundSet = await CreateSetAsync(viewer, clubId);
+        var boundId = Guid.CreateVersion7();
+        var bound = await UploadAsync(viewer, boundSet, Guid.CreateVersion7(),
+            Cave(boundId, $"Through a bound selection {marker}"));
+        Row(bound, boundId).GetProperty("status").GetString().ShouldBe("created");
+    }
+
     private static JsonElement Row(JsonElement answer, Guid id) =>
         answer.GetProperty("rows").EnumerateArray()
             .Single(r => r.GetProperty("id").GetGuid() == id);
@@ -817,11 +1044,12 @@ public sealed class SyncUploadTests : IAsyncLifetime, IDisposable
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    private async Task<Guid> CreateSetAsync(HttpClient client)
+    private async Task<Guid> CreateSetAsync(HttpClient client, Guid? cavingGroupId = null)
     {
         var response = await client.PostAsJsonAsync("/api/v1/sync/sets/", new
         {
             name = $"Phone {marker}",
+            cavingGroupId,
             uploadVisibility = "private",
             rootFeatureIds = Array.Empty<Guid>(),
             settings = new { },
