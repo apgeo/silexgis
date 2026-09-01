@@ -264,11 +264,19 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable
         call.Document.ShouldContain("s1: pesteri(");
         call.Document.ShouldContain("s2: pesteri(");
 
-        // The spellings themselves, in the variables the aliases read: what was typed, the cedilla
-        // form, and the form with no diacritics at all.
+        // Wide, but bounded — the width is what somebody else's service pays for.
+        call.Document.ShouldNotContain($"s{SilexGis.Domain.Catalogue.RomanianText.MaxSpellings}: pesteri(");
+
+        // The spellings themselves, in the variables the aliases read. What was typed leads, and
+        // the wholly unaccented form comes second because a large part of this catalogue was
+        // typed that way — for many caves it is the only spelling that matches at all.
         call.Text("q0").ShouldBe("urșilor");
-        call.Text("q1").ShouldBe("urşilor");
-        call.Text("q2").ShouldBe("ursilor");
+        call.Text("q1").ShouldBe("ursilor");
+
+        // The cedilla spelling is in there too, wherever the expansion placed it. Its position is
+        // not the contract; its presence is, because it and the comma-below form return genuinely
+        // disjoint sets of caves.
+        call.Terms.ShouldContain("urşilor");
 
         // The measured reason a listing stays kilobytes. Asserted on the document rather than on
         // the response size, because the response here is whatever this test wrote.
@@ -281,8 +289,11 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable
 
         // And the screen is told which spellings were actually searched for — a search that
         // quietly asked something other than what was typed is worse than one that did not.
-        found.GetProperty("spellings").EnumerateArray().Select(s => s.GetString())
-            .ShouldBe(["urșilor", "urşilor", "ursilor"]);
+        var reported = found.GetProperty("spellings").EnumerateArray().Select(x => x.GetString()).ToArray();
+        reported[0].ShouldBe("urșilor");
+        reported.ShouldContain("urşilor");
+        reported.ShouldContain("ursilor");
+        reported.Length.ShouldBeLessThanOrEqualTo(SilexGis.Domain.Catalogue.RomanianText.MaxSpellings);
     }
 
     /// <summary>
@@ -850,6 +861,19 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable
         public JsonElement Variables => Payload.GetProperty("variables");
 
         public string? Text(string name) => Variables.GetProperty(name).GetString();
+
+        /// <summary>
+        /// Every spelling this request actually carried, whatever the expansion decided to send.
+        /// Read from the variables rather than asserted position by position: which spelling lands
+        /// in which slot is the expansion's business, and pinning it here would make every future
+        /// improvement to the expansion look like a broken endpoint.
+        /// </summary>
+        public IReadOnlyList<string> Terms =>
+        [
+            .. Variables.EnumerateObject()
+                .Where(p => p.Name.StartsWith('q') && p.Value.ValueKind == JsonValueKind.String)
+                .Select(p => p.Value.GetString()!),
+        ];
 
         public int Number(string name) => Variables.GetProperty(name).GetInt32();
     }

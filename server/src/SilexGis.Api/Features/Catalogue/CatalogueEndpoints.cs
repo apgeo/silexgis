@@ -73,8 +73,9 @@ public static class CatalogueEndpoints
 
         catalogue.MapGet("/caves", SearchAsync)
             .WithSummary(
-                "Searches the speologie.org cave catalogue by name and county, marking the caves "
-                + "this installation already holds. Needs a term or a county.");
+                "Searches the speologie.org cave catalogue by cave name and county, marking the "
+                + "caves this installation already holds. Needs a term or a county. The term is "
+                + "asked about in every Romanian spelling of itself, in one request.");
 
         catalogue.MapGet("/caves/{id:int}", GetAsync)
             .WithSummary(

@@ -3436,7 +3436,8 @@
       "spellingsWhy": "Romanian is written with two different diacritic conventions and often with none, and the catalogue's search treats them as different words. All the spellings are asked about at once.",
       "noResults": "The catalogue has nothing matching that.",
       "hint": "The catalogue holds about 8,650 published caves. It carries no coordinates, so a cave imported from it arrives without a position.",
-      "spellings": "Searched for: {{list}}"
+      "spellings": "Searched for {{count}} spellings of what you typed: {{list}}",
+      "noResultsHint": "Nothing in the catalogue matches that. Its search is sensitive to Romanian diacritics — this installation already asks for several spellings of what you typed, but a long name with more than one accented letter may still need typing as the catalogue spells it (Scărișoara rather than Scarisoara)."
     },
     "columns": {
       "name": "Name",

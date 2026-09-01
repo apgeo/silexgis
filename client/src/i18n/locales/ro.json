@@ -3436,7 +3436,8 @@
       "spellingsWhy": "Româna se scrie cu două convenții de diacritice diferite și adesea fără niciuna, iar căutarea catalogului le tratează ca pe cuvinte diferite. Toate grafiile sunt cerute deodată.",
       "noResults": "Catalogul nu are nimic care să corespundă.",
       "hint": "Catalogul cuprinde aproximativ 8.650 de peșteri publicate. Nu conține coordonate, așa că o peșteră importată de acolo ajunge fără poziție.",
-      "spellings": "Grafii căutate: {{list}}"
+      "spellings": "S-au căutat {{count}} grafii ale a ceea ce ați scris: {{list}}",
+      "noResultsHint": "Nimic din catalog nu corespunde. Căutarea lui este sensibilă la diacritice — instalarea cere deja mai multe grafii ale a ceea ce ați scris, dar o denumire lungă cu mai multe litere accentuate poate cere totuși scrierea așa cum o scrie catalogul (Scărișoara, nu Scarisoara)."
     },
     "columns": {
       "name": "Denumire",

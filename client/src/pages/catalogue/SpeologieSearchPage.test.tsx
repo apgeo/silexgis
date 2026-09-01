@@ -190,6 +190,7 @@ describe('SpeologieSearchPage', () => {
     const note = screen.getByTestId('speologie-spellings');
     expect(note.textContent).toContain('urșilor');
     expect(note.textContent).toContain('urşilor');
+    expect(note.textContent).toContain('3');
   });
 
   it('does not claim a search was widened when only one spelling was asked about', () => {
@@ -201,5 +202,21 @@ describe('SpeologieSearchPage', () => {
     searchResult = { isFetching: false, error: new ApiError(503, 'speologie.unauthorized') };
     show();
     expect(screen.getByText(/did not accept this installation's API key/)).toBeTruthy();
+  });
+
+  it('names a few of the spellings it used rather than all of a wide expansion', () => {
+    // The server asks about up to two dozen spellings of one word. Printing them all turns the
+    // sentence that explains the search into a wall of near-identical words nobody reads.
+    const many = Array.from({ length: 24 }, (_, i) => `spelling${i}`);
+    searchResult = {
+      data: { items: [], page: 1, pageSize: 25, hasMore: false, spellings: many },
+      isFetching: false,
+    };
+    show();
+
+    const note = screen.getByTestId('speologie-spellings');
+    expect(note.textContent).toContain('24');
+    expect(note.textContent).toContain('spelling0');
+    expect(note.textContent).not.toContain('spelling9');
   });
 });

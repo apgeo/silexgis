@@ -13,7 +13,7 @@ using SilexGis.Domain.Catalogue;
 namespace SilexGis.Infrastructure.Catalogue;
 
 /// <summary>What to ask the catalogue for.</summary>
-/// <param name="Term">Free text matched against a cave's name and its URL slug. Optional.</param>
+/// <param name="Term">Free text, matched as a substring of the cave's name only. Optional.</param>
 /// <param name="County">Two-letter county code, matched exactly. Optional.</param>
 /// <param name="Offset">How many rows to skip, per spelling.</param>
 /// <param name="PageSize">How many rows are wanted.</param>

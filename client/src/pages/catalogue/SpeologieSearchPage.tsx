@@ -207,7 +207,15 @@ export default function SpeologieSearchPage() {
         <Alert
           type="info"
           showIcon
-          title={t('speologie.search.spellings', { list: results.data.spellings.join(', ') })}
+          title={t('speologie.search.spellings', {
+            count: results.data.spellings.length,
+            // A few, not all of them. The expansion is deliberately wide — two dozen spellings
+            // of one word — and printing every one turns the sentence that explains the search
+            // into a wall of near-identical words nobody reads.
+            list:
+              results.data.spellings.slice(0, 4).join(', ') +
+              (results.data.spellings.length > 4 ? ' …' : ''),
+          })}
           description={t('speologie.search.spellingsWhy')}
           data-testid="speologie-spellings"
         />
@@ -221,7 +229,16 @@ export default function SpeologieSearchPage() {
         dataSource={rows}
         columns={columns}
         pagination={false}
-        locale={{ emptyText: results.data ? t('speologie.search.noResults') : undefined }}
+        locale={{
+          emptyText: results.data ? (
+            <Space orientation="vertical" size={4}>
+              <span>{t('speologie.search.noResults')}</span>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t('speologie.search.noResultsHint')}
+              </Typography.Text>
+            </Space>
+          ) : undefined,
+        }}
         rowSelection={{
           selectedRowKeys: selected as number[],
           onChange: (keys) => setSelected(keys as number[]),

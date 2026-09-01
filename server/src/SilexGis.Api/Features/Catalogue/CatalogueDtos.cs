@@ -182,7 +182,7 @@ public sealed class SpeologieSearchValidator : AbstractValidator<SpeologieSearch
 }
 
 /// <summary>The search's parameters, as one object so they can be validated as one.</summary>
-/// <param name="Q">Free text, matched by the catalogue against a cave's name and its URL slug.</param>
+/// <param name="Q">Free text. The catalogue matches it as a substring of the cave's <b>name</b> only — not its slug, and not its description.</param>
 /// <param name="County">Two-letter Romanian county code.</param>
 /// <param name="Page">One-based page number.</param>
 /// <param name="PageSize">How many rows are wanted.</param>

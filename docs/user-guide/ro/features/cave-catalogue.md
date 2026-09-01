@@ -47,11 +47,26 @@ Româna se scrie corect cu `ș` și `ț` (cu virgulă dedesubt). Vreme de aproap
 mult text românesc a fost scris așa. O bună parte din acest catalog a fost tastată fără diacritice
 deloc.
 
-**Căutarea catalogului le tratează pe toate trei ca pe cuvinte diferite.** Căutarea `urșilor` și
-căutarea `urşilor` întorc peșteri complet diferite, iar niciuna nu găsește *Pestera Ursilor*. Așa că
-o căutare de aici cere fiecare grafie a ceea ce ați scris, unește răspunsurile și vă spune ce grafii
-a folosit. Nu trebuie să știți nimic din toate acestea ca să folosiți caseta — dar dacă ați căutat
-vreodată direct pe acel site și v-ați mirat, aceasta este explicația.
+**Căutarea catalogului le tratează pe toate trei ca pe cuvinte diferite**, iar efectul nu este
+subtil:
+
+| ce scrieți | ce găsește catalogul |
+|---|---|
+| `Padis` | 1 peșteră |
+| `Padiș` | niciuna |
+| `Padiş` | 2 peșteri |
+| `Scarisoara` | niciuna — ghețarul este trecut ca *Scărișoara* |
+
+Așadar scrierea fără diacritice, adică exact ce vă obligă majoritatea tastaturilor să faceți, de
+obicei nu găsește **nimic** — iar o peșteră care este în registru arată exact ca una care nu este.
+
+Acest ecran ocolește problema: cere până la două duzini de grafii ale a ceea ce ați scris, toate
+într-o singură cerere, și vă spune câte a folosit. Nu trebuie să știți nimic din toate acestea ca să
+folosiți caseta.
+
+**Soluția este bună, nu perfectă.** O denumire lungă care are nevoie de două accente în litere
+diferite poate rămâne totuși în afara a ceea ce se încearcă — *Scarisoara* este exemplul incomod.
+Dacă o căutare nu întoarce nimic și credeți că peștera există, scrieți diacriticele.
 
 O consecință de reținut: **paginarea dincolo de prima pagină este aproximativă.** Fiecare grafie este
 paginată separat la celălalt capăt, așa că o pagină ulterioară poate fi scurtă sau poate repeta ceva.

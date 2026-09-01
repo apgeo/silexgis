@@ -46,11 +46,24 @@ Romanian is properly written with `ș` and `ț` (comma below). For about two dec
 keyboards in circulation produced the Turkish cedilla letters `ş` and `ţ` instead, and a great deal of
 Romanian was written with those. A good deal of this catalogue was typed with no diacritics at all.
 
-**The catalogue's search treats all three as different words.** Searching `urșilor` and searching
-`urşilor` return completely different caves, and neither finds *Pestera Ursilor*. So one search here
-asks for every spelling of what you typed and merges the answers, and tells you which spellings it
-used. You do not need to know any of this to use the box — but if you have ever searched that site
-directly and been surprised, this is why.
+**The catalogue's search treats all three as different words**, and the effect is not subtle:
+
+| you type | the catalogue finds |
+|---|---|
+| `Padis` | 1 cave |
+| `Padiș` | none |
+| `Padiş` | 2 caves |
+| `Scarisoara` | none — the famous ice cave is filed as *Scărișoara* |
+
+So typing without diacritics, which is what most keyboards make you do, usually finds **nothing** —
+and a cave that is in the register looks exactly like a cave that is not.
+
+This screen works around it: it asks for up to two dozen spellings of whatever you typed, all in one
+request, and tells you how many it used. You do not need to know any of this to use the box.
+
+**The workaround is good, not perfect.** A long name needing two accents in different letters can
+still fall outside what is tried — *Scarisoara* is the awkward example. If a search comes back empty
+and you think the cave exists, type the accents.
 
 One consequence worth knowing: **paging past the first page is approximate.** Each spelling is paged
 separately at the far end, so a later page can be short or repeat something. Narrow the search rather
