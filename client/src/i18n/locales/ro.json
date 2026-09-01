@@ -42,7 +42,8 @@
       "admin": "Administrare",
       "config": "Configurare"
     },
-    "workAreas": "Zone de lucru"
+    "workAreas": "Zone de lucru",
+    "speologie": "Catalogul peșterilor"
   },
   "terrain": {
     "title": "Relief",
@@ -2801,7 +2802,8 @@
     "deletedTag": "Șters",
     "elevationPerCandidate": "Decide pentru fiecare candidat",
     "elevationHint": "Fișierul este singura sursă. Nu se preia nimic dintr-un model de elevație: o grilă publică lângă un perete — adică exact acolo unde sunt intrările — greșește cu o sută de metri, fără nimic pe ecran care să o spună.",
-    "keepAltitude": "Păstrează {{altitude}} m"
+    "keepAltitude": "Păstrează {{altitude}} m",
+    "batchFromCatalogue": "Din catalogul peșterilor"
   },
   "photoImport": {
     "title": "Obiecte din fotografii",
@@ -3412,6 +3414,124 @@
       "newTitle": "Notițe despre {{name}}",
       "newTitleBare": "Notițe",
       "newBody": "Scrie aici, apoi selectează orice parte din text ca să o legi."
+    }
+  },
+  "speologie": {
+    "title": "Catalogul peșterilor",
+    "subtitle": "Caută în catalogul comunitar al peșterilor din România de pe speologie.org și adu peșteri de acolo în această instalare.",
+    "portalLink": "Deschide speologie.org",
+    "openInPortal": "Deschide pe speologie.org",
+    "notConfigured": {
+      "title": "Această instalare nu are cheie pentru catalog",
+      "body": "Căutarea pe speologie.org are nevoie de o cheie API personală, obținută dintr-un profil de pe acel site și configurată de un administrator. Până atunci, acest ecran nu poate afișa nimic."
+    },
+    "search": {
+      "term": "Denumire",
+      "termPlaceholder": "O parte din denumirea peșterii sau codul ei",
+      "county": "Județ",
+      "countyPlaceholder": "Orice județ",
+      "submit": "Caută",
+      "clear": "Șterge",
+      "needSomething": "Dă o denumire de căutat, un județ, sau ambele.",
+      "spellingsWhy": "Româna se scrie cu două convenții de diacritice diferite și adesea fără niciuna, iar căutarea catalogului le tratează ca pe cuvinte diferite. Toate grafiile sunt cerute deodată.",
+      "noResults": "Catalogul nu are nimic care să corespundă.",
+      "hint": "Catalogul cuprinde aproximativ 8.650 de peșteri publicate. Nu conține coordonate, așa că o peșteră importată de acolo ajunge fără poziție.",
+      "spellings": "S-au căutat {{count}} grafii ale a ceea ce ați scris: {{list}}",
+      "noResultsHint": "Nimic din catalog nu corespunde. Căutarea lui este sensibilă la diacritice — instalarea cere deja mai multe grafii ale a ceea ce ați scris, dar o denumire lungă cu mai multe litere accentuate poate cere totuși scrierea așa cum o scrie catalogul (Scărișoara, nu Scarisoara)."
+    },
+    "columns": {
+      "name": "Denumire",
+      "county": "Județ",
+      "mountain": "Masiv",
+      "length": "Lungime (m)",
+      "depth": "Denivelare (m)",
+      "altitude": "Altitudine (m)",
+      "protectionClass": "Clasă",
+      "state": "În această instalare",
+      "actions": "Acțiuni"
+    },
+    "state": {
+      "imported": "Deja importată",
+      "importedElsewhere": "Deja importată, dar nu o poți vedea",
+      "notImported": "Încă nu este aici",
+      "openCave": "Deschide peștera"
+    },
+    "flags": {
+      "vanished": "Consemnată ca dispărută",
+      "sump": "Are sifon"
+    },
+    "actions": {
+      "import": "Importă",
+      "refresh": "Actualizează din catalog",
+      "details": "Detalii",
+      "importSelected": "Importă selecția ({{count}})"
+    },
+    "detail": {
+      "title": "{{name}} — speologie.org",
+      "description": "Descriere",
+      "noDescription": "Catalogul nu consemnează nicio descriere pentru această peșteră.",
+      "descriptionNote": "Afișată exact cum ar fi salvată: formatarea din catalog este transformată în text simplu, iar o descriere foarte lungă este scurtată.",
+      "identity": "Identificare",
+      "slug": "Identificator din catalog",
+      "catalogueId": "Id în catalog",
+      "locality": "Localitate",
+      "rockCode": "Cod rocă",
+      "rockCodeHint": "Catalogul nu publică o legendă pentru acest cod, așa că este păstrat exact cum este scris, fără a fi ghicit.",
+      "science": "Interes științific",
+      "protectedAreaCode": "Cod arie protejată",
+      "hydroNumber": "Număr hidrologic",
+      "hydroBasin": "Bazin hidrografic",
+      "hydroBasinHint": "Identificatorul de bazin al catalogului. Denumirile bazinelor nu sunt publicate prin această interfață."
+    },
+    "wizard": {
+      "title": "Import din catalog",
+      "back": "Înapoi la căutare",
+      "nothingSelected": "Nu a fost aleasă nicio peșteră. Întoarce-te la căutare și alege peșterile de importat.",
+      "options": "Pentru fiecare peșteră importată",
+      "parent": "Așază-le sub",
+      "parentPlaceholder": "Nimic — lasă-le la nivelul de sus",
+      "noCoordinates": "Catalogul nu publică coordonate",
+      "noCoordinatesBody": "O peșteră importată de acolo nu are poziție, deci este în registru și în căutare, dar pe nicio hartă. Dă-i o poziție mai jos și primește o intrare principală acolo; lasă-o așa și poate fi poziționată mai târziu. Peșterile fără poziție se găsesc la Peșteri, cu filtrul „fără poziție”.",
+      "candidates": "Peșterile",
+      "action": "Ce se face",
+      "actionCreate": "Creează",
+      "actionUpdate": "Actualizează",
+      "actionSkip": "Lasă neatinsă",
+      "actionUpdateHint": "Această peșteră a mai fost importată. Actualizarea îi rescrie denumirea, descrierea, regiunea, altitudinea, lungimea, denivelarea și clasa de protecție din catalog; restul a ceea ce este consemnat pe ea rămâne neatins.",
+      "caveType": "Tip",
+      "caveTypeDerived": "Dedus din denumire",
+      "position": "Poziție",
+      "unplaced": "Fără poziție",
+      "place": "Așază pe hartă",
+      "placing": "Dă clic pe hartă pentru a așeza „{{name}}”",
+      "clearPosition": "Șterge poziția",
+      "commit": "Importă",
+      "committing": "Se importă…",
+      "subtitle": "Alese de pe speologie.org: {{count}}. Gata de adus."
+    },
+    "result": {
+      "title": "Importul s-a încheiat",
+      "created": "Create",
+      "updated": "Actualizate",
+      "skipped": "Lăsate neatinse",
+      "failures": "Acestea nu au putut fi importate",
+      "undoHint": "Întregul import este un singur lot și poate fi anulat din Geodate → Istoric importuri.",
+      "viewCaves": "Vezi peșterile"
+    },
+    "errors": {
+      "notConfigured": "Această instalare nu are cheie API pentru catalog.",
+      "unauthorized": "Catalogul nu a acceptat cheia API a acestei instalări. Un administrator trebuie să configureze una funcțională.",
+      "unavailable": "Catalogul nu a putut fi contactat. Este un serviciu mic, întreținut de voluntari — încearcă din nou peste puțin timp.",
+      "rejected": "Catalogul a respins cererea. Este o eroare a acestei aplicații, nu ceva ce poți remedia.",
+      "searchTooBroad": "Dă o denumire de căutat, un județ, sau ambele.",
+      "caveNotFound": "Catalogul nu mai publică acea peșteră.",
+      "selectionTooLarge": "Au fost alese prea multe peșteri pentru un singur import. Adu-le în loturi mai mici — fiecare poate fi anulat separat.",
+      "importFailed": "Importul nu a putut fi finalizat."
+    },
+    "paging": {
+      "previous": "Anterioare",
+      "next": "Următoare",
+      "page": "Pagina {{page}}"
     }
   }
 }

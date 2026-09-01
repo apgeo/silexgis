@@ -4668,7 +4668,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged cave list with filters; visibility-filtered, protected locations obfuscated. */
+        /** Paged cave list with filters, including `unplaced` for caves that have no position at all; visibility-filtered, protected locations obfuscated. */
         get: {
             parameters: {
                 query?: {
@@ -4681,6 +4681,7 @@ export interface paths {
                     minLength?: number;
                     bbox?: string;
                     tag?: string;
+                    unplaced?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -6708,6 +6709,161 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["ImportBatchDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogue/speologie/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether this installation has been given an API key for the speologie.org cave catalogue, and the limits it works to. Reaches nothing. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpeologieStatusDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogue/speologie/caves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Searches the speologie.org cave catalogue by cave name and county, marking the caves this installation already holds. Needs a term or a county. The term is asked about in every Romanian spelling of itself, in one request. */
+        get: {
+            parameters: {
+                query?: {
+                    q?: string;
+                    county?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpeologieSearchDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogue/speologie/caves/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One cave from the speologie.org catalogue in full, with its description already converted to the plain text an import would store. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpeologieCaveDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogue/speologie/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Imports the selected caves from the speologie.org catalogue as one revertible batch, creating new caves and refreshing ones imported before. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SpeologieImportRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpeologieImportResultDto"];
                     };
                 };
             };
@@ -17396,7 +17552,7 @@ export interface components {
             photoClusterRadiusMeters: number;
         };
         /** @enum {unknown} */
-        ImportSource: "vectorFile" | "photos" | "deviceSync";
+        ImportSource: "vectorFile" | "photos" | "deviceSync" | "externalCatalogue";
         /** @enum {unknown} */
         ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
         /** @enum {unknown} */
@@ -18840,6 +18996,94 @@ export interface components {
         };
         /** @enum {unknown} */
         SortKey: "created" | "updated" | "title" | "owner" | "proximity" | "occurred";
+        /** @enum {unknown} */
+        SpeologieAction: "create" | "update" | "skip" | null;
+        SpeologieCaveDto: {
+            /** Format: int32 */
+            id: number;
+            title: string;
+            slug: null | string;
+            url: null | string;
+            county: null | string;
+            locality: null | string;
+            mountain: null | string;
+            /** Format: double */
+            length: null | number;
+            /** Format: double */
+            depth: null | number;
+            /** Format: double */
+            negativeDepth: null | number;
+            /** Format: double */
+            altitude: null | number;
+            protectionClass: null | string;
+            science: null | string;
+            rockCode: null | string;
+            sump: null | boolean;
+            vanished: boolean;
+            protectedAreaCode: null | string;
+            hydroNumber: null | string;
+            /** Format: int32 */
+            hydroBasinId: null | number;
+            description: null | string;
+            alreadyImported: boolean;
+            /** Format: uuid */
+            existingCaveId: null | string;
+        };
+        SpeologieDecisionDto: {
+            action?: null | components["schemas"]["SpeologieAction"];
+            caveTypeCode?: null | string;
+            /** Format: double */
+            longitude?: null | number;
+            /** Format: double */
+            latitude?: null | number;
+        };
+        SpeologieFailureDto: {
+            /** Format: int32 */
+            speologieId: number;
+            title: null | string;
+            code: string;
+            reason: string;
+        };
+        SpeologieImportRequest: {
+            selection: number[];
+            decisions: null | {
+                [key: string]: components["schemas"]["SpeologieDecisionDto"];
+            };
+            visibility: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId: null | string;
+            locationProtected: boolean;
+            /** Format: uuid */
+            parentId: null | string;
+        };
+        SpeologieImportResultDto: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            createdCount: number;
+            /** Format: int32 */
+            updatedCount: number;
+            /** Format: int32 */
+            skippedCount: number;
+            failures: components["schemas"]["SpeologieFailureDto"][];
+        };
+        SpeologieSearchDto: {
+            items: components["schemas"]["SpeologieCaveDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            hasMore: boolean;
+            spellings: string[];
+        };
+        SpeologieStatusDto: {
+            configured: boolean;
+            /** Format: int32 */
+            maxPageSize: number;
+            /** Format: int32 */
+            maxSelection: number;
+            portalUrl: string;
+        };
         SurveyModelDto: {
             /** Format: uuid */
             id: string;

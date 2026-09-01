@@ -42,7 +42,8 @@
       "admin": "Administration",
       "config": "Configuration"
     },
-    "workAreas": "Work areas"
+    "workAreas": "Work areas",
+    "speologie": "Cave catalogue"
   },
   "terrain": {
     "title": "Terrain",
@@ -2801,7 +2802,8 @@
     "deletedTag": "Deleted",
     "elevationPerCandidate": "Decide per candidate",
     "elevationHint": "The file is the only source. Nothing is taken from an elevation model: a public grid beside a cliff — which is where entrances are — is out by a hundred metres, with nothing on screen to say so.",
-    "keepAltitude": "Keep {{altitude}} m"
+    "keepAltitude": "Keep {{altitude}} m",
+    "batchFromCatalogue": "From the cave catalogue"
   },
   "photoImport": {
     "title": "Features from photographs",
@@ -3412,6 +3414,124 @@
       "newTitle": "Notes on {{name}}",
       "newTitleBare": "Notes",
       "newBody": "Write here, then select any part of the text to link it."
+    }
+  },
+  "speologie": {
+    "title": "Cave catalogue",
+    "subtitle": "Search the Romanian community cave catalogue at speologie.org, and bring caves from it into this installation.",
+    "portalLink": "Open speologie.org",
+    "openInPortal": "Open on speologie.org",
+    "notConfigured": {
+      "title": "This installation has no key for the catalogue",
+      "body": "Searching speologie.org needs a personal API key, obtained from a profile on that site and set by an administrator. Until one is set, this screen can show nothing."
+    },
+    "search": {
+      "term": "Name",
+      "termPlaceholder": "Part of a cave's name, or its code",
+      "county": "County",
+      "countyPlaceholder": "Any county",
+      "submit": "Search",
+      "clear": "Clear",
+      "needSomething": "Give a name to search for, a county, or both.",
+      "spellingsWhy": "Romanian is written with two different diacritic conventions and often with none, and the catalogue's search treats them as different words. All the spellings are asked about at once.",
+      "noResults": "The catalogue has nothing matching that.",
+      "hint": "The catalogue holds about 8,650 published caves. It carries no coordinates, so a cave imported from it arrives without a position.",
+      "spellings": "Searched for {{count}} spellings of what you typed: {{list}}",
+      "noResultsHint": "Nothing in the catalogue matches that. Its search is sensitive to Romanian diacritics — this installation already asks for several spellings of what you typed, but a long name with more than one accented letter may still need typing as the catalogue spells it (Scărișoara rather than Scarisoara)."
+    },
+    "columns": {
+      "name": "Name",
+      "county": "County",
+      "mountain": "Mountain range",
+      "length": "Length (m)",
+      "depth": "Depth (m)",
+      "altitude": "Altitude (m)",
+      "protectionClass": "Class",
+      "state": "In this installation",
+      "actions": "Actions"
+    },
+    "state": {
+      "imported": "Already imported",
+      "importedElsewhere": "Already imported, not visible to you",
+      "notImported": "Not here yet",
+      "openCave": "Open the cave"
+    },
+    "flags": {
+      "vanished": "Recorded as lost",
+      "sump": "Has a sump"
+    },
+    "actions": {
+      "import": "Import",
+      "refresh": "Refresh from catalogue",
+      "details": "Details",
+      "importSelected": "Import selected ({{count}})"
+    },
+    "detail": {
+      "title": "{{name}} — speologie.org",
+      "description": "Description",
+      "noDescription": "The catalogue records no description for this cave.",
+      "descriptionNote": "Shown exactly as it would be stored: the catalogue's formatting is converted to plain text, and a very long description is shortened.",
+      "identity": "Identity",
+      "slug": "Catalogue slug",
+      "catalogueId": "Catalogue id",
+      "locality": "Locality",
+      "rockCode": "Rock code",
+      "rockCodeHint": "The catalogue publishes no legend for this code, so it is kept exactly as written rather than guessed at.",
+      "science": "Scientific interest",
+      "protectedAreaCode": "Protected-area code",
+      "hydroNumber": "Hydrologic number",
+      "hydroBasin": "Hydrographic basin",
+      "hydroBasinHint": "The catalogue's own basin identifier. It does not publish the basin names through this interface."
+    },
+    "wizard": {
+      "title": "Import from the catalogue",
+      "back": "Back to the search",
+      "nothingSelected": "Nothing was chosen. Go back to the search and pick the caves to import.",
+      "options": "For every cave imported",
+      "parent": "File them under",
+      "parentPlaceholder": "Nothing — leave them at the top level",
+      "noCoordinates": "The catalogue publishes no coordinates",
+      "noCoordinatesBody": "A cave imported from it has no position, so it is in the registry and in search but on no map. Give one a position below and it gets a main entrance there; leave it and it can be placed later. Caves with no position are listed under Caves with the “no position” filter.",
+      "candidates": "The caves",
+      "action": "What to do",
+      "actionCreate": "Create",
+      "actionUpdate": "Refresh",
+      "actionSkip": "Leave alone",
+      "actionUpdateHint": "This cave was imported before. Refreshing rewrites its name, description, region, altitude, length, depth and protection class from the catalogue; anything else recorded on it is left alone.",
+      "caveType": "Kind",
+      "caveTypeDerived": "Read from the name",
+      "position": "Position",
+      "unplaced": "No position",
+      "place": "Place on the map",
+      "placing": "Click the map to place “{{name}}”",
+      "clearPosition": "Remove the position",
+      "commit": "Import",
+      "committing": "Importing…",
+      "subtitle": "Chosen from speologie.org: {{count}}. Ready to be brought in."
+    },
+    "result": {
+      "title": "The import is done",
+      "created": "Created",
+      "updated": "Refreshed",
+      "skipped": "Left alone",
+      "failures": "These could not be imported",
+      "undoHint": "The whole import is one batch and can be undone in Geodata → Import history.",
+      "viewCaves": "See the caves"
+    },
+    "errors": {
+      "notConfigured": "This installation has no API key for the catalogue.",
+      "unauthorized": "The catalogue did not accept this installation's API key. An administrator needs to set a working one.",
+      "unavailable": "The catalogue could not be reached. It is a small volunteer-run service — try again in a moment.",
+      "rejected": "The catalogue rejected the request. This is a fault in this application rather than something you can fix.",
+      "searchTooBroad": "Give a name to search for, a county, or both.",
+      "caveNotFound": "The catalogue no longer publishes that cave.",
+      "selectionTooLarge": "Too many caves were chosen for one import. Bring them in smaller batches — each one can be undone on its own.",
+      "importFailed": "The import could not be completed."
+    },
+    "paging": {
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {{page}}"
     }
   }
 }

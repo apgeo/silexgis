@@ -67,6 +67,23 @@ public static class DependencyInjection
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.PhotoCandidateService>();
         services.AddScoped<Import.PhotoCommitService>();
+
+        // The Romanian community cave catalogue, which this installation reads and imports from.
+        // Off unless an operator supplies a key, and absent rather than broken when they have not.
+        //
+        // The client is a singleton because it *is* the throttle: it holds the one gate every
+        // outbound call to that catalogue passes through, so a second instance would be a second
+        // allowance and the politeness this feature promises would quietly be per-caller. The
+        // handler decompresses, because a cave description there can run to a megabyte of markup.
+        services.Configure<Catalogue.SpeologieOptions>(
+            configuration.GetSection(Catalogue.SpeologieOptions.SectionName));
+        services.AddHttpClient(Catalogue.SpeologieClient.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AutomaticDecompression = System.Net.DecompressionMethods.All,
+            });
+        services.AddSingleton<Catalogue.SpeologieClient>();
+        services.AddScoped<Catalogue.SpeologieImportService>();
         services.AddScoped<Trips.TripTypeWriteService>();
         services.AddScoped<Trips.TripSectionWriter>();
         services.AddScoped<Trips.TripLogWriteService>();

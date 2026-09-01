@@ -29,7 +29,9 @@ public static class CaveEndpoints
         var caves = api.MapGroup("/caves").WithTags("Caves");
 
         caves.MapGet("/", ListAsync)
-            .WithSummary("Paged cave list with filters; visibility-filtered, protected locations obfuscated.");
+            .WithSummary(
+                "Paged cave list with filters, including `unplaced` for caves that have no position "
+                + "at all; visibility-filtered, protected locations obfuscated.");
         caves.MapGet("/{id:guid}", GetAsync)
             .WithSummary("Single cave; protected location fields require ViewExactLocation.");
         caves.MapGet("/{id:guid}/summary", GetSummaryAsync)
@@ -58,6 +60,7 @@ public static class CaveEndpoints
         decimal? minLength,
         string? bbox,
         string? tag,
+        bool? unplaced,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -100,6 +103,16 @@ public static class CaveEndpoints
         if (minLength is not null)
         {
             query = query.Where(f => f.Cave!.SurveyedLength >= minLength);
+        }
+
+        // Caves with no position at all, or only the ones that have one. A cave's point is the
+        // cache of its main entrance, so a cave with neither is on no map and inside no bounding
+        // box — findable here and nowhere else. That used to be a rare accident; a cave imported
+        // from a register that publishes no coordinates arrives that way by nature, so there has
+        // to be a way to list them and work through them.
+        if (unplaced is { } wantUnplaced)
+        {
+            query = wantUnplaced ? query.Where(f => f.Geom == null) : query.Where(f => f.Geom != null);
         }
 
         if (Bbox.TryParse(bbox, out var box))

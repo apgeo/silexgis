@@ -30,6 +30,15 @@ public static class ApiProblems
         TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status428PreconditionRequired,
             extensions: new Dictionary<string, object?> { ["code"] = code });
 
+    /// <summary>
+    /// Something this installation depends on is not there, or would not answer. Used for a
+    /// service outside this application: it says "not now, and not your fault", which is a
+    /// different sentence from a bad request and leads whoever reads it to a different place.
+    /// </summary>
+    public static ProblemHttpResult ServiceUnavailable(string code, string? detail = null) =>
+        TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status503ServiceUnavailable,
+            extensions: new Dictionary<string, object?> { ["code"] = code });
+
     public static ProblemHttpResult Conflict(string code, string? detail = null) =>
         TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status409Conflict,
             extensions: new Dictionary<string, object?> { ["code"] = code });

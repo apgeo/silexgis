@@ -29,6 +29,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Topografii, poligonații și modele 3D](surveys-and-models.md) | Therion, Survex, pereți, poligonații, surse topografice |
 | [Măsurători și statistici](measurements-and-statistics.md) | Ce calculează aplicația și ce refuză să calculeze |
 | [Fișiere de geodate](geodata.md) | Import și export vectorial, registrul importurilor |
+| [Catalogul național al peșterilor](cave-catalogue.md) | Căutarea pe speologie.org și importul peșterilor de acolo |
 | [Hărți raster georeferențiate](georeferenced-maps.md) | Foi geologice și topografice ca straturi suprapuse |
 
 ## Biblioteca
