@@ -164,6 +164,13 @@ export const queryKeys = {
   // choices, so changing a rule set or the duplicate radius is a different question rather
   // than a stale answer to the same one.
   importPreview: (geofileId: string, body: unknown) => ['import-preview', geofileId, body] as const,
+  speologieStatus: ['speologie', 'status'] as const,
+  // The whole request is the key. A catalogue search is a pure function of the term, the county
+  // and the page, so changing any of them is a different question rather than a stale answer to
+  // the same one — and the far end is somebody else's small service, so an answer already held
+  // is one call it does not have to serve again.
+  speologieSearch: (params: SpeologieSearchParams) => ['speologie', 'search', params] as const,
+  speologieCave: (id: number) => ['speologie', 'cave', id] as const,
   photoImportSession: ['photo-import-session'] as const,
   // Same reasoning as the vector preview: the grouping is a pure function of the pictures and
   // the choices, so changing the clustering radius is a different question rather than a stale
@@ -4318,6 +4325,115 @@ export function useImportProvenance(featureId: string | undefined, enabled = tru
       ),
     enabled: Boolean(featureId) && enabled,
     retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The Romanian community cave catalogue (speologie.org)
+// ---------------------------------------------------------------------------
+
+export type SpeologieStatus = components['schemas']['SpeologieStatusDto'];
+export type SpeologieCave = components['schemas']['SpeologieCaveDto'];
+export type SpeologieSearchResult = components['schemas']['SpeologieSearchDto'];
+export type SpeologieDecision = components['schemas']['SpeologieDecisionDto'];
+export type SpeologieAction = components['schemas']['SpeologieAction'];
+export type SpeologieImportResult = components['schemas']['SpeologieImportResultDto'];
+
+export type SpeologieSearchParams = {
+  q?: string;
+  county?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+/**
+ * Whether this installation has been given a key for the catalogue at all. Reaches nothing, so
+ * it is safe to ask on every visit; the screens use it to say "your administrator has not set
+ * this up" rather than to fail on the first search.
+ */
+export function useSpeologieStatus() {
+  return useQuery({
+    queryKey: queryKeys.speologieStatus,
+    queryFn: () => unwrap(api.GET('/api/v1/catalogue/speologie/status')),
+    staleTime: 300_000,
+  });
+}
+
+/**
+ * Searches the catalogue. Deliberately not fired until there is something to search for: the
+ * server refuses a search that names neither a term nor a county, and asking anyway would cost
+ * a round trip to be told so.
+ */
+export function useSpeologieSearch(params: SpeologieSearchParams, enabled = true) {
+  const hasQuestion = Boolean(params.q?.trim()) || Boolean(params.county?.trim());
+  return useQuery({
+    queryKey: queryKeys.speologieSearch(params),
+    queryFn: () => unwrap(api.GET('/api/v1/catalogue/speologie/caves', { params: { query: params } })),
+    enabled: enabled && hasQuestion,
+    placeholderData: keepPreviousData,
+    // The far end is a volunteer-run service the server already throttles itself against.
+    // Repeating a search it has just answered helps nobody.
+    staleTime: 300_000,
+    retry: false,
+  });
+}
+
+/**
+ * One catalogue cave in full, including the description already converted to the plain text an
+ * import would store — the same conversion, so what is previewed is what would be kept.
+ */
+export function useSpeologieCave(id: number | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.speologieCave(id ?? 0),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/catalogue/speologie/caves/{id}', { params: { path: { id: id! } } })),
+    enabled: Boolean(id) && enabled,
+    staleTime: 300_000,
+    retry: false,
+  });
+}
+
+/**
+ * Several catalogue caves in full, one query each.
+ *
+ * One query per cave rather than one for the lot, because each answer carries a description and a
+ * description in this catalogue can run to a megabyte — a batched answer would be one enormous
+ * payload that is either wholly there or wholly missing. Separate queries also mean a cave the
+ * catalogue has withdrawn fails on its own instead of taking the other nine with it. The server
+ * throttles itself against the far end, so these queue rather than arriving together.
+ */
+export function useSpeologieCaves(ids: readonly number[], enabled = true) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.speologieCave(id),
+      queryFn: () =>
+        unwrap(api.GET('/api/v1/catalogue/speologie/caves/{id}', { params: { path: { id } } })),
+      enabled,
+      staleTime: 300_000,
+      retry: false,
+    })),
+  });
+}
+
+export function useImportFromSpeologie() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      selection: number[];
+      decisions: Record<string, SpeologieDecision>;
+      visibility: Visibility;
+      cavingGroupId: string | null;
+      locationProtected: boolean;
+      parentId: string | null;
+    }) => unwrap(api.POST('/api/v1/catalogue/speologie/import', { body })),
+    onSuccess: () => {
+      // Caves and features appear, a batch appears in the undo history, and every catalogue
+      // search now has a different answer to "is this one already here".
+      void queryClient.invalidateQueries({ queryKey: ['features'] });
+      void queryClient.invalidateQueries({ queryKey: ['caves'] });
+      void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      void queryClient.invalidateQueries({ queryKey: ['speologie'] });
+    },
   });
 }
 
