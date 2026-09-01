@@ -69,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<Import.PhotoCommitService>();
         services.AddScoped<Trips.TripTypeWriteService>();
         services.AddScoped<Trips.TripSectionWriter>();
+        services.AddScoped<Trips.TripLogWriteService>();
         services.AddScoped<Documents.DocumentWriteService>();
         services.AddScoped<Documents.DocumentTypeWriteService>();
         services.AddScoped<Documents.CabinetWriteService>();

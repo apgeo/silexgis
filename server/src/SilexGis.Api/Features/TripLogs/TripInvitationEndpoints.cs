@@ -9,6 +9,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Features.TripLogs;
 
@@ -616,7 +617,7 @@ public static class TripInvitationEndpoints
             .Select(x => x.CaverId)
             .ToList();
 
-        var roles = await TripLogEndpoints.ShippedRosterRolesAsync(db, ct);
+        var roles = await TripLogWriteService.ShippedRosterRolesAsync(db, ct);
 
         // Everybody already recorded as having been on this trip, whatever they did on it.
         // Proposers are not in this set on purpose: putting a trip forward is not being on it,
