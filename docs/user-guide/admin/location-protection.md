@@ -1,5 +1,7 @@
 # Location protection
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/admin/location-protection.md)
+
 [← Administration](README.md) · Related: [Permissions](permissions.md)
 
 ---

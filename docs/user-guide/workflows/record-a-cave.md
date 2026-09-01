@@ -1,5 +1,7 @@
 # Workflow: record a new cave
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/workflows/record-a-cave.md)
+
 [← Workflows](README.md) · Reference: [Caves and entrances](../features/caves-and-entrances.md)
 
 ---

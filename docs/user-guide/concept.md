@@ -1,5 +1,7 @@
 # What SilexGIS is
 
+🇬🇧 **English** · 🇷🇴 [Română](ro/concept.md)
+
 [← Back to the guide](README.md) · Next: [First steps](first-steps.md)
 
 ---

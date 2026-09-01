@@ -1,5 +1,7 @@
 # First steps
 
+🇬🇧 **English** · 🇷🇴 [Română](ro/first-steps.md)
+
 [← Back to the guide](README.md) · Previous: [What SilexGIS is](concept.md) · Next: [Core concepts](core-concepts.md)
 
 ---

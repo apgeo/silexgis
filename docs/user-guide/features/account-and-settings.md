@@ -1,5 +1,7 @@
 # Your account and settings
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/account-and-settings.md)
+
 [← Feature reference](README.md) · Related: [Notifications](notifications.md) ·
 [Mobile and offline sync](mobile-sync.md)
 
@@ -102,6 +104,20 @@ form (`+40712345678`). It is used **only for sign-in codes**.
 
 Removing your number switches texted codes off with it, and says so. If the installation has
 no SMS gateway, texted codes are simply unavailable and the page says why.
+
+### Losing a device
+
+> **Changing or resetting your password revokes every token and every authorisation on your
+> account — every client, every device, including the one you are using.**
+
+That is the answer to a lost or stolen phone, and it is **one action any caver can reach**
+without waiting for an administrator. You are signed out everywhere, and you sign back in on
+the devices you still have.
+
+It works this way because the person acting cannot list their own sessions and cannot name the
+device that was taken — so the only honest thing to revoke is all of them.
+
+See [Mobile and offline sync](mobile-sync.md#signing-a-device-in-and-taking-it-back).
 
 ### Linked accounts
 

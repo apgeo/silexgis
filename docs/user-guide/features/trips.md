@@ -1,5 +1,7 @@
 # Trips
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/trips.md)
+
 [← Feature reference](README.md) · Workflow:
 [Plan a trip, run it, and write it up](../workflows/plan-and-log-a-trip.md)
 

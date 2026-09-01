@@ -1,5 +1,7 @@
 # Vocabularies your club owns
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/admin/vocabularies.md)
+
 [← Administration](README.md)
 
 ---

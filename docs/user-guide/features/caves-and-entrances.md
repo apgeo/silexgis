@@ -1,5 +1,7 @@
 # Caves and entrances
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/caves-and-entrances.md)
+
 [← Feature reference](README.md) · Workflow: [Record a new cave](../workflows/record-a-cave.md)
 
 ---

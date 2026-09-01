@@ -1,5 +1,7 @@
 # Feature reference
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/README.md)
+
 [← Back to the guide](../README.md)
 
 ---

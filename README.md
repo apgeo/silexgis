@@ -13,7 +13,8 @@ Previous versions:
 
 **Using it?** The handbook for cavers, archivists and whoever runs the installation is
 **[docs/user-guide/](docs/user-guide/README.md)** — what the application is, the workflows,
-and a page per feature. The list below is the summary.
+and a page per feature. In English and **[română](docs/user-guide/ro/README.md)**, page for page.
+The list below is the summary.
 
 ## Features
 

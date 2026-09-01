@@ -1,5 +1,7 @@
 # Workflows
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/workflows/README.md)
+
 [← Back to the guide](../README.md)
 
 ---

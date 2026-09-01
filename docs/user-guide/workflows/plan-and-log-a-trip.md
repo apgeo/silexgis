@@ -1,5 +1,7 @@
 # Workflow: plan a trip, run it, and write it up
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/workflows/plan-and-log-a-trip.md)
+
 [← Workflows](README.md) · Reference: [Trips](../features/trips.md) ·
 [Checklists and the callout](../features/checklists-and-callout.md)
 

@@ -1,5 +1,7 @@
 # Workflow: import a season of GPS waypoints
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/workflows/import-a-gps-file.md)
+
 [← Workflows](README.md) · Reference: [Geodata](../features/geodata.md) ·
 [Detection rules](../admin/vocabularies.md#configuration--detection-rules)
 

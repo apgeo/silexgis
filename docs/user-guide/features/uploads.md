@@ -1,5 +1,7 @@
 # Uploads
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/uploads.md)
+
 [← Feature reference](README.md) · Workflow:
 [File the club archive](../workflows/file-the-archive.md)
 
@@ -102,5 +104,11 @@ If you asked to be told, a notification arrives when **your uploads finish proce
 
 ---
 
+> **Uploaded a large archive before the text reader or the document converter was working?**
+> An administrator can sweep back over it — see
+> [Maintenance sweeps](../admin/maintenance.md).
+
+---
+
 Related: [Documents and cabinets](documents-and-cabinets.md) ·
-[Photographs](photographs.md)
+[Photographs](photographs.md) · [Maintenance sweeps](../admin/maintenance.md)

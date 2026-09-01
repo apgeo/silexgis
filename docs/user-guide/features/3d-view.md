@@ -1,5 +1,7 @@
 # 3D view
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/3d-view.md)
+
 [← Feature reference](README.md) · Related: [Terrain](terrain.md) ·
 [Surveys, centerlines and 3D models](surveys-and-models.md)
 

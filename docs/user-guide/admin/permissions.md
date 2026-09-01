@@ -1,5 +1,7 @@
 # Permissions explained
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/admin/permissions.md)
+
 [← Administration](README.md) · Related:
 [Location protection](location-protection.md) ·
 [Core concepts](../core-concepts.md#2-visibility-permissions-and-location-protection-are-three-different-things)
