@@ -148,7 +148,13 @@ public sealed record ImportBatchDto(
     DateTimeOffset ConfirmedAt,
     DateTimeOffset? RevertedAt,
     Guid? RevertedByUserId,
-    bool CanRevert);
+    bool CanRevert,
+    /// <summary>
+    /// The rows that could not be created. Carried on the batch because the confirmation runs on
+    /// the queue: by the time a row is refused there is no request left to tell, and the reviewer
+    /// still has to be able to find out which of their rows did not land, and why.
+    /// </summary>
+    IReadOnlyList<ImportFailureDto> Failures);
 
 /// <summary>One line of a batch: what a source row became, under which rule.</summary>
 public sealed record ImportBatchItemDto(
@@ -222,3 +228,15 @@ public sealed class ImportOptionsValidator : AbstractValidator<ImportOptions>
         RuleFor(x => x.TagIds).NotNull();
     }
 }
+
+/// <summary>
+/// What a confirmation answers with now that the objects are created on the queue.
+/// </summary>
+/// <param name="JobId">The job to watch. Its completion is what says the batch is whole.</param>
+/// <param name="BatchId">
+/// Where the objects will be. Decided before the work starts, so the reviewer can be taken to the
+/// batch immediately rather than made to guess which one appeared most recently — and so a job
+/// retried after its transaction committed can tell that it has already run.
+/// </param>
+/// <param name="Queued">How many rows were confirmed, so the page can say what it is waiting for.</param>
+public sealed record ImportCommitAcceptedDto(long JobId, Guid BatchId, int Queued);

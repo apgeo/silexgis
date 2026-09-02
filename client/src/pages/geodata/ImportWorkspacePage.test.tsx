@@ -115,6 +115,11 @@ vi.mock('../../api/hooks.ts', () => ({
   useFeatureTypes: () => ({ data: [{ id: 1, code: 'sinkhole', name: 'Sinkhole', acceptedGeometryClasses: ['point'] }] }),
   useCavingGroups: () => ({ data: [], isLoading: false }),
   useGeofileColumns: () => ({ data: undefined }),
+  // A confirmation is queued and its objects are created by a job, so the page watches that job
+  // and then reads the batch it named. Both are idle here: these tests are about the review
+  // table and what it sends, not about what the queue does with it afterwards.
+  useProcessingJob: () => ({ data: undefined }),
+  useImportBatch: () => ({ data: undefined }),
 }));
 
 // The map builds a real OpenLayers instance against a canvas jsdom does not have; the

@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -9,6 +10,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 using SilexGis.Domain.Settings;
 using SilexGis.Infrastructure.Import;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Import;
@@ -44,7 +46,10 @@ public static class StagedImportEndpoints
         import.MapPost("/preview", PreviewAsync).WithValidation<ImportPreviewRequest>()
             .WithSummary("The dry run: what each rule claims, and the candidate list, with nothing committed.");
         import.MapPost("/commit", CommitAsync).WithValidation<ImportCommitRequest>()
-            .WithSummary("Creates the selected candidates as one revertible batch.");
+            .WithSummary(
+                "Queues the selected candidates to be created as one revertible batch, and answers "
+                + "with the job to watch and the batch they will appear in. Everything that can "
+                + "refuse the confirmation is decided before it is queued.");
 
         return api;
     }
@@ -208,7 +213,7 @@ public static class StagedImportEndpoints
 
     // ---------- confirmation ----------
 
-    private static async Task<Results<Ok<ImportCommitResultDto>, UnauthorizedHttpResult, ProblemHttpResult>> CommitAsync(
+    private static async Task<Results<Accepted<ImportCommitAcceptedDto>, UnauthorizedHttpResult, ProblemHttpResult>> CommitAsync(
         Guid geofileId,
         ImportCommitRequest request,
         SilexGisDbContext db,
@@ -216,7 +221,7 @@ public static class StagedImportEndpoints
         IAccessContextAccessor accessAccessor,
         TermRuleSetStore ruleSets,
         ImportCandidateService candidateService,
-        ImportCommitService commitService,
+        IOptions<ImportLimitOptions> limits,
         IAppSettingsService settings,
         CancellationToken ct)
     {
@@ -278,32 +283,41 @@ public static class StagedImportEndpoints
             mode = ImportBatchMode.AutoCreated;
         }
 
-        try
+        // The one refusal that belongs here rather than on the queue: it is a property of the
+        // selection the caller just made, so it can be answered now, and a job queued only to
+        // fail on it would report a ceiling the reviewer could have been told about instantly.
+        if (selection.Count > limits.Value.MaxCommitItems)
         {
-            var result = await commitService.CommitAsync(
-                geofile,
-                ruleSet,
-                request.Options,
+            return ApiProblems.BadRequest(
+                "import.selection_too_large",
+                $"A single confirmation creates at most {limits.Value.MaxCommitItems} objects; "
+                + $"{selection.Count} were selected. Confirm them in smaller batches — each one reverts on its own.");
+        }
+
+        // The address of the result, decided before the work starts. Everything that could
+        // refuse this has been decided above, so what remains is work rather than judgement and
+        // the reviewer can be sent straight to the batch it will appear in.
+        var batchId = Guid.CreateVersion7();
+        var job = new ProcessingJob
+        {
+            Kind = ProcessingJobKinds.ImportCommit,
+            RequestedBy = ctx.UserId,
+            Payload = ImportJson.Serialize(new ImportCommitPayload(
+                geofile.Id,
+                batchId,
+                ctx.UserId,
+                ruleSet?.Id,
+                ImportJson.Serialize(request.Options),
+                ImportJson.Serialize(ReadDecisions(request.Decisions)),
                 selection,
-                ReadDecisions(request.Decisions),
-                mode,
-                ctx,
-                ct);
+                mode)),
+        };
+        db.ProcessingJobs.Add(job);
+        await db.SaveChangesAsync(ct);
 
-            // The review is spent: its decisions describe rows that are now objects, and
-            // leaving it would offer to create them a second time.
-            await db.GeofileImportSessions
-                .Where(s => s.GeofileId == geofile.Id && s.UserId == ctx.UserId)
-                .ExecuteDeleteAsync(ct);
-
-            return TypedResults.Ok(new ImportCommitResultDto(
-                ToDto(result.Batch, geofile.Name, canRevert: true),
-                [.. result.Failures.Select(f => new ImportFailureDto(f.SourceId, f.Name, f.Code, f.Reason))]));
-        }
-        catch (ImportCommitException ex)
-        {
-            return ApiProblems.BadRequest(ex.Code, ex.Message);
-        }
+        return TypedResults.Accepted(
+            $"/api/v1/jobs/{job.Id}",
+            new ImportCommitAcceptedDto(job.Id, batchId, selection.Count));
     }
 
     // ---------- helpers ----------
@@ -416,7 +430,12 @@ public static class StagedImportEndpoints
         batch.CreatedAt,
         batch.RevertedAt,
         batch.RevertedByUserId,
-        canRevert && !batch.IsReverted);
+        canRevert && !batch.IsReverted,
+        batch.Failures is null
+            ? []
+            : ImportJson.Deserialize<List<ImportFailure>>(batch.Failures) is { } read
+                ? [.. read.Select(f => new ImportFailureDto(f.SourceId, f.Name, f.Code, f.Reason))]
+                : []);
 
     private static ImportOptions? ReadOptions(string json)
     {

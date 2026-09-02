@@ -275,6 +275,7 @@ export const queryKeys = {
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
   workAreas: ['work-areas'] as const,
+  processingJob: (id: number) => ['jobs', id] as const,
   // Every terrain key starts with this list key, so the mutations that invalidate it also reach
   // the paged list and each build's own detail. A key that did not would leave the page showing
   // a build's old phase for as long as its query stayed fresh.
@@ -3977,6 +3978,7 @@ export type ImportPreviewRequest = components['schemas']['ImportPreviewRequest']
 export type ImportSession = components['schemas']['ImportSessionDto'];
 export type ImportCommitResult = components['schemas']['ImportCommitResultDto'];
 export type ImportBatch = components['schemas']['ImportBatchDto'];
+export type ImportFailure = components['schemas']['ImportFailureDto'];
 export type ImportBatchDetail = components['schemas']['ImportBatchDetailDto'];
 export type ImportProvenance = components['schemas']['ImportProvenanceDto'];
 export type GeofileSourceOptions = components['schemas']['GeofileSourceOptions'];
@@ -4135,13 +4137,49 @@ export function useCommitImport() {
         }),
       ),
     onSuccess: () => {
-      // A confirmation puts caves, entrances and features into the registry and spends the
-      // review that produced them, so four surfaces go stale at once.
-      void queryClient.invalidateQueries({ queryKey: ['features'] });
-      void queryClient.invalidateQueries({ queryKey: ['caves'] });
-      void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      // Only the review is spent here. The caves, entrances and features do not exist yet —
+      // the confirmation was queued — so invalidating the registry now would refetch it early
+      // and show the reader an unchanged map as though nothing had been created.
+      // `useProcessingJob` invalidates the rest when the job finishes.
       void queryClient.invalidateQueries({ queryKey: ['import-session'] });
     },
+  });
+}
+
+export type ProcessingJob = components['schemas']['ProcessingJobDto'];
+
+/** Whether a job is still going, which is the only thing worth asking again about. */
+export function jobUnsettled(status: ProcessingJob['status'] | undefined): boolean {
+  return status === 'queued' || status === 'running';
+}
+
+/**
+ * One job, polled while it is unfinished.
+ *
+ * A caller may always read a job they asked for, so this needs no right of its own — the server
+ * answers a job belonging to somebody else exactly as it answers one that never existed.
+ */
+export function useProcessingJob(jobId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: queryKeys.processingJob(jobId ?? 0),
+    queryFn: async () => {
+      const job = await unwrap(
+        api.GET('/api/v1/jobs/{id}', { params: { path: { id: jobId! } } }),
+      );
+      if (!jobUnsettled(job.status)) {
+        // The moment the work is actually done — not when it was asked for. Everything a
+        // confirmation creates lands at once, so the surfaces that show it go stale together.
+        void queryClient.invalidateQueries({ queryKey: ['features'] });
+        void queryClient.invalidateQueries({ queryKey: ['caves'] });
+        void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      }
+      return job;
+    },
+    enabled: jobId !== undefined,
+    // Stopped by the answer rather than by a timer: a settled job is asked about no more.
+    refetchInterval: (query) => (jobUnsettled(query.state.data?.status) ? 1500 : false),
+    retry: false,
   });
 }
 

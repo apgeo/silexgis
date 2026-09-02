@@ -6394,7 +6394,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Creates the selected candidates as one revertible batch. */
+        /** Queues the selected candidates to be created as one revertible batch, and answers with the job to watch and the batch they will appear in. Everything that can refuse the confirmation is decided before it is queued. */
         post: {
             parameters: {
                 query?: never;
@@ -6410,13 +6410,13 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description OK */
-                200: {
+                /** @description Accepted */
+                202: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ImportCommitResultDto"];
+                        "application/json": components["schemas"]["ImportCommitAcceptedDto"];
                     };
                 };
             };
@@ -17409,6 +17409,7 @@ export interface components {
             /** Format: uuid */
             revertedByUserId: null | string;
             canRevert: boolean;
+            failures: components["schemas"]["ImportFailureDto"][];
         };
         ImportBatchItemDto: {
             /** Format: int64 */
@@ -17448,6 +17449,14 @@ export interface components {
             geom: null | components["schemas"]["GeoJsonGeometry"];
             duplicate: null | components["schemas"]["ImportDuplicateDto"];
             decision: null | components["schemas"]["ImportDecision"];
+        };
+        ImportCommitAcceptedDto: {
+            /** Format: int64 */
+            jobId: number;
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            queued: number;
         };
         ImportCommitRequest: {
             options: components["schemas"]["ImportOptions"];

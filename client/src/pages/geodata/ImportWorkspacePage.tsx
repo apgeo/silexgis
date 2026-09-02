@@ -15,6 +15,8 @@ import {
   type ImportDecision,
   type ImportOptions,
   type ImportPreviewRequest,
+  useProcessingJob,
+  useImportBatch,
 } from '../../api/hooks.ts';
 import CandidateMap from '../../components/import/CandidateMap.tsx';
 import CandidateTable from '../../components/import/CandidateTable.tsx';
@@ -62,7 +64,13 @@ export default function ImportWorkspacePage() {
   const [filters, setFilters] = useState<CandidateFilters>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [result, setResult] = useState<Awaited<ReturnType<typeof commit.mutateAsync>> | null>(null);
+  // What was confirmed and is now being created, until the job that creates it settles. The
+  // objects do not exist yet, so there is nothing to show but progress.
+  const [queuedCommit, setQueuedCommit] =
+    useState<{ jobId: number; batchId: string; queued: number } | null>(null);
+  const job = useProcessingJob(queuedCommit?.jobId);
+  const committedBatch = useImportBatch(
+    job.data && job.data.status === 'succeeded' ? queuedCommit?.batchId : undefined);
   const loaded = useRef(false);
 
   // The saved review arrives once and then the browser owns it: refetching over the top would
@@ -141,7 +149,7 @@ export default function ImportWorkspacePage() {
           withoutReview,
         },
       });
-      setResult(outcome);
+      setQueuedCommit(outcome);
       setSelected(new Set());
       setDecisions({});
       loaded.current = false;
@@ -280,7 +288,18 @@ export default function ImportWorkspacePage() {
         </Flex>
       </Flex>
 
-      <ImportResultModal result={result} onClose={() => setResult(null)} />
+      <ImportResultModal
+        batch={committedBatch.data?.batch ?? null}
+        failures={committedBatch.data?.batch.failures ?? []}
+        // Open from the moment the work is queued, not from when it finishes: a confirmation of
+        // several thousand rows takes minutes, and a page that looked idle through all of it
+        // invites the reader to press the button again.
+        queued={queuedCommit?.queued ?? 0}
+        status={job.data?.status}
+        error={job.data?.error ?? null}
+        open={queuedCommit !== null}
+        onClose={() => setQueuedCommit(null)}
+      />
     </div>
   );
 }

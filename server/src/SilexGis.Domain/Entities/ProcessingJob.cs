@@ -43,6 +43,20 @@ public class ProcessingJob
 public static class ProcessingJobKinds
 {
     public const string GeofileImport = "geofile-import";
+
+    /// <summary>
+    /// Create the objects a reviewer confirmed out of an uploaded vector file.
+    /// </summary>
+    /// <remarks>
+    /// A job rather than the work of the request that asks for it. Confirming a file creates one
+    /// object per selected row, and each of those is a geometry read plus a write that maintains
+    /// the containment and protection state derived from it — so a few thousand rows is tens of
+    /// thousands of round trips inside one transaction. Held open in a request, that outlives any
+    /// reverse proxy's patience: the caller is cut off, the cancellation reaches the transaction,
+    /// and the whole batch rolls back having reported nothing. The confirmed ceiling for one
+    /// confirmation is ten thousand rows, which no request was ever going to carry.
+    /// </remarks>
+    public const string ImportCommit = "import-commit";
     public const string RasterCog = "raster-cog";
 
     /// <summary>Turn an uploaded cave wall mesh into the form the 3D scene draws.</summary>
