@@ -25,6 +25,8 @@ function renderControls(overrides: Partial<Scene3DCameraControlsProps> = {}) {
     onProjectionChange: vi.fn(),
     onFitCave: vi.fn(),
     fitDisabled: false,
+    coupled: true,
+    onCoupledChange: vi.fn(),
     ...overrides,
   };
   render(<Scene3DCameraControls {...props} />);
@@ -102,6 +104,28 @@ describe('Scene3DCameraControls', () => {
     fireEvent.click(screen.getByTestId('scene3d-fit-cave'));
     expect(props.onFitCave).not.toHaveBeenCalled();
   });
+
+  it('reports both edges of the coupling switch', () => {
+    // Both directions asserted rather than one: a control that only ever reports "off" is a
+    // plausible way to get this wrong, and it would leave a viewer unable to rejoin the map.
+    const coupled = renderControls({ coupled: true });
+    fireEvent.click(screen.getByTestId('scene3d-coupling-toggle'));
+    expect(coupled.onCoupledChange).toHaveBeenCalledWith(false);
+
+    cleanup();
+
+    const uncoupled = renderControls({ coupled: false });
+    fireEvent.click(screen.getByTestId('scene3d-coupling-toggle'));
+    expect(uncoupled.onCoupledChange).toHaveBeenCalledWith(true);
+  });
+
+  it('says which state it is in, to a reader and to a screen reader alike', () => {
+    renderControls({ coupled: false });
+
+    // The strip is icons, so the pressed state is the only thing carrying it visually and
+    // aria-pressed is the only thing carrying it otherwise.
+    expect(screen.getByTestId('scene3d-coupling-toggle')).toHaveAttribute('aria-pressed', 'false');
+  });
 });
 
 describe('Scene3DCameraControls under a finger on a wide screen', () => {
@@ -168,6 +192,11 @@ describe('Scene3DCameraControls at phone width', () => {
 
     fireEvent.click(screen.getByTestId('scene3d-projection-toggle'));
     expect(props.onProjectionChange).toHaveBeenCalledWith('orthographic');
+
+    // The folded menu is the only chrome a finger gets, so a control that exists solely in the
+    // strip is a control those viewers do not have.
+    fireEvent.click(screen.getByTestId('scene3d-coupling-toggle'));
+    expect(props.onCoupledChange).toHaveBeenCalledWith(false);
   });
 
   it('still refuses to frame a cave that is not drawn', () => {

@@ -1747,6 +1747,9 @@
     "projectionOrthographic": "Elimină perspectiva",
     "projectionOrthographicHint": "Elimină perspectiva, astfel încât distanțele să se citească la fel aproape și departe",
     "projectionPerspectiveHint": "Reactivează perspectiva",
+    "coupleToMap": "Mișcă odată cu harta",
+    "coupleToMapHint": "Mișcă din nou odată cu harta plană, aducând camera unde se uită ea",
+    "uncoupleFromMapHint": "Nu mai mișca odată cu harta plană, ca fiecare să poată fi mutată separat",
     "presetGlyph": {
       "top": "⌖",
       "north": "N",

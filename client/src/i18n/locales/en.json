@@ -1747,6 +1747,9 @@
     "projectionOrthographic": "Remove perspective",
     "projectionOrthographicHint": "Remove perspective, so distances read the same near and far",
     "projectionPerspectiveHint": "Put perspective back",
+    "coupleToMap": "Move with the map",
+    "coupleToMapHint": "Move with the flat map again, and bring the camera to where it is looking",
+    "uncoupleFromMapHint": "Stop moving with the flat map, so each can be moved on its own",
     "presetGlyph": {
       "top": "⌖",
       "north": "N",
