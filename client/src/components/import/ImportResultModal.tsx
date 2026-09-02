@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, Modal, Progress, Statistic, Flex, Table, Typography } from 'antd';
+import { Alert, Modal, Spin, Statistic, Flex, Table, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import type { ImportBatch, ImportFailure, ProcessingJob } from '../../api/hooks.ts';
@@ -57,10 +57,10 @@ export default function ImportResultModal(
     >
       {working && (
         <Flex vertical gap={12}>
-          {/* Indeterminate on purpose. The work reports no per-row progress, and a bar that
-              advanced on a guess would be a claim this page cannot support. What it does say is
-              how many rows are being created and that leaving is safe. */}
-          <Progress percent={100} status="active" showInfo={false} />
+          {/* A spinner, not a bar. The work reports no per-row progress, and antd's bar has no
+              indeterminate form — drawn at 100 it reads as finished, which is exactly the wrong
+              thing to show somebody wondering whether their import is stuck. */}
+          <Spin />
           <Typography.Text>{t('vectorImport.creating', { count: queued })}</Typography.Text>
           <Typography.Text type="secondary">{t('vectorImport.creatingHint')}</Typography.Text>
         </Flex>

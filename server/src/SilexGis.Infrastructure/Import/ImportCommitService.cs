@@ -132,6 +132,11 @@ public sealed class ImportCommitService(
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
+        // One recompute for the batch rather than one per row. Per row it reads the whole edge
+        // table and walks every tracked feature, so the cost grew with the square of the
+        // selection — and only the final pass could be right in any case.
+        writer.BeginDeferredDerivedState();
+
         foreach (var sourceId in selection)
         {
             if (!byId.TryGetValue(sourceId, out var candidate))
@@ -195,6 +200,11 @@ public sealed class ImportCommitService(
         db.ImportBatches.Add(batch);
         db.ImportBatchItems.AddRange(items);
         await db.SaveChangesAsync(ct);
+
+        // Now that every row of the batch is in, the state derived from the hierarchy is computed
+        // once over all of them — including the protection each one inherits, which is why this
+        // must happen before anything is readable rather than lazily afterwards.
+        await writer.FlushDerivedStateAsync(ct);
 
         // Caves that gained an entrance need their mirror refreshed after the entrances exist.
         foreach (var caveId in touchedCaves)
