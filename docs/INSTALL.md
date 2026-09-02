@@ -342,11 +342,19 @@ SILEXGIS__MapLayers__ApiKeys__Thunderforest=your-key-here
 That way the file itself holds no secrets and can be shared with the group next door. Until you set the
 key, those entries simply do not appear.
 
-**Backgrounds that are switched off on purpose.** Google's map and satellite tiles are in the file with
-`enabled="false"`. They work, and you will find them in every collection of layer definitions passed
-around — but using them this way is not something Google's terms permit, and that is a decision about your
-installation's licensing, not one this project can make for you. Turn one on only if you have read those
-terms and concluded it applies to you.
+**Backgrounds you should decide about.** Google's map, satellite, hybrid and terrain tiles are in the
+file, and they are currently **switched on**. They work, and you will find them in every collection of
+layer definitions passed around — but using them this way is not something Google's terms permit.
+
+This project's own position is that such a source should ship switched off, because it is a decision about
+your installation's licensing rather than one anybody can make on your behalf. That position has not been
+withdrawn; the four entries are enabled at the moment as a deliberate, temporary exception while the
+intended long-term imagery source is settled. **If you are installing this and did not make that choice
+yourself, it is the first thing to look at.**
+
+To switch them off, set `enabled="false"` on the four `Google *` entries and restart. Do not delete them:
+a source this file stops naming is left alone rather than withdrawn, so a deleted entry would stay enabled
+in your database for good.
 
 ## Terrain (optional)
 
