@@ -45,6 +45,8 @@ export default function ImportBatchesTab() {
         return t('vectorImport.batchFromPhotos');
       case 'deviceSync':
         return t('vectorImport.batchFromDevice');
+      case 'externalCatalogue':
+        return t('vectorImport.batchFromCatalogue');
       case 'vectorFile':
         return fileName ?? t('vectorImport.fileGone');
       default: {

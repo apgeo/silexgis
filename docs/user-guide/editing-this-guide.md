@@ -1,5 +1,7 @@
 # Editing this guide
 
+🇬🇧 **English** · 🇷🇴 [Română](ro/editing-this-guide.md)
+
 [← Back to the guide](README.md)
 
 ---
@@ -20,19 +22,34 @@ docs/user-guide/
 ├── glossary.md                the vocabulary
 ├── editing-this-guide.md      this page
 ├── workflows/                 whole jobs, start to finish
-│   ├── README.md
-│   └── …
 ├── features/                  one page per part of the application
-│   ├── README.md
-│   └── …
-└── admin/                     for whoever holds administrative rights
-    ├── README.md
+├── admin/                     for whoever holds administrative rights
+└── ro/                        the Romanian guide — identical file names
+    ├── TERMINOLOGIE.md        the EN↔RO term map
+    ├── workflows/ features/ admin/
     └── …
 ```
 
 **Plain Markdown, no build step, no site generator.** It renders on GitHub, in any Markdown
 viewer, in an editor, and it can be pasted into a wiki. Links are relative, so the tree can be
 moved or published as-is.
+
+## The two languages
+
+The guide ships in **English and Romanian**, matching the application itself. Every page exists
+in both, under the same file name, and each carries a language switcher under its title.
+
+**English is canonical.** When something changes, it changes in English first and in Romanian
+second. A Romanian page that has fallen behind is a defect, not a variant — say so plainly rather
+than letting the two drift.
+
+**Romanian pages use the exact words the interface shows**, collected in
+[`ro/TERMINOLOGIE.md`](ro/TERMINOLOGIE.md) and extracted from the application's own translation
+file. A guide that says *dosare* where the screen says *dulapuri* helps nobody. If you add a term,
+add it there too.
+
+Note the path depth: from `ro/features/x.md`, anything outside `docs/user-guide/` needs one extra
+`../` compared with the English page.
 
 ## What each directory is for
 
@@ -93,6 +110,7 @@ Ask for what you want in ordinary words. Some patterns that work well:
 
 - **Update the indexes.** A new page must be linked from at least `README.md` of its directory
   and, if it is significant, from the guide home page. An unlinked page is an invisible page.
+- **Do the Romanian too**, or say clearly that you did not. Use the terminology map.
 - **Add glossary entries** for any new term.
 - **Do not invent behaviour.** If the application's behaviour is unclear, the honest move is a
   short paragraph saying what is unknown, not a confident guess. This guide's value is that it
@@ -103,7 +121,7 @@ Ask for what you want in ordinary words. Some patterns that work well:
 
 ### A good source order for an agent
 
-1. `client/src/i18n/locales/en.json` — what the interface actually says
+1. `client/src/i18n/locales/en.json` and `ro.json` — what the interface actually says
 2. `client/src/App.tsx` and `client/src/components/navItems.tsx` — what pages exist and how
    they are grouped
 3. The repository `README.md` — the feature narrative, in the application's own voice

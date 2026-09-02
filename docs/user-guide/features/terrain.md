@@ -1,5 +1,7 @@
 # Terrain
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/terrain.md)
+
 [← Feature reference](README.md) · Related: [3D view](3d-view.md) ·
 Administration: [Building terrain](../admin/terrain-builds.md)
 

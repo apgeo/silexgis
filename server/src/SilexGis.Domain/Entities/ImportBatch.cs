@@ -97,6 +97,13 @@ public enum ImportSource : short
     /// wrong survey can have it taken back in a single act, the same way a bad file can.
     /// </summary>
     DeviceSync = 2,
+
+    /// <summary>
+    /// Caves chosen from a third-party catalogue this installation reads over the network. There
+    /// is no file and there is nothing to re-read: the source is somebody else's register, and
+    /// what it said at the time is kept on the batch's own lines rather than fetched again.
+    /// </summary>
+    ExternalCatalogue = 3,
 }
 
 /// <summary>How the objects in a batch came to exist.</summary>

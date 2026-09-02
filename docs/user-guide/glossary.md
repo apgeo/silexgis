@@ -1,5 +1,7 @@
 # Glossary
 
+🇬🇧 **English** · 🇷🇴 [Română](ro/glossary.md)
+
 [← Back to the guide](README.md)
 
 ---

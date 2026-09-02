@@ -1,5 +1,7 @@
 # Documents and cabinets
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/documents-and-cabinets.md)
+
 [← Feature reference](README.md) · Workflow:
 [File the club archive](../workflows/file-the-archive.md)
 
@@ -124,6 +126,10 @@ The **Text** state is one of:
 **Nothing recognises text in a photograph.** Scanned pages and image-only PDFs have no text
 to search, and the page says so rather than leaving you waiting.
 
+> If a whole batch of documents was uploaded before the text reader or the office-document
+> converter was working, an administrator can sweep back over them — see
+> [Maintenance sweeps](../admin/maintenance.md).
+
 A **password-protected** document is reported as locked rather than read into nonsense.
 
 The **language** is detected from the document's own text and left unset rather than guessed
@@ -170,20 +176,76 @@ a reply to you and a comment on your own upload you hear about it once.
 
 ## Link-annotated text
 
-A document can be a **link-annotated text**: passages of it are highlighted, and following a
-highlighted passage **moves the open views** — the map, the 3D scene, the survey viewer, the
-image view — to what that passage is about.
-
-- **Where links go** lets you turn each of those off, to leave one where it is.
-- The text can be **popped out into a window of its own**, to sit beside the map.
-- **Edit links**: select any part of the text and link it to a cave, a document, a trip or
-  anything else.
-- A link card can say **May have moved** — the words are not where the link recorded them, so
-  the highlight may be on the wrong passage.
-- **Show** moves the open views without leaving the text; **Open** goes to the thing itself.
+Prose written **in the application**, over which links mark passages. Following a highlighted
+passage **moves the open views** — the map, the 3D scene, the survey viewer, the image view —
+to what that passage is about.
 
 This is the mechanism for a written account of an exploration that drives the map as you read
-it. Where a record has nothing written about it, the section offers *Write one*.
+it: *"we followed the streamway to the third aven"*, and the map goes there.
+
+### It is an ordinary document
+
+There is no new world here. A link-annotated text **is a [document](#a-documents-page) like any
+other** — who may read it, which club it belongs to, where it is filed, its history, its
+discussion, whether it is searchable. All of that is unchanged.
+
+What is different is only the **format**: blocks of plain text whose character stream is
+defined rather than extracted, so a passage you select in the browser and a passage stored in a
+link are measured against the same string, **to the character**.
+
+> **Nothing anybody types is ever put on the page as markup.** A block's text becomes text; its
+> emphasis becomes elements chosen from a closed set. That is why the stored format is blocks of
+> plain text rather than a fragment of HTML — there is nothing in it that could be tempted to
+> interpret what somebody wrote.
+
+### Where to find and write them
+
+On a record's panel, the **Text** section lists the annotated texts written about it. Where a
+record has nothing written about it yet, the section offers **Write one**, pre-named after the
+record.
+
+Which of a cave's linked documents is a piece of annotated text and which is a scan of a 1974
+report is **the server's statement**, not a guess — so ordinary attachments never show you a
+refusal notice.
+
+### Reading
+
+| Control | |
+|---|---|
+| **Where links go** | Turn the map, 3D scene, survey viewer or image view off individually, to leave one where it is |
+| **Open in a window of its own** | To sit beside the map it drives |
+| **Show** | Moves the open views to the link's target, without leaving the text |
+| **Show in…** | Including *another window* |
+| **Open** | Goes to the thing itself |
+
+If nothing is open for a passage to move: *"No map, scene or viewer is open, so following a
+passage has nothing to move. Open one, or pop this text out beside it."*
+
+### Writing links
+
+**Edit links**, then select any part of the text and link it to a cave, a document, a trip or
+anything else. Deleting a link stops the passage being highlighted; **the things it linked are
+not affected**.
+
+**It links to nothing by itself.** Attaching the text to the scan it is a reading of, or to the
+cave it describes, is an ordinary [link](links.md) written the ordinary way.
+
+### Revisions, and passages that move
+
+Replacing the body writes **a new revision** and re-measures every link over it.
+
+- Passages that survive stay **exact**.
+- Passages that are gone read as **degraded**, and a card says **May have moved** — *"These
+  words are not where this link recorded them, so the highlight may be on the wrong passage."*
+
+You are told when a highlight is uncertain rather than being shown a confident one in the wrong
+place.
+
+### Over a PDF as well
+
+The same reader works over a **PDF's text layer**, not only over text written here. So a
+passage in a scanned report that carries real text can be pointed at exactly as a passage in a
+typed-up account can — see [Links](links.md#text-anchors-survive-editing).
 
 ---
 

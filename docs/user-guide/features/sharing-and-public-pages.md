@@ -1,5 +1,7 @@
 # Sharing, QR codes and public pages
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/sharing-and-public-pages.md)
+
 [← Feature reference](README.md) · Workflow:
 [Share your work with someone](../workflows/share-your-work.md)
 

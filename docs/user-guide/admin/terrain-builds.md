@@ -1,5 +1,7 @@
 # Building terrain
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/admin/terrain-builds.md)
+
 [← Administration](README.md) · Related: [Terrain](../features/terrain.md) ·
 [3D view](../features/3d-view.md)
 

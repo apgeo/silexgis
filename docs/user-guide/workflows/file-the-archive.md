@@ -1,5 +1,7 @@
 # Workflow: file the club archive
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/workflows/file-the-archive.md)
+
 [← Workflows](README.md) · Reference:
 [Documents and cabinets](../features/documents-and-cabinets.md) ·
 [Uploads](../features/uploads.md)
@@ -98,6 +100,10 @@ A document's page shows how far reading has got:
 > coming. If your archive is mostly scans, plan for typing up the important ones.
 
 A **password-protected** document is reported as locked, rather than read into nonsense.
+
+> **Filed the archive before all this was working?** That is the normal order of events. An
+> administrator runs a [maintenance sweep](../admin/maintenance.md) and the whole backlog
+> becomes readable and searchable without re-uploading anything.
 
 The **language** is worked out from the document's own text, and left *unset* rather than
 guessed when the text does not say clearly. Anyone who may edit the document can correct it,

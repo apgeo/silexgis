@@ -29,6 +29,8 @@ const SharedFeaturePage = lazy(() => import('./pages/SharedFeaturePage.tsx'));
 const GeodataPage = lazy(() => import('./pages/geodata/GeodataPage.tsx'));
 const ImportWorkspacePage = lazy(() => import('./pages/geodata/ImportWorkspacePage.tsx'));
 const PhotoImportWorkspacePage = lazy(() => import('./pages/geodata/PhotoImportWorkspacePage.tsx'));
+const SpeologieSearchPage = lazy(() => import('./pages/catalogue/SpeologieSearchPage.tsx'));
+const SpeologieImportPage = lazy(() => import('./pages/catalogue/SpeologieImportPage.tsx'));
 const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
 const ChecklistsPage = lazy(() => import('./pages/checklists/ChecklistsPage.tsx'));
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage.tsx'));
@@ -139,6 +141,8 @@ export const routes: RouteObject[] = [
           { path: '/geodata', element: <Loadable><GeodataPage /></Loadable> },
           { path: '/geodata/:geofileId/import', element: <Loadable><ImportWorkspacePage /></Loadable> },
           { path: '/geodata/photo-import', element: <Loadable><PhotoImportWorkspacePage /></Loadable> },
+          { path: '/catalogue/speologie', element: <Loadable><SpeologieSearchPage /></Loadable> },
+          { path: '/catalogue/speologie/import', element: <Loadable><SpeologieImportPage /></Loadable> },
           { path: '/admin/term-rules', element: <Loadable><TermRulesPage /></Loadable> },
           { path: '/checklists', element: <Loadable><ChecklistsPage /></Loadable> },
           { path: '/calendar', element: <Loadable><CalendarPage /></Loadable> },

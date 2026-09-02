@@ -1,5 +1,7 @@
 # Georeferenced raster maps
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/georeferenced-maps.md)
+
 [← Feature reference](README.md) · Related: [Map workspace](map-workspace.md) ·
 [Geodata](geodata.md)
 

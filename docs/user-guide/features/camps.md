@@ -1,5 +1,7 @@
 # Camps (expeditions)
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/camps.md)
+
 [← Feature reference](README.md) · Related: [Trips](trips.md)
 
 ---
@@ -41,14 +43,49 @@ somebody drew on the map."*
 
 ### Leads
 
-The board of what this camp's trips left open — the **Leads left** entries from the trips
-below it, **counted once each**, however many of the camp's trips mention them.
+The board of what this camp's trips left open, grouped by whether each way on is still going.
 
-Each lead can carry a **promise grade** and a **state**: Open · Checked · Dead end ·
-Continues (or *not recorded*).
+**It is a reading of what the trips already say, not a register of its own.** A lead is a
+place of the *continuation* kind — the sort an exploring club keeps its question marks as —
+named by one of the camp's member trips. Nobody writes anything on the board, and there is
+nothing on it that can fall out of step with the places themselves.
 
-Read as visible to you: leads found on trips you may read, and only the ones you may see.
-*"This camp's trips left nothing open — or nothing you may be shown."*
+| | |
+|---|---|
+| **Grade** | How promising it looked, on the register's own scale, or absent because nobody graded it |
+| **State** | Open · Checked · Dead end · Continues — or *not recorded* |
+| **Note** | What is left to do there, as whoever found it wrote it down |
+
+Four properties worth knowing:
+
+**Whether a way on is still going is a fact about the place, not about the trip.** So the board
+reports **what is true now**, rather than what some trip saw on some afternoon.
+
+**It reads over every trip role at once.** A club that recorded a continuation under *Visited*
+rather than under *Leads left* has still recorded it — and a board that asked about one role
+would drop it without saying so, which is exactly the failure nobody would notice, because the
+missing lead is missing from the only list that would show it.
+
+**A place two of the camp's trips both named is one lead, not two.**
+
+**A lead you may not place exactly is left off the board entirely** — not shown with its
+position blurred.
+
+> That is a deliberate and slightly unusual choice, so it is worth stating why. A board is a
+> bulk path, and *a list of undefended ways into caves, sorted by how promising they look*, is
+> the same species of disclosure as a single coordinate — arguably a worse one, since it is
+> ordered by how much somebody would want it. **The position is not what is being withheld; the
+> place is.** No coordinate is served on this board at all.
+
+Consequently: *"Read as visible to you: leads found on trips you may read, and only the ones
+you may see."* Two people opening the same camp see different boards and **both are right** —
+the page says so in words rather than leaving the numbers to imply otherwise.
+
+If there is nothing: *"This camp's trips left nothing open — or nothing you may be shown."*
+
+The board is read whole — it is not paged and takes no filter — and it is capped. Over the cap
+it shows **the same board every time it is opened** rather than an arbitrary subset that moves
+under you, and it says it was capped.
 
 ### Who was there
 

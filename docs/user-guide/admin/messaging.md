@@ -1,5 +1,7 @@
 # Messaging and delivery
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/admin/messaging.md)
+
 [← Administration](README.md) · Related:
 [Notifications](../features/notifications.md)
 

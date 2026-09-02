@@ -1,5 +1,7 @@
 # Photographs and albums
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/photographs.md)
+
 [← Feature reference](README.md) · Workflow:
 [Turn a trip's photographs into places](../workflows/photographs-to-places.md)
 

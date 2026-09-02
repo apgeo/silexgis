@@ -1,5 +1,7 @@
 # History and audit
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/history-and-audit.md)
+
 [← Feature reference](README.md) · Related:
 [Permissions](../admin/permissions.md)
 

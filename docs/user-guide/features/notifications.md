@@ -1,5 +1,7 @@
 # Notifications
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/notifications.md)
+
 [← Feature reference](README.md) · Related:
 [Your account and settings](account-and-settings.md) · [Messaging](../admin/messaging.md)
 

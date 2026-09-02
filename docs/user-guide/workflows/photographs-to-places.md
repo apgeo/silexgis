@@ -1,5 +1,7 @@
 # Workflow: turn a trip's photographs into places
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/workflows/photographs-to-places.md)
+
 [← Workflows](README.md) · Reference: [Photographs](../features/photographs.md)
 
 ---

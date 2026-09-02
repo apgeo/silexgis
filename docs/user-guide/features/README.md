@@ -1,5 +1,7 @@
 # Feature reference
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/README.md)
+
 [← Back to the guide](../README.md)
 
 ---
@@ -27,6 +29,7 @@ detail those walkthroughs link into.
 | [Surveys, centerlines and 3D models](surveys-and-models.md) | Therion, Survex, walls, centerlines, survey sources |
 | [Measurements and statistics](measurements-and-statistics.md) | What the application computes, and what it refuses to compute |
 | [Geodata files](geodata.md) | Vector import and export, the imports register |
+| [The national cave catalogue](cave-catalogue.md) | Searching speologie.org and importing caves from it |
 | [Georeferenced raster maps](georeferenced-maps.md) | Geological and topographic sheets as map overlays |
 
 ## The library

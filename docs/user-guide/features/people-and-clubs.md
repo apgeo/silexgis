@@ -1,5 +1,7 @@
 # People, cavers and clubs
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/people-and-clubs.md)
+
 [← Feature reference](README.md) · Related: [Permissions](../admin/permissions.md)
 
 ---

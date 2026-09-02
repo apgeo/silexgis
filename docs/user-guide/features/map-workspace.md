@@ -1,5 +1,7 @@
 # Map workspace
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/map-workspace.md)
+
 [← Feature reference](README.md) · Related: [3D view](3d-view.md) ·
 [Saved views and windows](saved-views-and-windows.md)
 

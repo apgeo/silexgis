@@ -1,5 +1,7 @@
 # Measurements and statistics
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/measurements-and-statistics.md)
+
 [← Feature reference](README.md) · Related:
 [Surveys and models](surveys-and-models.md) · [Trips](trips.md)
 

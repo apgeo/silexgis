@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
   ApartmentOutlined,
+  ApiOutlined,
   AppstoreOutlined,
   BorderOuterOutlined,
   CalendarOutlined,
@@ -192,6 +193,13 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
       { key: 'caves', icon: <TableOutlined />, label: t('nav.caves') },
       { key: 'features', icon: <GoldOutlined />, label: t('nav.features') },
       { key: 'geodata', icon: <DatabaseOutlined />, label: t('nav.geodata') },
+      // Reading somebody else's register of the same caves. Gated on the right to create
+      // features because that is exactly what the server gates it on: the searches leave over
+      // this installation's own key, against a small volunteer-run service, so an entry offered
+      // to everyone would be an invitation to spend somebody else's capacity.
+      ...(gates.featureCreate
+        ? [{ key: 'catalogue/speologie', icon: <ApiOutlined />, label: t('nav.speologie') }]
+        : []),
     ]),
     // The filing tree is readable by anyone who may read documents at all; what
     // is on a shelf is decided per document, not by hiding the shelf.

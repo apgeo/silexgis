@@ -1,5 +1,7 @@
 # Workflow: share your work with someone
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/workflows/share-your-work.md)
+
 [← Workflows](README.md) · Reference:
 [Sharing, QR codes and public pages](../features/sharing-and-public-pages.md) ·
 [Permissions](../admin/permissions.md)

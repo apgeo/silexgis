@@ -1,5 +1,7 @@
 # SilexGIS — User Guide
 
+🇬🇧 **English** · 🇷🇴 [Română](ro/README.md)
+
 This is the handbook for the people who *use* SilexGIS: cavers, club archivists, survey
 teams, and whoever ends up looking after the installation. It explains what the application
 is for, how it thinks, and what each of its screens does.
@@ -90,6 +92,7 @@ install is in [INSTALL.md](../INSTALL.md) and [DEPLOY-SERVER.md](../DEPLOY-SERVE
 - [Vocabularies your club owns](admin/vocabularies.md)
 - [Messaging and delivery](admin/messaging.md)
 - [Building terrain](admin/terrain-builds.md)
+- [Maintenance sweeps](admin/maintenance.md)
 
 ---
 
@@ -99,5 +102,8 @@ It is written to be edited. If something here is wrong, out of date, or missing,
 see [Editing this guide](editing-this-guide.md) for the conventions, the file layout, and how
 to get an AI agent to extend it consistently.
 
-**Status:** first iteration. Written against the application as it stands; every page is
+**Languages.** The guide exists in English and Romanian, page for page — see
+[Ghidul în română](ro/README.md). English is canonical; Romanian follows it.
+
+**Status:** second iteration. Written against the application as it stands; every page is
 open to correction by the people who actually use it.

@@ -1,5 +1,7 @@
 # Events and calendar
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/events-and-calendar.md)
+
 [← Feature reference](README.md) · Related: [Trips](trips.md) · [Camps](camps.md)
 
 ---

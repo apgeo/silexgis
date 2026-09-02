@@ -1,5 +1,7 @@
 # Links between records
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/links.md)
+
 [← Feature reference](README.md) · Related:
 [Core concepts](../core-concepts.md#4-links-say-how-two-things-are-related)
 

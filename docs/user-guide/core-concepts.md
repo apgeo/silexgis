@@ -1,5 +1,7 @@
 # Core concepts
 
+🇬🇧 **English** · 🇷🇴 [Română](ro/core-concepts.md)
+
 [← Back to the guide](README.md) · Previous: [First steps](first-steps.md)
 
 ---

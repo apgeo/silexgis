@@ -1,5 +1,7 @@
 # Saved views, panels and multi-window
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/saved-views-and-windows.md)
+
 [← Feature reference](README.md) · Related: [Map workspace](map-workspace.md)
 
 ---

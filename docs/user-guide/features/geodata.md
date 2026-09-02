@@ -1,5 +1,7 @@
 # Geodata files
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/geodata.md)
+
 [← Feature reference](README.md) · Workflow:
 [Import a season of GPS waypoints](../workflows/import-a-gps-file.md)
 

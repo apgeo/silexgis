@@ -1,5 +1,7 @@
 # Surveys, centerlines and 3D models
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/surveys-and-models.md)
+
 [← Feature reference](README.md) · Related: [3D view](3d-view.md) ·
 [Measurements and statistics](measurements-and-statistics.md)
 
@@ -37,6 +39,23 @@ This is the part people get wrong, so the forms are explicit about it.
   must say what its numbers mean, or the survey cannot be placed.
 - **A `.3d` file states its own** only when the survey was compiled with one. If it does,
   that is used and what you say is ignored.
+
+### Coordinate systems come from the installation, not the internet
+
+When you give an EPSG code — for a `.stl`, or for a survey whose file does not state its own —
+the definition is resolved **from the coordinate-system database that ships with the
+application**, not fetched from a public web service.
+
+Two things follow:
+
+- **An installation with no route out still georeferences surveys correctly.** Nothing makes an
+  outbound request at the moment a survey is read.
+- **National grids work.** Romanian Stereo70 (EPSG:31700) is the obvious case: it is not
+  hard-coded in the viewer, and on an installation that had to fetch definitions it would lose
+  its georeferencing or fail to load at all.
+
+If you are used to surveys quietly losing their position on a self-hosted system, this is why
+that does not happen here.
 
 ### Precision lost before arrival
 

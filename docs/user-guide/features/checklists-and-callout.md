@@ -1,5 +1,7 @@
 # Checklists and the callout
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/checklists-and-callout.md)
+
 [← Feature reference](README.md) · Related: [Trips](trips.md)
 
 ---

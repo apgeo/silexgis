@@ -1,5 +1,7 @@
 # Search and filters
 
+🇬🇧 **English** · 🇷🇴 [Română](../ro/features/search-and-filters.md)
+
 [← Feature reference](README.md)
 
 ---
