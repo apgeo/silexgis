@@ -66,7 +66,7 @@ import { supportsWebGl2 } from '../../scene3d/webglSupport.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
-import { geometryFor, isGeographic } from '../../viewlinks/geoTargets.ts';
+import { APPROXIMATE_SPAN_DEGREES, geometryFor, isGeographic } from '../../viewlinks/geoTargets.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
 import Scene3DLayerPanel from './Scene3DLayerPanel.tsx';
@@ -128,11 +128,17 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     enabled: showingHere && engineVersion > 0,
     canReveal: isGeographic,
     reveal: (ref) => {
-      void geometryFor(queryClient, ref).then((geometry) => {
+      void geometryFor(queryClient, ref).then((target) => {
         const engine = engineRef.current;
-        const bounds = geometry === null ? null : geoJsonBounds(geometry);
+        const bounds = target === null ? undefined : geoJsonBounds(target.geometry);
         if (engine !== null && bounds) {
-          engine.fitBounds(bounds, { animate: true });
+          // A snapped point's box is a single position, so the camera would drop to the same
+          // height it uses for a surveyed station over a spot that can be kilometres out. Widening
+          // to about the grid it was snapped to is what makes the picture say how well the place
+          // is actually known.
+          const [west, south, east, north] = bounds;
+          const pad = target?.approximate ? APPROXIMATE_SPAN_DEGREES / 2 : 0;
+          engine.fitBounds([west - pad, south - pad, east + pad, north + pad], { animate: true });
         }
       });
     },

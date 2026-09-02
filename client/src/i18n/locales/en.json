@@ -420,10 +420,13 @@
     "edit": "Edit entrance",
     "deleteConfirm": "Delete this entrance?",
     "coordinates": "Coordinates",
+    "showOnMap": "Show on map",
+    "showOnMapApproximate": "Show on map — this position is approximate",
     "longitude": "Longitude",
     "latitude": "Latitude",
     "main": "Main",
     "positionQuality": "Position quality",
+    "positionBlurred": "You may not see this entrance’s exact position, so what is shown is rounded to a grid. The position, altitude and position quality are therefore read-only — the server keeps the recorded values and would discard anything entered here. Everything else on this form saves normally.",
     "qualityValues": {
       "unknown": "Unknown",
       "gps": "GPS",

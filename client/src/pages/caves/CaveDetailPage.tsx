@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import {
+  AimOutlined,
   DeleteOutlined,
   EditOutlined,
   EnvironmentOutlined,
@@ -21,6 +22,7 @@ import {
   Spin,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -42,6 +44,8 @@ import {
   type EntranceWrite,
 } from '../../api/hooks.ts';
 import { formatLonLat } from '../../geo/coords.ts';
+import { APPROXIMATE_MAX_ZOOM, fitGeoJsonGeometry } from '../../map/mapContext.ts';
+import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
 import { applyRestore } from '../../components/history/historyModel.ts';
@@ -73,6 +77,7 @@ export default function CaveDetailPage() {
   const { data: caveTypes } = useCaveTypes();
   const { data: rockTypes } = useRockTypes();
   const { data: entranceTypes } = useEntranceTypes();
+  const setSelection = useWorkspaceStore((s) => s.setSelection);
   const deleteCave = useDeleteCave();
   const deleteEntrance = useDeleteEntrance(id ?? '');
   const updateCave = useUpdateCave(id ?? '');
@@ -109,6 +114,24 @@ export default function CaveDetailPage() {
         {String(value)}
       </Descriptions.Item>
     );
+
+  /**
+   * Frames an entrance on the flat map and goes there.
+   *
+   * `fitGeoJsonGeometry` rather than `flyTo` because this page has no map on it: the workspace map
+   * is a module-level object that exists unmounted, and only the fit path waits for it to acquire a
+   * size before framing. A `flyTo` issued from here would animate a map nobody is looking at and
+   * have finished by the time the viewer arrived.
+   *
+   * A row whose position is approximate is framed loosely rather than not at all. Refusing would
+   * protect nothing — the coordinate is printed in the very cell the button sits in — while zooming
+   * all the way in would dress a snapped point up as a surveyed one.
+   */
+  const showEntranceOnMap = (entrance: Entrance) => {
+    setSelection({ kind: 'entrance', entranceId: entrance.id, caveId: entrance.caveId });
+    fitGeoJsonGeometry(entrance.geom, entrance.approximateLocation ? APPROXIMATE_MAX_ZOOM : undefined);
+    navigate('/map');
+  };
 
   // The write DTO addresses containment by primary-parent id, which the read DTO carries
   // as the parents breadcrumb — map it back so an update/restore keeps the cave where it is.
@@ -276,9 +299,34 @@ export default function CaveDetailPage() {
               title: t('entrances.coordinates'),
               key: 'coords',
               render: (_, e) => (
-                <span>
-                  <EnvironmentOutlined /> {formatLonLat(e.geom.coordinates[0], e.geom.coordinates[1])}
-                </span>
+                <Flex align="center" gap={4}>
+                  <EnvironmentOutlined />
+                  <span>{formatLonLat(e.geom.coordinates[0], e.geom.coordinates[1])}</span>
+                  {/* This table printed five decimals for every row, including the ones the server
+                      had snapped to a 5 km grid before sending. Five decimals reads as one metre
+                      whatever the provenance, so the row has to say otherwise itself — the
+                      card-level warning above is about the cave, not about which entrance. */}
+                  {e.approximateLocation && (
+                    <Tag color="orange" style={{ marginInlineEnd: 0 }}>
+                      {t('map.approximateShort')}
+                    </Tag>
+                  )}
+                  <Tooltip
+                    title={
+                      e.approximateLocation
+                        ? t('entrances.showOnMapApproximate')
+                        : t('entrances.showOnMap')
+                    }
+                  >
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<AimOutlined />}
+                      aria-label={t('entrances.showOnMap')}
+                      onClick={() => showEntranceOnMap(e)}
+                    />
+                  </Tooltip>
+                </Flex>
               ),
             },
             { title: t('caves.fields.altitude'), dataIndex: 'altitude', width: 100, align: 'right' },

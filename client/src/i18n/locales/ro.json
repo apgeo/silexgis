@@ -420,10 +420,13 @@
     "edit": "Editare intrare",
     "deleteConfirm": "Ștergeți această intrare?",
     "coordinates": "Coordonate",
+    "showOnMap": "Arată pe hartă",
+    "showOnMapApproximate": "Arată pe hartă — poziția este aproximativă",
     "longitude": "Longitudine",
     "latitude": "Latitudine",
     "main": "Principală",
     "positionQuality": "Calitatea poziției",
+    "positionBlurred": "Nu aveți acces la poziția exactă a acestei intrări, așa că valorile afișate sunt rotunjite la o grilă. Poziția, altitudinea și calitatea poziției sunt de aceea needitabile — serverul păstrează valorile înregistrate și ar ignora orice s-ar introduce aici. Restul formularului se salvează normal.",
     "qualityValues": {
       "unknown": "Necunoscută",
       "gps": "GPS",
