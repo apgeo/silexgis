@@ -146,11 +146,6 @@ export const groups = {
   qr: ['AnonymousSurfaceTests', 'CaveQrPublicationTests', 'PublicQrLandingTests'],
   metadata: ['ContentMetadataTests', 'DocumentMetadataTests'],
   workAreas: ['WorkAreaTests'],
-  // The public cave register this installation can read from, and the import that brings rows
-  // in. Registered here by a later hand than the one that added the slice: the map fails closed,
-  // so the gap cost a full suite per touch rather than a missed test, but its own guard was red
-  // meanwhile — which is a cost paid by whoever runs the gate next, not by whoever left it.
-  catalogue: ['SpeologieCatalogueTests'],
   // The external cave register this installation reads from and imports out of.
   catalogue: ['SpeologieCatalogueTests'],
   // The elevation surface: the chain that builds it, the phases it runs, and the settings and
@@ -178,7 +173,6 @@ export const areas = {
   'server/src/SilexGis.Api/Features/AnnotatedTexts/': 'resLinks',
   'server/src/SilexGis.Api/Features/Cabinets/': 'cabinets',
   'server/src/SilexGis.Api/Features/Calendar/': 'calendar',
-  'server/src/SilexGis.Api/Features/Catalogue/': 'catalogue',
   'server/src/SilexGis.Api/Features/Catalogue/': 'catalogue',
   'server/src/SilexGis.Api/Features/Cavers/': 'cavers',
   'server/src/SilexGis.Api/Features/Caves/': 'caves',
@@ -223,7 +217,6 @@ export const areas = {
   'server/src/SilexGis.Domain/Auth/': 'users',
   'server/src/SilexGis.Domain/Calendar/': 'calendar',
   'server/src/SilexGis.Domain/Catalogue/': 'catalogue',
-  'server/src/SilexGis.Domain/Catalogue/': 'catalogue',
   'server/src/SilexGis.Domain/Documents/': 'documents',
   'server/src/SilexGis.Domain/Events/': 'events',
   'server/src/SilexGis.Domain/Expeditions/': 'expeditions',
@@ -239,7 +232,6 @@ export const areas = {
   'server/src/SilexGis.Domain/Terrain/': 'terrain',
   'server/src/SilexGis.Domain/Trips/': 'trips',
   // Infrastructure areas
-  'server/src/SilexGis.Infrastructure/Catalogue/': 'catalogue',
   'server/src/SilexGis.Infrastructure/Catalogue/': 'catalogue',
   'server/src/SilexGis.Infrastructure/Documents/': 'documents',
   'server/src/SilexGis.Infrastructure/Email/': 'notifications',
