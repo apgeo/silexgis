@@ -72,6 +72,19 @@ O consecință de reținut: **paginarea dincolo de prima pagină este aproximati
 paginată separat la celălalt capăt, așa că o pagină ulterioară poate fi scurtă sau poate repeta ceva.
 Mai bine restrângeți căutarea decât să paginați în adâncime.
 
+### Restrângerea după bazin hidrografic
+
+Registrul așază fiecare peșteră într-un bazin hidrografic, iar bazinele formează un arbore — grupă
+montană, masiv, grup de bazine, vale. Alegeți unul și rezultatele se restrâng la el **și la tot ce
+se află în el**, așa că alegerea *Munților Bihorului* vă dă toate văile din ei, nu doar pe cea care
+le poartă numele.
+
+Două precizări oneste. Catalogul însuși nu poate căuta după bazin, așa că filtrul restrânge ceea ce
+a adus căutarea, nu îi pune registrului o altă întrebare — ecranul vă spune câte peșteri au fost
+citite pentru a produce răspunsul. Iar un bazin singur nu este o căutare: tot aveți nevoie de o
+denumire sau de un județ, fiindcă „toate peșterile din acest bazin" ar însemna parcurgerea întregului
+registru.
+
 ### Ce vă spune fiecare rând
 
 Lungimea, denivelarea, altitudinea și clasa de protecție așa cum le ține registrul, plus două lucruri
@@ -154,10 +167,16 @@ hidrologic, identificatorul de bazin, codul ariei protejate, interesul științi
 consemnată ca dispărută — se păstrează pe peșteră ca proprietăți suplimentare și se repetă într-o
 notă scurtă la finalul descrierii, ca să le vadă un cititor fără să le caute.
 
-**Două sunt păstrate intenționat așa cum sunt scrise, fără a fi interpretate.** **Codul de rocă**
-(`00`, `05`, …) nu are o legendă publicată, așa că nu este transformat în tip de rocă — a completa o
-geologie pe ghicite ar fi mai rău decât a lăsa câmpul gol. **Identificatorul de bazin** este un număr
-ale cărui denumiri acea interfață nu le publică.
+**Codul de rocă este păstrat intenționat așa cum este scris, fără a fi interpretat.** `00`, `05` și
+celelalte nu au o legendă publicată, așa că nu sunt transformate în tip de rocă — a completa o geologie
+pe ghicite ar fi mai rău decât a lăsa câmpul gol.
+
+**Bazinul este cazul opus și este rezolvat.** Interfața catalogului răspunde cu un simplu număr, dar
+site-ul publică denumirile tuturor celor 653 de bazine, așa că această instalare poartă o copie a
+acelui arbore. O peșteră importată primește o denumire reală de bazin în câmpul ei, iar descrierea
+poartă tot drumul până la el — *Munții Apuseni › Munții Bihorului › Bazinele închise › Bazinul Padiș*
+— ceea ce așază peștera în țară pentru cineva care n-a auzit niciodată de acel bazin. Numărul rămâne
+lângă denumire, ca să puteți verifica citirea față de catalog.
 
 **Localitatea cea mai apropiată se păstrează unde se păstrează o localizare** — în câmpul de adresă
 al peșterii, care este ascuns celor ce nu au voie să vadă poziția exactă a unei peșteri protejate —

@@ -316,6 +316,7 @@ public sealed class SpeologieImportService(
             CaveTypeId = taxonomies.CaveType(caveTypeCode),
             Region = values.Region,
             ClosestAddress = values.ClosestAddress,
+            HydrographicBasin = values.HydrographicBasin,
             Website = values.Website,
             Altitude = values.Altitude,
             SurveyedLength = values.SurveyedLength,
@@ -375,6 +376,7 @@ public sealed class SpeologieImportService(
         feature.Properties = SpeologieMapping.MergeProperties(feature.Properties, values.Properties);
 
         cave.Region = values.Region;
+        cave.HydrographicBasin = values.HydrographicBasin;
         cave.Website = values.Website;
         cave.Altitude = values.Altitude;
         cave.SurveyedLength = values.SurveyedLength;

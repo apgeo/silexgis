@@ -171,6 +171,7 @@ export const queryKeys = {
   // is one call it does not have to serve again.
   speologieSearch: (params: SpeologieSearchParams) => ['speologie', 'search', params] as const,
   speologieCave: (id: number) => ['speologie', 'cave', id] as const,
+  speologieBasins: ['speologie', 'basins'] as const,
   photoImportSession: ['photo-import-session'] as const,
   // Same reasoning as the vector preview: the grouping is a pure function of the pictures and
   // the choices, so changing the clustering radius is a different question rather than a stale
@@ -4338,13 +4339,32 @@ export type SpeologieSearchResult = components['schemas']['SpeologieSearchDto'];
 export type SpeologieDecision = components['schemas']['SpeologieDecisionDto'];
 export type SpeologieAction = components['schemas']['SpeologieAction'];
 export type SpeologieImportResult = components['schemas']['SpeologieImportResultDto'];
+export type SpeologieBasin = components['schemas']['SpeologieBasinDto'];
 
 export type SpeologieSearchParams = {
   q?: string;
   county?: string;
+  basin?: number;
   page?: number;
   pageSize?: number;
 };
+
+/**
+ * The catalogue's hydrographic basin tree, which its own programmatic interface does not publish —
+ * this installation carries a copy so a cave's basin number can be read as a place.
+ *
+ * Held for the session: it is a table shipped with the application rather than an answer about
+ * anything, so re-fetching it on every visit to the screen would be asking the server to repeat
+ * itself six hundred times over.
+ */
+export function useSpeologieBasins() {
+  return useQuery({
+    queryKey: queryKeys.speologieBasins,
+    queryFn: () => unwrap(api.GET('/api/v1/catalogue/speologie/basins')),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
 
 /**
  * Whether this installation has been given a key for the catalogue at all. Reaches nothing, so

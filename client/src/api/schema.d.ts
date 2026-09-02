@@ -6755,6 +6755,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalogue/speologie/basins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The catalogue's hydrographic basin tree, which its programmatic interface does not publish — carried by this installation so a cave's basin number can be read as a place, and chosen as a filter. Reaches nothing. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpeologieBasinDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalogue/speologie/caves": {
         parameters: {
             query?: never;
@@ -6768,6 +6804,7 @@ export interface paths {
                 query?: {
                     q?: string;
                     county?: string;
+                    basin?: number;
                     page?: number;
                     pageSize?: number;
                 };
@@ -18998,6 +19035,17 @@ export interface components {
         SortKey: "created" | "updated" | "title" | "owner" | "proximity" | "occurred";
         /** @enum {unknown} */
         SpeologieAction: "create" | "update" | "skip" | null;
+        SpeologieBasinDto: {
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            parentId: null | number;
+            name: string;
+            label: string;
+            path: string;
+            /** Format: int32 */
+            depth: number;
+        };
         SpeologieCaveDto: {
             /** Format: int32 */
             id: number;
@@ -19024,6 +19072,7 @@ export interface components {
             hydroNumber: null | string;
             /** Format: int32 */
             hydroBasinId: null | number;
+            hydroBasin: null | components["schemas"]["SpeologieBasinDto"];
             description: null | string;
             alreadyImported: boolean;
             /** Format: uuid */
@@ -19075,6 +19124,8 @@ export interface components {
             pageSize: number;
             hasMore: boolean;
             spellings: string[];
+            /** Format: int32 */
+            scannedCount: number;
         };
         SpeologieStatusDto: {
             configured: boolean;

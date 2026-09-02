@@ -848,6 +848,93 @@ public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
+    /// The basin tree this installation carries, which the catalogue's own interface does not
+    /// publish. Answered to any signed-in caller and reaching nothing.
+    /// </summary>
+    [Fact]
+    public async Task The_basin_tree_is_answered_without_reaching_the_catalogue()
+    {
+        var basins = await JsonAsync(editor, "/api/v1/catalogue/speologie/basins");
+
+        var rows = basins.EnumerateArray().ToArray();
+        rows.Length.ShouldBeGreaterThan(600);
+        catalogue.Calls.ShouldBeEmpty();
+
+        // A cave's basin number resolves to a place, and to the way down to it — which is the
+        // whole reason the table is carried at all.
+        var padis = rows.First(b => b.GetProperty("id").GetInt32() == 605);
+        padis.GetProperty("label").GetString().ShouldBe("Bazinul Padiş");
+        padis.GetProperty("path").GetString()!.ShouldContain("Munţii Apuseni");
+    }
+
+    /// <summary>
+    /// A basin narrows what a search brought back, and the answer says how much was read to
+    /// produce it.
+    /// </summary>
+    /// <remarks>
+    /// The catalogue cannot filter on a basin — its search takes a term and a county and nothing
+    /// else — so the narrowing happens here. That makes the count of what was scanned part of the
+    /// answer rather than a detail: "one cave" and "one cave out of three read" are different
+    /// statements, and only the second is honest about what was not looked at. It is still exactly
+    /// one request to the far end.
+    /// </remarks>
+    [Fact]
+    public async Task A_basin_narrows_the_answer_here_and_the_scan_is_reported()
+    {
+        catalogue.AnswersWith(Data(new Dictionary<string, object?>
+        {
+            ["s0"] = new[]
+            {
+                Record(70801, $"Peștera din Padiş {tag}", bazinHidroId: 605),
+                Record(70802, $"Peștera de aiurea {tag}", bazinHidroId: 471),
+                Record(70803, $"Avenul fără bazin {tag}", bazinHidroId: null),
+            },
+        }));
+
+        var found = await JsonAsync(editor, $"{SearchUrl}?q=pestera&basin=605");
+
+        found.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetInt32())
+            .ShouldBe([70801]);
+        found.GetProperty("scannedCount").GetInt32().ShouldBe(3);
+
+        // One request, and it asked the catalogue for as much as it serves rather than for one
+        // screenful — the narrowing costs a wider read, not a second call.
+        catalogue.Only.Number("limit").ShouldBe(100);
+    }
+
+    /// <summary>
+    /// Choosing a level of the tree means everything under it, or the filter would look broken:
+    /// picking a massif and being shown only the basin named after it is not what anybody meant.
+    /// </summary>
+    [Fact]
+    public async Task Choosing_a_level_of_the_tree_includes_everything_beneath_it()
+    {
+        catalogue.AnswersWith(Data(new Dictionary<string, object?>
+        {
+            ["s0"] = new[] { Record(70811, $"Peștera sub Padiş {tag}", bazinHidroId: 605) },
+        }));
+
+        // 604 is the group Padiş sits in; 605 is inside it, not equal to it.
+        var found = await JsonAsync(editor, $"{SearchUrl}?q=pestera&basin=604");
+
+        found.GetProperty("items").EnumerateArray().Count().ShouldBe(1);
+    }
+
+    /// <summary>A basin this installation does not know is refused rather than silently ignored.</summary>
+    [Fact]
+    public async Task An_unknown_basin_is_refused_before_anything_is_asked()
+    {
+        catalogue.Answers(_ => throw new InvalidOperationException("the catalogue must not be called"));
+
+        var refused = await editor.GetAsync($"{SearchUrl}?q=pestera&basin=999999");
+        var body = await BodyAsync(refused);
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        CodeOf(body).ShouldBe(CatalogueEndpoints.ValidationFailedCode);
+        catalogue.Calls.ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// One request this installation sent to the catalogue, kept as what would have gone over the
     /// wire rather than as what a caller meant.
     /// </summary>

@@ -69,6 +69,17 @@ One consequence worth knowing: **paging past the first page is approximate.** Ea
 separately at the far end, so a later page can be short or repeat something. Narrow the search rather
 than paging deep.
 
+### Narrowing by hydrographic basin
+
+The register files every cave in a hydrographic basin, and those basins form a tree — mountain
+group, massif, basin group, valley. Pick one and the results narrow to it **and everything inside
+it**, so choosing *Munții Bihorului* gives you every valley in it, not just the one named after it.
+
+Two honest notes. The catalogue itself cannot search by basin, so this narrows what your search
+brought back rather than asking the register a different question — the screen tells you how many
+caves were read to produce the answer. And a basin on its own is not a search: you still need a name
+or a county, because "every cave in this basin" would mean walking the whole register.
+
 ### What each row tells you
 
 Length, depth, altitude and protection class as the register holds them, plus two things it does not:
@@ -149,10 +160,16 @@ identifier, protected-area code, scientific interest, and whether it is recorded
 on the cave as extra properties, and repeated in a short note at the end of the description so a
 reader sees them without hunting.
 
-**Two are deliberately kept as written rather than interpreted.** The **rock code** (`00`, `05`, …)
-has no published legend, so it is not turned into a rock type — filling in a geology on a guess would
-be worse than leaving the field empty. The **basin identifier** is a number whose names that interface
-does not publish.
+**The rock code is deliberately kept as written rather than interpreted.** `00`, `05` and so on have
+no published legend, so it is not turned into a rock type — filling in a geology on a guess would be
+worse than leaving the field empty.
+
+**The basin is the opposite case, and it is resolved.** The catalogue's interface answers a basin as a
+bare number, but it publishes the names of all 653 of them on its own site, so this installation carries
+a copy of that tree. An imported cave gets a real basin name in its own field, and its description
+carries the whole way down to it — *Munții Apuseni › Munții Bihorului › Bazinele închise › Bazinul
+Padiș* — which places a cave for somebody who has never heard of the basin. The number is kept beside
+the name, so you can check the reading against the catalogue.
 
 **The nearest locality is stored where a location is stored** — in the cave's address field, which is
 withheld from people who may not see a protected cave's exact position — and not in the description,

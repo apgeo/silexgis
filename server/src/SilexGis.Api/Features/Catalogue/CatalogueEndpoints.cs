@@ -71,6 +71,12 @@ public static class CatalogueEndpoints
                 "Whether this installation has been given an API key for the speologie.org cave "
                 + "catalogue, and the limits it works to. Reaches nothing.");
 
+        catalogue.MapGet("/basins", BasinsAsync)
+            .WithSummary(
+                "The catalogue's hydrographic basin tree, which its programmatic interface does "
+                + "not publish — carried by this installation so a cave's basin number can be read "
+                + "as a place, and chosen as a filter. Reaches nothing.");
+
         catalogue.MapGet("/caves", SearchAsync)
             .WithSummary(
                 "Searches the speologie.org cave catalogue by cave name and county, marking the "
@@ -106,9 +112,26 @@ public static class CatalogueEndpoints
             client.IsConfigured, client.MaxPageSize, client.MaxSelection, PortalUrl));
     }
 
+    private static async Task<Results<Ok<IReadOnlyList<SpeologieBasinDto>>, UnauthorizedHttpResult>> BasinsAsync(
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        // Not gated on the right to create caves, unlike everything else here: this is a table
+        // this installation carries, it names no cave, and it reaches nothing. Gating it would
+        // only stop a screen explaining itself.
+        return TypedResults.Ok<IReadOnlyList<SpeologieBasinDto>>([.. SpeologieBasins.All.Select(ToDto)]);
+    }
+
     private static async Task<Results<Ok<SpeologieSearchDto>, ProblemHttpResult, UnauthorizedHttpResult>> SearchAsync(
         string? q,
         string? county,
+        int? basin,
         int? page,
         int? pageSize,
         SpeologieClient client,
@@ -128,7 +151,7 @@ public static class CatalogueEndpoints
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
 
-        var parameters = new SpeologieSearchQueryDto(q, county, page, pageSize);
+        var parameters = new SpeologieSearchQueryDto(q, county, basin, page, pageSize);
         var validation = await validator.ValidateAsync(parameters, ct);
         if (!validation.IsValid)
         {
@@ -148,21 +171,37 @@ public static class CatalogueEndpoints
         var wantedPage = Math.Max(1, page ?? 1);
         var wantedSize = Math.Clamp(pageSize ?? DefaultPageSize, 1, client.MaxPageSize);
 
+        // Narrowing by basin is done here, because the catalogue cannot do it: its search takes a
+        // term and a county and nothing else. So when a basin is chosen the catalogue is asked for
+        // as much as it will serve in one page rather than for one screenful, and the narrowing
+        // happens over that. Still exactly one request either way — what changes is how much of
+        // the answer is read, not how often the far end is asked.
+        var narrowing = basin is not null;
+        var fetchSize = narrowing ? client.MaxPageSize : wantedSize;
+
         SpeologieSearchPage found;
         try
         {
             found = await client.SearchAsync(
-                new SpeologieSearchQuery(q, county, (wantedPage - 1) * wantedSize, wantedSize), ct);
+                new SpeologieSearchQuery(q, county, (wantedPage - 1) * fetchSize, fetchSize), ct);
         }
         catch (SpeologieException e)
         {
             return Unreachable(e);
         }
 
-        var annotated = await AnnotateAsync(db, ctx, found.Items, description: null, ct);
+        var scanned = found.Items.Count;
+        var items = narrowing
+            ? [.. found.Items.Where(r => SpeologieBasins.IsWithin(r.BazinHidroId, basin!.Value))]
+            : found.Items;
 
+        var annotated = await AnnotateAsync(db, ctx, items, description: null, ct);
+
+        // The page size reported is the one actually used to cut the window, which is the fetch
+        // size while narrowing. Reporting the screenful somebody asked for would say a page held
+        // 25 records when the offset had in fact moved by a hundred.
         return TypedResults.Ok(new SpeologieSearchDto(
-            annotated, wantedPage, wantedSize, found.HasMore, found.Spellings));
+            annotated, wantedPage, fetchSize, found.HasMore, found.Spellings, scanned));
     }
 
     private static async Task<Results<Ok<SpeologieCaveDto>, ProblemHttpResult, UnauthorizedHttpResult>> GetAsync(
@@ -331,11 +370,15 @@ public static class CatalogueEndpoints
                 ProtectedAreaCode: r.CodAp?.Trim(),
                 HydroNumber: r.NrHidro,
                 HydroBasinId: r.BazinHidroId,
+                HydroBasin: SpeologieBasins.Find(r.BazinHidroId) is { } b ? ToDto(b) : null,
                 Description: description,
                 AlreadyImported: alreadyImported,
                 ExistingCaveId: alreadyImported && visible.Contains(featureId) ? featureId : null);
         })];
     }
+
+    private static SpeologieBasinDto ToDto(SpeologieBasin b) =>
+        new(b.Id, b.ParentId, b.Name, b.Label, SpeologieBasins.PathOf(b.Id) ?? b.Label, b.Depth);
 
     /// <summary>
     /// The same shape the import stores, so the screen and the cave agree about which class a

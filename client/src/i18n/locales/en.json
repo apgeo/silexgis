@@ -3437,7 +3437,11 @@
       "noResults": "The catalogue has nothing matching that.",
       "hint": "The catalogue holds about 8,650 published caves. It carries no coordinates, so a cave imported from it arrives without a position.",
       "spellings": "Searched for {{count}} spellings of what you typed: {{list}}",
-      "noResultsHint": "Nothing in the catalogue matches that. Its search is sensitive to Romanian diacritics — this installation already asks for several spellings of what you typed, but a long name with more than one accented letter may still need typing as the catalogue spells it (Scărișoara rather than Scarisoara)."
+      "noResultsHint": "Nothing in the catalogue matches that. Its search is sensitive to Romanian diacritics — this installation already asks for several spellings of what you typed, but a long name with more than one accented letter may still need typing as the catalogue spells it (Scărișoara rather than Scarisoara).",
+      "basin": "Hydrographic basin",
+      "basinPlaceholder": "Any basin",
+      "basinNarrowed": "{{count}} of the {{scanned}} caves read match that basin.",
+      "basinNarrowedWhy": "The catalogue cannot search by basin, so this narrows what the search brought back rather than asking it a different question. Choosing a massif includes every basin inside it."
     },
     "columns": {
       "name": "Name",
@@ -3448,7 +3452,8 @@
       "altitude": "Altitude (m)",
       "protectionClass": "Class",
       "state": "In this installation",
-      "actions": "Actions"
+      "actions": "Actions",
+      "basin": "Basin"
     },
     "state": {
       "imported": "Already imported",
@@ -3481,7 +3486,7 @@
       "protectedAreaCode": "Protected-area code",
       "hydroNumber": "Hydrologic number",
       "hydroBasin": "Hydrographic basin",
-      "hydroBasinHint": "The catalogue's own basin identifier. It does not publish the basin names through this interface."
+      "hydroBasinUnknown": "The catalogue named a basin this installation's copy of its tree does not hold. Refreshing that table may resolve it."
     },
     "wizard": {
       "title": "Import from the catalogue",
