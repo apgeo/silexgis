@@ -181,6 +181,10 @@ fi
 
 say "Housekeeping"
 docker image prune -f >/dev/null || true
+# Build cache is the one thing here that grows without bound: every update leaves a new set of
+# layers behind, and on a single-disk host that is what eventually fills it. Two weeks keeps
+# the cache that makes an incremental rebuild fast while bounding the total.
+docker builder prune -f --filter until=336h >/dev/null || true
 if [ -d "$BACKUP_DIR" ]; then
 	# shellcheck disable=SC2012
 	ls -1dt "$BACKUP_DIR"/*/ 2>/dev/null | tail -n "+$((BACKUP_KEEP + 1))" | while read -r old; do
