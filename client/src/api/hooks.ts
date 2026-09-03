@@ -278,6 +278,7 @@ export const queryKeys = {
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
   caveSurveyStatistics: (caveId: string) => ['caves', caveId, 'survey-statistics'] as const,
   caveOrientation: (caveId: string) => ['caves', caveId, 'orientation'] as const,
+  caveTopology: (caveId: string) => ['caves', caveId, 'topology'] as const,
   annotatedText: (documentId: string) => ['annotated-texts', documentId] as const,
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
@@ -916,6 +917,23 @@ export function surveyModelReadableByViewer(model: { format: SurveyModelInfo['fo
 }
 
 /**
+ * Whether any of a cave's uploaded surveys can have produced a measured passage network.
+ *
+ * Only a line plot whose reading finished has stations and shots behind it; a wall mesh has no
+ * network, and a reading still queued or failed left nothing stored. A cave with none of those is
+ * the ordinary case — most caves have never had a survey file uploaded at all — and asking the
+ * server about its network anyway is a request that is certain to be refused. That refusal is not
+ * free: the browser reports every failed request to its console, so a panel that asked regardless
+ * would put an error on the console of every cave page in the application, drowning the real ones
+ * in an expected one.
+ */
+export function caveHasMeasurableSurvey(
+  models: { status: SurveyModelInfo['status']; format: SurveyModelInfo['format'] }[] | undefined,
+): boolean {
+  return (models ?? []).some((model) => model.status === 'ready' && surveyModelReadableByViewer(model));
+}
+
+/**
  * How often the list re-asks. Two intervals meet in this one number, which is why it is a named
  * rule and not a literal at the query: work in flight is worth a couple of seconds, and
  * once everything has settled the list must still come back before the signed URLs on it lapse.
@@ -947,6 +965,10 @@ export function surveyModelPollInterval(
 function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveyStatistics(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
+  // Stored beside the survey rather than recomputed per request, but changed by exactly the same
+  // events: the figures are rewritten when a file is read, and a cave whose answering upload was
+  // deleted is measured from a different one or from none at all.
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveTopology(caveId) });
 }
 
 /**
@@ -5228,6 +5250,35 @@ export function useCaveSurveyStatistics(caveId: string | undefined) {
     staleTime: 5 * 60_000,
     // A cave the caller may not read — or may read but not place exactly — is refused with the
     // same answer as a cave that does not exist, and asking again will not change it.
+    retry: false,
+  });
+}
+
+/**
+ * The shape of a cave's passage network, as the figures the karst literature uses.
+ *
+ * Every figure is a number that was measured or it is null, and null is never a zero: a network of
+ * two junctions has no connectivity ratio and a single branch has no spread of lengths, so
+ * anything drawing these has to keep the two apart.
+ */
+export type CaveTopology = components['schemas']['CaveTopologyDto'];
+
+export function useCaveTopology(caveId: string | undefined, hasMeasurableSurvey = true) {
+  return useQuery({
+    queryKey: queryKeys.caveTopology(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/topology', { params: { path: { id: caveId! } } })),
+    // Asked only of a cave that has a read line plot behind it. The route answers "no such cave"
+    // both to a caller who may not place the cave and to a cave whose network was never measured,
+    // and the second of those is the ordinary state of nearly every cave — so asking unconditionally
+    // would fail on almost every cave page and write an expected error to the browser console each
+    // time. The caller decides, because it already holds the list of uploads.
+    enabled: !!caveId && hasMeasurableSurvey,
+    // Measured once when the survey file is read and stored beside it, so this changes only when a
+    // file is uploaded or removed — both of which empty this key explicitly.
+    staleTime: 5 * 60_000,
+    // Two of the three answers this route gives are final: a cave the caller may not read or may
+    // not place exactly, and a cave whose network has never been measured. Neither changes by
+    // being asked again.
     retry: false,
   });
 }

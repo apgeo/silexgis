@@ -83,6 +83,37 @@ public static class SurveySegmentSql
     }
 
     /// <summary>
+    /// Which one of a cave's survey models answers for it: the model the cave's current shape was
+    /// read out of, and failing that the most recently uploaded model whose reading finished.
+    /// </summary>
+    /// <remarks>
+    /// Exactly one model answers, and this is the only place that says which. Anything reading a
+    /// figure derived from a survey resolves it through here rather than picking a model itself,
+    /// because the answer can change with no upload involved — making a different centerline the
+    /// cave's own, or deleting the newest model, re-points it — and two surfaces that resolved it
+    /// separately would disagree without either being able to say so.
+    /// </remarks>
+    /// <param name="caveParameter">Name of the bound parameter holding the cave feature id,
+    /// including its leading marker.</param>
+    public static string ChosenModel(string caveParameter) => $"""
+        SELECT COALESCE(
+            (SELECT c.survey_model_id
+             FROM centerlines c
+             WHERE c.cave_feature_id = {caveParameter}
+               AND c.is_default
+               AND c.survey_model_id IS NOT NULL
+             LIMIT 1),
+            (SELECT m.id
+             FROM survey_models m
+             WHERE m.cave_feature_id = {caveParameter}
+               AND m.status = {(short)SurveyModelStatus.Ready}
+               AND m.format IN ({(short)SurveyModelFormat.Lox}, {(short)SurveyModelFormat.Survex3d})
+             ORDER BY m.created_at DESC, m.id DESC
+             LIMIT 1)
+        ) AS model_id
+        """;
+
+    /// <summary>
     /// The statement <see cref="ForCaveAsync"/> runs and the parameters it runs it with, built
     /// without a database. Exposed so the access path this rides can be pinned by a test that
     /// asks the planner what it intends to do, rather than only by a test that checks the answer:
@@ -100,21 +131,7 @@ public static class SurveySegmentSql
         // the model status and the two line-plot formats below.
         var sql = $"""
             WITH chosen AS (
-                SELECT COALESCE(
-                    (SELECT c.survey_model_id
-                     FROM centerlines c
-                     WHERE c.cave_feature_id = @seg_cave_id
-                       AND c.is_default
-                       AND c.survey_model_id IS NOT NULL
-                     LIMIT 1),
-                    (SELECT m.id
-                     FROM survey_models m
-                     WHERE m.cave_feature_id = @seg_cave_id
-                       AND m.status = {(short)SurveyModelStatus.Ready}
-                       AND m.format IN ({(short)SurveyModelFormat.Lox}, {(short)SurveyModelFormat.Survex3d})
-                     ORDER BY m.created_at DESC, m.id DESC
-                     LIMIT 1)
-                ) AS model_id
+                {ChosenModel("@seg_cave_id")}
             ),
             leg AS (
                 SELECT s.id,
