@@ -10,12 +10,21 @@
 # Overrides (environment):
 #   SILEXGIS_DEPLOY_USER  default silexgis
 #   SILEXGIS_APP_DIR      default /opt/silexgis
+#   SILEXGIS_OPS_DIR      default /opt/silexgis-ops
 #   SILEXGIS_BACKUP_DIR   default /var/backups/silexgis
 #   SILEXGIS_BACKUP_KEEP  default 14
+#
+# The update logic is copied to SILEXGIS_OPS_DIR, outside the deployed checkout, rather than
+# being run from inside it. Two reasons, both learned the hard way: a script that lives in the
+# tree it is about to `git pull` can be rewritten underneath the shell executing it, and a copy
+# placed into the checkout by hand collides with the pull the moment the same path arrives from
+# upstream ("untracked working tree files would be overwritten"). Re-run this script after an
+# update to refresh the copy from the checkout.
 set -euo pipefail
 
 DEPLOY_USER="${SILEXGIS_DEPLOY_USER:-silexgis}"
 APP_DIR="${SILEXGIS_APP_DIR:-/opt/silexgis}"
+OPS_DIR="${SILEXGIS_OPS_DIR:-/opt/silexgis-ops}"
 BACKUP_DIR="${SILEXGIS_BACKUP_DIR:-/var/backups/silexgis}"
 BACKUP_KEEP="${SILEXGIS_BACKUP_KEEP:-14}"
 
@@ -26,19 +35,31 @@ say() { printf '\n==> %s\n' "$*"; }
 # `git pull` replaces, and a symlink would put the shell that is running the update in the
 # path of the update itself. update.sh handles that by re-execing from a copy; keeping the
 # entry point outside the checkout means the wrapper never changes underneath a run either.
+say "Installing update logic into $OPS_DIR"
+install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$OPS_DIR"
+for f in update.sh set-domain.sh install-app.sh; do
+	if [ -f "$(dirname "$0")/$f" ]; then
+		install -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$(dirname "$0")/$f" "$OPS_DIR/$f"
+	elif [ -f "$APP_DIR/deploy/server/$f" ]; then
+		install -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$APP_DIR/deploy/server/$f" "$OPS_DIR/$f"
+	fi
+done
+ls -1 "$OPS_DIR" | sed 's/^/    /'
+
 say "Installing /usr/local/sbin/silexgis-update"
 cat > /usr/local/sbin/silexgis-update <<EOF
 #!/usr/bin/env bash
-# Entry point for updating this SilexGIS installation. The logic lives in the checkout at
-# $APP_DIR/deploy/server/update.sh and is therefore updated by the update itself.
+# Entry point for updating this SilexGIS installation. The logic lives in $OPS_DIR,
+# outside the checkout, so a pull cannot rewrite the script that is running it.
+# Refresh it from the checkout with: sudo bash $APP_DIR/deploy/server/install-ops.sh
 set -euo pipefail
 if [ "\$(id -un)" != "$DEPLOY_USER" ]; then
 	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups \\
 		env SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" \\
-		bash "$APP_DIR/deploy/server/update.sh" "\$@"
+		bash "$OPS_DIR/update.sh" "\$@"
 fi
 export SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR"
-exec bash "$APP_DIR/deploy/server/update.sh" "\$@"
+exec bash "$OPS_DIR/update.sh" "\$@"
 EOF
 chmod 755 /usr/local/sbin/silexgis-update
 
