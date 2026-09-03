@@ -1,0 +1,279 @@
+# =============================================================================================
+# IMMICH — an optional photo library with its own database and its own storage.
+#
+# READ THIS BLOCK BEFORE COPYING THE FILE, AND COPY IT WITH THE FILE. Four things below are
+# deliberate and are lost the moment somebody tidies them.
+#
+# WHAT IT BRINGS UP: three containers of its own — the Immich server, its OWN PostgreSQL and its
+# OWN Valkey. Nothing is shared with the rest of this deployment but the network. Immich's
+# database is emphatically not this installation's database and must never be pointed at it: it
+# expects superuser on the cluster it runs in, it sets shared_preload_libraries (which is
+# instance-wide and needs a restart to change), and its own documented restore procedure begins
+# by deleting the data directory. Aimed at the cluster that holds this installation's cave
+# coordinates, each of those is a different way to lose them.
+#
+# WHAT IT DOES NOT BRING UP: machine learning. The service is written out below but COMMENTED
+# OUT, and the setting that seeds it is false. Both halves are needed and neither replaces the
+# other: the variable only seeds a stored setting at first start, so an administrator can turn
+# the feature back on afterwards — but a container that is not there cannot run. Nothing in
+# showing located photographs on a map uses any of it, this host has no GPU, and the service's
+# own documentation describes it as having no security measures whatsoever.
+#
+# IT IS WRITTEN AGAINST ONE NAMED VERSION, the v3 line. The /data mount, Valkey and the
+# VectorChord database image are all v3 shapes; a tag from an older major does not start against
+# this file.
+#
+# IT CARRIES HARDENING DEFAULTS the vendor's own compose file does not: first-run sign-up closed,
+# no published port beyond loopback, every writable path a named volume, no machine learning, and
+# the operator's photographs mounted read-only. The opposite of each is meant to require a
+# deliberate edit by somebody who has read why.
+#
+# ENTIRELY OPTIONAL AND ABSENT UNLESS YOU START IT. Without this file nothing changes: no image
+# is pulled, no service is defined, and the application reports the photo library as not
+# configured rather than showing an empty gallery.
+#
+# ---------------------------------------------------------------------------------------------
+# STORAGE: TWO MODES, AND YOU CHOOSE ONE BY EDITING THIS FILE
+#
+#   MODE A — READ-ONLY BIND (shipped active below). Immich indexes photographs that stay on the
+#            operator's own disks and are never copied in. This is what an external library is.
+#   MODE B — IMPORT (the commented alternative below). Photographs are uploaded into Immich's own
+#            named volume through its web UI, mobile app or CLI, and no host directory is mounted
+#            at all.
+#
+# Both are supported on purpose. Mode B is strictly safer — there is no foreign mount to lose, so
+# two of the three guards below stop applying — and it is the better choice for a first look at a
+# few hundred photographs. Mode A is the one that matches a club archive already sitting on
+# drives, and it costs only derived data. Compose cannot make a mount conditional on a variable,
+# so switching modes is an edit here rather than a line in .env, which is also what makes the
+# choice visible in the file somebody reads.
+#
+# ONE DECISION IN MODE A IS PERMANENT. Immich stores an external library's import path in its own
+# database as an absolute CONTAINER path. Editing that path later does not move the library, it
+# REMOVES every file that is no longer under an import path, exactly as a deletion would. So the
+# container path is /photo-library, it is fixed here, and it is fixed for ever.
+# ---------------------------------------------------------------------------------------------
+#
+# THREE DEFENCES PROTECT THE OPERATOR'S DISKS IN MODE A. None is optional and none replaces
+# another:
+#   1. READ-ONLY MOUNT. Immich's external-library code unlinks an original it does not own when
+#      an asset is deleted and the trash is emptied. The mount flag is the only defence here that
+#      is a kernel guarantee rather than a promise, and no product setting substitutes for it.
+#   2. A MARKER FILE that lives on the disk itself, bound in with create_host_path:false, so a
+#      disk that failed to mount stops the container starting instead of presenting an empty
+#      directory. An empty directory is not an error to Immich: the daily scan concludes every
+#      asset is gone and trashes the whole library, and once the retention window passes every
+#      album, named face, favourite and edit is destroyed. The photographs survive on the disk
+#      that was not mounted — the only thing this product contributed does not.
+#   3. NO WRITABLE PATH ANYWHERE ELSE. Derived data goes to named volumes and no import folder is
+#      mounted at all.
+#
+# Usage — with the whole stack:
+#   docker compose -f docker-compose.yml -f docker-compose.immich.yml up -d
+#
+# Usage — the photo library alone, on a machine where the application itself is run from source:
+#   docker compose -f docker-compose.yml -f docker-compose.immich.yml up -d \
+#       immich-server immich-db immich-redis
+#   The base file's own guards are still evaluated in this form: the whole composition is
+#   interpolated before any service is selected, so .env must carry SILEXGIS_DB_PASSWORD even
+#   when no SilexGIS container is being started. `docker compose ... config -q` says so in a
+#   second, without starting anything.
+#
+# Requires in .env:
+#   SILEXGIS_IMMICH_VERSION=v3.1.0          # PIN IT, on the v3 line. `release` moves under you at
+#                                           # update time, and a v2 tag does not start against
+#                                           # the shapes in this file
+#   SILEXGIS_IMMICH_DB_PASSWORD=…           # its own cluster, its own password
+#   SILEXGIS_IMMICH_LIBRARY_DIR=/srv/photos # MODE A only. The parent directory the operator's
+#                                           # disks are MOUNTED UNDER — not symlinked into: a
+#                                           # symlink pointing outside a bind mount is a dangling
+#                                           # symlink inside the container, and the result is an
+#                                           # empty library with no error at all.
+#                                           # On Windows write it with forward slashes, D:/Photos,
+#                                           # and the marker file is then
+#                                           # D:/Photos/.silexgis-photo-library
+#
+# Optional in .env: SILEXGIS_IMMICH_ALLOW_SETUP, SILEXGIS_IMMICH_BIND, SILEXGIS_IMMICH_PORT,
+#                   SILEXGIS_PHOTO_LIBRARY_TZ — all documented in .env.example.
+# =============================================================================================
+name: silexgis
+
+services:
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:${SILEXGIS_IMMICH_VERSION:?pin an Immich release in .env, on the v3 line}
+    restart: unless-stopped
+    environment:
+      # The service names here differ from Immich's own compose file, so both connection hosts
+      # must be named explicitly: their defaults are the bare words `database` and `redis`, which
+      # resolve to nothing on this network and fail as a connection error rather than as a
+      # configuration one.
+      DB_HOSTNAME: immich-db
+      DB_USERNAME: immich
+      DB_PASSWORD: ${SILEXGIS_IMMICH_DB_PASSWORD:?set SILEXGIS_IMMICH_DB_PASSWORD in .env}
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: immich-redis
+      # Set rather than mounted from the host. The vendor's file bind-mounts /etc/localtime,
+      # which has no equivalent on a Windows host; a variable works on both.
+      TZ: ${SILEXGIS_PHOTO_LIBRARY_TZ:-UTC}
+      # Closes first-run sign-up. Immich makes the first account that registers the
+      # administrator, and the route that does it stays open until this is false — an instance
+      # that has been started but not yet claimed is claimed by whoever reaches it first.
+      # SEQUENCE MATTERS: it must be true for the single start in which the administrator account
+      # is created, and false every other time. Shipping it false is what makes that a deliberate,
+      # visible step rather than a race nobody knew they were in.
+      # WALKED AND CONFIRMED 2026-09-03 against v3.1.0: with this true, POST /api/auth/admin-sign-up
+      # creates the first account and answers 201. Set it false, recreate the container, and the
+      # same call answers 400 "Admin setup is disabled". So the window really does close, and it
+      # closes on a container recreate rather than needing anything else.
+      IMMICH_ALLOW_SETUP: ${SILEXGIS_IMMICH_ALLOW_SETUP:-false}
+      # Machine learning off. Note what this variable is before relying on it: it is the SEED
+      # DEFAULT for a stored system setting, not a runtime kill switch, so from the second start
+      # onwards the stored setting wins and an administrator can turn it back on from the
+      # settings screen. That is why the machine-learning SERVICE below is commented out as well
+      # rather than merely switched off here — disabling the jobs stops the work, not the
+      # container.
+      IMMICH_MACHINE_LEARNING_ENABLED: "false"
+      # -----------------------------------------------------------------------------------
+      # THE SERVER CONFIGURATION FILE — SHIPPED, BUT NOT MOUNTED. Read this before uncommenting.
+      #
+      # Immich's map and reverse-geocoding settings are not environment variables; they live in a
+      # server configuration file. deploy/immich/immich.json holds the protective values and is
+      # in the repository ready to use. The mount is commented out for two reasons that have to
+      # be dealt with together:
+      #
+      #   (a) THE NAME OF THE VARIABLE BELOW IS NOT VERIFIED. Take it from the environment
+      #       reference for the release pinned above and correct this line before uncommenting.
+      #       A mount pointed at a variable nobody checked is how a file that was meant to be
+      #       copied fails to start.
+      #   (b) TURNING THE MAP OFF MAY ALSO REFUSE THE MAP API — and this deployment exists to
+      #       read photograph positions through that API. The sibling product was measured and
+      #       its equivalent switch does NOT disable its geographic API; whether Immich behaves
+      #       the same way is a different question about a different product and is NOT
+      #       established. Test it the same way — mount the file, call the marker route, count
+      #       what comes back — before relying on either answer.
+      #       DO NOT DELETE THIS COMMENT UNTIL IT IS ANSWERED HERE.
+      #
+      # Until then the map setting is left to whoever administers this instance, which is an
+      # honest position for a test instance and not one for an installation.
+      # IMMICH_CONFIG_FILE: /config/immich.json   # <-- VARIABLE NAME UNVERIFIED. Confirm first.
+      # -----------------------------------------------------------------------------------
+    volumes:
+      # Derived data — thumbnails, previews, transcodes, avatars — and, in MODE B, the
+      # photographs themselves. A NAMED VOLUME rather than the host bind the vendor's file uses:
+      # named volumes land on this machine's Docker volume disk, while a bind under the checkout
+      # lands on the system disk beside the image layers. Same reason as everywhere else in this
+      # deployment.
+      - immich-data:/data
+      # --- MODE A: the operator's photographs, read-only ---------------------------------
+      # Read-only is a data-integrity property here, not caution: see defence 1 in the header.
+      # Comment these two blocks out to switch to MODE B.
+      - type: bind
+        source: ${SILEXGIS_IMMICH_LIBRARY_DIR:?set SILEXGIS_IMMICH_LIBRARY_DIR in .env, or comment out the two bind blocks below to import photographs into Immich's own volume instead}
+        target: /photo-library
+        read_only: true
+        bind:
+          create_host_path: false
+      # The marker. This file lives on the operator's disk, so if the disk is not mounted the
+      # source path does not exist, create_host_path:false refuses to invent it, and the container
+      # does not start — naming the path it could not find. Without it Docker creates an empty
+      # directory, the library scans clean, and Immich trashes every asset it has ever indexed.
+      # A `:?` guard cannot do this job: it tests whether a variable is set, and the variable is
+      # set. What is missing is the filesystem underneath it.
+      # The file is a hidden dot-file at the root of the library, so an indexer that skips hidden
+      # files never sees it and one that does not sees a zero-byte file that is not a photograph.
+      - type: bind
+        source: ${SILEXGIS_IMMICH_LIBRARY_DIR}/.silexgis-photo-library
+        target: /photo-library-present
+        read_only: true
+        bind:
+          create_host_path: false
+      # --- MODE B: no host mount at all --------------------------------------------------
+      # Comment out the two blocks above and nothing replaces them. Photographs are uploaded into
+      # immich-data through Immich's own web UI, mobile app or CLI. Two consequences worth saying
+      # out loud: defences 2 and 3 in the header stop applying, because there is no foreign mount
+      # to lose; and immich-data then holds photographs rather than only derived data, so it is
+      # the one thing here whose loss is not repairable by re-indexing.
+      # -----------------------------------------------------------------------------------
+    ports:
+      # Loopback by default, and the address is load-bearing rather than tidy: Docker's published
+      # ports are inserted ahead of this host's own firewall rules, so "2283:2283" really is
+      # offered to every machine that can reach this host while "127.0.0.1:2283:2283" is not.
+      #
+      # This port is for a HUMAN to look at Immich. The application does not need it: composed
+      # into the same project, it reaches the server at http://immich-server:2283 over the
+      # stack's own network with nothing published at all. The exception is a development machine
+      # where the application is run from source on the host rather than in a container — there
+      # this port is not a convenience, it is the only path.
+      - "${SILEXGIS_IMMICH_BIND:-127.0.0.1}:${SILEXGIS_IMMICH_PORT:-2283}:2283"
+    depends_on:
+      immich-db:
+        condition: service_healthy
+      immich-redis:
+        condition: service_started
+
+  # ------------------------------------------------------------------------------------------
+  # OPTIONAL FRAGMENT — THE MACHINE-LEARNING SERVICE. COMMENTED OUT DELIBERATELY: THIS
+  # DEPLOYMENT SHIPS WITH MACHINE LEARNING OFF. It is a shipped default, not an oversight, and it
+  # is the other half of IMMICH_MACHINE_LEARNING_ENABLED above — the variable seeds a setting an
+  # administrator can change, an absent container cannot run at all.
+  #
+  # Why off: this service's own documentation says it has "no security measures whatsoever", and
+  # image previews are sent to it. It is also the one service here that showing located
+  # photographs on a map needs none of. On a host with no GPU the work it would do is a CPU pass
+  # over every photograph in the library.
+  #
+  # TO ENABLE smart search, faces and OCR: uncomment the service below AND the
+  # `immich-model-cache:` volume at the foot of this file, and set
+  # IMMICH_MACHINE_LEARNING_ENABLED to true above. Note the CPU requirement that belongs to THIS
+  # container alone and not to the rest of the stack: on amd64 it needs x86-64-v2, and SIGILL /
+  # exit 132 is the symptom on an older machine. The model cache is a further 1–3 GB, and it
+  # grows when an administrator chooses a larger model, which is a thing they will do.
+  #
+  # immich-ml:
+  #   image: ghcr.io/immich-app/immich-machine-learning:${SILEXGIS_IMMICH_VERSION}
+  #   restart: unless-stopped
+  #   volumes:
+  #     # A named volume, so the model cache lands on the volume disk and recreating the
+  #     # container does not re-download it.
+  #     - immich-model-cache:/cache
+  #   # No published port: nothing outside this network has any business reaching it.
+  # ------------------------------------------------------------------------------------------
+
+  immich-redis:
+    image: docker.io/valkey/valkey:9
+    restart: unless-stopped
+    healthcheck:
+      test: redis-cli ping | grep -q PONG || exit 1
+
+  immich-db:
+    # The extensions and the server version have to agree, which is why the vendor pins this by
+    # digest in their own file. Take the exact reference from the Immich release pinned above
+    # rather than from here.
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: immich
+      POSTGRES_PASSWORD: ${SILEXGIS_IMMICH_DB_PASSWORD}
+      POSTGRES_DB: immich
+      POSTGRES_INITDB_ARGS: '--data-checksums'
+    shm_size: 128mb
+    # An explicit check, matching the one the base stack's own database carries, so that the
+    # dependency above does not rest on whether this image happens to ship a HEALTHCHECK of its
+    # own. A `condition: service_healthy` against a container with no healthcheck waits for a
+    # state that never arrives.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U immich -d immich"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      # A named volume, and deliberately NOT anywhere on the photo disks: the vendor states
+      # plainly that network shares are unsupported for the database, and an external disk that
+      # can be unplugged is worse than a network share.
+      - immich-db-data:/var/lib/postgresql/data
+
+volumes:
+  immich-data:
+  immich-db-data:
+  # Used only by the optional machine-learning fragment above. Uncomment it with that service.
+  # immich-model-cache:
