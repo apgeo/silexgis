@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import type Map from 'ol/Map';
+import type MapBrowserEvent from 'ol/MapBrowserEvent';
+import Overlay from 'ol/Overlay';
+import type Point from 'ol/geom/Point';
 import i18n from '../i18n';
+import { getLibraryPhotoLoadState, libraryPhotoSourceOf } from './libraryPhotoLayer.ts';
 
 /**
  * What the balloon needs to know about the library a photograph came from, as opposed to about
@@ -150,4 +155,68 @@ export function libraryPhotoPopupNodes(
   }
 
   return nodes;
+}
+
+/**
+ * Balloon for the photo-library overlays: clicking a pin shows its picture and what the library
+ * said about it; clicking elsewhere dismisses it.
+ *
+ * One handler for every library rather than one per overlay — the layer the hit came from names
+ * which library it is, and that is also where the library's name, its picture address and the
+ * moment its positions were read come from, so a balloon says who is speaking without a second
+ * request.
+ *
+ * The strings are read when the body is built, and the body is rebuilt on every click, so
+ * switching language takes effect on the next click rather than needing a subscription that would
+ * rebuild a balloon nobody is looking at.
+ *
+ * Returns a detach fn.
+ */
+export function attachLibraryPhotoPopup(map: Map): () => void {
+  const element = document.createElement('div');
+  element.className = 'map-library-photo-popup';
+  // stopEvent keeps a click on the picture from bubbling back to the map.
+  const overlay = new Overlay({
+    element,
+    positioning: 'bottom-center',
+    offset: [0, -16],
+    stopEvent: true,
+  });
+  map.addOverlay(overlay);
+
+  const handler = (event: MapBrowserEvent) => {
+    let source: string | undefined;
+    const feature = map.forEachFeatureAtPixel(
+      event.pixel,
+      (hit, layer) => {
+        source = libraryPhotoSourceOf(layer?.get('id') as string | undefined);
+        return hit;
+      },
+      {
+        hitTolerance: 6,
+        layerFilter: (layer) =>
+          libraryPhotoSourceOf(layer.get('id') as string | undefined) !== undefined,
+      },
+    );
+    if (!feature || !source) {
+      overlay.setPosition(undefined);
+      return;
+    }
+
+    const state = getLibraryPhotoLoadState(source);
+    element.replaceChildren(
+      ...libraryPhotoPopupNodes(feature.getProperties(), {
+        libraryName: state.libraryName,
+        pictureUrlTemplate: state.pictureUrlTemplate,
+        readAt: state.readAt,
+      }),
+    );
+    overlay.setPosition((feature.getGeometry() as Point).getCoordinates());
+  };
+
+  map.on('singleclick', handler);
+  return () => {
+    map.un('singleclick', handler);
+    map.removeOverlay(overlay);
+  };
 }

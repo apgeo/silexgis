@@ -26,7 +26,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useSearchParams } from 'react-router-dom';
-import { useCan, useFeatureTypes, useGeofiles, useMapConfig, useMapLayers, useMapViews, useRasterMaps, useWorkAreas } from '../api/hooks.ts';
+import { useCan, useFeatureTypes, useGeofiles, useMapConfig, useMapLayers, useMapViews, usePhotoLibraries, useRasterMaps, useWorkAreas } from '../api/hooks.ts';
 import { transformExtent } from 'ol/proj';
 import { extentOf } from '../workareas/tree.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
@@ -73,6 +73,14 @@ import { ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer } from '../map/he
 import { GEOFILE_LAYER_PREFIX, attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer, setPhotosEnabled } from '../map/photoLayer.ts';
 import { attachPhotoPopup } from '../map/photoPopup.ts';
+import {
+  attachLibraryPhotoLoader,
+  createLibraryPhotoLayer,
+  libraryPhotoLayerId,
+  libraryPhotoSourceOf,
+  setLibraryPhotosEnabled,
+} from '../map/libraryPhotoLayer.ts';
+import { attachLibraryPhotoPopup } from '../map/libraryPhotoPopup.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { attachViewSync2d, type ViewSync2dHandle } from '../map/viewSync2d.ts';
@@ -130,6 +138,10 @@ export default function MapPage() {
   const syncRef = useRef<ViewSync2dHandle | null>(null);
   const { data: layers } = useMapLayers();
   const { data: mapConfig } = useMapConfig();
+  // Asked of the photo-library slice itself rather than of the map config: most of that
+  // slice's routes are not map routes, and keeping the question out of the map endpoints is
+  // what keeps the whole feature removable by deleting its directories.
+  const { data: libraryStatus } = usePhotoLibraries();
   const { data: featureTypes } = useFeatureTypes();
   const [activeBaseId, setActiveBaseId] = useState<number>();
   const [entrancesVisible, setEntrancesVisible] = useState(true);
@@ -140,6 +152,10 @@ export default function MapPage() {
   const [centerlinesVisible, setCenterlinesVisible] = useState(false);
   const [heatmapVisible, setHeatmapVisible] = useState(false);
   const [photosVisible, setPhotosVisible] = useState(false);
+  // Which neighbouring photo libraries are switched on, by the name the server gives each. A
+  // list rather than a flag per product, so pointing this installation at a different library
+  // needs no new state here and no new field in a saved view.
+  const [libraryPhotoSources, setLibraryPhotoSources] = useState<string[]>([]);
   const [editController, setEditController] = useState<MapEditController | null>(null);
   const selection = useWorkspaceStore((s) => s.selection);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -245,6 +261,10 @@ export default function MapPage() {
     const detachGeofileLoader = attachGeofileLoader(map);
     const detachPhotoLoader = attachPhotoLoader(map);
     const detachPhotoPopup = attachPhotoPopup(map);
+    // The foreign libraries' end of the same two things. Attached unconditionally: both are
+    // gated on a layer being switched on, and no library configured means no layer to switch on.
+    const detachLibraryPhotoLoader = attachLibraryPhotoLoader(map);
+    const detachLibraryPhotoPopup = attachLibraryPhotoPopup(map);
     // Clicking a point of an imported file opens what the file recorded beside it. Attached here,
     // beside the photo popup, because the two are the same kind of thing and share the rule that
     // a click landing on neither dismisses whichever is open.
@@ -296,6 +316,8 @@ export default function MapPage() {
       detachGeofileLoader();
       detachPhotoLoader();
       detachPhotoPopup();
+      detachLibraryPhotoLoader();
+      detachLibraryPhotoPopup();
       detachGeofilePopup();
       detachSelection();
       detachHover();
@@ -590,6 +612,45 @@ export default function MapPage() {
     setPhotosEnabled(photosVisible); // gate the bbox loader so hidden = no fetches
   }, [photosVisible]);
 
+  // The libraries this account may see. A caller outside the audience is told it may read nothing
+  // and given an empty list, which is the same answer to this question as an installation that has
+  // been given no library: either way there is nothing to offer, and neither is told which
+  // products the installation runs.
+  const photoLibraries = useMemo(
+    () => (libraryStatus?.mayRead ? (libraryStatus.providers ?? []) : []),
+    [libraryStatus],
+  );
+
+  // Overlays for those libraries. Not registered with the built-ins on mount, because their
+  // existence is a server answer that arrives after it — the same way imported files and
+  // georeferenced rasters are registered — and followed by the pending-order pass, because a saved
+  // view can name a layer that did not exist when the view was applied.
+  useEffect(() => {
+    const wanted = new Set(photoLibraries.map((library) => libraryPhotoLayerId(library.source)));
+    for (const library of photoLibraries) {
+      if (!findOverlayLayer(libraryPhotoLayerId(library.source))) {
+        getOverlayGroup().getLayers().push(createLibraryPhotoLayer(library.source));
+      }
+    }
+    // A library disconnected while somebody was looking at the map: the row goes away rather than
+    // staying as a layer that can only ever fail.
+    for (const layer of getOverlayGroup().getLayers().getArray().slice()) {
+      const id = layer.get('id') as string | undefined;
+      if (id && libraryPhotoSourceOf(id) && !wanted.has(id)) {
+        getOverlayGroup().getLayers().remove(layer);
+      }
+    }
+    applyPendingOverlayOrder();
+  }, [photoLibraries]);
+
+  useEffect(() => {
+    for (const library of photoLibraries) {
+      const on = libraryPhotoSources.includes(library.source);
+      findOverlayLayer(libraryPhotoLayerId(library.source))?.setVisible(on);
+      setLibraryPhotosEnabled(library.source, on); // gate the bbox loader so hidden = no fetches
+    }
+  }, [photoLibraries, libraryPhotoSources]);
+
   // Checkbox toggles coming from the composer tree. Built-ins hide/show and are
   // reflected into page state (for saved views); geofile/raster overlays are
   // deactivated entirely — their layer is removed and the catalog checkbox clears.
@@ -605,6 +666,11 @@ export default function MapPage() {
       setHeatmapVisible(visible);
     } else if (id === PHOTO_LAYER_ID) {
       setPhotosVisible(visible);
+    } else if (libraryPhotoSourceOf(id)) {
+      const source = libraryPhotoSourceOf(id)!;
+      setLibraryPhotoSources((current) =>
+        visible ? [...new Set([...current, source])] : current.filter((s) => s !== source),
+      );
     } else if (id?.startsWith(GEOFILE_LAYER_PREFIX)) {
       setGeofileVisible(id.slice(GEOFILE_LAYER_PREFIX.length), visible);
     } else if (id?.startsWith(RASTER_LAYER_PREFIX)) {
@@ -620,6 +686,7 @@ export default function MapPage() {
       centerlinesVisible,
       heatmapVisible,
       photosVisible,
+      libraryPhotoSources,
       geofileIds: visibleGeofileIds,
       rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
       tagFilter,
@@ -704,6 +771,7 @@ export default function MapPage() {
     setCenterlinesVisible(ui.centerlinesVisible);
     setHeatmapVisible(ui.heatmapVisible);
     setPhotosVisible(ui.photosVisible);
+    setLibraryPhotoSources(ui.libraryPhotoSources);
     for (const id of visibleGeofileIds) {
       if (!ui.geofileIds.includes(id)) {
         setGeofileVisible(id, false);
@@ -766,6 +834,8 @@ export default function MapPage() {
       visibleRasterIds={visibleRasterIds}
       onRasterVisibleChange={setRasterVisible}
       onOverlayVisibilityChanged={onOverlayVisibilityChanged}
+      photoLibraries={photoLibraries}
+      visibleLibraryPhotoSources={libraryPhotoSources}
       treeNonce={treeNonce}
       tagFilter={tagFilter}
       onTagFilterChange={(slug) => {

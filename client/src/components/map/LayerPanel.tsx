@@ -5,7 +5,8 @@ import LayerTransparencySlider from '@terrestris/react-geo/dist/Slider/LayerTran
 import { Alert, Checkbox, Collapse, Divider, InputNumber, Radio, Select, Slider, Typography } from 'antd';
 import type OlLayerBase from 'ol/layer/Base';
 import { useTranslation } from 'react-i18next';
-import { useTags, type GeofileInfo, type MapConfig, type MapLayerInfo, type RasterMapInfo } from '../../api/hooks.ts';
+import i18n from '../../i18n';
+import { useTags, type GeofileInfo, type LibraryPhotoProvider, type MapConfig, type MapLayerInfo, type RasterMapInfo } from '../../api/hooks.ts';
 import {
   CENTERLINE_LAYER_ID,
   getCenterlineLoadState,
@@ -13,6 +14,12 @@ import {
   type CenterlineLoadState,
 } from '../../map/centerlineLayer.ts';
 import { CLOSEST_APPROACH_LAYER_ID } from '../../map/closestApproachLayer.ts';
+import {
+  getLibraryPhotoLoadStates,
+  libraryPhotoSourceOf,
+  subscribeLibraryPhotoLoadStates,
+  type LibraryPhotoLoadStates,
+} from '../../map/libraryPhotoLayer.ts';
 import { ENTRANCE_LAYER_ID } from '../../map/entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from '../../map/featureLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID } from '../../map/heatmapLayer.ts';
@@ -42,6 +49,10 @@ interface LayerPanelProps {
   onRasterVisibleChange: (id: string, visible: boolean) => void;
   /** Fired when a layer's checkbox in the composer tree is toggled. */
   onOverlayVisibilityChanged: (layer: OlLayerBase, visible: boolean) => void;
+  /** The photo libraries this installation is pointed at, as this account may see them; empty when none. */
+  photoLibraries: LibraryPhotoProvider[];
+  /** Which of them are switched on — a status block for an overlay nobody is looking at is noise. */
+  visibleLibraryPhotoSources: string[];
   /**
    * Bumped when a saved view is applied. The transparency sliders are uncontrolled
    * (they read the layer's opacity once on mount), so remounting them here is what
@@ -80,6 +91,8 @@ export default function LayerPanel({
   visibleRasterIds,
   onRasterVisibleChange,
   onOverlayVisibilityChanged,
+  photoLibraries,
+  visibleLibraryPhotoSources,
   treeNonce,
   tagFilter,
   onTagFilterChange,
@@ -96,6 +109,12 @@ export default function LayerPanel({
   // The overlay reports what its limits held back; the panel is where that gets explained.
   const [centerlineLoad, setCenterlineLoad] = useState<CenterlineLoadState>(getCenterlineLoadState);
   useEffect(() => subscribeCenterlineLoadState(setCenterlineLoad), []);
+
+  // Each photo-library overlay reports what its library answered; this panel is where that gets
+  // explained, because on a map an empty answer, a failed request and an overlay still waiting all
+  // look like the same blank patch.
+  const [libraryLoad, setLibraryLoad] = useState<LibraryPhotoLoadStates>(getLibraryPhotoLoadStates);
+  useEffect(() => subscribeLibraryPhotoLoadStates(setLibraryLoad), []);
 
   /**
    * The catalogue split into the two things this panel draws differently: basemaps, of which one
@@ -194,6 +213,15 @@ export default function LayerPanel({
 
   const overlayName = (layer: OlLayerBase): string => {
     const id = layer.get('id') as string | undefined;
+    // Photo-library overlays are named for the library they read rather than for their layer id,
+    // and only the frame around that name is translated.
+    const librarySource = libraryPhotoSourceOf(id);
+    if (librarySource) {
+      return t('libraryPhotos.layerName', {
+        library:
+          photoLibraries.find((library) => library.source === librarySource)?.name ?? librarySource,
+      });
+    }
     switch (id) {
       case ENTRANCE_LAYER_ID:
         return t('map.entrances');
@@ -374,6 +402,56 @@ export default function LayerPanel({
           </Typography.Text>
         </div>
       )}
+      {photoLibraries
+        .filter((library) => visibleLibraryPhotoSources.includes(library.source))
+        .map((library) => {
+          const state = libraryLoad[library.source];
+          const reach = state?.reach ?? 'idle';
+          return (
+            <div
+              key={library.source}
+              style={{ marginTop: 8 }}
+              data-testid={`library-photos-status-${library.source}`}
+            >
+              <Typography.Text strong style={{ fontSize: 12 }}>
+                {library.name}
+              </Typography.Text>
+              {/* Three answers, never one. A blank map because the library holds nothing here, a
+                  blank map because the library did not answer, and a map still waiting are
+                  different facts, and an overlay that renders all three as emptiness is why
+                  somebody spends an afternoon debugging a library that was working. */}
+              {reach === 'unreachable' ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginTop: 4 }}
+                  title={t('libraryPhotos.unavailable')}
+                />
+              ) : (
+                <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
+                  {reach === 'loading' && !state?.shownCount
+                    ? t('libraryPhotos.loading')
+                    : state?.shownCount
+                      ? t('libraryPhotos.count', { count: state.shownCount })
+                      : t('libraryPhotos.empty')}
+                </Typography.Paragraph>
+              )}
+              {/* Unconditional wherever anything has been read. One library answers a rectangle
+                  live and another answers from a reading of its whole library taken earlier, and
+                  "how old are these positions" has to be answered the same way for both — a line
+                  that appeared only for the cached one would quietly decline the question for the
+                  other. While a library is not answering, the pins are the last positions it gave,
+                  which is exactly when this line earns its space. */}
+              {state?.readAt && (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('libraryPhotos.readAt', {
+                    when: new Date(state.readAt).toLocaleString(i18n.resolvedLanguage),
+                  })}
+                </Typography.Text>
+              )}
+            </div>
+          );
+        })}
       {geofiles.length > 0 && (
         <>
           <Divider style={{ margin: '12px 0' }} />

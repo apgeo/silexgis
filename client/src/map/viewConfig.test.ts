@@ -11,6 +11,7 @@ const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   centerlinesVisible: true,
   heatmapVisible: true,
   photosVisible: false,
+  libraryPhotoSources: [],
   geofileIds: [],
   rasters: [],
   tagFilter: null,
@@ -47,6 +48,28 @@ describe('viewConfig heatmap + base opacity', () => {
     const restored = applyViewConfig(legacy);
     expect(restored?.heatmapVisible).toBe(false);
     expect(restored?.baseOpacity).toEqual({});
+  });
+
+  it('round-trips which photo libraries were switched on, and treats an older view as none', () => {
+    // These overlays read a photo library this installation does not own, and they are opt-in: a
+    // saved view that predates them must not switch one on for whoever opens it, and a view that
+    // names one this installation no longer has is ignored the same way a deleted imported file
+    // is — by there being no layer with that id to show.
+    const config = captureViewConfig({ ...baseUi, libraryPhotoSources: ['photoprism'] });
+    expect(config.libraryPhotoSources).toEqual(['photoprism']);
+    expect(applyViewConfig(config)?.libraryPhotoSources).toEqual(['photoprism']);
+
+    const legacy = {
+      configVersion: 1,
+      center: [25.3, 45.7],
+      zoom: 10,
+      entrancesVisible: true,
+      surfaceFeaturesVisible: true,
+      geofileIds: [],
+      rasters: [],
+      tagFilter: null,
+    };
+    expect(applyViewConfig(legacy)?.libraryPhotoSources).toEqual([]);
   });
 
   it('treats a saved view without centerlinesVisible as off', () => {

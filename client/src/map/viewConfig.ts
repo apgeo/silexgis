@@ -28,6 +28,17 @@ export interface ViewConfig {
   heatmapVisible?: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
   photosVisible?: boolean;
+  /**
+   * Which photo libraries were switched on, named the way the server names each. Added after v1
+   * shipped; older saved views omit it (treated as none — these are opt-in overlays).
+   *
+   * A list rather than a flag per product, because this document's version is never bumped and
+   * every field added to it is permanent: pointing this installation at a different library, or at
+   * a third one, must not need another field that can never be dropped. An entry naming a library
+   * this installation no longer has is ignored, exactly as a saved view naming a deleted imported
+   * file is.
+   */
+  libraryPhotoSources?: string[];
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
@@ -59,6 +70,7 @@ export interface WorkspaceUiState {
   centerlinesVisible: boolean;
   heatmapVisible: boolean;
   photosVisible: boolean;
+  libraryPhotoSources: string[];
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
@@ -91,6 +103,7 @@ export function captureViewConfig(
     centerlinesVisible: ui.centerlinesVisible,
     heatmapVisible: ui.heatmapVisible,
     photosVisible: ui.photosVisible,
+    libraryPhotoSources: ui.libraryPhotoSources,
     geofileIds: ui.geofileIds,
     rasters: ui.rasters,
     tagFilter: ui.tagFilter,
@@ -117,6 +130,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     centerlinesVisible: parsed.centerlinesVisible ?? false,
     heatmapVisible: parsed.heatmapVisible ?? false,
     photosVisible: parsed.photosVisible ?? false,
+    libraryPhotoSources: parsed.libraryPhotoSources ?? [],
     geofileIds: parsed.geofileIds ?? [],
     rasters: parsed.rasters ?? [],
     tagFilter: parsed.tagFilter ?? null,
