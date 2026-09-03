@@ -19,7 +19,7 @@ public static class TaxonomySeeder
         await SeedSetAsync(db.CaveTypes, static (c, n) => new CaveType { Code = c, Name = n }, ct,
             ("cave", "Cave"),
             ("pit", "Pit / Aven"),
-            ("spring_cave", "Spring cave"),
+            (CaveTypeSeeds.SpringCave, "Spring cave"),
             ("mine", "Mine / Artificial cavity"),
             ("rock_shelter", "Rock shelter"));
 
@@ -472,7 +472,7 @@ public static class TaxonomySeeder
             ("tunnel", "Tunnel", FeatureCategory.Surface, point, false, snap, "tunnel.png", null),
             ("lake", "Lake / Pond", FeatureCategory.Surface, any, false, snap, "lake.png", null),
             ("water_flow", "Spring / Water flow", FeatureCategory.Surface, point, false, snap, "water_flow.png", waterFlowSchema),
-            ("fracture_line", "Fracture line / Fault", FeatureCategory.Surface, line, false, snap, "fracture_line.png", null),
+            (FeatureTypeSeeds.FractureLine, "Fracture line / Fault", FeatureCategory.Surface, line, false, snap, "fracture_line.png", null),
             ("peak", "Peak", FeatureCategory.Surface, point, false, snap, "peak.png", null),
             ("wall", "Wall / Crag", FeatureCategory.Surface, line, false, snap, "fracture_line.png", null),
             ("bivouac", "Bivouac", FeatureCategory.Surface, point, false, snap, "bivouac.png", null),
