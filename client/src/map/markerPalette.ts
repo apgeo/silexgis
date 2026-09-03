@@ -45,6 +45,22 @@ export const closestApproachPalette = {
   casing: 'rgba(255, 255, 255, 0.85)',
 } as const;
 
+/**
+ * Photographs held by a photo library this installation does not own — one hue per library.
+ *
+ * Deliberately clear of every hue already on this map: the entrance teal, the approximate-entrance
+ * orange, the surface-feature browns, the centerline maroon, the closest-approach blue, and the
+ * purple the in-house photo pin is drawn in (which lives inline in that layer rather than here).
+ * Two pins for the same photograph is a real state — one library may hold what the other does not,
+ * which is the comparison this exists for — so the two libraries have to be told apart at a glance
+ * and neither may be mistaken for a photograph this installation holds itself.
+ */
+export const libraryPhotoPalette = {
+  immich: '#c41d7f',
+  photoprism: '#237804',
+  stroke: '#ffffff',
+} as const;
+
 /** Where the feature-type symbol images are served from; the server sends the file name only. */
 export function featureSymbolUrl(symbolFile: string): string {
   return `/feature_symbols/${encodeURIComponent(symbolFile)}`;

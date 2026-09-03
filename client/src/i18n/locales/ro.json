@@ -3538,5 +3538,22 @@
       "next": "Următoare",
       "page": "Pagina {{page}}"
     }
+  },
+  "libraryPhotos": {
+    "layerName": "Fototecă ({{library}})",
+    "source": {
+      "immich": "Immich",
+      "photoprism": "PhotoPrism"
+    },
+    "loading": "Se citește fototeca…",
+    "count": "{{count}} fotografii afișate",
+    "empty": "Fototeca nu are fotografii în această zonă.",
+    "unavailable": "Fototeca nu a răspuns. Fotografiile afișate sunt ultimele poziții citite din ea.",
+    "truncated": "Se afișează doar primele {{count}} fotografii din această zonă — apropie harta pentru a le vedea pe celelalte.",
+    "readAt": "Poziții citite {{when}}",
+    "notConfigured": "Nicio fototecă nu este conectată la această instalare.",
+    "takenAt": "Fotografiată {{when}}",
+    "noTitle": "Fără titlu",
+    "thumbnailFailed": "Fotografia nu a putut fi încărcată."
   }
 }
