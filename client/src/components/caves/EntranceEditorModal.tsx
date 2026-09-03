@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { App, Checkbox, Flex, Form, Input, InputNumber, Select } from 'antd';
+import { Alert, App, Checkbox, Flex, Form, Input, InputNumber, Select } from 'antd';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import Feature from 'ol/Feature';
@@ -62,6 +62,19 @@ export default function EntranceEditorModal({
   const { data: entranceTypes } = useEntranceTypes();
   const createEntrance = useCreateEntrance(caveId);
   const updateEntrance = useUpdateEntrance(caveId);
+
+  /**
+   * Whether what is on screen is the snapped position rather than the surveyed one.
+   *
+   * The server already refuses to take a position back from an editor who may not see the exact
+   * one — its update handler writes geometry, altitude and position quality only when the caller
+   * has exact view, precisely so a save cannot echo blurred coordinates over precise stored ones.
+   * This does not duplicate that guard. It stops the editor from *inviting* an edit the server
+   * will then discard, which otherwise reports "saved" over a move that did not happen and leaves
+   * somebody believing they have corrected an entrance. Only an existing entrance can be in this
+   * state; a new one has no stored position to blur.
+   */
+  const positionIsBlurred = entrance?.approximateLocation === true;
 
   const placeMarker = (lon: number, lat: number, recenter: boolean) => {
     marker.current.setGeometry(new Point(fromLonLat([lon, lat])));
@@ -151,6 +164,9 @@ export default function EntranceEditorModal({
       view: new View({ center: fromLonLat([lon, lat]), zoom: 14 }),
     });
     map.on('singleclick', (event) => {
+      if (positionIsBlurred) {
+        return;
+      }
       const [clickLon, clickLat] = toLonLat(event.coordinate);
       form.setFieldsValue({ lon: Number(clickLon.toFixed(6)), lat: Number(clickLat.toFixed(6)) });
       placeMarker(clickLon, clickLat, false);
@@ -196,6 +212,14 @@ export default function EntranceEditorModal({
       okLoading={createEntrance.isPending || updateEntrance.isPending}
       width={720}
     >
+      {positionIsBlurred && (
+        <Alert
+          type="info"
+          showIcon
+          message={t('entrances.positionBlurred')}
+          style={{ marginBottom: 12 }}
+        />
+      )}
       <div ref={onMapTargetRef} style={{ height: 280, marginBottom: 16, background: '#e8ecef' }} />
       <Form<EntranceFormValues> form={form} layout="vertical">
         <Flex gap={12} wrap>
@@ -210,11 +234,15 @@ export default function EntranceEditorModal({
           </Form.Item>
         </Flex>
         <Flex gap={12} wrap>
+          {/* Disabled together, and exactly the four the update handler declines to take from a
+              caller without exact view. Leaving them editable makes a save look like it moved an
+              entrance that the server left where it was. */}
           <Form.Item name="lon" label={t('entrances.longitude')} rules={[{ required: true }]} style={{ width: 180 }}>
             <InputNumber
               min={-180}
               max={180}
               step={0.00001}
+              disabled={positionIsBlurred}
               style={{ width: '100%' }}
               onChange={(lon) => {
                 const lat = form.getFieldValue('lat') as number | undefined;
@@ -229,6 +257,7 @@ export default function EntranceEditorModal({
               min={-90}
               max={90}
               step={0.00001}
+              disabled={positionIsBlurred}
               style={{ width: '100%' }}
               onChange={(lat) => {
                 const lon = form.getFieldValue('lon') as number | undefined;
@@ -239,10 +268,11 @@ export default function EntranceEditorModal({
             />
           </Form.Item>
           <Form.Item name="altitude" label={t('caves.fields.altitude')} style={{ width: 140 }}>
-            <InputNumber style={{ width: '100%' }} />
+            <InputNumber disabled={positionIsBlurred} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="positionQuality" label={t('entrances.positionQuality')} style={{ width: 180 }}>
             <Select
+              disabled={positionIsBlurred}
               options={['unknown', 'gps', 'map', 'estimated'].map((v) => ({
                 value: v,
                 label: t(`entrances.qualityValues.${v}`),

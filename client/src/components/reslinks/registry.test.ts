@@ -90,6 +90,32 @@ describe('member type registry', () => {
     ).toBe('/documents/d1');
   });
 
+  it('names the region a chip followed, so the picture opens on it', () => {
+    // A photograph can carry several regions. Without the member on the address, following one
+    // chip lands the reader on a picture with four shapes on it and no way to tell which of them
+    // they clicked — which is the whole reason the chip was there.
+    expect(
+      memberRoute('document', 'd1', null, { id: 'member-7', anchorKind: 'imageRegion' }),
+    ).toBe('/documents/d1?region=member-7');
+
+    // Only that anchor kind: a page or a passage is opened by the page's own means, and a whole
+    // document has no part to name at all.
+    expect(memberRoute('document', 'd1', null, { id: 'member-7', anchorKind: 'page' })).toBe(
+      '/documents/d1',
+    );
+    expect(memberRoute('document', 'd1', null)).toBe('/documents/d1');
+
+    // A server-resolved route that already carries a query keeps it.
+    expect(
+      memberRoute(
+        'document',
+        'd1',
+        { title: 'Scan', subtitle: null, route: '/documents/d1?page=4', thumbnailUrl: null },
+        { id: 'member-7', anchorKind: 'imageRegion' },
+      ),
+    ).toBe('/documents/d1?page=4&region=member-7');
+  });
+
   it('routes a camp to its own page, from either side', () => {
     // Both halves, because either one alone decides where a chip goes: the server names the
     // route for a camp it resolved, and this table answers for one it did not.
@@ -136,7 +162,12 @@ describe('anchor summaries', () => {
     expect(anchorSummary('modelSurveyRange', { fromSurvey: 'intrare', toSurvey: 'lac' }, t)).toBe(
       'surveys intrare→lac',
     );
-    expect(anchorSummary('imageRegion', { shape: 'rect' }, t)).toBe('region');
+    // The shape is named, because which of them it is, is the only thing telling two regions of
+    // the same picture apart in a list. A shape this client has no word for still reads as one.
+    expect(anchorSummary('imageRegion', { shape: 'rect' }, t)).toBe('rectangle');
+    expect(anchorSummary('imageRegion', { shape: 'polygon' }, t)).toBe('outline');
+    expect(anchorSummary('imageRegion', { shape: 'trapezoid' }, t)).toBe('region');
+    expect(anchorSummary('imageRegion', {}, t)).toBe('region');
     expect(anchorSummary('waypoint', { index: 4 }, t)).toBe('waypoint 4');
     expect(anchorSummary('waypoint', { index: 4, name: 'Izvor' }, t)).toBe('waypoint Izvor');
     expect(anchorSummary('waypointRange', { fromIndex: 4, toIndex: 9 }, t)).toBe('waypoints 4–9');
@@ -286,9 +317,17 @@ describe('relation phrasing', () => {
     }
   });
 
-  it('can compose the numeric anchors, a text selection, and the whole resource', () => {
+  it('can compose the numeric anchors, a text selection, a picture region, and the whole resource', () => {
     const composable = RESLINK_ANCHOR_KINDS.filter(canComposeAnchor).sort();
-    expect(composable).toEqual(['page', 'pageRange', 'textRange', 'timePoint', 'timeRange', 'whole']);
+    expect(composable).toEqual([
+      'imageRegion',
+      'page',
+      'pageRange',
+      'textRange',
+      'timePoint',
+      'timeRange',
+      'whole',
+    ]);
   });
 
   it('mirrors the server rules for the anchors it can compose', () => {
@@ -315,8 +354,15 @@ describe('relation phrasing', () => {
     expect(anchorProblem('textRange', { quote: '', start: 10, end: 19 }, t)).not.toBeNull();
     expect(anchorProblem('textRange', { quote: 'a passage', start: 19, end: 19 }, t)).not.toBeNull();
 
+    // A region has to be a whole, in-frame shape. The pixel case is the one worth pinning: it is
+    // well formed in every other respect, so a rule checking only the floor would accept it and
+    // the region would read for ever as an exact part of a picture it lies far outside.
+    expect(anchorProblem('imageRegion', { shape: 'rect', x: 0.1, y: 0.1, w: 0.4, h: 0.4 }, t)).toBeNull();
+    expect(anchorProblem('imageRegion', { shape: 'rect', x: 10, y: 10, w: 200, h: 100 }, t)).not.toBeNull();
+    expect(anchorProblem('imageRegion', { shape: 'rect', x: 0.1, y: 0.1, w: 0, h: 0.4 }, t)).not.toBeNull();
+    expect(anchorProblem('imageRegion', null, t)).not.toBeNull();
+
     // A kind with no editor has no client-side rule to apply, and must not invent one.
-    expect(anchorProblem('imageRegion', null, t)).toBeNull();
     expect(anchorProblem('whole', null, t)).toBeNull();
     expect(anchorProblem('somethingNew', null, t)).toBeNull();
   });

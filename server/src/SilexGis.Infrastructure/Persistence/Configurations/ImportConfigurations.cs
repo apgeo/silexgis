@@ -134,6 +134,7 @@ public sealed class ImportBatchConfiguration : IEntityTypeConfiguration<ImportBa
         builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.SetNull);
 
         builder.Property(x => x.SyncResult).HasColumnType("jsonb");
+        builder.Property(x => x.Failures).HasColumnType("jsonb");
 
         builder.HasIndex(x => x.GeofileId);
         builder.HasIndex(x => x.ConfirmedByUserId);

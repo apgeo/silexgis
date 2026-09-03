@@ -50,12 +50,22 @@ export interface ViewSync3dHandle {
    * a saved view being opened, which places both views itself.
    */
   muteUntilSettled(): void;
+  /**
+   * Brings the scene back to where the flat map is standing, after a spell of not following it.
+   *
+   * The scene gives way rather than the map being brought to the scene, and that is not a
+   * preference: it is the rule the exchange already applies everywhere else — whoever was already
+   * there answers, whoever has just arrived listens. A camera flown around underground while
+   * uncoupled is the one arriving.
+   */
+  rejoin(): void;
   detach(): void;
 }
 
 export function attachViewSync3d(
   engine: ViewSync3dEngine,
   selection: ViewSelectionPort,
+  options: { followsExtent?: () => boolean } = {},
 ): ViewSync3dHandle {
   let timer: number | undefined;
 
@@ -83,7 +93,7 @@ export function attachViewSync3d(
         engine.setCamera(toSceneCamera(next), { animate: false });
       }
     },
-  });
+  }, { followsExtent: options.followsExtent });
 
   const unsubscribeView = engine.onViewChanged(() => {
     window.clearTimeout(timer);
@@ -94,6 +104,7 @@ export function attachViewSync3d(
     announce,
     publishSelection: (selection) => sync.publishSelection(selection),
     muteUntilSettled: () => sync.muteUntilSettled(),
+    rejoin: () => sync.rejoin(),
     detach() {
       window.clearTimeout(timer);
       unsubscribeView();

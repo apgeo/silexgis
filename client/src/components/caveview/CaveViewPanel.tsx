@@ -3,6 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { acquireCrsRewrite, CAVEVIEW_HOME, loadCaveView, type CaveViewUi } from '../../caveview/loadCaveView.ts';
+import {
+  partFromLeg,
+  partFromStation,
+  sectionForRef,
+  type PickedModelPart,
+} from '../../caveview/modelParts.ts';
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
 
@@ -18,6 +24,15 @@ export interface CaveViewPanelProps {
   height?: number | string;
   /** Fired with the survey's entrance label when one is clicked in the 3D scene. */
   onEntrancePick?: (displayName: string) => void;
+  /**
+   * Fired when a station or a leg is clicked and can be named — the caller then decides what to
+   * offer. Absent means clicks do only what the viewer does with them.
+   *
+   * A pick that cannot be named produces nothing rather than an empty offer: a splay's far end
+   * was never a station, and an anchor naming one end and inventing the other would read as
+   * exact while pointing at nothing.
+   */
+  onPartPick?: (part: PickedModelPart) => void;
   /**
    * Which survey model this panel is showing, when the caller knows.
    *
@@ -44,6 +59,7 @@ export default function CaveViewPanel({
   fileName,
   height = 480,
   onEntrancePick,
+  onPartPick,
   surveyModelId,
 }: CaveViewPanelProps) {
   const { t } = useTranslation();
@@ -59,20 +75,7 @@ export default function CaveViewPanel({
   // second time to do it would be a download per click.
   const loadedRef = useRef<{ ui: CaveViewUi; file: File } | null>(null);
 
-  // Which parts of a survey a passage can name. Station ranges and survey ranges are not here:
-  // the viewer takes one section, so a range would have to be reduced to one end of itself, and
-  // silently showing a reader one end of the stretch they asked for is worse than the panel
-  // saying it cannot show it.
-  const sectionOf = (ref: ResourceRef): string | null => {
-    if (surveyModelId === undefined || ref.targetType !== 'surveyModel' || ref.targetId !== surveyModelId) {
-      return null;
-    }
-
-    const anchor = (typeof ref.anchor === 'object' && ref.anchor !== null ? ref.anchor : {}) as Record<string, unknown>;
-    const key = ref.anchorKind === 'modelStation' ? 'station' : ref.anchorKind === 'modelSurvey' ? 'survey' : null;
-    const value = key === null ? undefined : anchor[key];
-    return typeof value === 'string' && value.length > 0 ? value : null;
-  };
+  const sectionOf = (ref: ResourceRef): string | null => sectionForRef(ref, surveyModelId);
 
   useViewControl({
     id: `caveview-${containerIdRef.current}`,
@@ -89,9 +92,13 @@ export default function CaveViewPanel({
     },
   });
 
-  // The callback rides a ref so a new identity doesn't reload the whole viewer.
+  // The callbacks ride refs so a new identity doesn't reload the whole viewer. Naming either of
+  // them in the effect's dependencies is how a parent that re-renders per keystroke ends up
+  // re-fetching and re-parsing a survey file on every one.
   const onEntrancePickRef = useRef(onEntrancePick);
   onEntrancePickRef.current = onEntrancePick;
+  const onPartPickRef = useRef(onPartPick);
+  onPartPickRef.current = onPartPick;
 
   useEffect(() => {
     let disposed = false;
@@ -117,6 +124,27 @@ export default function CaveViewPanel({
         const name = (event as { displayName?: unknown }).displayName;
         if (!disposed && typeof name === 'string' && name) {
           onEntrancePickRef.current?.(name);
+        }
+      });
+
+      // Both are watched unconditionally and answer only when somebody is listening, because the
+      // listeners are attached once with the viewer and the caller's interest can change without
+      // the survey being reloaded.
+      //
+      // `handled` is deliberately left alone. The bundle reads it back after dispatching and
+      // treats a true as "the application dealt with this click", which would stop the viewer
+      // selecting and highlighting what was clicked — so offering to link a station would take
+      // away the ability to simply look at one.
+      viewer.addEventListener('station', (event) => {
+        const part = partFromStation((event as { node?: unknown }).node);
+        if (!disposed && part !== null) {
+          onPartPickRef.current?.(part);
+        }
+      });
+      viewer.addEventListener('leg', (event) => {
+        const part = partFromLeg((event as { leg?: unknown }).leg);
+        if (!disposed && part !== null) {
+          onPartPickRef.current?.(part);
         }
       });
       ui = new cv2.CaveViewUI(viewer);

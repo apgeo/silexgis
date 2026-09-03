@@ -24,9 +24,12 @@ import {
   TimeRangeAnchorEditor,
 } from './anchorEditors.tsx';
 import TextRangeAnchorEditor from './TextRangeAnchorEditor.tsx';
+import ImageRegionAnchorEditor from './ImageRegionAnchorEditor.tsx';
+import { IMAGE_REGION_SHAPES } from '../../imagelink/regions.ts';
 import {
   validatePageAnchor,
   validatePageRangeAnchor,
+  validateImageRegionAnchor,
   validateTextRangeAnchor,
   validateTimePointAnchor,
   validateTimeRangeAnchor,
@@ -147,11 +150,26 @@ export function memberRoute(
   targetType: string,
   targetId: string,
   display?: ResLinkTargetDisplay | null,
+  /**
+   * The member itself, where the caller has it. Some anchors name a part the target's own page
+   * can open at, and which part that is cannot be worked out from the target's identity alone.
+   */
+  member?: { id: string; anchorKind: string } | null,
 ): string | null {
-  if (display?.route) {
-    return display.route;
+  const route = display?.route ?? targetTypeEntry(targetType).route?.(targetId) ?? null;
+  if (route === null) {
+    return null;
   }
-  return targetTypeEntry(targetType).route?.(targetId) ?? null;
+
+  // A region of a picture is addressable, so a chip pointing at one opens the picture with that
+  // region drawn heavier rather than dropping the reader on a photograph with four shapes on it
+  // and no indication which one they followed. The member's own id is what names it: the region
+  // is a member, not a thing with an identity of its own.
+  if (member?.anchorKind === 'imageRegion') {
+    return `${route}${route.includes('?') ? '&' : '?'}region=${encodeURIComponent(member.id)}`;
+  }
+
+  return route;
 }
 
 /** A link's own page, addressed by the short code it keeps for life. */
@@ -185,6 +203,11 @@ function text(anchor: unknown, key: string): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
+/** Whether a stored shape name is one this client has a word for. */
+function isRegionShape(value: string): value is (typeof IMAGE_REGION_SHAPES)[number] {
+  return (IMAGE_REGION_SHAPES as readonly string[]).includes(value);
+}
+
 const anchorKinds: Record<AnchorKind, AnchorKindEntry> = {
   whole: { summary: null, editor: null, validate: null },
   textRange: {
@@ -216,7 +239,18 @@ const anchorKinds: Record<AnchorKind, AnchorKindEntry> = {
     editor: PageRangeAnchorEditor,
     validate: validatePageRangeAnchor,
   },
-  imageRegion: { summary: (_anchor, t) => t('resLinks.anchors.region'), editor: null, validate: null },
+  imageRegion: {
+    // The shape is named in the chip rather than "a region", because which of them it is, is
+    // the only thing distinguishing two members of the same picture in a list.
+    summary: (anchor, t) => {
+      const shape = text(anchor, 'shape');
+      return shape === null || !isRegionShape(shape)
+        ? t('resLinks.anchors.region')
+        : t(`resLinks.anchors.regionShapes.${shape}`);
+    },
+    editor: ImageRegionAnchorEditor,
+    validate: validateImageRegionAnchor,
+  },
   timePoint: {
     summary: (anchor, t) => {
       const at = num(anchor, 't');

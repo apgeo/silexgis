@@ -310,6 +310,16 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './src/setupTests.ts',
+    // Five seconds is the runner's default and this suite has outgrown it. These are component
+    // tests: each one mounts a real antd tree into jsdom, and under the parallelism the runner
+    // chooses on a busy machine the slowest of them sit just under the line. The symptom is that
+    // a handful fail per run and a *different* handful fails on the next one, because what tips
+    // them is load rather than anything they assert — every failure reads "timed out", never a
+    // wrong value. Raising the ceiling cannot turn a passing test red; it only stops a slow one
+    // being reported as a broken one. If a test ever genuinely hangs, it now takes longer to say
+    // so, which is the trade being made.
+    testTimeout: 20_000,
+    hookTimeout: 20_000,
     // e2e/ belongs to Playwright, not Vitest.
     include: ['src/**/*.test.{ts,tsx}'],
     server: {

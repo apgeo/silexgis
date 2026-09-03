@@ -253,6 +253,7 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, DocumentConversionBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, ArchiveExpansionHandler>();
         services.AddScoped<IProcessingJobHandler, DirectoryImportHandler>();
+        services.AddScoped<IProcessingJobHandler, ImportCommitHandler>();
         services.AddScoped<IProcessingJobHandler, UploadSessionSweepHandler>();
         services.AddScoped<IProcessingJobHandler, DocumentPurgeHandler>();
         services.AddScoped<IProcessingJobHandler, CavingGroupAnnouncementHandler>();

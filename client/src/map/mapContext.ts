@@ -126,13 +126,20 @@ export function setLayerOpacity(layerId: string, opacity: number): void {
     ?.setOpacity(opacity);
 }
 
-/** Fits the view to a map-projection extent — degenerate (point) extents get maxZoom. */
-export function fitExtent(extent: [number, number, number, number]): void {
+/**
+ * Fits the view to a map-projection extent — degenerate (point) extents get maxZoom.
+ *
+ * How close to go is a parameter because it is sometimes a statement about how well a position
+ * is known rather than a matter of taste. A point that reached this client snapped to a grid
+ * should be framed loosely, so the screen does not present a hillside kilometres away as the
+ * entrance; see `APPROXIMATE_MAX_ZOOM`.
+ */
+export function fitExtent(extent: [number, number, number, number], maxZoom = 17): void {
   const map = getWorkspaceMap();
   const fit = () =>
     map.getView().fit(extent, {
       padding: [60, 60, 60, 60],
-      maxZoom: 17,
+      maxZoom,
       duration: 500,
     });
 
@@ -185,11 +192,23 @@ export function fitLonLatExtent(bounds: [number, number, number, number]): void 
   });
 }
 
+/**
+ * How close to frame a position this reader is only allowed to know approximately.
+ *
+ * The server snaps such a point to a grid — 5 km by default — so the true place can be anywhere in
+ * that cell. Framing it at the ordinary close-up zoom would draw a screen a couple of hundred
+ * metres across and centre it on a spot that is confidently, precisely wrong. At this zoom the
+ * screen is wide enough that the cell is a fair share of it, which is an honest picture of what is
+ * actually known. It is a fixed number rather than the real cell size because the grid is a server
+ * setting the API does not publish; if it ever does, frame the cell itself instead.
+ */
+export const APPROXIMATE_MAX_ZOOM = 12;
+
 /** Fits the view to a GeoJSON geometry (EPSG:4326) — points get a sane close-up zoom. */
-export function fitGeoJsonGeometry(geometry: object): void {
+export function fitGeoJsonGeometry(geometry: object, maxZoom?: number): void {
   const geom = new GeoJSON().readGeometry(geometry, {
     dataProjection: 'EPSG:4326',
     featureProjection: 'EPSG:3857',
   });
-  fitExtent(geom.getExtent() as [number, number, number, number]);
+  fitExtent(geom.getExtent() as [number, number, number, number], maxZoom);
 }

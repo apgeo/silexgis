@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
 using SilexGis.Domain;
+using SilexGis.Domain.Catalogue;
 using SilexGis.Infrastructure.Catalogue;
 
 namespace SilexGis.Api.Features.Catalogue;
@@ -43,7 +44,12 @@ public sealed record SpeologieStatusDto(
 /// <param name="Vanished">Whether the catalogue records the cave as destroyed or lost.</param>
 /// <param name="ProtectedAreaCode">Protected-area code.</param>
 /// <param name="HydroNumber">Hydrologic number within its basin.</param>
-/// <param name="HydroBasinId">The catalogue's basin identifier. Opaque — the catalogue does not publish the basin names through this interface.</param>
+/// <param name="HydroBasinId">The catalogue's basin identifier.</param>
+/// <param name="HydroBasin">
+/// That basin's name, and the whole way down to it — the catalogue's programmatic interface
+/// answers only the number, so this is resolved here against the tree its own site publishes.
+/// Null when the catalogue names a basin this installation's copy of that tree does not hold.
+/// </param>
 /// <param name="Description">
 /// The description, already converted from the catalogue's markup to the plain text this
 /// application stores, and already cut to the length it would be stored at. Only answered for a
@@ -80,9 +86,27 @@ public sealed record SpeologieCaveDto(
     string? ProtectedAreaCode,
     string? HydroNumber,
     int? HydroBasinId,
+    SpeologieBasinDto? HydroBasin,
     string? Description,
     bool AlreadyImported,
     Guid? ExistingCaveId);
+
+/// <summary>
+/// One hydrographic basin of the catalogue's own tree.
+/// </summary>
+/// <param name="Id">What a cave record's basin identifier points at.</param>
+/// <param name="ParentId">The basin this one sits inside; null at the top of the tree.</param>
+/// <param name="Name">The name exactly as the catalogue writes it, cadastral code and all.</param>
+/// <param name="Label">The same name without that code — what a person would call the place.</param>
+/// <param name="Path">Every level down to it, outermost first, which is what places a cave for a reader who does not know the basin.</param>
+/// <param name="Depth">How far down the tree it sits; the mountain groups are 1.</param>
+public sealed record SpeologieBasinDto(
+    int Id,
+    int? ParentId,
+    string Name,
+    string Label,
+    string Path,
+    int Depth);
 
 /// <summary>
 /// A page of catalogue results.
@@ -103,12 +127,19 @@ public sealed record SpeologieCaveDto(
 /// one typed term is asked about under several spellings — and the screen says which, because a
 /// search that quietly asked something other than what was typed is worse than one that did not.
 /// </param>
+/// <param name="ScannedCount">
+/// How many catalogue records were read to produce this page. Equal to what came back when no
+/// basin was chosen; larger when one was, because the catalogue cannot filter by basin and the
+/// narrowing is done here. Reported rather than hidden: "4 caves" and "4 caves out of 100 looked
+/// at" are different answers, and only one of them is honest about what was not looked at.
+/// </param>
 public sealed record SpeologieSearchDto(
     IReadOnlyList<SpeologieCaveDto> Items,
     int Page,
     int PageSize,
     bool HasMore,
-    IReadOnlyList<string> Spellings);
+    IReadOnlyList<string> Spellings,
+    int ScannedCount);
 
 /// <summary>What one person decided about one catalogue cave.</summary>
 /// <param name="Action">
@@ -178,15 +209,25 @@ public sealed class SpeologieSearchValidator : AbstractValidator<SpeologieSearch
             .Matches("^[A-Za-z]{2}$")
             .When(x => !string.IsNullOrWhiteSpace(x.County))
             .WithMessage("A county is the two-letter code the catalogue uses, such as BH or GJ.");
+
+        RuleFor(x => x.Basin)
+            .Must(id => SpeologieBasins.ById.ContainsKey(id!.Value))
+            .When(x => x.Basin is not null)
+            .WithMessage("That is not a hydrographic basin this installation knows.");
     }
 }
 
 /// <summary>The search's parameters, as one object so they can be validated as one.</summary>
 /// <param name="Q">Free text. The catalogue matches it as a substring of the cave's <b>name</b> only — not its slug, and not its description.</param>
 /// <param name="County">Two-letter Romanian county code.</param>
+/// <param name="Basin">
+/// A hydrographic basin identifier. Matches that basin <b>and everything beneath it</b>, so
+/// choosing a massif answers with every valley in it. Applied here rather than by the catalogue,
+/// which cannot filter on it.
+/// </param>
 /// <param name="Page">One-based page number.</param>
 /// <param name="PageSize">How many rows are wanted.</param>
-public sealed record SpeologieSearchQueryDto(string? Q, string? County, int? Page, int? PageSize);
+public sealed record SpeologieSearchQueryDto(string? Q, string? County, int? Basin, int? Page, int? PageSize);
 
 /// <summary>
 /// A confirmation names caves and nothing else — there is no "import everything that matched",

@@ -793,10 +793,10 @@ public sealed class ResLinkApiTests : IAsyncLifetime, IDisposable
                 anchorFileId: foreignFileId),
             "reslink.member.anchor_file_invalid");
 
-        // An image region is measured in pixels of a specific file: without the pin the
-        // coordinates have no space to live in, and a later version would silently
-        // reinterpret them — so the pin is required, not just permitted.
-        var region = new { shape = "rect", x = 10, y = 10, w = 40, h = 20 };
+        // An image region is measured in fractions of one specific file as it is drawn: without
+        // the pin the coordinates have no picture to be fractions of, and a later version would
+        // silently reinterpret them — so the pin is required, not just permitted.
+        var region = new { shape = "rect", x = 0.1, y = 0.1, w = 0.4, h = 0.2 };
         await ShouldRefuseMemberAsync(
             Member("document", documentId, anchorKind: "imageRegion", anchor: region),
             "reslink.member.anchor_pin_required");

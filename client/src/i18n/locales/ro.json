@@ -421,10 +421,13 @@
     "edit": "Editare intrare",
     "deleteConfirm": "Ștergeți această intrare?",
     "coordinates": "Coordonate",
+    "showOnMap": "Arată pe hartă",
+    "showOnMapApproximate": "Arată pe hartă — poziția este aproximativă",
     "longitude": "Longitudine",
     "latitude": "Latitudine",
     "main": "Principală",
     "positionQuality": "Calitatea poziției",
+    "positionBlurred": "Nu aveți acces la poziția exactă a acestei intrări, așa că valorile afișate sunt rotunjite la o grilă. Poziția, altitudinea și calitatea poziției sunt de aceea needitabile — serverul păstrează valorile înregistrate și ar ignora orice s-ar introduce aici. Restul formularului se salvează normal.",
     "qualityValues": {
       "unknown": "Necunoscută",
       "gps": "GPS",
@@ -1663,6 +1666,7 @@
     "popOutScene3d": "Deschide scena 3D într-o fereastră separată",
     "viewer3dTitle": "Vizualizator 3D",
     "viewer3dEmpty": "Selectează o peșteră cu model 3D pentru a-l afișa aici.",
+    "viewer3dUnavailable": "Acest model topografic nu mai este disponibil sau nu aveți acces la el.",
     "scene3dTitle": "Scena 3D",
     "sections": {
       "details": "Detalii",
@@ -1745,6 +1749,9 @@
     "projectionOrthographic": "Elimină perspectiva",
     "projectionOrthographicHint": "Elimină perspectiva, astfel încât distanțele să se citească la fel aproape și departe",
     "projectionPerspectiveHint": "Reactivează perspectiva",
+    "coupleToMap": "Mișcă odată cu harta",
+    "coupleToMapHint": "Mișcă din nou odată cu harta plană, aducând camera unde se uită ea",
+    "uncoupleFromMapHint": "Nu mai mișca odată cu harta plană, ca fiecare să poată fi mutată separat",
     "presetGlyph": {
       "top": "⌖",
       "north": "N",
@@ -1765,7 +1772,13 @@
     "rasterOverlayHint": "Pe glob fiecare planșă este aplatizată într-o singură imagine, așa că devine mai neclară la apropiere. Harta plană citește fișierul în sine și rămâne clară."
   },
   "caveview": {
-    "loadError": "Modelul 3D nu a putut fi încărcat"
+    "loadError": "Modelul 3D nu a putut fi încărcat",
+    "linkThisPart": "Leagă asta…",
+    "picked": {
+      "modelStation": "Stația {{name}}",
+      "modelStationRange": "Galeria de la {{name}}",
+      "modelSurvey": "Ridicarea {{name}}"
+    }
   },
   "surveyModels": {
     "title": "Modele topo 3D",
@@ -1775,6 +1788,9 @@
     "format": "Format",
     "surveyedAt": "Cartat la",
     "view": "Vezi în 3D",
+    "openBesideMap": "Deschide lângă hartă",
+    "openInWindow": "Deschide în altă fereastră",
+    "openOverlay": "Deschide peste toată fereastra",
     "deleteConfirm": "Ștergi acest model topo?",
     "empty": "Niciun model 3D încă",
     "uploadTitle": "Încarcă un model topo",
@@ -2479,7 +2495,13 @@
       "modelPoint": "punct",
       "waypoint": "punctul {{index}}",
       "waypointNamed": "punctul {{name}}",
-      "waypointRange": "punctele {{from}}–{{to}}"
+      "waypointRange": "punctele {{from}}–{{to}}",
+      "regionShapes": {
+        "rect": "dreptunghi",
+        "circle": "cerc",
+        "polygon": "contur",
+        "point": "punct"
+      }
     },
     "anchorStates": {
       "reanchored": "Măsurat pe o versiune mai veche, regăsit în cea curentă",
@@ -2634,7 +2656,26 @@
       "pageRangeBackwards": "Ultima pagină nu poate fi înaintea primei.",
       "timeRequired": "Dă un timp în secunde, cel puțin 0.",
       "timeRangeRequired": "Dă ambele timpuri în secunde, fiecare cel puțin 0.",
-      "timeRangeBackwards": "Sfârșitul trebuie să fie după început; pentru o clipă folosește un singur moment."
+      "timeRangeBackwards": "Sfârșitul trebuie să fie după început; pentru o clipă folosește un singur moment.",
+      "regionShape": "Formă",
+      "regionShapes": {
+        "rect": "Dreptunghi",
+        "circle": "Cerc",
+        "polygon": "Contur",
+        "point": "Punct"
+      },
+      "regionHelp": {
+        "rect": "Trage peste imagine ca să încadrezi partea la care te referi.",
+        "circle": "Apasă în centru și trage spre exterior.",
+        "polygon": "Dă clic pe fiecare colț pe rând, apoi dublu-clic ca să închizi conturul.",
+        "point": "Dă clic pe locul la care te referi."
+      },
+      "regionDrawn": "Partea desenată",
+      "regionClear": "Desenează din nou",
+      "regionRequired": "Desenează partea din imagine la care te referi.",
+      "regionNeedsDocument": "Alege întâi imaginea, apoi desenează pe ea.",
+      "regionNotAPicture": "Acest document nu este o imagine, deci nu are regiuni către care să arate. Alege altă parte.",
+      "regionNoRendering": "Această imagine nu poate fi afișată aici, deci nu există pe ce desena."
     },
     "point": {
       "title": "Punct nou",
@@ -2805,7 +2846,9 @@
     "elevationHint": "Fișierul este singura sursă. Nu se preia nimic dintr-un model de elevație: o grilă publică lângă un perete — adică exact acolo unde sunt intrările — greșește cu o sută de metri, fără nimic pe ecran care să o spună.",
     "keepAltitude": "Păstrează {{altitude}} m",
     "batchFromCatalogue": "Din catalogul peșterilor",
-    "batchFromTrips": "Dintr-un tabel de ture"
+    "batchFromTrips": "Dintr-un tabel de ture",
+    "creating": "Se creează {{count}} obiecte. Procesul rulează pe server și continuă dacă părăsești această pagină.",
+    "creatingHint": "Lotul apare la Loturi de import când s-a terminat și se anulează ca un întreg."
   },
   "photoImport": {
     "title": "Obiecte din fotografii",
@@ -3439,7 +3482,11 @@
       "noResults": "Catalogul nu are nimic care să corespundă.",
       "hint": "Catalogul cuprinde aproximativ 8.650 de peșteri publicate. Nu conține coordonate, așa că o peșteră importată de acolo ajunge fără poziție.",
       "spellings": "S-au căutat {{count}} grafii ale a ceea ce ați scris: {{list}}",
-      "noResultsHint": "Nimic din catalog nu corespunde. Căutarea lui este sensibilă la diacritice — instalarea cere deja mai multe grafii ale a ceea ce ați scris, dar o denumire lungă cu mai multe litere accentuate poate cere totuși scrierea așa cum o scrie catalogul (Scărișoara, nu Scarisoara)."
+      "noResultsHint": "Nimic din catalog nu corespunde. Căutarea lui este sensibilă la diacritice — instalarea cere deja mai multe grafii ale a ceea ce ați scris, dar o denumire lungă cu mai multe litere accentuate poate cere totuși scrierea așa cum o scrie catalogul (Scărișoara, nu Scarisoara).",
+      "basin": "Bazin hidrografic",
+      "basinPlaceholder": "Orice bazin",
+      "basinNarrowed": "{{count}} din cele {{scanned}} peșteri citite se potrivesc cu acel bazin.",
+      "basinNarrowedWhy": "Catalogul nu poate căuta după bazin, așa că filtrul restrânge ceea ce a adus căutarea, nu îi pune o altă întrebare. Alegerea unui masiv include toate bazinele din el."
     },
     "columns": {
       "name": "Denumire",
@@ -3450,7 +3497,8 @@
       "altitude": "Altitudine (m)",
       "protectionClass": "Clasă",
       "state": "În această instalare",
-      "actions": "Acțiuni"
+      "actions": "Acțiuni",
+      "basin": "Bazin"
     },
     "state": {
       "imported": "Deja importată",
@@ -3483,7 +3531,7 @@
       "protectedAreaCode": "Cod arie protejată",
       "hydroNumber": "Număr hidrologic",
       "hydroBasin": "Bazin hidrografic",
-      "hydroBasinHint": "Identificatorul de bazin al catalogului. Denumirile bazinelor nu sunt publicate prin această interfață."
+      "hydroBasinUnknown": "Catalogul a numit un bazin pe care copia arborelui din această instalare nu îl conține. O reîmprospătare a acelui tabel îl poate rezolva."
     },
     "wizard": {
       "title": "Import din catalog",
@@ -3684,5 +3732,59 @@
       "outcome": "Ce ar face confirmarea",
       "instead": "Sau îndreapt-o către"
     }
+  },
+  "hypsometry": {
+    "caveTitle": "Galerii după altitudine",
+    "areaTitle": "Intrări după altitudine",
+    "loading": "Se măsoară…",
+    "nothingMeasured": "Nu există trasee de măsurat.",
+    "noAltitudesTitle": "Nu s-au înregistrat altitudini",
+    "noAltitudesReason": "Ridicarea nu are a treia coordonată, deci nu există nimic de distribuit pe înălțime. O peșteră desenată în plan nu este o peșteră aflată pe un singur nivel.",
+    "noEntrances": "Nicio intrare din această zonă nu are o altitudine pe care o puteți localiza.",
+    "axisAltitude": "Altitudine (m)",
+    "axisPassageMetres": "Galerie (m)",
+    "axisEntrances": "Intrări",
+    "metres": "{{value}} m",
+    "springLine": "Izvor",
+    "from": "De la (m)",
+    "to": "Până la (m)",
+    "share": "Pondere",
+    "noProposal": "Măsurătorile nu se separă în niveluri.",
+    "notConfirmed": "Nu s-a înregistrat încă nicio citire",
+    "confirm": "Înregistrează această citire",
+    "clear": "Retrage citirea",
+    "clearConfirm": "Retrageți citirea înregistrată a nivelurilor acestei peșteri?",
+    "saved": "Citirea a fost înregistrată.",
+    "saveFailed": "Citirea nu a putut fi înregistrată. Reîncărcați și verificați ce este valabil.",
+    "entrancesPlaced": "Intrări numărate",
+    "springsSeen": "Izvoare dintre ele",
+    "countedOverWhatYouMayPlace": "Numărate peste intrările pe care le puteți localiza, ceea ce nu este, în mod deliberat, numărul intrărilor din această zonă.",
+    "proposalIsNotAnAssertion": "Nivelurile desenate în spatele barelor sunt citite din histogramă prin calcul. Sunt o propunere despre măsurători, nu o afirmație despre peșteră.",
+    "springLinesExplained": "Liniile întrerupte sunt altitudinile izvoarelor din această zonă. Un nivel tăiat la înălțimea la care apa părăsește masivul înseamnă altceva decât un nivel aflat oriunde altundeva.",
+    "proposedCount": "Niveluri propuse pe baza măsurătorilor: {{count}}",
+    "confirmedCount": "Niveluri în citirea înregistrată: {{count}}"
+  },
+  "structureComparison": {
+    "caveTitle": "Galeriile față de structura cartată",
+    "areaTitle": "Depresiunile față de structura cartată",
+    "loading": "Se compară…",
+    "passageRose": "Direcția galeriilor",
+    "noPassageTrend": "Traseele acestei peșteri nu au o direcție măsurabilă.",
+    "noStructureNearby": "Niciun traseu de fractură pe care îl puteți localiza nu este cartat în apropiere.",
+    "noStructureInArea": "Niciun traseu de fractură pe care îl puteți localiza nu este cartat în această zonă.",
+    "noDolines": "Niciun contur de aici nu are o aliniere utilizabilă.",
+    "divergence": "Divergență",
+    "meanSeparation": "Direcții medii la distanță de",
+    "unitDegrees": "°",
+    "noDivergence": "O parte nu conține nimic, deci nu există niciun dezacord de raportat. Zero aici ar susține un acord cu o structură pe care nimeni nu a cartat-o.",
+    "divergenceScale": "Zero înseamnă că cele două se suprapun ca direcție; unu înseamnă că sunt perpendiculare, la un sfert de tură distanță.",
+    "linesOnly": "Se compară doar liniile de fractură și de falie cartate. Măsurătorile de strat și de diaclază luate la o stație sunt un alt fel de înregistrare, iar această instalare nu stochează niciuna.",
+    "dolineModeElsewhere": "Compararea axelor lungi ale depresiunilor cu direcțiile faliilor se face pe o zonă, pe pagina zonei respective.",
+    "structureRose": "Trasee de fractură ({{count}} pe o rază de {{radius}} m)",
+    "areaStructureRose": "Trasee de fractură ({{count}} în această zonă)",
+    "dolineRose": "Axele lungi ale depresiunilor ({{count}} contururi)"
+  },
+  "imageLink": {
+    "regionCount": "Părți legate din această imagine: {{count}}"
   }
 }

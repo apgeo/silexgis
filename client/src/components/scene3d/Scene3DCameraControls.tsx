@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { RefObject } from 'react';
-import { BorderOuterOutlined, ExpandOutlined, VideoCameraOutlined } from '@ant-design/icons';
+import {
+  BorderOuterOutlined,
+  DisconnectOutlined,
+  ExpandOutlined,
+  LinkOutlined,
+  VideoCameraOutlined,
+} from '@ant-design/icons';
 import { Button, Popover, Tooltip } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
@@ -18,6 +24,13 @@ export interface Scene3DCameraControlsProps {
   /** Frames the cave the view is centred on. Disabled when no survey is drawn to frame. */
   onFitCave(): void;
   fitDisabled: boolean;
+  /**
+   * Whether this scene's camera moves with the flat map, and the map with it. Controlled like
+   * everything else here — the switch belongs to the workspace, not to this strip, because the
+   * same scene is mounted in three places and they share one answer.
+   */
+  coupled: boolean;
+  onCoupledChange(coupled: boolean): void;
   /** Handed out so whoever mounts this can measure how much of the view it stands on. */
   containerRef?: RefObject<HTMLDivElement | null>;
 }
@@ -47,6 +60,8 @@ export default function Scene3DCameraControls({
   onProjectionChange,
   onFitCave,
   fitDisabled,
+  coupled,
+  onCoupledChange,
   containerRef,
 }: Scene3DCameraControlsProps) {
   const { t } = useTranslation();
@@ -60,6 +75,9 @@ export default function Scene3DCameraControls({
   const projectionLabel = orthographic
     ? t('scene3d.projectionPerspectiveHint')
     : t('scene3d.projectionOrthographicHint');
+  // The hint says what pressing it would DO, like the projection toggle beside it, rather than
+  // naming the state it is already in — which the highlight and aria-pressed already say.
+  const couplingLabel = coupled ? t('scene3d.uncoupleFromMapHint') : t('scene3d.coupleToMapHint');
 
   if (folded) {
     return (
@@ -105,6 +123,16 @@ export default function Scene3DCameraControls({
                 data-testid="scene3d-projection-toggle"
               >
                 {projectionLabel}
+              </Button>
+              <Button
+                block
+                type={coupled ? 'primary' : 'default'}
+                icon={coupled ? <LinkOutlined /> : <DisconnectOutlined />}
+                aria-pressed={coupled}
+                onClick={() => onCoupledChange(!coupled)}
+                data-testid="scene3d-coupling-toggle"
+              >
+                {couplingLabel}
               </Button>
             </div>
           }
@@ -157,6 +185,17 @@ export default function Scene3DCameraControls({
           aria-pressed={orthographic}
           onClick={() => onProjectionChange(orthographic ? 'perspective' : 'orthographic')}
           data-testid="scene3d-projection-toggle"
+        />
+      </Tooltip>
+      <Tooltip title={couplingLabel} placement="left">
+        <Button
+          size="small"
+          type={coupled ? 'primary' : 'default'}
+          icon={coupled ? <LinkOutlined /> : <DisconnectOutlined />}
+          aria-label={t('scene3d.coupleToMap')}
+          aria-pressed={coupled}
+          onClick={() => onCoupledChange(!coupled)}
+          data-testid="scene3d-coupling-toggle"
         />
       </Tooltip>
     </div>

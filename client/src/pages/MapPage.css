@@ -549,3 +549,24 @@
   padding: 0 10px;
   border-radius: 0;
 }
+
+/* The survey viewer beside the map: a title strip that names the model and offers the two other
+   places it can be opened, over a body the viewer fills. The body is the flexing child and has
+   min-height 0, without which a flex item refuses to shrink below its content and the viewer
+   pushes the strip off the top of the pane. */
+.map-caveview-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.map-caveview-header {
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  flex: 0 0 auto;
+}
+
+.map-caveview-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}

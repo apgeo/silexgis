@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -27,6 +27,14 @@ const notHere: SpeologieCave = {
   protectedAreaCode: null,
   hydroNumber: '21',
   hydroBasinId: 605,
+  hydroBasin: {
+    id: 605,
+    parentId: 604,
+    name: '3440 - Bazinul Padiş',
+    label: 'Bazinul Padiş',
+    path: 'Munţii Apuseni › Munţii Bihorului › Bazinele închise şi platourile înalte › Bazinul Padiş',
+    depth: 4,
+  },
   description: null,
   alreadyImported: false,
   existingCaveId: null,
@@ -68,6 +76,19 @@ let configured = true;
 const searchCalls: unknown[] = [];
 const navigate = vi.fn();
 
+/** Two levels of the catalogue's own tree, which its programmatic interface does not publish. */
+const basins = [
+  { id: 604, parentId: null, name: '344 - Bazinele închise', label: 'Bazinele închise', path: 'Bazinele închise', depth: 1 },
+  {
+    id: 605,
+    parentId: 604,
+    name: '3440 - Bazinul Padiş',
+    label: 'Bazinul Padiş',
+    path: 'Bazinele închise › Bazinul Padiş',
+    depth: 2,
+  },
+];
+
 vi.mock('../../api/hooks.ts', () => ({
   useSpeologieStatus: () => ({
     data: { configured, maxPageSize: 50, maxSelection: 100, portalUrl: 'https://www.speologie.org' },
@@ -77,6 +98,7 @@ vi.mock('../../api/hooks.ts', () => ({
     return searchResult;
   },
   useSpeologieCave: () => ({ data: undefined, isPending: false }),
+  useSpeologieBasins: () => ({ data: basins, isPending: false }),
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -110,6 +132,7 @@ describe('SpeologieSearchPage', () => {
         pageSize: 25,
         hasMore: false,
         spellings: ['ursilor'],
+        scannedCount: 3,
       },
       isFetching: false,
     };
@@ -182,6 +205,7 @@ describe('SpeologieSearchPage', () => {
         pageSize: 25,
         hasMore: false,
         spellings: ['ursilor', 'urșilor', 'urşilor'],
+        scannedCount: 0,
       },
       isFetching: false,
     };
@@ -209,7 +233,7 @@ describe('SpeologieSearchPage', () => {
     // sentence that explains the search into a wall of near-identical words nobody reads.
     const many = Array.from({ length: 24 }, (_, i) => `spelling${i}`);
     searchResult = {
-      data: { items: [], page: 1, pageSize: 25, hasMore: false, spellings: many },
+      data: { items: [], page: 1, pageSize: 25, hasMore: false, spellings: many, scannedCount: 0 },
       isFetching: false,
     };
     show();
@@ -218,5 +242,50 @@ describe('SpeologieSearchPage', () => {
     expect(note.textContent).toContain('24');
     expect(note.textContent).toContain('spelling0');
     expect(note.textContent).not.toContain('spelling9');
+  });
+
+  it('offers the basin tree as a filter and sends the chosen basin with the search', async () => {
+    show();
+
+    fireEvent.change(screen.getByTestId('speologie-term'), { target: { value: 'padis' } });
+    fireEvent.mouseDown(within(screen.getByTestId('speologie-basin')).getByRole('combobox'));
+    fireEvent.click(await screen.findByTitle('Bazinele închise › Bazinul Padiş'));
+    fireEvent.click(screen.getByTestId('speologie-search'));
+
+    await waitFor(() => {
+      expect(searchCalls.at(-1)).toMatchObject({ q: 'padis', basin: 605 });
+    });
+  });
+
+  it('says how much was read to produce a basin-narrowed answer', async () => {
+    // The catalogue cannot search by basin, so the narrowing happens here over what the search
+    // brought back. "4 caves" and "4 caves out of 100 read" are different answers, and only one
+    // of them is honest about what was not looked at.
+    searchResult = {
+      data: {
+        items: [notHere],
+        page: 1,
+        pageSize: 100,
+        hasMore: false,
+        spellings: ['padis'],
+        scannedCount: 100,
+      },
+      isFetching: false,
+    };
+    show();
+
+    fireEvent.change(screen.getByTestId('speologie-term'), { target: { value: 'padis' } });
+    fireEvent.mouseDown(within(screen.getByTestId('speologie-basin')).getByRole('combobox'));
+    fireEvent.click(await screen.findByTitle('Bazinele închise › Bazinul Padiş'));
+    fireEvent.click(screen.getByTestId('speologie-search'));
+
+    const notice = await screen.findByTestId('speologie-basin-narrowed');
+    expect(notice.textContent).toContain('100');
+    expect(notice.textContent).toContain('cannot search by basin');
+  });
+
+  it('shows the basin a cave belongs to rather than its number', () => {
+    show();
+    expect(screen.getAllByText('Bazinul Padiş').length).toBeGreaterThan(0);
   });
 });

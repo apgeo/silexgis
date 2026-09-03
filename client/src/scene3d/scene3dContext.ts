@@ -138,6 +138,13 @@ const NEAR_PLANE_METERS = 0.5;
 const DEFAULT_FOVY_RADIANS = Math.PI / 3;
 
 /**
+ * How many places down the lower half of the screen to look for ground when the middle of it is
+ * sky. Coarse deliberately: each one reads the depth buffer, and the answer only has to be good
+ * enough to centre a box that is kilometres across.
+ */
+const GROUND_AHEAD_PROBES = 8;
+
+/**
  * Furthest from the ellipsoid a reported ground height is believed, in metres. Comfortably outside
  * the range the earth's own surface occupies — about 11 km down and 9 km up — and inside the tens
  * of kilometres a coarse tile's chord reports. See `groundHeightAt`.
@@ -865,10 +872,10 @@ class CesiumScene3D implements Scene3DCore {
     const width = this.viewportWidthPixels();
     const height = this.viewportHeightPixels();
     const camera = this.getCamera();
-    // The ground under the middle of the screen, which is what the view is about. Falling back to
-    // the point directly beneath the camera keeps a tilted view that has the horizon in its centre
-    // asking about somewhere real rather than about nothing.
-    const center = this.screenToPosition({ x: width / 2, y: height / 2 });
+    // The ground under the middle of the screen, which is what the view is about — and, when the
+    // middle of the screen is sky, the ground the viewer is looking at instead of it.
+    const center =
+      this.screenToPosition({ x: width / 2, y: height / 2 }) ?? this.groundAhead(width, height);
     return viewportBounds({
       centerLongitude: center?.longitude ?? camera.longitude,
       centerLatitude: center?.latitude ?? camera.latitude,
@@ -879,6 +886,53 @@ class CesiumScene3D implements Scene3DCore {
       viewportWidthPixels: width,
       viewportHeightPixels: height,
     });
+  }
+
+  /**
+   * The middle of the ground a view with sky in its centre is looking at, or undefined when it can
+   * see no ground at all.
+   *
+   * The case is ordinary rather than exotic: the scene's own cardinal presets pitch the camera ten
+   * degrees below horizontal, so the centre ray leaves over the horizon and the whole of the ground
+   * being looked at sits in the lower part of the screen. The previous answer here was the point
+   * directly BENEATH the camera, which is real but is behind the viewer — so the box that decides
+   * what gets loaded was centred on ground they had already flown over, and the terrain they were
+   * looking at came back empty however much of it was on screen.
+   *
+   * Probing down the middle column of the screen finds the ground instead. The first hit is the
+   * farthest visible ground, just below the horizon; the bottom of the screen is the nearest. The
+   * midpoint of the two is the middle of what is actually in view, which is what the box wants to
+   * be centred on. Either alone is an answer when the other misses.
+   */
+  private groundAhead(width: number, height: number): Scene3DPosition | undefined {
+    const x = width / 2;
+    const nearest = this.screenToPosition({ x, y: height - 1 });
+
+    let farthest: Scene3DPosition | undefined;
+    // Coarse on purpose: each probe reads the depth buffer, this runs whenever the camera settles,
+    // and the answer only has to be good enough to centre a box that is kilometres across.
+    for (let step = 1; step <= GROUND_AHEAD_PROBES; step += 1) {
+      const found = this.screenToPosition({
+        x,
+        y: height / 2 + ((height / 2) * step) / GROUND_AHEAD_PROBES,
+      });
+      if (found) {
+        farthest = found;
+        break;
+      }
+    }
+
+    if (!farthest) {
+      return nearest;
+    }
+    if (!nearest) {
+      return farthest;
+    }
+    return {
+      longitude: (farthest.longitude + nearest.longitude) / 2,
+      latitude: (farthest.latitude + nearest.latitude) / 2,
+      height: (farthest.height + nearest.height) / 2,
+    };
   }
 
   onViewChanged(listener: () => void): () => void {

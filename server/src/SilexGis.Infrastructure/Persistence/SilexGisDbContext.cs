@@ -38,6 +38,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<CaveEntrance> CaveEntrances => Set<CaveEntrance>();
 
+    public DbSet<CaveLevelBands> CaveLevelBands => Set<CaveLevelBands>();
+
     public DbSet<Centerline> Centerlines => Set<Centerline>();
 
     public DbSet<FeatureHierarchyEdge> FeatureHierarchyEdges => Set<FeatureHierarchyEdge>();

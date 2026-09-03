@@ -709,6 +709,9 @@ public static class TerrainBuildEndpoints
         await db.SaveChangesAsync(ct);
 
         build.IsActive = true;
+        // Chosen, so a build finishing later leaves it alone. A finished build draws itself only
+        // over ground nobody picked.
+        build.ActivationWasAutomatic = false;
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 

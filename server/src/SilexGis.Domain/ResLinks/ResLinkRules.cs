@@ -474,13 +474,13 @@ public static class ResLinkRules
 
     private static string? TimeRangeProblem(JsonElement root)
     {
-        var problem = NumberProblem(root, "start", min: 0, out var start);
+        var problem = NumberProblem(root, "start", min: 0, max: double.PositiveInfinity, out var start);
         if (problem is not null)
         {
             return problem;
         }
 
-        problem = NumberProblem(root, "end", min: 0, out var end);
+        problem = NumberProblem(root, "end", min: 0, max: double.PositiveInfinity, out var end);
         if (problem is not null)
         {
             return problem;
@@ -490,6 +490,33 @@ public static class ResLinkRules
         return end > start ? null : "'end' must be greater than 'start'";
     }
 
+    /// <summary>
+    /// A region of a picture, in fractions of the picture as it is drawn.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Coordinates run 0 to 1 across the pinned picture's width and height, with the origin at
+    /// its top-left <i>as displayed</i> — that is, after the quarter-turn correction somebody
+    /// recorded against it has been applied, which is the only form anyone ever sees it in.
+    /// </para>
+    /// <para>
+    /// Fractions rather than pixels, and the reason is not taste. A picture is served at whatever
+    /// size the viewer is entitled to and the screen can use — the full-size rendering is bounded,
+    /// so the bytes a browser measures are usually not the bytes that were uploaded. Pixel
+    /// coordinates would therefore mean something different depending on which rendering they were
+    /// drawn on, and nothing in a stored region says which that was. Fractions are the same number
+    /// on every rendering of the same picture, and they are what a client can measure without
+    /// being told the original's dimensions, which it is not.
+    /// </para>
+    /// <para>
+    /// What this does not survive is somebody turning the picture afterwards: every region stored
+    /// against it then describes a rotated frame that is no longer the frame it is drawn in. That
+    /// is a known and accepted consequence of measuring what is displayed, and it is why the
+    /// bound is checked here — a payload in pixels would sail past a floor-only rule and read for
+    /// ever as a region far outside the picture, which is precisely the silent wrongness that a
+    /// pinned, exact-looking anchor must not be able to have.
+    /// </para>
+    /// </remarks>
     private static string? ImageRegionProblem(JsonElement root)
     {
         var problem = IntProblem(root, "page", min: 1, required: false)
@@ -499,18 +526,29 @@ public static class ResLinkRules
             return problem;
         }
 
-        // Coordinates are natural pixels of the pinned file — never negative; extents
-        // must be positive, a zero-size region selects nothing.
+        // Extents must be positive as well as bounded: a zero-size region selects nothing, and
+        // reads on screen as a shape somebody drew rather than as nothing at all.
         return root.GetProperty("shape").GetString() switch
         {
-            "point" => NumberProblem(root, "x", min: 0) ?? NumberProblem(root, "y", min: 0),
-            "rect" => NumberProblem(root, "x", min: 0) ?? NumberProblem(root, "y", min: 0)
-                ?? PositiveNumberProblem(root, "w") ?? PositiveNumberProblem(root, "h"),
-            "circle" => NumberProblem(root, "cx", min: 0) ?? NumberProblem(root, "cy", min: 0)
-                ?? PositiveNumberProblem(root, "r"),
+            "point" => FractionProblem(root, "x") ?? FractionProblem(root, "y"),
+            "rect" => FractionProblem(root, "x") ?? FractionProblem(root, "y")
+                ?? PositiveFractionProblem(root, "w") ?? PositiveFractionProblem(root, "h"),
+            "circle" => FractionProblem(root, "cx") ?? FractionProblem(root, "cy")
+                ?? PositiveFractionProblem(root, "r"),
             "polygon" => PolygonProblem(root),
             _ => "'shape' must be one of: point, rect, circle, polygon",
         };
+    }
+
+    /// <summary>A coordinate or extent within the picture: 0 to 1 inclusive.</summary>
+    private static string? FractionProblem(JsonElement root, string name) =>
+        NumberProblem(root, name, min: 0, max: 1);
+
+    /// <summary>An extent within the picture that also has to be more than nothing.</summary>
+    private static string? PositiveFractionProblem(JsonElement root, string name)
+    {
+        var problem = NumberProblem(root, name, min: 0, max: 1, out var value);
+        return problem ?? (value > 0 ? null : $"'{name}' must be positive");
     }
 
     private static string? PolygonProblem(JsonElement root)
@@ -530,9 +568,11 @@ public static class ResLinkRules
 
             foreach (var coordinate in point.EnumerateArray())
             {
-                if (coordinate.ValueKind != JsonValueKind.Number || coordinate.GetDouble() < 0)
+                if (coordinate.ValueKind != JsonValueKind.Number
+                    || coordinate.GetDouble() < 0
+                    || coordinate.GetDouble() > 1)
                 {
-                    return "point coordinates must be non-negative numbers";
+                    return "point coordinates must be fractions of the picture, between 0 and 1";
                 }
             }
 
@@ -589,10 +629,14 @@ public static class ResLinkRules
     }
 
     private static string? NumberProblem(
-        JsonElement root, string name, double min = double.NegativeInfinity) =>
-        NumberProblem(root, name, min, out _);
+        JsonElement root,
+        string name,
+        double min = double.NegativeInfinity,
+        double max = double.PositiveInfinity) =>
+        NumberProblem(root, name, min, max, out _);
 
-    private static string? NumberProblem(JsonElement root, string name, double min, out double value)
+    private static string? NumberProblem(
+        JsonElement root, string name, double min, double max, out double value)
     {
         value = 0;
         if (!root.TryGetProperty(name, out var element))
@@ -606,18 +650,12 @@ public static class ResLinkRules
         }
 
         value = element.GetDouble();
-        return value >= min ? null : $"'{name}' must be at least {min}";
-    }
-
-    private static string? PositiveNumberProblem(JsonElement root, string name)
-    {
-        var problem = NumberProblem(root, name, min: 0, out var value);
-        if (problem is not null)
+        if (value < min)
         {
-            return problem;
+            return $"'{name}' must be at least {min}";
         }
 
-        return value > 0 ? null : $"'{name}' must be positive";
+        return value <= max ? null : $"'{name}' must be at most {max}";
     }
 
     /// <summary>Identity-bearing string: when required, it must be present and

@@ -4,7 +4,12 @@ import { ExportOutlined, ImportOutlined, SearchOutlined } from '@ant-design/icon
 import { Alert, Button, Card, Flex, Input, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { useSpeologieSearch, useSpeologieStatus, type SpeologieCave } from '../../api/hooks.ts';
+import {
+  useSpeologieBasins,
+  useSpeologieSearch,
+  useSpeologieStatus,
+  type SpeologieCave,
+} from '../../api/hooks.ts';
 import SpeologieCaveDrawer from '../../components/catalogue/SpeologieCaveDrawer.tsx';
 import { speologieErrorMessage } from '../../components/catalogue/errorMessage.ts';
 import { ROMANIAN_COUNTIES } from '../../components/catalogue/counties.ts';
@@ -29,12 +34,14 @@ export default function SpeologieSearchPage() {
 
   const [term, setTerm] = useState('');
   const [county, setCounty] = useState<string | undefined>();
-  const [query, setQuery] = useState<{ q?: string; county?: string }>({});
+  const [basin, setBasin] = useState<number | undefined>();
+  const [query, setQuery] = useState<{ q?: string; county?: string; basin?: number }>({});
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<readonly number[]>([]);
   const [detail, setDetail] = useState<SpeologieCave | null>(null);
 
   const status = useSpeologieStatus();
+  const basins = useSpeologieBasins();
   const pageSize = 25;
   const results = useSpeologieSearch({ ...query, page, pageSize }, status.data?.configured === true);
 
@@ -43,7 +50,7 @@ export default function SpeologieSearchPage() {
   const onSearch = () => {
     setPage(1);
     setSelected([]);
-    setQuery({ q: term.trim() || undefined, county });
+    setQuery({ q: term.trim() || undefined, county, basin });
   };
 
   const importIds = (ids: readonly number[]) => {
@@ -71,6 +78,19 @@ export default function SpeologieSearchPage() {
     },
     { title: t('speologie.columns.county'), dataIndex: 'county', width: 90 },
     { title: t('speologie.columns.mountain'), dataIndex: 'mountain', width: 140 },
+    {
+      title: t('speologie.columns.basin'),
+      key: 'basin',
+      width: 200,
+      render: (_: unknown, row: SpeologieCave) =>
+        row.hydroBasin ? (
+          <Tooltip title={row.hydroBasin.path}>
+            <span>{row.hydroBasin.label}</span>
+          </Tooltip>
+        ) : (
+          <Typography.Text type="secondary">—</Typography.Text>
+        ),
+    },
     { title: t('speologie.columns.length'), dataIndex: 'length', width: 110, align: 'right' as const },
     { title: t('speologie.columns.depth'), dataIndex: 'depth', width: 110, align: 'right' as const },
     { title: t('speologie.columns.altitude'), dataIndex: 'altitude', width: 110, align: 'right' as const },
@@ -177,6 +197,25 @@ export default function SpeologieSearchPage() {
             data-testid="speologie-county"
             options={ROMANIAN_COUNTIES.map((c) => ({ value: c.code, label: `${c.code} — ${c.name}` }))}
           />
+          <Select<number>
+            style={{ minWidth: 300 }}
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            value={basin}
+            onChange={(id) => setBasin(id ?? undefined)}
+            loading={basins.isPending}
+            placeholder={t('speologie.search.basinPlaceholder')}
+            aria-label={t('speologie.search.basin')}
+            data-testid="speologie-basin"
+            options={(basins.data ?? []).map((b) => ({
+              value: b.id,
+              // Indented by depth, because the tree is what makes this a filter worth having:
+              // a massif and a valley inside it read as the same kind of thing in a flat list.
+              label: `${'\u00a0\u00a0'.repeat(Math.max(0, b.depth - 1))}${b.label}`,
+              title: b.path,
+            }))}
+          />
           <Button
             type="primary"
             icon={<SearchOutlined />}
@@ -202,6 +241,19 @@ export default function SpeologieSearchPage() {
       </Card>
 
       {errorMessage ? <Alert type="error" showIcon title={errorMessage} /> : null}
+
+      {results.data && query.basin !== undefined ? (
+        <Alert
+          type="info"
+          showIcon
+          title={t('speologie.search.basinNarrowed', {
+            count: results.data.items.length,
+            scanned: results.data.scannedCount,
+          })}
+          description={t('speologie.search.basinNarrowedWhy')}
+          data-testid="speologie-basin-narrowed"
+        />
+      ) : null}
 
       {results.data && results.data.spellings.length > 1 ? (
         <Alert

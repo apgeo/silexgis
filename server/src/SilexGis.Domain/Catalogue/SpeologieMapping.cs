@@ -15,6 +15,7 @@ namespace SilexGis.Domain.Catalogue;
 /// <param name="Description">Description text plus the provenance footer, or just the footer when the source had no description.</param>
 /// <param name="Region">Mountain range.</param>
 /// <param name="ClosestAddress">Nearest locality. A redacted field under location protection, which is where a locality belongs.</param>
+/// <param name="HydrographicBasin">The basin the catalogue files this cave under, resolved to its name.</param>
 /// <param name="Website">The cave's page in the source catalogue.</param>
 /// <param name="Altitude">Entrance altitude in metres.</param>
 /// <param name="SurveyedLength">Surveyed length in metres.</param>
@@ -27,6 +28,7 @@ public sealed record SpeologieCaveValues(
     string? Description,
     string? Region,
     string? ClosestAddress,
+    string? HydrographicBasin,
     string? Website,
     decimal? Altitude,
     decimal? SurveyedLength,
@@ -101,6 +103,7 @@ public static class SpeologieMapping
     private const int NameMax = 255;
     private const int RegionMax = 100;
     private const int AddressMax = 200;
+    private const int BasinMax = 100;
     private const int ProtectionClassMax = 50;
     private const int WebsiteMax = 500;
 
@@ -129,6 +132,10 @@ public static class SpeologieMapping
             Description: description,
             Region: Clip(Blank(record.Munte), RegionMax),
             ClosestAddress: Clip(Blank(record.Localitate), AddressMax),
+            // The catalogue answers a basin as a bare integer; the name comes from the tree its
+            // own site publishes. An identifier that tree does not hold leaves the field empty
+            // rather than storing the number, which would read as a name and is not one.
+            HydrographicBasin: Clip(SpeologieBasins.Find(record.BazinHidroId)?.Name, BasinMax),
             Website: Clip(record.PublicUrl, WebsiteMax),
             Altitude: Metric(record.Altitudine),
             SurveyedLength: Metric(record.Lungime),
@@ -195,7 +202,15 @@ public static class SpeologieMapping
 
         Add(parts, "Județ", Blank(record.Judet)?.ToUpperInvariant());
         Add(parts, "Nr. hidro", Blank(record.NrHidro));
-        Add(parts, "Bazin hidro", record.BazinHidroId?.ToString(CultureInfo.InvariantCulture));
+
+        // The whole way down the tree, not just the basin: "Munţii Apuseni › Munţii Bihorului ›
+        // Bazinele închise › Bazinul Padiş" places a cave for a reader who has never heard of the
+        // basin, which the basin's own name on its own does not. The identifier is kept beside it
+        // so a reader can check the claim against the catalogue.
+        var basin = SpeologieBasins.Find(record.BazinHidroId);
+        Add(parts, "Bazin hidro", basin is null
+            ? record.BazinHidroId?.ToString(CultureInfo.InvariantCulture)
+            : $"{SpeologieBasins.PathOf(record.BazinHidroId)} (#{basin.Id})");
         Add(parts, "Rocă (cod)", Blank(record.Roca));
         Add(parts, "Scufundabilă", SumpOf(record.Scufundabila) switch { true => "da", false => "nu", _ => null });
         Add(parts, "Cod arie protejată", Blank(record.CodAp));

@@ -91,11 +91,21 @@ export default function SpeologieCaveDrawer({ cave, onClose }: Props) {
               {
                 key: 'hydroBasin',
                 label: t('speologie.detail.hydroBasin'),
-                children: full.hydroBasinId ? (
+                span: 2,
+                children: full.hydroBasin ? (
+                  <Space orientation="vertical" size={0}>
+                    <span>{full.hydroBasin.name}</span>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {full.hydroBasin.path}
+                    </Typography.Text>
+                  </Space>
+                ) : full.hydroBasinId ? (
+                  // The catalogue named a basin this installation's copy of its tree does not
+                  // hold — show the number rather than nothing, and say why it is only a number.
                   <Space orientation="vertical" size={0}>
                     <span>{full.hydroBasinId}</span>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {t('speologie.detail.hydroBasinHint')}
+                      {t('speologie.detail.hydroBasinUnknown')}
                     </Typography.Text>
                   </Space>
                 ) : (

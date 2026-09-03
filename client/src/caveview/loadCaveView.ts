@@ -13,11 +13,21 @@ const SCRIPT_URL = `${CAVEVIEW_HOME}js/CaveView2.min.js`;
 const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;
 
 // Minimal hand-written surface of the CV2 global — only what the app calls.
-// 'entrance' fires when an entrance label is clicked in the 3D scene; its event
-// carries the survey's entrance label as `displayName`.
+//
+// 'entrance' fires when an entrance label is clicked in the 3D scene; its event carries the
+// survey's entrance label as `displayName`.
+//
+// 'station' and 'leg' fire when one of those is clicked. Their events carry the viewer's own
+// objects — a survey-tree node under `node`, and under `leg` an object whose `start()` and
+// `end()` are the tree nodes it runs between. Both also carry a `handled` flag the bundle reads
+// back after dispatching: leaving it false lets the viewer do its own thing with the click as
+// well, which is what keeps selecting a station for a link from also breaking selecting one to
+// look at it.
+export type CaveViewerEvent = 'newCave' | 'progress' | 'entrance' | 'station' | 'leg';
+
 export interface CaveViewer {
-  addEventListener(type: 'newCave' | 'progress' | 'entrance', listener: (event: unknown) => void): void;
-  removeEventListener(type: 'newCave' | 'progress' | 'entrance', listener: (event: unknown) => void): void;
+  addEventListener(type: CaveViewerEvent, listener: (event: unknown) => void): void;
+  removeEventListener(type: CaveViewerEvent, listener: (event: unknown) => void): void;
 }
 
 export interface CaveViewUi {

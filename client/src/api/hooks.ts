@@ -142,6 +142,7 @@ export const queryKeys = {
   caveSummary: (id: string) => ['caves', 'summary', id] as const,
   entrances: (caveId: string) => ['entrances', caveId] as const,
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
+  surveyModel: (id: string) => ['survey-model', id] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
@@ -177,6 +178,7 @@ export const queryKeys = {
   // is one call it does not have to serve again.
   speologieSearch: (params: SpeologieSearchParams) => ['speologie', 'search', params] as const,
   speologieCave: (id: number) => ['speologie', 'cave', id] as const,
+  speologieBasins: ['speologie', 'basins'] as const,
   photoImportSession: ['photo-import-session'] as const,
   // Same reasoning as the vector preview: the grouping is a pure function of the pictures and
   // the choices, so changing the clustering radius is a different question rather than a stale
@@ -234,6 +236,12 @@ export const queryKeys = {
   cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
+  caveHypsometry: (id: string) => ['caves', id, 'hypsometry'] as const,
+  caveLevelBands: (id: string) => ['caves', id, 'level-bands'] as const,
+  areaHypsometry: (id: string) => ['features', id, 'entrance-hypsometry'] as const,
+  caveStructureComparison: (id: string, areaId: string) =>
+    ['caves', id, 'structure-comparison', areaId] as const,
+  areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
   closestApproach: (id: string, other: string) => ['caves', id, 'closest-approach', other] as const,
   objectAccess: (entityType: string, entityId: string) => ['object-access', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
@@ -280,6 +288,7 @@ export const queryKeys = {
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
   workAreas: ['work-areas'] as const,
+  processingJob: (id: number) => ['jobs', id] as const,
   // Every terrain key starts with this list key, so the mutations that invalidate it also reach
   // the paged list and each build's own detail. A key that did not would leave the page showing
   // a build's old phase for as long as its query stayed fresh.
@@ -952,6 +961,33 @@ export function surveyModelPollInterval(
 function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveyStatistics(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
+}
+
+/**
+ * One survey model, addressed by its own id rather than found in a cave's list.
+ *
+ * For the places that were sent to a particular model — a pane opened from the cave page, a
+ * pop-out window opened on one — and which have an id and no cave. Listing the cave's models and
+ * picking through them is not an alternative: the caller does not know which cave it belongs to,
+ * and the guess it would otherwise make is "the first readable one", which is how the pop-out
+ * viewer behaves and is exactly the behaviour a chosen model is meant to replace.
+ *
+ * Refetched on the same interval as the list, because the answer carries a signed URL with a ten
+ * minute life and a window left open on a model outlives it.
+ *
+ * A model whose cave's location is withheld from this reader answers **404**, not an empty result:
+ * a cave's models are its location, so their existence is withheld along with them. Callers must
+ * treat the failure as "there is nothing here for you" and not as an error worth reporting.
+ */
+export function useSurveyModel(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.surveyModel(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/survey-models/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    staleTime: 5 * 60_000,
+    refetchInterval: SURVEY_MODEL_URL_REFRESH_MS,
+    retry: false,
+  });
 }
 
 export function useSurveyModels(caveId: string | undefined) {
@@ -3990,6 +4026,7 @@ export type ImportPreviewRequest = components['schemas']['ImportPreviewRequest']
 export type ImportSession = components['schemas']['ImportSessionDto'];
 export type ImportCommitResult = components['schemas']['ImportCommitResultDto'];
 export type ImportBatch = components['schemas']['ImportBatchDto'];
+export type ImportFailure = components['schemas']['ImportFailureDto'];
 export type ImportBatchDetail = components['schemas']['ImportBatchDetailDto'];
 export type ImportProvenance = components['schemas']['ImportProvenanceDto'];
 export type GeofileSourceOptions = components['schemas']['GeofileSourceOptions'];
@@ -4148,13 +4185,49 @@ export function useCommitImport() {
         }),
       ),
     onSuccess: () => {
-      // A confirmation puts caves, entrances and features into the registry and spends the
-      // review that produced them, so four surfaces go stale at once.
-      void queryClient.invalidateQueries({ queryKey: ['features'] });
-      void queryClient.invalidateQueries({ queryKey: ['caves'] });
-      void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      // Only the review is spent here. The caves, entrances and features do not exist yet —
+      // the confirmation was queued — so invalidating the registry now would refetch it early
+      // and show the reader an unchanged map as though nothing had been created.
+      // `useProcessingJob` invalidates the rest when the job finishes.
       void queryClient.invalidateQueries({ queryKey: ['import-session'] });
     },
+  });
+}
+
+export type ProcessingJob = components['schemas']['ProcessingJobDto'];
+
+/** Whether a job is still going, which is the only thing worth asking again about. */
+export function jobUnsettled(status: ProcessingJob['status'] | undefined): boolean {
+  return status === 'queued' || status === 'running';
+}
+
+/**
+ * One job, polled while it is unfinished.
+ *
+ * A caller may always read a job they asked for, so this needs no right of its own — the server
+ * answers a job belonging to somebody else exactly as it answers one that never existed.
+ */
+export function useProcessingJob(jobId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: queryKeys.processingJob(jobId ?? 0),
+    queryFn: async () => {
+      const job = await unwrap(
+        api.GET('/api/v1/jobs/{id}', { params: { path: { id: jobId! } } }),
+      );
+      if (!jobUnsettled(job.status)) {
+        // The moment the work is actually done — not when it was asked for. Everything a
+        // confirmation creates lands at once, so the surfaces that show it go stale together.
+        void queryClient.invalidateQueries({ queryKey: ['features'] });
+        void queryClient.invalidateQueries({ queryKey: ['caves'] });
+        void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      }
+      return job;
+    },
+    enabled: jobId !== undefined,
+    // Stopped by the answer rather than by a timer: a settled job is asked about no more.
+    refetchInterval: (query) => (jobUnsettled(query.state.data?.status) ? 1500 : false),
+    retry: false,
   });
 }
 
@@ -4484,13 +4557,32 @@ export type SpeologieSearchResult = components['schemas']['SpeologieSearchDto'];
 export type SpeologieDecision = components['schemas']['SpeologieDecisionDto'];
 export type SpeologieAction = components['schemas']['SpeologieAction'];
 export type SpeologieImportResult = components['schemas']['SpeologieImportResultDto'];
+export type SpeologieBasin = components['schemas']['SpeologieBasinDto'];
 
 export type SpeologieSearchParams = {
   q?: string;
   county?: string;
+  basin?: number;
   page?: number;
   pageSize?: number;
 };
+
+/**
+ * The catalogue's hydrographic basin tree, which its own programmatic interface does not publish —
+ * this installation carries a copy so a cave's basin number can be read as a place.
+ *
+ * Held for the session: it is a table shipped with the application rather than an answer about
+ * anything, so re-fetching it on every visit to the screen would be asking the server to repeat
+ * itself six hundred times over.
+ */
+export function useSpeologieBasins() {
+  return useQuery({
+    queryKey: queryKeys.speologieBasins,
+    queryFn: () => unwrap(api.GET('/api/v1/catalogue/speologie/basins')),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
 
 /**
  * Whether this installation has been given a key for the catalogue at all. Reaches nothing, so
@@ -5282,6 +5374,139 @@ export function useCaveSurveyStatistics(caveId: string | undefined) {
     staleTime: 5 * 60_000,
     // A cave the caller may not read — or may read but not place exactly — is refused with the
     // same answer as a cave that does not exist, and asking again will not change it.
+    retry: false,
+  });
+}
+
+/** Where a cave's passage sits vertically, and the levels it appears to be cut at. */
+export type CaveHypsometry = components['schemas']['CaveHypsometryDto'];
+
+/** Where the entrances under an area sit vertically. */
+export type AreaHypsometry = components['schemas']['AreaHypsometryDto'];
+
+/** The histogram and the levels proposed from it. */
+export type ElevationBandProposal = components['schemas']['ElevationBandProposal'];
+
+/** One interval of height in an elevation histogram. */
+export type ElevationBin = components['schemas']['ElevationBin'];
+
+/** One proposed level. */
+export type ElevationBand = components['schemas']['ElevationBand'];
+
+/** What somebody decided one cave's levels are, or the fact that nobody has. */
+export type CaveLevelBands = components['schemas']['CaveLevelBandsDto'];
+
+/** One level of a saved reading, as a person wrote it down. */
+export type SavedElevationBand = components['schemas']['SavedElevationBand'];
+
+/** A cave's passage trends against the structure mapped around it. */
+export type CaveStructureComparison = components['schemas']['CaveStructureComparisonDto'];
+
+/** An area's depression alignments against the structure mapped in it. */
+export type AreaStructureComparison = components['schemas']['AreaStructureComparisonDto'];
+
+/** How far apart two roses are. */
+export type RoseDivergence = components['schemas']['RoseDivergence'];
+
+export function useCaveHypsometry(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveHypsometry(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{id}/hypsometry', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    // A cave this caller may read but not place exactly is refused with the same answer as one
+    // that does not exist. Retrying asks the same question again.
+    retry: false,
+  });
+}
+
+export function useAreaHypsometry(areaId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.areaHypsometry(areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/features/{id}/entrance-hypsometry', {
+          params: { path: { id: areaId! } },
+        }),
+      ),
+    enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useCaveLevelBands(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveLevelBands(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{id}/level-bands', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    retry: false,
+  });
+}
+
+export function useSaveCaveLevelBands(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { bands: SavedElevationBand[]; note: string | null }) =>
+      unwrap(
+        api.PUT('/api/v1/caves/{id}/level-bands', {
+          params: { path: { id: caveId } },
+          body,
+        }),
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.caveLevelBands(caveId) }),
+  });
+}
+
+export function useClearCaveLevelBands(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      unwrap(api.DELETE('/api/v1/caves/{id}/level-bands', { params: { path: { id: caveId } } })),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.caveLevelBands(caveId) }),
+  });
+}
+
+/**
+ * A cave's passage rose against the structure mapped around it.
+ *
+ * `areaId` scopes the structure to an area of the containment hierarchy instead of a buffer; it is
+ * part of the query key because the two scopes are two different answers to two different
+ * questions, and caching them together would show one under the other's heading.
+ */
+export function useCaveStructureComparison(caveId: string | undefined, areaId?: string) {
+  return useQuery({
+    queryKey: queryKeys.caveStructureComparison(caveId ?? '', areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caves/{id}/structure-comparison', {
+          // The contract names its query parameters as the request record does; spelled here the
+          // way the generated types spell them rather than lower-cased and left to the server's
+          // case-insensitive binding to rescue.
+          params: { path: { id: caveId! }, query: areaId ? { AreaId: areaId } : {} },
+        }),
+      ),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useAreaStructureComparison(areaId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.areaStructureComparison(areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/features/{id}/structure-comparison', {
+          params: { path: { id: areaId! } },
+        }),
+      ),
+    enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
     retry: false,
   });
 }

@@ -17,7 +17,16 @@
  */
 export interface AnchorEditorProps {
   value: unknown;
-  onChange: (anchor: unknown) => void;
+  /**
+   * The composed anchor, and — for a kind whose coordinates are only meaningful against one
+   * concrete file — which file they were measured against.
+   *
+   * The second argument exists because a region of a picture is the one anchor whose payload is
+   * not self-sufficient: fractions of *which* picture is a question the payload cannot answer,
+   * and the server refuses a region that does not name its file. Every other editor calls this
+   * with one argument and the pin stays unset, which is what those kinds require.
+   */
+  onChange: (anchor: unknown, anchorFileId?: string | null) => void;
   /** What the member points at, or undefined before one has been chosen. */
   target?: { targetType: string; targetId: string };
 }

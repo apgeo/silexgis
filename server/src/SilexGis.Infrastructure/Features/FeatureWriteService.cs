@@ -59,7 +59,7 @@ public sealed class FeatureWriteService(
 
         await ValidatePropertiesAsync(feature, featureType, ct);
         db.Features.Add(feature);
-        await SetParentsCoreAsync(feature.Id, parents, ct);
+        await SetParentsCoreAsync(feature.Id, parents, ct, featureIsNew: true);
         return feature;
     }
 
@@ -72,7 +72,7 @@ public sealed class FeatureWriteService(
         db.Features.Add(feature);
         db.Caves.Add(cave);
         db.Entry(cave).Property("Kind").CurrentValue = FeatureKind.Cave;
-        await SetParentsCoreAsync(feature.Id, parents, ct);
+        await SetParentsCoreAsync(feature.Id, parents, ct, featureIsNew: true);
         return feature;
     }
 
@@ -99,7 +99,7 @@ public sealed class FeatureWriteService(
         db.CaveEntrances.Add(entrance);
         db.Entry(entrance).Property("Kind").CurrentValue = FeatureKind.CaveEntrance;
         await SetParentsCoreAsync(
-            feature.Id, [new ParentSpec(entrance.CaveFeatureId, IsPrimary: true)], ct);
+            feature.Id, [new ParentSpec(entrance.CaveFeatureId, IsPrimary: true)], ct, featureIsNew: true);
         await SyncCaveMirrorAsync(entrance.CaveFeatureId, ct);
         return feature;
     }
@@ -129,7 +129,7 @@ public sealed class FeatureWriteService(
         db.Centerlines.Add(centerline);
         db.Entry(centerline).Property("Kind").CurrentValue = FeatureKind.Centerline;
         await SetParentsCoreAsync(
-            feature.Id, [new ParentSpec(centerline.CaveFeatureId, IsPrimary: true)], ct);
+            feature.Id, [new ParentSpec(centerline.CaveFeatureId, IsPrimary: true)], ct, featureIsNew: true);
         return feature;
     }
 
@@ -413,8 +413,46 @@ public sealed class FeatureWriteService(
     /// feature whose ancestry can be affected by the touched features — i.e. their
     /// containment subtrees.
     /// </summary>
+    /// <summary>
+    /// Collects the ids a bulk creation touches instead of recomputing after each one, until
+    /// <see cref="FlushDerivedStateAsync"/> runs the whole set in a single pass.
+    /// </summary>
+    /// <remarks>
+    /// The recompute reads the entire edge table and walks every tracked feature, so doing it per
+    /// row costs the square of the batch: a confirmed import of four thousand rows spent most of
+    /// twenty-five minutes recomputing state that only its last pass could get right anyway.
+    /// <para>
+    /// Deferring is equivalent rather than approximate, and only because nothing between reads
+    /// what it writes: <c>AncestorIds</c> and <c>IsProtectedEffective</c> are written here and
+    /// read by no other method of this service. If that ever stops being true, this has to go —
+    /// the failure would be a feature whose protection is briefly wrong, which is the one kind of
+    /// wrong this application exists to prevent.
+    /// </para>
+    /// </remarks>
+    private HashSet<Guid>? deferredDerivedState;
+
+    public void BeginDeferredDerivedState() => deferredDerivedState ??= [];
+
+    /// <summary>Runs the deferred recompute, once, for everything collected since it began.</summary>
+    public async Task FlushDerivedStateAsync(CancellationToken ct = default)
+    {
+        var touched = deferredDerivedState;
+        deferredDerivedState = null;
+        if (touched is { Count: > 0 })
+        {
+            await RecomputeDerivedStateAsync(touched, ct);
+        }
+    }
+
     public async Task RecomputeDerivedStateAsync(IReadOnlyCollection<Guid> touched, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(touched);
+        if (deferredDerivedState is not null)
+        {
+            deferredDerivedState.UnionWith(touched);
+            return;
+        }
+
         var allEdges = await AllEdgesAsync(excludeChildId: null, ct);
         var parentsByChild = FeatureHierarchyRules.ParentsByChild(allEdges);
         var childrenByParent = FeatureHierarchyRules.ChildrenByParent(allEdges);
@@ -487,8 +525,15 @@ public sealed class FeatureWriteService(
 
     // ---------- internals ----------
 
+    /// <param name="featureIsNew">
+    /// True when the row is being created rather than re-parented. It decides whether the cycle
+    /// check needs the edge set at all: cycling means the proposed parent is, or descends from,
+    /// this feature — and nothing descends from a feature that did not exist a moment ago. So for
+    /// a creation the rule collapses to "a feature is not its own parent", which needs no data.
+    /// The full check is kept, unchanged, for re-parenting, where it is not vacuous.
+    /// </param>
     private async Task SetParentsCoreAsync(
-        Guid featureId, IReadOnlyList<ParentSpec> parents, CancellationToken ct)
+        Guid featureId, IReadOnlyList<ParentSpec> parents, CancellationToken ct, bool featureIsNew = false)
     {
         if (parents.Count > 0 && parents.Count(p => p.IsPrimary) != 1)
         {
@@ -500,15 +545,33 @@ public sealed class FeatureWriteService(
             throw new FeatureWriteException("feature.parent_duplicate", ["duplicate parent"]);
         }
 
-        // Cycle check against the edge set minus this child's edges (they are being replaced).
-        var otherEdges = await AllEdgesAsync(excludeChildId: featureId, ct);
-        var lookup = FeatureHierarchyRules.ParentsByChild(otherEdges);
-        foreach (var parent in parents)
+        // Reading the whole edge table to check nothing is the single most expensive thing this
+        // service did. It ran per created feature, and a confirmed import creates thousands in
+        // one pass — so the cost grew with the square of the batch and a four-thousand-row file
+        // took twenty-five minutes, nearly all of it here.
+        if (parents.Count > 0)
         {
-            if (FeatureHierarchyRules.WouldCreateCycle(parent.ParentId, featureId, lookup))
+            if (featureIsNew)
             {
-                throw new FeatureWriteException("feature.hierarchy_cycle",
-                    [$"parent {parent.ParentId} is (or descends from) the feature itself"]);
+                foreach (var parent in parents.Where(parent => parent.ParentId == featureId))
+                {
+                    throw new FeatureWriteException("feature.hierarchy_cycle",
+                        [$"parent {parent.ParentId} is (or descends from) the feature itself"]);
+                }
+            }
+            else
+            {
+                // Cycle check against the edge set minus this child's edges (they are being replaced).
+                var otherEdges = await AllEdgesAsync(excludeChildId: featureId, ct);
+                var lookup = FeatureHierarchyRules.ParentsByChild(otherEdges);
+                foreach (var parent in parents)
+                {
+                    if (FeatureHierarchyRules.WouldCreateCycle(parent.ParentId, featureId, lookup))
+                    {
+                        throw new FeatureWriteException("feature.hierarchy_cycle",
+                            [$"parent {parent.ParentId} is (or descends from) the feature itself"]);
+                    }
+                }
             }
         }
 

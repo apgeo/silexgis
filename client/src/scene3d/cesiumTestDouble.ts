@@ -1156,8 +1156,21 @@ class FakeScene {
     }
   }
 
-  pickPosition(_windowPosition: Cartesian2) {
-    return this.pickedPosition;
+  /**
+   * Ground per screen point, for a test that cares WHERE on the screen the question was asked.
+   *
+   * The flat `pickedPosition` answers every pixel with one place, which is right for "what is under
+   * the cursor" and useless for anything that searches the screen: a probe running down the middle
+   * column looking for ground below the horizon gets the same answer at every height, so sky and
+   * ground become indistinguishable and the search cannot be exercised at all. Setting this instead
+   * builds a screen that actually has a horizon in it.
+   */
+  pickedPositionAt: ((x: number, y: number) => FakeCartesian3 | undefined) | undefined = undefined;
+
+  pickPosition(windowPosition: Cartesian2) {
+    return this.pickedPositionAt
+      ? this.pickedPositionAt(windowPosition.x, windowPosition.y)
+      : this.pickedPosition;
   }
 
   pick(windowPosition: Cartesian2, width?: number, height?: number) {
