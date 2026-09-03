@@ -1771,7 +1771,13 @@
     "rasterOverlayHint": "Pe glob fiecare planșă este aplatizată într-o singură imagine, așa că devine mai neclară la apropiere. Harta plană citește fișierul în sine și rămâne clară."
   },
   "caveview": {
-    "loadError": "Modelul 3D nu a putut fi încărcat"
+    "loadError": "Modelul 3D nu a putut fi încărcat",
+    "linkThisPart": "Leagă asta…",
+    "picked": {
+      "modelStation": "Stația {{name}}",
+      "modelStationRange": "Galeria de la {{name}}",
+      "modelSurvey": "Ridicarea {{name}}"
+    }
   },
   "surveyModels": {
     "title": "Modele topo 3D",

@@ -1771,7 +1771,13 @@
     "rasterOverlayHint": "On the globe each sheet is flattened to a single picture, so it softens under close zoom. The flat map reads the file itself and stays sharp."
   },
   "caveview": {
-    "loadError": "Failed to load the 3D model"
+    "loadError": "Failed to load the 3D model",
+    "linkThisPart": "Link this…",
+    "picked": {
+      "modelStation": "Station {{name}}",
+      "modelStationRange": "The passage from {{name}}",
+      "modelSurvey": "Survey {{name}}"
+    }
   },
   "surveyModels": {
     "title": "3D survey models",
