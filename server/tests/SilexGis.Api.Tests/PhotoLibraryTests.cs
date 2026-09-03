@@ -54,6 +54,30 @@ public sealed class PhotoLibraryTests
     }
 
     /// <summary>
+    /// The same order, pinned to a rectangle that was actually asked of a running library.
+    /// </summary>
+    /// <remarks>
+    /// The three numbers are what makes this worth its own case. Against a library holding an
+    /// invented set of forty photographs inside this rectangle, seven inside the rectangle its two
+    /// pairs make when swapped, and none anywhere near a third, the string below was measured
+    /// answering forty; the swapped string answered seven and a rectangle nothing was generated
+    /// near answered none. So a wrong order here does not fail — it answers a smaller number, and
+    /// a smaller number of pins on a map is what nobody notices. The counts are the instrument, and
+    /// this is the assertion that ties the code to the instrument.
+    /// </remarks>
+    [Fact]
+    public void The_order_is_the_one_a_running_library_answered_forty_photographs_to()
+    {
+        var bounds = new Envelope(x1: 22.6, x2: 22.9, y1: 45.4, y2: 45.6);
+
+        PhotoPrismClient.LatLng(bounds).ShouldBe("45.6,22.9,45.4,22.6");
+
+        // What the same four numbers make when the pairs are swapped — the answer that is smaller
+        // rather than absent, which is why it needs naming rather than merely avoiding.
+        PhotoPrismClient.LatLng(bounds).ShouldNotBe("22.9,45.6,22.6,45.4");
+    }
+
+    /// <summary>
     /// The order this application uses for a rectangle everywhere else, written out here so the
     /// difference is visible rather than remembered: if the two ever agree, one of them has been
     /// changed by mistake.
