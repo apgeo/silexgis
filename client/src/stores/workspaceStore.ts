@@ -114,6 +114,22 @@ interface WorkspaceState {
   scene3dSurfaceMode: Scene3DSurfaceMode;
   setScene3dSurfaceMode: (mode: Scene3DSurfaceMode) => void;
   /**
+   * Whether the 3D scene's camera and the flat map's view move together. On by default: two views
+   * showing different places is the surprising state, not the useful one.
+   *
+   * Uncoupled, the camera can be flown down a passage without dragging the map along behind it,
+   * and the map can be taken off to a neighbouring valley without pulling the camera out of the
+   * cave. Only the extent travels under this switch — a pick made in either view still lights up
+   * in the other, because uncoupling the cameras is not asking to stop sharing what is selected.
+   *
+   * Session state rather than a stored preference, for the same reason as the surface mode above:
+   * it belongs to the view being worked in, not to the browser. Somebody uncouples to look at one
+   * thing for a few minutes; a scene that silently stopped following the map a fortnight ago
+   * reads as a fault rather than as a setting.
+   */
+  scene3dCoupledToMap: boolean;
+  setScene3dCoupledToMap: (coupled: boolean) => void;
+  /**
    * Per-base-layer opacity (0..1), keyed by catalog id. Only the active base is visible
    * at a time, but each base remembers its own value so switching restores it. A missing
    * key means fully opaque.
@@ -226,6 +242,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set((state) => ({ overlayVisible: { ...state.overlayVisible, [key]: visible } })),
   scene3dSurfaceMode: 'overlay',
   setScene3dSurfaceMode: (scene3dSurfaceMode) => set({ scene3dSurfaceMode }),
+  scene3dCoupledToMap: true,
+  setScene3dCoupledToMap: (scene3dCoupledToMap) => set({ scene3dCoupledToMap }),
   baseOpacity: {},
   setBaseOpacity: (id, opacity) =>
     set((state) => ({ baseOpacity: { ...state.baseOpacity, [id]: opacity } })),

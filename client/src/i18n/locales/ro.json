@@ -420,10 +420,13 @@
     "edit": "Editare intrare",
     "deleteConfirm": "Ștergeți această intrare?",
     "coordinates": "Coordonate",
+    "showOnMap": "Arată pe hartă",
+    "showOnMapApproximate": "Arată pe hartă — poziția este aproximativă",
     "longitude": "Longitudine",
     "latitude": "Latitudine",
     "main": "Principală",
     "positionQuality": "Calitatea poziției",
+    "positionBlurred": "Nu aveți acces la poziția exactă a acestei intrări, așa că valorile afișate sunt rotunjite la o grilă. Poziția, altitudinea și calitatea poziției sunt de aceea needitabile — serverul păstrează valorile înregistrate și ar ignora orice s-ar introduce aici. Restul formularului se salvează normal.",
     "qualityValues": {
       "unknown": "Necunoscută",
       "gps": "GPS",
@@ -1744,6 +1747,9 @@
     "projectionOrthographic": "Elimină perspectiva",
     "projectionOrthographicHint": "Elimină perspectiva, astfel încât distanțele să se citească la fel aproape și departe",
     "projectionPerspectiveHint": "Reactivează perspectiva",
+    "coupleToMap": "Mișcă odată cu harta",
+    "coupleToMapHint": "Mișcă din nou odată cu harta plană, aducând camera unde se uită ea",
+    "uncoupleFromMapHint": "Nu mai mișca odată cu harta plană, ca fiecare să poată fi mutată separat",
     "presetGlyph": {
       "top": "⌖",
       "north": "N",
@@ -2803,7 +2809,9 @@
     "elevationPerCandidate": "Decide pentru fiecare candidat",
     "elevationHint": "Fișierul este singura sursă. Nu se preia nimic dintr-un model de elevație: o grilă publică lângă un perete — adică exact acolo unde sunt intrările — greșește cu o sută de metri, fără nimic pe ecran care să o spună.",
     "keepAltitude": "Păstrează {{altitude}} m",
-    "batchFromCatalogue": "Din catalogul peșterilor"
+    "batchFromCatalogue": "Din catalogul peșterilor",
+    "creating": "Se creează {{count}} obiecte. Procesul rulează pe server și continuă dacă părăsești această pagină.",
+    "creatingHint": "Lotul apare la Loturi de import când s-a terminat și se anulează ca un întreg."
   },
   "photoImport": {
     "title": "Obiecte din fotografii",

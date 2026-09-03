@@ -162,6 +162,7 @@ beforeEach(() => {
     overlayOpacity: {},
     baseOpacity: {},
     scene3dSurfaceMode: 'overlay',
+    scene3dCoupledToMap: true,
   });
 });
 
@@ -228,6 +229,28 @@ describe('Scene3DView', () => {
     view.unmount();
 
     await waitFor(() => expect(engine.engineState.widgets[0].isDestroyed()).toBe(true));
+  });
+
+  it('switches coupling to the flat map without reloading the cave it is drawing', async () => {
+    // The trap this wiring exists to avoid, pinned. One effect owns the view exchange AND the
+    // cave loader, the wall mesh and the pointer handlers, and its cleanup releases the graphics
+    // memory the walls hold. Naming the coupling switch in its dependencies is the obvious way to
+    // wire the button, and it would make every press drop the scene's contents and fetch them
+    // again — tens of megabytes, on a control that should cost nothing. So the switch reaches the
+    // exchange through a ref, and what proves it is that pressing it reads nothing and destroys
+    // nothing.
+    withWebGl2(true);
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    const reads = centerlineRequests.length;
+    const widget = engine.engineState.widgets[0];
+
+    act(() => useWorkspaceStore.getState().setScene3dCoupledToMap(false));
+    act(() => useWorkspaceStore.getState().setScene3dCoupledToMap(true));
+
+    expect(centerlineRequests).toHaveLength(reads);
+    expect(engine.engineState.widgets).toHaveLength(1);
+    expect(widget.isDestroyed()).toBe(false);
   });
 
   it('drapes the configured basemaps over the globe and shows the default one', async () => {

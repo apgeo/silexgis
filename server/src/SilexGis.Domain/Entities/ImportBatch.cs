@@ -197,6 +197,18 @@ public class ImportBatch : ITimestamped, IAuditable
 
     public int SkippedCount { get; set; }
 
+    /// <summary>
+    /// The rows that could not be created, as JSON, or null where none failed.
+    /// </summary>
+    /// <remarks>
+    /// Kept on the batch because the confirmation that produces them no longer answers in the
+    /// request that asked for it: the work runs on the queue, so by the time a row is refused
+    /// there is nobody left to tell. A reviewer who confirmed three thousand rows and got two
+    /// thousand nine hundred objects has to be able to find out which hundred did not land and
+    /// why, and the batch is the thing they still have.
+    /// </remarks>
+    public string? Failures { get; set; }
+
     public DateTimeOffset? RevertedAt { get; set; }
 
     public Guid? RevertedByUserId { get; set; }

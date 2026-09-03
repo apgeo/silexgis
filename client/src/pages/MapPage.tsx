@@ -87,6 +87,7 @@ import { attachUrlHash, hasMapHash } from '../map/urlHash.ts';
 import {
   applyPendingOverlayOrder,
   findOverlayLayer,
+  APPROXIMATE_MAX_ZOOM,
   fitGeoJsonGeometry,
   flyTo,
   getOverlayGroup,
@@ -155,12 +156,16 @@ export default function MapPage() {
     labelKey: 'viewLinks.controls.map2d',
     canReveal: isGeographic,
     reveal: (ref) => {
-      void geometryFor(queryClient, ref).then((geometry) => {
-        // A feature whose exact position this reader may not see comes back without one. Not
-        // moving is the honest answer: framing an approximation would tell them they are looking
-        // at the place.
-        if (geometry !== null) {
-          fitGeoJsonGeometry(geometry);
+      void geometryFor(queryClient, ref).then((target) => {
+        // Protection has two outcomes and this used to answer only one. A shape whose position is
+        // withheld comes back with nothing, and not moving is the honest answer. A point comes
+        // back SNAPPED — present, and wrong by up to the grid — so the comment that stood here,
+        // saying such a feature "comes back without one", described a case that does not arise for
+        // the caves and entrances most links point at: the guard never fired and the map closed in
+        // on the fuzzed point as though it were surveyed. Framing it loosely is what says how well
+        // it is known.
+        if (target !== null) {
+          fitGeoJsonGeometry(target.geometry, target.approximate ? APPROXIMATE_MAX_ZOOM : undefined);
         }
       });
     },

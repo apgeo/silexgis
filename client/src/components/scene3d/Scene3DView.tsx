@@ -61,12 +61,12 @@ import {
   type SurveyMesh3DState,
 } from '../../scene3d/surveyMesh3d.ts';
 import { attachScene3dHash } from '../../scene3d/urlHash3d.ts';
-import { attachViewSync3d } from '../../scene3d/viewSync3d.ts';
+import { attachViewSync3d, type ViewSync3dHandle } from '../../scene3d/viewSync3d.ts';
 import { supportsWebGl2 } from '../../scene3d/webglSupport.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
-import { geometryFor, isGeographic } from '../../viewlinks/geoTargets.ts';
+import { APPROXIMATE_SPAN_DEGREES, geometryFor, isGeographic } from '../../viewlinks/geoTargets.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
 import Scene3DLayerPanel from './Scene3DLayerPanel.tsx';
@@ -128,11 +128,17 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     enabled: showingHere && engineVersion > 0,
     canReveal: isGeographic,
     reveal: (ref) => {
-      void geometryFor(queryClient, ref).then((geometry) => {
+      void geometryFor(queryClient, ref).then((target) => {
         const engine = engineRef.current;
-        const bounds = geometry === null ? null : geoJsonBounds(geometry);
+        const bounds = target === null ? undefined : geoJsonBounds(target.geometry);
         if (engine !== null && bounds) {
-          engine.fitBounds(bounds, { animate: true });
+          // A snapped point's box is a single position, so the camera would drop to the same
+          // height it uses for a surveyed station over a spot that can be kilometres out. Widening
+          // to about the grid it was snapped to is what makes the picture say how well the place
+          // is actually known.
+          const [west, south, east, north] = bounds;
+          const pad = target?.approximate ? APPROXIMATE_SPAN_DEGREES / 2 : 0;
+          engine.fitBounds([west - pad, south - pad, east + pad, north + pad], { animate: true });
         }
       });
     },
@@ -248,6 +254,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
 
   // ---- catalogue overlays and this installation's own georeferenced maps ----
 
+  const scene3dCoupledToMap = useWorkspaceStore((s) => s.scene3dCoupledToMap);
+  const setScene3dCoupledToMap = useWorkspaceStore((s) => s.setScene3dCoupledToMap);
   const visibleTileOverlayIds = useWorkspaceStore((s) => s.visibleTileOverlayIds);
   const setTileOverlayVisible = useWorkspaceStore((s) => s.setTileOverlayVisible);
   const tileOverlayOpacity = useWorkspaceStore((s) => s.tileOverlayOpacity);
@@ -329,6 +337,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const meshRef = useRef<SurveyMesh3DHandle | null>(null);
   const [meshState, setMeshState] = useState<SurveyMesh3DState>(EMPTY_SURVEY_MESH_3D_STATE);
 
+  // The view exchange, held in a ref for the same reason as the handles above: the effect that
+  // owns it must not re-run when coupling is switched, so the switch reaches it from outside.
+  const syncRef = useRef<ViewSync3dHandle | null>(null);
+
   // What the camera is doing, read back from the scene so the preset buttons describe the camera
   // rather than the last button pressed. Undefined until the scene exists.
   const [camera, setCamera] = useState<Camera3DState>();
@@ -376,10 +388,19 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // Both views keep each other in step over the workspace bus, in references and degrees rather
     // than in cameras — the flat map must never be handed anything from a 3D engine, and this
     // scene must never be handed an OpenLayers view.
-    const sync = attachViewSync3d(engine, {
-      current: () => useWorkspaceStore.getState().selection,
-      set: (selection) => useWorkspaceStore.getState().setSelection(selection),
-    });
+    const sync = attachViewSync3d(
+      engine,
+      {
+        current: () => useWorkspaceStore.getState().selection,
+        set: (selection) => useWorkspaceStore.getState().setSelection(selection),
+      },
+      // Read from the store at the moment of each message rather than captured, so that switching
+      // coupling never appears in this effect's dependencies. A re-run here detaches the wall mesh
+      // and reloads the cave — tens of megabytes of graphics memory released and fetched again —
+      // which is far too much to spend on a button press, and would look like the scene breaking.
+      { followsExtent: () => useWorkspaceStore.getState().scene3dCoupledToMap },
+    );
+    syncRef.current = sync;
 
     // Selection is written straight into the workspace store, which is where the flat map writes
     // it too: both views describe what was picked as bare references, so the detail panel does not
@@ -462,6 +483,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       unsubscribeClick();
       unsubscribeHover();
       sync.detach();
+      syncRef.current = null;
       unsubscribeState();
       unsubscribeMesh();
       approach.detach();
@@ -559,6 +581,26 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     engine.setCamera(toSceneCamera(presetCamera(preset, readCamera3D(engine))), { animate: true });
     setCamera(readCamera3D(engine));
   }, []);
+
+  /**
+   * Switching whether this scene moves with the flat map.
+   *
+   * Re-coupling brings the SCENE to where the map is, not the other way about. The two have been
+   * moving independently and now disagree, and they do not converge on their own — the exchange's
+   * existing rule decides it: whoever was already there answers, whoever has just arrived listens,
+   * and a camera that went off underground on its own is the one arriving. The store is written
+   * first so that the rejoin, which asks the store whether it is allowed to follow, finds the
+   * answer it needs.
+   */
+  const changeCoupling = useCallback(
+    (next: boolean) => {
+      setScene3dCoupledToMap(next);
+      if (next) {
+        syncRef.current?.rejoin();
+      }
+    },
+    [setScene3dCoupledToMap],
+  );
 
   const changeProjection = useCallback((projection: Scene3DProjection) => {
     const engine = engineRef.current;
@@ -879,6 +921,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           onProjectionChange={changeProjection}
           onFitCave={fitCave}
           fitDisabled={!caveFramable}
+          coupled={scene3dCoupledToMap}
+          onCoupledChange={changeCoupling}
         />
       )}
       {/* Gated on the scene alone. Only the basemap section of the panel is about the layer

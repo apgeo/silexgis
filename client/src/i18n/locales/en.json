@@ -420,10 +420,13 @@
     "edit": "Edit entrance",
     "deleteConfirm": "Delete this entrance?",
     "coordinates": "Coordinates",
+    "showOnMap": "Show on map",
+    "showOnMapApproximate": "Show on map — this position is approximate",
     "longitude": "Longitude",
     "latitude": "Latitude",
     "main": "Main",
     "positionQuality": "Position quality",
+    "positionBlurred": "You may not see this entrance’s exact position, so what is shown is rounded to a grid. The position, altitude and position quality are therefore read-only — the server keeps the recorded values and would discard anything entered here. Everything else on this form saves normally.",
     "qualityValues": {
       "unknown": "Unknown",
       "gps": "GPS",
@@ -1744,6 +1747,9 @@
     "projectionOrthographic": "Remove perspective",
     "projectionOrthographicHint": "Remove perspective, so distances read the same near and far",
     "projectionPerspectiveHint": "Put perspective back",
+    "coupleToMap": "Move with the map",
+    "coupleToMapHint": "Move with the flat map again, and bring the camera to where it is looking",
+    "uncoupleFromMapHint": "Stop moving with the flat map, so each can be moved on its own",
     "presetGlyph": {
       "top": "⌖",
       "north": "N",
@@ -2803,7 +2809,9 @@
     "elevationPerCandidate": "Decide per candidate",
     "elevationHint": "The file is the only source. Nothing is taken from an elevation model: a public grid beside a cliff — which is where entrances are — is out by a hundred metres, with nothing on screen to say so.",
     "keepAltitude": "Keep {{altitude}} m",
-    "batchFromCatalogue": "From the cave catalogue"
+    "batchFromCatalogue": "From the cave catalogue",
+    "creating": "Creating {{count}} objects. This runs on the server and keeps going if you leave this page.",
+    "creatingHint": "The batch appears under Import batches when it is done, and reverts as one thing."
   },
   "photoImport": {
     "title": "Features from photographs",

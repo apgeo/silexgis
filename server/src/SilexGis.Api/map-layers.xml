@@ -125,6 +125,16 @@
          attribution="Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan"
          maxZoom="18" />
 
+  <!-- A second, independently captured imagery set from the same provider. Worth having beside
+       the one above rather than instead of it: the two were flown at different times, so a doline
+       or a collapse that is under cloud, under snow or simply not yet there in one is often plain
+       in the other. It stops three zoom levels earlier, which is the price. -->
+  <layer name="Esri World Imagery (Clarity)"
+         group="Imagery"
+         url="https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+         attribution="Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+         maxZoom="17" />
+
   <!-- Cloud-free composite. Coarser than the Esri imagery but never obscured, which is what makes
        it useful for a doline survey where the one clear pass over your area is a decade old. -->
   <layer name="Sentinel-2 cloudless"
@@ -140,6 +150,17 @@
          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}"
          attribution="Esri, NASA, NGA, USGS"
          maxZoom="13" />
+
+  <!-- Relief drawn as light and shadow rather than as colour, so it composites under the other
+       basemaps instead of fighting them, and reads karst the way a caver does: a doline is a dark
+       ring, a dry valley is a crease. Its ceiling is genuinely 16 — from 17 up this service
+       answers the same 2521-byte placeholder that got Esri World Terrain Base dropped, which is
+       real data's absence rather than a 404 and would otherwise look like working tiles. -->
+  <layer name="Esri World Hillshade"
+         group="Relief"
+         url="https://services.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}"
+         attribution="Esri, Airbus DS, USGS, NGA, NASA, CGIAR, NCEAS, NLS, OS, NMA, Geodatastyrelsen"
+         maxZoom="16" />
 
   <layer name="Esri National Geographic"
          group="Relief"
@@ -276,11 +297,22 @@
 
   <!-- ====================== Restricted by their own terms ===================== -->
   <!--
-    SHIPPED SWITCHED OFF, AND THAT IS THE POINT. These endpoints work, and they are in every
-    QGIS layer collection passed around, but fetching them as plain XYZ tiles is not a use their
-    terms of service permit: Google's require their tiles be used through the Google Maps APIs,
-    which this is not. Switching one on is a decision about YOUR installation's licensing, taken
-    by somebody who has read the terms — not a default this project can ship on anyone's behalf.
+    SHIPPED SWITCHED ON, TEMPORARILY, AND AGAINST THE RULE THE REST OF THIS COMMENT DESCRIBES.
+    These endpoints work, and they are in every QGIS layer collection passed around, but fetching
+    them as plain XYZ tiles is not a use their terms of service permit: Google's require their
+    tiles be used through the Google Maps APIs, which this is not.
+
+    Until 2026-09-03 the four entries below shipped disabled, on the reasoning that switching one
+    on is a decision about YOUR installation's licensing, taken by somebody who has read the terms
+    — not a default this project can ship on anyone's behalf. That reasoning has not been
+    withdrawn and is still the correct one. It has been deliberately overridden for the time being
+    at the owner's instruction, so that satellite imagery is available while the intended
+    long-term source is settled. If you are running this installation and did not make that choice
+    yourself, this is the first thing to revisit.
+
+    TO PUT IT BACK: set enabled="false" on the four entries below. Do NOT delete them. A stored
+    source this file stops naming is left alone rather than withdrawn, so a deleted entry would
+    stay enabled in the database for ever on every installation that had already started once.
 
     Bing is deliberately ABSENT rather than present-and-disabled. Its tile addresses are keyed by
     a quadkey rather than by z/x/y, which the tile source used here cannot build; an entry for it
@@ -291,28 +323,24 @@
          group="Restricted terms of use"
          url="https://mt1.google.com/vt/lyrs=m&amp;x={x}&amp;y={y}&amp;z={z}"
          attribution="Map data © Google"
-         enabled="false"
          maxZoom="20" />
 
   <layer name="Google Satellite"
          group="Restricted terms of use"
          url="https://mt1.google.com/vt/lyrs=s&amp;x={x}&amp;y={y}&amp;z={z}"
          attribution="Imagery © Google"
-         enabled="false"
-         maxZoom="20" />
+         maxZoom="21" />
 
   <layer name="Google Hybrid"
          group="Restricted terms of use"
          url="https://mt1.google.com/vt/lyrs=y&amp;x={x}&amp;y={y}&amp;z={z}"
          attribution="Map data and imagery © Google"
-         enabled="false"
-         maxZoom="20" />
+         maxZoom="21" />
 
   <layer name="Google Terrain"
          group="Restricted terms of use"
          url="https://mt1.google.com/vt/lyrs=p&amp;x={x}&amp;y={y}&amp;z={z}"
          attribution="Map data © Google"
-         enabled="false"
          maxZoom="20" />
 
 </silexgis-map-layers>

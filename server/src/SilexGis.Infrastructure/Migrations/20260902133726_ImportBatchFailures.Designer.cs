@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260902133726_ImportBatchFailures")]
+    partial class ImportBatchFailures
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1322,61 +1325,6 @@ namespace SilexGis.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("ck_cave_entrances_kind", "kind = 2");
                         });
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.CaveLevelBands", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Bands")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("bands")
-                        .HasDefaultValueSql("'[]'::jsonb");
-
-                    b.Property<Guid>("CaveFeatureId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("cave_feature_id");
-
-                    b.Property<Guid>("ConfirmedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("confirmed_by");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)")
-                        .HasColumnName("note");
-
-                    b.Property<DateTimeOffset?>("SupersededAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("superseded_at");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_cave_level_bands");
-
-                    b.HasIndex("ConfirmedBy")
-                        .HasDatabaseName("ix_cave_level_bands_confirmed_by");
-
-                    b.HasIndex(new[] { "CaveFeatureId" }, "ix_cave_level_bands_cave")
-                        .HasDatabaseName("ix_cave_level_bands_cave");
-
-                    b.HasIndex(new[] { "CaveFeatureId" }, "ux_cave_level_bands_current")
-                        .IsUnique()
-                        .HasDatabaseName("ux_cave_level_bands_current")
-                        .HasFilter("superseded_at IS NULL");
-
-                    b.ToTable("cave_level_bands", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.CaveQrPublication", b =>
@@ -7070,23 +7018,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasConstraintName("fk_cave_entrances_features_id_kind");
 
                     b.Navigation("Feature");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.CaveLevelBands", b =>
-                {
-                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
-                        .WithMany()
-                        .HasForeignKey("CaveFeatureId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_cave_level_bands_features_cave_feature_id");
-
-                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
-                        .WithMany()
-                        .HasForeignKey("ConfirmedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_cave_level_bands_users_confirmed_by");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.CaveQrPublication", b =>

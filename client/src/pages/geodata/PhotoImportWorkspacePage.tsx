@@ -316,7 +316,17 @@ export default function PhotoImportWorkspacePage() {
         </Flex>
       </Flex>
 
-      <ImportResultModal result={result} onClose={() => setResult(null)} />
+      {/* Photographs are still created inside the request that confirms them — the ceiling is
+          250, which a request carries comfortably — so this arrives already finished. */}
+      <ImportResultModal
+        batch={result?.batch ?? null}
+        failures={result?.failures ?? []}
+        queued={0}
+        status="succeeded"
+        error={null}
+        open={result !== null}
+        onClose={() => setResult(null)}
+      />
     </div>
   );
 }
