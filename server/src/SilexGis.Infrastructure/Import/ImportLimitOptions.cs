@@ -26,12 +26,23 @@ public sealed class ImportLimitOptions
     /// <para>
     /// Raised from the original thousand because a thousand is below what a single field season
     /// produces, and being told to "confirm them in smaller batches" ten times in a row is not a
-    /// limit anybody experiences as protective. Raise it further if your imports are bigger and
-    /// your patience for a long request is greater; the failure mode of too high is a request that
-    /// takes minutes, not one that loses data.
+    /// limit anybody experiences as protective.
+    /// </para>
+    /// <para>
+    /// Now equal to <see cref="MaxScanRows"/>, so that a review somebody can see is a review they
+    /// can confirm in one act. The reason the two differed no longer holds: the ceiling was set
+    /// against a confirmation running inside the request, where a reverse proxy gave up at sixty
+    /// seconds and took the whole batch back with it. Confirmation runs on the job queue, so what
+    /// a large one costs is a job that takes a long time rather than one that cannot finish.
+    /// </para>
+    /// <para>
+    /// What remains true, and is the reason to lower it: one confirmation is one transaction and
+    /// one undo unit. A very large one holds a write transaction open for as long as it runs, and
+    /// reverts as a single thing — which is what you want the first time somebody confirms the
+    /// wrong file, and unwieldy if what you actually wanted was to undo part of it.
     /// </para>
     /// </remarks>
-    public int MaxCommitItems { get; set; } = 10000;
+    public int MaxCommitItems { get; set; } = 150000;
 
     /// <summary>
     /// The most rows one scan reads out of an uploaded file to build the review list.
