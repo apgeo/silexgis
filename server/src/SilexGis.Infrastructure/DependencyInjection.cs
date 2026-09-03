@@ -84,6 +84,39 @@ public static class DependencyInjection
             });
         services.AddSingleton<Catalogue.SpeologieClient>();
         services.AddScoped<Catalogue.SpeologieImportService>();
+
+        // A neighbouring photo library: a separate product with its own database, its own storage
+        // and its own accounts, which this installation reads photographs' positions from and
+        // proxies their pictures through. It is not this application's archive, nothing is filed
+        // into it and nothing moves between it and anything else. Off unless an operator supplies
+        // an address and a token, and absent rather than broken when they have not.
+        //
+        // The client is a singleton for the opposite reason from the cave catalogue's above.
+        // Nothing here is being rationed: this runs on this host, in this deployment, on this
+        // operator's own electricity, and spacing requests to it would slow this application's map
+        // down for a politeness nobody is owed. There is deliberately no minimum interval between
+        // calls and no serialising gate. It outlives a request because two things it holds are
+        // process-wide: the credential its pictures are served under, and the sticky flag that
+        // stops asking it for pictures once one answer suggested it cannot reach its own originals.
+        //
+        // The transport decompresses because a viewport's worth of positions is very compressible
+        // JSON.
+        services.Configure<PhotoLibraries.PhotoLibraryOptions>(
+            configuration.GetSection(PhotoLibraries.PhotoLibraryOptions.SectionName));
+        services.Configure<PhotoLibraries.PhotoPrismOptions>(
+            configuration.GetSection(PhotoLibraries.PhotoPrismOptions.SectionName));
+        services.AddHttpClient(PhotoLibraries.PhotoPrismClient.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AutomaticDecompression = System.Net.DecompressionMethods.All,
+            });
+
+        // Registered twice: once as itself, so a surface can name the product, and once behind the
+        // shared contract, so everything above iterates over "the libraries this installation has"
+        // and a second product joining is an addition rather than a rewrite.
+        services.AddSingleton<PhotoLibraries.PhotoPrismClient>();
+        services.AddSingleton<PhotoLibraries.IPhotoLibrary>(
+            sp => sp.GetRequiredService<PhotoLibraries.PhotoPrismClient>());
         services.AddScoped<Trips.TripTypeWriteService>();
         services.AddScoped<Trips.TripSectionWriter>();
         services.AddScoped<Documents.DocumentWriteService>();

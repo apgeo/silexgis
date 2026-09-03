@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+using NetTopologySuite.Geometries;
+using Shouldly;
+using SilexGis.Infrastructure.PhotoLibraries;
+
+namespace SilexGis.Api.Tests;
+
+/// <summary>
+/// Reading a neighbouring photo library. These first cases need no database and no host: they pin
+/// the two values that are put into an outbound request and would otherwise fail silently — the
+/// order the rectangle is stated in, and what this application is willing to interpolate into a
+/// request path.
+///
+/// <para>
+/// Every rectangle, identifier and hash below is invented. Nothing here comes from any real
+/// library, and no coordinate names a real place.
+/// </para>
+/// </summary>
+public sealed class PhotoLibraryTests
+{
+    /// <summary>
+    /// The library states a rectangle as north, east, south, west. This application states one as
+    /// west, south, east, north, and GeoJSON states a position as longitude then latitude — so
+    /// three orders are in play and two of them are wrong here.
+    /// </summary>
+    /// <remarks>
+    /// The rectangle is chosen so that every one of the four numbers differs and the latitudes
+    /// cannot be mistaken for the longitudes: a square, or one straddling the equator, would let a
+    /// transposed pair produce the right string by accident, and this test exists precisely because
+    /// a transposition produces an empty map rather than an error — which is indistinguishable from
+    /// the feature being switched off.
+    /// </remarks>
+    [Fact]
+    public void The_rectangle_is_stated_north_east_south_west()
+    {
+        var bounds = new Envelope(x1: 21.5, x2: 24.25, y1: 45.125, y2: 46.75);
+
+        PhotoPrismClient.LatLng(bounds).ShouldBe("46.75,24.25,45.125,21.5");
+    }
+
+    /// <summary>
+    /// Written with the invariant culture, because a host whose culture writes a decimal comma
+    /// would otherwise send four numbers separated by seven commas and be told nothing about it.
+    /// </summary>
+    [Fact]
+    public void The_rectangle_is_written_with_a_decimal_point()
+    {
+        var bounds = new Envelope(x1: -1.5, x2: -0.25, y1: 0.125, y2: 2.5);
+
+        PhotoPrismClient.LatLng(bounds).ShouldBe("2.5,-0.25,0.125,-1.5");
+        PhotoPrismClient.LatLng(bounds).Split(',').Length.ShouldBe(4);
+    }
+
+    /// <summary>
+    /// The order this application uses for a rectangle everywhere else, written out here so the
+    /// difference is visible rather than remembered: if the two ever agree, one of them has been
+    /// changed by mistake.
+    /// </summary>
+    [Fact]
+    public void The_rectangle_is_not_this_applications_own_order()
+    {
+        var bounds = new Envelope(x1: 21.5, x2: 24.25, y1: 45.125, y2: 46.75);
+        var westSouthEastNorth = $"{bounds.MinX},{bounds.MinY},{bounds.MaxX},{bounds.MaxY}";
+
+        PhotoPrismClient.LatLng(bounds).ShouldNotBe(westSouthEastNorth);
+    }
+
+    /// <summary>
+    /// A reference is a foreign string that ends up inside a URL this application sends. Anything
+    /// that could make it a different request is refused here rather than escaped later, because
+    /// the escaping would have to be right in every one of the places a reference is used.
+    /// </summary>
+    [Theory]
+    [InlineData("abcdef0123456789")]
+    [InlineData("psxyz-1")]
+    [InlineData("a_b-C9")]
+    public void A_reference_of_letters_digits_hyphens_and_underscores_is_sent(string reference) =>
+        PhotoLibraryHttp.IsSafeReference(reference).ShouldBeTrue();
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("../../etc/passwd")]
+    [InlineData("abc/def")]
+    [InlineData("abc?size=huge")]
+    [InlineData("abc def")]
+    [InlineData("abc.def")]
+    [InlineData("abc%2Fdef")]
+    public void A_reference_that_could_ask_a_different_question_is_refused(string? reference) =>
+        PhotoLibraryHttp.IsSafeReference(reference).ShouldBeFalse();
+
+    [Fact]
+    public void A_reference_longer_than_any_library_mints_is_refused() =>
+        PhotoLibraryHttp.IsSafeReference(new string('a', 129)).ShouldBeFalse();
+}
