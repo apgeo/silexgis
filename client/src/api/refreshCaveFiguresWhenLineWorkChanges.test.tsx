@@ -56,7 +56,6 @@ describe("the figures computed from a cave's line work", () => {
     expect(asked).toContain(JSON.stringify(queryKeys.centerlines('cave-1')));
     expect(asked).toContain(JSON.stringify(queryKeys.caveSurveyStatistics('cave-1')));
     expect(asked).toContain(JSON.stringify(queryKeys.caveOrientation('cave-1')));
-    expect(asked).toContain(JSON.stringify(queryKeys.caveTopology('cave-1')));
   });
 
   it('are asked for again when a survey model is removed', async () => {
@@ -70,6 +69,5 @@ describe("the figures computed from a cave's line work", () => {
     expect(asked).toContain(JSON.stringify(queryKeys.surveyModels('cave-2')));
     expect(asked).toContain(JSON.stringify(queryKeys.caveSurveyStatistics('cave-2')));
     expect(asked).toContain(JSON.stringify(queryKeys.caveOrientation('cave-2')));
-    expect(asked).toContain(JSON.stringify(queryKeys.caveTopology('cave-2')));
   });
 });

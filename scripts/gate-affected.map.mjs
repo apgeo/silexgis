@@ -127,10 +127,10 @@ export const groups = {
   ],
   sms: ['MfaAndRateLimitTests', 'TwoFactorChannelTests'],
   surveys: [
-    'CaveSurveyStatisticsTests', 'HypsometryTests', 'KarstnetGoldenTests',
-    'StructureComparisonTests', 'SurveyFormatReaderTests', 'SurveyGraphExtractorTests',
-    'SurveyGraphTests', 'SurveyMeshTests', 'SurveyModelTests', 'SurveyPlacementTests',
-    'SurveySegmentSubstrateTests', 'SurveySourceTests', 'SurveyTopologyTests',
+    'CaveSurveyStatisticsTests', 'HypsometryTests', 'StructureComparisonTests',
+    'SurveyFormatReaderTests', 'SurveyGraphExtractorTests', 'SurveyGraphTests',
+    'SurveyMeshTests', 'SurveyModelTests', 'SurveyPlacementTests',
+    'SurveySegmentSubstrateTests', 'SurveySourceTests',
   ],
   // What a device asks of this installation, and what it may carry away. The protocol suites
   // and the registration and seed paths a device signs in through are one selection: they fail

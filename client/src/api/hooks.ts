@@ -236,6 +236,11 @@ export const queryKeys = {
   caveStructureComparison: (id: string, areaId: string) =>
     ['caves', id, 'structure-comparison', areaId] as const,
   areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
+  areaKarstStatistics: (id: string) => ['features', id, 'karst-statistics'] as const,
+  mapDensity: (bbox: string, cellMetres: number | null, bandwidthMetres: number | null, areaId?: string) =>
+    ['map', 'density', bbox, cellMetres, bandwidthMetres, areaId ?? null] as const,
+  mapPointPattern: (bbox: string, simulations: number, seed: number, areaId?: string) =>
+    ['map', 'point-pattern', bbox, simulations, seed, areaId ?? null] as const,
   closestApproach: (id: string, other: string) => ['caves', id, 'closest-approach', other] as const,
   objectAccess: (entityType: string, entityId: string) => ['object-access', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
@@ -278,7 +283,6 @@ export const queryKeys = {
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
   caveSurveyStatistics: (caveId: string) => ['caves', caveId, 'survey-statistics'] as const,
   caveOrientation: (caveId: string) => ['caves', caveId, 'orientation'] as const,
-  caveTopology: (caveId: string) => ['caves', caveId, 'topology'] as const,
   annotatedText: (documentId: string) => ['annotated-texts', documentId] as const,
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
@@ -917,23 +921,6 @@ export function surveyModelReadableByViewer(model: { format: SurveyModelInfo['fo
 }
 
 /**
- * Whether any of a cave's uploaded surveys can have produced a measured passage network.
- *
- * Only a line plot whose reading finished has stations and shots behind it; a wall mesh has no
- * network, and a reading still queued or failed left nothing stored. A cave with none of those is
- * the ordinary case — most caves have never had a survey file uploaded at all — and asking the
- * server about its network anyway is a request that is certain to be refused. That refusal is not
- * free: the browser reports every failed request to its console, so a panel that asked regardless
- * would put an error on the console of every cave page in the application, drowning the real ones
- * in an expected one.
- */
-export function caveHasMeasurableSurvey(
-  models: { status: SurveyModelInfo['status']; format: SurveyModelInfo['format'] }[] | undefined,
-): boolean {
-  return (models ?? []).some((model) => model.status === 'ready' && surveyModelReadableByViewer(model));
-}
-
-/**
  * How often the list re-asks. Two intervals meet in this one number, which is why it is a named
  * rule and not a literal at the query: work in flight is worth a couple of seconds, and
  * once everything has settled the list must still come back before the signed URLs on it lapse.
@@ -965,10 +952,6 @@ export function surveyModelPollInterval(
 function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveyStatistics(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
-  // Stored beside the survey rather than recomputed per request, but changed by exactly the same
-  // events: the figures are rewritten when a file is read, and a cave whose answering upload was
-  // deleted is measured from a different one or from none at all.
-  void queryClient.invalidateQueries({ queryKey: queryKeys.caveTopology(caveId) });
 }
 
 /**
@@ -5254,35 +5237,6 @@ export function useCaveSurveyStatistics(caveId: string | undefined) {
   });
 }
 
-/**
- * The shape of a cave's passage network, as the figures the karst literature uses.
- *
- * Every figure is a number that was measured or it is null, and null is never a zero: a network of
- * two junctions has no connectivity ratio and a single branch has no spread of lengths, so
- * anything drawing these has to keep the two apart.
- */
-export type CaveTopology = components['schemas']['CaveTopologyDto'];
-
-export function useCaveTopology(caveId: string | undefined, hasMeasurableSurvey = true) {
-  return useQuery({
-    queryKey: queryKeys.caveTopology(caveId ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/topology', { params: { path: { id: caveId! } } })),
-    // Asked only of a cave that has a read line plot behind it. The route answers "no such cave"
-    // both to a caller who may not place the cave and to a cave whose network was never measured,
-    // and the second of those is the ordinary state of nearly every cave — so asking unconditionally
-    // would fail on almost every cave page and write an expected error to the browser console each
-    // time. The caller decides, because it already holds the list of uploads.
-    enabled: !!caveId && hasMeasurableSurvey,
-    // Measured once when the survey file is read and stored beside it, so this changes only when a
-    // file is uploaded or removed — both of which empty this key explicitly.
-    staleTime: 5 * 60_000,
-    // Two of the three answers this route gives are final: a cave the caller may not read or may
-    // not place exactly, and a cave whose network has never been measured. Neither changes by
-    // being asked again.
-    retry: false,
-  });
-}
-
 /** Where a cave's passage sits vertically, and the levels it appears to be cut at. */
 export type CaveHypsometry = components['schemas']['CaveHypsometryDto'];
 
@@ -5411,6 +5365,130 @@ export function useAreaStructureComparison(areaId: string | undefined, enabled =
         }),
       ),
     enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/** What one karst area adds up to, over the caves declared to be in it. */
+export type AreaKarstStatistics = components['schemas']['AreaKarstStatisticsDto'];
+
+/** One reading behind the karstification index, present or absent. */
+export type KarstificationComponent = components['schemas']['KarstificationComponentDto'];
+
+/** One cave standing at an end of a range in an area. */
+export type AreaCaveExtreme = components['schemas']['AreaCaveExtremeDto'];
+
+/**
+ * Counts, densities, totals and a classed index for one area.
+ *
+ * `retry: false` for the reason every location-protected statistic here has it: an area this
+ * caller may not read answers exactly as one that is not there, so asking again asks the same
+ * refused question and only delays the empty state.
+ */
+export function useAreaKarstStatistics(areaId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.areaKarstStatistics(areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/features/{id}/karst-statistics', {
+          params: { path: { id: areaId! } },
+        }),
+      ),
+    enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export type DensityGrid = components['schemas']['DensityGridDto'];
+export type DensityCell = components['schemas']['DensityCellDto'];
+export type PointPattern = components['schemas']['PointPatternDto'];
+
+export interface DensityQuery {
+  bbox: string;
+  /**
+   * Omitted on the first request on purpose. The finest cell an installation will publish is its
+   * location-protection grid, which the client does not know and must not guess: asking without a
+   * cell size gets the floor and the payload states what it was, so a control can offer multiples
+   * of a real number instead of discovering the edge by being refused.
+   */
+  cellMetres?: number;
+  bandwidthMetres?: number;
+  areaId?: string;
+}
+
+/**
+ * How thickly cave entrances sit over a window, as a grid and as a smoothed surface.
+ *
+ * <p>
+ * `retry` is off on purpose. The two interesting failures here are refusals with a stable code —
+ * a cell finer than the location-protection grid, and a window that would be more cells than one
+ * answer holds — and neither becomes true on a second attempt. Retrying them only delays the
+ * message the control needs to show.
+ * </p>
+ */
+export function useMapDensity(query: DensityQuery | undefined) {
+  return useQuery({
+    queryKey: queryKeys.mapDensity(
+      query?.bbox ?? '',
+      query?.cellMetres ?? null,
+      query?.bandwidthMetres ?? null,
+      query?.areaId,
+    ),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/map/density', {
+          params: {
+            query: {
+              bbox: query!.bbox,
+              cellMetres: query!.cellMetres,
+              bandwidthMetres: query!.bandwidthMetres,
+              areaId: query!.areaId,
+            },
+          },
+        }),
+      ),
+    enabled: !!query,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export interface PointPatternQuery {
+  bbox: string;
+  simulations: number;
+  seed: number;
+  areaId?: string;
+}
+
+/**
+ * Whether those entrances are arranged more thickly, more evenly, or more directionally than
+ * chance would arrange them. The seed travels in the query key as well as in the request, so two
+ * readers looking at the same window and the same seed are looking at the same band.
+ */
+export function useMapPointPattern(query: PointPatternQuery | undefined) {
+  return useQuery({
+    queryKey: queryKeys.mapPointPattern(
+      query?.bbox ?? '',
+      query?.simulations ?? 0,
+      query?.seed ?? 0,
+      query?.areaId,
+    ),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/map/point-pattern', {
+          params: {
+            query: {
+              bbox: query!.bbox,
+              simulations: query!.simulations,
+              seed: query!.seed,
+              areaId: query!.areaId,
+            },
+          },
+        }),
+      ),
+    enabled: !!query,
     staleTime: 5 * 60_000,
     retry: false,
   });

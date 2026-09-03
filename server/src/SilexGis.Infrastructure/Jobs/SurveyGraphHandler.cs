@@ -10,7 +10,6 @@ using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
 using Therion.Blender;
 using Therion.Blender.Parsing;
-using Therion.Blender.Geometry;
 
 namespace SilexGis.Infrastructure.Jobs;
 
@@ -98,10 +97,6 @@ public sealed class SurveyGraphHandler(
                 // at all, so deleting the legs would leave those behind — belonging to a reading of
                 // the file that no longer exists, and indistinguishable from the ones this read is
                 // about to write.
-                // The measured shape of the network goes with them. It is derived from exactly
-                // these rows, so a reading of it that outlived them would be a confident answer
-                // about a file that had been read again since.
-                await db.SurveyTopologies.Where(t => t.SurveyModelId == model.Id).ExecuteDeleteAsync(ct);
                 await db.SurveyLruds.Where(l => l.SurveyModelId == model.Id).ExecuteDeleteAsync(ct);
                 await db.SurveyShots.Where(s => s.SurveyModelId == model.Id).ExecuteDeleteAsync(ct);
                 await db.SurveyStations.Where(s => s.SurveyModelId == model.Id).ExecuteDeleteAsync(ct);
@@ -115,14 +110,6 @@ public sealed class SurveyGraphHandler(
                 db.SurveyLruds.AddRange(extraction.Lrud);
 
                 await WriteCenterlineAsync(model, shape, ct);
-
-                // Measured now rather than when somebody asks, because the contraction and the
-                // betweenness behind it are superlinear in the station count and a large system is
-                // tens of thousands of stations — a figure a request has to wait for is a figure a
-                // request times out on. A file with no network at all is measured as nothing.
-                var topology = SurveyTopologyAnalyzer.Measure(
-                    CenterlineGraph.Build(parsed), model.Id, DateTime.UtcNow);
-                if (topology is not null) { db.SurveyTopologies.Add(topology); }
 
                 model.Anchor = new Point(extraction.AnchorLongitude, extraction.AnchorLatitude) { SRID = 4326 };
                 model.AnchorHeightM = extraction.AnchorHeightM;

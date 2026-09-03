@@ -56,6 +56,23 @@ public readonly record struct Bbox(double West, double South, double East, doubl
         return true;
     }
 
+    /// <summary>
+    /// Whether the box is a real window on the globe: inside the WGS84 limits, and with each pair
+    /// the right way round.
+    ///
+    /// <para>
+    /// Parsing four numbers is deliberately separate from believing them, because most callers of
+    /// this type hand the box straight to PostGIS, which is content to build an envelope spanning
+    /// several thousand times the planet. Anything that then does arithmetic per unit of the window
+    /// — enumerating grid cells, segmentising an edge — turns such a box into work measured in
+    /// millions of years, so those callers check this first and refuse. It is not applied inside
+    /// <c>TryParse</c> because that would change the answer for every existing caller at once.
+    /// </para>
+    /// </summary>
+    public bool IsWithinWorld =>
+        West >= -180d && East <= 180d && South >= -90d && North <= 90d
+        && West < East && South < North;
+
     public Polygon ToPolygon() => new(new LinearRing(
     [
         new Coordinate(West, South),
