@@ -37,9 +37,18 @@ public sealed class ImportLimitOptions
     /// The most rows one scan reads out of an uploaded file to build the review list.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A file larger than this is still imported whole and still drawn as a layer — only the
     /// review is bounded, and the reviewer is told it was, because a silently truncated candidate
     /// list reads exactly like a complete one.
+    /// </para>
+    /// <para>
+    /// The scan is a bounded read of rows already stored, and the review it feeds is paged to the
+    /// client, so the figure buys reviewable rows rather than rows on a screen: what it costs is
+    /// the one scan that ranks and de-duplicates them, not the drawing of them. Raised because a
+    /// season emptied off a GPS unit runs past the old figure and the part that was cut off is
+    /// the part nobody knew to look for.
+    /// </para>
     /// </remarks>
-    public int MaxScanRows { get; set; } = 50000;
+    public int MaxScanRows { get; set; } = 150000;
 }
