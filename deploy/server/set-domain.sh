@@ -46,27 +46,42 @@ say() { printf '\n==> %s\n' "$*"; }
 # operator what the DNS records ought to say.
 MYV4="$(curl -4 -fsS --max-time 10 https://api.ipify.org 2>/dev/null || echo '')"
 
+# Returns 0 when the name is usable, non-zero when it is not -- shell truth, not a boolean
+# flag. Getting that backwards makes the check refuse every correct name, which reads as a
+# strict tool rather than as a broken one.
 check_name() {
-	local name="$1" ok=1
+	local name="$1" problem=0
 	local a aaaa
 	a="$(getent ahostsv4 "$name" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')"
-	aaaa="$(getent ahostsv6 "$name" 2>/dev/null | awk '{print $1}' | sort -u | grep -v '^::ffff:' | tr '\n' ' ')"
+	aaaa="$(getent ahostsv6 "$name" 2>/dev/null | awk '{print $1}' | grep -v '^::ffff:' | sort -u | tr '\n' ' ')"
 	printf '    %-34s A: %s\n' "$name" "${a:-<none>}"
 	printf '    %-34s AAAA: %s\n' "" "${aaaa:-<none>}"
+
+	if [ -z "$a" ] && [ -z "$aaaa" ]; then
+		echo "    ^ does not resolve at all" >&2; problem=1
+	fi
 	if [ -n "$MYV4" ] && [ -n "$a" ] && ! echo " $a " | grep -q " $MYV4 "; then
-		echo "    ^ does not include this host ($MYV4)" >&2; ok=0
+		echo "    ^ does not include this host ($MYV4)" >&2; problem=1
 	fi
 	# More than one A record means round-robin: some visitors, and some ACME validation
-	# attempts, will land on the other address. That is a misconfiguration, not redundancy.
+	# attempts, land on the other address. That is a misconfiguration, not redundancy --
+	# and Let's Encrypt validates from several vantage points, all of which must agree.
 	if [ "$(echo $a | wc -w)" -gt 1 ]; then
-		echo "    ^ several A records: requests will be split between them" >&2; ok=0
+		echo "    ^ several A records: requests will be split between them" >&2; problem=1
 	fi
-	# An AAAA that is not this host is the quiet killer: browsers and Let's Encrypt both
-	# prefer IPv6, so everything reaches the wrong server while the A record looks correct.
+	# An AAAA pointing elsewhere is the quiet killer: browsers and Let's Encrypt both prefer
+	# IPv6, so everything reaches the wrong server while the A record looks correct. One that
+	# points here is fine and is not worth a warning.
 	if [ -n "$aaaa" ]; then
-		echo "    ^ has AAAA records; confirm they point at THIS host or remove them" >&2
+		local mine
+		mine="$(ip -6 addr show scope global 2>/dev/null | awk '/inet6/{sub(/\/.*/,"",$2); print $2}')"
+		for addr in $aaaa; do
+			if ! echo "$mine" | grep -qxF "$addr"; then
+				echo "    ^ AAAA $addr is not an address of this host" >&2; problem=1
+			fi
+		done
 	fi
-	return $ok
+	return $problem
 }
 
 say "DNS as this host resolves it"
