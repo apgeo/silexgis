@@ -290,6 +290,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapPhotoImportEndpoints();
     api.MapImportBatchEndpoints();
     api.MapCatalogueEndpoints();
+    api.MapTripImportEndpoints();
     api.MapJobEndpoints();
     api.MapExportEndpoints();
     api.MapFileEndpoints();

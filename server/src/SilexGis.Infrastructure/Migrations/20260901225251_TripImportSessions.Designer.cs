@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260901225251_TripImportSessions")]
+    partial class TripImportSessions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3634,10 +3637,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnName("source_properties")
                         .HasDefaultValueSql("'{}'::jsonb");
 
-                    b.Property<Guid?>("TripLogId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_log_id");
-
                     b.HasKey("Id")
                         .HasName("pk_import_batch_items");
 
@@ -3654,10 +3653,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("SourceFileId")
                         .HasDatabaseName("ix_import_batch_items_source_file_id")
                         .HasFilter("source_file_id is not null");
-
-                    b.HasIndex("TripLogId")
-                        .HasDatabaseName("ix_import_batch_items_trip_log_id")
-                        .HasFilter("trip_log_id is not null");
 
                     b.ToTable("import_batch_items", (string)null);
                 });
@@ -7616,12 +7611,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("SourceFileId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_import_batch_items_stored_files_source_file_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.TripLog", null)
-                        .WithMany()
-                        .HasForeignKey("TripLogId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_import_batch_items_trip_logs_trip_log_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.MapView", b =>

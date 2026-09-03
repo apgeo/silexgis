@@ -154,6 +154,47 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
+    /// <summary>
+    /// A line of a vector import reports no trip title, whatever the source rows happen to be
+    /// called. The line keeps its source object's own attributes verbatim, and a file whose
+    /// author wrote a "title" on every object owns that word for something of their own — a
+    /// photograph's caption, a map sheet, a survey name. Reading it back as the title of a trip
+    /// would invent a trip that was never recorded, and would hand the reader a name that the
+    /// same answer withholds two fields earlier when the object is not theirs to see.
+    /// </summary>
+    [Fact]
+    public async Task A_vector_import_line_reports_no_trip_title_even_when_the_source_row_has_one()
+    {
+        var geojson = $$"""
+            {
+              "type": "FeatureCollection",
+              "features": [
+                {
+                  "type": "Feature",
+                  "properties": { "name": "P. Titled {{tag}}", "title": "Nu este o tura {{tag}}" },
+                  "geometry": { "type": "Point", "coordinates": [25.51, 45.61] }
+                }
+              ]
+            }
+            """;
+        var geofileId = await UploadAsync("titled.geojson", Encoding.UTF8.GetBytes(geojson), editor);
+
+        var commit = await CommitAsync(editor, geofileId, SourceIds(await PreviewAsync(editor, geofileId)));
+        var batchId = commit.GetProperty("batch").GetProperty("id").GetGuid();
+
+        var detail = await GetJsonAsync(editor, $"/api/v1/import-batches/{batchId}");
+        var item = detail.GetProperty("items").EnumerateArray().Single();
+        item.GetProperty("tripLogId").ValueKind.ShouldBe(JsonValueKind.Null);
+        item.GetProperty("tripTitle").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // And the attribute really is there to be read, so the assertion above is about the
+        // answer rather than about a file that never carried the word.
+        var provenance = await GetJsonAsync(
+            editor, $"/api/v1/features/{item.GetProperty("featureId").GetGuid()}/import-provenance");
+        provenance.GetProperty("sourceProperties").GetProperty("title").GetString()
+            .ShouldBe($"Nu este o tura {tag}");
+    }
+
     [Fact]
     public async Task Provenance_says_which_file_which_rule_who_and_when()
     {

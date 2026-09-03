@@ -492,6 +492,7 @@ public static class TripLogEndpoints
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        TripLogWriteService writes,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -513,65 +514,9 @@ public static class TripLogEndpoints
             return stale;
         }
 
-        // Participant rows cascade; polymorphic rows are cleaned here.
-        //
-        // The trip's place in a camp goes with it, and the camp is otherwise untouched: a camp
-        // that gathered this trip has one fewer member, which is what deleting the trip means.
-        await db.ExpeditionTrips.Where(m => m.TripLogId == trip.Id).ExecuteDeleteAsync(ct);
-
-        // Every rule anchored on this trip goes with it — the ones authored on its own
-        // permissions tab and the ones a camp's sharing wrote onto it alike. A rule whose
-        // anchor no longer exists is what the integrity check reports as an orphan, and it
-        // reads as a live grant on every surface that lists rules by subject.
-        //
-        // Loaded and removed rather than deleted in one statement, because a rule
-        // disappearing is a change to who may reach what, and every other place rules are
-        // withdrawn records that. A set-based delete never reaches the change tracker, so the
-        // withdrawal would happen with nothing in the trail to say it had.
-        var anchored = await db.AccessEntries
-            .Where(e => e.Domain == AccessDomain.TripLogs
-                && e.ScopeKind == AccessScopeKind.Object
-                && e.ScopeId == trip.Id)
-            .ToListAsync(ct);
-        db.AccessEntries.RemoveRange(anchored);
-
-        await db.Attachments
-            .Where(a => a.EntityType == AttachedEntityType.TripLog && a.EntityId == trip.Id)
-            .ExecuteDeleteAsync(ct);
-        await db.Taggings
-            .Where(x => x.EntityType == AttachedEntityType.TripLog && x.EntityId == trip.Id)
-            .ExecuteDeleteAsync(ct);
-        // The trip's memberships go, and so do the links that cannot mean anything without it.
-        //
-        // A link typed with one of the trip roles goes whole, however many features it still
-        // names: the role says what *this trip* did there, so the surviving members are not
-        // related to each other by anything once the trip is gone. Leaving it would also leave a
-        // directed link with no distinguished member, which the link rules refuse — the result
-        // would show on every named cave's links panel as a relation to the other caves, and no
-        // later edit of it would be accepted.
-        //
-        // A link of any other kind the trip merely joined keeps whatever it still relates, and
-        // goes only when one member is left: an association with one end is a thing no surface
-        // offers and no delete path would ever reach again. Remaining members cascade with it.
-        var roleIds = TripRoleLinks.RoleIds(db);
-        var linkIds = await db.ResLinkMembers
-            .Where(m => m.EntityType == AttachedEntityType.TripLog && m.EntityId == trip.Id)
-            .Select(m => m.ResLinkId)
-            .Distinct()
-            .ToListAsync(ct);
-        var roleLinkIds = await db.ResLinks
-            .Where(l => linkIds.Contains(l.Id)
-                && l.RelationTypeId != null && roleIds.Contains(l.RelationTypeId.Value))
-            .Select(l => l.Id)
-            .ToListAsync(ct);
-        await db.ResLinkMembers
-            .Where(m => m.EntityType == AttachedEntityType.TripLog && m.EntityId == trip.Id)
-            .ExecuteDeleteAsync(ct);
-        await db.ResLinks
-            .Where(l => roleLinkIds.Contains(l.Id)
-                || (linkIds.Contains(l.Id) && db.ResLinkMembers.Count(m => m.ResLinkId == l.Id) < 2))
-            .ExecuteDeleteAsync(ct);
-        db.TripLogs.Remove(trip);
+        // What goes with a trip is stated in one place, because the undo that takes a whole
+        // imported spreadsheet back has to remove a trip the same way this route does.
+        await writes.DeleteAsync(trip, ct);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }

@@ -67,6 +67,9 @@ public static class DependencyInjection
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.PhotoCandidateService>();
         services.AddScoped<Import.PhotoCommitService>();
+        services.AddScoped<Import.TripCsvFileReader>();
+        services.AddScoped<Import.TripImportResolver>();
+        services.AddScoped<Import.TripImportCommitService>();
 
         // The Romanian community cave catalogue, which this installation reads and imports from.
         // Off unless an operator supplies a key, and absent rather than broken when they have not.
