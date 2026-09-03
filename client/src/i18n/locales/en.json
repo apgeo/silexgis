@@ -2488,7 +2488,13 @@
       "modelPoint": "point",
       "waypoint": "waypoint {{index}}",
       "waypointNamed": "waypoint {{name}}",
-      "waypointRange": "waypoints {{from}}–{{to}}"
+      "waypointRange": "waypoints {{from}}–{{to}}",
+      "regionShapes": {
+        "rect": "rectangle",
+        "circle": "circle",
+        "polygon": "outline",
+        "point": "point"
+      }
     },
     "anchorStates": {
       "reanchored": "Measured against an older version, found again in the current one",
@@ -2643,7 +2649,26 @@
       "pageRangeBackwards": "The last page cannot come before the first.",
       "timeRequired": "Give a time in seconds, 0 or more.",
       "timeRangeRequired": "Give both times in seconds, each 0 or more.",
-      "timeRangeBackwards": "The end must come after the start; use a single moment for an instant."
+      "timeRangeBackwards": "The end must come after the start; use a single moment for an instant.",
+      "regionShape": "Shape",
+      "regionShapes": {
+        "rect": "Rectangle",
+        "circle": "Circle",
+        "polygon": "Outline",
+        "point": "Point"
+      },
+      "regionHelp": {
+        "rect": "Drag across the picture to box the part you mean.",
+        "circle": "Press at the centre and drag outwards.",
+        "polygon": "Click each corner in turn, then double-click to close the outline.",
+        "point": "Click the spot you mean."
+      },
+      "regionDrawn": "The part you drew",
+      "regionClear": "Draw it again",
+      "regionRequired": "Draw the part of the picture you mean.",
+      "regionNeedsDocument": "Choose the picture first, then draw on it.",
+      "regionNotAPicture": "This document is not a picture, so it has no regions to point at. Choose another part instead.",
+      "regionNoRendering": "This picture cannot be shown here, so there is nothing to draw on."
     },
     "point": {
       "title": "New point",
@@ -3601,5 +3626,8 @@
     "structureRose": "Fracture traces ({{count}} within {{radius}} m)",
     "areaStructureRose": "Fracture traces ({{count}} in this area)",
     "dolineRose": "Depression long axes ({{count}} outlines)"
+  },
+  "imageLink": {
+    "regionCount": "Linked parts of this picture: {{count}}"
   }
 }

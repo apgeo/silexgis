@@ -183,26 +183,44 @@ public class ResLinkRulesTests
     public void Page_ranges_are_forward_and_positive(string payload, bool valid) =>
         (AnchorPayloadProblem(AnchorKind.PageRange, payload) is null).ShouldBe(valid);
 
+    /// <summary>
+    /// A region is measured in fractions of the picture as it is drawn, so 1 is its far edge and
+    /// anything past that is outside it.
+    /// </summary>
+    /// <remarks>
+    /// The over-one cases are the ones worth having. A payload written in pixels satisfies every
+    /// floor-only rule — that is exactly what these coordinates used to be — and would then read
+    /// for ever as an exact region far outside the picture it pins, with nothing to say so. The
+    /// boundary itself is admitted: a region drawn to the edge of a photograph is an ordinary
+    /// thing to want, and a rect at x=0 with w=1 is the whole width rather than an error.
+    /// </remarks>
     [Theory]
-    [InlineData("""{"shape": "point", "x": 0, "y": 4.5}""", true)]
-    [InlineData("""{"shape": "point", "x": -1, "y": 4}""", false)] // natural pixels
-    [InlineData("""{"shape": "point", "x": 1}""", false)]
-    [InlineData("""{"shape": "rect", "x": 1, "y": 1, "w": 10, "h": 5}""", true)]
-    [InlineData("""{"page": 2, "shape": "rect", "x": 1, "y": 1, "w": 10, "h": 5}""", true)]
-    [InlineData("""{"page": 0, "shape": "rect", "x": 1, "y": 1, "w": 10, "h": 5}""", false)]
-    [InlineData("""{"shape": "rect", "x": 1, "y": 1, "w": 0, "h": 5}""", false)] // zero-size region
-    [InlineData("""{"shape": "rect", "x": 1, "y": 1, "w": 10}""", false)]
-    [InlineData("""{"shape": "circle", "cx": 5, "cy": 5, "r": 2}""", true)]
-    [InlineData("""{"shape": "circle", "cx": 5, "cy": 5, "r": 0}""", false)]
-    [InlineData("""{"shape": "polygon", "points": [[0, 0], [10, 0], [5, 8]]}""", true)]
-    [InlineData("""{"shape": "polygon", "points": [[0, 0], [10, 0]]}""", false)] // < 3 points
-    [InlineData("""{"shape": "polygon", "points": [[0, 0], [10, 0], [5]]}""", false)]
-    [InlineData("""{"shape": "polygon", "points": [[0, 0], [10, 0], [5, "y"]]}""", false)]
-    [InlineData("""{"shape": "polygon", "points": [[0, 0], [10, 0], [5, -1]]}""", false)]
+    [InlineData("""{"shape": "point", "x": 0, "y": 0.45}""", true)]
+    [InlineData("""{"shape": "point", "x": 1, "y": 1}""", true)] // the far corner is in the picture
+    [InlineData("""{"shape": "point", "x": -0.1, "y": 0.4}""", false)]
+    [InlineData("""{"shape": "point", "x": 1.5, "y": 0.4}""", false)] // outside the picture
+    [InlineData("""{"shape": "point", "x": 640, "y": 480}""", false)] // pixels, not fractions
+    [InlineData("""{"shape": "point", "x": 0.5}""", false)]
+    [InlineData("""{"shape": "rect", "x": 0.1, "y": 0.1, "w": 0.5, "h": 0.25}""", true)]
+    [InlineData("""{"shape": "rect", "x": 0, "y": 0, "w": 1, "h": 1}""", true)] // the whole picture
+    [InlineData("""{"page": 2, "shape": "rect", "x": 0.1, "y": 0.1, "w": 0.5, "h": 0.25}""", true)]
+    [InlineData("""{"page": 0, "shape": "rect", "x": 0.1, "y": 0.1, "w": 0.5, "h": 0.25}""", false)]
+    [InlineData("""{"shape": "rect", "x": 0.1, "y": 0.1, "w": 0, "h": 0.25}""", false)] // selects nothing
+    [InlineData("""{"shape": "rect", "x": 0.1, "y": 0.1, "w": 1.4, "h": 0.25}""", false)]
+    [InlineData("""{"shape": "rect", "x": 0.1, "y": 0.1, "w": 0.5}""", false)]
+    [InlineData("""{"shape": "circle", "cx": 0.5, "cy": 0.5, "r": 0.2}""", true)]
+    [InlineData("""{"shape": "circle", "cx": 0.5, "cy": 0.5, "r": 0}""", false)]
+    [InlineData("""{"shape": "circle", "cx": 0.5, "cy": 0.5, "r": 2}""", false)]
+    [InlineData("""{"shape": "polygon", "points": [[0, 0], [1, 0], [0.5, 0.8]]}""", true)]
+    [InlineData("""{"shape": "polygon", "points": [[0, 0], [1, 0]]}""", false)] // < 3 points
+    [InlineData("""{"shape": "polygon", "points": [[0, 0], [1, 0], [0.5]]}""", false)]
+    [InlineData("""{"shape": "polygon", "points": [[0, 0], [1, 0], [0.5, "y"]]}""", false)]
+    [InlineData("""{"shape": "polygon", "points": [[0, 0], [1, 0], [0.5, -1]]}""", false)]
+    [InlineData("""{"shape": "polygon", "points": [[0, 0], [10, 0], [5, 8]]}""", false)] // pixels
     [InlineData("""{"shape": "polygon", "points": 3}""", false)]
     [InlineData("""{"shape": "polygon"}""", false)]
-    [InlineData("""{"shape": "oval", "x": 1, "y": 1}""", false)]
-    [InlineData("""{"x": 1, "y": 1}""", false)] // shape is required
+    [InlineData("""{"shape": "oval", "x": 0.1, "y": 0.1}""", false)]
+    [InlineData("""{"x": 0.1, "y": 0.1}""", false)] // shape is required
     public void Image_regions_validate_per_shape(string payload, bool valid) =>
         (AnchorPayloadProblem(AnchorKind.ImageRegion, payload) is null).ShouldBe(valid);
 
@@ -343,7 +361,7 @@ public class ResLinkRulesTests
     }
 
     [Fact]
-    public void An_image_region_requires_the_pin_its_pixels_are_measured_in()
+    public void An_image_region_requires_the_pin_its_fractions_are_measured_against()
     {
         RequiresAnchorFilePin(AnchorKind.ImageRegion).ShouldBeTrue();
         foreach (var kind in Enum.GetValues<AnchorKind>().Where(k => k != AnchorKind.ImageRegion))
@@ -351,7 +369,7 @@ public class ResLinkRulesTests
             RequiresAnchorFilePin(kind).ShouldBeFalse(kind.ToString());
         }
 
-        const string region = """{"shape": "rect", "x": 10, "y": 10, "w": 5, "h": 5}""";
+        const string region = """{"shape": "rect", "x": 0.1, "y": 0.1, "w": 0.5, "h": 0.5}""";
         MemberProblem(new(
                 null, AttachedEntityType.Document, SomeId, AnchorKind.ImageRegion, region))
             .ShouldBe(AnchorPinRequiredCode);

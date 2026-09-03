@@ -2488,7 +2488,13 @@
       "modelPoint": "punct",
       "waypoint": "punctul {{index}}",
       "waypointNamed": "punctul {{name}}",
-      "waypointRange": "punctele {{from}}–{{to}}"
+      "waypointRange": "punctele {{from}}–{{to}}",
+      "regionShapes": {
+        "rect": "dreptunghi",
+        "circle": "cerc",
+        "polygon": "contur",
+        "point": "punct"
+      }
     },
     "anchorStates": {
       "reanchored": "Măsurat pe o versiune mai veche, regăsit în cea curentă",
@@ -2643,7 +2649,26 @@
       "pageRangeBackwards": "Ultima pagină nu poate fi înaintea primei.",
       "timeRequired": "Dă un timp în secunde, cel puțin 0.",
       "timeRangeRequired": "Dă ambele timpuri în secunde, fiecare cel puțin 0.",
-      "timeRangeBackwards": "Sfârșitul trebuie să fie după început; pentru o clipă folosește un singur moment."
+      "timeRangeBackwards": "Sfârșitul trebuie să fie după început; pentru o clipă folosește un singur moment.",
+      "regionShape": "Formă",
+      "regionShapes": {
+        "rect": "Dreptunghi",
+        "circle": "Cerc",
+        "polygon": "Contur",
+        "point": "Punct"
+      },
+      "regionHelp": {
+        "rect": "Trage peste imagine ca să încadrezi partea la care te referi.",
+        "circle": "Apasă în centru și trage spre exterior.",
+        "polygon": "Dă clic pe fiecare colț pe rând, apoi dublu-clic ca să închizi conturul.",
+        "point": "Dă clic pe locul la care te referi."
+      },
+      "regionDrawn": "Partea desenată",
+      "regionClear": "Desenează din nou",
+      "regionRequired": "Desenează partea din imagine la care te referi.",
+      "regionNeedsDocument": "Alege întâi imaginea, apoi desenează pe ea.",
+      "regionNotAPicture": "Acest document nu este o imagine, deci nu are regiuni către care să arate. Alege altă parte.",
+      "regionNoRendering": "Această imagine nu poate fi afișată aici, deci nu există pe ce desena."
     },
     "point": {
       "title": "Punct nou",
@@ -3601,5 +3626,8 @@
     "structureRose": "Trasee de fractură ({{count}} pe o rază de {{radius}} m)",
     "areaStructureRose": "Trasee de fractură ({{count}} în această zonă)",
     "dolineRose": "Axele lungi ale depresiunilor ({{count}} contururi)"
+  },
+  "imageLink": {
+    "regionCount": "Părți legate din această imagine: {{count}}"
   }
 }

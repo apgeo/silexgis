@@ -9,6 +9,7 @@ import PagedDocumentView from './PagedDocumentView.tsx';
 import PdfDocumentView from './PdfDocumentView.tsx';
 import TextDocumentView from './TextDocumentView.tsx';
 import AnnotatedTextDocumentView from '../../textlink/AnnotatedTextDocumentView.tsx';
+import AnnotatedImageView from '../../imagelink/AnnotatedImageView.tsx';
 import { ANNOTATED_TEXT_MEDIA_TYPE } from '../../textlink/mediaType.ts';
 
 /**
@@ -85,6 +86,7 @@ export default function DocumentContent({
   file,
   initialPage,
   documentId,
+  highlightedMemberId,
 }: {
   file: FileInfo;
   initialPage?: number;
@@ -97,6 +99,12 @@ export default function DocumentContent({
    * hand; without it that one branch is not taken and the general answer is given instead.
    */
   documentId?: string;
+  /**
+   * A region of this picture to draw heavier, where the reader arrived by following a link that
+   * names one. Read from the address rather than passed around in memory, so the link somebody
+   * was sent still opens on the region it names.
+   */
+  highlightedMemberId?: string | null;
 }) {
   const { t } = useTranslation();
 
@@ -117,7 +125,19 @@ export default function DocumentContent({
     if (src !== null) {
       return (
         <Flex vertical gap={8} align="start">
-          <Image src={src} alt={file.originalName} style={{ maxWidth: '100%' }} />
+          {documentId === undefined ? (
+            // Regions belong to the document rather than to the file — a link survives a new
+            // version being uploaded — so a surface showing a file without knowing which document
+            // it is the content of gets the plain picture. Every one of those is an attachment
+            // strip, where regions would be too small to see in any case.
+            <Image src={src} alt={file.originalName} style={{ maxWidth: '100%' }} />
+          ) : (
+            <AnnotatedImageView
+              documentId={documentId}
+              file={file}
+              highlightedMemberId={highlightedMemberId}
+            />
+          )}
           {!file.mayDownloadOriginal && (
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {t('attachments.originalWithheld')}

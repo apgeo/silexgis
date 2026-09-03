@@ -118,6 +118,12 @@ export default function AddMemberModal({
   const [targetTitle, setTargetTitle] = useState<string | null>(null);
   const [anchorKind, setAnchorKind] = useState<AnchorKind>('whole');
   const [anchor, setAnchor] = useState<unknown>(null);
+  /**
+   * The file a region's fractions were measured against, set by the editor that composes one.
+   * Only the region kind has it; every other editor leaves it null, which is what those kinds
+   * require and what the server checks.
+   */
+  const [anchorFileId, setAnchorFileId] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [isMain, setIsMain] = useState(false);
   const presetRelationTypeId = relation?.typeId ?? null;
@@ -142,6 +148,7 @@ export default function AddMemberModal({
       setTargetTitle(null);
       setAnchorKind('whole');
       setAnchor(null);
+      setAnchorFileId(null);
       setNote('');
       setRelationTypeId(presetRelationTypeId);
       setRelationDirected(presetRelationDirected);
@@ -241,7 +248,7 @@ export default function AddMemberModal({
           note: note.trim() === '' ? null : note.trim(),
           anchorKind,
           anchor: anchorKind === 'whole' ? null : anchor,
-          anchorFileId: null,
+          anchorFileId: anchorKind === 'whole' ? null : anchorFileId,
         };
 
   /**
@@ -312,7 +319,7 @@ export default function AddMemberModal({
                 note: note.trim() === '' ? null : note.trim(),
                 anchorKind,
                 anchor: anchorKind === 'whole' ? null : anchor,
-                anchorFileId: null,
+                anchorFileId: anchorKind === 'whole' ? null : anchorFileId,
               },
             ],
           });
@@ -372,6 +379,7 @@ export default function AddMemberModal({
               setTargetTitle(null);
               setAnchorKind('whole');
               setAnchor(null);
+              setAnchorFileId(null);
               if (next !== 'feature') {
                 setSource('existing');
               }
@@ -462,6 +470,7 @@ export default function AddMemberModal({
               onChange={(next) => {
                 setAnchorKind(next);
                 setAnchor(null);
+                setAnchorFileId(null);
               }}
               aria-label={t('resLinks.anchorKind')}
               // Kinds whose selector has not shipped stay on the list, disabled: the scope
@@ -489,7 +498,12 @@ export default function AddMemberModal({
           <Flex vertical gap={4}>
             <AnchorEditor
               value={anchor}
-              onChange={setAnchor}
+              onChange={(next, pin) => {
+                setAnchor(next);
+                // Undefined means "this kind has no pin", which is not the same as clearing one;
+                // only an editor that composes coordinates against a file ever passes it.
+                setAnchorFileId(pin ?? null);
+              }}
               // A selector that has to show the resource needs to know which resource; the
               // numeric editors ignore this.
               target={targetId === null ? undefined : { targetType, targetId }}

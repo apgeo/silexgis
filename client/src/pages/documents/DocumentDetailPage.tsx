@@ -196,6 +196,7 @@ export default function DocumentDetailPage() {
             file={file}
             initialPage={Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1}
             documentId={id}
+            highlightedMemberId={searchParams.get('region')}
           />
         ) : (
           <Spin />

@@ -191,11 +191,15 @@ describe('AddMemberModal', () => {
     fireEvent.click(screen.getAllByText('Document').at(-1)!);
     fireEvent.mouseDown(screen.getByLabelText('What it points at'));
 
-    // The four numeric anchors ship; the ones that need a viewer are shown, disabled.
-    const region = screen.getAllByText('A region of an image').at(-1)!;
-    expect(region.closest('.ant-select-item-option')).toHaveClass('ant-select-item-option-disabled');
+    // A kind whose selector has not shipped is shown, disabled — the list stays honest about what
+    // a link can address and about what it cannot yet — while the ones that have shipped are
+    // pickable. Both halves are asserted: a list that disabled everything would pass the first.
+    const pending = screen.getAllByText('A point in the model').at(-1)!;
+    expect(pending.closest('.ant-select-item-option')).toHaveClass('ant-select-item-option-disabled');
     const page = screen.getAllByText('A page').at(-1)!;
     expect(page.closest('.ant-select-item-option')).not.toHaveClass('ant-select-item-option-disabled');
+    const region = screen.getAllByText('A region of an image').at(-1)!;
+    expect(region.closest('.ant-select-item-option')).not.toHaveClass('ant-select-item-option-disabled');
   });
 
   it('refuses a page range that runs backwards, in the same words the server would', () => {
