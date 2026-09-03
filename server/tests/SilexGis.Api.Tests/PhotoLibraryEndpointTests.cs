@@ -37,6 +37,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
 {
     private const string StatusUrl = "/api/v1/photo-libraries/status";
     private const string MapUrl = "/api/v1/photo-libraries/photoprism/map";
+    private const string OtherMapUrl = "/api/v1/photo-libraries/immich/map";
     private const string RecheckUrl = "/api/v1/photo-libraries/photoprism/recheck";
     private const string ThumbnailUrl = "/api/v1/photo-libraries/photoprism/thumbnails/";
 
@@ -44,7 +45,9 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
     private const string Bbox = "21.5,45.125,24.25,46.75";
 
     private const string FakeToken = "not-a-real-token-0000";
+    private const string FakeApiKey = "not-a-real-key-0000";
     private const string LibraryAddress = "http://photo-library.invalid:2342";
+    private const string OtherLibraryAddress = "http://other-photo-library.invalid:2283";
     private const int ConfiguredCount = 5;
 
     private readonly string connectionString;
@@ -182,7 +185,8 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
     {
         var stub = new LibraryStub();
         stub.AnswersGeo(OnePhotograph);
-        using var open = Configured(stub, ("PhotoLibraries:Audience", nameof(PhotoLibraryAudience.SignedIn)));
+        using var open = Configured(
+            stub, other: null, ("PhotoLibraries:Audience", nameof(PhotoLibraryAudience.SignedIn)));
 
         var email = $"pl-open-{Guid.NewGuid():N}"[..20] + "@t.local";
         await AuthHelper.CreateUserAsync(open, GlobalRoles.Viewer, email);
@@ -433,9 +437,85 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         stub.PictureCalls.Count.ShouldBe(2);
     }
 
+    // ------------------------------------------------------------------------- two of them at once
+
+    /// <summary>
+    /// Two libraries, read one at a time, on their own routes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One route each rather than one merged route, and the assertion that carries it is that
+    /// asking one leaves the other's stub with nothing recorded. They are separate products with
+    /// separate databases, separate storage and separate uptime, and one of them answers a
+    /// rectangle live while the other is answered from a reading of its whole located library held
+    /// here — so a joined answer would be as slow as the slower and as broken as the more broken,
+    /// and comparing the two is what somebody running both is doing.
+    /// </para>
+    /// <para>
+    /// The last assertion only becomes possible with two of them configured: a credential minted
+    /// for one library's pictures must not open the other's. Adding a second product must not
+    /// silently widen the first one's tokens.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Each_library_is_read_on_its_own_and_asking_one_asks_nothing_of_the_other()
+    {
+        using var rectangleLibrary = new LibraryStub();
+        using var wholeLibrary = new LibraryStub();
+        rectangleLibrary.AnswersGeo(OnePhotograph);
+        wholeLibrary.AnswersMarkers(OnePosition);
+        using var both = Configured(rectangleLibrary, wholeLibrary);
+
+        var email = $"pl-two-{Guid.NewGuid():N}"[..20] + "@t.local";
+        await AuthHelper.CreateUserAsync(both, GlobalRoles.Admin, email);
+        using var caller = await AuthHelper.BearerClientAsync(both, email);
+        using var browser = both.CreateClient();
+
+        (await JsonAsync(caller, StatusUrl)).GetProperty("providers").GetArrayLength().ShouldBe(2);
+
+        var fromWhole = await JsonAsync(caller, $"{OtherMapUrl}?bbox={Bbox}");
+        fromWhole.GetProperty("source").GetString().ShouldBe("immich");
+        fromWhole.GetProperty("libraryName").GetString().ShouldBe("Immich");
+        fromWhole.GetProperty("features").GetArrayLength().ShouldBe(1);
+        fromWhole.GetProperty("features")[0].GetProperty("properties")
+            .GetProperty("reference").GetString().ShouldBe(InventedAsset);
+
+        // The whole located library in one request, with the credential on a header and nowhere
+        // near the address, and no rectangle anywhere in it — this library publishes no way to ask
+        // for one, and the route it has that takes one is not part of the contract it offers.
+        wholeLibrary.Only.Url.ShouldContain("/api/map/markers");
+        wholeLibrary.Only.Url.ShouldNotContain("bbox");
+        wholeLibrary.Only.ApiKey.ShouldBe(FakeApiKey);
+
+        // And the other library was not asked anything at all.
+        rectangleLibrary.Calls.ShouldBeEmpty();
+
+        var fromRectangle = await JsonAsync(caller, $"{MapUrl}?bbox={Bbox}");
+        fromRectangle.GetProperty("source").GetString().ShouldBe("photoprism");
+        fromRectangle.GetProperty("features").GetArrayLength().ShouldBe(1);
+        wholeLibrary.Calls.Count.ShouldBe(1);
+
+        var address = fromWhole.GetProperty("pictureUrlTemplate").GetString()!;
+        address.ShouldStartWith("/api/v1/photo-libraries/immich/thumbnails/{reference}");
+
+        var crossed = address
+            .Replace("{reference}", InventedAsset, StringComparison.Ordinal)
+            .Replace("{size}", "large", StringComparison.Ordinal)
+            .Replace("/immich/", "/photoprism/", StringComparison.Ordinal);
+
+        (await browser.GetAsync(crossed)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     // ------------------------------------------------------------------------------------ support
 
-    private SilexGisApiFactory Configured(LibraryStub stub, params (string Key, string Value)[] extra)
+    /// <summary>
+    /// A host pointed at one library, or at two when a test supplies a stub for the second. Left at
+    /// one by default on purpose: most of what is asserted here is about a single library, and a
+    /// second one configured throughout would make every provider count read as two for reasons
+    /// unrelated to what the case is about.
+    /// </summary>
+    private SilexGisApiFactory Configured(
+        LibraryStub stub, LibraryStub? other = null, params (string Key, string Value)[] extra)
     {
         var settings = new Dictionary<string, string?>
         {
@@ -444,6 +524,19 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
             ["PhotoLibraries:PhotoPrism:AccessToken"] = FakeToken,
             ["PhotoLibraries:PhotoPrism:MaxViewportCount"] = ConfiguredCount.ToString(),
         };
+
+        if (other is not null)
+        {
+            settings["PhotoLibraries:Immich:Enabled"] = "true";
+            settings["PhotoLibraries:Immich:BaseUrl"] = OtherLibraryAddress;
+            settings["PhotoLibraries:Immich:ApiKey"] = FakeApiKey;
+
+            // Every viewport re-reads the whole located library, so no case here depends on how
+            // long a reading another case took is held for. Zero is a real configured value with a
+            // real meaning rather than a switch that only exists for tests.
+            settings["PhotoLibraries:Immich:PositionCacheSeconds"] = "0";
+        }
+
         foreach (var (key, value) in extra)
         {
             settings[key] = value;
@@ -452,12 +545,30 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         return new SilexGisApiFactory(
             connectionString,
             settings,
-            services => services
-                .AddHttpClient(PhotoPrismClient.HttpClientName)
-                .ConfigurePrimaryHttpMessageHandler(() => stub));
+            services =>
+            {
+                services.AddHttpClient(PhotoPrismClient.HttpClientName)
+                    .ConfigurePrimaryHttpMessageHandler(() => stub);
+
+                if (other is not null)
+                {
+                    services.AddHttpClient(ImmichClient.HttpClientName)
+                        .ConfigurePrimaryHttpMessageHandler(() => other);
+                }
+            });
     }
 
     private static readonly byte[] InventedJpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46];
+
+    /// <summary>An invented identifier of the shape the other library names a photograph with.</summary>
+    private const string InventedAsset = "11111111-1111-4111-8111-111111111111";
+
+    /// <summary>
+    /// One invented position, in the shape the library that cannot be asked about a rectangle
+    /// answers with. Its place-name fields are sent by the real one and read by nothing here.
+    /// </summary>
+    private const string OnePosition =
+        $$"""[{"id":"{{InventedAsset}}","lat":45.5,"lon":22.5,"city":null,"state":null,"country":null}]""";
 
     /// <summary>One invented photograph, in the shape this product answers a rectangle with.</summary>
     private const string OnePhotograph = """
@@ -481,7 +592,7 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
     private static string? CodeOf(string problemBody) =>
         JsonDocument.Parse(problemBody).RootElement.GetProperty("code").GetString();
 
-    private sealed record LibraryCall(string Method, string Url, string? Authorization);
+    private sealed record LibraryCall(string Method, string Url, string? Authorization, string? ApiKey);
 
     /// <summary>
     /// Stands in for the library, recording everything that would have left this machine and
@@ -518,6 +629,9 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
 
         public void Answers(Func<LibraryCall, HttpResponseMessage> responder) => answer = responder;
 
+        /// <summary>Answers with a whole library's positions, the way the library that cannot be asked about a rectangle does.</summary>
+        public void AnswersMarkers(string json) => Answers(_ => Json(json));
+
         /// <summary>Answers the rectangle question, and carries the picture credential the way the real one does.</summary>
         public void AnswersGeo(string json) => Answers(_ =>
         {
@@ -548,7 +662,8 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
             var call = new LibraryCall(
                 request.Method.Method,
                 request.RequestUri!.ToString(),
-                request.Headers.Authorization?.ToString());
+                request.Headers.Authorization?.ToString(),
+                request.Headers.TryGetValues("x-api-key", out var keys) ? keys.FirstOrDefault() : null);
 
             lock (gate) { calls.Add(call); }
             return Task.FromResult(answer(call));

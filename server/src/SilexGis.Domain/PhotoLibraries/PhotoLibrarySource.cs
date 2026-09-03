@@ -8,6 +8,9 @@ namespace SilexGis.Domain.PhotoLibraries;
 /// </summary>
 public enum PhotoLibrarySource
 {
+    /// <summary>A neighbouring Immich instance.</summary>
+    Immich = 1,
+
     /// <summary>A neighbouring PhotoPrism instance.</summary>
     PhotoPrism = 2,
 }

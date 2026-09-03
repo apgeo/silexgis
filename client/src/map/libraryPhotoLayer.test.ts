@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type Map from 'ol/Map';
+import type { Icon, Style } from 'ol/style';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { libraryPhotoPalette } from './markerPalette.ts';
 
 const fetchLibraryPhotoFeatures = vi.fn();
 
@@ -65,6 +67,29 @@ describe('libraryPhotoLayer ids', () => {
   });
 });
 
+describe('libraryPhotoLayer styling', () => {
+  /** The pin one library is drawn with, read back out of the icon the layer styles its features with. */
+  const pin = (source: string): string => {
+    const style = createLibraryPhotoLayer(source).getStyle() as () => Style[];
+    return decodeURIComponent((style()[0].getImage() as Icon).getSrc() ?? '');
+  };
+
+  it('gives each library its own colour, because a photograph both of them hold draws two pins on one point', () => {
+    // Two libraries indexing one drive really do produce two pins on the same coordinate. That is
+    // not a defect to hide — it is the comparison somebody running both is looking for — so the
+    // pins have to tell themselves apart at a glance.
+    expect(pin('immich')).toContain(libraryPhotoPalette.immich);
+    expect(pin('photoprism')).toContain(libraryPhotoPalette.photoprism);
+    expect(pin('immich')).not.toBe(pin('photoprism'));
+  });
+
+  it('still draws a library this build has no colour for', () => {
+    // A pin in the wrong colour is a photograph somebody can click. No pin at all is a library
+    // that looks empty, which is the one thing this overlay must never say by accident.
+    expect(pin('a-library-added-later')).toContain(libraryPhotoPalette.photoprism);
+  });
+});
+
 describe('libraryPhotoLayer loading', () => {
   let detach: () => void;
   let moveEnd: () => void;
@@ -78,6 +103,7 @@ describe('libraryPhotoLayer loading', () => {
   });
 
   afterEach(() => {
+    setLibraryPhotosEnabled('immich', false);
     setLibraryPhotosEnabled('photoprism', false);
     detach();
     vi.useRealTimers();
@@ -126,6 +152,54 @@ describe('libraryPhotoLayer loading', () => {
     // The pins stay: they are the last positions the library gave, and clearing them would be the
     // claim that there is nothing here, which is a different and false answer.
     expect(layer.getSource()?.getFeatures()).toHaveLength(1);
+  });
+
+  it('reads each library on its own, so one that stops answering does not empty the other', async () => {
+    // The whole reason an installation runs two: they are separate products with separate
+    // databases, separate storage and separate uptime. One request each, never one for both — a
+    // joined request is as slow as the slower of them and as broken as the more broken one.
+    const immich = createLibraryPhotoLayer('immich');
+    const photoprism = createLibraryPhotoLayer('photoprism');
+
+    fetchLibraryPhotoFeatures.mockImplementation((source: string) =>
+      Promise.resolve(
+        collection({ source, libraryName: source === 'immich' ? 'Immich' : 'PhotoPrism' }),
+      ),
+    );
+
+    setLibraryPhotosEnabled('immich', true);
+    setLibraryPhotosEnabled('photoprism', true);
+    await vi.waitFor(() => {
+      expect(getLibraryPhotoLoadState('immich').reach).toBe('ok');
+      expect(getLibraryPhotoLoadState('photoprism').reach).toBe('ok');
+    });
+    expect(getLibraryPhotoLoadState('immich').libraryName).toBe('Immich');
+    expect(immich.getSource()?.getFeatures()).toHaveLength(1);
+    expect(photoprism.getSource()?.getFeatures()).toHaveLength(1);
+
+    // One of them stops answering. The other must not notice.
+    fetchLibraryPhotoFeatures.mockImplementation((source: string) =>
+      source === 'immich'
+        ? Promise.reject(new Error('the library did not answer'))
+        : Promise.resolve(collection()),
+    );
+    moveEnd();
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.waitFor(() => expect(getLibraryPhotoLoadState('immich').reach).toBe('unreachable'));
+    expect(getLibraryPhotoLoadState('photoprism').reach).toBe('ok');
+    expect(immich.getSource()?.getFeatures()).toHaveLength(1);
+    expect(photoprism.getSource()?.getFeatures()).toHaveLength(1);
+
+    // And switching one off is switching one off: the other keeps its pins and goes on being read.
+    setLibraryPhotosEnabled('immich', false);
+    expect(immich.getSource()?.getFeatures()).toHaveLength(0);
+    expect(photoprism.getSource()?.getFeatures()).toHaveLength(1);
+
+    fetchLibraryPhotoFeatures.mockClear();
+    moveEnd();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(fetchLibraryPhotoFeatures).toHaveBeenCalledTimes(1);
+    expect(fetchLibraryPhotoFeatures).toHaveBeenCalledWith('photoprism', expect.any(String));
   });
 
   it('asks the library nothing while its overlay is switched off', async () => {

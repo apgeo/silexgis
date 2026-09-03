@@ -127,10 +127,13 @@ public sealed record LibraryPhotoFeatureCollection(
 /// </remarks>
 internal static class PhotoLibrarySlugs
 {
+    public const string Immich = "immich";
+
     public const string PhotoPrism = "photoprism";
 
     public static string Slug(PhotoLibrarySource source) => source switch
     {
+        PhotoLibrarySource.Immich => Immich,
         PhotoLibrarySource.PhotoPrism => PhotoPrism,
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
@@ -142,6 +145,7 @@ internal static class PhotoLibrarySlugs
     /// </summary>
     public static string Name(PhotoLibrarySource source) => source switch
     {
+        PhotoLibrarySource.Immich => "Immich",
         PhotoLibrarySource.PhotoPrism => "PhotoPrism",
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
@@ -153,6 +157,12 @@ internal static class PhotoLibrarySlugs
     /// </summary>
     public static bool TryParse(string? slug, out PhotoLibrarySource source)
     {
+        if (string.Equals(slug, Immich, StringComparison.Ordinal))
+        {
+            source = PhotoLibrarySource.Immich;
+            return true;
+        }
+
         if (string.Equals(slug, PhotoPrism, StringComparison.Ordinal))
         {
             source = PhotoLibrarySource.PhotoPrism;
