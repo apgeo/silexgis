@@ -1665,6 +1665,7 @@
     "popOutScene3d": "Deschide scena 3D într-o fereastră separată",
     "viewer3dTitle": "Vizualizator 3D",
     "viewer3dEmpty": "Selectează o peșteră cu model 3D pentru a-l afișa aici.",
+    "viewer3dUnavailable": "Acest model topografic nu mai este disponibil sau nu aveți acces la el.",
     "scene3dTitle": "Scena 3D",
     "sections": {
       "details": "Detalii",
@@ -1780,6 +1781,9 @@
     "format": "Format",
     "surveyedAt": "Cartat la",
     "view": "Vezi în 3D",
+    "openBesideMap": "Deschide lângă hartă",
+    "openInWindow": "Deschide în altă fereastră",
+    "openOverlay": "Deschide peste toată fereastra",
     "deleteConfirm": "Ștergi acest model topo?",
     "empty": "Niciun model 3D încă",
     "uploadTitle": "Încarcă un model topo",

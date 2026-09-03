@@ -142,6 +142,7 @@ export const queryKeys = {
   caveSummary: (id: string) => ['caves', 'summary', id] as const,
   entrances: (caveId: string) => ['entrances', caveId] as const,
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
+  surveyModel: (id: string) => ['survey-model', id] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
@@ -946,6 +947,33 @@ export function surveyModelPollInterval(
 function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveyStatistics(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
+}
+
+/**
+ * One survey model, addressed by its own id rather than found in a cave's list.
+ *
+ * For the places that were sent to a particular model — a pane opened from the cave page, a
+ * pop-out window opened on one — and which have an id and no cave. Listing the cave's models and
+ * picking through them is not an alternative: the caller does not know which cave it belongs to,
+ * and the guess it would otherwise make is "the first readable one", which is how the pop-out
+ * viewer behaves and is exactly the behaviour a chosen model is meant to replace.
+ *
+ * Refetched on the same interval as the list, because the answer carries a signed URL with a ten
+ * minute life and a window left open on a model outlives it.
+ *
+ * A model whose cave's location is withheld from this reader answers **404**, not an empty result:
+ * a cave's models are its location, so their existence is withheld along with them. Callers must
+ * treat the failure as "there is nothing here for you" and not as an error worth reporting.
+ */
+export function useSurveyModel(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.surveyModel(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/survey-models/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    staleTime: 5 * 60_000,
+    refetchInterval: SURVEY_MODEL_URL_REFRESH_MS,
+    retry: false,
+  });
 }
 
 export function useSurveyModels(caveId: string | undefined) {

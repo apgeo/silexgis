@@ -9,11 +9,13 @@ import {
   useCave,
   useCaves,
   useEntrances,
+  useSurveyModel,
   useSurveyModels,
   type CaveListItem,
   type CaveListParams,
 } from '../../api/hooks.ts';
 import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
+import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import SelectionPanel from '../../components/map/SelectionPanel.tsx';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import Scene3DView from '../../components/scene3d/Scene3DView.tsx';
@@ -154,28 +156,42 @@ function Scene3dScenePanel() {
  */
 function Viewer3dPanel() {
   const { t } = useTranslation();
+  const [params] = useSearchParams();
+  // A model named in the address pins this window to it, the way ?document= pins the text
+  // pop-out, and for the same reason: the other pop-outs show whatever is selected, while a
+  // window opened on one particular model was opened to look at that one and must go on showing
+  // it while the reader clicks about elsewhere. Without a model named, this window keeps its old
+  // behaviour of following the selection.
+  const pinnedModelId = params.get('model');
   const [caveId, setCaveId] = useState<string | null>(null);
 
-  useEffect(
-    () =>
-      subscribe((event) => {
-        if (
-          event.kind === 'selection' &&
-          (event.selection?.kind === 'cave' || event.selection?.kind === 'entrance')
-        ) {
-          setCaveId(event.selection.caveId);
-        }
-      }),
-    [],
-  );
+  useEffect(() => {
+    if (pinnedModelId) {
+      return;
+    }
+    return subscribe((event) => {
+      if (
+        event.kind === 'selection' &&
+        (event.selection?.kind === 'cave' || event.selection?.kind === 'entrance')
+      ) {
+        setCaveId(event.selection.caveId);
+      }
+    });
+  }, [pinnedModelId]);
 
-  const { data: cave } = useCave(caveId ?? undefined);
-  const { data: models } = useSurveyModels(caveId ?? undefined);
-  const { data: entrances } = useEntrances(caveId ?? undefined);
+  // The pinned model is asked for by its own id; the cave it belongs to comes back with it, so
+  // the two paths converge on one cave id and everything below reads the same either way.
+  const { data: pinnedModel, isPending: pinnedPending } = useSurveyModel(pinnedModelId ?? undefined);
+  const effectiveCaveId = pinnedModelId ? (pinnedModel?.caveId ?? null) : caveId;
+
+  const { data: cave } = useCave(effectiveCaveId ?? undefined);
+  const { data: models } = useSurveyModels(pinnedModelId ? undefined : (caveId ?? undefined));
+  const { data: entrances } = useEntrances(effectiveCaveId ?? undefined);
   // A cave whose models are all wall meshes has nothing for the survey viewer, and handing it one
   // would produce a parse failure instead of the empty panel that is the truth. Which formats it
   // can read is decided in one place, because this window is not the only thing that asks.
-  const model = models?.find(surveyModelReadableByViewer);
+  const followedModel = models?.find(surveyModelReadableByViewer);
+  const model = pinnedModelId ? pinnedModel : followedModel;
 
   // Clicking an entrance label in the 3D scene pans the main window's map there.
   // Survey labels and DB entrance names only sometimes agree, so fall back to the
@@ -209,7 +225,7 @@ function Viewer3dPanel() {
         <div style={{ flex: 1, minHeight: 0 }}>
           <CaveViewPanel
             fileUrl={model.modelUrl}
-            fileName={`${model.name}.${model.format === 'lox' ? 'lox' : '3d'}`}
+            fileName={viewerFileName(model)}
             height="100%"
             onEntrancePick={onEntrancePick}
             // Named so this window can answer a link that points at a station of *this* model,
@@ -219,7 +235,17 @@ function Viewer3dPanel() {
         </div>
       ) : (
         <Flex align="center" justify="center" style={{ flex: 1 }}>
-          <Typography.Text type="secondary">{t('panel.viewer3dEmpty')}</Typography.Text>
+          {/* Two different silences. A window following the selection is waiting to be told which
+              cave, and "select a cave" is the instruction that ends the wait. A window opened ON a
+              model has already been told, so that instruction is not merely unhelpful, it implies
+              the reader did something wrong — when what happened is that the model is gone or is
+              one whose cave's location is withheld from them, which the server answers as a plain
+              404 because a cave's models are its location. */}
+          <Typography.Text type="secondary">
+            {pinnedModelId && !pinnedPending
+              ? t('panel.viewer3dUnavailable')
+              : t('panel.viewer3dEmpty')}
+          </Typography.Text>
         </Flex>
       )}
     </Flex>

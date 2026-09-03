@@ -4,11 +4,13 @@ import BackgroundLayerChooser from '@terrestris/react-geo/dist/BackgroundLayerCh
 import GeoLocationButton from '@terrestris/react-geo/dist/Button/GeoLocationButton/GeoLocationButton';
 import ScaleCombo from '@terrestris/react-geo/dist/Field/ScaleCombo/ScaleCombo';
 import MapContext from '@terrestris/react-util/dist/Context/MapContext/MapContext';
-import { App, Button, Drawer, Spin, Tabs, Tooltip } from 'antd';
+import { App, Button, Drawer, Flex, Spin, Tabs, Tooltip, Typography } from 'antd';
 import {
   AimOutlined,
   BorderVerticleOutlined,
+  CloseOutlined,
   CodeSandboxOutlined,
+  ExpandOutlined,
   ProfileOutlined,
   ExportOutlined,
   EyeInvisibleOutlined,
@@ -26,7 +28,18 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { useSearchParams } from 'react-router-dom';
-import { useCan, useFeatureTypes, useGeofiles, useMapConfig, useMapLayers, useMapViews, useRasterMaps, useWorkAreas } from '../api/hooks.ts';
+import {
+  useCan,
+  useFeatureTypes,
+  useGeofiles,
+  useMapConfig,
+  useMapLayers,
+  useMapViews,
+  useRasterMaps,
+  useSurveyModel,
+  useWorkAreas,
+  type SurveyModelInfo,
+} from '../api/hooks.ts';
 import { transformExtent } from 'ol/proj';
 import { extentOf } from '../workareas/tree.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
@@ -76,6 +89,8 @@ import { attachPhotoPopup } from '../map/photoPopup.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { attachViewSync2d, type ViewSync2dHandle } from '../map/viewSync2d.ts';
+import { openModelWindow } from '../caveview/openModelWindow.ts';
+import { viewerFileName } from '../caveview/viewerFileName.ts';
 import { hasScene3dHash } from '../scene3d/urlHash3d.ts';
 import { surfaceFeaturesChanged } from '../workspace/surfaceFeatureRefresh.ts';
 import { applyViewCamera3d, setActiveViewCamera } from '../workspace/viewCamera.ts';
@@ -109,6 +124,12 @@ import './MapPage.css';
 // module and its runtime assets are about a megabyte, and a session that never opens the pane must
 // not pay for it.
 const Scene3DView = lazy(() => import('../components/scene3d/Scene3DView.tsx'));
+// Loaded on demand for the same reason as the scene above: it is a survey-viewer bundle that
+// most visits to the map never open.
+const CaveViewPanel = lazy(() => import('../components/caveview/CaveViewPanel.tsx'));
+const SurveyModelViewerModal = lazy(
+  () => import('../components/caveview/SurveyModelViewerModal.tsx'),
+);
 
 /** Map workspace v1: fixed resizable panes on desktop, drawers on phones. */
 export default function MapPage() {
@@ -128,6 +149,12 @@ export default function MapPage() {
   // a second renderer with a graphics context of its own, and most visits to the map do not want
   // one. Opening it is what makes the two-way sync visible — the point of having both on screen.
   const [scene3dOpen, setScene3dOpen] = useState(false);
+  // Which survey model is open beside the map, if any. Held as an id rather than as the model,
+  // so the pane keeps asking for it: the answer carries a signed URL with a ten-minute life, and
+  // a pane left open outlives it.
+  const [caveViewModelId, setCaveViewModelId] = useState<string | null>(null);
+  /** The same model over the whole window, escalated from the pane. */
+  const [caveViewOverlay, setCaveViewOverlay] = useState<SurveyModelInfo | null>(null);
   const syncRef = useRef<ViewSync2dHandle | null>(null);
   const { data: layers } = useMapLayers();
   const { data: mapConfig } = useMapConfig();
@@ -412,6 +439,7 @@ export default function MapPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedViewId = searchParams.get('view');
   const requestedAreaId = searchParams.get('area');
+  const requestedModelId = searchParams.get('model');
 
   // A view picked elsewhere (?view=<id>, e.g. from the dashboard) is applied on arrival, then
   // the param is consumed. It is a one-shot instruction, not a description of the URL: the
@@ -436,6 +464,30 @@ export default function MapPage() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applyView is stable for this use
   }, [savedViews, requestedViewId, setSearchParams]);
+
+  // A survey model picked elsewhere (?model=<id>, from a cave's model list) opens the survey
+  // viewer beside the map. Consumed on arrival like ?view= and ?area= above, and for the same
+  // reason — it is an instruction, not a description of the URL — but unlike those two it is
+  // remembered here afterwards, because the pane it opens is a place the reader stays rather than
+  // a camera move that finishes.
+  useEffect(() => {
+    if (!requestedModelId) {
+      return;
+    }
+    setCaveViewModelId(requestedModelId);
+    setSearchParams(
+      (params) => {
+        params.delete('model');
+        return params;
+      },
+      { replace: true },
+    );
+  }, [requestedModelId, setSearchParams]);
+
+  // A model the reader may not see answers 404 rather than an empty result — a cave's models are
+  // its location — so there is nothing to report and nothing to draw, and the pane simply does not
+  // open. The query does not retry, so a withheld model costs one request.
+  const { data: caveViewModel } = useSurveyModel(caveViewModelId ?? undefined);
 
   // An area picked elsewhere (?area=<id>, from the work-area overview or the dashboard board) is
   // framed on arrival, then the param is consumed — a one-shot instruction, exactly like ?view=
@@ -1052,6 +1104,63 @@ export default function MapPage() {
           </Suspense>
         </Panel>
       )}
+      {/* A cave's survey model beside the map, opened from the cave's model list. Rendered only
+          while it holds a model, for the same reason the 3D scene above is: a survey viewer keeps
+          a drawing context, and a collapsed pane would keep one alive at zero width. */}
+      {!isMobile && caveViewModel && <Separator className="map-workspace-handle" />}
+      {!isMobile && caveViewModel && (
+        <Panel defaultSize="30%" minSize="20%" className="map-workspace-panel">
+          <div className="map-caveview-pane">
+            <Flex align="center" justify="space-between" className="map-caveview-header" gap={8}>
+              <Typography.Text ellipsis strong title={caveViewModel.name}>
+                {caveViewModel.name}
+              </Typography.Text>
+              <Flex gap={4}>
+                <Tooltip title={t('surveyModels.openOverlay')}>
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<ExpandOutlined />}
+                    aria-label={t('surveyModels.openOverlay')}
+                    onClick={() => setCaveViewOverlay(caveViewModel)}
+                    data-testid="map-caveview-overlay"
+                  />
+                </Tooltip>
+                <Tooltip title={t('surveyModels.openInWindow')}>
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<ExportOutlined />}
+                    aria-label={t('surveyModels.openInWindow')}
+                    onClick={() => openModelWindow(caveViewModel.id)}
+                    data-testid="map-caveview-popout"
+                  />
+                </Tooltip>
+                <Tooltip title={t('common.close')}>
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<CloseOutlined />}
+                    aria-label={t('common.close')}
+                    onClick={() => setCaveViewModelId(null)}
+                    data-testid="map-caveview-close"
+                  />
+                </Tooltip>
+              </Flex>
+            </Flex>
+            <div className="map-caveview-body">
+              <Suspense fallback={<Spin style={{ margin: 48 }} />}>
+                <CaveViewPanel
+                  fileUrl={caveViewModel.modelUrl}
+                  fileName={viewerFileName(caveViewModel)}
+                  height="100%"
+                  surveyModelId={caveViewModel.id}
+                />
+              </Suspense>
+            </div>
+          </div>
+        </Panel>
+      )}
       {!isMobile && (
         <Separator
           className="map-workspace-handle"
@@ -1095,6 +1204,11 @@ export default function MapPage() {
         </Panel>
       )}
     </Group>
+    {/* The pane's model over the whole window. Mounted here rather than reached for on the cave
+        page, because a reader who arrived at the map from a link has no cave page open. */}
+    <Suspense fallback={null}>
+      <SurveyModelViewerModal model={caveViewOverlay} onClose={() => setCaveViewOverlay(null)} />
+    </Suspense>
     {!isMobile && !rightPinned && (
       <Drawer
         placement="right"

@@ -1665,6 +1665,7 @@
     "popOutScene3d": "Open the 3D scene in its own window",
     "viewer3dTitle": "3D viewer",
     "viewer3dEmpty": "Select a cave with a 3D model to display it here.",
+    "viewer3dUnavailable": "This survey model is no longer available, or you may not see it.",
     "scene3dTitle": "3D scene",
     "sections": {
       "details": "Details",
@@ -1780,6 +1781,9 @@
     "format": "Format",
     "surveyedAt": "Surveyed",
     "view": "View in 3D",
+    "openBesideMap": "Open beside the map",
+    "openInWindow": "Open in another window",
+    "openOverlay": "Open over the whole window",
     "deleteConfirm": "Delete this survey model?",
     "empty": "No 3D models yet",
     "uploadTitle": "Upload a survey model",

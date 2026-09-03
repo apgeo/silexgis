@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, EyeOutlined, UploadOutlined } from '@ant-design/icons';
-import { App, Button, Card, Flex, Modal, Popconfirm, Table, Tag, Tooltip, Typography } from 'antd';
+import {
+  DeleteOutlined,
+  ExportOutlined,
+  EyeOutlined,
+  PictureOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
+import { App, Button, Card, Flex, Popconfirm, Table, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import {
   surveyModelReadableByViewer,
   surveyModelUnsettled,
@@ -10,13 +17,9 @@ import {
   useSurveyModels,
   type SurveyModelInfo,
 } from '../../api/hooks.ts';
-import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
+import SurveyModelViewerModal from '../../components/caveview/SurveyModelViewerModal.tsx';
+import { openModelWindow } from '../../caveview/openModelWindow.ts';
 import SurveyModelUploadModal from './SurveyModelUploadModal.tsx';
-
-/** File name handed to the survey viewer — its extension selects the parser. */
-function viewerFileName(model: SurveyModelInfo): string {
-  return `${model.name}.${model.format === 'lox' ? 'lox' : '3d'}`;
-}
 
 /**
  * What each format is called in the list. The two line-plot names are product names and read the
@@ -41,6 +44,7 @@ const FORMAT_LABEL_KEYS: Record<SurveyModelInfo['format'], string> = {
 export default function SurveyModelSection({ caveId, canEdit }: { caveId: string; canEdit: boolean }) {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  const navigate = useNavigate();
   const { data: models } = useSurveyModels(caveId);
   const remove = useDeleteSurveyModel();
   const [viewing, setViewing] = useState<SurveyModelInfo | null>(null);
@@ -129,13 +133,36 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           },
           {
             key: 'actions',
-            width: 140,
+            width: 230,
             render: (_, model) => (
               <Flex gap={4}>
                 {surveyModelReadableByViewer(model) && (
-                  <Button size="small" icon={<EyeOutlined />} onClick={() => setViewing(model)}>
-                    {t('surveyModels.view')}
-                  </Button>
+                  <>
+                    <Button size="small" icon={<EyeOutlined />} onClick={() => setViewing(model)}>
+                      {t('surveyModels.view')}
+                    </Button>
+                    {/* The same model in the two other places it can be looked at. Behind the same
+                        readability check as the overlay: a format the viewer cannot parse is no
+                        more openable beside the map than it is over this page. */}
+                    <Tooltip title={t('surveyModels.openBesideMap')}>
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<PictureOutlined />}
+                        aria-label={t('surveyModels.openBesideMap')}
+                        onClick={() => navigate(`/map?model=${model.id}`)}
+                      />
+                    </Tooltip>
+                    <Tooltip title={t('surveyModels.openInWindow')}>
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<ExportOutlined />}
+                        aria-label={t('surveyModels.openInWindow')}
+                        onClick={() => openModelWindow(model.id)}
+                      />
+                    </Tooltip>
+                  </>
                 )}
                 {canEdit && (
                   <Popconfirm
@@ -165,23 +192,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         />
       )}
 
-      <Modal
-        title={viewing?.name}
-        open={viewing !== null}
-        onCancel={() => setViewing(null)}
-        footer={null}
-        width="min(1200px, 95vw)"
-        destroyOnHidden
-      >
-        {viewing && (
-          <CaveViewPanel
-            fileUrl={viewing.modelUrl}
-            fileName={viewerFileName(viewing)}
-            height="70vh"
-            surveyModelId={viewing.id}
-          />
-        )}
-      </Modal>
+      <SurveyModelViewerModal model={viewing} onClose={() => setViewing(null)} />
     </Card>
   );
 }

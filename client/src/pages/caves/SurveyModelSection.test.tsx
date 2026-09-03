@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const navigate = vi.fn();
+vi.mock('react-router-dom', async () => ({
+  ...(await vi.importActual<typeof import('react-router-dom')>('react-router-dom')),
+  useNavigate: () => navigate,
+}));
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import { surveyModelPollInterval } from '../../api/hooks.ts';
@@ -78,11 +85,17 @@ vi.mock('../../api/hooks.ts', async () => {
 
 const { default: SurveyModelSection } = await import('./SurveyModelSection.tsx');
 
+/** Where the two new buttons send the reader, recorded rather than followed. */
+let opened: Parameters<typeof window.open>[] = [];
+
+// The section routes to the map when a model is opened beside it, so it needs a router around it.
 function show(canEdit = true) {
   return render(
-    <App>
-      <SurveyModelSection caveId="c1" canEdit={canEdit} />
-    </App>,
+    <MemoryRouter>
+      <App>
+        <SurveyModelSection caveId="c1" canEdit={canEdit} />
+      </App>
+    </MemoryRouter>,
   );
 }
 
@@ -104,6 +117,14 @@ beforeEach(() => {
   deleteMutate.mockReset().mockResolvedValue(undefined);
   models = [];
   summary = summaryWith(true);
+  navigate.mockClear();
+  opened = [];
+  // Recorded rather than opened: jsdom's window.open would otherwise be a no-op that swallows
+  // both the address and the window name, and the window name is half of what is asserted.
+  vi.spyOn(window, 'open').mockImplementation((...args) => {
+    opened.push(args);
+    return null;
+  });
 });
 
 afterEach(cleanup);
@@ -148,6 +169,54 @@ describe('the survey model list', () => {
     // One view button for two rows: the line plot's.
     const viewButtons = await screen.findAllByRole('button', { name: /View in 3D/ });
     expect(viewButtons).toHaveLength(1);
+  });
+
+  it('offers the same model in all three places, and only for a format the viewer reads', async () => {
+    // A mesh is not openable in the survey viewer anywhere, so none of the three ways of opening
+    // one may appear against it. Counting rather than asserting presence: the failure worth
+    // catching is a new button that forgot the format gate the "View in 3D" one has.
+    models = [model({ id: 'mesh' }), model({ id: 'plot', format: 'lox', name: 'Grind plot' })];
+    show();
+    await screen.findByText('Grind plot');
+
+    // Queried by label rather than by role-with-name: computing an accessible name for every
+    // button in the tree is slow enough in this environment that three such queries in one case
+    // timed out under a full-suite run while passing on its own.
+    expect(screen.getAllByLabelText('Open beside the map')).toHaveLength(1);
+    expect(screen.getAllByLabelText('Open in another window')).toHaveLength(1);
+  });
+
+  it('sends the map the model that was asked for, not the cave', async () => {
+    models = [model({ id: 'plot', format: 'lox', name: 'Grind plot' })];
+    show();
+
+    await screen.findByText('Grind plot');
+    fireEvent.click(screen.getByLabelText('Open beside the map'));
+
+    // The id travels, because the map has no way to guess which of a cave's models was meant —
+    // and guessing "the first readable one" is exactly the behaviour this button exists to fix.
+    expect(navigate).toHaveBeenCalledWith('/map?model=plot');
+  });
+
+  it('opens a window per model rather than reusing one', async () => {
+    // A shared window name would make asking for a second model replace the first, which is right
+    // for the map's "show whatever is selected" pop-out and wrong for a model chosen by name.
+    models = [
+      model({ id: 'plot', format: 'lox', name: 'Grind plot' }),
+      model({ id: 'other', format: 'lox', name: 'Other plot' }),
+    ];
+    show();
+
+    await screen.findByText('Grind plot');
+    const buttons = screen.getAllByLabelText('Open in another window');
+    fireEvent.click(buttons[0]);
+    fireEvent.click(buttons[1]);
+
+    expect(opened.map((call) => call[1])).toEqual([
+      'silexgis-viewer3d-plot',
+      'silexgis-viewer3d-other',
+    ]);
+    expect(opened[0][0]).toBe('/panel/viewer3d?model=plot');
   });
 
   it('stops asking once nothing is left to wait for', () => {
@@ -219,9 +288,11 @@ describe('uploading a survey model', () => {
 
     summary = summaryWith(true);
     view.rerender(
-      <App>
-        <SurveyModelSection caveId="c1" canEdit />
-      </App>,
+      <MemoryRouter>
+        <App>
+          <SurveyModelSection caveId="c1" canEdit />
+        </App>
+      </MemoryRouter>,
     );
 
     await waitFor(() =>
