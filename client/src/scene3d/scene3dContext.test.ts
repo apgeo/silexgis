@@ -721,7 +721,46 @@ describe('the box a loader should ask about', () => {
     session.release();
   });
 
-  it('falls back to the ground beneath the camera when the screen centre is sky', async () => {
+  it('looks down the screen for the ground when the middle of it is sky', async () => {
+    // The ordinary case, not an exotic one: the scene's own cardinal presets pitch the camera ten
+    // degrees below horizontal, so the centre ray leaves over the horizon and everything the
+    // viewer is looking at is in the lower half of the screen.
+    const session = acquire();
+    const { scene } = engine.engineState.widgets[0];
+    session.engine.setCamera({
+      longitude: 25.3,
+      latitude: 45.7,
+      height: 4000,
+      heading: 0,
+      pitch: -10,
+      roll: 0,
+    });
+    // A screen with a horizon across it: sky above the middle, and ground below it running from
+    // far away just under the horizon to near the camera at the bottom edge. The height is read
+    // off the widget's own canvas rather than assumed — an assumed one that disagrees with it puts
+    // the fake horizon in the wrong place, and then the centre ray hits ground, the fallback never
+    // runs, and this test passes whether or not the code under it works.
+    const { clientHeight: screenHeight } = engine.engineState.widgets[0].canvas;
+    scene.pickedPositionAt = (_x, y) =>
+      y <= screenHeight / 2
+        ? undefined
+        : {
+            longitudeDegrees: 25.3,
+            latitudeDegrees: 46.0 - (0.2 * (y - screenHeight / 2)) / (screenHeight / 2),
+            height: 900,
+          };
+
+    const [west, south, east, north] = session.engine.getVisibleBounds()!;
+
+    // Ahead of the camera — which sits at 45.7 — rather than on top of it. Before this, the box
+    // was centred on the camera's own ground: real, but behind the viewer, so the terrain on
+    // screen was never asked for however much of it was showing.
+    expect((south + north) / 2).toBeGreaterThan(45.75);
+    expect((west + east) / 2).toBeCloseTo(25.3, 6);
+    session.release();
+  });
+
+  it('falls back to the ground beneath the camera when there is no ground on screen at all', async () => {
     const session = acquire();
     session.engine.setCamera({
       longitude: 25.3,
