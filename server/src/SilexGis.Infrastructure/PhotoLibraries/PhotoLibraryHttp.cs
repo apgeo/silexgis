@@ -113,15 +113,16 @@ public static class PhotoLibraryHttp
     /// </summary>
     /// <remarks>
     /// <para>
-    /// One of these libraries answers a failed picture request with a placeholder drawing carrying
-    /// HTTP 200 or 403 rather than with an error, so the content type is the signal and the status
-    /// code is not. Two of its placeholder cases are known and are not dangerous: a rejected
-    /// credential, which arrives as 403 and is decided before any file on the far side is touched,
-    /// and a rendering size the instance does not serve, which is a defect on this side. Everything
-    /// else that is not a picture is treated as the dangerous case — because a request that failed
-    /// while resolving a file on disk is the case that marks the file missing and deletes the
-    /// photograph from the far side's index, and the documented behaviour does not let it be told
-    /// apart from the rest.
+    /// One of these libraries answers a failed picture request with a placeholder drawing rather
+    /// than with an error, so the content type is the signal and the status code is not. The status
+    /// code is what splits the placeholder in two, and the split is made the safe way round. A
+    /// placeholder carrying a refusal is a request this installation should not have made — a
+    /// rejected credential, or a rendering the instance does not serve — and is decided before any
+    /// file on the far side is touched. <b>A placeholder carrying success is the dangerous one</b>:
+    /// that is what this product answers when it went looking for a file on disk and could not find
+    /// it, which is the act that marks the file missing and deletes the photograph from its own
+    /// index. Anything else that is not a picture is treated as dangerous too, because nothing in
+    /// the answer lets it be told apart from that case.
     /// </para>
     /// <para>
     /// The verdict is returned rather than acted on here: closing the picture path is sticky
@@ -143,8 +144,10 @@ public static class PhotoLibraryHttp
         var mediaType = response.Content.Headers.ContentType?.MediaType;
         var placeholder = string.Equals(mediaType, "image/svg+xml", StringComparison.OrdinalIgnoreCase);
 
-        if (placeholder && response.IsSuccessStatusCode)
+        if (placeholder && !response.IsSuccessStatusCode)
         {
+            // Refused, and drawn rather than said. Nothing on the far side was looked for on disk,
+            // so this one is a defect on this side and does not close the byte path.
             return PictureVerdict.WrongRendering;
         }
 

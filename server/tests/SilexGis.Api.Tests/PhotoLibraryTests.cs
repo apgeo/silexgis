@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Net;
+using System.Net.Http.Headers;
 using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Infrastructure.PhotoLibraries;
@@ -92,4 +94,76 @@ public sealed class PhotoLibraryTests
     [Fact]
     public void A_reference_longer_than_any_library_mints_is_refused() =>
         PhotoLibraryHttp.IsSafeReference(new string('a', 129)).ShouldBeFalse();
+
+    /// <summary>
+    /// The one that decides whether a library keeps its photographs. This product draws a
+    /// placeholder instead of failing when it went looking for a file on disk and did not find it,
+    /// and that same act marks the file missing and deletes the photograph from its own index — so
+    /// a drawing carrying a successful status is the dangerous answer, not a harmless one, and
+    /// reading it as harmless is how a map viewport becomes a purge.
+    /// </summary>
+    [Fact]
+    public void A_drawing_where_a_photograph_was_expected_stops_the_picture_path()
+    {
+        using var answer = Answered(HttpStatusCode.OK, "image/svg+xml");
+
+        PhotoLibraryHttp.ClassifyPicture(answer).ShouldBe(PictureVerdict.NotAPicture);
+    }
+
+    /// <summary>
+    /// The same drawing carrying a refusal is a different sentence: the library declined the
+    /// request before looking for anything on disk, so nothing of its is at risk and the picture
+    /// path stays open.
+    /// </summary>
+    [Fact]
+    public void A_drawing_carrying_a_refusal_is_a_defect_on_this_side_and_not_a_danger()
+    {
+        using var answer = Answered(HttpStatusCode.BadRequest, "image/svg+xml");
+
+        PhotoLibraryHttp.ClassifyPicture(answer).ShouldBe(PictureVerdict.WrongRendering);
+    }
+
+    [Fact]
+    public void A_picture_is_recognised_as_one()
+    {
+        using var answer = Answered(HttpStatusCode.OK, "image/jpeg");
+
+        PhotoLibraryHttp.ClassifyPicture(answer).ShouldBe(PictureVerdict.Picture);
+    }
+
+    /// <summary>
+    /// A rejected credential is told apart from a lost disk, because the two send whoever has to
+    /// act on them to completely different places.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public void A_refused_credential_is_not_read_as_a_lost_disk(HttpStatusCode status)
+    {
+        using var answer = Answered(status, "image/svg+xml");
+
+        PhotoLibraryHttp.ClassifyPicture(answer).ShouldBe(PictureVerdict.Unauthorized);
+    }
+
+    /// <summary>
+    /// A page of markup where a picture was expected is a library in trouble, and is treated as the
+    /// dangerous case: nothing in the answer says which kind of trouble, and only one of the kinds
+    /// is recoverable.
+    /// </summary>
+    [Fact]
+    public void A_page_of_markup_where_a_picture_was_expected_stops_the_picture_path()
+    {
+        using var answer = Answered(HttpStatusCode.OK, "text/html");
+
+        PhotoLibraryHttp.ClassifyPicture(answer).ShouldBe(PictureVerdict.NotAPicture);
+    }
+
+    private static HttpResponseMessage Answered(HttpStatusCode status, string mediaType) =>
+        new(status)
+        {
+            Content = new ByteArrayContent([0x00])
+            {
+                Headers = { ContentType = new MediaTypeHeaderValue(mediaType) },
+            },
+        };
 }

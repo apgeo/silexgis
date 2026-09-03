@@ -38,6 +38,7 @@ using SilexGis.Api.Features.MapViews;
 using SilexGis.Api.Features.FeatureSets;
 using SilexGis.Api.Features.Permissions;
 using SilexGis.Api.Features.Photos;
+using SilexGis.Api.Features.PhotoLibraries;
 using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
 using SilexGis.Api.Features.Notifications;
@@ -135,6 +136,9 @@ try
         .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
     builder.Services.AddSingleton<IFileAccessTokenService, FileAccessTokenService>();
     builder.Services.AddSingleton<IUnsubscribeTokens, UnsubscribeTokenService>();
+    // Its own protection purpose, so a token minted for a picture held in a neighbouring photo
+    // library can never be redeemed against this application's own stored files.
+    builder.Services.AddSingleton<ILibraryPhotoTokenService, LibraryPhotoTokenService>();
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<SilexGisDbContext>("database");
     builder.Services.AddOptions<AboutOptions>()
@@ -289,6 +293,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapPhotoImportEndpoints();
     api.MapImportBatchEndpoints();
     api.MapCatalogueEndpoints();
+    api.MapPhotoLibraryEndpoints();
     api.MapJobEndpoints();
     api.MapExportEndpoints();
     api.MapFileEndpoints();

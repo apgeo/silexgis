@@ -49,7 +49,7 @@ export const groups = {
     'AlbumAndPublicGalleryTests', 'PhotoBytesProtectionTests', 'PhotoGalleryTests',
     'PhotoImportTests',
   ],
-  photoLibraries: ['PhotoLibraryTests'],
+  photoLibraries: ['PhotoLibraryEndpointTests', 'PhotoLibraryTests'],
   checklists: ['ChecklistAccessTests', 'ChecklistAuthoringTests', 'TripChecklistTickTests'],
   notifications: [
     'AccountEmailTests', 'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests',
@@ -304,7 +304,8 @@ export const crossCutting = {
     'ExpeditionSharingCascadeTests', 'ExpeditionTests', 'ExpeditionTimelineTests',
     'FeatureHierarchyTests', 'FeatureLinkTests', 'FeatureShareTests', 'FeatureTests',
     'FileAttachmentTests', 'GeofileTests', 'MapViewTests', 'NotificationHealthTests',
-    'PhotoImportTests', 'ResLinkApiTests', 'SeededGroupUpgradeTests', 'StagedImportTests',
+    'PhotoImportTests', 'PhotoLibraryEndpointTests', 'PhotoLibraryTests', 'ResLinkApiTests',
+    'SeededGroupUpgradeTests', 'StagedImportTests',
     'SurveyModelTests', 'SurveySourceTests', 'SyncSetTests', 'TermRuleSetTests',
     'TerrainActivationTests', 'TerrainBuildApiTests', 'TerrainBuildPipelineTests',
     'TerrainSourceTests', 'TextExtractionPipelineTests', 'TripAndTagTests',
