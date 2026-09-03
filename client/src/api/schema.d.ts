@@ -6874,6 +6874,192 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-imports/{fileId}/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's review of this spreadsheet, resumed where they left it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportSessionDto"];
+                    };
+                };
+            };
+        };
+        /** Saves the review as the reviewer works; nothing is created. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripImportSessionWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportSessionDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-imports/{fileId}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The sheet's header, and which field each column was taken for. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportColumnsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-imports/{fileId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reads the sheet under the current choices and answers a page of it. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripImportPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportPreviewDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-imports/{fileId}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records the chosen rows as trips, as one batch that reverts as a unit. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripImportCommitRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportCommitResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files": {
         parameters: {
             query?: never;
@@ -17388,6 +17574,9 @@ export interface components {
             ruleId: null | string;
             ruleName: null | string;
             action: components["schemas"]["ImportDecisionAction"];
+            /** Format: uuid */
+            tripLogId: null | string;
+            tripTitle: null | string;
         };
         /** @enum {unknown} */
         ImportBatchMode: "reviewed" | "autoCreated";
@@ -17552,7 +17741,7 @@ export interface components {
             photoClusterRadiusMeters: number;
         };
         /** @enum {unknown} */
-        ImportSource: "vectorFile" | "photos" | "deviceSync" | "externalCatalogue";
+        ImportSource: "vectorFile" | "photos" | "deviceSync" | "externalCatalogue" | "tripCsv";
         /** @enum {unknown} */
         ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
         /** @enum {unknown} */
@@ -19581,9 +19770,243 @@ export interface components {
             /** Format: int32 */
             total: number;
         };
+        /** @enum {unknown} */
+        TripCsvDateOrder: "dayFirst" | "monthFirst";
+        /** @enum {unknown} */
+        TripCsvDateOrderSource: "stated" | "file" | "conflict";
+        /** @enum {unknown} */
+        TripCsvDiagnosticCode: "mappedColumnMissing" | "mappedColumnTaken" | "unmappedColumn" | "raggedRow" | "blankRow" | "requiredFieldEmpty" | "dateUnreadable" | "dateOutOfRange" | "dateTwoDigitYear" | "dateAmbiguous" | "dateOrderConflict" | "valueDropped" | "duplicateSourceId" | "tooManyColumns" | "noHeader" | "unterminatedQuote";
+        /** @enum {unknown} */
+        TripCsvField: "sourceId" | "startDate" | "endDate" | "title" | "country" | "massif" | "subArea" | "caves" | "proposers" | "participants" | "details" | "details2" | "tripType" | "errors";
+        /** @enum {unknown} */
+        TripCsvSeverity: "warning" | "error";
         TripExpeditionRequest: {
             /** Format: uuid */
             expeditionId?: null | string;
+        };
+        TripImportCandidate: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        TripImportColumnsDto: {
+            header: string[];
+            resolvedColumns: {
+                [key: string]: string;
+            };
+            unmappedColumns: string[];
+            problems: components["schemas"]["TripImportProblemDto"][];
+        };
+        TripImportCommitRequest: {
+            options: components["schemas"]["TripImportOptions"];
+            lines: number[];
+            decisions: null | {
+                [key: string]: components["schemas"]["TripImportDecision"];
+            };
+        };
+        TripImportCommitResultDto: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            createdTripCount: number;
+            /** Format: int32 */
+            createdFeatureCount: number;
+            /** Format: int32 */
+            skippedCount: number;
+            failures: components["schemas"]["TripImportFailureDto"][];
+        };
+        TripImportDecision: {
+            action?: null | components["schemas"]["TripImportRowAction"];
+        };
+        TripImportFailureDto: {
+            /** Format: int32 */
+            line: number;
+            title: null | string;
+            code: string;
+            reason: string;
+        };
+        TripImportFeatureMatch: {
+            source: string;
+            state: components["schemas"]["TripImportMatchState"];
+            /** Format: uuid */
+            featureId: null | string;
+            name: null | string;
+            candidates: components["schemas"]["TripImportCandidate"][];
+            willCreate: boolean;
+        };
+        /** @enum {unknown} */
+        TripImportMatchState: "matched" | "unmatched" | "ambiguous";
+        TripImportOptions: {
+            delimiter?: string;
+            multiValueSeparators?: string;
+            slashSeparatedFields?: components["schemas"]["TripCsvField"][];
+            dateOrder?: components["schemas"]["TripCsvDateOrder"];
+            columns?: {
+                [key: string]: string;
+            };
+            visibility?: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            createMissingCaves?: boolean;
+            createMissingAreas?: boolean;
+            createMissingCavers?: boolean;
+            createMissingTripTypes?: boolean;
+            tripTypeChoices?: {
+                [key: string]: number;
+            };
+            tripTypeNames?: {
+                [key: string]: string;
+            };
+            caverChoices?: {
+                [key: string]: string;
+            };
+            featureChoices?: {
+                [key: string]: string;
+            };
+        };
+        TripImportPersonMatch: {
+            source: string;
+            state: components["schemas"]["TripImportMatchState"];
+            /** Format: uuid */
+            caverId: null | string;
+            name: null | string;
+            candidates: components["schemas"]["TripImportCandidate"][];
+            mayCreate: boolean;
+            willCreate: boolean;
+        };
+        TripImportPreviewDto: {
+            items: components["schemas"]["TripImportRowDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+            filteredLines: number[];
+            selectableLines: number[];
+            truncated: boolean;
+            /** Format: int32 */
+            rowCount: number;
+            /** Format: int32 */
+            readableRowCount: number;
+            /** Format: int32 */
+            failedRowCount: number;
+            /** Format: int32 */
+            skippedRowCount: number;
+            header: string[];
+            resolvedColumns: {
+                [key: string]: string;
+            };
+            unmappedColumns: string[];
+            dateOrder: components["schemas"]["TripCsvDateOrder"];
+            dateOrderSource: components["schemas"]["TripCsvDateOrderSource"];
+            /** Format: int32 */
+            ambiguousDateRows: number;
+            problems: components["schemas"]["TripImportProblemDto"][];
+            proposals: components["schemas"]["TripImportProposalsDto"];
+        };
+        TripImportPreviewRequest: {
+            options: components["schemas"]["TripImportOptions"];
+            /** Format: int32 */
+            page: null | number;
+            /** Format: int32 */
+            pageSize: null | number;
+            search: null | string;
+        };
+        TripImportProblemDto: {
+            /** Format: int32 */
+            line: number;
+            severity: components["schemas"]["TripCsvSeverity"];
+            code: components["schemas"]["TripCsvDiagnosticCode"];
+            field: null | components["schemas"]["TripCsvField"];
+            column: null | string;
+            detail: null | string;
+        };
+        TripImportProposalsDto: {
+            tripTypes: components["schemas"]["TripImportTermMatch"][];
+            people: components["schemas"]["TripImportPersonMatch"][];
+            caves: components["schemas"]["TripImportFeatureMatch"][];
+            areas: components["schemas"]["TripImportFeatureMatch"][];
+            /** Format: int32 */
+            newTripTypeCount: number;
+            /** Format: int32 */
+            newCaverCount: number;
+            /** Format: int32 */
+            newCaveCount: number;
+            /** Format: int32 */
+            newAreaCount: number;
+            /** Format: int32 */
+            ambiguousPersonCount: number;
+            /** Format: int32 */
+            uncreatablePersonCount: number;
+            /** Format: int32 */
+            ambiguousPlaceCount: number;
+        };
+        /** @enum {unknown} */
+        TripImportRowAction: "create" | "skip" | null;
+        TripImportRowDto: {
+            /** Format: int32 */
+            line: number;
+            sourceId: null | string;
+            /** Format: date */
+            startDate: null | string;
+            /** Format: date */
+            endDate: null | string;
+            startDateText: null | string;
+            endDateText: null | string;
+            title: null | string;
+            country: null | string;
+            massif: null | string;
+            subArea: null | string;
+            caves: string[];
+            proposers: string[];
+            participants: string[];
+            details: null | string;
+            details2: null | string;
+            tripType: null | string;
+            errors: null | string;
+            unmapped: {
+                [key: string]: string;
+            };
+            warnings: components["schemas"]["TripImportProblemDto"][];
+            decision: null | components["schemas"]["TripImportDecision"];
+            resolution: null | components["schemas"]["TripImportRowResolution"];
+        };
+        TripImportRowResolution: {
+            /** Format: int32 */
+            line: number;
+            tripType: null | components["schemas"]["TripImportTermMatch"];
+            caves: components["schemas"]["TripImportFeatureMatch"][];
+            massif: null | components["schemas"]["TripImportFeatureMatch"];
+            subArea: null | components["schemas"]["TripImportFeatureMatch"];
+            proposers: components["schemas"]["TripImportPersonMatch"][];
+            participants: components["schemas"]["TripImportPersonMatch"][];
+            locationNote: null | string;
+        };
+        TripImportSessionDto: {
+            /** Format: uuid */
+            fileId: string;
+            fileName: string;
+            options: components["schemas"]["TripImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["TripImportDecision"];
+            };
+            /** Format: date-time */
+            updatedAt: null | string;
+        };
+        TripImportSessionWriteRequest: {
+            options: components["schemas"]["TripImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["TripImportDecision"];
+            };
+        };
+        TripImportTermMatch: {
+            source: string;
+            state: components["schemas"]["TripImportMatchState"];
+            /** Format: int64 */
+            id: null | number;
+            name: null | string;
+            willCreate: boolean;
         };
         TripInvitationCreateRequest: {
             /** Format: uuid */

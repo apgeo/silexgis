@@ -59,7 +59,11 @@ export default function AppLayout() {
   const sections = [
     'map3d', 'dashboard', 'work-areas', 'caves', 'features', 'geodata', 'catalogue/speologie',
     'gallery', 'albums', 'cabinets',
-    'uploads', 'documents', 'calendar', 'events', 'trip-logs', 'expeditions', 'checklists',
+    'uploads', 'documents', 'calendar', 'events',
+    // Before the trip list, because the list's own prefix matches this path too and the first
+    // match is the one taken. Behind it, the reviewer reading a spreadsheet is shown the rail
+    // highlighting the trip list — a destination they are not on.
+    'trip-logs/import', 'trip-logs', 'expeditions', 'checklists',
     'caving-groups', 'cavers',
     'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
     'admin/permission-groups',
@@ -84,6 +88,10 @@ export default function AppLayout() {
     // is not an administrator's — only promoting a set to what a group or the installation
     // inherits is, and that is refused on the server.
     featureCreate: hasAccessAction(capabilities?.domains.features, 'create'),
+    // Reading a spreadsheet into trips ends in creating them, and the server refuses the whole
+    // screen — the preview included — to anyone who may not. A read check here would offer an
+    // afternoon's review to somebody whose first request is turned down.
+    tripLogCreate: hasAccessAction(capabilities?.domains.tripLogs, 'create'),
     isFullAdmin,
   });
 

@@ -20,12 +20,30 @@ export class ApiError extends Error {
    */
   readonly detail?: string;
 
-  constructor(status: number, code?: string, detail?: string) {
+  /**
+   * The refusal's own members, as the server wrote them.
+   *
+   * A few refusals carry a fact a screen has to act on rather than merely show — the identifier
+   * of the document a duplicate upload collided with, say. That fact belongs here and not in
+   * `detail`: the detail is a sentence written for a person to read, so recovering a value by
+   * matching it out of that prose makes rewording or translating the sentence a silent break in
+   * whatever was parsing it. Read through {@link member}, which is where the narrowing lives.
+   */
+  readonly problem?: Readonly<Record<string, unknown>>;
+
+  constructor(status: number, code?: string, detail?: string, problem?: Record<string, unknown>) {
     super(`API error ${status}${code ? ` (${code})` : ''}`);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.detail = detail;
+    this.problem = problem;
+  }
+
+  /** One member of the refusal, when the server sent it and it is a string. */
+  member(name: string): string | undefined {
+    const value = this.problem?.[name];
+    return typeof value === 'string' ? value : undefined;
   }
 }
 

@@ -164,6 +164,12 @@ export const queryKeys = {
   // choices, so changing a rule set or the duplicate radius is a different question rather
   // than a stale answer to the same one.
   importPreview: (geofileId: string, body: unknown) => ['import-preview', geofileId, body] as const,
+  tripImportSession: (fileId: string) => ['trip-import-session', fileId] as const,
+  tripImportColumns: (fileId: string) => ['trip-import-columns', fileId] as const,
+  // Same reasoning as the vector preview: reading a sheet is a pure function of the file and
+  // the choices, so moving a column mapping or the day/month order is a different question
+  // rather than a stale answer to the same one.
+  tripImportPreview: (fileId: string, body: unknown) => ['trip-import-preview', fileId, body] as const,
   speologieStatus: ['speologie', 'status'] as const,
   // The whole request is the key. A catalogue search is a pure function of the term, the county
   // and the page, so changing any of them is a different question rather than a stale answer to
@@ -298,7 +304,15 @@ async function unwrap<T>(
   const { data, error, response } = await call;
   if (error !== undefined || data === undefined) {
     const problem = error as { code?: string; detail?: string } | undefined;
-    throw new ApiError(response.status, problem?.code, problem?.detail);
+    // The whole problem object travels, not only the two members every screen reads: a refusal
+    // that carries a machine-readable fact of its own is otherwise recoverable only by matching
+    // it out of the English detail sentence.
+    throw new ApiError(
+      response.status,
+      problem?.code,
+      problem?.detail,
+      problem as Record<string, unknown> | undefined,
+    );
   }
   return data;
 }
@@ -4140,6 +4154,138 @@ export function useCommitImport() {
       void queryClient.invalidateQueries({ queryKey: ['caves'] });
       void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
       void queryClient.invalidateQueries({ queryKey: ['import-session'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// A club's trip spreadsheet into trips
+// ---------------------------------------------------------------------------
+
+export type TripImportOptions = components['schemas']['TripImportOptions'];
+export type TripImportDecision = components['schemas']['TripImportDecision'];
+export type TripImportRowAction = components['schemas']['TripImportRowAction'];
+export type TripImportSession = components['schemas']['TripImportSessionDto'];
+export type TripImportColumns = components['schemas']['TripImportColumnsDto'];
+export type TripImportPreview = components['schemas']['TripImportPreviewDto'];
+export type TripImportPreviewRequest = components['schemas']['TripImportPreviewRequest'];
+export type TripImportRow = components['schemas']['TripImportRowDto'];
+export type TripImportProblem = components['schemas']['TripImportProblemDto'];
+export type TripImportProposals = components['schemas']['TripImportProposalsDto'];
+export type TripImportPersonMatch = components['schemas']['TripImportPersonMatch'];
+export type TripImportFeatureMatch = components['schemas']['TripImportFeatureMatch'];
+export type TripImportTermMatch = components['schemas']['TripImportTermMatch'];
+export type TripImportCommitResult = components['schemas']['TripImportCommitResultDto'];
+export type TripCsvField = components['schemas']['TripCsvField'];
+export type TripCsvDateOrder = components['schemas']['TripCsvDateOrder'];
+export type TripCsvDateOrderSource = components['schemas']['TripCsvDateOrderSource'];
+export type TripCsvDiagnosticCode = components['schemas']['TripCsvDiagnosticCode'];
+
+/**
+ * The saved review of one uploaded sheet. Answers with defaults rather than a 404 when
+ * nobody has reviewed this file yet, so the screen has something to open with.
+ */
+export function useTripImportSession(fileId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.tripImportSession(fileId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-imports/{fileId}/session', { params: { path: { fileId: fileId! } } }),
+      ),
+    enabled: Boolean(fileId),
+  });
+}
+
+/**
+ * Saves the review as the reviewer works. Deliberately does not invalidate the session
+ * query: the browser already holds what it just sent, and refetching would make every tick
+ * of the table fight the answer coming back.
+ */
+export function useSaveTripImportSession() {
+  return useMutation({
+    mutationFn: ({
+      fileId,
+      body,
+    }: {
+      fileId: string;
+      body: { options: TripImportOptions; decisions: Record<string, TripImportDecision> };
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-imports/{fileId}/session', { params: { path: { fileId } }, body }),
+      ),
+  });
+}
+
+/**
+ * The sheet's own header line, for the mapping controls. Read from the stored file rather
+ * than from a parse, so it still answers when the parse itself failed — which is exactly
+ * when somebody needs to re-point a column.
+ */
+export function useTripImportColumns(fileId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.tripImportColumns(fileId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-imports/{fileId}/columns', { params: { path: { fileId: fileId! } } }),
+      ),
+    enabled: Boolean(fileId),
+    // A refusal here is the server's settled answer about this file, and asking again three
+    // times only holds the screen in its loading state through the whole backoff.
+    retry: false,
+  });
+}
+
+/** The dry run. A POST because the options are a body, but it creates nothing. */
+export function useTripImportPreview(
+  fileId: string | undefined,
+  body: TripImportPreviewRequest,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.tripImportPreview(fileId ?? '', body),
+    queryFn: () =>
+      unwrap(
+        api.POST('/api/v1/trip-imports/{fileId}/preview', {
+          params: { path: { fileId: fileId! } },
+          body,
+        }),
+      ),
+    enabled: Boolean(fileId) && enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/**
+ * Confirms the review. The options travel with it rather than being read back from the saved
+ * row: a second tab left open on different choices must not decide what a thousand trips
+ * become.
+ */
+export function useCommitTripImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      fileId,
+      body,
+    }: {
+      fileId: string;
+      body: {
+        options: TripImportOptions;
+        lines: number[];
+        decisions: Record<string, TripImportDecision>;
+      };
+    }) =>
+      unwrap(
+        api.POST('/api/v1/trip-imports/{fileId}/commit', { params: { path: { fileId } }, body }),
+      ),
+    onSuccess: () => {
+      // A confirmation writes trips, may add area and cave features, records a batch that can
+      // be undone, and spends the review that produced it — five surfaces go stale at once.
+      void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+      void queryClient.invalidateQueries({ queryKey: ['features'] });
+      void queryClient.invalidateQueries({ queryKey: ['caves'] });
+      void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      void queryClient.invalidateQueries({ queryKey: ['trip-import-session'] });
     },
   });
 }

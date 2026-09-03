@@ -53,6 +53,20 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
     private string Alone => $"Bogdan Ionescu {tag}";
 
     /// <summary>
+    /// A name written the way a club sheet writes one when nobody wrote the surname down. It
+    /// carries this run's suffix inside its first word rather than as a second one, because a
+    /// suffix written as a second word would make it a name a person could be created from and
+    /// the fixture would be proving the opposite of what it is here for.
+    /// </summary>
+    private string Initialled => $"Ionel{tag} A.";
+
+    /// <summary>One word and nothing else, for the same reason and with the suffix inside it.</summary>
+    private string Mononym => $"Gheorghita{tag}";
+
+    /// <summary>Two full words nothing here answers to: the control that a switch can act on.</summary>
+    private string Newcomer => $"Vasile Nou {tag}";
+
+    /// <summary>
     /// One row naming all three caves and both people. One row rather than three, because what is
     /// being read is a resolution per name and putting them together proves the three answers come
     /// out of the same reading rather than out of three differently-configured ones.
@@ -61,6 +75,16 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         "Nr crt.,Data inceput,Titlu,Tara,Masiv/zona,Pesteri,Participanti,Tip\r\n"
         + $"1,17/04/2024,O tura,Romania,Masivul Necunoscut {tag},"
         + $"\"{Readable}; {Guarded}; {Hidden}\",\"{Shared}; {Alone}\",explorare {tag}\r\n";
+
+    /// <summary>
+    /// One row naming five people: the one two roster entries answer to, the one exactly one
+    /// answers to, two nobody can be made from, and one nothing answers to that a switch could
+    /// make. Together they are every state a name can be in, read out of one sheet so the figures
+    /// are known to come from one reading.
+    /// </summary>
+    private string PeopleSheet =>
+        "Nr crt.,Data inceput,Titlu,Participanti\r\n"
+        + $"1,17/04/2024,O tura,\"{Shared}; {Alone}; {Initialled}; {Mononym}; {Newcomer}\"\r\n";
 
     public TripImportPreviewResolutionTests(PostgresFixture postgres)
     {
@@ -116,7 +140,7 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
             withheld.GetProperty("state").GetString().ShouldBe("unmatched");
             withheld.GetProperty("featureId").ValueKind.ShouldBe(JsonValueKind.Null);
             withheld.GetProperty("name").ValueKind.ShouldBe(JsonValueKind.Null);
-            withheld.GetProperty("candidates").GetInt32().ShouldBe(0);
+            withheld.GetProperty("candidates").GetArrayLength().ShouldBe(0);
         }
 
         // The same reading with the switches off, which is where the words matter: a name that
@@ -133,7 +157,11 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         // name, and the switch does not turn the ambiguity into a third person.
         var people = row.GetProperty("participants").EnumerateArray().ToList();
         people[0].GetProperty("state").GetString().ShouldBe("ambiguous");
-        people[0].GetProperty("candidates").GetInt32().ShouldBe(2);
+        // Named, not counted: settling the name means picking one of these two, so they travel to
+        // the review rather than a figure saying how many there were.
+        var offered = people[0].GetProperty("candidates").EnumerateArray().ToList();
+        offered.Count.ShouldBe(2);
+        offered.ShouldAllBe(c => c.GetProperty("name").GetString()!.Length > 0);
         people[0].GetProperty("willCreate").GetBoolean().ShouldBeFalse();
         people[1].GetProperty("state").GetString().ShouldBe("matched");
     }
@@ -176,6 +204,82 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         on.GetProperty("newTripTypeCount").GetInt32().ShouldBe(1);
         on.GetProperty("newCaverCount").GetInt32().ShouldBe(0);
         on.GetProperty("ambiguousPersonCount").GetInt32().ShouldBe(1);
+
+        // Both names on this sheet are two full words, so nothing here is a name a person could
+        // not be made from — and the figure that says so is present saying nothing, which is the
+        // only way a reviewer can tell it from a figure nobody worked out.
+        off.GetProperty("uncreatablePersonCount").GetInt32().ShouldBe(0);
+        on.GetProperty("uncreatablePersonCount").GetInt32().ShouldBe(0);
+    }
+
+    /// <summary>
+    /// The figure a reviewer reads before confirming, on a sheet whose people cannot all be
+    /// recorded: an initial where the surname should be and a name of one word.
+    ///
+    /// <para>
+    /// Counting only the ambiguous names said nobody needed a decision while these two were being
+    /// dropped from the trip they went on — a sheet that could not be imported honestly reading
+    /// exactly like one that could. So the assertion is on the pair of headline figures together,
+    /// on both settings of the switch, and on the list still naming everybody: the count is what
+    /// a reviewer notices and the list is what they act on.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_preview_counts_the_people_no_switch_can_create()
+    {
+        await SeedAsync();
+
+        var fileId = await UploadAsync("people.csv", PeopleSheet);
+        var on = (await PreviewAsync(fileId, Options(createEverything: true))).GetProperty("proposals");
+
+        // One name two roster entries answer to, and two nobody can be made from at all.
+        on.GetProperty("ambiguousPersonCount").GetInt32().ShouldBe(1);
+        on.GetProperty("uncreatablePersonCount").GetInt32().ShouldBe(2);
+
+        // The control, and the proof that the new figure is not simply counting what missed: the
+        // fifth name missed too, and it is a name a person can be made from, so the switch makes
+        // one. Two of the three that missed are a decision; this one is not.
+        on.GetProperty("newCaverCount").GetInt32().ShouldBe(1);
+
+        // Every name is still listed. The count is the headline; the list is the only place the
+        // reviewer can see which two names it is talking about.
+        var people = on.GetProperty("people").EnumerateArray().ToList();
+        people.Count.ShouldBe(5);
+        foreach (var name in new[] { Initialled, Mononym })
+        {
+            var entry = people.Single(p => p.GetProperty("source").GetString() == name);
+            entry.GetProperty("state").GetString().ShouldBe("unmatched");
+            entry.GetProperty("candidates").GetArrayLength().ShouldBe(0);
+            entry.GetProperty("willCreate").GetBoolean().ShouldBeFalse();
+            entry.GetProperty("mayCreate").GetBoolean().ShouldBeFalse();
+        }
+
+        // With the switch off the figure does not move, because the switch is not what is
+        // refusing these two. A number that fell to zero when the switch went off would be
+        // telling the reviewer they had already dealt with it.
+        var off = (await PreviewAsync(fileId, Options())).GetProperty("proposals");
+        off.GetProperty("uncreatablePersonCount").GetInt32().ShouldBe(2);
+        off.GetProperty("ambiguousPersonCount").GetInt32().ShouldBe(1);
+        off.GetProperty("newCaverCount").GetInt32().ShouldBe(0);
+
+        // The two facts pulled apart, on the setting where they look alike. With the switch off
+        // nothing is created, so "will not be created" is true of every name that missed — the
+        // ordinary one included. Whether a person *could* be made from the name is a different
+        // answer, and it is stated separately so that a screen reading it cannot list somebody
+        // among the people nothing can be done about when a single switch would make them.
+        var quiet = off.GetProperty("people").EnumerateArray().ToList();
+        var ordinary = quiet.Single(p => p.GetProperty("source").GetString() == Newcomer);
+        ordinary.GetProperty("state").GetString().ShouldBe("unmatched");
+        ordinary.GetProperty("willCreate").GetBoolean().ShouldBeFalse();
+        ordinary.GetProperty("mayCreate").GetBoolean().ShouldBeTrue();
+
+        // And the ones the count is about answer the other way on the same setting, so the two
+        // fields are not simply agreeing with each other everywhere.
+        foreach (var name in new[] { Initialled, Mononym })
+        {
+            quiet.Single(p => p.GetProperty("source").GetString() == name)
+                .GetProperty("mayCreate").GetBoolean().ShouldBeFalse();
+        }
     }
 
     // ---------- a choice picks from the list, and only from the list ----------

@@ -317,6 +317,15 @@ public static class TripImportEndpoints
     /// will be created" reads exactly like a screen that has not worked it out yet, and the
     /// reviewer's whole job here is to know which of the two they are looking at.
     /// </para>
+    /// <para>
+    /// Two counts, not one, for the people a reviewer still has to deal with. The ambiguous ones
+    /// are the names more than one roster entry answers to. Beside them are the names nothing
+    /// answered to that no person can be made from — an initial, or a lone given name — which are
+    /// not ambiguous at all and yet are the ones that quietly cost a trip its roster: they become
+    /// no link whatever the create switch says, so they are counted without reference to it.
+    /// Counting only the ambiguous ones told a reviewer that nobody needed a decision while
+    /// people were being dropped from the trips they went on.
+    /// </para>
     /// </summary>
     private static TripImportProposalsDto Proposals(TripImportResolutionSet resolution) => new(
         resolution.TripTypes,
@@ -328,6 +337,10 @@ public static class TripImportEndpoints
         resolution.NewCaves.Count,
         resolution.NewAreas.Count,
         resolution.People.Count(p => p.State == TripImportMatchState.Ambiguous),
+        // Read off the match rather than worked out again here. The same fact decides this count,
+        // the warning above the table and the list of names under it, and it has one home so that
+        // the three cannot come to disagree about which people an import is unable to make.
+        resolution.People.Count(p => p.State == TripImportMatchState.Unmatched && !p.MayCreate),
         resolution.Caves.Concat(resolution.Areas).Count(f => f.State == TripImportMatchState.Ambiguous));
 
     // ---------- the confirmation ----------

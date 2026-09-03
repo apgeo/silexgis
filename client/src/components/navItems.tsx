@@ -26,6 +26,7 @@ import {
   GroupOutlined,
   HistoryOutlined,
   IdcardOutlined,
+  ImportOutlined,
   MailOutlined,
   MonitorOutlined,
   PictureOutlined,
@@ -67,6 +68,8 @@ export type NavGates = {
   taxonomyWrite: boolean;
   /** Having something of one's own to import, which is what the detection rules serve. */
   featureCreate: boolean;
+  /** Recording trips, which is what reading a spreadsheet of them ends in. */
+  tripLogCreate: boolean;
   isFullAdmin: boolean;
 };
 
@@ -214,6 +217,12 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
       // write is settled per row.
       { key: 'events', icon: <ScheduleOutlined />, label: t('nav.events') },
       { key: 'trip-logs', icon: <CarOutlined />, label: t('nav.trips') },
+      // Reading a club's own spreadsheet of past trips into the archive. Gated on the right
+      // to create trips, because that is what confirming the review does — the screen would
+      // otherwise be an invitation to spend an afternoon on a review nobody may act on.
+      ...(gates.tripLogCreate
+        ? [{ key: 'trip-logs/import', icon: <ImportOutlined />, label: t('nav.tripImport') }]
+        : []),
       // The lists trips work through. Everybody may keep their own, so this is not
       // gated on a right: what a caller may read and write is settled per row.
       { key: 'checklists', icon: <CheckSquareOutlined />, label: t('nav.checklists') },

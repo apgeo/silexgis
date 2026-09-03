@@ -105,7 +105,7 @@ public sealed class TripImportResolutionTests : IAsyncLifetime, IDisposable
             withheld.State.ShouldBe(TripImportMatchState.Unmatched);
             withheld.FeatureId.ShouldBeNull();
             withheld.Name.ShouldBeNull();
-            withheld.Candidates.ShouldBe(0);
+            withheld.Candidates.ShouldBeEmpty();
         }
 
         // And the names nothing was taken from are kept, so the trip still records where it
@@ -188,7 +188,10 @@ public sealed class TripImportResolutionTests : IAsyncLifetime, IDisposable
         var ambiguous = resolved.Rows[1].Participants[0];
         ambiguous.State.ShouldBe(TripImportMatchState.Ambiguous);
         ambiguous.CaverId.ShouldBeNull();
-        ambiguous.Candidates.ShouldBe(2);
+        // Both of them named, not merely counted: the review settles the name by offering these
+        // two and no others, so a count alone would state a decision without affording it.
+        ambiguous.Candidates.Count.ShouldBe(2);
+        ambiguous.Candidates.Select(c => c.Id).ShouldBeUnique();
 
         // Not resolved to the older of the two, and not created a third time either — with the
         // switch on, which is the state in which the wrong answer would have been silent.

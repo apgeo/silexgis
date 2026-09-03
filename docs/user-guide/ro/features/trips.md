@@ -231,6 +231,56 @@ membru, și pentru un editor.
 
 ---
 
+## Importul unui tabel al clubului
+
+**Ture → Import** ia *centralizatorul* pe care un club îl ține de ani de zile — un rând pentru
+fiecare tură, într-un tabel — și îl transformă în ture. Este un singur ecran și nu se scrie nimic
+până nu apeși butonul de jos.
+
+Încarci fișierul și ecranul se completează cu ce crede el că scrie acolo. Deasupra tabelului
+stau alegerile care privesc tot fișierul:
+
+- **Care coloană ce este.** Le ghicește după antet, iar tu le corectezi dintr-o listă cu numele
+  reale ale coloanelor din fișier.
+- **Întâi ziua sau întâi luna.** Datele ambigue sunt exact lucrul care mută pe tăcute un an de
+  ture cu șase luni, așa că ecranul spune din ce a dedus ordinea și câte rânduri depind de
+  răspuns.
+- **Ce separă mai multe lucruri într-o singură celulă** — participanții, peșterile.
+- **Ce are voie să creeze.** Peșteri, zone, persoane și tipuri de tură pe care fișierul le
+  numește, dar instalarea nu le are. Fiecare este un comutator separat și **toate pornesc
+  oprite**, așa că un import nu adaugă nimic într-un registru dacă nu ceri tu asta. Poți porni
+  un comutator doar pentru un registru în care ai oricum dreptul să adaugi.
+- **Cine va putea vedea turele și cărui club îi aparțin.**
+
+Dedesubt este câte un rând pentru fiecare linie din tabel, cu ce a potrivit, iar alături tot ce
+nu s-a putut citi curat. Orice rând poate fi lăsat deoparte. Ce nu a putut fi înțeles deloc apare
+ca problemă și nu se importă niciodată.
+
+### Cifrele, și cea care contează
+
+Patru cifre spun ce ar adăuga confirmarea — ture, peșteri, zone, persoane. Lângă ele stau cifrele
+care spun **ce are nevoie de tine**: nume cărora le răspund mai multe persoane din registru și
+nume care nu pot deveni deloc o persoană.
+
+Al doilea fel este cel de citit cu atenție. O celulă cu `Ion A.` sau cu un singur prenume nu poate
+deveni o fișă de persoană — nu există cum să o deosebești mai târziu de următoarea persoană cu
+același nume — deci **acei oameni nu vor apărea pe turele lor**. Ecranul o spune limpede, deasupra
+butonului, înainte să-l apeși. Numele lor nu se pierd: rămân în textul turei. Dacă asta contează
+pentru tine, corectează celulele în tabel înainte de import.
+
+Un nume ambiguu este altceva: pe el îl lămurești pe ecran, alegând despre cine este vorba.
+
+### După
+
+Confirmarea depune totul ca un singur lot. Turele importate sunt **tăcute** — nu se anunță nimeni,
+nu se invită nimeni — și intră finalizate, nu ca ciorne.
+
+Lotul apare la **Geodate → Importuri**, de unde poate fi anulat. Anularea șterge turele. **Nu**
+retrage speologii sau cuvintele de tip de tură pe care le-a creat importul, fiindcă un cuvânt care
+între timp poate a fost dat altor ture nu este al acestui lot să-l retragă.
+
+---
+
 ## Turele mele
 
 **Jurnale de tură → Turele mele** răspunde la *pe ce merg și când*: turele pe care sunteți numit,

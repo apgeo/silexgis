@@ -35,10 +35,31 @@ public sealed record TripImportTermMatch(
     string? Name,
     bool WillCreate);
 
+/// <summary>
+/// One of the things a name answered to, named so that somebody can say which was meant.
+/// </summary>
+/// <remarks>
+/// Only ever the things this caller was already going to be told about: the set is the one the
+/// name matched against, which every visibility and disclosure gate has already narrowed. It is
+/// also exactly the set a choice is honoured among, so a reviewer is never offered an option
+/// that would be silently discarded.
+/// </remarks>
+/// <param name="Id">The thing chosen, when this candidate is the one meant.</param>
+/// <param name="Name">Its name as this installation holds it, which is what distinguishes it.</param>
+public sealed record TripImportCandidate(Guid Id, string Name);
+
 /// <summary>A person the sheet named, and the roster entry they were taken for.</summary>
 /// <param name="Candidates">
-/// How many roster entries answered to the name. Two or more is what makes the row ambiguous,
-/// and the count is shown so the reviewer knows there is a choice to make rather than a gap.
+/// The roster entries that answered to the name. Two or more is what makes the row ambiguous, and
+/// they are listed rather than counted because a count states that a decision is needed while
+/// leaving no way to make it: settling the name means picking one of exactly these.
+/// </param>
+/// <param name="MayCreate">
+/// Whether a person could be made from this name at all — that is, whether it is a name and not a
+/// bare initial or a lone given word. Stated on its own, separately from <paramref name="WillCreate"/>,
+/// because the two answer different questions and confusing them is how a screen comes to list a
+/// perfectly creatable person among the ones nothing can be done about: with the toggle off,
+/// nothing will be created, and that says nothing about what could be.
 /// </param>
 /// <param name="WillCreate">
 /// True only when nothing matched, the toggle is on, and the name is one a person can be created
@@ -49,7 +70,8 @@ public sealed record TripImportPersonMatch(
     TripImportMatchState State,
     Guid? CaverId,
     string? Name,
-    int Candidates,
+    IReadOnlyList<TripImportCandidate> Candidates,
+    bool MayCreate,
     bool WillCreate);
 
 /// <summary>A place the sheet named, and the feature it was taken for.</summary>
@@ -59,12 +81,16 @@ public sealed record TripImportPersonMatch(
 /// anybody could ask for by uploading a sheet with a name in it. The visible cost is accepted —
 /// a caller who may not be told about a cave will be offered the chance to create a second one.
 /// </remarks>
+/// <param name="Candidates">
+/// The features that answered to the name, for the same reason the people are listed: a place two
+/// caves answer to is settled by saying which, and only these can be said.
+/// </param>
 public sealed record TripImportFeatureMatch(
     string Source,
     TripImportMatchState State,
     Guid? FeatureId,
     string? Name,
-    int Candidates,
+    IReadOnlyList<TripImportCandidate> Candidates,
     bool WillCreate);
 
 /// <summary>What one row of the sheet was taken to mean.</summary>

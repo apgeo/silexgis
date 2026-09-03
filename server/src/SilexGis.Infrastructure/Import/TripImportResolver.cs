@@ -232,6 +232,7 @@ public sealed class TripImportResolver(SilexGisDbContext db, FeatureProtection p
         }
 
         var hits = index.Lookup(text);
+        var candidates = Candidates(hits);
 
         // A choice settles which of the candidates the name meant. Honoured only among them, so
         // that naming an identifier in the request body can never reach a feature this caller was
@@ -244,15 +245,18 @@ public sealed class TripImportResolver(SilexGisDbContext db, FeatureProtection p
                 TripImportMatchState.Matched,
                 chosen,
                 hits.First(h => h.Key == chosen).Name,
-                hits.Count,
+                candidates,
                 false);
         }
 
         return hits.Count switch
         {
-            1 => new TripImportFeatureMatch(text, TripImportMatchState.Matched, hits[0].Key, hits[0].Name, 1, false),
-            0 => new TripImportFeatureMatch(text, TripImportMatchState.Unmatched, null, null, 0, createMissing),
-            _ => new TripImportFeatureMatch(text, TripImportMatchState.Ambiguous, null, null, hits.Count, false),
+            1 => new TripImportFeatureMatch(
+                text, TripImportMatchState.Matched, hits[0].Key, hits[0].Name, candidates, false),
+            0 => new TripImportFeatureMatch(
+                text, TripImportMatchState.Unmatched, null, null, candidates, createMissing),
+            _ => new TripImportFeatureMatch(
+                text, TripImportMatchState.Ambiguous, null, null, candidates, false),
         };
     }
 
@@ -266,7 +270,14 @@ public sealed class TripImportResolver(SilexGisDbContext db, FeatureProtection p
         }
 
         var hits = index.Lookup(text);
+        var candidates = Candidates(hits);
         var createMissing = options.CreateMissingCavers;
+
+        // Asked once, here, and carried on the match. The screen that warns about the people an
+        // import cannot make needs the same answer this does, and a second version of the rule
+        // living in the browser is how that warning came to name people it could perfectly well
+        // have made.
+        var mayCreate = TripImportNames.MayCreatePerson(text);
 
         // The same rule as for a place: a choice picks one of the people this name answered to,
         // and a choice naming anybody else is no choice at all.
@@ -277,13 +288,15 @@ public sealed class TripImportResolver(SilexGisDbContext db, FeatureProtection p
                 TripImportMatchState.Matched,
                 chosen,
                 hits.First(h => h.Key == chosen).Name,
-                hits.Count,
+                candidates,
+                mayCreate,
                 false);
         }
 
         if (hits.Count == 1)
         {
-            return new TripImportPersonMatch(text, TripImportMatchState.Matched, hits[0].Key, hits[0].Name, 1, false);
+            return new TripImportPersonMatch(
+                text, TripImportMatchState.Matched, hits[0].Key, hits[0].Name, candidates, mayCreate, false);
         }
 
         if (hits.Count > 1)
@@ -294,7 +307,7 @@ public sealed class TripImportResolver(SilexGisDbContext db, FeatureProtection p
             // mean, and wrong here, where nobody is watching and the wrong answer becomes a
             // claim about who was underground on a day in 2014.
             return new TripImportPersonMatch(
-                text, TripImportMatchState.Ambiguous, null, null, hits.Count, false);
+                text, TripImportMatchState.Ambiguous, null, null, candidates, mayCreate, false);
         }
 
         return new TripImportPersonMatch(
@@ -302,9 +315,19 @@ public sealed class TripImportResolver(SilexGisDbContext db, FeatureProtection p
             TripImportMatchState.Unmatched,
             null,
             null,
-            0,
-            createMissing && TripImportNames.MayCreatePerson(text));
+            candidates,
+            mayCreate,
+            createMissing && mayCreate);
     }
+
+    /// <summary>
+    /// What a name answered to, in the shape the review offers as a choice. Empty when nothing
+    /// answered and a single entry when one thing did — the list is what the name matched, not
+    /// only what is still undecided, so the same field means the same thing in every state.
+    /// </summary>
+    private static IReadOnlyList<TripImportCandidate> Candidates(
+        IReadOnlyList<(Guid Key, string Name)> hits) =>
+        [.. hits.Select(h => new TripImportCandidate(h.Key, h.Name))];
 
     // ---------- what the installation holds ----------
 

@@ -31,6 +31,7 @@ const ImportWorkspacePage = lazy(() => import('./pages/geodata/ImportWorkspacePa
 const PhotoImportWorkspacePage = lazy(() => import('./pages/geodata/PhotoImportWorkspacePage.tsx'));
 const SpeologieSearchPage = lazy(() => import('./pages/catalogue/SpeologieSearchPage.tsx'));
 const SpeologieImportPage = lazy(() => import('./pages/catalogue/SpeologieImportPage.tsx'));
+const TripImportPage = lazy(() => import('./pages/trips/TripImportPage.tsx'));
 const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
 const ChecklistsPage = lazy(() => import('./pages/checklists/ChecklistsPage.tsx'));
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage.tsx'));
@@ -148,6 +149,8 @@ export const routes: RouteObject[] = [
           { path: '/calendar', element: <Loadable><CalendarPage /></Loadable> },
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/mine', element: <Loadable><MyTripsPage /></Loadable> },
+          { path: '/trip-logs/import', element: <Loadable><TripImportPage /></Loadable> },
+          { path: '/trip-logs/import/:fileId', element: <Loadable><TripImportPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/trip-logs/:id/report', element: <Loadable><TripReportPage /></Loadable> },
           { path: '/events', element: <Loadable><EventListPage /></Loadable> },

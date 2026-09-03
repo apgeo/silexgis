@@ -62,8 +62,19 @@ public sealed record TripImportRowDto(
 /// <para>
 /// The four tables are the answer to "what am I agreeing to", which the row table cannot give —
 /// a type value written on four hundred rows is one new vocabulary term, and four hundred rows
-/// saying so is not a review. Ambiguities are counted apart because they are the only entries
-/// somebody has to act on: nothing else in the file is waiting for anybody.
+/// saying so is not a review.
+/// </para>
+/// <para>
+/// The counts of what a person still has to settle are stated apart from the counts of what a
+/// confirmation would add, because a confirmation does not settle them. There are two kinds and
+/// both must be said. A name more than one roster entry answers to waits for somebody to say
+/// which — that is <c>ambiguousPersonCount</c>. A name nothing answers to and nobody can be
+/// created from — an initial, or a lone given name — waits for nobody: it becomes no roster row
+/// whatever the create switch says, and the person is recorded only in the trip's own words.
+/// That is <c>uncreatablePersonCount</c>, and it is counted regardless of the switch because the
+/// switch cannot change it. Leaving it out of the headline is how a sheet whose people cannot
+/// all be recorded comes to read exactly like a sheet whose people can, right up until the trips
+/// arrive with somebody missing from them.
 /// </para>
 /// <para>
 /// Every count is present even at zero. A number that disappears when it is nothing reads exactly
@@ -80,6 +91,7 @@ public sealed record TripImportProposalsDto(
     int NewCaveCount,
     int NewAreaCount,
     int AmbiguousPersonCount,
+    int UncreatablePersonCount,
     int AmbiguousPlaceCount);
 
 /// <summary>
