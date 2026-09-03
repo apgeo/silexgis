@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Terrain;
@@ -216,6 +217,67 @@ public static class TerrainBuildWrites
                 .SetProperty(b => b.LogTail, tail)
                 .SetProperty(b => b.FinishedAt, now)
                 .SetProperty(b => b.UpdatedAt, now), ct);
+    }
+
+    /// <summary>
+    /// Draws a build that has just finished, unless somebody chose what is drawn now.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one write here that is not a direct update statement, deliberately: moving which build
+    /// the scene draws is one of the acts the row's audit trail exists to record, and it is the
+    /// same act the button performs. It therefore goes through the tracked path and takes the same
+    /// advisory lock, so a build finishing and an operator pressing the button at the same instant
+    /// queue behind one another instead of racing for a unique index that permits one winner.
+    /// </para>
+    /// <para>
+    /// The mark is let go and taken in two saves rather than one. Within a single save the order
+    /// of the two updates is the change tracker's to choose, and the order where the new holder is
+    /// written first is the order the unique index refuses. This mirrors what the endpoint does,
+    /// for the same reason.
+    /// </para>
+    /// <para>
+    /// Returns whether the scene changed, which is what the caller has to log: an unremarkable
+    /// "did not take over" is the ordinary outcome on an installation whose operator picks terrain
+    /// by hand, and is not a failure of anything.
+    /// </para>
+    /// </remarks>
+    public static async Task<bool> DrawIfNothingWasChosenAsync(
+        SilexGisDbContext db, Guid buildId, bool hasPublishedPyramid, CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await TerrainBuildSql.TakeActivationLockAsync(db, ct);
+
+        var build = await db.TerrainBuilds.FirstOrDefaultAsync(b => b.Id == buildId, ct);
+        if (build is null || build.Status != TerrainBuildStatus.Succeeded)
+        {
+            return false;
+        }
+
+        // Both halves of "drawable" are asked here rather than trusted from the run: the version is
+        // written by the check that read the pyramid back and found it whole, and the pyramid on
+        // disk is what a browser will actually ask for.
+        var drawable = hasPublishedPyramid && !string.IsNullOrWhiteSpace(build.PyramidVersion);
+
+        var drawn = await db.TerrainBuilds.FirstOrDefaultAsync(b => b.IsActive, ct);
+        if (!TerrainActivationRules.MayDrawAutomatically(
+                drawable, build.IsActive, drawn?.ActivationWasAutomatic))
+        {
+            return false;
+        }
+
+        if (drawn is not null)
+        {
+            drawn.IsActive = false;
+            await db.SaveChangesAsync(ct);
+        }
+
+        build.IsActive = true;
+        build.ActivationWasAutomatic = true;
+        build.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return true;
     }
 
     /// <summary>The start of the text: a reason and a sentence say what they mean at the front.</summary>
