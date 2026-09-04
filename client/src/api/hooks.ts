@@ -171,6 +171,7 @@ export const queryKeys = {
   // the choices, so moving a column mapping or the day/month order is a different question
   // rather than a stale answer to the same one.
   tripImportPreview: (fileId: string, body: unknown) => ['trip-import-preview', fileId, body] as const,
+  photoLibraryStatus: ['photo-libraries', 'status'] as const,
   speologieStatus: ['speologie', 'status'] as const,
   // The whole request is the key. A catalogue search is a pure function of the term, the county
   // and the page, so changing any of them is a different question rather than a stale answer to
@@ -1291,6 +1292,58 @@ export async function fetchCenterlineFeatures(
 /** Imperative fetch used by the OpenLayers photo overlay loader (not a hook). */
 export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureCollection> {
   return unwrap(api.GET('/api/v1/map/photos', { params: { query: { bbox } } }));
+}
+
+/**
+ * Which neighbouring photo library a request is about, named the way the server names it.
+ *
+ * Taken from the generated contract rather than written here as a union of the products that
+ * happen to exist today: a third one added on the server would leave a hand-written union
+ * type-checking against a value it has never heard of, and failing only at runtime.
+ */
+export type LibraryPhotoSource = LibraryPhotoProvider['source'];
+export type LibraryPhotoProvider = components['schemas']['PhotoLibraryProviderDto'];
+export type LibraryPhotoStatus = components['schemas']['PhotoLibraryStatusDto'];
+export type LibraryPhotoCollection = components['schemas']['LibraryPhotoFeatureCollection'];
+
+/**
+ * The photo libraries this account may see, or none.
+ *
+ * A query rather than an imperative fetch, unlike the map loaders below it: there is no viewport
+ * in this question, so it is asked once and answered from cache while the map is panned. An
+ * account outside the audience is told it may read nothing and given an empty list — the answer
+ * a client needs in order to decide whether to offer the overlay at all, without being told which
+ * products this installation runs.
+ */
+export function usePhotoLibraries() {
+  return useQuery({
+    queryKey: queryKeys.photoLibraryStatus,
+    queryFn: () => unwrap(api.GET('/api/v1/photo-libraries/status')),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Imperative fetch used by the photo-library overlays (not a hook), one library per call.
+ *
+ * Imperative for the reason every other map loader here is: a bbox that changes with every pan is
+ * an unbounded cache key, and the loader's own sequence guard is cheaper than fighting a query
+ * cache for last-write-wins.
+ *
+ * The library is a path segment rather than a filter, because it selects which foreign
+ * installation is called. One request per library, never one for both: they are separate
+ * installations with separate uptime, and a joined request would be as slow as the slower of them
+ * and as broken as the more broken one.
+ */
+export async function fetchLibraryPhotoFeatures(
+  source: LibraryPhotoSource,
+  bbox: string,
+): Promise<LibraryPhotoCollection> {
+  return unwrap(
+    api.GET('/api/v1/photo-libraries/{source}/map', {
+      params: { path: { source }, query: { bbox } },
+    }),
+  );
 }
 
 export type SearchResult = components['schemas']['SearchResultDto'];

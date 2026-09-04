@@ -7576,6 +7576,158 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/photo-libraries/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which neighbouring photo libraries this installation has been given, and whether the caller may see them. Reaches no library. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoLibraryStatusDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Located photographs held in one neighbouring photo library, as GeoJSON points for the given bbox. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                };
+                header?: never;
+                path: {
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryPhotoFeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/thumbnails/{reference}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Streams one photograph's rendering from a neighbouring photo library; token-authenticated. */
+        get: {
+            parameters: {
+                query?: {
+                    size?: string;
+                    token?: string;
+                };
+                header?: never;
+                path: {
+                    source: string;
+                    reference: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopens a library's picture delivery after an answer that was not a picture closed it. Deliberately the only way back: nothing reopens it on a timer. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files": {
         parameters: {
             query?: never;
@@ -18576,6 +18728,19 @@ export interface components {
             class: components["schemas"]["KarstificationClass"];
             components: components["schemas"]["KarstificationComponentDto"][];
         };
+        LibraryPhotoFeatureCollection: {
+            type: string;
+            features: components["schemas"]["GeoFeature"][];
+            source: string;
+            libraryName: string;
+            picturesAvailable: boolean;
+            pictureUrlTemplate: null | string;
+            /** Format: date-time */
+            readAt: string;
+            truncated: boolean;
+            /** Format: int32 */
+            omittedCount: number;
+        };
         LinkKindDto: {
             /** Format: int64 */
             id: number;
@@ -19580,6 +19745,15 @@ export interface components {
             cameraClockOffsetSeconds?: number;
             /** Format: int32 */
             trackMatchToleranceSeconds?: number;
+        };
+        PhotoLibraryProviderDto: {
+            source: string;
+            name: string;
+            configured: boolean;
+        };
+        PhotoLibraryStatusDto: {
+            mayRead: boolean;
+            providers: components["schemas"]["PhotoLibraryProviderDto"][];
         };
         PhotoNearbyDto: {
             /** Format: uuid */

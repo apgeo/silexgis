@@ -3945,5 +3945,22 @@
   },
   "imageLink": {
     "regionCount": "Linked parts of this picture: {{count}}"
+  },
+  "libraryPhotos": {
+    "layerName": "Photo library ({{library}})",
+    "source": {
+      "immich": "Immich",
+      "photoprism": "PhotoPrism"
+    },
+    "loading": "Reading this library…",
+    "count": "{{count}} photographs shown",
+    "empty": "This library has no photographs in this area.",
+    "unavailable": "This library did not answer. The photographs shown are the last positions read from it.",
+    "truncated": "Only the first {{count}} photographs in this area are shown — zoom in to see the rest.",
+    "readAt": "Positions read {{when}}",
+    "notConfigured": "No photo library is connected to this installation.",
+    "takenAt": "Taken {{when}}",
+    "noTitle": "Untitled",
+    "thumbnailFailed": "The photograph could not be loaded."
   }
 }

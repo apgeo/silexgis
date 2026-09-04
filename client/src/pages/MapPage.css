@@ -250,6 +250,47 @@
   overflow-wrap: anywhere;
 }
 
+/* The balloon opened by clicking a photograph held in a library this installation does not own.
+   Wider than the in-house one because it carries lines of text under the picture, and bounded,
+   because a balloon that outgrows the map it is anchored to hides the thing it is describing. */
+.map-library-photo-popup {
+  background: #fff;
+  padding: 6px;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  max-width: 240px;
+  font-size: 12px;
+  color: #333;
+}
+
+.map-library-photo-popup img {
+  display: block;
+  max-width: 228px;
+  max-height: 228px;
+  border-radius: 4px;
+}
+
+.map-library-photo-popup-title {
+  margin-top: 4px;
+  font-weight: 600;
+  /* Wraps rather than truncating: a title is what identifies the picture in the far library. */
+  overflow-wrap: anywhere;
+}
+
+.map-library-photo-popup-meta {
+  margin-top: 2px;
+  color: #666;
+}
+
+/* Stands in for the picture when the bytes did not arrive. It occupies roughly the space the
+   picture would have, so a balloon that failed to load one is not mistaken for a balloon that
+   was never given a picture to show. */
+.map-library-photo-popup-failed {
+  padding: 24px 8px;
+  color: #888;
+  text-align: center;
+}
+
 /* Collapsible catalogue groups in the layer panel. antd's ghost panels carry padding sized for a
    page rather than for a 280px dock, so it is taken back here rather than fought with inline
    styles on every panel. */
