@@ -1399,7 +1399,13 @@ export function useRecheckPhotoLibrary() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (source: LibraryPhotoSource) =>
-      unwrap(api.POST('/api/v1/photo-libraries/{source}/recheck', { params: { path: { source } } })),
+      // unwrapVoid, not unwrap: this route answers 204 with no body, and unwrap treats an absent
+      // body as a failure. Through unwrap the button reported "the library still did not answer"
+      // every time the recheck succeeded — the one message that must never be wrong, on the one
+      // control an operator presses when they already suspect something is broken.
+      unwrapVoid(
+        api.POST('/api/v1/photo-libraries/{source}/recheck', { params: { path: { source } } }),
+      ),
     onSettled: () =>
       void queryClient.invalidateQueries({ queryKey: queryKeys.photoLibraryStatus }),
   });
