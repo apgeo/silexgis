@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type Map from 'ol/Map';
-import type FeatureLike from 'ol/Feature';
+import type { FeatureLike } from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
 import { transformExtent } from 'ol/proj';
