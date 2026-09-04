@@ -50,6 +50,37 @@ public static class SurveySegmentSql
     private const SurveyShotFlags NotPassage = SurveyShotFlags.Splay | SurveyShotFlags.Surface;
 
     /// <summary>
+    /// The sub-select naming the one survey model that answers for a cave: the model the cave's
+    /// current shape was read out of, and failing that the most recently uploaded model whose
+    /// reading finished. It selects a single column, <c>model_id</c>.
+    /// </summary>
+    /// <remarks>
+    /// Exactly one model answers, and this is the only place that says which. Anything reading a
+    /// figure derived from a survey — its legs, its wall distances, the shape of its network —
+    /// resolves it through here rather than picking a model itself, because two figures about one
+    /// cave describe the same passage only if they were measured over the same file.
+    /// </remarks>
+    /// <param name="caveParameter">The SQL parameter holding the cave feature's id, including its
+    /// leading marker.</param>
+    public static string ChosenModel(string caveParameter) => $"""
+        SELECT COALESCE(
+            (SELECT c.survey_model_id
+             FROM centerlines c
+             WHERE c.cave_feature_id = {caveParameter}
+               AND c.is_default
+               AND c.survey_model_id IS NOT NULL
+             LIMIT 1),
+            (SELECT m.id
+             FROM survey_models m
+             WHERE m.cave_feature_id = {caveParameter}
+               AND m.status = {(short)SurveyModelStatus.Ready}
+               AND m.format IN ({(short)SurveyModelFormat.Lox}, {(short)SurveyModelFormat.Survex3d})
+             ORDER BY m.created_at DESC, m.id DESC
+             LIMIT 1)
+        ) AS model_id
+        """;
+
+    /// <summary>
     /// Every measured leg of the one survey model that answers for a cave, or an empty list when
     /// the cave has no parsed survey the caller may see.
     ///
@@ -100,21 +131,7 @@ public static class SurveySegmentSql
         // the model status and the two line-plot formats below.
         var sql = $"""
             WITH chosen AS (
-                SELECT COALESCE(
-                    (SELECT c.survey_model_id
-                     FROM centerlines c
-                     WHERE c.cave_feature_id = @seg_cave_id
-                       AND c.is_default
-                       AND c.survey_model_id IS NOT NULL
-                     LIMIT 1),
-                    (SELECT m.id
-                     FROM survey_models m
-                     WHERE m.cave_feature_id = @seg_cave_id
-                       AND m.status = {(short)SurveyModelStatus.Ready}
-                       AND m.format IN ({(short)SurveyModelFormat.Lox}, {(short)SurveyModelFormat.Survex3d})
-                     ORDER BY m.created_at DESC, m.id DESC
-                     LIMIT 1)
-                ) AS model_id
+                {ChosenModel("@seg_cave_id")}
             ),
             leg AS (
                 SELECT s.id,

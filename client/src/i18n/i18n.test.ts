@@ -17,6 +17,11 @@ import type {
   SearchDocumentItem,
   TerrainBuildPhase,
   TerrainBuildSourceKind,
+  PatternCaveat,
+  PatternFigure,
+  PatternRule,
+  PatternRuleOutcome,
+  SpeleogeneticPatternKind,
   TerrainBuildStatus,
   TripCsvDateOrderSource,
   TripCsvDiagnosticCode,
@@ -852,5 +857,74 @@ describe('i18n locales', () => {
     expect(names.filter((name) => !enDivisions[name])).toEqual([]);
     expect(names.filter((name) => !roDivisions[name])).toEqual([]);
     expect(Object.keys(enDivisions).sort()).toEqual(names.sort());
+  });
+
+  /**
+   * The pattern suggestion builds every one of its labels from a value the server sent — the
+   * pattern, each rule, each rule's outcome, each figure a rule read and each caveat — so the scan
+   * that reads keys straight out of the source text sees none of them. Without this, a rule added
+   * on the server would be shown to a reader as a lookup key in both languages with every other
+   * check still green. Both directions, because a label kept for a rule the server no longer sends
+   * would sit unnoticed and read as a rule that never fires.
+   */
+  it('names every pattern, rule, outcome, figure and caveat a suggestion can carry, and no more', () => {
+    const patterns: Record<SpeleogeneticPatternKind, true> = {
+      insufficient: true,
+      undetermined: true,
+      vadoseBranchwork: true,
+      waterTable: true,
+      looping: true,
+      angularMaze: true,
+    };
+    const rules: Record<PatternRule, true> = {
+      networkIsLooped: true,
+      networkIsTreeLike: true,
+      networkEndsOften: true,
+      networkRings: true,
+      bearingsAreConcentrated: true,
+      passageIsSteep: true,
+      passageIsLevel: true,
+      profileOscillates: true,
+      sectionIsWide: true,
+      sectionIsTall: true,
+    };
+    const outcomes: Record<PatternRuleOutcome, true> = {
+      notAssessable: true,
+      didNotFire: true,
+      fired: true,
+    };
+    const figures: Record<PatternFigure, true> = {
+      loopsPerNode: true,
+      deadEndFraction: true,
+      clustering: true,
+      orientationEntropy: true,
+      meanAbsoluteDip: true,
+      maximumDip: true,
+      minimumDip: true,
+      verticality: true,
+      medianWidthHeightRatio: true,
+    };
+    const caveats: Record<PatternCaveat, true> = {
+      figuresAreApproximated: true,
+      networkIsIncomplete: true,
+      networkCompletenessIsUnknown: true,
+      noAltitudes: true,
+      noCrossSections: true,
+      noNetworkFigures: true,
+    };
+
+    const cases: [string[], Record<string, string>, Record<string, string>][] = [
+      [Object.keys(patterns), en.passagePattern.pattern, ro.passagePattern.pattern],
+      [Object.keys(rules), en.passagePattern.rule, ro.passagePattern.rule],
+      [Object.keys(outcomes), en.passagePattern.outcome, ro.passagePattern.outcome],
+      [Object.keys(figures), en.passagePattern.figure, ro.passagePattern.figure],
+      [Object.keys(caveats), en.passagePattern.caveat, ro.passagePattern.caveat],
+    ];
+    for (const [names, enNames, roNames] of cases) {
+      expect(names.filter((name) => !enNames[name])).toEqual([]);
+      expect(names.filter((name) => !roNames[name])).toEqual([]);
+      expect(Object.keys(enNames).sort()).toEqual([...names].sort());
+      expect(Object.keys(roNames).sort()).toEqual([...names].sort());
+    }
   });
 });

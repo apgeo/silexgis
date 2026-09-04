@@ -1,0 +1,279 @@
+# =============================================================================================
+# PHOTOPRISM — an optional photo library with its own database and its own storage. Independent
+# of the Immich overlay in every respect: either, both, or neither. It shares nothing with the
+# application's own photo storage, and the application's own photo storage shares nothing with it.
+#
+# READ THIS BLOCK BEFORE COPYING THE FILE, AND COPY IT WITH THE FILE.
+#
+# WHAT IT BRINGS UP: one container. Its database is SQLite, embedded, living inside its own
+# storage volume — so "its own database" costs no second daemon here. MariaDB is the vendor's
+# recommendation for a large library and is written out commented at the foot of this file; the
+# driver CANNOT SAFELY BE CHANGED once data exists, so it is decided once, now, and a library
+# small enough to be looked at is a SQLite library.
+#
+# IT IS PINNED TO ONE NAMED BUILD. PhotoPrism publishes no semantic versioning; its releases are
+# date-stamped, `:latest` tracks the current stable build and `:preview` the development one. A
+# moving tag plus a routine `docker compose pull` turns an application update into an unplanned
+# PhotoPrism upgrade with nothing to say what changed.
+#
+# IT CARRIES HARDENING DEFAULTS the vendor's own compose file does not: read-only originals,
+# WebDAV off, the agent endpoint off, no unattended index run, workers pinned, no published port
+# beyond loopback, every writable path a named volume, and the vendor's weakened host confinement
+# NOT carried over. Reversing any of them is meant to be a deliberate edit by somebody who has
+# read why.
+#
+# ENTIRELY OPTIONAL AND ABSENT UNLESS YOU START IT.
+#
+# ---------------------------------------------------------------------------------------------
+# STORAGE: TWO MODES, AND YOU CHOOSE ONE BY EDITING THIS FILE
+#
+#   MODE A — READ-ONLY BIND (shipped active below). PhotoPrism indexes photographs that stay on
+#            the operator's own disks and are never copied in. Additional disks are expressed for
+#            this product by mounting them as SUBDIRECTORIES of the originals root.
+#   MODE B — IMPORT (the commented alternative below). The originals root becomes a named volume
+#            of PhotoPrism's own, and the operator's disk is mounted READ-ONLY at the import
+#            staging folder instead. Photographs are copied out of it into the product's store
+#            with canonical names, organised by year and month, de-duplicated.
+#
+# Both are supported on purpose. Mode B is strictly safer, and for this product the difference is
+# larger than it looks: with the originals inside a named volume, the originals cannot go absent,
+# and the deletion path in defence 3 below stops being reachable at all.
+#
+# THE ROOT IS NOT PERMANENT HERE, unlike the other product: PhotoPrism records paths RELATIVE to
+# its originals root, so the root can move and only a renamed subdirectory hurts.
+# ---------------------------------------------------------------------------------------------
+#
+# THREE DEFENCES PROTECT THE OPERATOR'S DISKS IN MODE A, and in this product the third has
+# nothing to do with indexing:
+#   1. READ-ONLY, STATED THREE WAYS — the mount flag, the product setting below, and no import
+#      folder mounted at all. Only the mount flag is a kernel guarantee; the setting can be
+#      undone from a settings screen, which is why it is the weakest of the three and not the
+#      answer.
+#   2. A MARKER FILE bound with create_host_path:false, so a disk that failed to mount stops the
+#      container starting instead of presenting an empty directory that Docker helpfully invented.
+#   3. A THUMBNAIL REQUEST ALONE CAN DELETE A PHOTOGRAPH FROM THE INDEX. When an original cannot
+#      be resolved on disk the handler marks the file missing, and a photograph whose files are
+#      all missing is deleted. That is the READ path — the path a map view exercises — so the
+#      empty index schedule below does NOT cover it. Two things do: the marker file, which stops
+#      the container starting against an absent disk at all; and a rule for the application in
+#      front of this one, which has no YAML and must be written into the client — treat
+#      "originals unavailable" as a reason to stop calling this product, and NEVER RETRY A FAILED
+#      THUMBNAIL. Against a detached disk, a retry loop is a deletion loop.
+#
+# Usage — composed with the application:
+#   docker compose -f docker-compose.yml -f docker-compose.photoprism.yml up -d
+# Usage — the photo library alone, beside an application run from source, in its own project so
+# that it cannot reconcile against containers the application already has running:
+#   docker compose -f docker-compose.photoprism.yml -p silexgis-photolib up -d photoprism
+#
+# Requires in .env:
+#   SILEXGIS_PHOTOPRISM_VERSION=…                # PIN IT to a dated build tag, never `latest`
+#   SILEXGIS_PHOTOPRISM_ADMIN_PASSWORD=…         # the value this image ships is the word
+#                                                # "insecure"
+#   SILEXGIS_PHOTOPRISM_LIBRARY_DIR=/srv/photos  # MODE A: the parent the operator's disks are
+#                                                # MOUNTED UNDER — not symlinked into. MODE B:
+#                                                # the folder photographs are imported FROM.
+#                                                # On Windows write it with forward slashes,
+#                                                # D:/Photos, and the marker file is then
+#                                                # D:/Photos/.silexgis-photo-library
+# =============================================================================================
+name: silexgis
+
+services:
+  photoprism:
+    image: photoprism/photoprism:${SILEXGIS_PHOTOPRISM_VERSION:?pin a PhotoPrism build tag in .env — dated, never `latest`}
+    restart: unless-stopped
+    stop_grace_period: 15s
+    # NO security_opt HERE, DELIBERATELY, and this is a change from the vendor's file rather than
+    # an omission. The vendor sets seccomp:unconfined and apparmor:unconfined on this container
+    # and on its database, and its own inline comment attributes that to an upstream issue in the
+    # DATABASE image, not this one. This deployment runs the embedded database, so that container
+    # is not even present, and nothing in the vendor's documentation states a requirement for the
+    # application container. Weakening host confinement on the container most likely to need an
+    # emergency patch, on a host that also holds the cave coordinates, is not something to inherit
+    # by copy-paste.
+    # WHAT BREAKS WITHOUT IT IS NOT ESTABLISHED. If this container fails to start on a particular
+    # host, restore ONE option deliberately, with a comment naming the host and the error — do not
+    # restore both options on both containers because the vendor's file did.
+    working_dir: "/photoprism"          # fixed by the image; do not change
+    environment:
+      PHOTOPRISM_ADMIN_USER: ${SILEXGIS_PHOTOPRISM_ADMIN_USER:-admin}
+      PHOTOPRISM_ADMIN_PASSWORD: ${SILEXGIS_PHOTOPRISM_ADMIN_PASSWORD:?set SILEXGIS_PHOTOPRISM_ADMIN_PASSWORD in .env — the value this image ships is the word "insecure"}
+      # Never "public". Public mode disables token validation entirely — and this product's
+      # preview URLs are already usable by anyone holding them, for as long as the token is
+      # valid, whoever is signed in.
+      PHOTOPRISM_AUTH_MODE: "password"
+      # The public address, path included if it is ever served under one. Wrong here and every
+      # generated link points somewhere the browser cannot reach.
+      PHOTOPRISM_SITE_URL: ${SILEXGIS_PHOTOPRISM_SITE_URL:-http://localhost:2342/}
+      # Read-only, stated three times over: here, in the mount below, and by not mounting an
+      # import folder at all. This one disables the features that would need to write; the mount
+      # is what makes it true even if somebody turns this off in the settings screen.
+      # IN MODE B THIS MUST BE FALSE — importing is a write, and this setting forbids it.
+      PHOTOPRISM_READONLY: ${SILEXGIS_PHOTOPRISM_READONLY:-true}
+      PHOTOPRISM_DISABLE_WEBDAV: "true"
+      # Left open on purpose: an operator needs the settings screen. It is also exactly why the
+      # read-only MOUNT rather than the read-only SETTING is what enforces read-only — this screen
+      # can undo a product setting and cannot undo a mount flag.
+      PHOTOPRISM_DISABLE_SETTINGS: "false"
+      # ---------------------------------------------------------------------------------
+      # THE INTERACTIVE WORLD MAP AND REVERSE GEOCODING. Default true here means OFF: both are on
+      # in the product by default, and the feature transmits the library's spatial distribution to
+      # the vendor's own service and to a third-party map provider.
+      #
+      # ANSWERED 2026-09-03, measured against build 260728 on this machine: NO. Turning this on
+      # does NOT remove the geo API. With PHOTOPRISM_DISABLE_PLACES=true, an index run logs
+      # "maps: location lookup disabled" and writes no reverse-geocoded place names — and
+      # GET /api/v1/geo still answers HTTP 200 with a GeoJSON FeatureCollection whose counts match
+      # the fixture manifest exactly (40 in the fixture rectangle, 7 in its transposed twin, 0 in
+      # the empty one, 47 for the whole world).
+      #
+      # So the protective default and the feature this stack was installed for are BOTH TRUE, and
+      # this value can ship at "true". What is lost is only what it says: the interactive world map
+      # inside this product, and reverse geocoding — place names. Coordinates, which is what the
+      # application actually reads, are untouched, because they come from the photograph's own EXIF
+      # rather than from any lookup.
+      #
+      # Re-test after any version change. It is one line in .env and four counts, and the whole
+      # protective posture of this overlay rests on the answer staying NO.
+      PHOTOPRISM_DISABLE_PLACES: ${SILEXGIS_PHOTOPRISM_DISABLE_PLACES:-true}
+      # ---------------------------------------------------------------------------------
+      # The agent-facing endpoint, on by default. It does not serve library content — it serves
+      # configuration keys and filter documentation — but anonymous access to it is permitted when
+      # the instance is in public mode, and an unauthenticated endpoint that enumerates a running
+      # instance's configuration is free reconnaissance. Nothing here needs it.
+      PHOTOPRISM_DISABLE_MCP: "true"
+      # No index run may start unattended. An index run against a disk that is not mounted
+      # concludes the library was deleted and updates the index accordingly. Empty schedule, and
+      # the automatic post-upload index (300 seconds by default) disabled outright: indexing
+      # happens on a deliberate operator action or not at all. This does NOT cover the thumbnail
+      # read path — see defence 3 in the header.
+      PHOTOPRISM_INDEX_SCHEDULE: ""
+      PHOTOPRISM_AUTO_INDEX: "-1"
+      # Pinned, never "auto": auto takes half the visible CPUs, so on a 32-thread host it is
+      # sixteen indexing workers and sixteen face-detection sessions, and a first index that helps
+      # itself to half the machine starves the application it was installed beside.
+      PHOTOPRISM_WORKERS: ${SILEXGIS_PHOTOPRISM_WORKERS:-4}
+      # TLS terminates at the proxy in front, as it does for the rest of this deployment. Left at
+      # its default this container serves a self-signed certificate, which anything in front of it
+      # then has to trust or skip verifying.
+      PHOTOPRISM_DISABLE_TLS: "true"
+      PHOTOPRISM_DEFAULT_TLS: "false"
+      PHOTOPRISM_DATABASE_DRIVER: "sqlite"
+      # PHOTOPRISM_INIT IS DELIBERATELY ABSENT. The vendor's file sets it to "https tensorflow",
+      # which downloads TensorFlow into the storage volume on first start — a few hundred
+      # megabytes for label generation this deployment does not use, plus a self-signed
+      # certificate for the TLS that is disabled two lines above. Face detection is unaffected:
+      # its models are bundled in the image and run on ONNX. Add `PHOTOPRISM_INIT: "tensorflow"`
+      # if image classification is wanted; nothing else here needs it.
+      # Local inference reaches no further than this host's CPU. A vision model runs elsewhere by
+      # being named here; leave both blank and no picture leaves this machine.
+      PHOTOPRISM_VISION_URI: ${SILEXGIS_PHOTOPRISM_VISION_URI:-}
+      PHOTOPRISM_VISION_KEY: ${SILEXGIS_PHOTOPRISM_VISION_KEY:-}
+    volumes:
+      # Cache, sidecars, the SQLite database and anything downloaded at first start. A named
+      # volume rather than the vendor's ./storage bind, for the same disk reason as everywhere
+      # else here — the vendor's default would put all of that inside the checkout, on the small
+      # disk, beside the image layers.
+      #
+      # NOTE A REAL DISAGREEMENT WITH THE VENDOR, so nobody discovers it as a surprise: their
+      # documentation advises against named volumes for storage and originals, on the grounds
+      # that data can be lost when a container is recreated. Named volumes are not removed by
+      # recreating a container — only by `down -v` or an explicit `volume rm`, neither of which
+      # appears in any procedure in this repository. The disk split on this kind of host is the
+      # concrete risk; the vendor's is not.
+      - photoprism-storage:/photoprism/storage
+      # --- MODE A: the operator's photographs, read-only ---------------------------------
+      # This product fixes the container path. Additional disks mount as subdirectories of it,
+      # which is how a list of disks is expressed here.
+      - type: bind
+        source: ${SILEXGIS_PHOTOPRISM_LIBRARY_DIR:?set SILEXGIS_PHOTOPRISM_LIBRARY_DIR in .env}
+        target: /photoprism/originals
+        read_only: true
+        bind:
+          create_host_path: false
+      # The marker, and in this product it guards the read path as much as the index. If the disk
+      # is not mounted the source does not exist, create_host_path:false refuses to invent it, and
+      # the container does not start. Without it Docker creates an empty directory, every original
+      # resolves to nothing, and every thumbnail request for a photograph in that library deletes
+      # it from the index.
+      - type: bind
+        source: ${SILEXGIS_PHOTOPRISM_LIBRARY_DIR}/.silexgis-photo-library
+        target: /photoprism/.library-present
+        read_only: true
+        bind:
+          create_host_path: false
+      # --- MODE B: import into the product's own store -----------------------------------
+      # Comment out the two blocks above, uncomment the two below AND the photoprism-originals
+      # volume at the foot of this file, and set SILEXGIS_PHOTOPRISM_READONLY=false in .env —
+      # importing is a write, and that setting forbids it.
+      #
+      # The import mount stays READ-ONLY even though this is the writable mode, because the
+      # product offers both a copy-import and a move-import and only one of them is safe against
+      # somebody else's archive. The kernel is what settles it: a move cannot succeed against a
+      # read-only source. WHAT A REFUSED MOVE LOOKS LIKE IN THE UI IS NOT ESTABLISHED — use the
+      # copy option, and treat this flag as the backstop rather than the mechanism.
+      #
+      # - photoprism-originals:/photoprism/originals
+      # - type: bind
+      #   source: ${SILEXGIS_PHOTOPRISM_LIBRARY_DIR:?set SILEXGIS_PHOTOPRISM_LIBRARY_DIR in .env}
+      #   target: /photoprism/import
+      #   read_only: true
+      #   bind:
+      #     create_host_path: false
+      # -----------------------------------------------------------------------------------
+    ports:
+      # Loopback, for the same reason as the other overlay: Docker's published ports are inserted
+      # ahead of this host's firewall rules. The application does not need this port — composed
+      # into the same project it reaches this service at http://photoprism:2342 with nothing
+      # published — but a human looking at the library does, and so does an application being run
+      # from source on the host during development.
+      - "${SILEXGIS_PHOTOPRISM_BIND:-127.0.0.1}:${SILEXGIS_PHOTOPRISM_PORT:-2342}:2342"
+    # NO mem_limit. The vendor advises against a hard memory limit outright: the indexer
+    # transiently wants more than its average, and a hard limit turns that into an OOM restart
+    # rather than a slow minute. The control surface is PHOTOPRISM_WORKERS above, pinned. On a
+    # shared development box where a runaway indexer would disturb other work, a cap is
+    # defensible — `mem_limit: 4g` — but it is a local choice with a known cost, not a default.
+
+  # ------------------------------------------------------------------------------------------
+  # OPTIONAL FRAGMENT — MariaDB INSTEAD OF THE EMBEDDED DATABASE. Commented out deliberately.
+  #
+  # The vendor's own compose comments that MariaDB "offers significantly better performance
+  # compared to SQLite", and SQLite's own cost is documented: the indexer caps itself at four
+  # workers on SQLite whatever the host size, to avoid `database is locked` contention. Against
+  # that stands a second image, a second daemon's memory, a reserved buffer pool — and the fact
+  # that the vendor ships MariaDB with seccomp and apparmor unconfined, i.e. asks you to weaken
+  # host confinement for a component you may not need.
+  #
+  # THE DRIVER CANNOT SAFELY BE CHANGED AFTER DATA EXISTS. Deciding this by editing .env once a
+  # library has been indexed is a data-loss trap, which is why there is no variable for it.
+  #
+  # photoprism-db:
+  #   image: mariadb:12.3
+  #   restart: unless-stopped
+  #   command: >
+  #     --innodb-buffer-pool-size=512M
+  #     --transaction-isolation=READ-COMMITTED
+  #     --max-connections=512
+  #   environment:
+  #     MARIADB_DATABASE: photoprism
+  #     MARIADB_USER: photoprism
+  #     MARIADB_PASSWORD: ${SILEXGIS_PHOTOPRISM_DB_PASSWORD:?set SILEXGIS_PHOTOPRISM_DB_PASSWORD in .env}
+  #     MARIADB_ROOT_PASSWORD: ${SILEXGIS_PHOTOPRISM_DB_ROOT_PASSWORD:?set SILEXGIS_PHOTOPRISM_DB_ROOT_PASSWORD in .env}
+  #   volumes:
+  #     - photoprism-db-data:/var/lib/mysql
+  # and on the photoprism service, replacing PHOTOPRISM_DATABASE_DRIVER: "sqlite":
+  #     PHOTOPRISM_DATABASE_DRIVER: "mysql"
+  #     PHOTOPRISM_DATABASE_SERVER: "photoprism-db:3306"
+  #     PHOTOPRISM_DATABASE_NAME: "photoprism"
+  #     PHOTOPRISM_DATABASE_USER: "photoprism"
+  #     PHOTOPRISM_DATABASE_PASSWORD: ${SILEXGIS_PHOTOPRISM_DB_PASSWORD}
+  # ------------------------------------------------------------------------------------------
+
+volumes:
+  photoprism-storage:
+  # MODE B only. Uncomment with the import mount above — this is where the photographs then live,
+  # and it becomes the one thing here whose loss is not repairable by re-indexing.
+  # photoprism-originals:
+  # Used only by the optional MariaDB fragment above.
+  # photoprism-db-data:

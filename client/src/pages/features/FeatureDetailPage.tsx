@@ -25,6 +25,8 @@ import {
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import FeatureEditModal, { type FeatureAttributeValues } from '../../components/features/FeatureEditModal.tsx';
 import AreaHypsometryCard from '../../components/features/AreaHypsometryCard.tsx';
+import AreaKarstStatisticsCard from '../../components/features/AreaKarstStatisticsCard.tsx';
+import AreaPointPatternCard from '../../components/features/AreaPointPatternCard.tsx';
 import AreaStructureCard from '../../components/features/AreaStructureCard.tsx';
 import FeatureMorphometryCard from '../../components/features/FeatureMorphometryCard.tsx';
 import { parsePropertiesSchema } from '../../components/typedProperties/propertiesSchema.ts';
@@ -341,6 +343,12 @@ export default function FeatureDetailPage() {
           are asked of the same outline and answered over the same subtree. */}
       <AreaHypsometryCard featureId={id} geometryType={feature.geometry?.type ?? null} />
       <AreaStructureCard featureId={id} geometryType={feature.geometry?.type ?? null} />
+      <AreaKarstStatisticsCard featureId={id} featureTypeCode={feature.featureTypeCode ?? null} />
+      <AreaPointPatternCard
+        featureId={id}
+        featureTypeCode={feature.featureTypeCode ?? null}
+        geometry={feature.geometry ?? null}
+      />
       {labelCode && (
         <Card title={t('qr.cardTitle')} style={{ marginBottom: 16 }}>
           <QrCodeSquare code={labelCode} />

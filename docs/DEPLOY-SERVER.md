@@ -10,10 +10,11 @@ the *server*: the account the stack runs as, the firewall, the swap, the backup 
 the update procedure. Where the two overlap, INSTALL.md is the authority on the application's
 own configuration.
 
-Everything here is done by four scripts under [`deploy/server/`](../deploy/server/). They are
-idempotent, they are the same scripts used to build the reference installation, and running
-them is what makes this reproducible rather than a list of commands somebody has to retype
-correctly.
+Everything here is done by five scripts under [`deploy/server/`](../deploy/server/):
+`provision-host.sh`, `harden-ssh.sh`, `install-app.sh`, `install-ops.sh` and `set-domain.sh`.
+They are idempotent, they are the same scripts used to build the reference installation, and
+running them is what makes this reproducible rather than a list of commands somebody has to
+retype correctly.
 
 ## What you need
 
@@ -63,6 +64,19 @@ present, correct, and completely ineffective, which reads as success in every ch
 at the file rather than at the running daemon. The shipped drop-in is named `01-silexgis.conf`
 for exactly this reason.
 
+An operator who needs the opposite — direct root logins, or password authentication, for
+convenient remote access — can ask for it explicitly:
+
+```bash
+sudo SILEXGIS_SSH_ALLOW_ROOT=1 SILEXGIS_SSH_ALLOW_PASSWORD=1 bash harden-ssh.sh
+```
+
+Both are off by default and each is a real cost, not a preference. Permitting root logins
+removes the record of which person did what, since everyone arrives as the same account.
+Permitting passwords exposes every account on a public address to continuous credential
+guessing; fail2ban blunts that without removing it. Re-running the script without the switches
+puts both back.
+
 ### 3. Install the application
 
 As the `silexgis` account:
@@ -100,6 +114,12 @@ weekly automatic-update timer but leaves it **disabled**: updating an applicatio
 when its schema may change underneath it, is a decision to take deliberately rather than a
 default to inherit.
 
+The update logic is *copied* to `/opt/silexgis-ops/`, outside the deployed checkout, rather
+than being run from inside it. A script that lives in the tree it is about to `git pull` can be
+rewritten underneath the shell executing it, and a copy placed into the checkout by hand
+collides with the pull the moment the same path arrives from upstream. Re-run `install-ops.sh`
+after an update to refresh that copy.
+
 ### 5. Create the first content
 
 ```bash
@@ -119,6 +139,8 @@ Administrators. Sign in with it and create the accounts you need.
 | `db` | none | PostGIS. Never published; reach it with `docker compose exec db psql` |
 | `convert` | none | Gotenberg, if the conversion overlay is in use |
 | `terrain-worker` | none | if the terrain overlay is in use; talks to the API through a directory, not a socket |
+| `pgadmin` | `127.0.0.1:5050` | if the pgAdmin overlay is in use. Loopback only: it stores database credentials, so it is reached over an ssh tunnel rather than published |
+| `caddy` | **80 and 443** | if the TLS overlay is in use, in which case it fronts `web` and `web` stops publishing a port of its own |
 
 **The mobile SpeleoLoc API is not a separate port.** It is served under `/api/v1/…` by the same
 API container and proxied by the same nginx, so one public port carries both the browser and
@@ -256,26 +278,58 @@ SILEXGIS_DOMAIN=158-220-114-220.sslip.io bash install-app.sh
 
 ### Moving to your own domain
 
-Once DNS points at the host:
+One command covers the four places a hostname is written — the reverse proxy, the public URL,
+the OIDC redirect registrations and the TLS contact address:
 
 ```bash
-cd /opt/silexgis/deploy
-# in .env:
-#   SILEXGIS_DOMAIN=caves.example.org
-#   SILEXGIS_PUBLIC_URL=https://caves.example.org
-#   SILEXGIS_TLS_EMAIL=you@example.org
-#   COMPOSE_FILE=...:docker-compose.tls.yml
-sudo ufw allow 443/tcp
-docker compose up -d
+/opt/silexgis-ops/set-domain.sh \
+  --primary caves.example.org \
+  --also    158-220-114-220.sslip.io \
+  --email   you@example.org
 ```
 
-Caddy obtains and renews the certificate; the TLS overlay stops publishing the plain port. Ports
-80 and 443 must be reachable for the ACME challenge. `SILEXGIS_PUBLIC_URL` must match the
-hostname exactly — OIDC redirect URIs, including external-provider callbacks, derive from it.
+`--primary` becomes `PublicUrl`: the address in emails and share links, the OIDC issuer, and
+the redirect URI sign-in returns to. `--also` is repeatable and keeps the previous address
+working across the move — the SPA takes its OIDC authority from whatever is in the browser's
+address bar, so each additional name needs its own `/auth/callback` registered or signing in
+through it is refused as an invalid redirect. The script registers them, restarts the proxy and
+the API, and waits until the primary name really is serving a trusted certificate before it
+reports success. `sudo ufw allow 443/tcp` first if the host was provisioned without TLS.
 
-Switching from a wildcard-DNS hostname to your own domain is exactly these three lines: the
-OIDC client registration is re-seeded from `PublicUrl` on every API start, so the redirect URI
-follows automatically.
+#### Get the DNS right first, because the failure does not look like DNS
+
+The script inspects the records before changing anything and refuses if they are wrong. Three
+things must hold for every name:
+
+1. **Exactly one `A` record, pointing here.** Two `A` records is not redundancy, it is
+   round-robin: half your visitors reach the other machine, and so does much of Let's
+   Encrypt's validation traffic.
+2. **No `AAAA` record unless it points here.** This is the one that costs an afternoon.
+   Browsers and Let's Encrypt both *prefer* IPv6, so a stale `AAAA` sends everything to the
+   wrong server while the `A` record you just fixed sits there looking correct. The CA reports
+   it as an unauthorized challenge naming an address you were not expecting:
+
+   ```
+   2a0f:4480:0:7::48e: Invalid response from
+   http://caves.example.org/.well-known/acme-challenge/...: 404
+   ```
+
+   If you are not deliberately serving over IPv6, delete the `AAAA`. If you are, point it at
+   this host and confirm the host answers there.
+3. **Ports 80 and 443 reachable.** Port 80 is not optional even though the site redirects away
+   from it — the HTTP-01 challenge arrives on it.
+
+DNS caches for its TTL. Lower the TTL *before* the change; afterwards you are only waiting.
+Once the records are right, Caddy picks the certificate up on its next retry, or immediately
+with `docker compose restart caddy`.
+
+#### Configuring a name before its DNS is ready
+
+`--skip-dns-check` writes the configuration anyway, and doing so deliberately is the safe
+order: keep the working address as `--primary`, add the new one with `--also`, and the live
+site is untouched while Caddy retries the new name in the background. When DNS is corrected
+the certificate appears on its own; the only remaining step is to re-run the command with the
+two names swapped.
 
 ## Troubleshooting
 

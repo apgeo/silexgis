@@ -37,6 +37,17 @@ export interface ViewConfig {
    */
   tripsFrom?: string;
   tripsTo?: string;
+  /**
+   * Which photo libraries were switched on, named the way the server names each. Added after v1
+   * shipped; older saved views omit it (treated as none — these are opt-in overlays).
+   *
+   * A list rather than a flag per product, because this document's version is never bumped and
+   * every field added to it is permanent: pointing this installation at a different library, or at
+   * a third one, must not need another field that can never be dropped. An entry naming a library
+   * this installation no longer has is ignored, exactly as a saved view naming a deleted imported
+   * file is.
+   */
+  libraryPhotoSources?: string[];
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
@@ -71,6 +82,7 @@ export interface WorkspaceUiState {
   tripsVisible: boolean;
   tripsFrom?: string;
   tripsTo?: string;
+  libraryPhotoSources: string[];
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
@@ -106,6 +118,7 @@ export function captureViewConfig(
     tripsVisible: ui.tripsVisible,
     tripsFrom: ui.tripsFrom,
     tripsTo: ui.tripsTo,
+    libraryPhotoSources: ui.libraryPhotoSources,
     geofileIds: ui.geofileIds,
     rasters: ui.rasters,
     tagFilter: ui.tagFilter,
@@ -135,6 +148,7 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     tripsVisible: parsed.tripsVisible ?? false,
     tripsFrom: parsed.tripsFrom,
     tripsTo: parsed.tripsTo,
+    libraryPhotoSources: parsed.libraryPhotoSources ?? [],
     geofileIds: parsed.geofileIds ?? [],
     rasters: parsed.rasters ?? [],
     tagFilter: parsed.tagFilter ?? null,

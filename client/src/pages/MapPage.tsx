@@ -35,6 +35,7 @@ import {
   useMapConfig,
   useMapLayers,
   useMapViews,
+  usePhotoLibraries,
   useRasterMaps,
   useSurveyModel,
   useWorkAreas,
@@ -95,6 +96,14 @@ import {
   type TripLayerFilter,
 } from '../map/tripLayer.ts';
 import { attachPhotoPopup } from '../map/photoPopup.ts';
+import {
+  attachLibraryPhotoLoader,
+  createLibraryPhotoLayer,
+  libraryPhotoLayerId,
+  libraryPhotoSourceOf,
+  setLibraryPhotosEnabled,
+} from '../map/libraryPhotoLayer.ts';
+import { attachLibraryPhotoPopup } from '../map/libraryPhotoPopup.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { attachViewSync2d, type ViewSync2dHandle } from '../map/viewSync2d.ts';
@@ -167,6 +176,10 @@ export default function MapPage() {
   const syncRef = useRef<ViewSync2dHandle | null>(null);
   const { data: layers } = useMapLayers();
   const { data: mapConfig } = useMapConfig();
+  // Asked of the photo-library slice itself rather than of the map config: most of that
+  // slice's routes are not map routes, and keeping the question out of the map endpoints is
+  // what keeps the whole feature removable by deleting its directories.
+  const { data: libraryStatus } = usePhotoLibraries();
   const { data: featureTypes } = useFeatureTypes();
   const [activeBaseId, setActiveBaseId] = useState<number>();
   const [entrancesVisible, setEntrancesVisible] = useState(true);
@@ -183,6 +196,10 @@ export default function MapPage() {
   const [tripFilter, setTripFilter] = useState<TripLayerFilter>({});
   // How many of a carried listing filter's narrowings this overlay cannot ask about.
   const [unappliedTripFilters, setUnappliedTripFilters] = useState(0);
+  // Which neighbouring photo libraries are switched on, by the name the server gives each. A
+  // list rather than a flag per product, so pointing this installation at a different library
+  // needs no new state here and no new field in a saved view.
+  const [libraryPhotoSources, setLibraryPhotoSources] = useState<string[]>([]);
   const [editController, setEditController] = useState<MapEditController | null>(null);
   const selection = useWorkspaceStore((s) => s.selection);
   const setSelection = useWorkspaceStore((s) => s.setSelection);
@@ -294,6 +311,10 @@ export default function MapPage() {
     const detachPhotoLoader = attachPhotoLoader(map);
     const detachTripLoader = attachTripLoader(map);
     const detachPhotoPopup = attachPhotoPopup(map);
+    // The foreign libraries' end of the same two things. Attached unconditionally: both are
+    // gated on a layer being switched on, and no library configured means no layer to switch on.
+    const detachLibraryPhotoLoader = attachLibraryPhotoLoader(map);
+    const detachLibraryPhotoPopup = attachLibraryPhotoPopup(map);
     // Clicking a point of an imported file opens what the file recorded beside it. Attached here,
     // beside the photo popup, because the two are the same kind of thing and share the rule that
     // a click landing on neither dismisses whichever is open.
@@ -346,6 +367,8 @@ export default function MapPage() {
       detachPhotoLoader();
       detachTripLoader();
       detachPhotoPopup();
+      detachLibraryPhotoLoader();
+      detachLibraryPhotoPopup();
       detachGeofilePopup();
       detachSelection();
       detachHover();
@@ -724,6 +747,44 @@ export default function MapPage() {
   useEffect(() => {
     setTripLayerFilter(tripFilter);
   }, [tripFilter]);
+  // The libraries this account may see. A caller outside the audience is told it may read nothing
+  // and given an empty list, which is the same answer to this question as an installation that has
+  // been given no library: either way there is nothing to offer, and neither is told which
+  // products the installation runs.
+  const photoLibraries = useMemo(
+    () => (libraryStatus?.mayRead ? (libraryStatus.providers ?? []) : []),
+    [libraryStatus],
+  );
+
+  // Overlays for those libraries. Not registered with the built-ins on mount, because their
+  // existence is a server answer that arrives after it — the same way imported files and
+  // georeferenced rasters are registered — and followed by the pending-order pass, because a saved
+  // view can name a layer that did not exist when the view was applied.
+  useEffect(() => {
+    const wanted = new Set(photoLibraries.map((library) => libraryPhotoLayerId(library.source)));
+    for (const library of photoLibraries) {
+      if (!findOverlayLayer(libraryPhotoLayerId(library.source))) {
+        getOverlayGroup().getLayers().push(createLibraryPhotoLayer(library.source));
+      }
+    }
+    // A library disconnected while somebody was looking at the map: the row goes away rather than
+    // staying as a layer that can only ever fail.
+    for (const layer of getOverlayGroup().getLayers().getArray().slice()) {
+      const id = layer.get('id') as string | undefined;
+      if (id && libraryPhotoSourceOf(id) && !wanted.has(id)) {
+        getOverlayGroup().getLayers().remove(layer);
+      }
+    }
+    applyPendingOverlayOrder();
+  }, [photoLibraries]);
+
+  useEffect(() => {
+    for (const library of photoLibraries) {
+      const on = libraryPhotoSources.includes(library.source);
+      findOverlayLayer(libraryPhotoLayerId(library.source))?.setVisible(on);
+      setLibraryPhotosEnabled(library.source, on); // gate the bbox loader so hidden = no fetches
+    }
+  }, [photoLibraries, libraryPhotoSources]);
 
   // Checkbox toggles coming from the composer tree. Built-ins hide/show and are
   // reflected into page state (for saved views); geofile/raster overlays are
@@ -742,6 +803,11 @@ export default function MapPage() {
       setPhotosVisible(visible);
     } else if (id === TRIP_LAYER_ID) {
       setTripsVisible(visible);
+    } else if (libraryPhotoSourceOf(id)) {
+      const source = libraryPhotoSourceOf(id)!;
+      setLibraryPhotoSources((current) =>
+        visible ? [...new Set([...current, source])] : current.filter((s) => s !== source),
+      );
     } else if (id?.startsWith(GEOFILE_LAYER_PREFIX)) {
       setGeofileVisible(id.slice(GEOFILE_LAYER_PREFIX.length), visible);
     } else if (id?.startsWith(RASTER_LAYER_PREFIX)) {
@@ -760,6 +826,7 @@ export default function MapPage() {
       tripsVisible,
       tripsFrom: tripFilter.from,
       tripsTo: tripFilter.to,
+      libraryPhotoSources,
       geofileIds: visibleGeofileIds,
       rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
       tagFilter,
@@ -849,6 +916,7 @@ export default function MapPage() {
     // from a listing somebody was reading at the time, and a view reopened months later would
     // otherwise silently answer for a filter whose reason nobody remembers.
     setTripFilter((current) => ({ ...current, from: ui.tripsFrom, to: ui.tripsTo }));
+    setLibraryPhotoSources(ui.libraryPhotoSources);
     for (const id of visibleGeofileIds) {
       if (!ui.geofileIds.includes(id)) {
         setGeofileVisible(id, false);
@@ -911,6 +979,8 @@ export default function MapPage() {
       visibleRasterIds={visibleRasterIds}
       onRasterVisibleChange={setRasterVisible}
       onOverlayVisibilityChanged={onOverlayVisibilityChanged}
+      photoLibraries={photoLibraries}
+      visibleLibraryPhotoSources={libraryPhotoSources}
       treeNonce={treeNonce}
       tagFilter={tagFilter}
       onTagFilterChange={(slug) => {

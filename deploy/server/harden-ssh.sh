@@ -12,15 +12,28 @@
 #   bash harden-ssh.sh
 #
 # Overrides (environment):
-#   SILEXGIS_DEPLOY_USER  default silexgis
+#   SILEXGIS_DEPLOY_USER        default silexgis
+#   SILEXGIS_SSH_ALLOW_ROOT     default 0 -- set 1 to permit direct root logins
+#   SILEXGIS_SSH_ALLOW_PASSWORD default 0 -- set 1 to permit password authentication
+#
+# The two switches exist because an operator may deliberately trade this away for convenient
+# remote access. Both are off by default, and each is a stated risk rather than a preference:
+# on a public address, permitting root logins removes the record of which person did what, and
+# permitting passwords exposes every account to continuous credential guessing. fail2ban,
+# installed by provision-host.sh, blunts the second without removing it.
 set -euo pipefail
 
 DEPLOY_USER="${SILEXGIS_DEPLOY_USER:-silexgis}"
+ALLOW_ROOT="${SILEXGIS_SSH_ALLOW_ROOT:-0}"
+ALLOW_PASSWORD="${SILEXGIS_SSH_ALLOW_PASSWORD:-0}"
 KEYS="/home/$DEPLOY_USER/.ssh/authorized_keys"
+
+if [ "$ALLOW_ROOT" = 1 ]; then ROOT_SETTING=yes; else ROOT_SETTING=no; fi
+if [ "$ALLOW_PASSWORD" = 1 ]; then PW_SETTING=yes; else PW_SETTING=no; fi
 
 [ "$(id -u)" -eq 0 ] || { echo "must run as root" >&2; exit 1; }
 
-if [ ! -s "$KEYS" ]; then
+if [ ! -s "$KEYS" ] && [ "$ALLOW_PASSWORD" != 1 ] && [ "$ALLOW_ROOT" != 1 ]; then
 	echo "refusing: $KEYS is missing or empty -- disabling password login now would" >&2
 	echo "leave no way back in. Install a key for $DEPLOY_USER first." >&2
 	exit 1
@@ -37,13 +50,12 @@ echo "==> $DEPLOY_USER has $(grep -c . "$KEYS") authorised key(s)"
 # any hardening file named 60-. Sorting ahead of it is what makes this take effect, and
 # checking `sshd -T` afterwards rather than trusting the file is what proves it did.
 rm -f /etc/ssh/sshd_config.d/60-silexgis.conf
-cat > /etc/ssh/sshd_config.d/01-silexgis.conf <<'EOF'
-# Public-key authentication only. Recovery, should the key be lost, is the provider's
-# console -- not a password over the network.
-PermitRootLogin no
-PasswordAuthentication no
-KbdInteractiveAuthentication no
-ChallengeResponseAuthentication no
+cat > /etc/ssh/sshd_config.d/01-silexgis.conf <<EOF
+# Written by harden-ssh.sh. Recovery, should a key be lost, is the provider's console.
+PermitRootLogin ${ROOT_SETTING}
+PasswordAuthentication ${PW_SETTING}
+KbdInteractiveAuthentication ${PW_SETTING}
+ChallengeResponseAuthentication ${PW_SETTING}
 PermitEmptyPasswords no
 UsePAM yes
 
@@ -69,9 +81,15 @@ sshd -T | grep -E '^(permitrootlogin|passwordauthentication|kbdinteractiveauthen
 # Assert rather than report. The failure this catches is a drop-in that is present, correct
 # and outranked -- which reads as success in every check that looks at the file.
 fail=0
-[ "$(sshd -T | awk '/^passwordauthentication /{print $2}')" = no ] || { echo "FAIL: password authentication is still enabled" >&2; fail=1; }
-[ "$(sshd -T | awk '/^permitrootlogin /{print $2}')" = no ] || { echo "FAIL: root login is still permitted" >&2; fail=1; }
-[ "$fail" -eq 0 ] || { echo "sshd is NOT hardened; check for a lower-sorting file in /etc/ssh/sshd_config.d/" >&2; exit 1; }
+[ "$(sshd -T | awk '/^passwordauthentication /{print $2}')" = "$PW_SETTING" ] || { echo "FAIL: passwordauthentication is not '$PW_SETTING'" >&2; fail=1; }
+[ "$(sshd -T | awk '/^permitrootlogin /{print $2}')" = "$ROOT_SETTING" ] || { echo "FAIL: permitrootlogin is not '$ROOT_SETTING'" >&2; fail=1; }
+[ "$fail" -eq 0 ] || { echo "effective sshd config does not match what was asked for; look for a lower-sorting file in /etc/ssh/sshd_config.d/" >&2; exit 1; }
+
+if [ "$ALLOW_ROOT" = 1 ] || [ "$ALLOW_PASSWORD" = 1 ]; then
+	echo
+	echo "NOTE: this host now permits root logins=$ROOT_SETTING, password auth=$PW_SETTING."
+	echo "      Deliberate, and reversible by re-running this script without the switches."
+fi
 
 echo
 echo "Existing sessions stay open. Verify a NEW ssh session works before closing this one."
