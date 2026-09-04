@@ -202,6 +202,13 @@ server is in no position to answer for them. It never decides which write the se
 phone's clock is unsynchronised, resettable by whoever holds it and routinely wrong by hours, so a
 rule that preferred the later `clientUpdatedAt` would let one bad clock overwrite anything.
 
+**A point may carry a third ordinate, and it is the altitude.** A downloaded
+`geometry` is GeoJSON, so a position that has an altitude arrives as
+`[longitude, latitude, altitude]` and one that has none arrives as `[longitude, latitude]`. There is
+no separate `altitude` member on a downloaded row: a client that reads only the first two ordinates
+silently drops every altitude the installation holds. `positionQuality` is **write-only** in this
+generation — an entrance stores it, and nothing hands it back.
+
 **The table above is the whole row.** Kind-specific columns are deliberately not folded into it, so
 a device never receives a field whose protection was decided for a different channel.
 
@@ -421,12 +428,21 @@ still be refused its deletion — a delete takes the row's whole containment sub
 | `name`, `description` | As stored. `name` is at most 255 characters |
 | `caveTypeCode`, `entranceTypeCode`, `featureTypeCode` | The kind, **by its stable code, never by a numeric id** |
 | `isMain` | For an entrance: whether it is the cave's main one |
-| `geometry`, `altitude`, `positionQuality` | The position, and how it was obtained |
+| `geometry`, `altitude`, `positionQuality` | The position, and how it was obtained. `altitude` is kept on every kind that carries a point — it is stored as the point's third ordinate, which is also how it comes back. `positionQuality` is stored only on an entrance, and is not returned by any route |
 | `properties` | The property document, stored verbatim. Where the device's own identifiers and codes live |
 | `clientUpdatedAt` | When the device believes it last wrote the row. Stored as provenance; **never consulted in the arbitration** |
 
 **An upload is a partial write.** `name`, `description`, `properties` and the position are what a
-device owns on a row that already exists. **Containment and kind are set when a row is created and
+device owns on a row that already exists. A member the device does not send is a member the server
+leaves alone, and that now holds for every one of them — until 2026-09-01 `name` and `description`
+were written unconditionally, so an update naming only one of them emptied the other.
+
+**A field cannot be cleared in this generation.** An absent JSON member and an explicit `null`
+arrive at the server as the same value, so the rule that makes omission safe also makes "the caver
+emptied this description" unsendable: sending `"description": null` leaves the stored description
+alone rather than clearing it. A device that needs to clear a field sends a space, or waits for a
+generation whose row shape distinguishes the two. This is a real limit, not an oversight, and it is
+the other half of the decision that stopped the data loss. **Containment and kind are set when a row is created and
 are not carried by this contract afterwards**: on an update `parentId`, `caveTypeCode`,
 `entranceTypeCode` and `featureTypeCode` are read by nothing, so a row sent with a different
 container comes back `updated` — honestly, for the fields that were written — while the edge stays
