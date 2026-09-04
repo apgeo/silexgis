@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { DownloadOutlined, EnvironmentOutlined, PlusOutlined } from '@ant-design/icons';
+import { BarChartOutlined, DownloadOutlined, EnvironmentOutlined, PlusOutlined } from '@ant-design/icons';
 import { App, Button, Empty, Flex, Input, Table, Tag, Typography } from 'antd';
 import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
@@ -190,6 +190,17 @@ export default function TripLogListPage() {
             onClick={() => navigate({ pathname: '/map', search: tripMapSearch(filter) })}
           >
             {t('trips.filters.showOnMap')}
+          </Button>
+          {/* The same narrowing, totalled. Where the reader was standing in the list travels
+              too, so coming back from the charts returns to the page they left. */}
+          <Button
+            icon={<BarChartOutlined />}
+            data-testid="trip-list-insights"
+            onClick={() =>
+              navigate({ pathname: '/trip-logs/stats', search: writeTripListFilter(filter).toString() })
+            }
+          >
+            {t('tripStats.open')}
           </Button>
           <Button icon={<DownloadOutlined />} data-testid="trip-list-export" onClick={onExport}>
             {t('common.export')}

@@ -221,6 +221,7 @@ export const queryKeys = {
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   tripLogFacets: (params: TripLogFacetParams) => ['trip-logs', 'facets', params] as const,
   tripLogGrouping: (params: TripLogGroupingParams) => ['trip-logs', 'grouping', params] as const,
+  tripLogStats: (params: TripLogFacetParams) => ['trip-logs', 'stats', params] as const,
   myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
@@ -2654,6 +2655,34 @@ export function useTripLogGrouping(params: TripLogGroupingParams, enabled: boole
   return useQuery({
     queryKey: queryKeys.tripLogGrouping(params),
     queryFn: () => unwrap(api.GET('/api/v1/trip-logs/grouping', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** One year of a filtered trip listing, and how much ground had been covered by the end of it. */
+export type TripStatsYear = components['schemas']['TripStatsYearDto'];
+
+/** How the filtered trips break down along one dimension, longest first. */
+export type TripStatsBreakdown = components['schemas']['TripStatsBreakdownDto'];
+
+/** What a filtered trip listing adds up to, over the trips this caller may read. */
+export type TripStats = components['schemas']['TripStatsDto'];
+
+/**
+ * What the filtered trips add up to.
+ *
+ * It takes the listing's own narrowings and nothing else, so "the current filter" means one thing
+ * on the insights page and on the list. A figure worked out from a second, similar-looking filter
+ * would disagree with the table under the one condition nobody checks by eye: a reader who may
+ * open only part of the archive. The previous answer is kept while a new one loads, because the
+ * scope toggle and the filter are things somebody is clicking and charts that blank out and
+ * return under the cursor read as breakage.
+ */
+export function useTripLogStats(params: TripLogFacetParams, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripLogStats(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/stats', { params: { query: params } })),
     placeholderData: keepPreviousData,
     enabled,
   });

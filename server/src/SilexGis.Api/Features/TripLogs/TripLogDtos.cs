@@ -536,3 +536,92 @@ public sealed record TripListGroupingDto(
     /// </summary>
     public static TripListGroupingDto Empty { get; } = new("none", "none", 0, false, false, []);
 }
+
+/// <summary>
+/// One year of a filtered trip listing: what was done in it, and how much of the ground had been
+/// covered by the end of it.
+/// </summary>
+/// <remarks>
+/// Appended, and appended only. This record is constructed positionally and is a run of members
+/// of the same type, so a value inserted in the middle is absorbed silently by the neighbour it
+/// displaces.
+/// </remarks>
+/// <param name="Year">The year the trips began in. A trip whose span crosses midnight on New
+/// Year's Eve belongs to the year it started, exactly as it does in a grouping.</param>
+/// <param name="Trips">Trips this caller may read that the filter left in that year. Zero for a
+/// year inside the span that holds none, so a quiet year reads as a flat stretch rather than
+/// being closed up.</param>
+/// <param name="NewAreas">Areas reached for the first time that year, counted over the filtered
+/// trips only — an area the club first visited outside the filter counts as new here, because
+/// this is a curve of what the filter shows and not of what the archive knows.</param>
+/// <param name="AreasSoFar">Distinct areas reached by the end of that year, running. This is the
+/// figure no other one gives: a curve still climbing says new ground is being found, and one
+/// flattening says the same places are being revisited.</param>
+public sealed record TripStatsYearDto(int Year, int Trips, int NewAreas, int AreasSoFar);
+
+/// <summary>
+/// How the filtered trips break down along one dimension, longest first.
+/// </summary>
+/// <remarks>
+/// Appended, and appended only, for the reason the other listing records carry.
+/// </remarks>
+/// <param name="Overlapping">A trip counts into every value it holds, so these counts
+/// legitimately add up to more than the trips the filter left. True for the dimensions that hold
+/// more than one value per trip — where a trip went, and who was on it — and the axis has to say
+/// so, because a total that quietly exceeds its population is the one figure nobody checks.</param>
+/// <param name="Distinct">How many distinct values there are, which is more than were handed back
+/// wherever the list was bounded. A page showing forty bars of two hundred values says so with
+/// this rather than implying there are forty.</param>
+/// <param name="Values">The values, longest first, with the trips holding nothing under the
+/// dimension last however many of them there are.</param>
+public sealed record TripStatsBreakdownDto(
+    bool Overlapping,
+    int Distinct,
+    IReadOnlyList<TripFacetValueDto> Values);
+
+/// <summary>
+/// What a filtered trip listing adds up to, counted over the trips this caller may read.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <paramref name="Matching"/> over <paramref name="Overall"/> is the same fraction the list
+/// prints above its table, and it is here so the page can say whose totals these are. Both halves
+/// are about the caller: somebody with different access sees different figures for the same
+/// filter and both are right. A page that printed an unqualified total would be making a claim
+/// about the archive out of a count of one reader's share of it.
+/// </para>
+/// <para>
+/// Appended, and appended only. This record is constructed positionally and has runs of members
+/// of the same type, so a value inserted in the middle is absorbed silently by the neighbour it
+/// displaces.
+/// </para>
+/// </remarks>
+/// <param name="Matching">Trips the filter left, of the trips this caller may read.</param>
+/// <param name="Overall">Trips this caller may read at all, before any narrowing.</param>
+/// <param name="Years">One row per year of the filtered span, in order.</param>
+/// <param name="Types">What the trips were for, by trip type id.</param>
+/// <param name="Areas">Where they went, through the same gated walk of the containment hierarchy
+/// the area filter and the area counts make.</param>
+/// <param name="Participants">Who was on them, distinct by person: a roster row is one person
+/// doing one job, so leading and surveying one trip is one person who went once.</param>
+public sealed record TripStatsDto(
+    int Matching,
+    int Overall,
+    IReadOnlyList<TripStatsYearDto> Years,
+    TripStatsBreakdownDto Types,
+    TripStatsBreakdownDto Areas,
+    TripStatsBreakdownDto Participants)
+{
+    /// <summary>
+    /// The answer when a filter named something this caller may not read. Every figure is zero
+    /// and nothing is listed — the same silence the page and the option counts give, because
+    /// charts drawn beside an empty page would say the rows exist.
+    /// </summary>
+    public static TripStatsDto Empty { get; } = new(
+        0,
+        0,
+        [],
+        new TripStatsBreakdownDto(false, 0, []),
+        new TripStatsBreakdownDto(true, 0, []),
+        new TripStatsBreakdownDto(true, 0, []));
+}

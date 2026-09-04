@@ -80,6 +80,14 @@ public static class TripLogEndpoints
                 + "person. A trip counts into every area and every person it holds, so those "
                 + "slice counts add up to more than the trips \u2014 the answer says so rather "
                 + "than leaving a reader to notice.");
+        trips.MapGet("/stats", StatsAsync)
+            .WithSummary(
+                "What the same narrowed listing adds up to: trips per year, what they were for, "
+                + "where they went, who was on them, and how many distinct areas had been reached "
+                + "by the end of each year. Counted over the trips this caller may read, so the "
+                + "totals are the reader\u2019s and not the archive\u2019s. A trip counts into "
+                + "every area and every person it holds, so those breakdowns add up to more than "
+                + "the trips \u2014 the answer says so rather than leaving a reader to notice.");
         trips.MapGet("/mine", MineAsync)
             .WithSummary(
                 "The trips the calling account is on \u2014 named on the roster or asked about it "
@@ -535,6 +543,64 @@ public static class TripLogEndpoints
 
         return TypedResults.Ok(
             await TripLogGrouping.BuildAsync(db, protection, ctx, user, listing, primary, secondary, ct));
+    }
+
+    /// <summary>
+    /// The narrowed listing, totalled.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Its own route rather than a shape on the listing, and taking exactly the listing's own
+    /// narrowings so that "the current filter" means one thing on both screens. A figure worked
+    /// out from a second, similar-looking filter would disagree with the list under the one
+    /// condition nobody tests: a caller who may read only part of the archive.
+    /// </para>
+    /// <para>
+    /// The order a page would be in changes no total, so it is not a parameter here \u2014 but a
+    /// bad word in any of the shared ones is refused with the same code the listing uses, or a
+    /// page would draw charts for a filter the listing rejects.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<TripStatsDto>, UnauthorizedHttpResult, ProblemHttpResult>> StatsAsync(
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        IUserContextAccessor userAccessor,
+        FeatureProtection protection,
+        DateOnly? from,
+        DateOnly? to,
+        Guid? caveId,
+        Guid? expeditionId,
+        string? areaIds,
+        string? participantIds,
+        string? types,
+        string? states,
+        string? visibilities,
+        bool? hadIncident,
+        string? search,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var user = await userAccessor.GetAsync(ct);
+        if (ctx is null || user is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!TripListQuery.TryParse(
+                from, to, caveId, expeditionId, participantIds, areaIds,
+                types, states, visibilities, hadIncident, search, null,
+                out var filter, out var problem))
+        {
+            return problem!;
+        }
+
+        var listing = await TripLogListing.ResolveAsync(db, protection, ctx, filter, ct);
+        if (listing.Blocked)
+        {
+            return TypedResults.Ok(TripStatsDto.Empty);
+        }
+
+        return TypedResults.Ok(await TripLogStats.BuildAsync(db, protection, ctx, user, listing, ct));
     }
 
     // An option's value is the word the listing's own parameter takes, which is the word every

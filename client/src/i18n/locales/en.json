@@ -3825,4 +3825,27 @@
   "imageLink": {
     "regionCount": "Linked parts of this picture: {{count}}"
   }
+,
+  "tripStats": {
+    "title": "Trip insights",
+    "open": "Insights",
+    "backToList": "Back to the list",
+    "scopeFiltered": "The current filter",
+    "scopeAll": "All trips",
+    "populationFiltered": "the {{matching}} of {{overall}} trips you can read that this filter leaves",
+    "populationAll": "all {{overall}} trips you can read",
+    "compareHint": "Switch to all trips to see the same charts without the filter, as something to compare this against.",
+    "perYear": "Trips per year, over {{population}}",
+    "byType": "What they were for, over {{population}}",
+    "byArea": "Where they went, over {{population}}",
+    "byPerson": "Who was on them, over {{population}}",
+    "year": "Year",
+    "trips": "Trips",
+    "areasSoFar": "Distinct areas reached",
+    "newGroundNote": "The line is how many distinct areas the counted trips had reached by the end of each year. Still climbing means new ground is being found; flattening under bars that are not means the same places are being revisited.",
+    "overlapping": "A trip counts into every value it holds, so these bars add up to more than the {{count}} trips counted.",
+    "showingValues": "Showing the {{shown}} largest of {{distinct}}.",
+    "empty": "No trips to count.",
+    "failed": "The totals could not be worked out."
+  }
 }

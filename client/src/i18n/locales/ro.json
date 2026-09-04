@@ -3825,4 +3825,27 @@
   "imageLink": {
     "regionCount": "Părți legate din această imagine: {{count}}"
   }
+,
+  "tripStats": {
+    "title": "Sinteza ieșirilor",
+    "open": "Sinteză",
+    "backToList": "Înapoi la listă",
+    "scopeFiltered": "Filtrul curent",
+    "scopeAll": "Toate ieșirile",
+    "populationFiltered": "cele {{matching}} din {{overall}} ieșiri pe care le poți citi rămase după acest filtru",
+    "populationAll": "toate cele {{overall}} ieșiri pe care le poți citi",
+    "compareHint": "Treci pe toate ieșirile ca să vezi aceleași grafice fără filtru, ca termen de comparație.",
+    "perYear": "Ieșiri pe an, peste {{population}}",
+    "byType": "Cu ce scop, peste {{population}}",
+    "byArea": "Unde s-a mers, peste {{population}}",
+    "byPerson": "Cine a fost, peste {{population}}",
+    "year": "An",
+    "trips": "Ieșiri",
+    "areasSoFar": "Zone distincte atinse",
+    "newGroundNote": "Linia arată câte zone distincte atinseseră ieșirile numărate până la sfârșitul fiecărui an. Dacă urcă în continuare, se descoperă teren nou; dacă se aplatizează sub bare care nu se aplatizează, se revine în aceleași locuri.",
+    "overlapping": "O ieșire se numără la fiecare valoare pe care o conține, așa că barele adună mai mult decât cele {{count}} ieșiri numărate.",
+    "showingValues": "Se arată cele mai mari {{shown}} din {{distinct}}.",
+    "empty": "Nicio ieșire de numărat.",
+    "failed": "Totalurile nu au putut fi calculate."
+  }
 }
