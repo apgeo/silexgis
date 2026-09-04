@@ -65,6 +65,27 @@ export function featureExportUrl(
   return buildUrl('/api/v1/export/features', { format, ...filters });
 }
 
+/**
+ * GET /api/v1/trip-logs/export — the narrowed trip listing as a spreadsheet.
+ *
+ * Every trip the filter leaves, not the page being looked at: the server takes the whole narrowed
+ * set, so the page and the page size are deliberately not among the parameters passed on. The
+ * order is, because a file is read top to bottom and arriving in a different order from the
+ * screen it was taken from is a small lie about the same question.
+ */
+export function tripLogExportUrl(
+  filters: Record<string, string | number | boolean | undefined>,
+): string {
+  const params: Record<string, string | number | undefined> = {};
+  for (const [key, value] of Object.entries(filters)) {
+    if (key === 'page' || key === 'pageSize') {
+      continue;
+    }
+    params[key] = typeof value === 'boolean' ? String(value) : value;
+  }
+  return buildUrl('/api/v1/trip-logs/export', params);
+}
+
 /** GET /api/v1/geofiles/{id}/export — an imported geofile's rows re-exported. */
 export function geofileExportUrl(id: string, format: string): string {
   return buildUrl(`/api/v1/geofiles/${encodeURIComponent(id)}/export`, { format });

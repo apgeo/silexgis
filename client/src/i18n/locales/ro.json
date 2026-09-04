@@ -1196,7 +1196,45 @@
     "checklistReadiness": "{{ticked}} din {{total}} rezolvate",
     "checklistAdvisory": "Aceasta este o informare pentru echipă, nu o regulă. Nimic nu este refuzat pentru că o linie a rămas nerezolvată, iar gradul de pregătire nu schimbă niciodată cine poate citi tura.",
     "checklistTickedAt": "Confirmat la {{when}}",
-    "checklistTickFailed": "Confirmarea nu a putut fi înregistrată."
+    "checklistTickFailed": "Confirmarea nu a putut fi înregistrată.",
+    "empty": "Nicio tură încă.",
+    "emptyFiltered": "Nicio tură nu corespunde acestui filtru.",
+    "listFailed": "Turele nu au putut fi încărcate.",
+    "filters": {
+      "showing": "Se afișează {{matching}} din {{overall}} ture pe care le poți vedea",
+      "reset": "Șterge filtrele",
+      "yourAccess": "Numerele sunt ale turelor pe care le poți vedea",
+      "incident": "Incident",
+      "incidentYes": "Ceva nu a mers bine",
+      "incidentNo": "Totul a mers bine",
+      "participant": "Persoană",
+      "area": "Zonă",
+      "fromDate": "Ture de la",
+      "toDate": "Ture până la",
+      "showOnMap": "Arată pe hartă"
+    },
+    "grouping": {
+      "groupBy": "Grupează după",
+      "thenBy": "apoi după",
+      "trips": "Ture",
+      "span": "Zile",
+      "topTypes": "În principal",
+      "topPeople": "Cine",
+      "unassigned": "Neînregistrat",
+      "empty": "Nimic de grupat",
+      "overlapping": "O tură se numără la fiecare valoare pe care o are, deci totalurile depășesc cele {{count}} ture afișate.",
+      "truncated": "Grupare peste primele {{count}} ture găsite de filtru. Restrânge filtrul pentru a le cuprinde pe restul.",
+      "dimensions": {
+        "none": "Nimic",
+        "year": "An",
+        "type": "Scop",
+        "state": "Stare",
+        "visibility": "Audiență",
+        "incident": "Incident",
+        "area": "Zonă",
+        "participant": "Persoană"
+      }
+    }
   },
   "expeditions": {
     "notFound": "Nicio astfel de tabără",
