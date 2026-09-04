@@ -321,6 +321,17 @@
     "heatmap": "Hartă de căldură (intrări)",
     "baseOpacity": "Opacitatea stratului {{name}}",
     "photos": "Fotografii geolocalizate",
+    "tripsLayer": "Ture",
+    "tripsShown": "{{count}} tură/ture desenate",
+    "tripsLoading": "Se încarcă turele…",
+    "tripsFailed": "Turele nu au putut fi încărcate. Deplasarea hărții reîncearcă.",
+    "tripsTruncated": "Sunt desenate doar primele {{count}} ture din acest interval — restrânge datele sau filtrele pentru a le vedea pe celelalte.",
+    "tripsUnlocated": "{{count}} tură/ture din acest interval nu au localizare și nu apar pe hartă.",
+    "tripsFilterUnapplied": "{{count}} filtru/filtre din lista de ture nu sunt filtre pe care acest strat le poate aplica, așa că harta arată mai mult decât lista.",
+    "tripsFrom": "De la",
+    "tripsTo": "Până la",
+    "tripsTypeFilter": "Orice tip de tură",
+    "tripsFilterHint": "O tură este desenată acolo unde spune că a mers, altfel unde s-a întâlnit echipa, altfel la o peșteră pe care o numește. O peșteră pe care o poți citi dar nu o poți localiza exact nu plasează nimic.",
     "centerlinesWithheld": "{{count}} poligonale nu sunt afișate la această scară — apropie harta pentru a le încărca.",
     "centerlineDetailOn": "Se afișează detaliul complet al ridicării, inclusiv razele laterale.",
     "centerlineSkeletonOn": "Se afișează traseul galeriilor; razele către pereți apar când apropii harta.",
@@ -881,6 +892,7 @@
   "trips": {
     "title": "Jurnale de tură",
     "titleField": "Titlu",
+    "openTrip": "Deschide tura",
     "new": "Jurnal de tură nou",
     "edit": "Editare jurnal",
     "tabReport": "Raport",
@@ -3824,8 +3836,7 @@
   },
   "imageLink": {
     "regionCount": "Părți legate din această imagine: {{count}}"
-  }
-,
+  },
   "tripStats": {
     "title": "Sinteza ieșirilor",
     "open": "Sinteză",

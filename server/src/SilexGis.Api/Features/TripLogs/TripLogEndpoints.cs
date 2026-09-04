@@ -556,7 +556,7 @@ public static class TripLogEndpoints
     /// condition nobody tests: a caller who may read only part of the archive.
     /// </para>
     /// <para>
-    /// The order a page would be in changes no total, so it is not a parameter here \u2014 but a
+    /// The order a page would be in changes no total, so it is not a parameter here — but a
     /// bad word in any of the shared ones is refused with the same code the listing uses, or a
     /// page would draw charts for a filter the listing rejects.
     /// </para>

@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EChartsOption } from 'echarts';
 
-import { axisStyle, paletteFor } from './chartTheme.ts';
+import { axisStyle, paletteFor, themedTooltip } from './chartTheme.ts';
 import { axisRoomFor, chartHeightForCategories, truncateLabel } from './tripInsights.ts';
 import { useECharts } from './useECharts.ts';
 
@@ -77,11 +77,13 @@ export function TripYearChart({ years, height = 320 }: { years: readonly TripYea
           type: 'value',
           name: t('tripStats.areasSoFar'),
           minInterval: 1,
+          ...axisStyle(token),
           // The running curve has its own scale: distinct areas and trips are different
           // quantities, and forcing them onto one axis would flatten whichever is smaller into
-          // the floor and say nothing.
+          // the floor and say nothing. Only one of the two axes draws the horizontal lines,
+          // though — after the shared axis styling, which carries a split line of its own and
+          // would put this one back — or the grid is two sets of lines at two sets of ticks.
           splitLine: { show: false },
-          ...axisStyle(token),
         },
       ],
       series: [
@@ -103,7 +105,7 @@ export function TripYearChart({ years, height = 320 }: { years: readonly TripYea
         },
       ],
       legend: { top: 0, textStyle: { color: palette.axisLabel } },
-      tooltip: { trigger: 'axis' },
+      tooltip: { ...themedTooltip(palette), trigger: 'axis' },
     };
   }, [years, token, t]);
 
@@ -166,7 +168,7 @@ export function TripBreakdownChart({
           itemStyle: { color: palette.series[0] },
         },
       ],
-      tooltip: { trigger: 'axis' },
+      tooltip: { ...themedTooltip(palette), trigger: 'axis' },
     };
   }, [values, countLabel, token, t]);
 

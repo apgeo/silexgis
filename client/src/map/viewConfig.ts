@@ -28,6 +28,15 @@ export interface ViewConfig {
   heatmapVisible?: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
   photosVisible?: boolean;
+  /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
+  tripsVisible?: boolean;
+  /**
+   * The day window the trip overlay asks with, inclusive, as `yyyy-MM-dd`. Added after v1 shipped;
+   * older saved views omit either bound, and an absent bound is no bound rather than today — a
+   * view saved before this existed asked about every trip, and reopening it must go on doing so.
+   */
+  tripsFrom?: string;
+  tripsTo?: string;
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
@@ -59,6 +68,9 @@ export interface WorkspaceUiState {
   centerlinesVisible: boolean;
   heatmapVisible: boolean;
   photosVisible: boolean;
+  tripsVisible: boolean;
+  tripsFrom?: string;
+  tripsTo?: string;
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
   tagFilter: string | null;
@@ -91,6 +103,9 @@ export function captureViewConfig(
     centerlinesVisible: ui.centerlinesVisible,
     heatmapVisible: ui.heatmapVisible,
     photosVisible: ui.photosVisible,
+    tripsVisible: ui.tripsVisible,
+    tripsFrom: ui.tripsFrom,
+    tripsTo: ui.tripsTo,
     geofileIds: ui.geofileIds,
     rasters: ui.rasters,
     tagFilter: ui.tagFilter,
@@ -117,6 +132,9 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     centerlinesVisible: parsed.centerlinesVisible ?? false,
     heatmapVisible: parsed.heatmapVisible ?? false,
     photosVisible: parsed.photosVisible ?? false,
+    tripsVisible: parsed.tripsVisible ?? false,
+    tripsFrom: parsed.tripsFrom,
+    tripsTo: parsed.tripsTo,
     geofileIds: parsed.geofileIds ?? [],
     rasters: parsed.rasters ?? [],
     tagFilter: parsed.tagFilter ?? null,

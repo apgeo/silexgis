@@ -1287,6 +1287,47 @@ export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureC
   return unwrap(api.GET('/api/v1/map/photos', { params: { query: { bbox } } }));
 }
 
+export type TripLogFeatureCollection = components['schemas']['TripLogFeatureCollection'];
+
+/** The narrowings the trip overlay may carry, spelled as the trip listing spells them. */
+export interface TripLogMapFilter {
+  from?: string;
+  to?: string;
+  types?: string[];
+  states?: string[];
+  visibilities?: string[];
+  hadIncident?: boolean;
+}
+
+/**
+ * Imperative fetch used by the OpenLayers trip overlay loader (not a hook).
+ *
+ * Every facet is sent as one comma-separated word list, which is how the trip listing spells the
+ * same narrowings in its own address — so a filter carried from the list to the map arrives
+ * unchanged rather than being translated into a second dialect on the way. An empty facet is
+ * omitted entirely: an empty string would be a filter naming nothing, which the server is right
+ * to refuse.
+ */
+export async function fetchTripLogFeatures(
+  bbox: string,
+  filter: TripLogMapFilter = {},
+): Promise<TripLogFeatureCollection> {
+  const list = (values?: string[]) => (values && values.length > 0 ? values.join(',') : undefined);
+  return unwrap(api.GET('/api/v1/map/trip-logs', {
+    params: {
+      query: {
+        bbox,
+        from: filter.from,
+        to: filter.to,
+        types: list(filter.types),
+        states: list(filter.states),
+        visibilities: list(filter.visibilities),
+        hadIncident: filter.hadIncident,
+      },
+    },
+  }));
+}
+
 export type SearchResult = components['schemas']['SearchResultDto'];
 export type SearchFeatureItem = components['schemas']['SearchFeatureItemDto'];
 export type SearchTripItem = components['schemas']['SearchTripItemDto'];

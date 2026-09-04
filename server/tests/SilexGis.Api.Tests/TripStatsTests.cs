@@ -156,6 +156,63 @@ public sealed class TripStatsTests : IAsyncLifetime, IDisposable
     }
 
     /// <summary>
+    /// A trip role names a feature once per role, so one trip naming one area twice is one trip
+    /// that went there — the sibling of the roster rule, and carried here because nothing in the
+    /// schema stops the same pair being written under two roles.
+    /// </summary>
+    [Fact]
+    public async Task An_area_named_twice_on_one_trip_is_one_trip_that_reached_it()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var area = await CreateGenericFeatureAsync();
+        var tripId = await CreateTripAsync($"Twice named {marker}", surveyTypeId, "authenticated");
+        await NameFeatureAsync(tripId, area, "trip-work-area");
+        await NameFeatureAsync(tripId, area, "trip-objective");
+
+        // Fixture proof, over the very query the counting reads: the pair really is written
+        // twice, so the one below is the reduction and not a second naming that never happened.
+        (await NamedPairCountAsync(tripId)).ShouldBe(2);
+
+        var count = ValueCount(await StatsAsync(reader, $"search={marker}"), "areas", area.ToString());
+        count.ShouldBe(1);
+
+        // And it is what the area narrowing hands back on the list, which is the whole point of
+        // reducing it: a bar of two over a page of one is a claim about a row nobody was shown.
+        (await ListAsync(reader, $"search={marker}&areaIds={area}"))
+            .GetProperty("totalItems").GetInt32().ShouldBe(count);
+    }
+
+    /// <summary>
+    /// A trip spanning New Year's Eve stands over one year, and the one place that differs from
+    /// the list is stated here rather than discovered later: a date window keeps a trip whose span
+    /// merely overlaps it, so the later year's page holds a trip the earlier year's bar carries.
+    /// Counted the window's way the bars would total more than the trips they are drawn under,
+    /// which is the worse of the two — so this test records the choice, not a defect.
+    /// </summary>
+    [Fact]
+    public async Task A_trip_across_new_year_stands_over_the_year_it_started_in()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        await CreateTripAsync(
+            $"Over the turn {marker}", surveyTypeId, "authenticated",
+            tripDate: "2024-12-30", tripDateEnd: "2025-01-02");
+
+        var stats = await StatsAsync(reader, $"search={marker}");
+        YearTrips(stats, 2024).ShouldBe(1);
+        YearTrips(stats, 2025).ShouldBe(0);
+
+        // The bars total the trips, which is the figure printed above them.
+        Years(stats).Sum(y => y.GetProperty("trips").GetInt32())
+            .ShouldBe(stats.GetProperty("matching").GetInt32());
+
+        // The list reads the window as an overlap, so it hands the trip back from either side.
+        (await ListAsync(reader, $"search={marker}&from=2025-01-01&to=2025-12-31"))
+            .GetProperty("totalItems").GetInt32().ShouldBe(1);
+        (await ListAsync(reader, $"search={marker}&from=2024-01-01&to=2024-12-31"))
+            .GetProperty("totalItems").GetInt32().ShouldBe(1);
+    }
+
+    /// <summary>
     /// Where the trips went is counted through the containment hierarchy, exactly as the area
     /// narrowing and the area option counts walk it — and an area whose position is guarded is
     /// counted for nobody who may not place it.
@@ -325,12 +382,14 @@ public sealed class TripStatsTests : IAsyncLifetime, IDisposable
         long tripTypeId,
         string visibility,
         string tripDate = "2026-04-10",
+        string? tripDateEnd = null,
         (string Name, long RoleId)[]? people = null)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
         {
             title,
             tripDate,
+            tripDateEnd,
             tripTypeId,
             visibility,
             caveIds = Array.Empty<Guid>(),
@@ -423,6 +482,19 @@ public sealed class TripStatsTests : IAsyncLifetime, IDisposable
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         db.TripLogParticipants.Add(new TripLogParticipant { TripLogId = tripId, CaverId = caverId, RoleId = roleId });
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// The (trip, feature) pairs a trip's roles name, unreduced — the fixture proof a reduced
+    /// count cannot give, read over the same query the counting composes into.
+    /// </summary>
+    private async Task<int> NamedPairCountAsync(Guid tripId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await TripRoleLinks
+            .PairsIn(db, db.TripLogs.AsNoTracking().Where(t => t.Id == tripId).Select(t => t.Id))
+            .CountAsync();
     }
 
     /// <summary>Roster rows, unreduced — the fixture proof a reduced count cannot give.</summary>

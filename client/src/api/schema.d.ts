@@ -1406,13 +1406,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Trip-log geometries as GeoJSON for the given bbox and date range. */
+        /** Trip-log geometries as GeoJSON for the given bbox, date range and list filters; a trip with no shape of its own is placed at a cave it names when the caller may both read and place it, and counted as unlocated otherwise. */
         get: {
             parameters: {
                 query: {
                     bbox: string;
                     from?: string;
                     to?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -1426,7 +1430,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["FeatureCollection"];
+                        "application/json": components["schemas"]["TripLogFeatureCollection"];
                     };
                 };
             };
@@ -20800,6 +20804,13 @@ export interface components {
             canStandDownCallout: boolean;
             meetingGeom: null | components["schemas"]["GeoJsonGeometry"];
             checklistReadiness: null | components["schemas"]["TripChecklistReadinessDto"];
+        };
+        TripLogFeatureCollection: {
+            type: string;
+            features: components["schemas"]["GeoFeature"][];
+            truncated: boolean;
+            /** Format: int32 */
+            unlocatedCount: number;
         };
         TripLogTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];

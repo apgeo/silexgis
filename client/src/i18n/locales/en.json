@@ -321,6 +321,17 @@
     "heatmap": "Entrance heatmap",
     "baseOpacity": "Opacity of {{name}}",
     "photos": "Geotagged photos",
+    "tripsLayer": "Trip logs",
+    "tripsShown": "{{count}} trip(s) drawn",
+    "tripsLoading": "Loading trips…",
+    "tripsFailed": "The trips could not be loaded. Panning the map tries again.",
+    "tripsTruncated": "Only the first {{count}} trips in this window are drawn — narrow the dates or the filters to see the rest.",
+    "tripsUnlocated": "{{count}} trip(s) in this window have no location and are not on the map.",
+    "tripsFilterUnapplied": "{{count}} filter(s) from the trip list are not ones this layer can ask about, so the map shows more than the list did.",
+    "tripsFrom": "From",
+    "tripsTo": "To",
+    "tripsTypeFilter": "Any trip type",
+    "tripsFilterHint": "A trip is drawn where it says it went, else where its party met, else at a cave it names. A cave you may read but not locate exactly places nothing.",
     "centerlinesWithheld": "{{count}} more centerline(s) not shown at this zoom — zoom in to load them.",
     "centerlineDetailOn": "Showing full survey detail, including splays.",
     "centerlineSkeletonOn": "Showing passage outlines; wall shots appear when you zoom in.",
@@ -881,6 +892,7 @@
   "trips": {
     "title": "Trip logs",
     "titleField": "Title",
+    "openTrip": "Open trip log",
     "new": "New trip log",
     "edit": "Edit trip log",
     "tabReport": "Report",
@@ -3824,8 +3836,7 @@
   },
   "imageLink": {
     "regionCount": "Linked parts of this picture: {{count}}"
-  }
-,
+  },
   "tripStats": {
     "title": "Trip insights",
     "open": "Insights",

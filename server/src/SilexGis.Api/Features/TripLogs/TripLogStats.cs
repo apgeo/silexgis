@@ -86,9 +86,15 @@ internal static class TripLogStats
 
         var yearOfTrip = dated.ToDictionary(x => x.Id, x => x.TripDate.Year);
 
-        // The year the trip started, which is the year its slice is cut on. A span crossing
-        // midnight on New Year's Eve is one trip in one year; the window's overlap reading finds
-        // it from either side and is deliberately not repeated here, or the two would disagree.
+        // The year the trip started, which is the year its bar is drawn on. A trip is one trip in
+        // one year, so the year the span ends in is not a second bar: the bars sum to the number
+        // of trips, which is the figure printed above them.
+        //
+        // The one place this differs from the list: a date window keeps a trip whose span merely
+        // overlaps it, so a trip running from one New Year's Eve into the next is returned by a
+        // window over the later year while its bar stands over the earlier one. Reading the
+        // overlap here instead would put that trip in two bars and make the bars total more than
+        // the trips, which is the worse of the two.
         var tripsPerYear = dated
             .GroupBy(x => x.TripDate.Year)
             .ToDictionary(g => g.Key, g => g.Count());
@@ -118,8 +124,13 @@ internal static class TripLogStats
             .Select(participant => participant.TripLogId)
             .Distinct()
             .CountAsync(ct);
+        // Resolved for every counted person rather than for a guessed head of the list. Which
+        // forty come back is decided by the ordering below, and that ordering reads the label —
+        // so labelling a set chosen before it leaves whoever the two sets disagree about carrying
+        // a bare identifier, and an unlabelled value sorts by its identifier and displaces a
+        // person with a name. One statement over the roster of the filtered trips either way.
         var caverLabels = await CaverDirectory.ResolveLabelsAsync(
-            db, user, rosterCounts.OrderByDescending(x => x.Count).Take(MaxValues).Select(x => x.CaverId), ct);
+            db, user, rosterCounts.Select(x => x.CaverId), ct);
         var participants = Breakdown(
             [
                 .. rosterCounts.Select(x => (

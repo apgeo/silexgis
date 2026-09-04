@@ -13,13 +13,12 @@ import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import { useExpeditionMap } from '../../api/hooks.ts';
+import { tripPalette as palette } from '../../map/markerPalette.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
 const DEFAULT_CENTER: [number, number] = [25.6, 45.65];
 
 const AREA_COLOUR = '#7a5195';
-const TRIP_COLOUR = '#146262';
-const ENTRANCE_COLOUR = '#bc5090';
 
 const areaStyle = new Style({
   stroke: new Stroke({ color: AREA_COLOUR, width: 2, lineDash: [6, 6] }),
@@ -29,17 +28,17 @@ const areaStyle = new Style({
 const tripStyle = new Style({
   image: new CircleStyle({
     radius: 6,
-    fill: new Fill({ color: TRIP_COLOUR }),
-    stroke: new Stroke({ color: '#fff', width: 2 }),
+    fill: new Fill({ color: palette.sketch }),
+    stroke: new Stroke({ color: palette.stroke, width: 2 }),
   }),
-  stroke: new Stroke({ color: TRIP_COLOUR, width: 3 }),
-  fill: new Fill({ color: 'rgba(20, 98, 98, 0.2)' }),
+  stroke: new Stroke({ color: palette.sketch, width: 3 }),
+  fill: new Fill({ color: palette.sketchFill }),
 });
 
 const entranceStyle = new Style({
   image: new CircleStyle({
     radius: 5,
-    fill: new Fill({ color: ENTRANCE_COLOUR }),
+    fill: new Fill({ color: palette.meeting }),
     stroke: new Stroke({ color: '#fff', width: 2 }),
   }),
 });
