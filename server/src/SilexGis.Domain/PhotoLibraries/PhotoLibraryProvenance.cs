@@ -10,9 +10,9 @@ namespace SilexGis.Domain.PhotoLibraries;
 /// A neighbouring photo library is a separate product with its own database and its own accounts,
 /// and nothing of it is stored here — no picture, no title, no copy of its index. What is stored is
 /// the answer to one question somebody will ask years from now: <em>where did this cave's position
-/// come from?</em> Two values answer it — which library, and what that library called the
-/// photograph — and they are enough to go back and look, for as long as the library keeps the
-/// photograph.
+/// come from?</em> Two values answer it — which library, and the string that library answered about
+/// the picture with — and they are enough to go back and look, for as long as that string still
+/// means the same picture over there.
 /// </para>
 /// <para>
 /// Flat and prefixed, following what this application already does with a third-party source's own
@@ -39,9 +39,19 @@ public static class PhotoLibraryProvenance
         public const string Source = "photoLibrarySource";
 
         /// <summary>
-        /// What that library called the photograph. Deliberately kept verbatim and never parsed:
-        /// one product names a photograph and the picture of it with the same string and the other
-        /// does not, and a value re-derived here would be a guess about somebody else's scheme.
+        /// The string this application asks that library for the picture with, stored exactly as it
+        /// was read. Deliberately kept verbatim and never parsed: a value re-derived here would be a
+        /// guess about somebody else's scheme.
+        ///
+        /// <para>
+        /// <b>It is not always the far side's name for the photograph itself.</b> One product names
+        /// a photograph and the picture of it with the same string; the other answers with a hash of
+        /// the picture's contents, and keeps its own identifier for the photograph as a separate
+        /// value which it may re-mint when a file moves or comes back out of its trash. Neither of
+        /// those is durable at the far side's own discretion — a hash stops matching when the
+        /// primary file is replaced or re-imported — so this key records what was read at the time
+        /// and answers "where did this position come from", not "this can still be fetched".
+        /// </para>
         /// </summary>
         public const string Reference = "photoLibraryReference";
     }
@@ -50,7 +60,10 @@ public static class PhotoLibraryProvenance
     /// The properties bag a feature created from a photograph starts with.
     /// </summary>
     /// <param name="source">The library, as the address names it — <c>immich</c>, <c>photoprism</c>.</param>
-    /// <param name="reference">The library's own name for the photograph.</param>
+    /// <param name="reference">
+    /// The string that library answers about the picture with — its own name for the photograph on
+    /// one product and a hash of the picture on the other.
+    /// </param>
     public static JsonObject Properties(string source, string reference) => new()
     {
         [Keys.Source] = source,
