@@ -242,6 +242,11 @@ export const queryKeys = {
   caveStructureComparison: (id: string, areaId: string) =>
     ['caves', id, 'structure-comparison', areaId] as const,
   areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
+  areaKarstStatistics: (id: string) => ['features', id, 'karst-statistics'] as const,
+  mapDensity: (bbox: string, cellMetres: number | null, bandwidthMetres: number | null, areaId?: string) =>
+    ['map', 'density', bbox, cellMetres, bandwidthMetres, areaId ?? null] as const,
+  mapPointPattern: (bbox: string, simulations: number, seed: number, areaId?: string) =>
+    ['map', 'point-pattern', bbox, simulations, seed, areaId ?? null] as const,
   closestApproach: (id: string, other: string) => ['caves', id, 'closest-approach', other] as const,
   objectAccess: (entityType: string, entityId: string) => ['object-access', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
@@ -284,6 +289,8 @@ export const queryKeys = {
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
   caveSurveyStatistics: (caveId: string) => ['caves', caveId, 'survey-statistics'] as const,
   caveOrientation: (caveId: string) => ['caves', caveId, 'orientation'] as const,
+  caveCrossSection: (caveId: string) => ['caves', caveId, 'cross-section'] as const,
+  cavePattern: (caveId: string) => ['caves', caveId, 'pattern'] as const,
   annotatedText: (documentId: string) => ['annotated-texts', documentId] as const,
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
@@ -961,6 +968,8 @@ export function surveyModelPollInterval(
 function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveyStatistics(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveCrossSection(caveId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.cavePattern(caveId) });
 }
 
 /**
@@ -5378,6 +5387,62 @@ export function useCaveSurveyStatistics(caveId: string | undefined) {
   });
 }
 
+/** How big a cave's passages are, from the wall distances recorded at its stations. */
+export type CaveCrossSection = components['schemas']['CaveCrossSectionDto'];
+
+/** The sizes, distributions, volume and vertical slices of one cave's passages. */
+export type CrossSectionSummary = components['schemas']['CrossSectionSummary'];
+
+/** A five-number summary plus the mean, for one kind of measurement. */
+export type CrossSectionDistribution = components['schemas']['CrossSectionDistribution'];
+
+/** One vertical slice of a cave, with the passage sizes found in it. */
+export type CrossSectionElevationBand = components['schemas']['CrossSectionElevationBand'];
+
+/** What kind of cave a survey's shape suggests, with every rule applied to reach it. */
+export type CavePattern = components['schemas']['CavePatternDto'];
+
+/** The suggestion itself: the pattern, the scores, the rules and the caveats. */
+export type PatternSuggestion = components['schemas']['PatternSuggestion'];
+
+/** One rule, what it did, what it read and what it would have counted towards. */
+export type PatternRuleTrace = components['schemas']['PatternRuleTrace'];
+
+/** Which pattern a cave's measurements suggest. */
+export type SpeleogeneticPatternKind = components['schemas']['SpeleogeneticPatternKind'];
+
+/** Which rule a trace entry describes. */
+export type PatternRule = components['schemas']['PatternRule'];
+
+/** Which measured figure a rule read. */
+export type PatternFigure = components['schemas']['PatternFigure'];
+
+/** Whether a rule fired, stayed silent, or had nothing to read. */
+export type PatternRuleOutcome = components['schemas']['PatternRuleOutcome'];
+
+/** Something a reader has to know before using a pattern suggestion. */
+export type PatternCaveat = components['schemas']['PatternCaveat'];
+
+export function useCaveCrossSection(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveCrossSection(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/cross-section', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useCavePattern(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.cavePattern(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/pattern', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 /** Where a cave's passage sits vertically, and the levels it appears to be cut at. */
 export type CaveHypsometry = components['schemas']['CaveHypsometryDto'];
 
@@ -5506,6 +5571,130 @@ export function useAreaStructureComparison(areaId: string | undefined, enabled =
         }),
       ),
     enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/** What one karst area adds up to, over the caves declared to be in it. */
+export type AreaKarstStatistics = components['schemas']['AreaKarstStatisticsDto'];
+
+/** One reading behind the karstification index, present or absent. */
+export type KarstificationComponent = components['schemas']['KarstificationComponentDto'];
+
+/** One cave standing at an end of a range in an area. */
+export type AreaCaveExtreme = components['schemas']['AreaCaveExtremeDto'];
+
+/**
+ * Counts, densities, totals and a classed index for one area.
+ *
+ * `retry: false` for the reason every location-protected statistic here has it: an area this
+ * caller may not read answers exactly as one that is not there, so asking again asks the same
+ * refused question and only delays the empty state.
+ */
+export function useAreaKarstStatistics(areaId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.areaKarstStatistics(areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/features/{id}/karst-statistics', {
+          params: { path: { id: areaId! } },
+        }),
+      ),
+    enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export type DensityGrid = components['schemas']['DensityGridDto'];
+export type DensityCell = components['schemas']['DensityCellDto'];
+export type PointPattern = components['schemas']['PointPatternDto'];
+
+export interface DensityQuery {
+  bbox: string;
+  /**
+   * Omitted on the first request on purpose. The finest cell an installation will publish is its
+   * location-protection grid, which the client does not know and must not guess: asking without a
+   * cell size gets the floor and the payload states what it was, so a control can offer multiples
+   * of a real number instead of discovering the edge by being refused.
+   */
+  cellMetres?: number;
+  bandwidthMetres?: number;
+  areaId?: string;
+}
+
+/**
+ * How thickly cave entrances sit over a window, as a grid and as a smoothed surface.
+ *
+ * <p>
+ * `retry` is off on purpose. The two interesting failures here are refusals with a stable code —
+ * a cell finer than the location-protection grid, and a window that would be more cells than one
+ * answer holds — and neither becomes true on a second attempt. Retrying them only delays the
+ * message the control needs to show.
+ * </p>
+ */
+export function useMapDensity(query: DensityQuery | undefined) {
+  return useQuery({
+    queryKey: queryKeys.mapDensity(
+      query?.bbox ?? '',
+      query?.cellMetres ?? null,
+      query?.bandwidthMetres ?? null,
+      query?.areaId,
+    ),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/map/density', {
+          params: {
+            query: {
+              bbox: query!.bbox,
+              cellMetres: query!.cellMetres,
+              bandwidthMetres: query!.bandwidthMetres,
+              areaId: query!.areaId,
+            },
+          },
+        }),
+      ),
+    enabled: !!query,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export interface PointPatternQuery {
+  bbox: string;
+  simulations: number;
+  seed: number;
+  areaId?: string;
+}
+
+/**
+ * Whether those entrances are arranged more thickly, more evenly, or more directionally than
+ * chance would arrange them. The seed travels in the query key as well as in the request, so two
+ * readers looking at the same window and the same seed are looking at the same band.
+ */
+export function useMapPointPattern(query: PointPatternQuery | undefined) {
+  return useQuery({
+    queryKey: queryKeys.mapPointPattern(
+      query?.bbox ?? '',
+      query?.simulations ?? 0,
+      query?.seed ?? 0,
+      query?.areaId,
+    ),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/map/point-pattern', {
+          params: {
+            query: {
+              bbox: query!.bbox,
+              simulations: query!.simulations,
+              seed: query!.seed,
+              areaId: query!.areaId,
+            },
+          },
+        }),
+      ),
+    enabled: !!query,
     staleTime: 5 * 60_000,
     retry: false,
   });

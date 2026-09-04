@@ -1555,6 +1555,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/map/density": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cave-entrance counts and densities per grid cell over a bbox, optionally normalised by a study-area outline. Cells finer than the location-protection grid are refused. */
+        get: {
+            parameters: {
+                query?: {
+                    bbox?: string;
+                    cellMetres?: number;
+                    areaId?: string;
+                    bandwidthMetres?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DensityGridDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map/point-pattern": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Clark-Evans nearest-neighbour index, Ripley's L with a seeded Monte-Carlo envelope, and the rose of bearings between pairs of entrances, over the cave entrances in a window that the caller may place exactly. */
+        get: {
+            parameters: {
+                query?: {
+                    bbox?: string;
+                    areaId?: string;
+                    maxRadiusMetres?: number;
+                    steps?: number;
+                    simulations?: number;
+                    seed?: number;
+                    maxPairSeparationMetres?: number;
+                    minPairSeparationMetres?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PointPatternDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search": {
         parameters: {
             query?: never;
@@ -4930,6 +5016,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/cross-section": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How big one cave's passages are, and over how much of the cave that was worked out. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveCrossSectionDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/pattern": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What kind of cave one survey's shape suggests, with every rule applied to reach it. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CavePatternDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{id}/hypsometry": {
         parameters: {
             query?: never;
@@ -5479,6 +5641,80 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["FeatureMorphometryDto"];
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/karst-statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Counts, densities, totals, extremes, a rock-type breakdown and a classed karstification index for one area, over the caves declared to be in it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AreaKarstStatisticsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/karst-statistics.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same area statistics as a two-column CSV, for a spreadsheet. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -15985,6 +16221,13 @@ export interface components {
             /** Format: int32 */
             dailyPaidMessageCap: number;
         };
+        AreaCaveExtremeDto: {
+            /** Format: uuid */
+            featureId: string;
+            name: null | string;
+            /** Format: double */
+            value: number;
+        };
         AreaHypsometryDto: {
             /** Format: uuid */
             areaId: string;
@@ -15992,6 +16235,49 @@ export interface components {
             entranceCount: number;
             springAltitudesM: number[];
             proposal: components["schemas"]["ElevationBandProposal"];
+        };
+        AreaKarstStatisticsDto: {
+            /** Format: uuid */
+            areaId: string;
+            basis: string;
+            /** Format: double */
+            areaKm2: null | number;
+            /** Format: int32 */
+            caveCount: number;
+            /** Format: int32 */
+            entranceCount: number;
+            /** Format: double */
+            cavesPerKm2: null | number;
+            /** Format: double */
+            entrancesPerKm2: null | number;
+            /** Format: double */
+            surveyedLengthM: null | number;
+            /** Format: int32 */
+            surveyedCaveCount: number;
+            /** Format: double */
+            surveyedMetresPerKm2: null | number;
+            /** Format: int32 */
+            depressionCount: number;
+            /** Format: double */
+            depressionAreaKm2: null | number;
+            /** Format: double */
+            depressionAreaRatio: null | number;
+            deepestCaves: components["schemas"]["AreaCaveExtremeDto"][];
+            longestCaves: components["schemas"]["AreaCaveExtremeDto"][];
+            rockTypes: components["schemas"]["AreaRockTypeCountDto"][];
+            karstification: components["schemas"]["KarstificationIndexDto"];
+            /** Format: int32 */
+            unparentedInsideCount: number;
+            /** Format: int32 */
+            placeableCaveCount: number;
+        };
+        AreaRockTypeCountDto: {
+            /** Format: int64 */
+            rockTypeId: null | number;
+            code: null | string;
+            name: null | string;
+            /** Format: int32 */
+            caveCount: number;
         };
         AreaStructureComparisonDto: {
             /** Format: uuid */
@@ -16167,6 +16453,16 @@ export interface components {
                 [key: string]: components["schemas"]["AccessAction"];
             };
             isFullAdmin: boolean;
+        };
+        CaveCrossSectionDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasReadings: boolean;
+            summary: null | components["schemas"]["CrossSectionSummary"];
         };
         CaveDto: {
             /** Format: uuid */
@@ -16352,6 +16648,17 @@ export interface components {
             id: string;
             name: null | string;
             isPrimary: boolean;
+        };
+        CavePatternDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            suggestion: components["schemas"]["PatternSuggestion"];
+            network: null | components["schemas"]["PassageNetworkFigures"];
         };
         CavePermissionsDto: {
             canWrite: boolean;
@@ -16630,6 +16937,18 @@ export interface components {
             visibility: components["schemas"]["Visibility"];
             items: components["schemas"]["ChecklistItemRequest"][];
         };
+        ClarkEvansDto: {
+            /** Format: double */
+            meanNearestNeighbourM: number;
+            /** Format: double */
+            expectedMeanM: number;
+            /** Format: double */
+            index: number;
+            /** Format: double */
+            zScore: number;
+            /** Format: double */
+            pValue: number;
+        };
         /** @enum {unknown} */
         ClosestApproachAbsence: "none" | "noLineWork" | "noAltitudes";
         ClosestApproachDto: {
@@ -16671,6 +16990,66 @@ export interface components {
         };
         /** @enum {unknown} */
         ConversionState: "notApplicable" | "pending" | "converted" | "unavailable" | "failed" | "deferred";
+        CrossSectionDistribution: {
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            minimum: number;
+            /** Format: double */
+            lowerQuartile: number;
+            /** Format: double */
+            median: number;
+            /** Format: double */
+            upperQuartile: number;
+            /** Format: double */
+            maximum: number;
+            /** Format: double */
+            mean: number;
+        };
+        CrossSectionElevationBand: {
+            /** Format: double */
+            fromM: number;
+            /** Format: double */
+            toM: number;
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: int32 */
+            areaStationCount: number;
+            width: null | components["schemas"]["CrossSectionDistribution"];
+            height: null | components["schemas"]["CrossSectionDistribution"];
+            area: null | components["schemas"]["CrossSectionDistribution"];
+        };
+        CrossSectionScaling: {
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: double */
+            exponent: number;
+            /** Format: double */
+            coefficient: number;
+            /** Format: double */
+            rSquared: number;
+        };
+        CrossSectionSummary: {
+            /** Format: int32 */
+            readingCount: number;
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: int32 */
+            widthStationCount: number;
+            /** Format: int32 */
+            heightStationCount: number;
+            /** Format: int32 */
+            areaStationCount: number;
+            width: null | components["schemas"]["CrossSectionDistribution"];
+            height: null | components["schemas"]["CrossSectionDistribution"];
+            widthHeightRatio: null | components["schemas"]["CrossSectionDistribution"];
+            area: null | components["schemas"]["CrossSectionDistribution"];
+            scaling: null | components["schemas"]["CrossSectionScaling"];
+            volume: components["schemas"]["PassageVolumeEstimate"];
+            /** Format: double */
+            bandWidthM: number;
+            bands: components["schemas"]["CrossSectionElevationBand"][];
+        };
         DashboardActivityItemDto: {
             kind: components["schemas"]["DashboardActivityKind"];
             /** Format: uuid */
@@ -16727,6 +17106,47 @@ export interface components {
             longitudeColumn?: null | string;
             elevationColumn?: null | string;
             wktColumn?: null | string;
+        };
+        DensityCellDto: {
+            /** Format: double */
+            west: number;
+            /** Format: double */
+            south: number;
+            /** Format: double */
+            east: number;
+            /** Format: double */
+            north: number;
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            areaKm2: number;
+            /** Format: double */
+            densityPerKm2: number;
+            /** Format: double */
+            studyAreaFraction: null | number;
+            /** Format: double */
+            kernelDensityPerKm2: number;
+        };
+        DensityGridDto: {
+            /** Format: double */
+            cellMetres: number;
+            /** Format: double */
+            minimumCellMetres: number;
+            /** Format: double */
+            protectionGridMetres: number;
+            /** Format: double */
+            bandwidthMetres: number;
+            /** Format: double */
+            minimumBandwidthMetres: number;
+            /** Format: uuid */
+            studyAreaId: null | string;
+            /** Format: double */
+            studyAreaKm2: null | number;
+            /** Format: int32 */
+            featureCount: number;
+            /** Format: int32 */
+            cellCount: number;
+            cells: components["schemas"]["DensityCellDto"][];
         };
         DipSummary: {
             /** Format: int32 */
@@ -18139,6 +18559,23 @@ export interface components {
             panelDefaults: string;
         };
         JsonElement: unknown;
+        /** @enum {unknown} */
+        KarstificationClass: "unknown" | "veryLow" | "low" | "moderate" | "high" | "veryHigh";
+        KarstificationComponentDto: {
+            name: string;
+            /** Format: double */
+            value: null | number;
+            /** Format: double */
+            normalised: null | number;
+            /** Format: double */
+            reference: number;
+        };
+        KarstificationIndexDto: {
+            /** Format: double */
+            score: null | number;
+            class: components["schemas"]["KarstificationClass"];
+            components: components["schemas"]["KarstificationComponentDto"][];
+        };
         LinkKindDto: {
             /** Format: int64 */
             id: number;
@@ -18827,10 +19264,49 @@ export interface components {
             page: number;
             text: string;
         };
+        PairAlignmentDto: {
+            /** Format: int32 */
+            pairCount: number;
+            /** Format: double */
+            minSeparationM: number;
+            /** Format: double */
+            maxSeparationM: number;
+            rose: components["schemas"]["OrientationSummary"];
+        };
         ParentEdgeRequest: {
             /** Format: uuid */
             parentId: string;
             isPrimary: boolean;
+        };
+        PassageNetworkFigures: {
+            /** Format: int32 */
+            nodeCount: number;
+            /** Format: int32 */
+            edgeCount: number;
+            /** Format: int32 */
+            componentCount: number;
+            /** Format: int32 */
+            reducedNodeCount: number;
+            /** Format: int32 */
+            cyclomaticNumber: number;
+            /** Format: int32 */
+            extremityCount: number;
+            /** Format: double */
+            clustering: null | number;
+        };
+        PassageVolumeEstimate: {
+            /** Format: double */
+            volumeM3: null | number;
+            /** Format: int32 */
+            legCount: number;
+            /** Format: int32 */
+            measuredLegCount: number;
+            /** Format: double */
+            lengthM: number;
+            /** Format: double */
+            measuredLengthM: number;
+            /** Format: double */
+            lengthFraction: null | number;
         };
         PasswordChangeRequest: {
             currentPassword: string;
@@ -18845,6 +19321,44 @@ export interface components {
             straightLineM: number;
             /** Format: double */
             sinuosity: null | number;
+        };
+        /** @enum {unknown} */
+        PatternCaveat: "figuresAreApproximated" | "networkIsIncomplete" | "networkCompletenessIsUnknown" | "noAltitudes" | "noCrossSections" | "noNetworkFigures";
+        /** @enum {unknown} */
+        PatternFigure: "loopsPerNode" | "deadEndFraction" | "clustering" | "orientationEntropy" | "meanAbsoluteDip" | "maximumDip" | "minimumDip" | "verticality" | "medianWidthHeightRatio";
+        PatternFigureValue: {
+            figure: components["schemas"]["PatternFigure"];
+            /** Format: double */
+            value: null | number;
+        };
+        /** @enum {unknown} */
+        PatternRule: "networkIsLooped" | "networkIsTreeLike" | "networkEndsOften" | "networkRings" | "bearingsAreConcentrated" | "passageIsSteep" | "passageIsLevel" | "profileOscillates" | "sectionIsWide" | "sectionIsTall";
+        /** @enum {unknown} */
+        PatternRuleOutcome: "notAssessable" | "didNotFire" | "fired";
+        PatternRuleTrace: {
+            rule: components["schemas"]["PatternRule"];
+            outcome: components["schemas"]["PatternRuleOutcome"];
+            supports: components["schemas"]["SpeleogeneticPatternKind"][];
+            /** Format: double */
+            weight: number;
+            figures: components["schemas"]["PatternFigureValue"][];
+        };
+        PatternScore: {
+            kind: components["schemas"]["SpeleogeneticPatternKind"];
+            /** Format: double */
+            score: number;
+        };
+        PatternSuggestion: {
+            pattern: components["schemas"]["SpeleogeneticPatternKind"];
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            scores: components["schemas"]["PatternScore"][];
+            rules: components["schemas"]["PatternRuleTrace"][];
+            /** Format: int32 */
+            assessableRuleCount: number;
+            /** Format: int32 */
+            firedRuleCount: number;
+            caveats: components["schemas"]["PatternCaveat"][];
         };
         PermissionGroupDto: {
             /** Format: uuid */
@@ -19158,6 +19672,19 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        PointPatternDto: {
+            /** Format: int32 */
+            featureCount: number;
+            /** Format: int32 */
+            minimumFeatureCount: number;
+            /** Format: double */
+            studyAreaKm2: number;
+            /** Format: uuid */
+            studyAreaId: null | string;
+            clarkEvans: null | components["schemas"]["ClarkEvansDto"];
+            ripley: null | components["schemas"]["RipleyDto"];
+            alignment: null | components["schemas"]["PairAlignmentDto"];
+        };
         /** @enum {unknown} */
         PositionConfidenceBand: "unknown" | "excellent" | "good" | "moderate" | "poor";
         /** @enum {unknown} */
@@ -19376,6 +19903,25 @@ export interface components {
             relationTypeId: null | number;
             /** Format: uuid */
             mainMemberId: null | string;
+        };
+        RipleyDto: {
+            /** Format: int32 */
+            simulations: number;
+            /** Format: int32 */
+            seed: number;
+            /** Format: double */
+            maxRadiusM: number;
+            steps: components["schemas"]["RipleyStepDto"][];
+        };
+        RipleyStepDto: {
+            /** Format: double */
+            radiusM: number;
+            /** Format: double */
+            observedL: number;
+            /** Format: double */
+            lowerL: null | number;
+            /** Format: double */
+            upperL: null | number;
         };
         RoseDivergence: {
             /** Format: double */
@@ -19600,6 +20146,8 @@ export interface components {
         };
         /** @enum {unknown} */
         SortKey: "created" | "updated" | "title" | "owner" | "proximity" | "occurred";
+        /** @enum {unknown} */
+        SpeleogeneticPatternKind: "insufficient" | "undetermined" | "vadoseBranchwork" | "waterTable" | "looping" | "angularMaze";
         /** @enum {unknown} */
         SpeologieAction: "create" | "update" | "skip" | null;
         SpeologieBasinDto: {

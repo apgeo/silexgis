@@ -188,6 +188,57 @@ export function CategoryBoxChart({
   return <Frame option={option} height={height} testId="chart-box" />;
 }
 
+/**
+ * One box per category, drawn from quartiles that were worked out elsewhere.
+ *
+ * The sibling above takes raw measurements and summarises them here. This one exists for the
+ * figures a server has already reduced: it would be sent a five-number summary and re-deriving it
+ * from a resent copy of every measurement is both wasteful and a second definition of a quartile,
+ * which is how a number quoted in words comes to disagree with the box beside it.
+ *
+ * A category with no summary for a series draws a gap rather than a flat box on the axis floor,
+ * because a slice of cave nobody measured is not a slice of passage with no size.
+ */
+export function SummaryBoxChart({
+  categories,
+  series,
+  yLabel,
+  height,
+  testId = 'chart-summary-box',
+}: {
+  categories: string[];
+  series: Array<{ name: string; summaries: Array<FiveNumber | null> }>;
+  yLabel: string;
+  testId?: string;
+} & SizedProps) {
+  const { token } = theme.useToken();
+
+  const option = useMemo<EChartsOption | null>(() => {
+    if (categories.length === 0 || series.every((s) => s.summaries.every((v) => v === null))) return null;
+
+    const palette = paletteFor(token);
+
+    return {
+      xAxis: { type: 'category', data: categories, ...axisStyle(token) },
+      yAxis: { type: 'value', name: yLabel, ...axisStyle(token) },
+      series: series.map((s, i) => ({
+        type: 'boxplot' as const,
+        name: s.name,
+        itemStyle: { borderColor: palette.series[i % palette.series.length] },
+        // A category with no summary is given the renderer's own empty datum rather than a
+        // fabricated box. Nothing is drawn there, which is the honest picture of a slice of cave
+        // nobody measured.
+        data: s.summaries.map((v) =>
+          v === null ? ['-', '-', '-', '-', '-'] : [v.min, v.q1, v.median, v.q3, v.max]),
+      })),
+      legend: { bottom: 0, textStyle: { color: palette.axisLabel } },
+      tooltip: { trigger: 'item' },
+    } as EChartsOption;
+  }, [categories, series, yLabel, token]);
+
+  return <Frame option={option} height={height} testId={testId} />;
+}
+
 /** A curve with a band behind it — what a simulation envelope and a depth profile both need. */
 export function EnvelopeChart({
   x,

@@ -51,6 +51,8 @@ import HistoryPanel, { type HistoryRestore } from '../../components/history/Hist
 import { applyRestore } from '../../components/history/historyModel.ts';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
+import CaveCrossSectionPanel from '../../components/statistics/CaveCrossSectionPanel.tsx';
+import CavePatternPanel from '../../components/statistics/CavePatternPanel.tsx';
 import CaveHypsometryPanel from '../../components/statistics/CaveHypsometryPanel.tsx';
 import CaveStructurePanel from '../../components/statistics/CaveStructurePanel.tsx';
 import CaveOrientationPanel from '../../components/statistics/CaveOrientationPanel.tsx';
@@ -399,12 +401,23 @@ export default function CaveDetailPage() {
 
       {id && <CaveOrientationPanel caveId={id} />}
 
+      {/* Beside the lengths rather than beside the pattern below: how long the passage is and how
+          big it is are the same reading of the same survey, and both are measurements rather than
+          proposals. */}
+      {id && <CaveCrossSectionPanel caveId={id} />}
+
       {/* Beside the trend rather than beside the map: which way the passages run and whether the
           rock around them runs the same way are one reading, and separating them puts the two
           roses on different screens. */}
       {id && <CaveStructurePanel caveId={id} />}
 
       {id && <CaveHypsometryPanel caveId={id} canEdit={canEdit} />}
+
+      {/* Last of the survey figures, because it is the only one that proposes rather than
+          measures: it reads the shape, the trend and the profile above it and suggests what kind
+          of cave they add up to. Putting it first would have a reader take the label and skip the
+          measurements it was drawn from. */}
+      {id && <CavePatternPanel caveId={id} />}
       {id && <CaveClosestApproachSection caveId={id} />}
 
       {id && <CaveTripsSection caveId={id} />}

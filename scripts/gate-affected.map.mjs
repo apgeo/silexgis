@@ -127,7 +127,8 @@ export const groups = {
   ],
   sms: ['MfaAndRateLimitTests', 'TwoFactorChannelTests'],
   surveys: [
-    'CaveSurveyStatisticsTests', 'HypsometryTests', 'StructureComparisonTests',
+    'CavePassageShapeTests', 'CaveSurveyStatisticsTests', 'HypsometryTests',
+    'StructureComparisonTests',
     'SurveyFormatReaderTests', 'SurveyGraphExtractorTests', 'SurveyGraphTests',
     'SurveyMeshTests', 'SurveyModelTests', 'SurveyPlacementTests',
     'SurveySegmentSubstrateTests', 'SurveySourceTests',
@@ -333,8 +334,8 @@ export const crossCutting = {
   ],
   locationClasses: [
     'AccessHistoryTests', 'AclAndCavingGroupTests', 'AssociationDisclosureTests',
-    'AttachmentReachListingTests', 'CalendarTests', 'CaveDomainTests', 'CaveSurveyStatisticsTests',
-    'CenterlineTests', 'ClosestApproachTests', 'ConcurrencyTests', 'DashboardTests',
+    'AttachmentReachListingTests', 'CalendarTests', 'CaveDomainTests', 'CavePassageShapeTests',
+    'CaveSurveyStatisticsTests', 'CenterlineTests', 'ClosestApproachTests', 'ConcurrencyTests', 'DashboardTests',
     'DocumentAccessApiTests', 'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
     'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests', 'ExpeditionLeadsTests',
     'ExpeditionMapTests', 'ExpeditionReportTests', 'FeatureFilterCompilerTests',
