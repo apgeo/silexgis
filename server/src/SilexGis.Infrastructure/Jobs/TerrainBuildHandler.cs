@@ -146,6 +146,7 @@ public sealed class TerrainBuildHandler(
                 await TerrainBuildWrites.SucceedAsync(
                     db, build.Id, TerrainBuildPhase.Publish,
                     TerrainPhases.Overall(TerrainBuildPhase.Publish, 100), null, ct);
+                await DrawIfNothingWasChosenAsync(build.Id, ct);
                 return;
             }
 
@@ -195,6 +196,7 @@ public sealed class TerrainBuildHandler(
 
             await TerrainBuildWrites.SucceedAsync(
                 db, build.Id, reached, TerrainPhases.Overall(reached, 100), null, ct);
+            await DrawIfNothingWasChosenAsync(build.Id, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -251,6 +253,47 @@ public sealed class TerrainBuildHandler(
             : build.ErrorCode is { } previous && job.Attempts > 1
                 ? $"Stopped: an earlier attempt already ended with {previous}."
                 : null;
+
+    /// <summary>
+    /// Puts a build that has just finished on the screen, so that the step between building an
+    /// area and seeing it is not a button somebody has to know about.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Whether it takes the scene is the write's decision, not this one's: it never displaces a
+    /// build somebody chose by hand. Here it is only asked, and told what is on disk.
+    /// </para>
+    /// <para>
+    /// Nothing it does may fail the run. The build itself succeeded — its tiles are baked,
+    /// published and recorded — and throwing here would hand the queue a red row for a build that
+    /// is finished and drawable, which is the one thing worse than the scene not switching. So the
+    /// failure is logged as the operator's to read and swallowed; the button still works, and the
+    /// next finished build tries again.
+    /// </para>
+    /// </remarks>
+    private async Task DrawIfNothingWasChosenAsync(Guid buildId, CancellationToken ct)
+    {
+        try
+        {
+            if (await TerrainBuildWrites.DrawIfNothingWasChosenAsync(
+                    db, buildId, workspace.HasPublishedPyramid(buildId), ct))
+            {
+                logger.LogInformation(
+                    "Terrain build {BuildId} finished and is now the terrain the scene draws", buildId);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Terrain build {BuildId} finished but could not be drawn automatically; it can still be chosen",
+                buildId);
+        }
+    }
 
     private Task RecordAsync(
         Guid buildId, TerrainBuildPhase phase, string code, string message, string? logTail) =>

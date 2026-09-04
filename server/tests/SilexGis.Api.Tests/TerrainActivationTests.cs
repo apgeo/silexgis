@@ -13,6 +13,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Terrain;
 
 namespace SilexGis.Api.Tests;
 
@@ -320,6 +321,89 @@ public sealed class TerrainActivationTests : IAsyncLifetime, IDisposable
         CodeOf(await activate.Content.ReadAsStringAsync()).ShouldBe(TerrainBuildEndpoints.NotFoundCode);
 
         (await remover.DeleteAsync(Build(missing))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// A build that finishes puts itself on the screen, so that the step between building an area
+    /// and seeing it is not a button somebody has to know about.
+    /// </summary>
+    [Fact]
+    public async Task A_finished_build_draws_itself_when_nothing_is_drawn()
+    {
+        await ClearBuildsAsync();
+        var built = await SeedPublishedBuildAsync();
+
+        (await DrawAutomaticallyAsync(built)).ShouldBeTrue();
+
+        (await ActiveIdsAsync()).ShouldBe([built]);
+    }
+
+    /// <summary>
+    /// The pair the guard exists for: an automatic choice may be moved on by the next finished
+    /// build, a deliberate one may not.
+    /// </summary>
+    /// <remarks>
+    /// Both halves are asserted together because either alone passes against a rule that is wrong
+    /// in the other direction. "Draw it whenever nothing is drawn" satisfies the first test on an
+    /// empty installation and then never fires again; "always draw the newest" satisfies it for
+    /// ever and quietly overrules the operator who picked a coarser build on purpose. The
+    /// deliberate choice is made through the endpoint rather than written into storage, because
+    /// what marks it deliberate is something that endpoint does.
+    /// </remarks>
+    [Fact]
+    public async Task A_finished_build_takes_over_from_an_automatic_choice_but_never_from_a_chosen_one()
+    {
+        await ClearBuildsAsync();
+        var drewItself = await SeedPublishedBuildAsync();
+        var next = await SeedPublishedBuildAsync();
+
+        (await DrawAutomaticallyAsync(drewItself)).ShouldBeTrue();
+        (await DrawAutomaticallyAsync(next)).ShouldBeTrue();
+        (await ActiveIdsAsync()).ShouldBe([next]);
+
+        var chosen = await SeedPublishedBuildAsync();
+        (await executor.PostAsync(Active(chosen), null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var later = await SeedPublishedBuildAsync();
+        (await DrawAutomaticallyAsync(later)).ShouldBeFalse();
+        (await ActiveIdsAsync()).ShouldBe([chosen]);
+    }
+
+    /// <summary>
+    /// A run can succeed without leaving a pyramid — the chain stops at the last step this
+    /// installation implements — and terrain that is not there draws as smooth bare ground with
+    /// nothing anywhere saying so.
+    /// </summary>
+    /// <remarks>
+    /// The second assertion is the one that matters: refusing to draw the new build must not also
+    /// take away the build that was being drawn, which is what a rule written as "let the mark go,
+    /// then decide" would do.
+    /// </remarks>
+    [Fact]
+    public async Task A_finished_build_with_nothing_to_draw_leaves_the_scene_where_it_was()
+    {
+        await ClearBuildsAsync();
+        var drawing = await SeedPublishedBuildAsync();
+        (await DrawAutomaticallyAsync(drawing)).ShouldBeTrue();
+
+        var succeededWithNoPyramid = await SeedBuildAsync(
+            TerrainBuildStatus.Succeeded, version: null, publish: false);
+
+        (await DrawAutomaticallyAsync(succeededWithNoPyramid)).ShouldBeFalse();
+        (await ActiveIdsAsync()).ShouldBe([drawing]);
+    }
+
+    /// <summary>
+    /// What the worker calls when a build finishes, driven the way the worker drives it: the
+    /// question of whether there is a pyramid is put to the disk, not to the row.
+    /// </summary>
+    private async Task<bool> DrawAutomaticallyAsync(Guid buildId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var workspace = scope.ServiceProvider.GetRequiredService<TerrainWorkspace>();
+        return await TerrainBuildWrites.DrawIfNothingWasChosenAsync(
+            db, buildId, workspace.HasPublishedPyramid(buildId), CancellationToken.None);
     }
 
     private static string Build(Guid id) => $"/api/v1/terrain/builds/{id}";

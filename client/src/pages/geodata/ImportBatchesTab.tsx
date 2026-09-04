@@ -47,6 +47,11 @@ export default function ImportBatchesTab() {
         return t('vectorImport.batchFromDevice');
       case 'externalCatalogue':
         return t('vectorImport.batchFromCatalogue');
+      // A spreadsheet of trips arrives as an ordinary stored file rather than as a geofile, so
+      // there is no file name on the batch to show. Saying where it came from is the whole of
+      // what this column can honestly say about it.
+      case 'tripCsv':
+        return t('vectorImport.batchFromTrips');
       case 'vectorFile':
         return fileName ?? t('vectorImport.fileGone');
       default: {
@@ -148,6 +153,7 @@ export default function ImportBatchesTab() {
         open={open !== null}
         size="min(760px, 96vw)"
         title={t('vectorImport.batchDetail')}
+        data-testid="import-batch-detail"
         onClose={() => setOpen(null)}
         destroyOnHidden
       >
@@ -161,15 +167,47 @@ export default function ImportBatchesTab() {
             {
               title: t('vectorImport.columns.name'),
               dataIndex: 'featureName',
-              render: (name: string | null, row: { featureId?: string | null; featureDeleted?: boolean }) =>
-                row.featureId ? (
-                  <Flex gap={8} align="center">
-                    <Link to={`/features/${row.featureId}`}>{name ?? t('vectorImport.unnamed')}</Link>
-                    {row.featureDeleted && <Tag>{t('vectorImport.deletedTag')}</Tag>}
-                  </Flex>
-                ) : (
-                  <Typography.Text type="secondary">{t('vectorImport.notCreated')}</Typography.Text>
-                ),
+              // Two kinds of line end up in one drawer: a batch of caves and areas read off a
+              // map file, and a batch of trips read off a spreadsheet. Branching on the feature
+              // alone made every trip in a five-hundred-trip batch read "Nothing created",
+              // directly under a header row saying five hundred were.
+              render: (
+                name: string | null,
+                row: {
+                  featureId?: string | null;
+                  featureDeleted?: boolean;
+                  tripLogId?: string | null;
+                  tripTitle?: string | null;
+                },
+              ) => {
+                if (row.featureId) {
+                  return (
+                    <Flex gap={8} align="center">
+                      <Link to={`/features/${row.featureId}`}>{name ?? t('vectorImport.unnamed')}</Link>
+                      {row.featureDeleted && <Tag>{t('vectorImport.deletedTag')}</Tag>}
+                    </Flex>
+                  );
+                }
+                if (row.tripLogId) {
+                  return (
+                    <Link to={`/trip-logs/${row.tripLogId}`}>
+                      {row.tripTitle ?? t('vectorImport.unnamed')}
+                    </Link>
+                  );
+                }
+                // A reverted trip keeps its title here and loses its pointer, because the trip
+                // itself is gone rather than soft-deleted. Saying what it was named is the whole
+                // reason the title is recorded on the line.
+                if (row.tripTitle) {
+                  return (
+                    <Flex gap={8} align="center">
+                      <Typography.Text>{row.tripTitle}</Typography.Text>
+                      <Tag>{t('vectorImport.deletedTag')}</Tag>
+                    </Flex>
+                  );
+                }
+                return <Typography.Text type="secondary">{t('vectorImport.notCreated')}</Typography.Text>;
+              },
             },
             { title: t('vectorImport.columns.rule'), dataIndex: 'ruleName', width: 200 },
             {

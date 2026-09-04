@@ -64,8 +64,11 @@ public static class LocationProtection
     /// Snaps a point to the nearest grid intersection of <paramref name="gridMeters"/>,
     /// removing precision deterministically (same input → same output; no jitter to average
     /// away). Uses one cell size in degrees on both axes and away-from-zero rounding so it
-    /// is exactly reproducible in SQL as round(x / cell) * cell — the two MUST stay
-    /// identical, or combining endpoints would leak location by grid intersection.
+    /// is exactly reproducible in SQL as round((x / cell)::numeric) * cell — the two MUST stay
+    /// identical, or combining endpoints would leak location by grid intersection. The cast is
+    /// load-bearing and is not decoration: PostgreSQL's round(double precision) rounds half to
+    /// EVEN, and only round(numeric) rounds half away from zero as this does. Written without it
+    /// the two disagree at exactly the halfway values every snapped coordinate can land on.
     /// </summary>
     public static Point Snap(Point point, double gridMeters)
     {

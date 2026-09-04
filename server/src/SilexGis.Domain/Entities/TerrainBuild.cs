@@ -231,6 +231,18 @@ public class TerrainBuild : ITimestamped, IAuditable
     /// </summary>
     public bool IsActive { get; set; }
 
+    /// <summary>
+    /// How this build came to be the one the scene draws: true when it drew itself on finishing,
+    /// false when somebody chose it.
+    /// </summary>
+    /// <remarks>
+    /// Read only of the build currently holding <see cref="IsActive"/>, and only to answer whether
+    /// the next finished build may take the scene from it. A hand-made choice is never overruled;
+    /// an automatic one is moved on. Left as written on rows that are not drawn, where it means
+    /// nothing — it is a fact about a decision, not about the build.
+    /// </remarks>
+    public bool ActivationWasAutomatic { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>When a worker picked the build up.</summary>

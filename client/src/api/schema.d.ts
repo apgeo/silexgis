@@ -1555,6 +1555,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/map/density": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cave-entrance counts and densities per grid cell over a bbox, optionally normalised by a study-area outline. Cells finer than the location-protection grid are refused. */
+        get: {
+            parameters: {
+                query?: {
+                    bbox?: string;
+                    cellMetres?: number;
+                    areaId?: string;
+                    bandwidthMetres?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DensityGridDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/map/point-pattern": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Clark-Evans nearest-neighbour index, Ripley's L with a seeded Monte-Carlo envelope, and the rose of bearings between pairs of entrances, over the cave entrances in a window that the caller may place exactly. */
+        get: {
+            parameters: {
+                query?: {
+                    bbox?: string;
+                    areaId?: string;
+                    maxRadiusMetres?: number;
+                    steps?: number;
+                    simulations?: number;
+                    seed?: number;
+                    maxPairSeparationMetres?: number;
+                    minPairSeparationMetres?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PointPatternDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search": {
         parameters: {
             query?: never;
@@ -4930,6 +5016,325 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/cross-section": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How big one cave's passages are, and over how much of the cave that was worked out. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveCrossSectionDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/pattern": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What kind of cave one survey's shape suggests, with every rule applied to reach it. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CavePatternDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/hypsometry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How one cave's passage length is distributed by height, and the levels it appears to be cut at. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveHypsometryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/level-bands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The levels somebody recorded for this cave, or the fact that nobody has. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveLevelBandsDto"];
+                    };
+                };
+            };
+        };
+        /** Record a reading of this cave's levels, superseding any earlier one. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SaveCaveLevelBandsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveLevelBandsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Withdraw the recorded reading of this cave's levels. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveLevelBandsDto"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/entrance-hypsometry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How the altitudes of the cave entrances under one area are distributed, with the spring altitudes among them. Counts only entrances this caller may place. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AreaHypsometryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/structure-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The cave's passage rose against the length-weighted rose of the fracture traces mapped within reach of it, with how far apart the two are. */
+        get: {
+            parameters: {
+                query?: {
+                    RadiusMetres?: number;
+                    AreaId?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveStructureComparisonDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/structure-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The rose of the depression long axes under one area against the length-weighted rose of the fracture traces mapped in it, with how far apart the two are. */
+        get: {
+            parameters: {
+                query?: {
+                    FeatureTypeId?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AreaStructureComparisonDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{id}/closest-approach/{other}": {
         parameters: {
             query?: never;
@@ -5236,6 +5641,80 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["FeatureMorphometryDto"];
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/karst-statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Counts, densities, totals, extremes, a rock-type breakdown and a classed karstification index for one area, over the caves declared to be in it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AreaKarstStatisticsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/features/{id}/karst-statistics.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same area statistics as a two-column CSV, for a spreadsheet. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -6394,7 +6873,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Creates the selected candidates as one revertible batch. */
+        /** Queues the selected candidates to be created as one revertible batch, and answers with the job to watch and the batch they will appear in. Everything that can refuse the confirmation is decided before it is queued. */
         post: {
             parameters: {
                 query?: never;
@@ -6410,13 +6889,13 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description OK */
-                200: {
+                /** @description Accepted */
+                202: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ImportCommitResultDto"];
+                        "application/json": components["schemas"]["ImportCommitAcceptedDto"];
                     };
                 };
             };
@@ -6901,6 +7380,192 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["SpeologieImportResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-imports/{fileId}/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's review of this spreadsheet, resumed where they left it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportSessionDto"];
+                    };
+                };
+            };
+        };
+        /** Saves the review as the reviewer works; nothing is created. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripImportSessionWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportSessionDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-imports/{fileId}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The sheet's header, and which field each column was taken for. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportColumnsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-imports/{fileId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reads the sheet under the current choices and answers a page of it. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripImportPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportPreviewDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-imports/{fileId}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records the chosen rows as trips, as one batch that reverts as a unit. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripImportCommitRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportCommitResultDto"];
                     };
                 };
             };
@@ -15708,6 +16373,75 @@ export interface components {
             /** Format: int32 */
             dailyPaidMessageCap: number;
         };
+        AreaCaveExtremeDto: {
+            /** Format: uuid */
+            featureId: string;
+            name: null | string;
+            /** Format: double */
+            value: number;
+        };
+        AreaHypsometryDto: {
+            /** Format: uuid */
+            areaId: string;
+            /** Format: int32 */
+            entranceCount: number;
+            springAltitudesM: number[];
+            proposal: components["schemas"]["ElevationBandProposal"];
+        };
+        AreaKarstStatisticsDto: {
+            /** Format: uuid */
+            areaId: string;
+            basis: string;
+            /** Format: double */
+            areaKm2: null | number;
+            /** Format: int32 */
+            caveCount: number;
+            /** Format: int32 */
+            entranceCount: number;
+            /** Format: double */
+            cavesPerKm2: null | number;
+            /** Format: double */
+            entrancesPerKm2: null | number;
+            /** Format: double */
+            surveyedLengthM: null | number;
+            /** Format: int32 */
+            surveyedCaveCount: number;
+            /** Format: double */
+            surveyedMetresPerKm2: null | number;
+            /** Format: int32 */
+            depressionCount: number;
+            /** Format: double */
+            depressionAreaKm2: null | number;
+            /** Format: double */
+            depressionAreaRatio: null | number;
+            deepestCaves: components["schemas"]["AreaCaveExtremeDto"][];
+            longestCaves: components["schemas"]["AreaCaveExtremeDto"][];
+            rockTypes: components["schemas"]["AreaRockTypeCountDto"][];
+            karstification: components["schemas"]["KarstificationIndexDto"];
+            /** Format: int32 */
+            unparentedInsideCount: number;
+            /** Format: int32 */
+            placeableCaveCount: number;
+        };
+        AreaRockTypeCountDto: {
+            /** Format: int64 */
+            rockTypeId: null | number;
+            code: null | string;
+            name: null | string;
+            /** Format: int32 */
+            caveCount: number;
+        };
+        AreaStructureComparisonDto: {
+            /** Format: uuid */
+            areaId: string;
+            /** Format: int32 */
+            dolineCount: number;
+            /** Format: int32 */
+            structureFeatureCount: number;
+            dolines: null | components["schemas"]["OrientationSummary"];
+            structure: null | components["schemas"]["OrientationSummary"];
+            divergence: null | components["schemas"]["RoseDivergence"];
+        };
         AttachmentCreateRequest: {
             /** Format: uuid */
             fileId: string;
@@ -15872,6 +16606,16 @@ export interface components {
             };
             isFullAdmin: boolean;
         };
+        CaveCrossSectionDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasReadings: boolean;
+            summary: null | components["schemas"]["CrossSectionSummary"];
+        };
         CaveDto: {
             /** Format: uuid */
             id: string;
@@ -15953,6 +16697,17 @@ export interface components {
             thumbnailUrl: string;
             caption: null | string;
         };
+        CaveHypsometryDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            proposal: null | components["schemas"]["ElevationBandProposal"];
+            springAltitudesM: number[];
+        };
         CaveIndexSummary: {
             /** Format: int32 */
             segmentCount: number;
@@ -15981,6 +16736,17 @@ export interface components {
             lengthToDepthRatio: null | number;
             /** Format: double */
             sinuosity: null | number;
+        };
+        CaveLevelBandsDto: {
+            /** Format: uuid */
+            caveId: string;
+            confirmed: boolean;
+            bands: components["schemas"]["SavedElevationBand"][];
+            note: null | string;
+            /** Format: uuid */
+            confirmedBy: null | string;
+            /** Format: date-time */
+            confirmedAt: null | string;
         };
         CaveListItemDto: {
             /** Format: uuid */
@@ -16034,6 +16800,17 @@ export interface components {
             id: string;
             name: null | string;
             isPrimary: boolean;
+        };
+        CavePatternDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            suggestion: components["schemas"]["PatternSuggestion"];
+            network: null | components["schemas"]["PassageNetworkFigures"];
         };
         CavePermissionsDto: {
             canWrite: boolean;
@@ -16097,6 +16874,21 @@ export interface components {
             length: components["schemas"]["MorphometryComparison"];
             depth: components["schemas"]["MorphometryComparison"];
             declaredDisagrees: boolean;
+        };
+        CaveStructureComparisonDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            /** Format: double */
+            radiusMetres: number;
+            /** Format: int32 */
+            structureFeatureCount: number;
+            passage: null | components["schemas"]["OrientationSummary"];
+            structure: null | components["schemas"]["OrientationSummary"];
+            divergence: null | components["schemas"]["RoseDivergence"];
         };
         CaveSummaryDto: {
             /** Format: uuid */
@@ -16297,6 +17089,18 @@ export interface components {
             visibility: components["schemas"]["Visibility"];
             items: components["schemas"]["ChecklistItemRequest"][];
         };
+        ClarkEvansDto: {
+            /** Format: double */
+            meanNearestNeighbourM: number;
+            /** Format: double */
+            expectedMeanM: number;
+            /** Format: double */
+            index: number;
+            /** Format: double */
+            zScore: number;
+            /** Format: double */
+            pValue: number;
+        };
         /** @enum {unknown} */
         ClosestApproachAbsence: "none" | "noLineWork" | "noAltitudes";
         ClosestApproachDto: {
@@ -16338,6 +17142,66 @@ export interface components {
         };
         /** @enum {unknown} */
         ConversionState: "notApplicable" | "pending" | "converted" | "unavailable" | "failed" | "deferred";
+        CrossSectionDistribution: {
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            minimum: number;
+            /** Format: double */
+            lowerQuartile: number;
+            /** Format: double */
+            median: number;
+            /** Format: double */
+            upperQuartile: number;
+            /** Format: double */
+            maximum: number;
+            /** Format: double */
+            mean: number;
+        };
+        CrossSectionElevationBand: {
+            /** Format: double */
+            fromM: number;
+            /** Format: double */
+            toM: number;
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: int32 */
+            areaStationCount: number;
+            width: null | components["schemas"]["CrossSectionDistribution"];
+            height: null | components["schemas"]["CrossSectionDistribution"];
+            area: null | components["schemas"]["CrossSectionDistribution"];
+        };
+        CrossSectionScaling: {
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: double */
+            exponent: number;
+            /** Format: double */
+            coefficient: number;
+            /** Format: double */
+            rSquared: number;
+        };
+        CrossSectionSummary: {
+            /** Format: int32 */
+            readingCount: number;
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: int32 */
+            widthStationCount: number;
+            /** Format: int32 */
+            heightStationCount: number;
+            /** Format: int32 */
+            areaStationCount: number;
+            width: null | components["schemas"]["CrossSectionDistribution"];
+            height: null | components["schemas"]["CrossSectionDistribution"];
+            widthHeightRatio: null | components["schemas"]["CrossSectionDistribution"];
+            area: null | components["schemas"]["CrossSectionDistribution"];
+            scaling: null | components["schemas"]["CrossSectionScaling"];
+            volume: components["schemas"]["PassageVolumeEstimate"];
+            /** Format: double */
+            bandWidthM: number;
+            bands: components["schemas"]["CrossSectionElevationBand"][];
+        };
         DashboardActivityItemDto: {
             kind: components["schemas"]["DashboardActivityKind"];
             /** Format: uuid */
@@ -16394,6 +17258,47 @@ export interface components {
             longitudeColumn?: null | string;
             elevationColumn?: null | string;
             wktColumn?: null | string;
+        };
+        DensityCellDto: {
+            /** Format: double */
+            west: number;
+            /** Format: double */
+            south: number;
+            /** Format: double */
+            east: number;
+            /** Format: double */
+            north: number;
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            areaKm2: number;
+            /** Format: double */
+            densityPerKm2: number;
+            /** Format: double */
+            studyAreaFraction: null | number;
+            /** Format: double */
+            kernelDensityPerKm2: number;
+        };
+        DensityGridDto: {
+            /** Format: double */
+            cellMetres: number;
+            /** Format: double */
+            minimumCellMetres: number;
+            /** Format: double */
+            protectionGridMetres: number;
+            /** Format: double */
+            bandwidthMetres: number;
+            /** Format: double */
+            minimumBandwidthMetres: number;
+            /** Format: uuid */
+            studyAreaId: null | string;
+            /** Format: double */
+            studyAreaKm2: null | number;
+            /** Format: int32 */
+            featureCount: number;
+            /** Format: int32 */
+            cellCount: number;
+            cells: components["schemas"]["DensityCellDto"][];
         };
         DipSummary: {
             /** Format: int32 */
@@ -16541,6 +17446,48 @@ export interface components {
         EffectiveTermRuleSetDto: {
             set: null | components["schemas"]["TermRuleSetDetailDto"];
             source: null | components["schemas"]["TermRuleScope"];
+        };
+        ElevationBand: {
+            /** Format: double */
+            fromM: number;
+            /** Format: double */
+            toM: number;
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            weightM: number;
+            /** Format: double */
+            weightFraction: number;
+        };
+        ElevationBandProposal: {
+            /** Format: int32 */
+            sampleCount: number;
+            /** Format: double */
+            totalWeightM: number;
+            /** Format: double */
+            lowestM: null | number;
+            /** Format: double */
+            highestM: null | number;
+            /** Format: double */
+            binWidthM: number;
+            bins: components["schemas"]["ElevationBin"][];
+            bands: components["schemas"]["ElevationBand"][];
+            /** Format: double */
+            goodnessOfVarianceFit: null | number;
+        };
+        ElevationBin: {
+            /** Format: double */
+            fromM: number;
+            /** Format: double */
+            toM: number;
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            weightM: number;
+            /** Format: double */
+            countFraction: number;
+            /** Format: double */
+            weightFraction: number;
         };
         EmailChangeRequest: {
             newEmail: string;
@@ -17561,6 +18508,7 @@ export interface components {
             /** Format: uuid */
             revertedByUserId: null | string;
             canRevert: boolean;
+            failures: components["schemas"]["ImportFailureDto"][];
         };
         ImportBatchItemDto: {
             /** Format: int64 */
@@ -17577,6 +18525,9 @@ export interface components {
             ruleId: null | string;
             ruleName: null | string;
             action: components["schemas"]["ImportDecisionAction"];
+            /** Format: uuid */
+            tripLogId: null | string;
+            tripTitle: null | string;
         };
         /** @enum {unknown} */
         ImportBatchMode: "reviewed" | "autoCreated";
@@ -17600,6 +18551,14 @@ export interface components {
             geom: null | components["schemas"]["GeoJsonGeometry"];
             duplicate: null | components["schemas"]["ImportDuplicateDto"];
             decision: null | components["schemas"]["ImportDecision"];
+        };
+        ImportCommitAcceptedDto: {
+            /** Format: int64 */
+            jobId: number;
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            queued: number;
         };
         ImportCommitRequest: {
             options: components["schemas"]["ImportOptions"];
@@ -17741,7 +18700,7 @@ export interface components {
             photoClusterRadiusMeters: number;
         };
         /** @enum {unknown} */
-        ImportSource: "vectorFile" | "photos" | "deviceSync" | "externalCatalogue";
+        ImportSource: "vectorFile" | "photos" | "deviceSync" | "externalCatalogue" | "tripCsv";
         /** @enum {unknown} */
         ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
         /** @enum {unknown} */
@@ -17752,6 +18711,23 @@ export interface components {
             panelDefaults: string;
         };
         JsonElement: unknown;
+        /** @enum {unknown} */
+        KarstificationClass: "unknown" | "veryLow" | "low" | "moderate" | "high" | "veryHigh";
+        KarstificationComponentDto: {
+            name: string;
+            /** Format: double */
+            value: null | number;
+            /** Format: double */
+            normalised: null | number;
+            /** Format: double */
+            reference: number;
+        };
+        KarstificationIndexDto: {
+            /** Format: double */
+            score: null | number;
+            class: components["schemas"]["KarstificationClass"];
+            components: components["schemas"]["KarstificationComponentDto"][];
+        };
         LibraryPhotoFeatureCollection: {
             type: string;
             features: components["schemas"]["GeoFeature"][];
@@ -18176,6 +19152,15 @@ export interface components {
             /** Format: double */
             entropyNormalized: null | number;
         };
+        OrientationSummary: {
+            /** Format: int32 */
+            sampleCount: number;
+            /** Format: double */
+            totalLengthM: number;
+            byCount: components["schemas"]["OrientationMeasure"];
+            byLength: components["schemas"]["OrientationMeasure"];
+            bins: components["schemas"]["OrientationBin"][];
+        };
         /** @enum {unknown} */
         PageDivision: "whole" | "page" | "sheet" | "slide";
         PagedResultOfAlbumDto: {
@@ -18444,10 +19429,49 @@ export interface components {
             page: number;
             text: string;
         };
+        PairAlignmentDto: {
+            /** Format: int32 */
+            pairCount: number;
+            /** Format: double */
+            minSeparationM: number;
+            /** Format: double */
+            maxSeparationM: number;
+            rose: components["schemas"]["OrientationSummary"];
+        };
         ParentEdgeRequest: {
             /** Format: uuid */
             parentId: string;
             isPrimary: boolean;
+        };
+        PassageNetworkFigures: {
+            /** Format: int32 */
+            nodeCount: number;
+            /** Format: int32 */
+            edgeCount: number;
+            /** Format: int32 */
+            componentCount: number;
+            /** Format: int32 */
+            reducedNodeCount: number;
+            /** Format: int32 */
+            cyclomaticNumber: number;
+            /** Format: int32 */
+            extremityCount: number;
+            /** Format: double */
+            clustering: null | number;
+        };
+        PassageVolumeEstimate: {
+            /** Format: double */
+            volumeM3: null | number;
+            /** Format: int32 */
+            legCount: number;
+            /** Format: int32 */
+            measuredLegCount: number;
+            /** Format: double */
+            lengthM: number;
+            /** Format: double */
+            measuredLengthM: number;
+            /** Format: double */
+            lengthFraction: null | number;
         };
         PasswordChangeRequest: {
             currentPassword: string;
@@ -18462,6 +19486,44 @@ export interface components {
             straightLineM: number;
             /** Format: double */
             sinuosity: null | number;
+        };
+        /** @enum {unknown} */
+        PatternCaveat: "figuresAreApproximated" | "networkIsIncomplete" | "networkCompletenessIsUnknown" | "noAltitudes" | "noCrossSections" | "noNetworkFigures";
+        /** @enum {unknown} */
+        PatternFigure: "loopsPerNode" | "deadEndFraction" | "clustering" | "orientationEntropy" | "meanAbsoluteDip" | "maximumDip" | "minimumDip" | "verticality" | "medianWidthHeightRatio";
+        PatternFigureValue: {
+            figure: components["schemas"]["PatternFigure"];
+            /** Format: double */
+            value: null | number;
+        };
+        /** @enum {unknown} */
+        PatternRule: "networkIsLooped" | "networkIsTreeLike" | "networkEndsOften" | "networkRings" | "bearingsAreConcentrated" | "passageIsSteep" | "passageIsLevel" | "profileOscillates" | "sectionIsWide" | "sectionIsTall";
+        /** @enum {unknown} */
+        PatternRuleOutcome: "notAssessable" | "didNotFire" | "fired";
+        PatternRuleTrace: {
+            rule: components["schemas"]["PatternRule"];
+            outcome: components["schemas"]["PatternRuleOutcome"];
+            supports: components["schemas"]["SpeleogeneticPatternKind"][];
+            /** Format: double */
+            weight: number;
+            figures: components["schemas"]["PatternFigureValue"][];
+        };
+        PatternScore: {
+            kind: components["schemas"]["SpeleogeneticPatternKind"];
+            /** Format: double */
+            score: number;
+        };
+        PatternSuggestion: {
+            pattern: components["schemas"]["SpeleogeneticPatternKind"];
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            scores: components["schemas"]["PatternScore"][];
+            rules: components["schemas"]["PatternRuleTrace"][];
+            /** Format: int32 */
+            assessableRuleCount: number;
+            /** Format: int32 */
+            firedRuleCount: number;
+            caveats: components["schemas"]["PatternCaveat"][];
         };
         PermissionGroupDto: {
             /** Format: uuid */
@@ -18784,6 +19846,19 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        PointPatternDto: {
+            /** Format: int32 */
+            featureCount: number;
+            /** Format: int32 */
+            minimumFeatureCount: number;
+            /** Format: double */
+            studyAreaKm2: number;
+            /** Format: uuid */
+            studyAreaId: null | string;
+            clarkEvans: null | components["schemas"]["ClarkEvansDto"];
+            ripley: null | components["schemas"]["RipleyDto"];
+            alignment: null | components["schemas"]["PairAlignmentDto"];
+        };
         /** @enum {unknown} */
         PositionConfidenceBand: "unknown" | "excellent" | "good" | "moderate" | "poor";
         /** @enum {unknown} */
@@ -19003,11 +20078,49 @@ export interface components {
             /** Format: uuid */
             mainMemberId: null | string;
         };
+        RipleyDto: {
+            /** Format: int32 */
+            simulations: number;
+            /** Format: int32 */
+            seed: number;
+            /** Format: double */
+            maxRadiusM: number;
+            steps: components["schemas"]["RipleyStepDto"][];
+        };
+        RipleyStepDto: {
+            /** Format: double */
+            radiusM: number;
+            /** Format: double */
+            observedL: number;
+            /** Format: double */
+            lowerL: null | number;
+            /** Format: double */
+            upperL: null | number;
+        };
+        RoseDivergence: {
+            /** Format: double */
+            transportDegrees: number;
+            /** Format: double */
+            normalized: number;
+            /** Format: double */
+            meanAxisSeparationDegrees: null | number;
+        };
         RuleHitDto: {
             ruleId: string;
             ruleName: string;
             /** Format: int32 */
             count: number;
+        };
+        SaveCaveLevelBandsRequest: {
+            bands: null | components["schemas"]["SavedElevationBand"][];
+            note: null | string;
+        };
+        SavedElevationBand: {
+            /** Format: double */
+            fromM: number;
+            /** Format: double */
+            toM: number;
+            label: null | string;
         };
         SearchDocumentItemDto: {
             /** Format: uuid */
@@ -19207,6 +20320,8 @@ export interface components {
         };
         /** @enum {unknown} */
         SortKey: "created" | "updated" | "title" | "owner" | "proximity" | "occurred";
+        /** @enum {unknown} */
+        SpeleogeneticPatternKind: "insufficient" | "undetermined" | "vadoseBranchwork" | "waterTable" | "looping" | "angularMaze";
         /** @enum {unknown} */
         SpeologieAction: "create" | "update" | "skip" | null;
         SpeologieBasinDto: {
@@ -19806,9 +20921,243 @@ export interface components {
             /** Format: int32 */
             total: number;
         };
+        /** @enum {unknown} */
+        TripCsvDateOrder: "dayFirst" | "monthFirst";
+        /** @enum {unknown} */
+        TripCsvDateOrderSource: "stated" | "file" | "conflict";
+        /** @enum {unknown} */
+        TripCsvDiagnosticCode: "mappedColumnMissing" | "mappedColumnTaken" | "unmappedColumn" | "raggedRow" | "blankRow" | "requiredFieldEmpty" | "dateUnreadable" | "dateOutOfRange" | "dateTwoDigitYear" | "dateAmbiguous" | "dateOrderConflict" | "valueDropped" | "duplicateSourceId" | "tooManyColumns" | "noHeader" | "unterminatedQuote";
+        /** @enum {unknown} */
+        TripCsvField: "sourceId" | "startDate" | "endDate" | "title" | "country" | "massif" | "subArea" | "caves" | "proposers" | "participants" | "details" | "details2" | "tripType" | "errors";
+        /** @enum {unknown} */
+        TripCsvSeverity: "warning" | "error";
         TripExpeditionRequest: {
             /** Format: uuid */
             expeditionId?: null | string;
+        };
+        TripImportCandidate: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        TripImportColumnsDto: {
+            header: string[];
+            resolvedColumns: {
+                [key: string]: string;
+            };
+            unmappedColumns: string[];
+            problems: components["schemas"]["TripImportProblemDto"][];
+        };
+        TripImportCommitRequest: {
+            options: components["schemas"]["TripImportOptions"];
+            lines: number[];
+            decisions: null | {
+                [key: string]: components["schemas"]["TripImportDecision"];
+            };
+        };
+        TripImportCommitResultDto: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            createdTripCount: number;
+            /** Format: int32 */
+            createdFeatureCount: number;
+            /** Format: int32 */
+            skippedCount: number;
+            failures: components["schemas"]["TripImportFailureDto"][];
+        };
+        TripImportDecision: {
+            action?: null | components["schemas"]["TripImportRowAction"];
+        };
+        TripImportFailureDto: {
+            /** Format: int32 */
+            line: number;
+            title: null | string;
+            code: string;
+            reason: string;
+        };
+        TripImportFeatureMatch: {
+            source: string;
+            state: components["schemas"]["TripImportMatchState"];
+            /** Format: uuid */
+            featureId: null | string;
+            name: null | string;
+            candidates: components["schemas"]["TripImportCandidate"][];
+            willCreate: boolean;
+        };
+        /** @enum {unknown} */
+        TripImportMatchState: "matched" | "unmatched" | "ambiguous";
+        TripImportOptions: {
+            delimiter?: string;
+            multiValueSeparators?: string;
+            slashSeparatedFields?: components["schemas"]["TripCsvField"][];
+            dateOrder?: components["schemas"]["TripCsvDateOrder"];
+            columns?: {
+                [key: string]: string;
+            };
+            visibility?: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            createMissingCaves?: boolean;
+            createMissingAreas?: boolean;
+            createMissingCavers?: boolean;
+            createMissingTripTypes?: boolean;
+            tripTypeChoices?: {
+                [key: string]: number;
+            };
+            tripTypeNames?: {
+                [key: string]: string;
+            };
+            caverChoices?: {
+                [key: string]: string;
+            };
+            featureChoices?: {
+                [key: string]: string;
+            };
+        };
+        TripImportPersonMatch: {
+            source: string;
+            state: components["schemas"]["TripImportMatchState"];
+            /** Format: uuid */
+            caverId: null | string;
+            name: null | string;
+            candidates: components["schemas"]["TripImportCandidate"][];
+            mayCreate: boolean;
+            willCreate: boolean;
+        };
+        TripImportPreviewDto: {
+            items: components["schemas"]["TripImportRowDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+            filteredLines: number[];
+            selectableLines: number[];
+            truncated: boolean;
+            /** Format: int32 */
+            rowCount: number;
+            /** Format: int32 */
+            readableRowCount: number;
+            /** Format: int32 */
+            failedRowCount: number;
+            /** Format: int32 */
+            skippedRowCount: number;
+            header: string[];
+            resolvedColumns: {
+                [key: string]: string;
+            };
+            unmappedColumns: string[];
+            dateOrder: components["schemas"]["TripCsvDateOrder"];
+            dateOrderSource: components["schemas"]["TripCsvDateOrderSource"];
+            /** Format: int32 */
+            ambiguousDateRows: number;
+            problems: components["schemas"]["TripImportProblemDto"][];
+            proposals: components["schemas"]["TripImportProposalsDto"];
+        };
+        TripImportPreviewRequest: {
+            options: components["schemas"]["TripImportOptions"];
+            /** Format: int32 */
+            page: null | number;
+            /** Format: int32 */
+            pageSize: null | number;
+            search: null | string;
+        };
+        TripImportProblemDto: {
+            /** Format: int32 */
+            line: number;
+            severity: components["schemas"]["TripCsvSeverity"];
+            code: components["schemas"]["TripCsvDiagnosticCode"];
+            field: null | components["schemas"]["TripCsvField"];
+            column: null | string;
+            detail: null | string;
+        };
+        TripImportProposalsDto: {
+            tripTypes: components["schemas"]["TripImportTermMatch"][];
+            people: components["schemas"]["TripImportPersonMatch"][];
+            caves: components["schemas"]["TripImportFeatureMatch"][];
+            areas: components["schemas"]["TripImportFeatureMatch"][];
+            /** Format: int32 */
+            newTripTypeCount: number;
+            /** Format: int32 */
+            newCaverCount: number;
+            /** Format: int32 */
+            newCaveCount: number;
+            /** Format: int32 */
+            newAreaCount: number;
+            /** Format: int32 */
+            ambiguousPersonCount: number;
+            /** Format: int32 */
+            uncreatablePersonCount: number;
+            /** Format: int32 */
+            ambiguousPlaceCount: number;
+        };
+        /** @enum {unknown} */
+        TripImportRowAction: "create" | "skip" | null;
+        TripImportRowDto: {
+            /** Format: int32 */
+            line: number;
+            sourceId: null | string;
+            /** Format: date */
+            startDate: null | string;
+            /** Format: date */
+            endDate: null | string;
+            startDateText: null | string;
+            endDateText: null | string;
+            title: null | string;
+            country: null | string;
+            massif: null | string;
+            subArea: null | string;
+            caves: string[];
+            proposers: string[];
+            participants: string[];
+            details: null | string;
+            details2: null | string;
+            tripType: null | string;
+            errors: null | string;
+            unmapped: {
+                [key: string]: string;
+            };
+            warnings: components["schemas"]["TripImportProblemDto"][];
+            decision: null | components["schemas"]["TripImportDecision"];
+            resolution: null | components["schemas"]["TripImportRowResolution"];
+        };
+        TripImportRowResolution: {
+            /** Format: int32 */
+            line: number;
+            tripType: null | components["schemas"]["TripImportTermMatch"];
+            caves: components["schemas"]["TripImportFeatureMatch"][];
+            massif: null | components["schemas"]["TripImportFeatureMatch"];
+            subArea: null | components["schemas"]["TripImportFeatureMatch"];
+            proposers: components["schemas"]["TripImportPersonMatch"][];
+            participants: components["schemas"]["TripImportPersonMatch"][];
+            locationNote: null | string;
+        };
+        TripImportSessionDto: {
+            /** Format: uuid */
+            fileId: string;
+            fileName: string;
+            options: components["schemas"]["TripImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["TripImportDecision"];
+            };
+            /** Format: date-time */
+            updatedAt: null | string;
+        };
+        TripImportSessionWriteRequest: {
+            options: components["schemas"]["TripImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["TripImportDecision"];
+            };
+        };
+        TripImportTermMatch: {
+            source: string;
+            state: components["schemas"]["TripImportMatchState"];
+            /** Format: int64 */
+            id: null | number;
+            name: null | string;
+            willCreate: boolean;
         };
         TripInvitationCreateRequest: {
             /** Format: uuid */

@@ -70,6 +70,7 @@ public sealed class ImportCommitService(
     FeatureWriteService writer,
     ImportCandidateService candidates,
     IAccessService access,
+    Trips.TripLogWriteService tripWrites,
     IOptions<ImportLimitOptions> limits)
 {
     /// <summary>Entrance type a cave built around an imported waypoint gets when no rule said otherwise.</summary>
@@ -86,6 +87,7 @@ public sealed class ImportCommitService(
         IReadOnlyDictionary<long, ImportDecision> decisions,
         ImportBatchMode mode,
         AccessContext ctx,
+        Guid? batchId = null,
         CancellationToken ct = default)
     {
         var maxCommitItems = limits.Value.MaxCommitItems;
@@ -112,6 +114,10 @@ public sealed class ImportCommitService(
                 .ToListAsync(ct);
         var batch = new ImportBatch
         {
+            // Supplied by the caller when the work runs on the queue, so the address of the
+            // result exists before the work does and the reviewer can be sent to it immediately
+            // rather than being made to hunt for whichever batch appeared most recently.
+            Id = batchId ?? Guid.CreateVersion7(),
             GeofileId = geofile.Id,
             TermRuleSetId = ruleSet?.Id,
             TermRuleSetName = ruleSet?.Name,
@@ -126,6 +132,11 @@ public sealed class ImportCommitService(
         var touchedCaves = new HashSet<Guid>();
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // One recompute for the batch rather than one per row. Per row it reads the whole edge
+        // table and walks every tracked feature, so the cost grew with the square of the
+        // selection — and only the final pass could be right in any case.
+        writer.BeginDeferredDerivedState();
 
         foreach (var sourceId in selection)
         {
@@ -182,9 +193,19 @@ public sealed class ImportCommitService(
                 $"None of the {failures.Count} selected rows could be created. {failures[0].Reason}");
         }
 
+        // Recorded on the batch, not merely returned: on the queue there is no longer a caller
+        // listening when a row is refused, and "why did a hundred of my three thousand not
+        // arrive" has to be answerable afterwards.
+        batch.Failures = failures.Count == 0 ? null : ImportJson.Serialize(failures);
+
         db.ImportBatches.Add(batch);
         db.ImportBatchItems.AddRange(items);
         await db.SaveChangesAsync(ct);
+
+        // Now that every row of the batch is in, the state derived from the hierarchy is computed
+        // once over all of them — including the protection each one inherits, which is why this
+        // must happen before anything is readable rather than lazily afterwards.
+        await writer.FlushDerivedStateAsync(ct);
 
         // Caves that gained an entrance need their mirror refreshed after the entrances exist.
         foreach (var caveId in touchedCaves)
@@ -204,10 +225,20 @@ public sealed class ImportCommitService(
     /// their other entrances and are re-mirrored, so reverting an import that added a second
     /// entrance to somebody's cave leaves that cave exactly as it was.
     /// <para>
-    /// One revert serves both kinds of batch. A vector import creates objects and nothing else,
+    /// One revert serves every kind of batch. A vector import creates objects and nothing else,
     /// so taking the objects back is the whole of it; a photo import also hangs pictures on
     /// things that were already there, and soft-deleting what it created would leave those
     /// behind — on somebody else's cave, which is precisely the case undo exists for.
+    /// </para>
+    /// <para>
+    /// A spreadsheet of trips creates two kinds of thing at once, and both go: the trips
+    /// themselves, and the caves and areas the same confirmation invented along the way. A trip
+    /// is removed rather than stamped, because a trip carries no deleted mark and the surfaces
+    /// that list trips would go on listing it; it is removed through the one place that says what
+    /// dies with a trip, so an undo leaves no orphaned rule and no link relating caves to each
+    /// other through a trip that is gone. The people and the vocabulary terms a confirmation
+    /// added stay: a person is not something an undo may quietly remove from a club's roster,
+    /// where by then they may be named on trips this batch never touched.
     /// </para>
     /// </summary>
     public async Task RevertAsync(ImportBatch batch, Guid userId, CancellationToken ct = default)
@@ -218,6 +249,7 @@ public sealed class ImportCommitService(
         var items = allItems.Where(i => i.FeatureId != null).ToList();
 
         var createdIds = items.Select(i => i.FeatureId!.Value).ToHashSet();
+        var tripIds = allItems.Where(i => i.TripLogId != null).Select(i => i.TripLogId!.Value).ToHashSet();
         var caves = await db.CaveEntrances.AsNoTracking()
             .Where(e => createdIds.Contains(e.Id))
             .Select(e => e.CaveFeatureId)
@@ -225,6 +257,23 @@ public sealed class ImportCommitService(
             .ToListAsync(ct);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+        // Trips first, and features after: a trip names the caves it reached through links, and
+        // the delete that takes a trip apart is the one place that knows which of those links
+        // cannot survive it. Doing it the other way round would leave a link naming a cave that
+        // no longer exists.
+        if (tripIds.Count > 0)
+        {
+            var trips = await db.TripLogs.Where(t => tripIds.Contains(t.Id)).ToListAsync(ct);
+            foreach (var trip in trips)
+            {
+                await tripWrites.DeleteAsync(trip, ct);
+            }
+
+            // The removals are polymorphic rows deleted by statement and a tracked delete of the
+            // trip itself; saving here is what makes the second half see a consistent picture.
+            await db.SaveChangesAsync(ct);
+        }
 
         foreach (var id in createdIds)
         {

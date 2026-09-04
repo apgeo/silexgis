@@ -342,11 +342,19 @@ SILEXGIS__MapLayers__ApiKeys__Thunderforest=your-key-here
 That way the file itself holds no secrets and can be shared with the group next door. Until you set the
 key, those entries simply do not appear.
 
-**Backgrounds that are switched off on purpose.** Google's map and satellite tiles are in the file with
-`enabled="false"`. They work, and you will find them in every collection of layer definitions passed
-around — but using them this way is not something Google's terms permit, and that is a decision about your
-installation's licensing, not one this project can make for you. Turn one on only if you have read those
-terms and concluded it applies to you.
+**Backgrounds you should decide about.** Google's map, satellite, hybrid and terrain tiles are in the
+file, and they are currently **switched on**. They work, and you will find them in every collection of
+layer definitions passed around — but using them this way is not something Google's terms permit.
+
+This project's own position is that such a source should ship switched off, because it is a decision about
+your installation's licensing rather than one anybody can make on your behalf. That position has not been
+withdrawn; the four entries are enabled at the moment as a deliberate, temporary exception while the
+intended long-term imagery source is settled. **If you are installing this and did not make that choice
+yourself, it is the first thing to look at.**
+
+To switch them off, set `enabled="false"` on the four `Google *` entries and restart. Do not delete them:
+a source this file stops naming is left alone rather than withdrawn, so a deleted entry would stay enabled
+in your database for good.
 
 ## Terrain (optional)
 
@@ -1230,8 +1238,8 @@ the reasoning beside each one.
 | `SILEXGIS__MapLayers__CatalogPath` | — (the file shipped in the image) | the XML file listing the tile sources this installation offers. Set it to a path outside the image — that is the only way an edit of yours survives an upgrade. Start from a copy of the shipped `map-layers.xml` |
 | `SILEXGIS__MapLayers__ApiKeys__<name>` | — | the access key a catalogue entry names, e.g. `SILEXGIS__MapLayers__ApiKeys__Thunderforest`. An entry whose key is not set is **not offered at all**, rather than offered and broken: a tile address still carrying the placeholder answers 401 for every tile, which on screen looks exactly like a source that is down |
 | `SILEXGIS__Map__MaxPoints` | `10000` | the most points one map layer request answers with. Raise it if you import GPS recordings of tens of thousands of points and want to see all of them at once; the cost is the browser's memory and drawing time, not the server's |
-| `SILEXGIS__Import__MaxCommitItems` | `10000` | the most objects one confirmation of a reviewed import creates. Larger confirmations are slower requests, not bigger risks; the practical reason for a limit is that it keeps an undo unit to something a person can reason about |
-| `SILEXGIS__Import__MaxScanRows` | `50000` | the most rows one upload's review list reads. A bigger file is still imported whole and still drawn as a layer — only the review is bounded, and it says so |
+| `SILEXGIS__Import__MaxCommitItems` | `150000` | the most objects one confirmation of a reviewed import creates, deliberately equal to the review limit below so that what you can see you can confirm in one act. Confirmation runs as a background job, so a large one is a job that takes a while rather than a request that cannot finish; lower it if you would rather your undo units stayed small, since one confirmation reverts as a single thing |
+| `SILEXGIS__Import__MaxScanRows` | `150000` | the most rows one upload's review list reads. A bigger file is still imported whole and still drawn as a layer — only the review is bounded, and it says so. The list is paged to the browser, so this buys reviewable rows rather than rows drawn at once; what it costs is the single scan that ranks and de-duplicates them |
 | `SILEXGIS__Files__Root` | `data/files` | uploaded-files directory |
 | `SILEXGIS__Files__MaxUploadBytes` | `536870912` (512 MB) | largest accepted upload. The request-body and multipart limits follow this value automatically; the reverse proxy in front has its own cap that must be at least as large (the bundled web service allows 1 GB) |
 | `SILEXGIS__Keys__Path` | `data/keys` | data-protection keys (must persist across restarts) |

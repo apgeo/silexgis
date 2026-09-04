@@ -142,6 +142,7 @@ export const queryKeys = {
   caveSummary: (id: string) => ['caves', 'summary', id] as const,
   entrances: (caveId: string) => ['entrances', caveId] as const,
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
+  surveyModel: (id: string) => ['survey-model', id] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
@@ -164,6 +165,12 @@ export const queryKeys = {
   // choices, so changing a rule set or the duplicate radius is a different question rather
   // than a stale answer to the same one.
   importPreview: (geofileId: string, body: unknown) => ['import-preview', geofileId, body] as const,
+  tripImportSession: (fileId: string) => ['trip-import-session', fileId] as const,
+  tripImportColumns: (fileId: string) => ['trip-import-columns', fileId] as const,
+  // Same reasoning as the vector preview: reading a sheet is a pure function of the file and
+  // the choices, so moving a column mapping or the day/month order is a different question
+  // rather than a stale answer to the same one.
+  tripImportPreview: (fileId: string, body: unknown) => ['trip-import-preview', fileId, body] as const,
   photoLibraryStatus: ['photo-libraries', 'status'] as const,
   speologieStatus: ['speologie', 'status'] as const,
   // The whole request is the key. A catalogue search is a pure function of the term, the county
@@ -230,6 +237,17 @@ export const queryKeys = {
   cavingGroupAudience: (cavingGroupId: string) => ['teams', cavingGroupId, 'audience'] as const,
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
+  caveHypsometry: (id: string) => ['caves', id, 'hypsometry'] as const,
+  caveLevelBands: (id: string) => ['caves', id, 'level-bands'] as const,
+  areaHypsometry: (id: string) => ['features', id, 'entrance-hypsometry'] as const,
+  caveStructureComparison: (id: string, areaId: string) =>
+    ['caves', id, 'structure-comparison', areaId] as const,
+  areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
+  areaKarstStatistics: (id: string) => ['features', id, 'karst-statistics'] as const,
+  mapDensity: (bbox: string, cellMetres: number | null, bandwidthMetres: number | null, areaId?: string) =>
+    ['map', 'density', bbox, cellMetres, bandwidthMetres, areaId ?? null] as const,
+  mapPointPattern: (bbox: string, simulations: number, seed: number, areaId?: string) =>
+    ['map', 'point-pattern', bbox, simulations, seed, areaId ?? null] as const,
   closestApproach: (id: string, other: string) => ['caves', id, 'closest-approach', other] as const,
   objectAccess: (entityType: string, entityId: string) => ['object-access', entityType, entityId] as const,
   history: (entityType: string, entityId: string) => ['history', entityType, entityId] as const,
@@ -272,10 +290,13 @@ export const queryKeys = {
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
   caveSurveyStatistics: (caveId: string) => ['caves', caveId, 'survey-statistics'] as const,
   caveOrientation: (caveId: string) => ['caves', caveId, 'orientation'] as const,
+  caveCrossSection: (caveId: string) => ['caves', caveId, 'cross-section'] as const,
+  cavePattern: (caveId: string) => ['caves', caveId, 'pattern'] as const,
   annotatedText: (documentId: string) => ['annotated-texts', documentId] as const,
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
   workAreas: ['work-areas'] as const,
+  processingJob: (id: number) => ['jobs', id] as const,
   // Every terrain key starts with this list key, so the mutations that invalidate it also reach
   // the paged list and each build's own detail. A key that did not would leave the page showing
   // a build's old phase for as long as its query stayed fresh.
@@ -300,7 +321,15 @@ async function unwrap<T>(
   const { data, error, response } = await call;
   if (error !== undefined || data === undefined) {
     const problem = error as { code?: string; detail?: string } | undefined;
-    throw new ApiError(response.status, problem?.code, problem?.detail);
+    // The whole problem object travels, not only the two members every screen reads: a refusal
+    // that carries a machine-readable fact of its own is otherwise recoverable only by matching
+    // it out of the English detail sentence.
+    throw new ApiError(
+      response.status,
+      problem?.code,
+      problem?.detail,
+      problem as Record<string, unknown> | undefined,
+    );
   }
   return data;
 }
@@ -940,6 +969,35 @@ export function surveyModelPollInterval(
 function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveyStatistics(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveCrossSection(caveId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.cavePattern(caveId) });
+}
+
+/**
+ * One survey model, addressed by its own id rather than found in a cave's list.
+ *
+ * For the places that were sent to a particular model — a pane opened from the cave page, a
+ * pop-out window opened on one — and which have an id and no cave. Listing the cave's models and
+ * picking through them is not an alternative: the caller does not know which cave it belongs to,
+ * and the guess it would otherwise make is "the first readable one", which is how the pop-out
+ * viewer behaves and is exactly the behaviour a chosen model is meant to replace.
+ *
+ * Refetched on the same interval as the list, because the answer carries a signed URL with a ten
+ * minute life and a window left open on a model outlives it.
+ *
+ * A model whose cave's location is withheld from this reader answers **404**, not an empty result:
+ * a cave's models are its location, so their existence is withheld along with them. Callers must
+ * treat the failure as "there is nothing here for you" and not as an error worth reporting.
+ */
+export function useSurveyModel(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.surveyModel(id ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/survey-models/{id}', { params: { path: { id: id! } } })),
+    enabled: !!id,
+    staleTime: 5 * 60_000,
+    refetchInterval: SURVEY_MODEL_URL_REFRESH_MS,
+    retry: false,
+  });
 }
 
 export function useSurveyModels(caveId: string | undefined) {
@@ -4030,6 +4088,7 @@ export type ImportPreviewRequest = components['schemas']['ImportPreviewRequest']
 export type ImportSession = components['schemas']['ImportSessionDto'];
 export type ImportCommitResult = components['schemas']['ImportCommitResultDto'];
 export type ImportBatch = components['schemas']['ImportBatchDto'];
+export type ImportFailure = components['schemas']['ImportFailureDto'];
 export type ImportBatchDetail = components['schemas']['ImportBatchDetailDto'];
 export type ImportProvenance = components['schemas']['ImportProvenanceDto'];
 export type GeofileSourceOptions = components['schemas']['GeofileSourceOptions'];
@@ -4188,12 +4247,180 @@ export function useCommitImport() {
         }),
       ),
     onSuccess: () => {
-      // A confirmation puts caves, entrances and features into the registry and spends the
-      // review that produced them, so four surfaces go stale at once.
+      // Only the review is spent here. The caves, entrances and features do not exist yet —
+      // the confirmation was queued — so invalidating the registry now would refetch it early
+      // and show the reader an unchanged map as though nothing had been created.
+      // `useProcessingJob` invalidates the rest when the job finishes.
+      void queryClient.invalidateQueries({ queryKey: ['import-session'] });
+    },
+  });
+}
+
+export type ProcessingJob = components['schemas']['ProcessingJobDto'];
+
+/** Whether a job is still going, which is the only thing worth asking again about. */
+export function jobUnsettled(status: ProcessingJob['status'] | undefined): boolean {
+  return status === 'queued' || status === 'running';
+}
+
+/**
+ * One job, polled while it is unfinished.
+ *
+ * A caller may always read a job they asked for, so this needs no right of its own — the server
+ * answers a job belonging to somebody else exactly as it answers one that never existed.
+ */
+export function useProcessingJob(jobId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: queryKeys.processingJob(jobId ?? 0),
+    queryFn: async () => {
+      const job = await unwrap(
+        api.GET('/api/v1/jobs/{id}', { params: { path: { id: jobId! } } }),
+      );
+      if (!jobUnsettled(job.status)) {
+        // The moment the work is actually done — not when it was asked for. Everything a
+        // confirmation creates lands at once, so the surfaces that show it go stale together.
+        void queryClient.invalidateQueries({ queryKey: ['features'] });
+        void queryClient.invalidateQueries({ queryKey: ['caves'] });
+        void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      }
+      return job;
+    },
+    enabled: jobId !== undefined,
+    // Stopped by the answer rather than by a timer: a settled job is asked about no more.
+    refetchInterval: (query) => (jobUnsettled(query.state.data?.status) ? 1500 : false),
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// A club's trip spreadsheet into trips
+// ---------------------------------------------------------------------------
+
+export type TripImportOptions = components['schemas']['TripImportOptions'];
+export type TripImportDecision = components['schemas']['TripImportDecision'];
+export type TripImportRowAction = components['schemas']['TripImportRowAction'];
+export type TripImportSession = components['schemas']['TripImportSessionDto'];
+export type TripImportColumns = components['schemas']['TripImportColumnsDto'];
+export type TripImportPreview = components['schemas']['TripImportPreviewDto'];
+export type TripImportPreviewRequest = components['schemas']['TripImportPreviewRequest'];
+export type TripImportRow = components['schemas']['TripImportRowDto'];
+export type TripImportProblem = components['schemas']['TripImportProblemDto'];
+export type TripImportProposals = components['schemas']['TripImportProposalsDto'];
+export type TripImportPersonMatch = components['schemas']['TripImportPersonMatch'];
+export type TripImportFeatureMatch = components['schemas']['TripImportFeatureMatch'];
+export type TripImportTermMatch = components['schemas']['TripImportTermMatch'];
+export type TripImportCommitResult = components['schemas']['TripImportCommitResultDto'];
+export type TripCsvField = components['schemas']['TripCsvField'];
+export type TripCsvDateOrder = components['schemas']['TripCsvDateOrder'];
+export type TripCsvDateOrderSource = components['schemas']['TripCsvDateOrderSource'];
+export type TripCsvDiagnosticCode = components['schemas']['TripCsvDiagnosticCode'];
+
+/**
+ * The saved review of one uploaded sheet. Answers with defaults rather than a 404 when
+ * nobody has reviewed this file yet, so the screen has something to open with.
+ */
+export function useTripImportSession(fileId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.tripImportSession(fileId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-imports/{fileId}/session', { params: { path: { fileId: fileId! } } }),
+      ),
+    enabled: Boolean(fileId),
+  });
+}
+
+/**
+ * Saves the review as the reviewer works. Deliberately does not invalidate the session
+ * query: the browser already holds what it just sent, and refetching would make every tick
+ * of the table fight the answer coming back.
+ */
+export function useSaveTripImportSession() {
+  return useMutation({
+    mutationFn: ({
+      fileId,
+      body,
+    }: {
+      fileId: string;
+      body: { options: TripImportOptions; decisions: Record<string, TripImportDecision> };
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-imports/{fileId}/session', { params: { path: { fileId } }, body }),
+      ),
+  });
+}
+
+/**
+ * The sheet's own header line, for the mapping controls. Read from the stored file rather
+ * than from a parse, so it still answers when the parse itself failed — which is exactly
+ * when somebody needs to re-point a column.
+ */
+export function useTripImportColumns(fileId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.tripImportColumns(fileId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-imports/{fileId}/columns', { params: { path: { fileId: fileId! } } }),
+      ),
+    enabled: Boolean(fileId),
+    // A refusal here is the server's settled answer about this file, and asking again three
+    // times only holds the screen in its loading state through the whole backoff.
+    retry: false,
+  });
+}
+
+/** The dry run. A POST because the options are a body, but it creates nothing. */
+export function useTripImportPreview(
+  fileId: string | undefined,
+  body: TripImportPreviewRequest,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.tripImportPreview(fileId ?? '', body),
+    queryFn: () =>
+      unwrap(
+        api.POST('/api/v1/trip-imports/{fileId}/preview', {
+          params: { path: { fileId: fileId! } },
+          body,
+        }),
+      ),
+    enabled: Boolean(fileId) && enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/**
+ * Confirms the review. The options travel with it rather than being read back from the saved
+ * row: a second tab left open on different choices must not decide what a thousand trips
+ * become.
+ */
+export function useCommitTripImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      fileId,
+      body,
+    }: {
+      fileId: string;
+      body: {
+        options: TripImportOptions;
+        lines: number[];
+        decisions: Record<string, TripImportDecision>;
+      };
+    }) =>
+      unwrap(
+        api.POST('/api/v1/trip-imports/{fileId}/commit', { params: { path: { fileId } }, body }),
+      ),
+    onSuccess: () => {
+      // A confirmation writes trips, may add area and cave features, records a batch that can
+      // be undone, and spends the review that produced it — five surfaces go stale at once.
+      void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
       void queryClient.invalidateQueries({ queryKey: ['features'] });
       void queryClient.invalidateQueries({ queryKey: ['caves'] });
       void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
-      void queryClient.invalidateQueries({ queryKey: ['import-session'] });
+      void queryClient.invalidateQueries({ queryKey: ['trip-import-session'] });
     },
   });
 }
@@ -5209,6 +5436,319 @@ export function useCaveSurveyStatistics(caveId: string | undefined) {
     staleTime: 5 * 60_000,
     // A cave the caller may not read — or may read but not place exactly — is refused with the
     // same answer as a cave that does not exist, and asking again will not change it.
+    retry: false,
+  });
+}
+
+/** How big a cave's passages are, from the wall distances recorded at its stations. */
+export type CaveCrossSection = components['schemas']['CaveCrossSectionDto'];
+
+/** The sizes, distributions, volume and vertical slices of one cave's passages. */
+export type CrossSectionSummary = components['schemas']['CrossSectionSummary'];
+
+/** A five-number summary plus the mean, for one kind of measurement. */
+export type CrossSectionDistribution = components['schemas']['CrossSectionDistribution'];
+
+/** One vertical slice of a cave, with the passage sizes found in it. */
+export type CrossSectionElevationBand = components['schemas']['CrossSectionElevationBand'];
+
+/** What kind of cave a survey's shape suggests, with every rule applied to reach it. */
+export type CavePattern = components['schemas']['CavePatternDto'];
+
+/** The suggestion itself: the pattern, the scores, the rules and the caveats. */
+export type PatternSuggestion = components['schemas']['PatternSuggestion'];
+
+/** One rule, what it did, what it read and what it would have counted towards. */
+export type PatternRuleTrace = components['schemas']['PatternRuleTrace'];
+
+/** Which pattern a cave's measurements suggest. */
+export type SpeleogeneticPatternKind = components['schemas']['SpeleogeneticPatternKind'];
+
+/** Which rule a trace entry describes. */
+export type PatternRule = components['schemas']['PatternRule'];
+
+/** Which measured figure a rule read. */
+export type PatternFigure = components['schemas']['PatternFigure'];
+
+/** Whether a rule fired, stayed silent, or had nothing to read. */
+export type PatternRuleOutcome = components['schemas']['PatternRuleOutcome'];
+
+/** Something a reader has to know before using a pattern suggestion. */
+export type PatternCaveat = components['schemas']['PatternCaveat'];
+
+export function useCaveCrossSection(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveCrossSection(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/cross-section', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useCavePattern(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.cavePattern(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/pattern', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/** Where a cave's passage sits vertically, and the levels it appears to be cut at. */
+export type CaveHypsometry = components['schemas']['CaveHypsometryDto'];
+
+/** Where the entrances under an area sit vertically. */
+export type AreaHypsometry = components['schemas']['AreaHypsometryDto'];
+
+/** The histogram and the levels proposed from it. */
+export type ElevationBandProposal = components['schemas']['ElevationBandProposal'];
+
+/** One interval of height in an elevation histogram. */
+export type ElevationBin = components['schemas']['ElevationBin'];
+
+/** One proposed level. */
+export type ElevationBand = components['schemas']['ElevationBand'];
+
+/** What somebody decided one cave's levels are, or the fact that nobody has. */
+export type CaveLevelBands = components['schemas']['CaveLevelBandsDto'];
+
+/** One level of a saved reading, as a person wrote it down. */
+export type SavedElevationBand = components['schemas']['SavedElevationBand'];
+
+/** A cave's passage trends against the structure mapped around it. */
+export type CaveStructureComparison = components['schemas']['CaveStructureComparisonDto'];
+
+/** An area's depression alignments against the structure mapped in it. */
+export type AreaStructureComparison = components['schemas']['AreaStructureComparisonDto'];
+
+/** How far apart two roses are. */
+export type RoseDivergence = components['schemas']['RoseDivergence'];
+
+export function useCaveHypsometry(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveHypsometry(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{id}/hypsometry', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    // A cave this caller may read but not place exactly is refused with the same answer as one
+    // that does not exist. Retrying asks the same question again.
+    retry: false,
+  });
+}
+
+export function useAreaHypsometry(areaId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.areaHypsometry(areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/features/{id}/entrance-hypsometry', {
+          params: { path: { id: areaId! } },
+        }),
+      ),
+    enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useCaveLevelBands(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveLevelBands(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{id}/level-bands', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    retry: false,
+  });
+}
+
+export function useSaveCaveLevelBands(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { bands: SavedElevationBand[]; note: string | null }) =>
+      unwrap(
+        api.PUT('/api/v1/caves/{id}/level-bands', {
+          params: { path: { id: caveId } },
+          body,
+        }),
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.caveLevelBands(caveId) }),
+  });
+}
+
+export function useClearCaveLevelBands(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      unwrap(api.DELETE('/api/v1/caves/{id}/level-bands', { params: { path: { id: caveId } } })),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.caveLevelBands(caveId) }),
+  });
+}
+
+/**
+ * A cave's passage rose against the structure mapped around it.
+ *
+ * `areaId` scopes the structure to an area of the containment hierarchy instead of a buffer; it is
+ * part of the query key because the two scopes are two different answers to two different
+ * questions, and caching them together would show one under the other's heading.
+ */
+export function useCaveStructureComparison(caveId: string | undefined, areaId?: string) {
+  return useQuery({
+    queryKey: queryKeys.caveStructureComparison(caveId ?? '', areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caves/{id}/structure-comparison', {
+          // The contract names its query parameters as the request record does; spelled here the
+          // way the generated types spell them rather than lower-cased and left to the server's
+          // case-insensitive binding to rescue.
+          params: { path: { id: caveId! }, query: areaId ? { AreaId: areaId } : {} },
+        }),
+      ),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useAreaStructureComparison(areaId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.areaStructureComparison(areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/features/{id}/structure-comparison', {
+          params: { path: { id: areaId! } },
+        }),
+      ),
+    enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/** What one karst area adds up to, over the caves declared to be in it. */
+export type AreaKarstStatistics = components['schemas']['AreaKarstStatisticsDto'];
+
+/** One reading behind the karstification index, present or absent. */
+export type KarstificationComponent = components['schemas']['KarstificationComponentDto'];
+
+/** One cave standing at an end of a range in an area. */
+export type AreaCaveExtreme = components['schemas']['AreaCaveExtremeDto'];
+
+/**
+ * Counts, densities, totals and a classed index for one area.
+ *
+ * `retry: false` for the reason every location-protected statistic here has it: an area this
+ * caller may not read answers exactly as one that is not there, so asking again asks the same
+ * refused question and only delays the empty state.
+ */
+export function useAreaKarstStatistics(areaId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.areaKarstStatistics(areaId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/features/{id}/karst-statistics', {
+          params: { path: { id: areaId! } },
+        }),
+      ),
+    enabled: !!areaId && enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export type DensityGrid = components['schemas']['DensityGridDto'];
+export type DensityCell = components['schemas']['DensityCellDto'];
+export type PointPattern = components['schemas']['PointPatternDto'];
+
+export interface DensityQuery {
+  bbox: string;
+  /**
+   * Omitted on the first request on purpose. The finest cell an installation will publish is its
+   * location-protection grid, which the client does not know and must not guess: asking without a
+   * cell size gets the floor and the payload states what it was, so a control can offer multiples
+   * of a real number instead of discovering the edge by being refused.
+   */
+  cellMetres?: number;
+  bandwidthMetres?: number;
+  areaId?: string;
+}
+
+/**
+ * How thickly cave entrances sit over a window, as a grid and as a smoothed surface.
+ *
+ * <p>
+ * `retry` is off on purpose. The two interesting failures here are refusals with a stable code —
+ * a cell finer than the location-protection grid, and a window that would be more cells than one
+ * answer holds — and neither becomes true on a second attempt. Retrying them only delays the
+ * message the control needs to show.
+ * </p>
+ */
+export function useMapDensity(query: DensityQuery | undefined) {
+  return useQuery({
+    queryKey: queryKeys.mapDensity(
+      query?.bbox ?? '',
+      query?.cellMetres ?? null,
+      query?.bandwidthMetres ?? null,
+      query?.areaId,
+    ),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/map/density', {
+          params: {
+            query: {
+              bbox: query!.bbox,
+              cellMetres: query!.cellMetres,
+              bandwidthMetres: query!.bandwidthMetres,
+              areaId: query!.areaId,
+            },
+          },
+        }),
+      ),
+    enabled: !!query,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export interface PointPatternQuery {
+  bbox: string;
+  simulations: number;
+  seed: number;
+  areaId?: string;
+}
+
+/**
+ * Whether those entrances are arranged more thickly, more evenly, or more directionally than
+ * chance would arrange them. The seed travels in the query key as well as in the request, so two
+ * readers looking at the same window and the same seed are looking at the same band.
+ */
+export function useMapPointPattern(query: PointPatternQuery | undefined) {
+  return useQuery({
+    queryKey: queryKeys.mapPointPattern(
+      query?.bbox ?? '',
+      query?.simulations ?? 0,
+      query?.seed ?? 0,
+      query?.areaId,
+    ),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/map/point-pattern', {
+          params: {
+            query: {
+              bbox: query!.bbox,
+              simulations: query!.simulations,
+              seed: query!.seed,
+              areaId: query!.areaId,
+            },
+          },
+        }),
+      ),
+    enabled: !!query,
+    staleTime: 5 * 60_000,
     retry: false,
   });
 }

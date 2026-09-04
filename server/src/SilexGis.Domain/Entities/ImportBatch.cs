@@ -82,6 +82,52 @@ public class PhotoImportSession : ITimestamped
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
+/// <summary>
+/// A trip-spreadsheet review in progress: what one person has decided so far about one uploaded
+/// file, before any trip exists.
+///
+/// <para>
+/// Nothing parsed is copied here, and that is deliberate rather than economical. A trip sheet
+/// carries no coordinates, so it cannot travel the path an uploaded vector file takes; and every
+/// choice a reviewer makes about it — which header is the date column, whether a numeric date is
+/// day-first, which characters separate several names in one cell — changes what the rows *are*.
+/// A staged copy would have to be rewritten each time one of those moved, and a staged copy that
+/// was not rewritten is a review of a file nobody has any more. So the stored file is re-read on
+/// every preview, and what is kept here is only what would otherwise be lost: the options and the
+/// per-row decisions.
+/// </para>
+/// <para>
+/// One session per person per file. Two people reviewing the same upload keep their own decisions
+/// rather than overwriting each other, and neither has created anything.
+/// </para>
+/// </summary>
+public class TripImportSession : ITimestamped
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+
+    /// <summary>The uploaded spreadsheet being reviewed.</summary>
+    public Guid StoredFileId { get; set; }
+
+    /// <summary>Whose review this is.</summary>
+    public Guid UserId { get; set; }
+
+    /// <summary>The whole-file choices (jsonb), in the shape of <c>TripImportOptions</c>.</summary>
+    public string Options { get; set; } = "{}";
+
+    /// <summary>
+    /// Decisions keyed by the row's physical line in the file (jsonb):
+    /// <c>{"14": {"action": "skip"}}</c>. The line is the key rather than the sheet's own running
+    /// number because two rows may carry the same running number — a sheet edited by hand does it
+    /// often — and a key that is not unique silently makes one row's decision the other's.
+    /// Untouched rows are absent, so agreeing with what is proposed costs nothing to store.
+    /// </summary>
+    public string Decisions { get; set; } = "{}";
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>What a batch was made from.</summary>
 public enum ImportSource : short
 {
@@ -104,6 +150,14 @@ public enum ImportSource : short
     /// what it said at the time is kept on the batch's own lines rather than fetched again.
     /// </summary>
     ExternalCatalogue = 3,
+
+    /// <summary>
+    /// A club's trip spreadsheet, read row by row and confirmed. The objects are trips rather
+    /// than features, which is why a line of such a batch points at a trip; the caves and areas
+    /// a confirmation created along the way are lines of the same batch, so one undo takes the
+    /// whole import back.
+    /// </summary>
+    TripCsv = 4,
 }
 
 /// <summary>How the objects in a batch came to exist.</summary>
@@ -197,6 +251,18 @@ public class ImportBatch : ITimestamped, IAuditable
 
     public int SkippedCount { get; set; }
 
+    /// <summary>
+    /// The rows that could not be created, as JSON, or null where none failed.
+    /// </summary>
+    /// <remarks>
+    /// Kept on the batch because the confirmation that produces them no longer answers in the
+    /// request that asked for it: the work runs on the queue, so by the time a row is refused
+    /// there is nobody left to tell. A reviewer who confirmed three thousand rows and got two
+    /// thousand nine hundred objects has to be able to find out which hundred did not land and
+    /// why, and the batch is the thing they still have.
+    /// </remarks>
+    public string? Failures { get; set; }
+
     public DateTimeOffset? RevertedAt { get; set; }
 
     public Guid? RevertedByUserId { get; set; }
@@ -232,6 +298,20 @@ public class ImportBatchItem
 
     /// <summary>The existing feature an attached candidate was recognised as.</summary>
     public Guid? AttachedToFeatureId { get; set; }
+
+    /// <summary>
+    /// The trip this line created. A line points at a trip or at a feature, never at both: one
+    /// row of a spreadsheet becomes one trip, and the caves and areas that row named are lines
+    /// of their own so that undo can take each of them back by the same rule.
+    ///
+    /// <para>
+    /// It goes null rather than taking the line with it when the trip is deleted by hand
+    /// afterwards, for the reason the other pointers here go null: a batch that says a trip was
+    /// created and has since been removed is still the answer somebody looking for the import is
+    /// asking for.
+    /// </para>
+    /// </summary>
+    public Guid? TripLogId { get; set; }
 
     /// <summary>The geofile row this came from. Kept even after a re-import replaces those rows.</summary>
     public long? SourceFeatureId { get; set; }

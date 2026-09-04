@@ -101,6 +101,17 @@ export interface ViewSyncHandle {
    * talk the other out of the position the same document had just given it.
    */
   muteUntilSettled(): void;
+  /**
+   * Comes back to where the other kind of view is standing — from this window's memory of the
+   * exchange if it has any, and otherwise by asking the other windows.
+   *
+   * For a view rejoining the exchange after taking part in none of it. The pair have been moving
+   * independently, so they now disagree, and there is no position they converge on by themselves:
+   * whichever moves next would otherwise yank the other across the country. Which of them gives
+   * way is decided the same way it is for a view that has only just opened — the one arriving
+   * listens, the one already there answers.
+   */
+  rejoin(): void;
   detach(): void;
 }
 
@@ -124,6 +135,22 @@ export interface ViewSyncOptions {
    * answers, and whoever has just arrived listens.
    */
   joinGraceMs?: number;
+  /**
+   * Whether this view is taking part in the extent exchange at all. Asked afresh each time rather
+   * than read once, so a viewer can step out of the exchange and back in without the sync being
+   * torn down and rebuilt — which for the scene would mean releasing and re-downloading the cave
+   * it is drawing.
+   *
+   * It gates <b>both</b> directions, and that is the point of putting it here rather than in the
+   * two ends. Gating only what a view follows leaves it still announcing where it is looking, and
+   * the other view goes on chasing it: one-way coupling, which is not what somebody who switched
+   * coupling off asked for.
+   *
+   * It gates the extent channel <b>only</b>. Selection still crosses: picking a station in the
+   * scene should light it up in the list beside the map, and a viewer who uncoupled the cameras
+   * did not ask to stop sharing what they are looking at.
+   */
+  followsExtent?: () => boolean;
 }
 
 const DEFAULT_FOLLOW_SETTLE_MS = 1200;
@@ -166,8 +193,24 @@ export function attachViewSync(
   const believedSelection = () =>
     handlers.currentSelection ? handlers.currentSelection() : knownSelection;
 
-  /** Says where this view is looking, without asking whether it is allowed to speak. */
+  /**
+   * Whether the extent channel is open in either direction. Both funnels below consult it, which
+   * is what makes four call sites into one decision — in particular the attach-time replay, which
+   * reaches `follow` without going near the bus and is the path a scene opening while uncoupled
+   * would otherwise take.
+   */
+  const couplesExtent = () => options.followsExtent?.() ?? true;
+
+  /**
+   * Says where this view is looking, without asking whether it is allowed to speak — the mute is
+   * the caller's business. It does ask whether this view is in the exchange at all: a view that is
+   * not must not leave its position in `lastExtent` either, or the next view to open would be
+   * placed by a camera that had deliberately wandered off on its own.
+   */
   const sendExtent = (bounds: ViewExtent, zoom: number) => {
+    if (!couplesExtent()) {
+      return;
+    }
     lastExtent = { origin, bounds, zoom };
     publish({ kind: 'extent', origin, bounds, zoom });
   };
@@ -181,6 +224,9 @@ export function attachViewSync(
   };
 
   const follow = (bounds: ViewExtent, zoom: number) => {
+    if (!couplesExtent()) {
+      return;
+    }
     mute();
     handlers.onExtent?.(bounds, zoom);
   };
@@ -224,18 +270,35 @@ export function attachViewSync(
   // yet, so a handler that touched the handle it is about to return would find nothing there. The
   // caller is left holding a working handle before anything can call back into it.
   let detached = false;
-  const replay = lastExtent && lastExtent.origin !== origin ? lastExtent : undefined;
-  queueMicrotask(() => {
-    if (detached) {
-      return;
-    }
-    if (replay) {
-      follow(replay.bounds, replay.zoom);
+
+  /**
+   * Joins the conversation where the others already are: from this window's memory if there is
+   * any, and otherwise by asking. Shared by a view that has just opened and by one coming back
+   * after being uncoupled, because those are the same situation — a view with no claim on where
+   * the pair should be pointing, arriving among views that have one.
+   */
+  const joinAt = (remembered: typeof lastExtent) => {
+    if (remembered) {
+      follow(remembered.bounds, remembered.zoom);
       return;
     }
     askingWhereToLook = true;
     publish({ kind: 'view-hello', origin });
     askingWhereToLook = false;
+  };
+
+  /** What this window remembers of the other kind of view, if anything. */
+  const rememberedElsewhere = () =>
+    lastExtent && lastExtent.origin !== origin ? lastExtent : undefined;
+
+  // Captured now rather than read in the microtask, which is the existing behaviour and is worth
+  // keeping: what should place a view is where the exchange stood when it attached.
+  const replay = rememberedElsewhere();
+  queueMicrotask(() => {
+    if (detached) {
+      return;
+    }
+    joinAt(replay);
   });
 
   return {
@@ -250,6 +313,9 @@ export function attachViewSync(
       publish({ kind: 'selection', origin, selection });
     },
     muteUntilSettled: mute,
+    // Read fresh, unlike the attach-time capture above: a view rejoining wants where the other one
+    // is standing now, not where it stood when this one was created, which may be hours ago.
+    rejoin: () => joinAt(rememberedElsewhere()),
     detach() {
       detached = true;
       window.clearTimeout(followTimer);

@@ -94,7 +94,10 @@ export default function MemberChip({
 
   const summary = anchorSummary(member.anchorKind, member.anchor, t);
   const stateNote = anchorStateNote(member.anchorState, t);
-  const route = memberRoute(member.targetType, member.targetId, member.display);
+  const route = memberRoute(member.targetType, member.targetId, member.display, {
+    id: member.id,
+    anchorKind: member.anchorKind,
+  });
   const path = member.display.path ?? [];
   const hint = [
     t(entry.labelKey),

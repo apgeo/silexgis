@@ -312,6 +312,7 @@ describe('AppLayout nav destinations', () => {
     can: () => true,
     taxonomyWrite: true,
     featureCreate: true,
+    tripLogCreate: true,
     isFullAdmin: true,
   };
 
@@ -364,6 +365,7 @@ describe('AppLayout nav destinations', () => {
       can: () => false,
       taxonomyWrite: false,
       featureCreate: false,
+      tripLogCreate: false,
       isFullAdmin: false,
     });
     const keys = items.map((item) => item.key);
@@ -375,6 +377,27 @@ describe('AppLayout nav destinations', () => {
     expect(keys).not.toContain(`${GROUP_PREFIX}config`);
     expect(keys).toContain('map');
     expect(keys).toContain(`${GROUP_PREFIX}activity`);
+  });
+
+  it('offers the spreadsheet review only to an account that may record trips', () => {
+    // The distinction this pins is between reading trips and writing them. Reading a club's
+    // spreadsheet ends in creating every trip in it, and the server refuses the screen — its
+    // preview included — to an account that may not, so an entry offered on the read right
+    // invites somebody to spend an afternoon on a review they will be turned down for.
+    const activityOf = (gates: Parameters<typeof buildNavItems>[1]) => {
+      const group = buildNavItems(i18n.t, gates).find(
+        (item) => item.key === `${GROUP_PREFIX}activity`,
+      );
+      return isNavGroup(group!) ? group.children.map((child) => child.key) : [];
+    };
+
+    const reader = { ...everything, tripLogCreate: false };
+    expect(activityOf(reader)).not.toContain('trip-logs/import');
+    // The control: the reader still reaches the trip list itself, so what disappeared is the
+    // import and not the whole group.
+    expect(activityOf(reader)).toContain('trip-logs');
+
+    expect(activityOf(everything)).toContain('trip-logs/import');
   });
 });
 

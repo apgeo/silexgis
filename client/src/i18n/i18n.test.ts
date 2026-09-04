@@ -17,7 +17,15 @@ import type {
   SearchDocumentItem,
   TerrainBuildPhase,
   TerrainBuildSourceKind,
+  PatternCaveat,
+  PatternFigure,
+  PatternRule,
+  PatternRuleOutcome,
+  SpeleogeneticPatternKind,
   TerrainBuildStatus,
+  TripCsvDateOrderSource,
+  TripCsvDiagnosticCode,
+  TripCsvField,
   SurveyModelInfo,
 } from '../api/hooks.ts';
 import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
@@ -774,6 +782,74 @@ describe('i18n locales', () => {
     expect(missing).toEqual([]);
   });
 
+  /**
+   * The import wizard builds three of its key names from a value the server sent, so the scan
+   * that reads literal keys out of the source cannot see them. A word the server adds to any
+   * of these three vocabularies therefore fails to compile here until it has been named in
+   * both languages — which is the only thing standing between a new diagnostic code and a
+   * reviewer reading the raw enum name off the screen.
+   */
+  it('names every part of a sheet, every reason a row was refused, and every way a date order was settled', () => {
+    const fields: Record<TripCsvField, true> = {
+      sourceId: true,
+      startDate: true,
+      endDate: true,
+      title: true,
+      country: true,
+      massif: true,
+      subArea: true,
+      caves: true,
+      proposers: true,
+      participants: true,
+      details: true,
+      details2: true,
+      tripType: true,
+      errors: true,
+    };
+    const problems: Record<TripCsvDiagnosticCode, true> = {
+      mappedColumnMissing: true,
+      mappedColumnTaken: true,
+      unmappedColumn: true,
+      raggedRow: true,
+      blankRow: true,
+      requiredFieldEmpty: true,
+      dateUnreadable: true,
+      dateOutOfRange: true,
+      dateTwoDigitYear: true,
+      dateAmbiguous: true,
+      dateOrderConflict: true,
+      valueDropped: true,
+      duplicateSourceId: true,
+      tooManyColumns: true,
+      noHeader: true,
+      unterminatedQuote: true,
+    };
+    const sources: Record<TripCsvDateOrderSource, true> = { stated: true, file: true, conflict: true };
+
+    const missing = (
+      [
+        ['fields', Object.keys(fields)],
+        ['problems', Object.keys(problems)],
+        ['dateOrderSources', Object.keys(sources)],
+      ] as const
+    ).flatMap(([group, names]) =>
+      names.flatMap((name) =>
+        [
+          ['en', en],
+          ['ro', ro],
+        ]
+          .filter(([, locale]) => typeof lookup(locale as object, `tripImport.${group}.${name}`) !== 'string')
+          .map(([language]) => `${language as string}: tripImport.${group}.${name}`),
+      ),
+    );
+    expect(missing).toEqual([]);
+
+    // And no more than the server can send: a word left behind by a rename is a phrase
+    // nothing will ever show, and the only way anybody finds it is a test like this one.
+    expect(Object.keys(en.tripImport.problems).sort()).toEqual(Object.keys(problems).sort());
+    expect(Object.keys(en.tripImport.fields).sort()).toEqual(Object.keys(fields).sort());
+  });
+
   it('names every numbered division a content hit can carry, and no more', () => {
     const names = Object.keys(numberedDivisions);
     const enDivisions: Record<string, string> = en.search.divisions;
@@ -781,5 +857,74 @@ describe('i18n locales', () => {
     expect(names.filter((name) => !enDivisions[name])).toEqual([]);
     expect(names.filter((name) => !roDivisions[name])).toEqual([]);
     expect(Object.keys(enDivisions).sort()).toEqual(names.sort());
+  });
+
+  /**
+   * The pattern suggestion builds every one of its labels from a value the server sent — the
+   * pattern, each rule, each rule's outcome, each figure a rule read and each caveat — so the scan
+   * that reads keys straight out of the source text sees none of them. Without this, a rule added
+   * on the server would be shown to a reader as a lookup key in both languages with every other
+   * check still green. Both directions, because a label kept for a rule the server no longer sends
+   * would sit unnoticed and read as a rule that never fires.
+   */
+  it('names every pattern, rule, outcome, figure and caveat a suggestion can carry, and no more', () => {
+    const patterns: Record<SpeleogeneticPatternKind, true> = {
+      insufficient: true,
+      undetermined: true,
+      vadoseBranchwork: true,
+      waterTable: true,
+      looping: true,
+      angularMaze: true,
+    };
+    const rules: Record<PatternRule, true> = {
+      networkIsLooped: true,
+      networkIsTreeLike: true,
+      networkEndsOften: true,
+      networkRings: true,
+      bearingsAreConcentrated: true,
+      passageIsSteep: true,
+      passageIsLevel: true,
+      profileOscillates: true,
+      sectionIsWide: true,
+      sectionIsTall: true,
+    };
+    const outcomes: Record<PatternRuleOutcome, true> = {
+      notAssessable: true,
+      didNotFire: true,
+      fired: true,
+    };
+    const figures: Record<PatternFigure, true> = {
+      loopsPerNode: true,
+      deadEndFraction: true,
+      clustering: true,
+      orientationEntropy: true,
+      meanAbsoluteDip: true,
+      maximumDip: true,
+      minimumDip: true,
+      verticality: true,
+      medianWidthHeightRatio: true,
+    };
+    const caveats: Record<PatternCaveat, true> = {
+      figuresAreApproximated: true,
+      networkIsIncomplete: true,
+      networkCompletenessIsUnknown: true,
+      noAltitudes: true,
+      noCrossSections: true,
+      noNetworkFigures: true,
+    };
+
+    const cases: [string[], Record<string, string>, Record<string, string>][] = [
+      [Object.keys(patterns), en.passagePattern.pattern, ro.passagePattern.pattern],
+      [Object.keys(rules), en.passagePattern.rule, ro.passagePattern.rule],
+      [Object.keys(outcomes), en.passagePattern.outcome, ro.passagePattern.outcome],
+      [Object.keys(figures), en.passagePattern.figure, ro.passagePattern.figure],
+      [Object.keys(caveats), en.passagePattern.caveat, ro.passagePattern.caveat],
+    ];
+    for (const [names, enNames, roNames] of cases) {
+      expect(names.filter((name) => !enNames[name])).toEqual([]);
+      expect(names.filter((name) => !roNames[name])).toEqual([]);
+      expect(Object.keys(enNames).sort()).toEqual([...names].sort());
+      expect(Object.keys(roNames).sort()).toEqual([...names].sort());
+    }
   });
 });

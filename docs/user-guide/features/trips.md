@@ -228,6 +228,57 @@ disappears, so the same layout produces an honest document for a member and for 
 
 ---
 
+## Importing a club spreadsheet
+
+**Trip logs → Import** takes the *centralizator* a club has kept for years — one row per trip,
+in a spreadsheet — and turns it into trips. It is one screen, and nothing is written until you
+press the button at the bottom.
+
+Upload the sheet and the screen fills in with what it thinks the file says. Above the table are
+the choices that apply to the whole file:
+
+- **Which column is which.** It guesses from the headers and you correct it from a list of the
+  sheet's own header names.
+- **Day first or month first.** Ambiguous dates are the thing that silently moves a year of
+  trips by six months, so the screen says what it worked the order out from and how many rows
+  depend on the answer.
+- **What separates several things in one cell** — the participants, the caves.
+- **What may be created.** Caves, areas, people and trip types the sheet names but the
+  installation does not have. Each is a separate switch and **every one starts off**, so an
+  import adds nothing to a register unless you ask it to. You can only turn on a switch for a
+  register you are allowed to add to anyway.
+- **Who will be able to see the trips, and which club they belong to.**
+
+Below that is one row per line of the sheet, with what it matched, and beside it everything the
+file could not be read cleanly. Any row can be set aside. Anything the reader could not make
+sense of at all is listed as a problem and is never imported.
+
+### The counts, and the one that matters
+
+Four figures say what confirming would add — trips, caves, areas, people. Beside them are the
+figures that say **what needs you**: names more than one person on the roster answers to, and
+names that cannot become a person at all.
+
+That second kind is the one to read carefully. A cell holding `Ion A.` or a single first name
+cannot be turned into a roster entry — there is no way to tell it apart from the next person of
+the same name later on — so **those people will not be listed on their trips**. The screen says
+so plainly, above the button, before you press it. Their names are not thrown away: they are
+kept in the trip's own text. If that matters to you, fix those cells in the spreadsheet before
+importing.
+
+An ambiguous name is different: you settle it on the screen by picking which person is meant.
+
+### After
+
+Confirming files the whole thing as one batch. Imported trips are **silent** — nobody is
+notified, nobody is invited — and they land finished rather than as drafts.
+
+The batch appears under **Geodata → Imports**, where it can be undone. Undo removes the trips.
+It does **not** take back cavers or trip-type words the import created, because a word other
+trips may since have been given is not this batch's to remove.
+
+---
+
 ## My trips
 
 **Trip logs → My trips** answers *what am I going on, and when*: the trips you are named on,

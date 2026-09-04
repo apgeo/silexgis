@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TFunction } from 'i18next';
 import { readAnchorNumber } from './anchorTypes.ts';
+import { readRegion } from '../../imagelink/regions.ts';
 
 /**
  * What the server will and will not accept for the anchors this client can compose, said
@@ -53,6 +54,15 @@ export function validateTextRangeAnchor(anchor: unknown, t: TFunction): string |
   // End is exclusive, so an empty range selects nothing — the server refuses it for that
   // reason, and this says so before the round trip.
   return end <= start ? t('resLinks.anchorEditors.textEmpty') : null;
+}
+
+/**
+ * A region has to be a whole, in-frame shape. The reading is delegated rather than repeated:
+ * the model already refuses a payload written in pixels, a shape that selects nothing and a
+ * polygon of fewer than three points, which are exactly the server's own refusals.
+ */
+export function validateImageRegionAnchor(anchor: unknown, t: TFunction): string | null {
+  return readRegion(anchor) === null ? t('resLinks.anchorEditors.regionRequired') : null;
 }
 
 export function validateTimeRangeAnchor(anchor: unknown, t: TFunction): string | null {

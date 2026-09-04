@@ -9,6 +9,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -152,6 +153,47 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable
         // Undoing twice is refused rather than silently repeated.
         (await editor.PostAsync($"/api/v1/import-batches/{batchId}/revert", null))
             .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// A line of a vector import reports no trip title, whatever the source rows happen to be
+    /// called. The line keeps its source object's own attributes verbatim, and a file whose
+    /// author wrote a "title" on every object owns that word for something of their own — a
+    /// photograph's caption, a map sheet, a survey name. Reading it back as the title of a trip
+    /// would invent a trip that was never recorded, and would hand the reader a name that the
+    /// same answer withholds two fields earlier when the object is not theirs to see.
+    /// </summary>
+    [Fact]
+    public async Task A_vector_import_line_reports_no_trip_title_even_when_the_source_row_has_one()
+    {
+        var geojson = $$"""
+            {
+              "type": "FeatureCollection",
+              "features": [
+                {
+                  "type": "Feature",
+                  "properties": { "name": "P. Titled {{tag}}", "title": "Nu este o tura {{tag}}" },
+                  "geometry": { "type": "Point", "coordinates": [25.51, 45.61] }
+                }
+              ]
+            }
+            """;
+        var geofileId = await UploadAsync("titled.geojson", Encoding.UTF8.GetBytes(geojson), editor);
+
+        var commit = await CommitAsync(editor, geofileId, SourceIds(await PreviewAsync(editor, geofileId)));
+        var batchId = commit.GetProperty("batch").GetProperty("id").GetGuid();
+
+        var detail = await GetJsonAsync(editor, $"/api/v1/import-batches/{batchId}");
+        var item = detail.GetProperty("items").EnumerateArray().Single();
+        item.GetProperty("tripLogId").ValueKind.ShouldBe(JsonValueKind.Null);
+        item.GetProperty("tripTitle").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // And the attribute really is there to be read, so the assertion above is about the
+        // answer rather than about a file that never carried the word.
+        var provenance = await GetJsonAsync(
+            editor, $"/api/v1/features/{item.GetProperty("featureId").GetGuid()}/import-provenance");
+        provenance.GetProperty("sourceProperties").GetProperty("title").GetString()
+            .ShouldBe($"Nu este o tura {tag}");
     }
 
     [Fact]
@@ -330,9 +372,7 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable
                     decisions = new Dictionary<string, object>(),
                     withoutReview = true,
                 }));
-            accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
-
-            var result = JsonDocument.Parse(await accepted.Content.ReadAsStringAsync()).RootElement;
+            var result = await RunCommitAsync(editor, accepted);
             result.GetProperty("batch").GetProperty("mode").GetString().ShouldBe("autoCreated");
             (await SearchFeatureNamesAsync(editor)).ShouldContain($"Auto {tag}");
         }
@@ -760,6 +800,84 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable
         return JsonDocument.Parse(payload).RootElement;
     }
 
+    [Fact]
+    public async Task A_confirmation_is_queued_and_creates_nothing_until_the_job_runs()
+    {
+        // A name the shipped rules classify, so there is something to confirm — which term it is
+        // does not matter here, only that the row has a proposed kind.
+        var geofileId = await UploadGpxAsync(SimpleGpx($"Izbuc {tag}", 45.53, 25.44));
+        // Only what a rule claimed. An unmatched row has nothing saying what it should become,
+        // and confirming one is refused — which is a different test from this one.
+        var selection = ClassifiedSourceIds(await PreviewAsync(editor, geofileId));
+        selection.ShouldNotBeEmpty();
+
+        var response = await editor.PostAsJsonAsync($"/api/v1/geofiles/{geofileId}/import/commit", new
+        {
+            options = DefaultOptions(),
+            selection,
+            decisions = new Dictionary<string, object>(),
+            withoutReview = false,
+        });
+
+        // Accepted, not OK: the objects do not exist yet. This is the whole point of the change —
+        // a few thousand rows cannot be created inside a request, and a reverse proxy cutting the
+        // caller off used to roll the entire batch back and report a gateway timeout.
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted, payload);
+        var accepted = JsonDocument.Parse(payload).RootElement;
+        accepted.GetProperty("queued").GetInt32().ShouldBe(selection.Count);
+
+        // The address of the result is settled before the work starts, so the reviewer can be
+        // sent to it rather than made to guess which batch appeared most recently.
+        var batchId = accepted.GetProperty("batchId").GetGuid();
+        (await editor.GetAsync($"/api/v1/import-batches/{batchId}")).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+        (await SearchFeatureNamesAsync(editor)).ShouldBeEmpty();
+
+        await RunCommitAsync(editor, response);
+
+        var batch = (await GetJsonAsync(editor, $"/api/v1/import-batches/{batchId}")).GetProperty("batch");
+        batch.GetProperty("createdCount").GetInt32().ShouldBe(selection.Count);
+        (await SearchFeatureNamesAsync(editor)).Count.ShouldBe(selection.Count);
+    }
+
+    [Fact]
+    public async Task A_job_that_runs_twice_does_not_create_the_batch_twice()
+    {
+        // A name the shipped rules classify, so there is something to confirm — which term it is
+        // does not matter here, only that the row has a proposed kind.
+        var geofileId = await UploadGpxAsync(SimpleGpx($"Izbuc {tag}", 45.53, 25.44));
+        // Only what a rule claimed. An unmatched row has nothing saying what it should become,
+        // and confirming one is refused — which is a different test from this one.
+        var selection = ClassifiedSourceIds(await PreviewAsync(editor, geofileId));
+        selection.ShouldNotBeEmpty();
+
+        var response = await editor.PostAsJsonAsync($"/api/v1/geofiles/{geofileId}/import/commit", new
+        {
+            options = DefaultOptions(),
+            selection,
+            decisions = new Dictionary<string, object>(),
+            withoutReview = false,
+        });
+        var accepted = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var jobId = accepted.GetProperty("jobId").GetInt64();
+
+        // The queue retries a job whose handler threw. A retry of one whose transaction had
+        // already committed must not create every object a second time — which is why the batch
+        // id is fixed by whoever queued it rather than invented by the run.
+        for (var run = 0; run < 2; run++)
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var job = await db.ProcessingJobs.SingleAsync(j => j.Id == jobId);
+            var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
+                .Single(h => h.Kind == ProcessingJobKinds.ImportCommit);
+            await handler.ExecuteAsync(job, CancellationToken.None);
+        }
+
+        (await SearchFeatureNamesAsync(editor)).Count.ShouldBe(selection.Count);
+    }
+
     private async Task<JsonElement> CommitAsync(
         HttpClient client,
         Guid geofileId,
@@ -774,10 +892,56 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable
             decisions = decisions ?? [],
             withoutReview = false,
         });
-        var payload = await response.Content.ReadAsStringAsync();
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
-        return JsonDocument.Parse(payload).RootElement;
+        return await RunCommitAsync(client, response);
     }
+
+    /// <summary>
+    /// Runs the queued confirmation and answers with the batch it produced, shaped the way the
+    /// old synchronous answer was so the assertions above it still read the same.
+    /// </summary>
+    /// <remarks>
+    /// The job is executed here rather than waited for. The container runs a live worker, so
+    /// waiting would work most of the time and race the rest — and a test that sometimes asserts
+    /// against a batch that does not exist yet reports a defect in whatever it was checking.
+    /// Running the handler directly is the same code on the same row, at a moment this test
+    /// chooses.
+    /// </remarks>
+    private async Task<JsonElement> RunCommitAsync(HttpClient client, HttpResponseMessage response)
+    {
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Accepted, payload);
+        var accepted = JsonDocument.Parse(payload).RootElement;
+        var jobId = accepted.GetProperty("jobId").GetInt64();
+        var batchId = accepted.GetProperty("batchId").GetGuid();
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var job = await db.ProcessingJobs.SingleAsync(j => j.Id == jobId);
+            job.Kind.ShouldBe(ProcessingJobKinds.ImportCommit);
+            var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
+                .Single(h => h.Kind == ProcessingJobKinds.ImportCommit);
+            await handler.ExecuteAsync(job, CancellationToken.None);
+        }
+
+        // Shaped as the synchronous answer was — `{ batch, failures }` — so every assertion
+        // written against that still says what it said. The failures now live on the batch,
+        // because the confirmation no longer answers in the request that asked for it.
+        var detail = await GetJsonAsync(client, $"/api/v1/import-batches/{batchId}");
+        var batch = detail.GetProperty("batch");
+        using var shaped = JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            batch = JsonSerializer.Deserialize<JsonElement>(batch.GetRawText()),
+            failures = JsonSerializer.Deserialize<JsonElement>(batch.GetProperty("failures").GetRawText()),
+        }));
+        return shaped.RootElement.Clone();
+    }
+
+    /// <summary>The rows a rule actually classified — the only ones a confirmation may create.</summary>
+    private static List<long> ClassifiedSourceIds(JsonElement preview) =>
+        [.. preview.GetProperty("items").EnumerateArray()
+            .Where(i => i.GetProperty("proposedKind").ValueKind != JsonValueKind.Null)
+            .Select(i => i.GetProperty("sourceId").GetInt64())];
 
     private static List<long> SourceIds(JsonElement preview) =>
         [.. preview.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("sourceId").GetInt64())];

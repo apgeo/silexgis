@@ -310,3 +310,126 @@ describe('sameSelection', () => {
     ).toBe(false);
   });
 });
+
+describe('a view that has stepped out of the extent exchange', () => {
+  /**
+   * A view whose participation is switchable, and which reports what it was told rather than
+   * echoing — the noise above is about loop-freedom and only gets in the way here.
+   */
+  function switchableView(kind: 'map2d' | 'scene3d', coupled = { yes: true }) {
+    const seen: { bounds: ViewExtent; zoom: number }[] = [];
+    const sync = attachViewSync(
+      kind,
+      { onExtent: (bounds, zoom) => seen.push({ bounds, zoom }), currentExtent: () => here },
+      { followsExtent: () => coupled.yes },
+    );
+    let here: { bounds: ViewExtent; zoom: number } | undefined;
+    return {
+      seen,
+      sync,
+      coupled,
+      standAt: (bounds: ViewExtent, zoom: number) => {
+        here = { bounds, zoom };
+      },
+    };
+  }
+
+  it('does not follow the other view', () => {
+    const scene = switchableView('scene3d', { yes: false });
+    const map = noisyView('map2d');
+
+    map.sync.publishExtent(romania, 14);
+
+    expect(scene.seen).toHaveLength(0);
+  });
+
+  it('does not drag the other view along behind it either', () => {
+    // The half that is easy to leave out. A view that stops following but keeps announcing is
+    // still coupled — in one direction — and the other view goes on chasing it, which is exactly
+    // what somebody who switched coupling off was trying to stop.
+    const scene = switchableView('scene3d', { yes: false });
+    const map = noisyView('map2d');
+
+    scene.sync.publishExtent(elsewhere, 12);
+
+    expect(map.seen).toHaveLength(0);
+  });
+
+  it('does not answer a view that opens and asks where to look', async () => {
+    // The third way out, and the one with no bus message of its own to notice: the answer to
+    // `view-hello` deliberately bypasses the follow-mute, so a gate placed only on the ordinary
+    // publish would let an uncoupled scene place a newly opened window at its own private camera.
+    //
+    // The await matters and is not tidiness. The question a new view asks goes out on a microtask,
+    // so a synchronous body asserts before it has been asked and the test passes without the
+    // exchange ever happening — which it did, until removing the gate failed to turn it red.
+    const scene = switchableView('scene3d', { yes: false });
+    scene.standAt(elsewhere, 12);
+    vi.advanceTimersByTime(2000); // past the join grace, so it would otherwise be entitled to answer
+
+    const map = noisyView('map2d');
+    await Promise.resolve();
+
+    expect(map.seen).toHaveLength(0);
+  });
+
+  it('leaves no trace for the next view to open to be placed by', async () => {
+    // A view moving on its own must not write itself into the memory that places later views, or
+    // the uncoupling leaks out through the next window instead of through the bus. Awaited for the
+    // same reason as above: the replay that would carry the trace happens on a microtask.
+    const scene = switchableView('scene3d', { yes: false });
+    scene.sync.publishExtent(elsewhere, 12);
+
+    const map = noisyView('map2d');
+    await Promise.resolve();
+
+    expect(map.seen).toHaveLength(0);
+  });
+
+  it('still passes selections across', () => {
+    // Uncoupling the cameras is not asking to stop sharing what is picked; the detail panel
+    // beside the map is fed by this channel and must not go dead.
+    const picked: (WorkspaceSelection | null)[] = [];
+    const coupled = { yes: false };
+    attachViewSync('map2d', { onSelection: (s) => picked.push(s) }, { followsExtent: () => coupled.yes });
+    const scene = attachViewSync('scene3d', {}, { followsExtent: () => coupled.yes });
+
+    scene.publishSelection({ kind: 'feature', featureId: 'f-1' });
+
+    expect(picked).toEqual([{ kind: 'feature', featureId: 'f-1' }]);
+  });
+
+  it('comes back to where the other view is standing when it rejoins', () => {
+    const coupled = { yes: true };
+    const scene = switchableView('scene3d', coupled);
+    const map = noisyView('map2d');
+
+    // The map moves while the scene is out of the exchange, so the scene does not see it.
+    coupled.yes = false;
+    map.sync.publishExtent(romania, 14);
+    expect(scene.seen).toHaveLength(0);
+
+    // Rejoining is what closes the gap. The scene goes to the map, not the other way round.
+    coupled.yes = true;
+    scene.sync.rejoin();
+
+    expect(scene.seen).toHaveLength(1);
+    expect(scene.seen[0].bounds).toEqual(romania);
+    expect(scene.seen[0].zoom).toBe(14);
+  });
+
+  it('asks where to look when it rejoins and this window remembers nothing', () => {
+    // A window opened while already uncoupled has no memory of the exchange to replay, so the
+    // rejoin has to be a question rather than a recall — and the answer comes from another window.
+    const coupled = { yes: false };
+    const scene = switchableView('scene3d', coupled);
+    const map = switchableView('map2d');
+    map.standAt(romania, 13);
+    vi.advanceTimersByTime(2000); // the map is established and may answer
+
+    coupled.yes = true;
+    scene.sync.rejoin();
+
+    expect(scene.seen).toEqual([{ bounds: romania, zoom: 13 }]);
+  });
+});
