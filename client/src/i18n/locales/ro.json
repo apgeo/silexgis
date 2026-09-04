@@ -3969,10 +3969,12 @@
       "credentialRefused": "Fototeca nu a acceptat credențialul cu care este configurată această instalare. Emite unul nou în fototecă și setează-l aici.",
       "missingPermissions": "Credențialului folosit de această instalare îi lipsesc: {{permissions}}. Adaugă-i-le în setările fototecii.",
       "unreadable": "Fototeca a răspuns, dar într-un fel pe care această instalare nu l-a putut citi.",
+      "partlyAnswering": "Fototeca a răspuns, dar una dintre întrebările pe care i le pune această instalare nu a primit răspuns. Poate fi ocupată sau încă pornește.",
       "picturesStopped": "Fotografiile din această fototecă nu mai sunt cerute: a răspuns unei cereri de imagine fără imagine, ceea ce poate însemna că nu mai ajunge la originalele ei.",
       "versionChecked": "Versiunea {{version}} · verificat {{when}}",
       "checked": "Verificat {{when}}",
-      "recheckFailed": "Fototeca tot nu a răspuns, așa că nimic nu s-a schimbat."
+      "recheckFailed": "Fototeca tot nu a răspuns, așa că nimic nu s-a schimbat.",
+      "recheckRefused": "Fototeca a răspuns și nu a acceptat credențialul cu care este configurată această instalare, așa că nimic nu s-a schimbat."
     },
     "notConnected": "{{library}} nu este conectată: această instalare nu are adresă sau credențial pentru ea.",
     "recheck": "Verifică din nou"

@@ -6,6 +6,7 @@ import { Alert, Button, Checkbox, Collapse, Divider, InputNumber, Radio, Select,
 import type OlLayerBase from 'ol/layer/Base';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import { useRecheckPhotoLibrary, useTags, type GeofileInfo, type LibraryPhotoProvider, type MapConfig, type MapLayerInfo, type RasterMapInfo } from '../../api/hooks.ts';
 import {
   CENTERLINE_LAYER_ID,
@@ -38,6 +39,19 @@ import { getOverlayGroup } from '../../map/mapContext.ts';
  * about it.
  */
 const CREDENTIAL_REFUSED = 'photo_library.unauthorized';
+
+/**
+ * The refusal a library gives when a question did not come back at all: nothing listening, or
+ * nothing said in time.
+ *
+ * It arrives in two situations that are not the same errand, and the reach beside it is what
+ * separates them. Against a library that answered nothing it is why the reach is unreachable, and
+ * it is read there. Against one that answered the first question and not the second it means a
+ * container that is busy or still starting up — which is a wait, not a fault. Without this it
+ * lands in the catch-all sentence and sends an operator looking for a malformed answer that never
+ * existed, when what they have is a library that would answer again in a minute.
+ */
+const ANSWER_DID_NOT_ARRIVE = 'photo_library.unavailable';
 
 interface LayerPanelProps {
   layers: MapLayerInfo[];
@@ -458,10 +472,39 @@ export default function LayerPanel({
                     // fix; "the key is not sufficient" is a search through a permission list of
                     // over a hundred entries.
                     t('libraryPhotos.health.missingPermissions', { permissions: missing.join(', ') })
-                  : health?.failureCode
-                    ? t('libraryPhotos.health.unreadable')
-                    : null;
+                  : health?.failureCode === ANSWER_DID_NOT_ARRIVE
+                    ? // Reachable, and one question still unanswered: a container that is busy or
+                      // has not finished starting. Named apart from the sentence below because
+                      // that one sends an operator to look at an answer, and there is no answer to
+                      // look at — the thing to do is wait and press the button again.
+                      t('libraryPhotos.health.partlyAnswering')
+                    : health?.failureCode
+                      ? t('libraryPhotos.health.unreadable')
+                      : null;
+          /*
+           * What came back for the rectangle on screen, which is a different question from whether
+           * the library is working, and null when there is nothing honest to say about it.
+           *
+           * A count survives a warning about the library on purpose. A library that answered one
+           * of the questions asked about itself and not another can still be answering viewports
+           * perfectly, and a panel that withholds the number while the map draws the pins beside
+           * it is arguing with what the reader can already see. "Nothing here" does not survive
+           * one: that sentence is a claim about what the library holds, and a library that is not
+           * fully answering has not earned it.
+           */
+          const viewport =
+            reach === 'loading' && !state?.shownCount
+              ? t('libraryPhotos.loading')
+              : state?.shownCount
+                ? t('libraryPhotos.count', { count: state.shownCount })
+                : problem
+                  ? null
+                  : t('libraryPhotos.empty');
           const checking = recheck.isPending && recheck.variables === library.source;
+          // Why the recheck was refused, where the server named it. Taken from the refusal's own
+          // code rather than matched out of its sentence, which is prose written for a person and
+          // may be reworded or translated without anything here noticing.
+          const recheckCode = recheck.error instanceof ApiError ? recheck.error.code : undefined;
           return (
             <div
               key={library.source}
@@ -471,30 +514,49 @@ export default function LayerPanel({
               <Typography.Text strong style={{ fontSize: 12 }}>
                 {library.name}
               </Typography.Text>
-              {/* The library's own state comes first, because when it is wrong nothing said about
-                  the viewport means anything: an overlay reporting "no photographs here" for a
-                  container that is not running is a true sentence about a question nobody asked. */}
-              {problem ? (
+              {/* The library's own state comes first, because when it is wrong most of what can be
+                  said about the viewport means less: an overlay reporting "no photographs here"
+                  for a container that is not running is a true sentence about a question nobody
+                  asked. */}
+              {problem && (
                 <Alert type="warning" showIcon style={{ marginTop: 4 }} title={problem} />
-              ) : /* Three answers, never one. A blank map because the library holds nothing here, a
-                     blank map because the library did not answer this viewport, and a map still
-                     waiting are different facts, and an overlay that renders all three as emptiness
-                     is why somebody spends an afternoon debugging a library that was working. */
-              reach === 'unreachable' ? (
+              )}
+              {/* Three answers, never one. A blank map because the library holds nothing here, a
+                  blank map because the library did not answer this viewport, and a map still
+                  waiting are different facts, and an overlay that renders all three as emptiness is
+                  why somebody spends an afternoon debugging a library that was working. */}
+              {reach === 'unreachable' ? (
+                // Said once. The line above already names why nothing answered and names it more
+                // precisely, so repeating it here in weaker words adds a sentence and no fact.
+                problem ? null : (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginTop: 4 }}
+                    title={t('libraryPhotos.unavailable')}
+                  />
+                )
+              ) : (
+                viewport && (
+                  <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
+                    {viewport}
+                  </Typography.Paragraph>
+                )
+              )}
+              {/* A viewport that stopped at this installation's own point limit, which on a screen
+                  looks exactly like a viewport that ended. Only this says which happened, and
+                  without it an operator reading a partly drawn valley concludes the library holds
+                  that many photographs. Keyed off the flag and never off how many were held back:
+                  a library asked for a clamped count truncates with nothing left to count, so a
+                  line keyed off the number would go quiet for the very case it exists for. */}
+              {state?.truncated && (
                 <Alert
-                  type="warning"
+                  type="info"
                   showIcon
                   style={{ marginTop: 4 }}
-                  title={t('libraryPhotos.unavailable')}
+                  data-testid={`library-photos-truncated-${library.source}`}
+                  title={t('libraryPhotos.truncated', { count: state.shownCount })}
                 />
-              ) : (
-                <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
-                  {reach === 'loading' && !state?.shownCount
-                    ? t('libraryPhotos.loading')
-                    : state?.shownCount
-                      ? t('libraryPhotos.count', { count: state.shownCount })
-                      : t('libraryPhotos.empty')}
-                </Typography.Paragraph>
               )}
               {/* Not a failure and not a probe result: this application's own gate, closed by a
                   library answering a picture request without a picture. Said out loud because the
@@ -564,11 +626,18 @@ export default function LayerPanel({
               >
                 {t('libraryPhotos.recheck')}
               </Button>
-              {/* A recheck that itself failed leaves every line above exactly as it was, which
-                  reads as a button that does nothing. Said instead. */}
+              {/* The lines above are re-read either way — the server forgets what it last heard
+                  whether or not the check succeeded — but what the check itself ran into appears
+                  nowhere in them, and an operator watching a health line stay exactly as it was is
+                  watching a button that did nothing. Said here instead. */}
               {recheck.isError && recheck.variables === library.source && (
                 <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
-                  {t('libraryPhotos.health.recheckFailed')}
+                  {/* A library that answered promptly and refused the credential is not a library
+                      that did not answer, and telling an operator it is down sends them to the
+                      container while the thing to fix is on the library's own settings screen. */}
+                  {recheckCode === CREDENTIAL_REFUSED
+                    ? t('libraryPhotos.health.recheckRefused')
+                    : t('libraryPhotos.health.recheckFailed')}
                 </Typography.Paragraph>
               )}
             </div>

@@ -37,11 +37,18 @@ public sealed class LibraryHealthCache(TimeSpan window, TimeSpan deadline)
     /// The longest one probe may take, whatever timeout an operator configured for the library.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A viewport query may legitimately be slow — it can be reading a whole library — but a health
     /// check that takes twenty seconds has already answered the question it was asked. This is not
     /// configurable because it is not a property of the far side: it is how long somebody is
     /// willing to look at a blank status line, and "did not answer within a few seconds" is the
     /// same errand for an operator as "did not answer".
+    /// </para>
+    /// <para>
+    /// It is also what bounds how long anybody else waits: the permit below is held for the whole
+    /// of a reading, so a neighbour that has stopped answering costs one caller this long and every
+    /// other caller the same, once, rather than a timeout each.
+    /// </para>
     /// </remarks>
     public static readonly TimeSpan DefaultDeadline = TimeSpan.FromSeconds(5);
 
@@ -77,8 +84,13 @@ public sealed class LibraryHealthCache(TimeSpan window, TimeSpan deadline)
     /// caller going away — a cancelled request has nobody left to tell.
     /// </para>
     /// <para>
-    /// The deadline is applied here rather than inside each product's probe, so that a probe cannot
-    /// be written that forgets it.
+    /// The deadline is applied here rather than inside each product's probe, so that no probe has
+    /// to remember to set one. What it bounds is elapsed time, and only for the work a probe does
+    /// through the token it is handed — every call and every body read below takes that token, so
+    /// the whole of a probe is covered today, but the bound is a cancellation signal and not a
+    /// ceiling: it says nothing about how much memory an answer may cost while it arrives inside
+    /// the deadline. A probe that reads a body without passing the token on would escape it
+    /// silently, which is worth knowing before writing a third one.
     /// </para>
     /// </remarks>
     public async Task<LibraryHealth> GetAsync(

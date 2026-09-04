@@ -398,6 +398,104 @@ public sealed class PhotoLibraryProbeTests
         stub.Asked.Count.ShouldBeGreaterThan(afterRecheck);
     }
 
+    /// <summary>
+    /// The button does its second job even when its first one fails. A recheck against a library
+    /// that is still down cannot reopen the picture path — and must still forget what was last
+    /// heard, or the operator who has just tried a fix is shown the state from before it for the
+    /// rest of the window, which is the button visibly doing nothing at the moment it is pressed
+    /// most.
+    /// </summary>
+    [Fact]
+    public async Task A_recheck_that_failed_still_forgets_what_was_last_heard()
+    {
+        // A picture answer that is not a picture, which is what closes the byte path.
+        var stub = HealthyPrism().Answering("/api/v1/t/", """{"error":"no picture here"}""");
+        var library = Prism(stub);
+
+        await library.ProbeAsync(default);
+        await Should.ThrowAsync<PhotoLibraryException>(async () =>
+        {
+            await using var refused = await library.ThumbnailAsync(
+                "aa11bb22cc33", LibraryThumbnailSize.Large, null, default);
+        });
+        library.PicturesAvailable.ShouldBeFalse();
+
+        stub.NothingListening();
+        await Should.ThrowAsync<PhotoLibraryException>(() => library.RecheckOriginalsAsync(default));
+
+        // Still closed, and that is the half of the button that must not fire on a failure: with
+        // the originals out of reach a picture request is a deletion, so the byte path reopens on
+        // an answer and on nothing else.
+        library.PicturesAvailable.ShouldBeFalse();
+
+        var asked = stub.Asked.Count;
+        var reading = await library.ProbeAsync(default);
+
+        stub.Asked.Count.ShouldBeGreaterThan(asked);
+        reading.Reach.ShouldBe(LibraryReach.Unreachable);
+    }
+
+    /// <summary>The same, on the library that is read whole rather than by rectangle.</summary>
+    [Fact]
+    public async Task A_failed_recheck_of_the_other_library_also_forgets_what_was_last_heard()
+    {
+        var stub = new LibraryStub()
+            .Answering(ImmichVersion, """{"major":1,"minor":142,"patch":0}""")
+            .Answering(ImmichKey, """{"name":"an invented key","permissions":["all"]}""");
+        var library = Immich(stub);
+
+        await library.ProbeAsync(default);
+
+        stub.NothingListening();
+        await Should.ThrowAsync<PhotoLibraryException>(() => library.RecheckOriginalsAsync(default));
+
+        var asked = stub.Asked.Count;
+        var reading = await library.ProbeAsync(default);
+
+        stub.Asked.Count.ShouldBeGreaterThan(asked);
+        reading.Reach.ShouldBe(LibraryReach.Unreachable);
+    }
+
+    /// <summary>
+    /// The de-duplication the permit exists for, and the only load this route was ever at risk of
+    /// creating: two readers arriving together, neither finding a reading held, must cost the
+    /// neighbour one round of requests rather than two. Written so the second reader provably
+    /// arrives while the first is still inside the probe — two sequential looks pass with the
+    /// permit deleted, so they prove the window and not the gate.
+    /// </summary>
+    [Fact]
+    public async Task Two_readers_arriving_together_cost_one_round_of_requests()
+    {
+        var cache = new LibraryHealthCache();
+        var inside = new TaskCompletionSource();
+        var release = new TaskCompletionSource();
+        var probes = 0;
+
+        async Task<LibraryHealth> Probe(CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref probes) == 1)
+            {
+                inside.SetResult();
+                await release.Task;
+            }
+
+            return LibraryHealth.Answered("1.0.0");
+        }
+
+        var first = cache.GetAsync(Probe, default);
+
+        // The first reader is now inside the probe holding the permit, and nothing is held yet — so
+        // the second reader below can only be waiting on the permit rather than reading an answer.
+        await inside.Task;
+        var second = cache.GetAsync(Probe, default);
+        release.SetResult();
+
+        var readings = await Task.WhenAll(first, second);
+
+        probes.ShouldBe(1);
+        readings[1].ProbedAt.ShouldBe(readings[0].ProbedAt);
+    }
+
     // ------------------------------------------------------------------- the window and the deadline
 
     /// <summary>

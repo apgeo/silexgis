@@ -358,6 +358,29 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         CodeOf(body).ShouldBe(PhotoLibraryException.UnavailableCode);
     }
 
+    /// <summary>
+    /// The one thing this route must never do. A library that is not answering is the answer an
+    /// operator came to read, so producing it has to succeed: the probes run together and a single
+    /// one of them escaping as an exception would fail the whole status answer, taking the healthy
+    /// library's line and the list of unconnected products down with it — and the screen would then
+    /// show nothing at all for a case whose entire purpose is to be shown.
+    /// </summary>
+    [Fact]
+    public async Task The_status_route_answers_for_a_library_that_is_not_answering()
+    {
+        library.Answers(_ => throw new HttpRequestException("nothing is listening at that address"));
+
+        var status = await JsonAsync(admin, StatusUrl);
+
+        var health = status.GetProperty("providers")[0].GetProperty("health");
+        health.GetProperty("reach").GetString().ShouldBe("unreachable");
+        health.GetProperty("failureCode").GetString().ShouldBe(PhotoLibraryException.UnavailableCode);
+
+        // Read, and said to have been read. A health line with no moment on it describes a minute
+        // ago while looking like now.
+        health.GetProperty("probedAt").ValueKind.ShouldNotBe(JsonValueKind.Null);
+    }
+
     // --------------------------------------------------------------------------- the picture path
 
     /// <summary>

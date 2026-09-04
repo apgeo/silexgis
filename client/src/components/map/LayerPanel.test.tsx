@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LayerGroup from 'ol/layer/Group';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { LibraryPhotoHealth, LibraryPhotoProvider } from '../../api/hooks.ts';
 import type { LibraryPhotoLoadState, LibraryPhotoLoadStates } from '../../map/libraryPhotoLayer.ts';
 import LayerPanel from './LayerPanel.tsx';
@@ -20,7 +21,13 @@ import LayerPanel from './LayerPanel.tsx';
  */
 
 const recheck = vi.fn();
-let recheckState = { mutate: recheck, isPending: false, isError: false, variables: undefined as string | undefined };
+let recheckState = {
+  mutate: recheck,
+  isPending: false,
+  isError: false,
+  variables: undefined as string | undefined,
+  error: null as unknown,
+};
 
 vi.mock('../../api/hooks.ts', () => ({
   useTags: () => ({ data: [] }),
@@ -106,7 +113,7 @@ function renderPanel(
 
 beforeEach(() => {
   loadStates = { immich: answered };
-  recheckState = { mutate: recheck, isPending: false, isError: false, variables: undefined };
+  recheckState = { mutate: recheck, isPending: false, isError: false, variables: undefined, error: null };
   recheck.mockClear();
 });
 
@@ -199,12 +206,84 @@ describe('the photo-library block of the layer panel', () => {
   });
 
   it('says when the check itself did not go through, rather than leaving the button looking dead', () => {
-    recheckState = { mutate: recheck, isPending: false, isError: true, variables: 'immich' };
+    recheckState = {
+      mutate: recheck,
+      isPending: false,
+      isError: true,
+      variables: 'immich',
+      error: new ApiError(503, 'photo_library.unavailable'),
+    };
     renderPanel();
 
     expect(screen.getByTestId('library-photos-status-immich')).toHaveTextContent(
       /still did not answer/i,
     );
+  });
+
+  it('does not report a refused credential as a library that is still down', () => {
+    // The two failures the button can come back with are the two the whole block exists to
+    // separate. A library that answered in milliseconds and refused the credential is not a
+    // library that did not answer, and being told it is down sends an operator to the container
+    // while what needs fixing is on the library's own settings screen.
+    recheckState = {
+      mutate: recheck,
+      isPending: false,
+      isError: true,
+      variables: 'immich',
+      error: new ApiError(503, 'photo_library.unauthorized'),
+    };
+    renderPanel();
+
+    const block = screen.getByTestId('library-photos-status-immich');
+    expect(block).toHaveTextContent(/would not accept the credential/i);
+    expect(block).not.toHaveTextContent(/still did not answer/i);
+  });
+
+  it('says a viewport was cut short at the limit, which on a map looks like a viewport that ended', () => {
+    loadStates = { immich: { ...answered, shownCount: 3, truncated: true, omittedCount: 0 } };
+    renderPanel();
+
+    // Off the flag and not off how many were held back: this library is asked for a clamped count,
+    // so it truncates with nothing left to count, and a line keyed off the number would say
+    // nothing at all for exactly the case it exists for.
+    expect(screen.getByTestId('library-photos-truncated-immich')).toHaveTextContent(
+      /only the first 3 photographs/i,
+    );
+  });
+
+  it('says nothing about a limit for a viewport that simply ended', () => {
+    loadStates = { immich: { ...answered, shownCount: 3 } };
+    renderPanel();
+
+    expect(screen.queryByTestId('library-photos-truncated-immich')).toBeNull();
+  });
+
+  it('still counts the photographs on the map while warning about the library', () => {
+    // A library that answered one of the questions asked about itself and not another can be
+    // answering viewports perfectly. The pins are drawn; withholding the count while the map shows
+    // them argues with what the reader can already see.
+    loadStates = { immich: { ...answered, shownCount: 4 } };
+    renderPanel({
+      photoLibraries: [library({ ...healthy, failureCode: 'photo_library.unavailable' })],
+    });
+
+    const block = screen.getByTestId('library-photos-status-immich');
+    expect(block).toHaveTextContent('4 photographs shown');
+    expect(block).toHaveTextContent(/did not come back/i);
+
+    // And not the sentence for an answer that could not be read: nothing came back to read, and
+    // sending an operator to look for a malformed answer is sending them nowhere.
+    expect(block).not.toHaveTextContent(/not in a way this installation could read/i);
+  });
+
+  it('does not claim the library holds nothing here while it is only half answering', () => {
+    renderPanel({
+      photoLibraries: [library({ ...healthy, failureCode: 'photo_library.rejected' })],
+    });
+
+    const block = screen.getByTestId('library-photos-status-immich');
+    expect(block).toHaveTextContent(/not in a way this installation could read/i);
+    expect(block).not.toHaveTextContent(/no photographs in this area/i);
   });
 
   it('names a product nobody connected, which is the one thing an empty panel cannot say', () => {

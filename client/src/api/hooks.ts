@@ -1316,6 +1316,15 @@ export type LibraryPhotoCollection = components['schemas']['LibraryPhotoFeatureC
 export type LibraryPhotoHealth = components['schemas']['PhotoLibraryHealthDto'];
 
 /**
+ * How long a reading of a library's health stands, matching the window the server holds one for.
+ *
+ * Stated once and used for both the freshness and the timer below, so the two cannot drift apart
+ * into a client that re-asks faster than the server will ever answer differently, or slower than
+ * the operator loop the short window was chosen for: restart a container, look at the line.
+ */
+const PHOTO_LIBRARY_HEALTH_WINDOW_MS = 30_000;
+
+/**
  * The photo libraries this account may see, or none.
  *
  * A query rather than an imperative fetch, unlike the map loaders below it: there is no viewport
@@ -1323,12 +1332,30 @@ export type LibraryPhotoHealth = components['schemas']['PhotoLibraryHealthDto'];
  * account outside the audience is told it may read nothing and given an empty list — the answer
  * a client needs in order to decide whether to offer the overlay at all, without being told which
  * products this installation runs.
+ *
+ * It used to be held for five minutes, which was right while the answer was a static one about
+ * what an operator had typed into a settings file. The answer now carries what each library said
+ * when it was last asked, and the server holds one such reading for half a minute — so anything
+ * held here for longer hands an operator a health line older than the server was ever willing to
+ * serve, and the short window on the far side buys nothing on the path anybody actually uses.
+ * Kept to the same half minute for that reason, and asked again while somebody is looking at it,
+ * because what it describes is the state of another container and changes without anything
+ * happening in this browser.
+ *
+ * The timer runs only while there is a library to report on: an installation that runs none of
+ * these products has nothing to poll for, and the answer for it cannot change until somebody
+ * restarts the server with a new setting. It also stops of its own accord while the tab is in the
+ * background, which is the default and is wanted here — a map left open in a tab nobody is
+ * looking at should not keep a neighbouring container awake.
  */
 export function usePhotoLibraries() {
   return useQuery({
     queryKey: queryKeys.photoLibraryStatus,
     queryFn: () => unwrap(api.GET('/api/v1/photo-libraries/status')),
-    staleTime: 5 * 60_000,
+    staleTime: PHOTO_LIBRARY_HEALTH_WINDOW_MS,
+    refetchInterval: (query) =>
+      (query.state.data?.providers?.length ?? 0) > 0 ? PHOTO_LIBRARY_HEALTH_WINDOW_MS : false,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -1359,16 +1386,21 @@ export async function fetchLibraryPhotoFeatures(
  * Asks the server to re-open one library's picture delivery and to forget what it last heard
  * about that library's health.
  *
- * The status answer is invalidated on success rather than patched, because the point of pressing
- * this is to find out what the library says now: a button that reopened the pictures and left the
- * health line describing the state before the fix would look like a button that does nothing.
+ * The status answer is invalidated rather than patched, because the point of pressing this is to
+ * find out what the library says now: a button that reopened the pictures and left the health
+ * line describing the state before the fix would look like a button that does nothing.
+ *
+ * Invalidated whether the call succeeded or not, and that is the case it matters in. A recheck
+ * fails precisely when the library is still not working — which is when an operator has just
+ * tried something and is watching this panel to find out whether it took. The server forgets its
+ * held reading on both paths too, so re-asking here is what turns that into a line on the screen.
  */
 export function useRecheckPhotoLibrary() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (source: LibraryPhotoSource) =>
       unwrap(api.POST('/api/v1/photo-libraries/{source}/recheck', { params: { path: { source } } })),
-    onSuccess: () =>
+    onSettled: () =>
       void queryClient.invalidateQueries({ queryKey: queryKeys.photoLibraryStatus }),
   });
 }

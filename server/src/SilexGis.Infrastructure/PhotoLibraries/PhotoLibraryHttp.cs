@@ -92,8 +92,17 @@ public static class PhotoLibraryHttp
     /// having trouble answers with a page of markup and HTTP 200 as readily as with an error, and a
     /// parser fed markup fails somewhere far from the cause.
     /// </summary>
+    /// <remarks>
+    /// The answer is disposed on the way out, exactly as every other refusal on this path disposes
+    /// it. These calls are made with the headers read and the body still open, so a response
+    /// abandoned here holds a pooled connection until it is collected — and this is the one refusal
+    /// a misconfigured neighbour produces on every request rather than once: an address in front of
+    /// the wrong container answers markup with HTTP 200 for as long as it is pointed there.
+    /// </remarks>
     public static void EnsureJson(HttpResponseMessage response, PhotoLibrarySource source)
     {
+        ArgumentNullException.ThrowIfNull(response);
+
         var mediaType = response.Content.Headers.ContentType?.MediaType;
 
         if (mediaType is not null
@@ -102,6 +111,8 @@ public static class PhotoLibraryHttp
         {
             return;
         }
+
+        response.Dispose();
 
         throw new PhotoLibraryException(
             PhotoLibraryException.RejectedCode,

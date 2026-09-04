@@ -698,18 +698,28 @@ public sealed class ImmichClient(
     {
         EnsureConfigured();
 
-        // Nothing in the answer is read. That it answered at all, and accepted the key, is the check.
-        using (await SendJsonAsync(new Uri(BaseAddress(Options.BaseUrl), KeyRoute), ct))
+        try
         {
+            // Nothing in the answer is read. That it answered at all, and accepted the key, is the check.
+            using (await SendJsonAsync(new Uri(BaseAddress(Options.BaseUrl), KeyRoute), ct))
+            {
+            }
+
+            // Reopened only on an answer, and never in the block below: with the originals out of
+            // reach a picture request is a deletion, so the byte path opens on evidence that the
+            // library is answering and on nothing else.
+            picturesStopped = false;
         }
-
-        picturesStopped = false;
-
-        // The held reading describes the library as it was before whatever the operator has just
-        // finished doing. Forgotten rather than replaced here, so the next status line is read
-        // fresh: a recheck that reopened the pictures and went on reporting the old state would be
-        // a button that visibly does nothing.
-        health.Clear();
+        finally
+        {
+            // The held reading describes the library as it was before whatever the operator has
+            // just finished doing, and it is forgotten whether or not the call above succeeded.
+            // Forgetting only on success would make the button do least when it is pressed most: a
+            // recheck against a library that is still down would leave the health line describing
+            // the state before the fix attempt for the rest of the window, which is exactly the
+            // button that visibly does nothing this is here to remove.
+            health.Clear();
+        }
 
         logger.LogInformation(
             "Picture requests to the {Source} photo library were reopened by an operator recheck.", Source);
