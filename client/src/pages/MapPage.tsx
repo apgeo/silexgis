@@ -103,7 +103,11 @@ import {
   libraryPhotoSourceOf,
   setLibraryPhotosEnabled,
 } from '../map/libraryPhotoLayer.ts';
-import { attachLibraryPhotoPopup } from '../map/libraryPhotoPopup.ts';
+import {
+  attachLibraryPhotoPopup,
+  setLibraryPhotoFeatureHandler,
+  type LibraryPhotoFeatureTarget,
+} from '../map/libraryPhotoPopup.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { attachViewSync2d, type ViewSync2dHandle } from '../map/viewSync2d.ts';
@@ -147,6 +151,11 @@ const Scene3DView = lazy(() => import('../components/scene3d/Scene3DView.tsx'));
 const CaveViewPanel = lazy(() => import('../components/caveview/CaveViewPanel.tsx'));
 const SurveyModelViewerModal = lazy(
   () => import('../components/caveview/SurveyModelViewerModal.tsx'),
+);
+// On demand as well: it is only ever opened from a balloon over a photo-library overlay, which
+// most installations do not run and most visits never switch on.
+const LibraryPhotoFeatureModal = lazy(
+  () => import('../components/map/LibraryPhotoFeatureModal.tsx'),
 );
 
 /** Map workspace v1: fixed resizable panes on desktop, drawers on phones. */
@@ -277,6 +286,21 @@ export default function MapPage() {
 
   // Right-click (long-press on touch) context menu over the canvas.
   const [contextTarget, setContextTarget] = useState<MapContextMenuTarget | null>(null);
+
+  // A photograph in a neighbouring library, offered up by its balloon to become an object here.
+  const [libraryPhotoTarget, setLibraryPhotoTarget] = useState<LibraryPhotoFeatureTarget | null>(
+    null,
+  );
+
+  // The balloon offers the button only when it has somewhere to send it, so withholding the
+  // handler is what withholds the button from an account that may not create features. The server
+  // decides in any case; this only keeps a button that would be refused off the screen. Set apart
+  // from the map's mount effect because the answer arrives after it and can change, and
+  // re-attaching the balloon to carry a new callback would tear one down mid-read.
+  useEffect(() => {
+    setLibraryPhotoFeatureHandler(mayCreateFeatures ? setLibraryPhotoTarget : undefined);
+    return () => setLibraryPhotoFeatureHandler(undefined);
+  }, [mayCreateFeatures]);
 
   useEffect(() => {
     const map = getWorkspaceMap();
@@ -756,6 +780,16 @@ export default function MapPage() {
     [libraryStatus],
   );
 
+  // The products this build can read that nobody supplied an address for. The server answers this
+  // for a full administrator and with an empty list for everybody else, so nothing here decides
+  // who is told; what it earns is the one thing an empty layer panel cannot say for itself —
+  // whether there is nothing to look at because nothing was connected. No overlay is made for
+  // these: a layer that can only ever draw nothing is not a layer.
+  const unconfiguredPhotoLibraries = useMemo(
+    () => (libraryStatus?.mayRead ? (libraryStatus.unconfigured ?? []) : []),
+    [libraryStatus],
+  );
+
   // Overlays for those libraries. Not registered with the built-ins on mount, because their
   // existence is a server answer that arrives after it — the same way imported files and
   // georeferenced rasters are registered — and followed by the pending-order pass, because a saved
@@ -980,6 +1014,7 @@ export default function MapPage() {
       onRasterVisibleChange={setRasterVisible}
       onOverlayVisibilityChanged={onOverlayVisibilityChanged}
       photoLibraries={photoLibraries}
+      unconfiguredPhotoLibraries={unconfiguredPhotoLibraries}
       visibleLibraryPhotoSources={libraryPhotoSources}
       treeNonce={treeNonce}
       tagFilter={tagFilter}
@@ -1370,6 +1405,12 @@ export default function MapPage() {
         page, because a reader who arrived at the map from a link has no cave page open. */}
     <Suspense fallback={null}>
       <SurveyModelViewerModal model={caveViewOverlay} onClose={() => setCaveViewOverlay(null)} />
+    </Suspense>
+    <Suspense fallback={null}>
+      <LibraryPhotoFeatureModal
+        target={libraryPhotoTarget}
+        onClose={() => setLibraryPhotoTarget(null)}
+      />
     </Suspense>
     {!isMobile && !rightPinned && (
       <Drawer

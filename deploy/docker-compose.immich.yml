@@ -95,6 +95,21 @@
 #
 # Optional in .env: SILEXGIS_IMMICH_ALLOW_SETUP, SILEXGIS_IMMICH_BIND, SILEXGIS_IMMICH_PORT,
 #                   SILEXGIS_PHOTO_LIBRARY_TZ — all documented in .env.example.
+#
+# AFTER FIRST START: THE KEY THIS APPLICATION READS WITH. Immich is read through an API key
+# minted in its own settings screen, and the key IS the account it was minted for — it carries
+# that account's whole reach, cannot be narrowed to an album, and does not expire. So mint it for
+# an account made for this purpose, and share to that account exactly what this application should
+# be able to see.
+#
+#   IT NEEDS TWO PERMISSIONS: map.read (where the photographs are) and asset.view (the pictures
+#   themselves). A key minted without narrowing carries everything and is sufficient; a key
+#   narrowed to fewer than these two produces an empty map and no error anywhere, because a
+#   library that answers "you may not see that" and a library holding nothing draw the same blank
+#   patch. The application asks the key what it may do and names any of the two that are missing,
+#   by name, on the photo-library block of the map's layer panel — that block is also where a
+#   wrong address and a stopped container are told apart, and it carries the button that asks
+#   again after a fix.
 # =============================================================================================
 name: silexgis
 

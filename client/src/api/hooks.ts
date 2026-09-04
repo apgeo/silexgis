@@ -1351,6 +1351,24 @@ export type LibraryPhotoStatus = components['schemas']['PhotoLibraryStatusDto'];
 export type LibraryPhotoCollection = components['schemas']['LibraryPhotoFeatureCollection'];
 
 /**
+ * What one library said about itself when the server last asked it.
+ *
+ * A separate answer from the overlay's own load state, and the two are not interchangeable: this
+ * one says whether the library is working at all, and the load state says what came back for the
+ * rectangle currently on screen. A library can be perfectly healthy and hold nothing here.
+ */
+export type LibraryPhotoHealth = components['schemas']['PhotoLibraryHealthDto'];
+
+/**
+ * How long a reading of a library's health stands, matching the window the server holds one for.
+ *
+ * Stated once and used for both the freshness and the timer below, so the two cannot drift apart
+ * into a client that re-asks faster than the server will ever answer differently, or slower than
+ * the operator loop the short window was chosen for: restart a container, look at the line.
+ */
+const PHOTO_LIBRARY_HEALTH_WINDOW_MS = 30_000;
+
+/**
  * The photo libraries this account may see, or none.
  *
  * A query rather than an imperative fetch, unlike the map loaders below it: there is no viewport
@@ -1358,12 +1376,30 @@ export type LibraryPhotoCollection = components['schemas']['LibraryPhotoFeatureC
  * account outside the audience is told it may read nothing and given an empty list — the answer
  * a client needs in order to decide whether to offer the overlay at all, without being told which
  * products this installation runs.
+ *
+ * It used to be held for five minutes, which was right while the answer was a static one about
+ * what an operator had typed into a settings file. The answer now carries what each library said
+ * when it was last asked, and the server holds one such reading for half a minute — so anything
+ * held here for longer hands an operator a health line older than the server was ever willing to
+ * serve, and the short window on the far side buys nothing on the path anybody actually uses.
+ * Kept to the same half minute for that reason, and asked again while somebody is looking at it,
+ * because what it describes is the state of another container and changes without anything
+ * happening in this browser.
+ *
+ * The timer runs only while there is a library to report on: an installation that runs none of
+ * these products has nothing to poll for, and the answer for it cannot change until somebody
+ * restarts the server with a new setting. It also stops of its own accord while the tab is in the
+ * background, which is the default and is wanted here — a map left open in a tab nobody is
+ * looking at should not keep a neighbouring container awake.
  */
 export function usePhotoLibraries() {
   return useQuery({
     queryKey: queryKeys.photoLibraryStatus,
     queryFn: () => unwrap(api.GET('/api/v1/photo-libraries/status')),
-    staleTime: 5 * 60_000,
+    staleTime: PHOTO_LIBRARY_HEALTH_WINDOW_MS,
+    refetchInterval: (query) =>
+      (query.state.data?.providers?.length ?? 0) > 0 ? PHOTO_LIBRARY_HEALTH_WINDOW_MS : false,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -1388,6 +1424,84 @@ export async function fetchLibraryPhotoFeatures(
       params: { path: { source }, query: { bbox } },
     }),
   );
+}
+
+/**
+ * Asks the server to re-open one library's picture delivery and to forget what it last heard
+ * about that library's health.
+ *
+ * The status answer is invalidated rather than patched, because the point of pressing this is to
+ * find out what the library says now: a button that reopened the pictures and left the health
+ * line describing the state before the fix would look like a button that does nothing.
+ *
+ * Invalidated whether the call succeeded or not, and that is the case it matters in. A recheck
+ * fails precisely when the library is still not working — which is when an operator has just
+ * tried something and is watching this panel to find out whether it took. The server forgets its
+ * held reading on both paths too, so re-asking here is what turns that into a line on the screen.
+ */
+export function useRecheckPhotoLibrary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (source: LibraryPhotoSource) =>
+      // unwrapVoid, not unwrap: this route answers 204 with no body, and unwrap treats an absent
+      // body as a failure. Through unwrap the button reported "the library still did not answer"
+      // every time the recheck succeeded — the one message that must never be wrong, on the one
+      // control an operator presses when they already suspect something is broken.
+      unwrapVoid(
+        api.POST('/api/v1/photo-libraries/{source}/recheck', { params: { path: { source } } }),
+      ),
+    onSettled: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.photoLibraryStatus }),
+  });
+}
+
+/**
+ * What one photograph in a neighbouring library is to become in this installation's own registry.
+ *
+ * Note what is not in it: a coordinate. The caller names a photograph and a rectangle to look for
+ * it in, and the server reads the position from the library that holds it — a body able to carry a
+ * latitude would be a way of putting an object anywhere at all while it looked as though a camera
+ * had measured it, and the provenance is the whole point of creating one this way.
+ */
+export type LibraryPhotoFeatureRequest = components['schemas']['PhotoLibraryFeatureRequest'];
+export type LibraryPhotoFeatureCreated = components['schemas']['PhotoLibraryFeatureCreatedDto'];
+
+/**
+ * An object already in the registry near where a photograph was taken.
+ *
+ * Information rather than a refusal: the answer comes back beside an object that was created, and
+ * it exists because forty photographs of one entrance would otherwise quietly become forty caves.
+ * An empty list is not a promise that nothing is there — the server searches only what this caller
+ * may both read and place exactly.
+ */
+export type LibraryPhotoNearbyFeature = components['schemas']['PhotoLibraryNearbyFeatureDto'];
+
+/**
+ * Creates a cave, an entrance, or a feature of another kind at the position one photograph in a
+ * neighbouring library records.
+ *
+ * The map overlays are refreshed by the caller rather than here: they are OpenLayers sources loaded
+ * imperatively per viewport, not query-cache entries, so what has to happen after this is a reload
+ * of the extent on screen and not an invalidation.
+ */
+export function useCreateFeatureFromLibraryPhoto() {
+  return useMutation({
+    mutationFn: (input: {
+      source: LibraryPhotoSource;
+      reference: string;
+      bbox: string;
+      body: LibraryPhotoFeatureRequest;
+    }) =>
+      unwrap(
+        api.POST('/api/v1/photo-libraries/{source}/photographs/{reference}/feature', {
+          params: {
+            path: { source: input.source, reference: input.reference },
+            query: { bbox: input.bbox },
+          },
+          body: input.body,
+        }),
+      ),
+  });
 }
 
 export type SearchResult = components['schemas']['SearchResultDto'];

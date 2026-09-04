@@ -41,6 +41,30 @@ public interface IPhotoLibrary
     bool PicturesAvailable { get; }
 
     /// <summary>
+    /// Asks the library what state it is in: whether it answers at all, what it says it is, and
+    /// whether the configured credential carries the rights this integration needs.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This never throws.</b> A library that is not there, not answering or refusing the
+    /// credential is a result an operator has to read, not an error that fails the request they
+    /// asked it in — the whole point of the call is to describe a failure, so failing at it would
+    /// be answering the question with the question.
+    /// </para>
+    /// <para>
+    /// It reaches only routes that describe the installation and the credential. Nothing here asks
+    /// the library to resolve a file on disk, because that is the act that costs photographs when
+    /// the disk is not there. Probing an unconfigured library opens no socket and reports that
+    /// nothing was asked, which is a different answer from reporting that it did not answer.
+    /// </para>
+    /// <para>
+    /// Answers are held briefly, per library: a status line refreshed twice, or looked at by two
+    /// people at once, must not become a burst of requests against a neighbouring container.
+    /// </para>
+    /// </remarks>
+    Task<LibraryHealth> ProbeAsync(CancellationToken ct);
+
+    /// <summary>
     /// Photographs this library reports inside <paramref name="bounds"/>, at most
     /// <paramref name="limit"/> of them, together with when their positions were read.
     /// </summary>

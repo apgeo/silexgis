@@ -291,6 +291,27 @@
   text-align: center;
 }
 
+/* The one thing in the balloon that leads anywhere: an offer to put an object in this
+   installation's own registry at the place the photograph was taken. Full width and separated from
+   the lines above it, because it is an action among descriptions and must not read as one more
+   line of text about the picture. */
+.map-library-photo-popup-action {
+  margin-top: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fafafa;
+  font: inherit;
+  color: #333;
+  cursor: pointer;
+}
+
+.map-library-photo-popup-action:hover {
+  border-color: #4096ff;
+  color: #4096ff;
+}
+
 /* Collapsible catalogue groups in the layer panel. antd's ghost panels carry padding sized for a
    page rather than for a 280px dock, so it is taken back here rather than fought with inline
    styles on every panel. */

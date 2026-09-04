@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -54,6 +55,16 @@ public sealed class ImmichClient(
     /// <summary>Name of the client; registered in <c>DependencyInjection</c>.</summary>
     public const string HttpClientName = "photo-library-immich";
 
+    /// <summary>
+    /// The route that describes the configured key: its name, and the list of what it may do.
+    /// </summary>
+    /// <remarks>
+    /// It needs no permission of its own, which is what makes it the right route to ask about a
+    /// key that can do nothing else — a key with every permission removed still answers here, and
+    /// says so.
+    /// </remarks>
+    private const string KeyRoute = "api/api-keys/me";
+
     /// <summary>The header the key travels on. Never a query parameter: this library accepts one there too, and a whole-library credential in an address is a credential in browser history, in a referer and in every log between here and there.</summary>
     private const string ApiKeyHeader = "x-api-key";
 
@@ -71,6 +82,29 @@ public sealed class ImmichClient(
     /// this has outgrown an index that lives in memory and wants a durable one instead.
     /// </summary>
     public const int PositionCeiling = 1_000_000;
+
+    /// <summary>
+    /// What this integration cannot work without, named exactly as the library's own settings
+    /// screen names them so an operator can find them there.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two, and only two: the positions come from the map route and the pictures from the asset
+    /// route, and nothing else here asks this library for anything. Reported as a set difference
+    /// rather than as a yes or no, because "your key is missing asset.view" is a fix and "it does
+    /// not work" is a support thread.
+    /// </para>
+    /// <para>
+    /// A key may also carry a single entry standing for everything, which satisfies both and is
+    /// what a key minted without narrowing looks like — read as sufficient rather than as an
+    /// unknown name, or every operator who took the default would be told to add two rights they
+    /// already have.
+    /// </para>
+    /// </remarks>
+    private static readonly string[] RequiredPermissions = ["map.read", "asset.view"];
+
+    /// <summary>The entry a key carries when it was minted with no narrowing at all.</summary>
+    private const string EveryPermission = "all";
 
     /// <summary>
     /// How long a failed reading is remembered when there is nothing to draw. A library that is
@@ -100,6 +134,13 @@ public sealed class ImmichClient(
     /// </summary>
     private volatile bool picturesStopped;
 
+    /// <summary>
+    /// The last thing the library said about itself, held for a short window. Process-wide for the
+    /// same reason the positions are: a status line refreshed in two browsers must not become two
+    /// rounds of requests against a container next door.
+    /// </summary>
+    private readonly LibraryHealthCache health = new();
+
     /// <summary>One at a time, so a stale reading being served does not start a re-read per viewport.</summary>
     private int refreshing;
 
@@ -112,6 +153,147 @@ public sealed class ImmichClient(
     public bool IsConfigured => Options.IsConfigured;
 
     public bool PicturesAvailable => IsConfigured && !picturesStopped;
+
+    /// <summary>
+    /// What state the library is in, asked of the two routes that describe it and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two questions rather than one, because they fail separately and send an operator to
+    /// different places: whether anything is listening at that address, and what the configured key
+    /// is actually allowed to do. The second is the one worth having. A key here is not scoped by
+    /// this application and cannot be — it carries whatever its own account holds — so the single
+    /// most likely way this integration is misconfigured is a key minted with the wrong rights,
+    /// which fails by drawing an empty map rather than by saying anything.
+    /// </para>
+    /// <para>
+    /// The route that describes the key needs no permission of its own, so this works even for a
+    /// key that can do nothing else — which is exactly the key an operator most needs told about.
+    /// </para>
+    /// </remarks>
+    public Task<LibraryHealth> ProbeAsync(CancellationToken ct) =>
+        IsConfigured ? health.GetAsync(ProbeOnceAsync, ct) : Task.FromResult(LibraryHealth.NotAsked);
+
+    private async Task<LibraryHealth> ProbeOnceAsync(CancellationToken ct)
+    {
+        string? version;
+        try
+        {
+            version = await ReadVersionAsync(ct);
+        }
+        catch (PhotoLibraryException e)
+        {
+            return LibraryHealth.DidNotAnswer(e.Code);
+        }
+
+        try
+        {
+            return LibraryHealth.Answered(version, await ReadMissingPermissionsAsync(ct));
+        }
+        catch (PhotoLibraryException e)
+        {
+            // It is answering; it would not answer this. Reported as reachable with the reason
+            // beside it, because "the container is down" and "the key is no longer accepted" are
+            // two different afternoons for whoever has to fix it.
+            return LibraryHealth.Answered(version, failureCode: e.Code);
+        }
+    }
+
+    /// <summary>
+    /// What the library says it is, written the way its own release notes write it. Null when it
+    /// names none, never a guess.
+    /// </summary>
+    private async Task<string?> ReadVersionAsync(CancellationToken ct)
+    {
+        using var response = await SendJsonAsync(
+            new Uri(BaseAddress(Options.BaseUrl), "api/server/version"), ct);
+
+        using var document = await ReadDocumentAsync(response, ct);
+
+        if (document.RootElement.ValueKind != JsonValueKind.Object
+            || !document.RootElement.TryGetProperty("major", out var major)
+            || !document.RootElement.TryGetProperty("minor", out var minor)
+            || !document.RootElement.TryGetProperty("patch", out var patch)
+            || major.ValueKind != JsonValueKind.Number
+            || minor.ValueKind != JsonValueKind.Number
+            || patch.ValueKind != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        var release = string.Create(
+            CultureInfo.InvariantCulture,
+            $"{major.GetInt32()}.{minor.GetInt32()}.{patch.GetInt32()}");
+
+        // A build before a release names itself with a suffix beside the three numbers, and
+        // dropping it would report an operator's release candidate as the release it precedes —
+        // which is a version line that lies rather than one that says less.
+        return document.RootElement.TryGetProperty("prerelease", out var prerelease)
+            && prerelease.ValueKind == JsonValueKind.String
+            && prerelease.GetString() is { Length: > 0 } suffix
+            ? $"{release}-{suffix}"
+            : release;
+    }
+
+    /// <summary>
+    /// The rights this integration needs that the configured key does not carry, in the order they
+    /// are declared so that two readings of the same key read the same.
+    /// </summary>
+    /// <remarks>
+    /// An answer this application cannot read is not evidence either way, so it produces no
+    /// missing names: telling an operator to add a right their key already carries sends them to
+    /// change a working key, and is a worse answer than saying nothing. That the check could not be
+    /// made is written to the log instead, where an unexplained empty map is investigated from.
+    /// </remarks>
+    private async Task<IReadOnlyList<string>> ReadMissingPermissionsAsync(CancellationToken ct)
+    {
+        using var response = await SendJsonAsync(new Uri(BaseAddress(Options.BaseUrl), KeyRoute), ct);
+        using var document = await ReadDocumentAsync(response, ct);
+
+        if (document.RootElement.ValueKind != JsonValueKind.Object
+            || !document.RootElement.TryGetProperty("permissions", out var permissions)
+            || permissions.ValueKind != JsonValueKind.Array)
+        {
+            logger.LogWarning(
+                "The {Source} photo library did not say what its key may do, so no claim is made "
+                + "about the key's rights.", Source);
+            return [];
+        }
+
+        var granted = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var permission in permissions.EnumerateArray())
+        {
+            if (permission.ValueKind == JsonValueKind.String && permission.GetString() is { } name)
+            {
+                granted.Add(name);
+            }
+        }
+
+        if (granted.Contains(EveryPermission))
+        {
+            return [];
+        }
+
+        return [.. RequiredPermissions.Where(required => !granted.Contains(required))];
+    }
+
+    /// <summary>
+    /// Parses an answer already known to be JSON. A body that stopped halfway parses as nothing,
+    /// and a health line built from half an answer would describe a library nobody is running.
+    /// </summary>
+    private async Task<JsonDocument> ReadDocumentAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        try
+        {
+            return JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        }
+        catch (JsonException e)
+        {
+            throw new PhotoLibraryException(
+                PhotoLibraryException.RejectedCode,
+                $"The {Source} photo library's answer was not readable as JSON.", e);
+        }
+    }
 
     /// <summary>
     /// Photographs inside a rectangle, answered from the reading this process holds.
@@ -516,12 +698,28 @@ public sealed class ImmichClient(
     {
         EnsureConfigured();
 
-        // Nothing in the answer is read. That it answered at all, and accepted the key, is the check.
-        using (await SendJsonAsync(new Uri(BaseAddress(Options.BaseUrl), "api/api-keys/me"), ct))
+        try
         {
-        }
+            // Nothing in the answer is read. That it answered at all, and accepted the key, is the check.
+            using (await SendJsonAsync(new Uri(BaseAddress(Options.BaseUrl), KeyRoute), ct))
+            {
+            }
 
-        picturesStopped = false;
+            // Reopened only on an answer, and never in the block below: with the originals out of
+            // reach a picture request is a deletion, so the byte path opens on evidence that the
+            // library is answering and on nothing else.
+            picturesStopped = false;
+        }
+        finally
+        {
+            // The held reading describes the library as it was before whatever the operator has
+            // just finished doing, and it is forgotten whether or not the call above succeeded.
+            // Forgetting only on success would make the button do least when it is pressed most: a
+            // recheck against a library that is still down would leave the health line describing
+            // the state before the fix attempt for the rest of the window, which is exactly the
+            // button that visibly does nothing this is here to remove.
+            health.Clear();
+        }
 
         logger.LogInformation(
             "Picture requests to the {Source} photo library were reopened by an operator recheck.", Source);

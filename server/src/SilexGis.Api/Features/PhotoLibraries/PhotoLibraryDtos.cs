@@ -18,21 +18,119 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// runs none of these products is a supported installation, not a half-broken one, so the list is
 /// short rather than full of falses.
 /// </param>
+/// <param name="Unconfigured">
+/// The products this build can read that no address or credential has been supplied for.
+/// </param>
+/// <remarks>
+/// <para>
+/// <see cref="Unconfigured"/> is empty for everybody but a full administrator, and that is the
+/// server's decision rather than something a screen declines to draw. Which products an
+/// installation could run is a fact about the installation, not about the caves in it, and an
+/// ordinary account has no errand that begins with it — while the administrator who has just set
+/// three environment variables and seen no overlay appear has exactly that errand, and today has
+/// nothing anywhere that distinguishes "switched off" from "typed the address wrong".
+/// </para>
+/// <para>
+/// A product listed here is not a fault. Running one of the two, or neither, is a supported
+/// installation; the list says what could be connected and is not, and says nothing about whether
+/// anything should be.
+/// </para>
+/// </remarks>
 public sealed record PhotoLibraryStatusDto(
     bool MayRead,
-    IReadOnlyList<PhotoLibraryProviderDto> Providers);
+    IReadOnlyList<PhotoLibraryProviderDto> Providers,
+    IReadOnlyList<PhotoLibraryProviderDto> Unconfigured);
 
 /// <param name="Source">Which product it is, as the address names it.</param>
 /// <param name="Name">What to call it on a screen. Never the product identifier a route is built from.</param>
 /// <param name="Configured">
-/// An address and a credential are set. Whether it actually answers is a different question and a
-/// different request, and is deliberately not asked here: a status route that opens a socket on
-/// every poll is load this installation inflicts on itself.
+/// An address and a credential are set. Whether anything answers at that address is a different
+/// question, and it is <see cref="Health"/> that answers it.
+/// </param>
+/// <param name="Health">
+/// What the library said about itself when it was last asked, or that it was not asked.
 /// </param>
 public sealed record PhotoLibraryProviderDto(
     string Source,
     string Name,
-    bool Configured);
+    bool Configured,
+    PhotoLibraryHealthDto Health);
+
+/// <summary>
+/// Whether a neighbouring library is actually working, which is a different question from whether
+/// somebody configured it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This route used to answer "configured" alone, deliberately, so that a poll opened no socket. It
+/// asks now because the thing it was protecting was never the load: an installation with a wrong
+/// address, a revoked credential or a stopped container looked exactly like a healthy one until
+/// somebody opened the map and found it empty, and every one of those is invisible from this side
+/// without asking. The load is bounded instead — each library holds its last answer for a short
+/// window, so a page refreshed twice, or read by two people at once, costs one round of requests.
+/// </para>
+/// <para>
+/// The fields are separate rather than one verdict because they fail separately. A library can
+/// answer and refuse the credential; it can accept the credential and withhold a right; and it can
+/// be perfectly healthy while its pictures are stopped, which is not a failure at all but this
+/// application's own guard.
+/// </para>
+/// </remarks>
+/// <param name="Reach">
+/// <c>reachable</c>, <c>unreachable</c>, or <c>unknown</c> when nothing was asked. Three values
+/// because "nobody asked" must not be written down as "no".
+/// </param>
+/// <param name="Version">What the product says it is, where it says. Null where it does not, and never a guess.</param>
+/// <param name="MissingPermissions">
+/// The rights this integration needs that the configured credential does not carry, named as the
+/// far side names them. Empty when the credential is sufficient and when the product publishes no
+/// way to ask — so an empty list means nothing is known to be missing, not that everything is
+/// present.
+/// </param>
+/// <param name="PicturesAvailable">
+/// Whether this library may currently be asked for image bytes. Not a probe result: it is this
+/// application's own sticky gate, closed by an answer to a picture request that was not a picture,
+/// and published here because an operator reading a health line is asking exactly this.
+/// </param>
+/// <param name="FailureCode">
+/// The stable code for what went wrong, or null when nothing did. Present alongside a reachable
+/// library that refused the credential.
+/// </param>
+/// <param name="ProbedAt">When this was read. Null only when nothing was asked.</param>
+public sealed record PhotoLibraryHealthDto(
+    string Reach,
+    string? Version,
+    IReadOnlyList<string> MissingPermissions,
+    bool PicturesAvailable,
+    string? FailureCode,
+    DateTimeOffset? ProbedAt)
+{
+    public static PhotoLibraryHealthDto Of(LibraryHealth health, bool picturesAvailable)
+    {
+        ArgumentNullException.ThrowIfNull(health);
+
+        return new(
+            ReachSlug(health.Reach),
+            health.Version,
+            health.MissingPermissions,
+            picturesAvailable,
+            health.FailureCode,
+            health.ProbedAt);
+    }
+
+    /// <summary>
+    /// How a reach is named on the wire. Written out rather than taken from the enumeration's own
+    /// <c>ToString</c>, which is a C# identifier a refactoring tool is allowed to change under a
+    /// client that reads it.
+    /// </summary>
+    private static string ReachSlug(LibraryReach reach) => reach switch
+    {
+        LibraryReach.Reachable => "reachable",
+        LibraryReach.Unreachable => "unreachable",
+        LibraryReach.Unknown => "unknown",
+        _ => throw new ArgumentOutOfRangeException(nameof(reach)),
+    };
+}
 
 /// <summary>
 /// Located photographs held in one neighbouring photo library, as GeoJSON points, plus the few

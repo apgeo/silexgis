@@ -7587,7 +7587,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Which neighbouring photo libraries this installation has been given, and whether the caller may see them. Reaches no library. */
+        /** Which neighbouring photo libraries this installation has been given, whether the caller may see them, and what each library said when it was last asked. */
         get: {
             parameters: {
                 query?: never;
@@ -7723,6 +7723,51 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/photographs/{reference}/feature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates a cave, an entrance or another feature at the position one photograph in a neighbouring library was taken; the position is read from the library, never sent. */
+        post: {
+            parameters: {
+                query: {
+                    bbox: string;
+                };
+                header?: never;
+                path: {
+                    source: string;
+                    reference: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhotoLibraryFeatureRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoLibraryFeatureCreatedDto"];
+                    };
                 };
             };
         };
@@ -19950,14 +19995,48 @@ export interface components {
             /** Format: int32 */
             trackMatchToleranceSeconds?: number;
         };
+        PhotoLibraryFeatureCreatedDto: {
+            /** Format: uuid */
+            featureId: string;
+            name: string;
+            kind: components["schemas"]["FeatureKind"];
+            nearby: components["schemas"]["PhotoLibraryNearbyFeatureDto"][];
+        };
+        PhotoLibraryFeatureRequest: {
+            kind: components["schemas"]["FeatureKind"];
+            name: string;
+            /** Format: int64 */
+            featureTypeId: null | number;
+            /** Format: uuid */
+            caveFeatureId: null | string;
+        };
+        PhotoLibraryHealthDto: {
+            reach: string;
+            version: null | string;
+            missingPermissions: string[];
+            picturesAvailable: boolean;
+            failureCode: null | string;
+            /** Format: date-time */
+            probedAt: null | string;
+        };
+        PhotoLibraryNearbyFeatureDto: {
+            /** Format: uuid */
+            featureId: string;
+            name: null | string;
+            kind: components["schemas"]["FeatureKind"];
+            /** Format: double */
+            distanceMeters: number;
+        };
         PhotoLibraryProviderDto: {
             source: string;
             name: string;
             configured: boolean;
+            health: components["schemas"]["PhotoLibraryHealthDto"];
         };
         PhotoLibraryStatusDto: {
             mayRead: boolean;
             providers: components["schemas"]["PhotoLibraryProviderDto"][];
+            unconfigured: components["schemas"]["PhotoLibraryProviderDto"][];
         };
         PhotoNearbyDto: {
             /** Format: uuid */

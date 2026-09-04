@@ -74,6 +74,20 @@ public sealed class PhotoPrismClient(
     private const string PreviewTokenHeader = "X-Preview-Token";
 
     /// <summary>
+    /// The rectangle the token check asks about: two degrees square, off the west coast of Africa,
+    /// where no cave is.
+    /// </summary>
+    /// <remarks>
+    /// An ordinary rectangle rather than a degenerate one, because it is the exact shape the map
+    /// asks about on every pan and so is certainly a form the far side accepts. Nothing here rests
+    /// on a zero-area rectangle being accepted, and a rectangle refused as malformed would be read
+    /// as a bad token — a false alarm on every poll against a library that works perfectly.
+    /// Measured against a running instance: this rectangle answers 200 with a valid credential and
+    /// 401 without one, which is precisely the discrimination this call is here to make.
+    /// </remarks>
+    private static readonly Envelope TokenCheckRectangle = new(x1: -1, x2: 1, y1: -1, y2: 1);
+
+    /// <summary>
     /// De-duplicates a concurrent fetch of the picture credential so a burst of balloon openings
     /// with no credential in hand costs one call rather than one each. <b>Not a throttle</b>: it is
     /// never held while a picture or a position query is in flight, and nothing else in this class
@@ -88,6 +102,13 @@ public sealed class PhotoPrismClient(
     /// </summary>
     private volatile bool picturesStopped;
 
+    /// <summary>
+    /// The last thing the library said about itself, held for a short window. Process-wide for the
+    /// same reason the picture credential is: a status line refreshed in two browsers must not
+    /// become two rounds of requests against a container next door.
+    /// </summary>
+    private readonly LibraryHealthCache health = new();
+
     private PhotoPrismOptions Options => options.Value;
 
     public PhotoLibrarySource Source => PhotoLibrarySource.PhotoPrism;
@@ -95,6 +116,89 @@ public sealed class PhotoPrismClient(
     public bool IsConfigured => Options.IsConfigured;
 
     public bool PicturesAvailable => IsConfigured && !picturesStopped;
+
+    /// <summary>
+    /// What state the library is in, asked of the routes that describe it and of the one it answers
+    /// positions from — and of nothing else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Three questions rather than one, because they fail separately and send an operator to
+    /// different places: whether anything is listening at that address at all, what it says it is,
+    /// and whether it accepts this installation's token. A container that is still starting and a
+    /// token that expired look identical from one call and completely different from three.
+    /// </para>
+    /// <para>
+    /// The second call is one the byte path already needs — it is where the picture credential
+    /// comes from — so it refreshes that credential rather than adding a call of its own, and the
+    /// first balloon opened after a probe costs nothing extra. The third exists because neither of
+    /// the first two proves anything about the token; see the note where it is made.
+    /// </para>
+    /// <para>
+    /// Nothing here names a permission. This product publishes no route saying what its access
+    /// token may do, so no claim is made about it: an empty list of missing rights means nothing
+    /// is known to be missing, never that everything is present.
+    /// </para>
+    /// </remarks>
+    public Task<LibraryHealth> ProbeAsync(CancellationToken ct) =>
+        IsConfigured ? health.GetAsync(ProbeOnceAsync, ct) : Task.FromResult(LibraryHealth.NotAsked);
+
+    private async Task<LibraryHealth> ProbeOnceAsync(CancellationToken ct)
+    {
+        try
+        {
+            // Liveness, and deliberately the cheapest route this product has: it answers without
+            // building the configuration document, so a container that is not up yet is told apart
+            // from one that is up and refusing the token. Nothing in the answer is read — that it
+            // answered as this product at all is the whole of the check.
+            using (await SendJsonAsync(new Uri(BaseAddress(Options.BaseUrl), "api/v1/status"), ct))
+            {
+            }
+        }
+        catch (PhotoLibraryException e)
+        {
+            return LibraryHealth.DidNotAnswer(e.Code);
+        }
+
+        string? version;
+        try
+        {
+            version = await ReadConfigurationAsync(ct);
+        }
+        catch (PhotoLibraryException e)
+        {
+            // It is answering; it would not answer this. Reported as reachable with the reason
+            // beside it, because "the container is down" and "the answer was unreadable" are two
+            // different afternoons for whoever has to fix it.
+            return LibraryHealth.Answered(version: null, failureCode: e.Code);
+        }
+
+        try
+        {
+            // The only question here that the token has to be right to answer. Measured against a
+            // running instance of this product: the liveness route and the configuration route both
+            // answer 200 with no credential at all, and 200 with a wrong one — they even hand out a
+            // picture credential to an anonymous caller — so neither of them can tell a working
+            // token from an expired one. The route this feature actually reads positions from
+            // refuses. Without this call a health line would go green for an installation whose
+            // token expired, which is the exact failure it exists to catch: this product's tokens
+            // last a year by default, so that is what a working installation turns into twelve
+            // months after somebody set it up.
+            //
+            // A small ordinary rectangle and one photograph asked for: the smallest well-formed
+            // form of the same question, and it resolves no file on disk, which is the one thing a
+            // probe must never make this product do.
+            using (await SendJsonAsync(GeoUrl(TokenCheckRectangle, count: 1), ct))
+            {
+            }
+        }
+        catch (PhotoLibraryException e)
+        {
+            return LibraryHealth.Answered(version, failureCode: e.Code);
+        }
+
+        return LibraryHealth.Answered(version);
+    }
 
     /// <summary>
     /// Photographs inside a rectangle, asked of the library directly.
@@ -116,19 +220,11 @@ public sealed class PhotoPrismClient(
         ArgumentNullException.ThrowIfNull(bounds);
         EnsureConfigured();
 
-        var opts = Options;
-
         // Clamped here rather than trusted to the far end, which caps this at a hundred thousand
         // and would happily serve tens of thousands into a browser that cannot draw them.
-        var count = Math.Clamp(Math.Min(limit, opts.MaxViewportCount), 1, ViewportCountCeiling);
+        var count = Math.Clamp(Math.Min(limit, Options.MaxViewportCount), 1, ViewportCountCeiling);
 
-        var url = new Uri(
-            BaseAddress(opts.BaseUrl),
-            "api/v1/geo?latlng=" + Uri.EscapeDataString(LatLng(bounds))
-            + "&count=" + count.ToString(CultureInfo.InvariantCulture)
-            + "&quality=" + Math.Clamp(opts.MinQuality, 0, 7).ToString(CultureInfo.InvariantCulture));
-
-        using var response = await SendJsonAsync(url, ct);
+        using var response = await SendJsonAsync(GeoUrl(bounds, count), ct);
 
         // The credential the picture routes need arrives on the answer to this call and refreshes
         // itself with every answer, so it is taken here rather than fetched separately. It never
@@ -183,6 +279,19 @@ public sealed class PhotoPrismClient(
             return new LibraryPhotoPage(photos, photos.Count >= count, DateTimeOffset.UtcNow);
         }
     }
+
+    /// <summary>
+    /// The address of a position query. One place for it, because the viewport and the check that
+    /// the token still works have to ask the library the same question — a check aimed at a
+    /// different operation proves the credential opens a door nothing in this feature walks
+    /// through.
+    /// </summary>
+    private Uri GeoUrl(Envelope bounds, int count) =>
+        new(
+            BaseAddress(Options.BaseUrl),
+            "api/v1/geo?latlng=" + Uri.EscapeDataString(LatLng(bounds))
+            + "&count=" + count.ToString(CultureInfo.InvariantCulture)
+            + "&quality=" + Math.Clamp(Options.MinQuality, 0, 7).ToString(CultureInfo.InvariantCulture));
 
     /// <summary>
     /// The rectangle, in the order this library states one: north, east, south, west.
@@ -321,8 +430,25 @@ public sealed class PhotoPrismClient(
     {
         EnsureConfigured();
 
-        await FetchPreviewTokenAsync(ct);
-        picturesStopped = false;
+        try
+        {
+            await FetchPreviewTokenAsync(ct);
+
+            // Reopened only on an answer, and never in the block below: with the originals out of
+            // reach a picture request is a deletion, so the byte path opens on evidence that the
+            // library is answering and on nothing else.
+            picturesStopped = false;
+        }
+        finally
+        {
+            // The held reading describes the library as it was before whatever the operator has
+            // just finished doing, and it is forgotten whether or not the call above succeeded.
+            // Forgetting only on success would make the button do least when it is pressed most: a
+            // recheck against a library that is still down would leave the health line describing
+            // the state before the fix attempt for the rest of the window, which is exactly the
+            // button that visibly does nothing this is here to remove.
+            health.Clear();
+        }
 
         logger.LogInformation(
             "Picture requests to the {Source} photo library were reopened by an operator recheck.", Source);
@@ -522,28 +648,66 @@ public sealed class PhotoPrismClient(
 
     private async Task<string> FetchPreviewTokenAsync(CancellationToken ct)
     {
+        await ReadConfigurationAsync(ct);
+
+        return previewToken ?? throw new PhotoLibraryException(
+            PhotoLibraryException.RejectedCode,
+            "The photo library did not say what credential its pictures are served under.");
+    }
+
+    /// <summary>
+    /// Reads the configuration answer, returning the version it names and taking the picture
+    /// credential from it. Null version where it names none.
+    /// </summary>
+    /// <remarks>
+    /// One place for this call, shared by the byte path and the health probe, because it is the
+    /// same call: the credential the pictures need and the version an operator quotes in a bug
+    /// report arrive in the same answer, and asking twice for the halves would double what this
+    /// installation costs its neighbour for no gain.
+    /// </remarks>
+    private async Task<string?> ReadConfigurationAsync(CancellationToken ct)
+    {
         var url = new Uri(BaseAddress(Options.BaseUrl), "api/v1/config");
         using var response = await SendJsonAsync(url, ct);
 
-        // The configuration answer carries it in the same header as every other answer; the body is
-        // read only when it does not.
+        // The answer carries the credential in the same header as every other answer; the body is
+        // read for the version, and for the credential when the header did not carry one.
         CapturePreviewToken(response);
 
-        if (previewToken is null)
+        JsonDocument document;
+        try
         {
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        }
+        catch (JsonException e)
+        {
+            throw new PhotoLibraryException(
+                PhotoLibraryException.RejectedCode,
+                "The photo library's configuration was not readable as JSON.", e);
+        }
 
-            if (document.RootElement.ValueKind == JsonValueKind.Object
+        using (document)
+        {
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            if (previewToken is null
                 && document.RootElement.TryGetProperty("previewToken", out var value)
                 && value.ValueKind == JsonValueKind.String
                 && PhotoLibraryHttp.IsSafeReference(value.GetString()))
             {
                 previewToken = value.GetString();
             }
-        }
 
-        return previewToken ?? throw new PhotoLibraryException(
-            PhotoLibraryException.RejectedCode,
-            "The photo library did not say what credential its pictures are served under.");
+            // Read as whatever string the product writes and never parsed into parts: this one
+            // states a build rather than a number, and a reader that split it on dots would turn a
+            // line an operator quotes into a line that lies.
+            return document.RootElement.TryGetProperty("version", out var version)
+                && version.ValueKind == JsonValueKind.String
+                ? version.GetString()
+                : null;
+        }
     }
 }

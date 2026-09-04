@@ -262,6 +262,16 @@ export interface LibraryPhotoLoadState {
    */
   readAt: string | null;
   /**
+   * The rectangle these positions were read for, in the form the server takes one. Null before
+   * anything has been read.
+   *
+   * Carried because it is the rectangle the library answered, which is not always the rectangle on
+   * screen: a balloon is opened after a pan as readily as before one. Anything that has to ask the
+   * server about a single photograph has to say where to look for it, and the only rectangle that
+   * is certain to contain it is the one it arrived in.
+   */
+  bbox: string | null;
+  /**
    * Where one picture is fetched from, with `{reference}` and `{size}` still in it. Null when this
    * library's pictures are stopped — the server's byte gate, published. A client reading null
    * requests no pictures rather than showing broken ones, which is the difference between a flag
@@ -289,6 +299,7 @@ const IDLE: LibraryPhotoLoadState = {
   truncated: false,
   omittedCount: 0,
   readAt: null,
+  bbox: null,
   pictureUrlTemplate: null,
   pictures: false,
   picturesSuppressed: false,
@@ -400,6 +411,7 @@ export function attachLibraryPhotoLoader(map: Map): () => void {
         truncated: collection.truncated,
         omittedCount: collection.omittedCount,
         readAt: collection.readAt,
+        bbox,
         pictureUrlTemplate: collection.pictureUrlTemplate,
         pictures: state.pictures,
         picturesSuppressed:
