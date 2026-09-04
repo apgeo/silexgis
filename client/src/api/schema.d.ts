@@ -5016,6 +5016,82 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/cross-section": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How big one cave's passages are, and over how much of the cave that was worked out. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveCrossSectionDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/pattern": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What kind of cave one survey's shape suggests, with every rule applied to reach it. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CavePatternDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{id}/hypsometry": {
         parameters: {
             query?: never;
@@ -16192,6 +16268,16 @@ export interface components {
             };
             isFullAdmin: boolean;
         };
+        CaveCrossSectionDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasReadings: boolean;
+            summary: null | components["schemas"]["CrossSectionSummary"];
+        };
         CaveDto: {
             /** Format: uuid */
             id: string;
@@ -16376,6 +16462,17 @@ export interface components {
             id: string;
             name: null | string;
             isPrimary: boolean;
+        };
+        CavePatternDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            suggestion: components["schemas"]["PatternSuggestion"];
+            network: null | components["schemas"]["PassageNetworkFigures"];
         };
         CavePermissionsDto: {
             canWrite: boolean;
@@ -16707,6 +16804,66 @@ export interface components {
         };
         /** @enum {unknown} */
         ConversionState: "notApplicable" | "pending" | "converted" | "unavailable" | "failed" | "deferred";
+        CrossSectionDistribution: {
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            minimum: number;
+            /** Format: double */
+            lowerQuartile: number;
+            /** Format: double */
+            median: number;
+            /** Format: double */
+            upperQuartile: number;
+            /** Format: double */
+            maximum: number;
+            /** Format: double */
+            mean: number;
+        };
+        CrossSectionElevationBand: {
+            /** Format: double */
+            fromM: number;
+            /** Format: double */
+            toM: number;
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: int32 */
+            areaStationCount: number;
+            width: null | components["schemas"]["CrossSectionDistribution"];
+            height: null | components["schemas"]["CrossSectionDistribution"];
+            area: null | components["schemas"]["CrossSectionDistribution"];
+        };
+        CrossSectionScaling: {
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: double */
+            exponent: number;
+            /** Format: double */
+            coefficient: number;
+            /** Format: double */
+            rSquared: number;
+        };
+        CrossSectionSummary: {
+            /** Format: int32 */
+            readingCount: number;
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: int32 */
+            widthStationCount: number;
+            /** Format: int32 */
+            heightStationCount: number;
+            /** Format: int32 */
+            areaStationCount: number;
+            width: null | components["schemas"]["CrossSectionDistribution"];
+            height: null | components["schemas"]["CrossSectionDistribution"];
+            widthHeightRatio: null | components["schemas"]["CrossSectionDistribution"];
+            area: null | components["schemas"]["CrossSectionDistribution"];
+            scaling: null | components["schemas"]["CrossSectionScaling"];
+            volume: components["schemas"]["PassageVolumeEstimate"];
+            /** Format: double */
+            bandWidthM: number;
+            bands: components["schemas"]["CrossSectionElevationBand"][];
+        };
         DashboardActivityItemDto: {
             kind: components["schemas"]["DashboardActivityKind"];
             /** Format: uuid */
@@ -18932,6 +19089,36 @@ export interface components {
             parentId: string;
             isPrimary: boolean;
         };
+        PassageNetworkFigures: {
+            /** Format: int32 */
+            nodeCount: number;
+            /** Format: int32 */
+            edgeCount: number;
+            /** Format: int32 */
+            componentCount: number;
+            /** Format: int32 */
+            reducedNodeCount: number;
+            /** Format: int32 */
+            cyclomaticNumber: number;
+            /** Format: int32 */
+            extremityCount: number;
+            /** Format: double */
+            clustering: null | number;
+        };
+        PassageVolumeEstimate: {
+            /** Format: double */
+            volumeM3: null | number;
+            /** Format: int32 */
+            legCount: number;
+            /** Format: int32 */
+            measuredLegCount: number;
+            /** Format: double */
+            lengthM: number;
+            /** Format: double */
+            measuredLengthM: number;
+            /** Format: double */
+            lengthFraction: null | number;
+        };
         PasswordChangeRequest: {
             currentPassword: string;
             newPassword: string;
@@ -18945,6 +19132,44 @@ export interface components {
             straightLineM: number;
             /** Format: double */
             sinuosity: null | number;
+        };
+        /** @enum {unknown} */
+        PatternCaveat: "figuresAreApproximated" | "networkIsIncomplete" | "networkCompletenessIsUnknown" | "noAltitudes" | "noCrossSections" | "noNetworkFigures";
+        /** @enum {unknown} */
+        PatternFigure: "loopsPerNode" | "deadEndFraction" | "clustering" | "orientationEntropy" | "meanAbsoluteDip" | "maximumDip" | "minimumDip" | "verticality" | "medianWidthHeightRatio";
+        PatternFigureValue: {
+            figure: components["schemas"]["PatternFigure"];
+            /** Format: double */
+            value: null | number;
+        };
+        /** @enum {unknown} */
+        PatternRule: "networkIsLooped" | "networkIsTreeLike" | "networkEndsOften" | "networkRings" | "bearingsAreConcentrated" | "passageIsSteep" | "passageIsLevel" | "profileOscillates" | "sectionIsWide" | "sectionIsTall";
+        /** @enum {unknown} */
+        PatternRuleOutcome: "notAssessable" | "didNotFire" | "fired";
+        PatternRuleTrace: {
+            rule: components["schemas"]["PatternRule"];
+            outcome: components["schemas"]["PatternRuleOutcome"];
+            supports: components["schemas"]["SpeleogeneticPatternKind"][];
+            /** Format: double */
+            weight: number;
+            figures: components["schemas"]["PatternFigureValue"][];
+        };
+        PatternScore: {
+            kind: components["schemas"]["SpeleogeneticPatternKind"];
+            /** Format: double */
+            score: number;
+        };
+        PatternSuggestion: {
+            pattern: components["schemas"]["SpeleogeneticPatternKind"];
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            scores: components["schemas"]["PatternScore"][];
+            rules: components["schemas"]["PatternRuleTrace"][];
+            /** Format: int32 */
+            assessableRuleCount: number;
+            /** Format: int32 */
+            firedRuleCount: number;
+            caveats: components["schemas"]["PatternCaveat"][];
         };
         PermissionGroupDto: {
             /** Format: uuid */
@@ -19732,6 +19957,8 @@ export interface components {
         };
         /** @enum {unknown} */
         SortKey: "created" | "updated" | "title" | "owner" | "proximity" | "occurred";
+        /** @enum {unknown} */
+        SpeleogeneticPatternKind: "insufficient" | "undetermined" | "vadoseBranchwork" | "waterTable" | "looping" | "angularMaze";
         /** @enum {unknown} */
         SpeologieAction: "create" | "update" | "skip" | null;
         SpeologieBasinDto: {
