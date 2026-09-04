@@ -4,13 +4,18 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shouldly;
+using SilexGis.Api.Features.PhotoLibraries;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
+using SilexGis.Domain.Entities;
 using SilexGis.Domain.PhotoLibraries;
 using SilexGis.Infrastructure.PhotoLibraries;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
 
@@ -59,6 +64,22 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
 
     private const string LoneFeatureUrl =
         $"/api/v1/photo-libraries/photoprism/photographs/{LonePhotographReference}/feature?bbox={Bbox}";
+
+    /// <summary>
+    /// A third invented photograph, again somewhere nothing else in this suite builds, for the case
+    /// that creates an object with a grant narrowed to one kind.
+    /// </summary>
+    private const string ThirdPhotographReference = "cc33dd44ee55";
+
+    private const string ThirdFeatureUrl =
+        $"/api/v1/photo-libraries/photoprism/photographs/{ThirdPhotographReference}/feature?bbox={Bbox}";
+
+    /// <summary>
+    /// The kind a narrowed grant is written for. Chosen because the taxonomy gives it no properties
+    /// schema, so what this case is about is the right and not whether that kind's attributes will
+    /// hold the two lines saying where the position came from.
+    /// </summary>
+    private const string NarrowedKindCode = "pit";
 
     /// <summary>An invented rectangle whose four numbers all differ, so a transposition shows.</summary>
     private const string Bbox = "21.5,45.125,24.25,46.75";
@@ -766,6 +787,13 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         var envelope = await JsonAsync(admin, $"/api/v1/features/{id}");
         envelope.GetProperty("entrance").GetProperty("caveFeatureId").GetString().ShouldBe(caveId);
 
+        // The position is the library's on this path too, and it is asserted here rather than left
+        // to the cave case: the entrance is the row the coordinate lives on, and a body able to
+        // nudge it would be the whole defect this route is built to make impossible.
+        var coordinates = envelope.GetProperty("feature").GetProperty("geometry").GetProperty("coordinates");
+        coordinates[0].GetDouble().ShouldBe(22.5);
+        coordinates[1].GetDouble().ShouldBe(45.5);
+
         // A camera's own fix is a GPS reading, and saying so is what lets somebody later tell this
         // position from one that was dragged onto a map.
         envelope.GetProperty("entrance").GetProperty("positionQuality").GetString().ShouldBe("gps");
@@ -794,7 +822,149 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         library.Calls.ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A reference of a shape this application will not send anywhere is refused before anything is
+    /// asked of anybody, on the route that writes exactly as on the routes that read.
+    /// </summary>
+    [Fact]
+    public async Task A_reference_this_application_would_not_send_is_refused_before_the_library_is_asked()
+    {
+        library.AnswersGeo(OnePhotograph);
+        var before = await FeatureCountAsync();
+
+        var refused = await PostAsync(
+            admin,
+            $"/api/v1/photo-libraries/photoprism/photographs/aa11.bb22/feature?bbox={Bbox}",
+            new { kind = "cave", name = "Should not exist" });
+
+        refused.Status.ShouldBe(HttpStatusCode.NotFound, refused.Body);
+        CodeOf(refused.Body).ShouldBe(PhotoLibraryEndpoints.NotFoundCode);
+        library.Calls.ShouldBeEmpty();
+        (await FeatureCountAsync()).ShouldBe(before);
+    }
+
+    /// <summary>
+    /// A photograph missing from an answer that stopped at its limit is not the same fact as a
+    /// photograph the library no longer holds, and must not be reported as one.
+    /// </summary>
+    /// <remarks>
+    /// The rectangle is asked under the limit the map draws under, which usually makes this
+    /// deterministic — a pin on the screen came out of that same answer. In a rectangle holding
+    /// more photographs than the limit it stops being deterministic, and the reader is then looking
+    /// at a pin they can click while being told it does not exist. The distinction is worth a code
+    /// of its own because the two have different ways out: this one is answered by a smaller
+    /// rectangle, and "it is gone" is answered by nothing at all.
+    /// </remarks>
+    [Fact]
+    public async Task A_photograph_missing_from_an_answer_that_was_cut_short_is_not_reported_as_gone()
+    {
+        library.AnswersGeo(FullPageOfPhotographs);
+        var before = await FeatureCountAsync();
+
+        var refused = await PostAsync(
+            admin,
+            $"/api/v1/photo-libraries/photoprism/photographs/ee55ff66aa77/feature?bbox={Bbox}",
+            new { kind = "cave", name = "Should not exist" });
+
+        refused.Status.ShouldBe(HttpStatusCode.NotFound, refused.Body);
+        CodeOf(refused.Body).ShouldBe("photo_library.answer_truncated");
+        (await FeatureCountAsync()).ShouldBe(before);
+    }
+
+    /// <summary>
+    /// A grant narrowed to one of the installation's own kinds opens that kind and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The kind and the type in the body are both the caller's to write, and only one of them
+    /// describes what the row will be: a cave and an entrance are stored with no feature type at
+    /// all. So a create decided against the type the body happens to carry would let "may create
+    /// springs" create a cave — and the cave that arrived would carry no type, so nothing anybody
+    /// looked at afterwards would show where the right had come from.
+    /// </para>
+    /// <para>
+    /// The second half is what keeps the first half honest. The same grant, used for the kind it was
+    /// actually given for, creates — otherwise a rule that refused this caller everything would pass
+    /// the first half and prove nothing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_grant_narrowed_to_one_kind_of_place_does_not_reach_the_cave_path()
+    {
+        using var stub = new LibraryStub();
+        stub.AnswersGeo(ThirdPhotograph);
+
+        // The audience is opened, because this is a case about the create right and not about the
+        // audience: with the shipped setting the only accounts inside it are full administrators,
+        // whose rights are settled before any entry is looked at.
+        using var open = Configured(stub, extra: [("PhotoLibraries:Audience", "SignedIn")]);
+
+        var email = $"pl-nar-{Guid.NewGuid():N}"[..20] + "@t.local";
+        var subject = await AuthHelper.CreateUserAsync(open, GlobalRoles.Viewer, email);
+        using var caller = await AuthHelper.BearerClientAsync(open, email);
+
+        var kindId = await KindIdAsync(open, NarrowedKindCode);
+        await GrantCreateOfOneKindAsync(open, subject, kindId);
+
+        var refused = await PostAsync(caller, ThirdFeatureUrl, new
+        {
+            kind = "cave",
+            name = "Should not exist",
+            featureTypeId = kindId,
+        });
+
+        refused.Status.ShouldBe(HttpStatusCode.Forbidden, refused.Body);
+        CodeOf(refused.Body).ShouldBe("access.create_forbidden");
+
+        // And refused without asking the library anything: everything this caller may do is settled
+        // from their request and this installation's own rows, so a request that ends in a refusal
+        // must not first become a live request at somebody else's container.
+        stub.Calls.ShouldBeEmpty();
+
+        var created = await PostAsync(caller, ThirdFeatureUrl, new
+        {
+            kind = "generic",
+            name = "An invented place from a picture",
+            featureTypeId = kindId,
+        });
+
+        created.Status.ShouldBe(HttpStatusCode.Created, created.Body);
+        created.Json.GetProperty("kind").GetString().ShouldBe("generic");
+    }
+
     // ------------------------------------------------------------------------------------ support
+
+    /// <summary>
+    /// The id of one of this installation's own kinds, by the code its taxonomy names it with.
+    /// </summary>
+    private static async Task<long> KindIdAsync(SilexGisApiFactory host, string code)
+    {
+        using var scope = host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.FeatureTypes.Where(t => t.Code == code).Select(t => t.Id).FirstAsync();
+    }
+
+    /// <summary>
+    /// Grants exactly "may create places of this one kind, anywhere" — a configuration the
+    /// permission model supports, and the one this route must not widen into something else.
+    /// </summary>
+    private static async Task GrantCreateOfOneKindAsync(
+        SilexGisApiFactory host, Guid subjectId, long featureTypeId)
+    {
+        using var scope = host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = subjectId,
+            Effect = AccessEffect.Allow,
+            Domain = AccessDomain.Features,
+            Actions = AccessAction.Create,
+            ScopeKind = AccessScopeKind.All,
+            FeatureTypeId = featureTypeId,
+        });
+        await db.SaveChangesAsync();
+    }
 
     /// <summary>
     /// A host pointed at one library, or at two when a test supplies a stub for the second. Left at
@@ -863,6 +1033,35 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
     {"type":"FeatureCollection","features":[
       {"id":"1","type":"Feature","geometry":{"type":"Point","coordinates":[22.5,45.5]},
        "properties":{"Hash":"aa11bb22cc33","UID":"psinvented1","Title":"An invented photograph",
+                     "TakenAt":"2026-02-03T04:05:06Z"}}
+    ]}
+    """;
+
+    /// <summary>
+    /// A full page: as many photographs as this host asks the library for, so the answer counts as
+    /// cut short — which is what a rectangle holding more photographs than the map draws looks like.
+    /// None of them is the one the case then asks for.
+    /// </summary>
+    private const string FullPageOfPhotographs = """
+    {"type":"FeatureCollection","features":[
+      {"id":"10","type":"Feature","geometry":{"type":"Point","coordinates":[22.1,45.9]},
+       "properties":{"Hash":"aa00000000a1","UID":"psinvented11","Title":"One of many"}},
+      {"id":"11","type":"Feature","geometry":{"type":"Point","coordinates":[22.2,45.9]},
+       "properties":{"Hash":"aa00000000a2","UID":"psinvented12","Title":"One of many"}},
+      {"id":"12","type":"Feature","geometry":{"type":"Point","coordinates":[22.3,45.9]},
+       "properties":{"Hash":"aa00000000a3","UID":"psinvented13","Title":"One of many"}},
+      {"id":"13","type":"Feature","geometry":{"type":"Point","coordinates":[22.4,45.9]},
+       "properties":{"Hash":"aa00000000a4","UID":"psinvented14","Title":"One of many"}},
+      {"id":"14","type":"Feature","geometry":{"type":"Point","coordinates":[22.5,45.9]},
+       "properties":{"Hash":"aa00000000a5","UID":"psinvented15","Title":"One of many"}}
+    ]}
+    """;
+
+    /// <summary>The photograph the narrowed-grant case builds from, again where nothing else does.</summary>
+    private const string ThirdPhotograph = """
+    {"type":"FeatureCollection","features":[
+      {"id":"3","type":"Feature","geometry":{"type":"Point","coordinates":[21.874311,46.203785]},
+       "properties":{"Hash":"cc33dd44ee55","UID":"psinvented7","Title":"A photograph of somewhere else",
                      "TakenAt":"2026-02-03T04:05:06Z"}}
     ]}
     """;

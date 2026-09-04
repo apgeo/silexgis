@@ -52,6 +52,14 @@ public static class PhotoLibraryFeatureEndpoints
     /// </summary>
     public const string PhotographNotFoundCode = "photo_library.photograph_not_found";
 
+    /// <summary>
+    /// The library's answer for that rectangle stopped at the limit it was asked under before the
+    /// photograph was reached, so whether it still holds it is not known. Kept apart from "not
+    /// found" because the way out of it is different: the same request repeated does the same thing
+    /// for ever, while a smaller rectangle carries fewer photographs and reaches this one.
+    /// </summary>
+    public const string AnswerTruncatedCode = "photo_library.answer_truncated";
+
     /// <summary>A position the library reported that is not a position on the earth.</summary>
     public const string PositionInvalidCode = "photo_library.position_invalid";
 
@@ -113,7 +121,9 @@ public static class PhotoLibraryFeatureEndpoints
     /// The right asked is the caller's ordinary right to create a feature, decided against where the
     /// object is going, and nothing else — with one addition on one path: naming a cave to hang an
     /// entrance on is a write on that cave, because a cave's own point on the map is its main
-    /// entrance's and adding the first entrance moves it.
+    /// entrance's and adding the first entrance moves it. All of it is settled before the library is
+    /// asked anything, so a request that ends in a refusal never becomes traffic at a neighbouring
+    /// container.
     /// </para>
     /// <para>
     /// Everything goes through the service that owns feature creation, the way an import or a hand
@@ -140,6 +150,7 @@ public static class PhotoLibraryFeatureEndpoints
         IOptions<PhotoLibraryOptions> options,
         IOptions<MapOptions> mapOptions,
         IAccessContextAccessor accessAccessor,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -173,39 +184,13 @@ public static class PhotoLibraryFeatureEndpoints
             return ApiProblems.NotFound(PhotoLibraryEndpoints.NotFoundCode);
         }
 
-        LibraryPhoto photo;
-        try
-        {
-            var found = await LocateAsync(
-                library,
-                reference,
-                new Envelope(box.West, box.East, box.South, box.North),
-                Math.Max(1, mapOptions.Value.MaxPoints),
-                ct);
-            if (found is not { } located)
-            {
-                return ApiProblems.NotFound(PhotographNotFoundCode);
-            }
-
-            photo = located;
-        }
-        catch (PhotoLibraryException e)
-        {
-            // A library that did not answer fails the request. Guessing a position, or falling back
-            // to anything at all, would put a coordinate in the registry that no camera measured.
-            return ApiProblems.ServiceUnavailable(e.Code, e.Message);
-        }
-
-        if (!IsOnEarth(photo.Longitude, photo.Latitude))
-        {
-            return ApiProblems.BadRequest(
-                PositionInvalidCode, "The library reported a position that is not on the earth.");
-        }
-
-        // No altitude, and none invented: a library's position feed carries none, and a Z of zero
-        // would read as sea level rather than as silence.
-        var point = new Point(photo.Longitude, photo.Latitude) { SRID = 4326 };
-
+        // Everything the caller may and may not do is settled here, before the neighbouring library
+        // is asked anything at all. Nothing below this block reads the library's answer to decide a
+        // right — the context a create is judged against is the named cave and the requested kind,
+        // both of which are in hand already — and a request that is going to be refused must not
+        // first become a live request at somebody else's container. Otherwise an account inside the
+        // audience with no right to create anything can drive one outbound round trip per attempt
+        // through this installation and be refused after every one of them.
         Feature? cave = null;
         if (request.Kind == FeatureKind.CaveEntrance)
         {
@@ -228,13 +213,66 @@ public static class PhotoLibraryFeatureEndpoints
         // under, where there is one — so a grant scoped to one subtree reaches exactly as far as it
         // was meant to. No club binding is requested: this dialogue asks for a kind and a name, and
         // an object created here belongs to whoever created it until somebody says otherwise.
+        //
+        // The installation's own kind travels only for the kind that has one. A cave and an entrance
+        // are stored with no feature type at all, so handing the body's field over on their behalf
+        // would decide their creation against a type the created row will not have — and a grant
+        // narrowed to one kind of place ("may create springs") would then admit a cave, which is a
+        // wider right than anybody granted.
         var createFacts = await CreateContext.ParentCreateFactsAsync(
-            db, ctx, cave?.Id, cavingGroupId: null, request.Kind, ct, request.FeatureTypeId);
+            db, ctx, cave?.Id, cavingGroupId: null, request.Kind, ct,
+            request.Kind == FeatureKind.Generic ? request.FeatureTypeId : null);
         if (createFacts is null
             || !CreateRules.MayCreate(ctx, AccessDomain.Features, createFacts))
         {
             return ApiProblems.Forbidden(CreateRules.ForbiddenCode);
         }
+
+        LibraryPhoto photo;
+        try
+        {
+            var (found, truncated) = await LocateAsync(
+                library,
+                reference,
+                new Envelope(box.West, box.East, box.South, box.North),
+                Math.Max(1, mapOptions.Value.MaxPoints),
+                ct);
+            if (found is not { } located)
+            {
+                // Two silences, and they are not the same silence. A library that no longer reports
+                // that photograph is one answer; an answer that stopped at its limit before reaching
+                // it is another, and only the second has a way out — the same request repeated does
+                // the same thing for ever, while a smaller rectangle holds fewer photographs and
+                // reaches this one.
+                return ApiProblems.NotFound(truncated ? AnswerTruncatedCode : PhotographNotFoundCode);
+            }
+
+            photo = located;
+        }
+        catch (PhotoLibraryException e)
+        {
+            // A library that did not answer fails the request. Guessing a position, or falling back
+            // to anything at all, would put a coordinate in the registry that no camera measured.
+            //
+            // Logged as well as returned: "nobody can create anything from a photograph" is
+            // diagnosed from this side, and a refusal that only ever reached the browser leaves the
+            // operator with nothing to read.
+            loggerFactory.CreateLogger(typeof(PhotoLibraryFeatureEndpoints)).LogWarning(
+                e, "The {Source} photo library did not answer while a feature was being created "
+                + "from one of its photographs.", which);
+
+            return ApiProblems.ServiceUnavailable(e.Code, e.Message);
+        }
+
+        if (!IsOnEarth(photo.Longitude, photo.Latitude))
+        {
+            return ApiProblems.BadRequest(
+                PositionInvalidCode, "The library reported a position that is not on the earth.");
+        }
+
+        // No altitude, and none invented: a library's position feed carries none, and a Z of zero
+        // would read as sea level rather than as silence.
+        var point = new Point(photo.Longitude, photo.Latitude) { SRID = 4326 };
 
         // Asked before anything is written, so the answer is what was already standing there rather
         // than a list this request has just added itself to.
@@ -277,17 +315,27 @@ public static class PhotoLibraryFeatureEndpoints
 
     /// <summary>
     /// The photograph the library reports under <paramref name="reference"/> inside
-    /// <paramref name="bounds"/>, or null when it reports none by that name there.
+    /// <paramref name="bounds"/>, and whether the answer it was picked out of had been cut short.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Deliberately the overlay's own question and not a new one. Both products already answer it:
     /// one asks its neighbour over the network exactly as it does for a viewport, and the other
     /// answers from the whole located library it holds in memory, so neither needs a route this
-    /// application has never exercised. Asking with the limit the map answers under is what makes it
-    /// deterministic — a photograph drawn on the screen was inside that answer, so it is inside this
-    /// one.
+    /// application has never exercised.
+    /// </para>
+    /// <para>
+    /// Asking with the limit the map answers under is what usually makes it deterministic — a
+    /// photograph drawn on the screen was inside that answer, so it is inside this one. That holds
+    /// only while the answer was not truncated, and in a rectangle holding more photographs than the
+    /// limit it does not: neither product promises to order two answers to the same question the
+    /// same way, and one of them re-asks its neighbour while the other walks a reading that may have
+    /// been refreshed in between. So the truncation travels back with the result, because a
+    /// photograph the reader can see and click missing from the re-query is not the same fact as a
+    /// photograph the library no longer holds.
+    /// </para>
     /// </remarks>
-    private static async Task<LibraryPhoto?> LocateAsync(
+    private static async Task<(LibraryPhoto? Photo, bool Truncated)> LocateAsync(
         IPhotoLibrary library, string reference, Envelope bounds, int limit, CancellationToken ct)
     {
         var page = await library.PhotosInAsync(bounds, limit, ct);
@@ -295,11 +343,11 @@ public static class PhotoLibraryFeatureEndpoints
         {
             if (string.Equals(photo.Reference, reference, StringComparison.Ordinal))
             {
-                return photo;
+                return (photo, page.Truncated);
             }
         }
 
-        return null;
+        return (null, page.Truncated);
     }
 
     /// <summary>

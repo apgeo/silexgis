@@ -83,6 +83,10 @@ public sealed class PhotoLibraryFeatureRequestValidator : AbstractValidator<Phot
 /// the forty-first picture of a hole already recorded or a second hole four metres from it. An
 /// empty list is not a promise that nothing is there: the search runs over what this caller may
 /// both read and place exactly, so an object they may read but not place is left out on purpose.
+/// A full list is not a promise of completeness either — it stops at a handful of the nearest,
+/// because past that a warning read at a glance becomes a list nobody reads, and it does not
+/// currently say that it stopped. In a place that is already densely recorded that reads as five
+/// neighbours when there are twenty, which the reader would rather know.
 /// </param>
 public sealed record PhotoLibraryFeatureCreatedDto(
     Guid FeatureId,
