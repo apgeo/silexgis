@@ -17,6 +17,7 @@ import { CLOSEST_APPROACH_LAYER_ID } from '../../map/closestApproachLayer.ts';
 import {
   getLibraryPhotoLoadStates,
   libraryPhotoSourceOf,
+  setLibraryPhotoPictures,
   subscribeLibraryPhotoLoadStates,
   type LibraryPhotoLoadStates,
 } from '../../map/libraryPhotoLayer.ts';
@@ -449,6 +450,25 @@ export default function LayerPanel({
                   })}
                 </Typography.Text>
               )}
+              {/* Pins or the photographs themselves. Per library, because one may be worth looking
+                  at as pictures while the other is not, and because the two answer from libraries
+                  with different amounts in them. */}
+              <div style={{ marginTop: 4 }}>
+                <Checkbox
+                  checked={state?.pictures ?? false}
+                  onChange={(e) => setLibraryPhotoPictures(library.source, e.target.checked)}
+                >
+                  <span style={{ fontSize: 12 }}>{t('libraryPhotos.asPictures')}</span>
+                </Checkbox>
+                {/* Said out loud rather than left looking broken. A switch that silently does
+                    nothing is worse than no switch, and this one stops working exactly when the map
+                    is busiest — which is when somebody is most likely to assume it failed. */}
+                {state?.picturesSuppressed && (
+                  <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
+                    {t('libraryPhotos.picturesSuppressed')}
+                  </Typography.Paragraph>
+                )}
+              </div>
             </div>
           );
         })}

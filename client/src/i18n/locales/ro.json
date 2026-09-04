@@ -3554,6 +3554,8 @@
     "notConfigured": "Nicio fototecă nu este conectată la această instalare.",
     "takenAt": "Fotografiată {{when}}",
     "noTitle": "Fără titlu",
-    "thumbnailFailed": "Fotografia nu a putut fi încărcată."
+    "thumbnailFailed": "Fotografia nu a putut fi încărcată.",
+    "asPictures": "Arată fotografiile propriu-zise",
+    "picturesSuppressed": "Prea multe fotografii aici pentru a fi arătate ca imagini — apropie harta."
   }
 }

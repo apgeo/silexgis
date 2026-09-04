@@ -3554,6 +3554,8 @@
     "notConfigured": "No photo library is connected to this installation.",
     "takenAt": "Taken {{when}}",
     "noTitle": "Untitled",
-    "thumbnailFailed": "The photograph could not be loaded."
+    "thumbnailFailed": "The photograph could not be loaded.",
+    "asPictures": "Show the photographs themselves",
+    "picturesSuppressed": "Too many photographs here to show them as pictures — zoom in."
   }
 }

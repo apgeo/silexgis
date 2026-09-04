@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type Map from 'ol/Map';
+import type FeatureLike from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
 import { transformExtent } from 'ol/proj';
@@ -50,6 +51,8 @@ interface SourceState {
   enabled: boolean;
   /** Monotonic per library, so a slow answer for one cannot discard the other's. */
   requestSeq: number;
+  /** Whether the reader asked to see the photographs themselves rather than pins. */
+  pictures: boolean;
 }
 
 // `globalThis.Map` because `Map` in this module is OpenLayers' — the same shadowing the layer
@@ -59,7 +62,7 @@ const states = new globalThis.Map<LibraryPhotoSource, SourceState>();
 function stateOf(source: LibraryPhotoSource): SourceState {
   let state = states.get(source);
   if (!state) {
-    state = { features: new VectorSource(), enabled: false, requestSeq: 0 };
+    state = { features: new VectorSource(), enabled: false, requestSeq: 0, pictures: false };
     states.set(source, state);
   }
   return state;
@@ -95,6 +98,88 @@ const pinStyle = (fill: string) =>
 // shared foreign-photograph hue, which is wrong-looking rather than invisible.
 const styles = new globalThis.Map<LibraryPhotoSource, Style[]>();
 
+/**
+ * Above this many photographs in view, pins are drawn whatever the reader asked for.
+ *
+ * A count and not a zoom. Zoom is a proxy for density and a poor one: a valley holding four hundred
+ * photographs and a country holding four hundred are the same problem for the browser and a very
+ * different one for a zoom threshold. The cost being bounded here is real — every picture is a
+ * request through this application into a neighbouring library, and the comment above is the other
+ * half of it: a style built per feature is what turns a few thousand points into a map that will
+ * not pan.
+ */
+export const LIBRARY_PHOTO_PICTURE_LIMIT = 180;
+
+/**
+ * References whose picture failed, per library. A failed picture falls back to its pin and is
+ * never asked for again.
+ *
+ * This is the balloon's rule, and it binds harder here. A failure in a balloon is one request; a
+ * failure in a marker style is one per photograph in view, on every frame. And against a library
+ * whose originals have gone away it is not merely wasteful: in one of the two products, asking for
+ * a picture whose original cannot be resolved is itself what removes the photograph from the index.
+ * A retry loop would be a deletion loop.
+ */
+const failedPictures = new globalThis.Map<LibraryPhotoSource, Set<string>>();
+
+/** Loaded picture styles, keyed by library and reference, so panning re-uses rather than re-fetches. */
+const pictureStyles = new globalThis.Map<string, Style>();
+const pictureLoads = new Set<string>();
+
+function pictureStyleFor(
+  source: LibraryPhotoSource,
+  reference: string,
+  template: string,
+): Style | undefined {
+  const key = `${source}\u0000${reference}`;
+  const ready = pictureStyles.get(key);
+  if (ready) {
+    return ready;
+  }
+  if (pictureLoads.has(key) || failedPictures.get(source)?.has(reference)) {
+    return undefined; // in flight, or already known bad — the pin stands in either case
+  }
+
+  // Replaced through a function rather than with a string: `$&` and its siblings are substitution
+  // syntax in a replacement, and a reference is foreign text that must not reach into the template
+  // around it. The same guard the balloon applies to the same value.
+  const encoded = encodeURIComponent(reference);
+  const src = template.replace('{reference}', () => encoded).replace('{size}', () => 'small');
+
+  pictureLoads.add(key);
+  const image = new Image();
+  image.decoding = 'async';
+  image.addEventListener('load', () => {
+    pictureLoads.delete(key);
+    pictureStyles.set(
+      key,
+      new Style({
+        image: new Icon({
+          img: image,
+          // A small square, drawn a little larger than the pin it replaces so that a photograph
+          // reads as a photograph at a glance rather than as a slightly odd marker.
+          width: 34,
+          height: 34,
+          declutterMode: 'obstacle',
+        }),
+      }),
+    );
+    // The frame that asked for this one has long since been drawn: ask for another.
+    stateOf(source).features.changed();
+  });
+  image.addEventListener('error', () => {
+    pictureLoads.delete(key);
+    let failed = failedPictures.get(source);
+    if (!failed) {
+      failed = new Set<string>();
+      failedPictures.set(source, failed);
+    }
+    failed.add(reference);
+  });
+  image.src = src;
+  return undefined;
+}
+
 function styleOf(source: LibraryPhotoSource): Style[] {
   let style = styles.get(source);
   if (!style) {
@@ -106,12 +191,38 @@ function styleOf(source: LibraryPhotoSource): Style[] {
   return style;
 }
 
+/**
+ * The style one photograph is drawn in.
+ *
+ * The pin is the answer in every case but one: pictures asked for, few enough of them to be worth
+ * the requests, a library that publishes a picture URL at all, and a picture that has already
+ * arrived. Anything else — too many, none asked for, stopped at the server's byte gate, still
+ * loading, or loaded and failed — is a pin. Which is the point: the pin is the thing that can
+ * never go missing, so a photograph is never silently absent from the map.
+ */
+function styleForFeature(source: LibraryPhotoSource, feature: FeatureLike): Style[] {
+  const pin = styleOf(source);
+  const state = stateOf(source);
+  if (!state.pictures) {
+    return pin;
+  }
+  const load = getLibraryPhotoLoadState(source);
+  if (!load.pictureUrlTemplate || load.shownCount > LIBRARY_PHOTO_PICTURE_LIMIT) {
+    return pin;
+  }
+  const reference = feature.get('reference') as unknown;
+  if (typeof reference !== 'string' || reference.length === 0) {
+    return pin;
+  }
+  return [pictureStyleFor(source, reference, load.pictureUrlTemplate) ?? pin[0]];
+}
+
 export function createLibraryPhotoLayer(source: LibraryPhotoSource): VectorLayer {
   // Stacking comes from the overlay group's collection order, not a fixed zIndex — the group
   // renumbers every child on add and remove, so a zIndex passed here would be overwritten.
   const layer = new VectorLayer({
     source: stateOf(source).features,
-    style: () => styleOf(source),
+    style: (feature) => styleForFeature(source, feature),
     declutter: declutterOption(),
   });
   layer.set('id', libraryPhotoLayerId(source));
@@ -157,6 +268,16 @@ export interface LibraryPhotoLoadState {
    * and a guard.
    */
   pictureUrlTemplate: string | null;
+  /** Whether the reader asked to see the photographs themselves rather than pins. */
+  pictures: boolean;
+  /**
+   * Asked for, and refused because there are too many here.
+   *
+   * Carried rather than recomputed by whatever displays it, so the rule lives in one place: a
+   * surface that worked out for itself when pictures stop would be a second copy of the ceiling,
+   * and the two would part company the first time either moved.
+   */
+  picturesSuppressed: boolean;
   reach: 'idle' | 'loading' | 'ok' | 'unreachable';
 }
 
@@ -169,6 +290,8 @@ const IDLE: LibraryPhotoLoadState = {
   omittedCount: 0,
   readAt: null,
   pictureUrlTemplate: null,
+  pictures: false,
+  picturesSuppressed: false,
   reach: 'idle',
 };
 
@@ -227,6 +350,33 @@ export function setLibraryPhotosEnabled(source: LibraryPhotoSource, value: boole
   }
 }
 
+/**
+ * Switches one library's overlay between pins and the photographs themselves.
+ *
+ * Only the styling changes: nothing is re-fetched, because the positions already drawn are the same
+ * positions either way. Turning it off keeps whatever pictures have already been loaded, so turning
+ * it back on is instant and costs the library nothing.
+ */
+export function setLibraryPhotoPictures(source: LibraryPhotoSource, value: boolean): void {
+  const state = stateOf(source);
+  if (state.pictures === value) {
+    return;
+  }
+  state.pictures = value;
+  const load = getLibraryPhotoLoadState(source);
+  publish(source, {
+    ...load,
+    pictures: value,
+    picturesSuppressed: value && load.shownCount > LIBRARY_PHOTO_PICTURE_LIMIT,
+  });
+  state.features.changed();
+}
+
+/** Whether one library is currently drawing photographs rather than pins. */
+export function getLibraryPhotoPictures(source: LibraryPhotoSource): boolean {
+  return stateOf(source).pictures;
+}
+
 /** Bbox loading on moveend (debounced), stale answers discarded — one request per library. */
 export function attachLibraryPhotoLoader(map: Map): () => void {
   let timer: number | undefined;
@@ -251,6 +401,9 @@ export function attachLibraryPhotoLoader(map: Map): () => void {
         omittedCount: collection.omittedCount,
         readAt: collection.readAt,
         pictureUrlTemplate: collection.pictureUrlTemplate,
+        pictures: state.pictures,
+        picturesSuppressed:
+          state.pictures && collection.features.length > LIBRARY_PHOTO_PICTURE_LIMIT,
         reach: 'ok',
       });
     } catch {

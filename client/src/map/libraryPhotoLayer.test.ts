@@ -17,6 +17,9 @@ const {
   libraryPhotoLayerId,
   libraryPhotoSourceOf,
   setLibraryPhotosEnabled,
+  setLibraryPhotoPictures,
+  getLibraryPhotoPictures,
+  LIBRARY_PHOTO_PICTURE_LIMIT,
 } = await import('./libraryPhotoLayer.ts');
 
 /** One photograph, in the shape the endpoint answers with. Invented, and deliberately not a place. */
@@ -221,5 +224,87 @@ describe('libraryPhotoLayer loading', () => {
     moveEnd();
     await vi.advanceTimersByTimeAsync(300);
     expect(fetchLibraryPhotoFeatures).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('drawing the photographs themselves', () => {
+  /** Many photographs in one answer, so the ceiling can be crossed without inventing a new shape. */
+  const many = (count: number) => {
+    const one = collection().features[0];
+    return collection({
+      features: Array.from({ length: count }, (_, i) => ({
+        ...one,
+        properties: { ...one.properties, reference: `ref-${i}` },
+      })),
+    });
+  };
+
+  it('is off until it is asked for, and reports itself', async () => {
+    expect(getLibraryPhotoPictures('photoprism')).toBe(false);
+    setLibraryPhotoPictures('photoprism', true);
+    expect(getLibraryPhotoPictures('photoprism')).toBe(true);
+    expect(getLibraryPhotoLoadState('photoprism').pictures).toBe(true);
+    setLibraryPhotoPictures('photoprism', false);
+    expect(getLibraryPhotoLoadState('photoprism').pictures).toBe(false);
+  });
+
+  it('draws pins past the ceiling, and says that is why', async () => {
+    fetchLibraryPhotoFeatures.mockResolvedValue(many(LIBRARY_PHOTO_PICTURE_LIMIT + 1));
+    setLibraryPhotoPictures('photoprism', true);
+    const layer = createLibraryPhotoLayer('photoprism');
+    const detach = attachLibraryPhotoLoader(stubMap().map);
+    setLibraryPhotosEnabled('photoprism', true);
+    await vi.waitFor(() =>
+      expect(getLibraryPhotoLoadState('photoprism').shownCount).toBe(LIBRARY_PHOTO_PICTURE_LIMIT + 1),
+    );
+
+    // Refused, and the refusal is carried rather than left for a surface to work out again.
+    expect(getLibraryPhotoLoadState('photoprism').picturesSuppressed).toBe(true);
+
+    // And what is actually drawn is the pin — the check that matters, because the flag above is a
+    // claim about the style and this is the style.
+    const feature = layer.getSource()!.getFeatures()[0]!;
+    const style = (layer.getStyleFunction() as (f: unknown, r: number) => Style[])(feature, 1);
+    const src = (style[0]!.getImage() as Icon).getSrc() ?? '';
+    expect(src.startsWith('data:image/svg+xml')).toBe(true);
+
+    detach();
+    setLibraryPhotosEnabled('photoprism', false);
+    setLibraryPhotoPictures('photoprism', false);
+  });
+
+  it('stays under the ceiling without suppressing', async () => {
+    fetchLibraryPhotoFeatures.mockResolvedValue(many(LIBRARY_PHOTO_PICTURE_LIMIT));
+    setLibraryPhotoPictures('photoprism', true);
+    createLibraryPhotoLayer('photoprism');
+    const detach = attachLibraryPhotoLoader(stubMap().map);
+    setLibraryPhotosEnabled('photoprism', true);
+    await vi.waitFor(() =>
+      expect(getLibraryPhotoLoadState('photoprism').shownCount).toBe(LIBRARY_PHOTO_PICTURE_LIMIT),
+    );
+    expect(getLibraryPhotoLoadState('photoprism').picturesSuppressed).toBe(false);
+
+    detach();
+    setLibraryPhotosEnabled('photoprism', false);
+    setLibraryPhotoPictures('photoprism', false);
+  });
+
+  it('draws a pin for a library that publishes no picture URL, however it is asked', async () => {
+    fetchLibraryPhotoFeatures.mockResolvedValue(
+      collection({ picturesAvailable: false, pictureUrlTemplate: null }),
+    );
+    setLibraryPhotoPictures('photoprism', true);
+    const layer = createLibraryPhotoLayer('photoprism');
+    const detach = attachLibraryPhotoLoader(stubMap().map);
+    setLibraryPhotosEnabled('photoprism', true);
+    await vi.waitFor(() => expect(getLibraryPhotoLoadState('photoprism').shownCount).toBe(1));
+
+    const feature = layer.getSource()!.getFeatures()[0]!;
+    const style = (layer.getStyleFunction() as (f: unknown, r: number) => Style[])(feature, 1);
+    expect(((style[0]!.getImage() as Icon).getSrc() ?? '').startsWith('data:image/svg+xml')).toBe(true);
+
+    detach();
+    setLibraryPhotosEnabled('photoprism', false);
+    setLibraryPhotoPictures('photoprism', false);
   });
 });
