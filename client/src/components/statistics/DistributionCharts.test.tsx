@@ -11,6 +11,7 @@ import {
   CorrelationChart,
   EnvelopeChart,
   HistogramChart,
+  SummaryBoxChart,
 } from './DistributionCharts.tsx';
 
 /**
@@ -63,6 +64,60 @@ describe('the chart layer draws real elements', () => {
     for (const g of groups) {
       expect(frame.textContent).toContain(g.label);
     }
+  });
+
+  it('draws boxes from quartiles it was given rather than recomputing them', async () => {
+    const five = (median: number) => ({
+      min: median - 2,
+      q1: median - 1,
+      median,
+      q3: median + 1,
+      max: median + 2,
+      count: 9,
+    });
+
+    renderThemed(
+      <SummaryBoxChart
+        categories={['10–20 m', '20–30 m', '30–40 m']}
+        series={[{ name: 'Width', summaries: [five(4), null, five(9)] }]}
+        yLabel="m"
+      />,
+    );
+
+    const frame = await screen.findByTestId('chart-summary-box');
+    await waitFor(() => expect(frame.querySelector('svg')).not.toBeNull());
+    expect(frame.textContent).toContain('10–20 m');
+    expect(frame.textContent).toContain('30–40 m');
+  });
+
+  // A slice of cave nobody measured is not a slice of passage with no size, so a category with no
+  // summary must draw nothing at all there. Asserted as a difference against the same chart with
+  // that slice measured, because "a box is absent" is only checkable against what present looks
+  // like — counting shapes in one render would assert whatever the renderer happened to emit.
+  it('leaves a gap for a category nothing was measured in', async () => {
+    const five = { min: 1, q1: 2, median: 3, q3: 4, max: 5, count: 4 };
+    const categories = ['low', 'middle', 'high'];
+
+    const shapesFor = async (summaries: Array<typeof five | null>, testId: string) => {
+      renderThemed(
+        <SummaryBoxChart
+          categories={categories}
+          series={[{ name: 'Width', summaries }]}
+          yLabel="m"
+          testId={testId}
+        />,
+      );
+      const frame = await screen.findByTestId(testId);
+      await waitFor(() => expect(frame.querySelector('svg')).not.toBeNull());
+      const count = frame.querySelectorAll('path').length;
+      cleanup();
+      return count;
+    };
+
+    const whole = await shapesFor([five, five, five], 'chart-whole-box');
+    const gapped = await shapesFor([five, null, five], 'chart-gap-box');
+
+    expect(gapped).toBeLessThan(whole);
   });
 
   it('puts both axes of the rank-size plot on a logarithmic scale', async () => {

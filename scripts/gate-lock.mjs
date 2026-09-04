@@ -85,8 +85,24 @@ export function tryAcquire(dir, label) {
   return true;
 }
 
-export function release(dir) {
+/**
+ * Give up the lock — but only when it is ours to give up.
+ *
+ * Deleting it unconditionally looks harmless and is not. A caller that releases a lock it does
+ * not hold destroys a running suite's claim, and the next waiter immediately starts a second
+ * suite against the same machine: the exact collision this file exists to prevent. It also
+ * cascades, because the dispossessed run releases again when it finishes and carries off the
+ * new holder's claim in turn. Observed 2026-09-04, from a single hand-typed release.
+ *
+ * A holder that is gone, or a directory with no readable owner, is not a claim anybody is
+ * relying on, so both are still removed — otherwise a crashed run would wedge the machine.
+ * Returns true when the lock is now free.
+ */
+export function release(dir, { heldByPid = process.pid } = {}) {
+  const owner = readOwner(dir);
+  if (owner && owner.pid !== heldByPid && pidAlive(owner.pid)) return false;
   rmSync(dir, { recursive: true, force: true });
+  return true;
 }
 
 async function acquireWaiting(dir, label) {
@@ -155,9 +171,16 @@ async function main() {
   }
 
   if (cmd === 'release') {
-    release(dir);
-    console.log('released');
-    return;
+    if (release(dir)) {
+      console.log('released');
+      return;
+    }
+    const o = readOwner(dir);
+    console.error(
+      `refusing: the lock is held by pid ${o.pid} (${o.label || 'unlabelled'}) since ${o.since}, ` +
+        'which is still running. Wait for it, or stop that run deliberately.',
+    );
+    process.exit(3);
   }
 
   if (cmd === 'run') {

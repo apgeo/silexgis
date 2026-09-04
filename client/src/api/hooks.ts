@@ -283,6 +283,8 @@ export const queryKeys = {
   resLinkPointDefault: ['reslinks', 'point-default'] as const,
   caveSurveyStatistics: (caveId: string) => ['caves', caveId, 'survey-statistics'] as const,
   caveOrientation: (caveId: string) => ['caves', caveId, 'orientation'] as const,
+  caveCrossSection: (caveId: string) => ['caves', caveId, 'cross-section'] as const,
+  cavePattern: (caveId: string) => ['caves', caveId, 'pattern'] as const,
   annotatedText: (documentId: string) => ['annotated-texts', documentId] as const,
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
@@ -952,6 +954,8 @@ export function surveyModelPollInterval(
 function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveSurveyStatistics(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveCrossSection(caveId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.cavePattern(caveId) });
 }
 
 /**
@@ -5233,6 +5237,62 @@ export function useCaveSurveyStatistics(caveId: string | undefined) {
     staleTime: 5 * 60_000,
     // A cave the caller may not read — or may read but not place exactly — is refused with the
     // same answer as a cave that does not exist, and asking again will not change it.
+    retry: false,
+  });
+}
+
+/** How big a cave's passages are, from the wall distances recorded at its stations. */
+export type CaveCrossSection = components['schemas']['CaveCrossSectionDto'];
+
+/** The sizes, distributions, volume and vertical slices of one cave's passages. */
+export type CrossSectionSummary = components['schemas']['CrossSectionSummary'];
+
+/** A five-number summary plus the mean, for one kind of measurement. */
+export type CrossSectionDistribution = components['schemas']['CrossSectionDistribution'];
+
+/** One vertical slice of a cave, with the passage sizes found in it. */
+export type CrossSectionElevationBand = components['schemas']['CrossSectionElevationBand'];
+
+/** What kind of cave a survey's shape suggests, with every rule applied to reach it. */
+export type CavePattern = components['schemas']['CavePatternDto'];
+
+/** The suggestion itself: the pattern, the scores, the rules and the caveats. */
+export type PatternSuggestion = components['schemas']['PatternSuggestion'];
+
+/** One rule, what it did, what it read and what it would have counted towards. */
+export type PatternRuleTrace = components['schemas']['PatternRuleTrace'];
+
+/** Which pattern a cave's measurements suggest. */
+export type SpeleogeneticPatternKind = components['schemas']['SpeleogeneticPatternKind'];
+
+/** Which rule a trace entry describes. */
+export type PatternRule = components['schemas']['PatternRule'];
+
+/** Which measured figure a rule read. */
+export type PatternFigure = components['schemas']['PatternFigure'];
+
+/** Whether a rule fired, stayed silent, or had nothing to read. */
+export type PatternRuleOutcome = components['schemas']['PatternRuleOutcome'];
+
+/** Something a reader has to know before using a pattern suggestion. */
+export type PatternCaveat = components['schemas']['PatternCaveat'];
+
+export function useCaveCrossSection(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveCrossSection(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/cross-section', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+export function useCavePattern(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.cavePattern(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/pattern', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
     retry: false,
   });
 }
