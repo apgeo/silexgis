@@ -3980,6 +3980,19 @@
     "nearbyTitle": "Există deja ceva înregistrat în apropiere",
     "nearbyHint": "Verifică să nu fie același loc înregistrat a doua oară.",
     "nearbyItem": "{{name}} — la {{distance}} m",
+    "refusals": {
+      "photographGone": "Fototeca nu mai raportează această fotografie în zona de pe ecran, așa că nu s-a creat nimic. Reîmprospătează harta și pornește din nou de la fotografie.",
+      "answerTruncated": "Sunt aici mai multe fotografii decât răspunde fototeca deodată, iar aceasta nu a fost în răspunsul ei. Apropie harta și încearcă din nou.",
+      "caveGone": "Peștera nu mai există sau nu o poți vedea.",
+      "caveForbidden": "Nu poți adăuga o intrare la această peșteră.",
+      "typeUnknown": "Această instalare nu are un tip cu care să creeze acest obiect.",
+      "positionInvalid": "Fototeca a raportat o poziție care nu este un loc de pe Pământ, așa că nu s-a creat nimic.",
+      "notAllowed": "Nu ai acces la fototecile acestei instalări.",
+      "createForbidden": "Nu poți crea obiecte aici.",
+      "propertiesRefused": "Acest tip nu poate păstra cele două linii care spun din ce fototecă vine poziția, așa că nu s-a creat nimic.",
+      "needsContainer": "Acest tip trebuie să stea în interiorul altui obiect, lucru pe care acest dialog nu îl cere. Creează-l din hartă.",
+      "librarySilent": "Fototeca nu a răspuns, așa că nu s-a creat nimic. Poate fi ocupată sau încă pornește — încearcă din nou peste puțin timp."
+    },
     "health": {
       "notAnswering": "Fototeca este configurată, dar nu a răspuns. Verifică dacă rulează și dacă adresa este corectă.",
       "credentialRefused": "Fototeca nu a acceptat credențialul cu care este configurată această instalare. Emite unul nou în fototecă și setează-l aici.",

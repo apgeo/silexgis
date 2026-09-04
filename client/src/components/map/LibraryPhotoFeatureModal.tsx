@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, App, AutoComplete, Form, Input, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { ApiError } from '../../api/client.ts';
 import {
   useCreateFeatureFromLibraryPhoto,
   useFeatureTypes,
@@ -30,6 +31,54 @@ interface FormValues {
   featureTypeId?: number;
   caveFeatureId?: string;
 }
+
+/**
+ * Why the server refused, said in words the reader can act on and keyed by the stable code it sends
+ * rather than matched out of its sentence — that sentence is prose written for a person and may be
+ * reworded or translated without anything here noticing.
+ *
+ * A table rather than one general phrase, because the general phrase is "try again" and that is the
+ * right advice for exactly one of these. A photograph the library no longer reports, a kind this
+ * installation does not have, a cave the reader may not add to, a properties schema that will not
+ * hold the two lines saying where the position came from — none of them get better by pressing the
+ * button a second time, and a reader told to retry does exactly that until they give up.
+ */
+const REFUSALS: Readonly<Record<string, string>> = {
+  'photo_library.photograph_not_found': 'libraryPhotos.refusals.photographGone',
+  'photo_library.answer_truncated': 'libraryPhotos.refusals.answerTruncated',
+  'photo_library.cave_not_found': 'libraryPhotos.refusals.caveGone',
+  'photo_library.cave_forbidden': 'libraryPhotos.refusals.caveForbidden',
+  'photo_library.type_unknown': 'libraryPhotos.refusals.typeUnknown',
+  'photo_library.position_invalid': 'libraryPhotos.refusals.positionInvalid',
+  'photo_library.forbidden': 'libraryPhotos.refusals.notAllowed',
+  'access.create_forbidden': 'libraryPhotos.refusals.createForbidden',
+  // Raised by the service that owns feature creation rather than by this route, and reaching the
+  // reader all the same: a kind whose attributes will not admit the provenance keys, one that has
+  // no taxonomy row, and one that cannot exist without something to sit inside.
+  'feature.properties_invalid': 'libraryPhotos.refusals.propertiesRefused',
+  'feature.type_required': 'libraryPhotos.refusals.typeUnknown',
+  'feature.parent_required': 'libraryPhotos.refusals.needsContainer',
+};
+
+/**
+ * The library not answering is the one refusal where trying again is the honest advice: the
+ * container beside this one may be busy or still starting, and nothing here is wrong.
+ */
+const LIBRARY_SILENT: Readonly<Record<string, true>> = {
+  'photo_library.unavailable': true,
+  'photo_library.unauthorized': true,
+  'photo_library.not_configured': true,
+  'photo_library.rejected': true,
+};
+
+/** The message key for a failure, and the general phrase when the server said nothing mapped. */
+const refusalKey = (error: unknown): string => {
+  const code = error instanceof ApiError ? (error.code ?? '') : '';
+  if (LIBRARY_SILENT[code]) {
+    return 'libraryPhotos.refusals.librarySilent';
+  }
+  return REFUSALS[code] ?? 'common.saveFailed';
+};
 
 /**
  * Turning a photograph held in a neighbouring library into an object in this installation's own
@@ -105,7 +154,18 @@ export default function LibraryPhotoFeatureModal({
     if (!target) {
       return;
     }
-    const values = await form.validateFields();
+
+    // An empty required field rejects here, and the form has already said so beside the field
+    // itself. Caught rather than left to travel: the dialog's button cannot await this, so a
+    // rejection escaping would surface as an unhandled promise rejection in the browser — recorded
+    // as a defect by the sweep, and reported to the reader as nothing at all.
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+
     setSaving(true);
     try {
       const made = await create.mutateAsync({
@@ -126,8 +186,8 @@ export default function LibraryPhotoFeatureModal({
       // of another kind lands on the surface layer.
       reloadEntrances();
       surfaceFeaturesChanged();
-    } catch {
-      message.error(t('common.saveFailed'));
+    } catch (error) {
+      message.error(t(refusalKey(error)));
     } finally {
       setSaving(false);
     }

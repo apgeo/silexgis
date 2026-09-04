@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { LibraryPhotoFeatureCreated } from '../../api/hooks.ts';
 import type { LibraryPhotoFeatureTarget } from '../../map/libraryPhotoPopup.ts';
 import LibraryPhotoFeatureModal from './LibraryPhotoFeatureModal.tsx';
@@ -148,6 +149,59 @@ describe('LibraryPhotoFeatureModal', () => {
 
     // Created all the same: the warning sits beside the success, never instead of it.
     expect(screen.getByText(/muddy crawl\.jpg was created/)).toBeTruthy();
+  });
+
+  it('says why the server refused, in the words that refusal deserves', async () => {
+    // The server separates these codes on purpose, and "try again" is the right advice for exactly
+    // one of them. A photograph the library no longer reports does not come back by retrying.
+    mutateAsync.mockRejectedValue(
+      new ApiError(404, 'photo_library.photograph_not_found', 'no such photograph there'),
+    );
+    show();
+    confirm();
+
+    expect(
+      await screen.findByText(/no longer reports that photograph in the area on screen/),
+    ).toBeTruthy();
+  });
+
+  it('tells the reader to zoom in when the library answered with more photographs than it can send at once', async () => {
+    // The pin is on the screen and the re-query did not reach it, so "that photograph is gone" would
+    // be a false sentence about something the reader can see.
+    mutateAsync.mockRejectedValue(new ApiError(404, 'photo_library.answer_truncated', 'cut short'));
+    show();
+    confirm();
+
+    expect(await screen.findByText(/Zoom in and try again/)).toBeTruthy();
+  });
+
+  it('falls back to the general phrase for a refusal it has no words for', async () => {
+    mutateAsync.mockRejectedValue(new ApiError(500, 'something.unmapped', 'boom'));
+    show();
+    confirm();
+
+    expect(await screen.findByText('The operation failed. Please try again.')).toBeTruthy();
+  });
+
+  it('asks nothing of the server when a required field is empty, and rejects nothing at the browser', async () => {
+    // antd's validation rejects, and the button that started it cannot await the rejection — so an
+    // uncaught one becomes an unhandled promise rejection, which this project sweeps for and treats
+    // as a defect. What the reader gets instead is the form's own message beside the field.
+    //
+    // The escaping rejection is caught by the runner rather than by an assertion here: it arrives
+    // after this case has finished, and the run fails on it as an unhandled error. Verified by
+    // removing the catch — with it gone this file reports one unhandled rejection and fails.
+    show();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '' } });
+    confirm();
+
+    // Matched on the form's own error slot rather than on the sentence in it: the wording belongs
+    // to the component library and to whichever language is in force, and neither is what this case
+    // is about.
+    await waitFor(() =>
+      expect(document.querySelector('.ant-form-item-explain-error')).not.toBeNull(),
+    );
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
   it('offers only the kinds a photograph can actually become', async () => {

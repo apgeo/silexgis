@@ -3980,6 +3980,19 @@
     "nearbyTitle": "Something is already recorded near here",
     "nearbyHint": "Check that this is not the same place recorded a second time.",
     "nearbyItem": "{{name}} — {{distance}} m away",
+    "refusals": {
+      "photographGone": "This library no longer reports that photograph in the area on screen, so nothing was created. Refresh the map and start again from the photograph.",
+      "answerTruncated": "There are more photographs here than this library answers with at once, and this one was not in its answer. Zoom in and try again.",
+      "caveGone": "That cave is no longer there, or you may not see it.",
+      "caveForbidden": "You may not add an entrance to that cave.",
+      "typeUnknown": "This installation has no kind to create that as.",
+      "positionInvalid": "The library reported a position that is not a place on the earth, so nothing was created.",
+      "notAllowed": "You may not reach this installation's photo libraries.",
+      "createForbidden": "You may not create features here.",
+      "propertiesRefused": "That kind cannot hold the two lines saying which library the position came from, so nothing was created.",
+      "needsContainer": "That kind has to sit inside something else, which this dialogue does not ask for. Create it from the map instead.",
+      "librarySilent": "The library did not answer, so nothing was created. It may be busy or still starting — try again in a moment."
+    },
     "health": {
       "notAnswering": "This library is configured but did not answer. Check that it is running and that the address is right.",
       "credentialRefused": "This library would not accept the credential this installation is configured with. Issue a new one in the library and set it here.",
