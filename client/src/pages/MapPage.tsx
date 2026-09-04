@@ -94,7 +94,11 @@ import {
   libraryPhotoSourceOf,
   setLibraryPhotosEnabled,
 } from '../map/libraryPhotoLayer.ts';
-import { attachLibraryPhotoPopup } from '../map/libraryPhotoPopup.ts';
+import {
+  attachLibraryPhotoPopup,
+  setLibraryPhotoFeatureHandler,
+  type LibraryPhotoFeatureTarget,
+} from '../map/libraryPhotoPopup.ts';
 import { getMapTagFilter, setMapTagFilter } from '../map/mapFilters.ts';
 import { applyViewConfig, captureViewConfig } from '../map/viewConfig.ts';
 import { attachViewSync2d, type ViewSync2dHandle } from '../map/viewSync2d.ts';
@@ -138,6 +142,11 @@ const Scene3DView = lazy(() => import('../components/scene3d/Scene3DView.tsx'));
 const CaveViewPanel = lazy(() => import('../components/caveview/CaveViewPanel.tsx'));
 const SurveyModelViewerModal = lazy(
   () => import('../components/caveview/SurveyModelViewerModal.tsx'),
+);
+// On demand as well: it is only ever opened from a balloon over a photo-library overlay, which
+// most installations do not run and most visits never switch on.
+const LibraryPhotoFeatureModal = lazy(
+  () => import('../components/map/LibraryPhotoFeatureModal.tsx'),
 );
 
 /** Map workspace v1: fixed resizable panes on desktop, drawers on phones. */
@@ -262,6 +271,21 @@ export default function MapPage() {
 
   // Right-click (long-press on touch) context menu over the canvas.
   const [contextTarget, setContextTarget] = useState<MapContextMenuTarget | null>(null);
+
+  // A photograph in a neighbouring library, offered up by its balloon to become an object here.
+  const [libraryPhotoTarget, setLibraryPhotoTarget] = useState<LibraryPhotoFeatureTarget | null>(
+    null,
+  );
+
+  // The balloon offers the button only when it has somewhere to send it, so withholding the
+  // handler is what withholds the button from an account that may not create features. The server
+  // decides in any case; this only keeps a button that would be refused off the screen. Set apart
+  // from the map's mount effect because the answer arrives after it and can change, and
+  // re-attaching the balloon to carry a new callback would tear one down mid-read.
+  useEffect(() => {
+    setLibraryPhotoFeatureHandler(mayCreateFeatures ? setLibraryPhotoTarget : undefined);
+    return () => setLibraryPhotoFeatureHandler(undefined);
+  }, [mayCreateFeatures]);
 
   useEffect(() => {
     const map = getWorkspaceMap();
@@ -1290,6 +1314,12 @@ export default function MapPage() {
         page, because a reader who arrived at the map from a link has no cave page open. */}
     <Suspense fallback={null}>
       <SurveyModelViewerModal model={caveViewOverlay} onClose={() => setCaveViewOverlay(null)} />
+    </Suspense>
+    <Suspense fallback={null}>
+      <LibraryPhotoFeatureModal
+        target={libraryPhotoTarget}
+        onClose={() => setLibraryPhotoTarget(null)}
+      />
     </Suspense>
     {!isMobile && !rightPinned && (
       <Drawer

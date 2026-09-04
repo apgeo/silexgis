@@ -12,6 +12,8 @@ import { getLibraryPhotoLoadState, libraryPhotoSourceOf } from './libraryPhotoLa
  * once with the collection rather than once per feature.
  */
 export interface LibraryPhotoLibraryFacts {
+  /** Which library, as the address names it. Needed to ask the server about one photograph. */
+  source: string;
   /** The label this installation gives the library, already resolved — never a product id. */
   libraryName: string;
   /**
@@ -22,6 +24,27 @@ export interface LibraryPhotoLibraryFacts {
   pictureUrlTemplate: string | null;
   /** When the positions now on the map were read from the library. Null when nothing was read. */
   readAt: string | null;
+  /**
+   * The rectangle those positions were read for. Null before anything has been read, which is also
+   * when there is nothing on the map to click.
+   */
+  bbox: string | null;
+}
+
+/**
+ * One photograph, named the way the server takes one when asked to build something from it.
+ *
+ * <b>No coordinate, deliberately.</b> The position is read on the server from the library that
+ * holds the photograph; a client that sent one would be a way of putting an object anywhere at all
+ * while it looked as though a camera had measured it. The rectangle is where to look for the
+ * photograph and is the one its position arrived in.
+ */
+export interface LibraryPhotoFeatureTarget {
+  source: string;
+  reference: string;
+  bbox: string;
+  /** The library's own title, to seed the name field. Absent where the library sends none. */
+  title?: string;
 }
 
 /** A property that is a non-blank string, or nothing — a library may send either for any field. */
@@ -97,16 +120,23 @@ function pictureUrl(
  * this application handles: they are file names, written by whoever can write to a library that
  * is not this installation's, and rendered for every viewer who clicks near a pin.
  *
+ * The last node is the only one that leads anywhere: an offer to make an object in this
+ * installation's own registry at the place this photograph was taken. It is present only when the
+ * page supplied somewhere to send it, which is how an account that may not create features is
+ * never shown a button that would be refused.
+ *
  * Pure DOM construction, no OpenLayers, so it is unit-testable on its own.
  */
 export function libraryPhotoPopupNodes(
   props: Record<string, unknown>,
   library: LibraryPhotoLibraryFacts,
+  onCreateFeature?: (target: LibraryPhotoFeatureTarget) => void,
 ): Node[] {
   const nodes: Node[] = [];
   const title = text(props.title);
+  const reference = text(props.reference);
 
-  const picture = pictureUrl(library.pictureUrlTemplate, text(props.reference), 'large');
+  const picture = pictureUrl(library.pictureUrlTemplate, reference, 'large');
   if (picture) {
     const img = document.createElement('img');
     img.src = picture;
@@ -154,12 +184,50 @@ export function libraryPhotoPopupNodes(
     );
   }
 
+  // The one thing in this balloon that writes. Offered only when the caller was given a way to
+  // act on it — the page withholds it from an account that may not create features — and only
+  // when both halves of naming the photograph to the server are in hand. The button carries no
+  // coordinate: what it hands on is which library, which photograph, and the rectangle that
+  // photograph's position arrived in, and the position itself is read on the server.
+  if (onCreateFeature && reference && library.bbox) {
+    const create = document.createElement('button');
+    create.type = 'button';
+    create.className = 'map-library-photo-popup-action';
+    create.textContent = i18n.t('libraryPhotos.createFeature');
+    create.addEventListener('click', () => {
+      onCreateFeature({
+        source: library.source,
+        reference,
+        bbox: library.bbox!,
+        title,
+      });
+    });
+    nodes.push(create);
+  }
+
   return nodes;
 }
 
 /**
- * Balloon for the photo-library overlays: clicking a pin shows its picture and what the library
- * said about it; clicking elsewhere dismisses it.
+ * Where a balloon's create button sends what it collected.
+ *
+ * Module-level rather than an argument to the attach below, because the balloon is attached once
+ * for the life of the page while whether it may offer the button is an answer that arrives later
+ * and can change — and re-attaching a map overlay to carry a changed callback would tear down the
+ * balloon somebody is reading.
+ */
+let requestFeature: ((target: LibraryPhotoFeatureTarget) => void) | undefined;
+
+export function setLibraryPhotoFeatureHandler(
+  handler: ((target: LibraryPhotoFeatureTarget) => void) | undefined,
+): void {
+  requestFeature = handler;
+}
+
+/**
+ * Balloon for the photo-library overlays: clicking a pin shows its picture, what the library said
+ * about it, and — where the page has offered one — the way to turn its position into an object in
+ * this installation's registry; clicking elsewhere dismisses it.
  *
  * One handler for every library rather than one per overlay — the layer the hit came from names
  * which library it is, and that is also where the library's name, its picture address and the
@@ -205,11 +273,17 @@ export function attachLibraryPhotoPopup(map: Map): () => void {
 
     const state = getLibraryPhotoLoadState(source);
     element.replaceChildren(
-      ...libraryPhotoPopupNodes(feature.getProperties(), {
-        libraryName: state.libraryName,
-        pictureUrlTemplate: state.pictureUrlTemplate,
-        readAt: state.readAt,
-      }),
+      ...libraryPhotoPopupNodes(
+        feature.getProperties(),
+        {
+          source,
+          libraryName: state.libraryName,
+          pictureUrlTemplate: state.pictureUrlTemplate,
+          readAt: state.readAt,
+          bbox: state.bbox,
+        },
+        requestFeature,
+      ),
     );
     overlay.setPosition((feature.getGeometry() as Point).getCoordinates());
   };

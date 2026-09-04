@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { libraryPhotoPopupNodes, type LibraryPhotoLibraryFacts } from './libraryPhotoPopup.ts';
+import {
+  libraryPhotoPopupNodes,
+  type LibraryPhotoFeatureTarget,
+  type LibraryPhotoLibraryFacts,
+} from './libraryPhotoPopup.ts';
 
 // Every value here is invented. Nothing in this file comes from any real photo library: the
 // references are made-up strings, the coordinates do not appear at all, and the dates are chosen
 // for what they prove rather than for what happened.
 const library: LibraryPhotoLibraryFacts = {
+  source: 'photoprism',
   libraryName: 'Club library',
   pictureUrlTemplate: '/api/v1/photo-libraries/photoprism/thumbnails/{reference}?size={size}&token=t0ken',
   readAt: '2026-09-03T09:15:00Z',
+  bbox: '21.5,45.125,24.25,46.75',
 };
 
 /** The balloon's children, by the class the stylesheet bounds them with. */
@@ -19,6 +25,8 @@ const linesOf = (nodes: Node[], className: string): string[] =>
 
 const meta = (nodes: Node[]) => linesOf(nodes, 'map-library-photo-popup-meta');
 const image = (nodes: Node[]) => nodes.find((n): n is HTMLImageElement => n instanceof HTMLImageElement);
+const action = (nodes: Node[]) =>
+  nodes.find((n): n is HTMLButtonElement => n instanceof HTMLButtonElement);
 
 describe('libraryPhotoPopupNodes', () => {
   it('shows the picture, the title, the capture date, the library and when the positions were read', () => {
@@ -129,5 +137,56 @@ describe('libraryPhotoPopupNodes', () => {
 
     expect(meta(nodes).some((line) => line.startsWith('Positions read '))).toBe(false);
     expect(meta(nodes)).toEqual(['Club library']);
+  });
+
+  it('offers to build something at the photograph and hands on no coordinate', () => {
+    const asked: LibraryPhotoFeatureTarget[] = [];
+    const nodes = libraryPhotoPopupNodes(
+      { reference: 'abc123', title: 'muddy crawl.jpg' },
+      library,
+      (target) => asked.push(target),
+    );
+
+    const button = action(nodes)!;
+    expect(button.textContent).toBe('Create a feature here');
+    button.click();
+
+    // Which library, which photograph, and where to look for it — and nothing else. A coordinate
+    // here would make the button a way of putting an object anywhere at all while it looked as
+    // though a camera had measured it; the position is read on the server from the library.
+    expect(asked).toEqual([
+      {
+        source: 'photoprism',
+        reference: 'abc123',
+        bbox: '21.5,45.125,24.25,46.75',
+        title: 'muddy crawl.jpg',
+      },
+    ]);
+  });
+
+  it('offers nothing when the page gave it nowhere to send it', () => {
+    // How the button is withheld from an account that may not create features. The server refuses
+    // in any case; this is what keeps a button that would be refused off the screen.
+    const nodes = libraryPhotoPopupNodes({ reference: 'abc123' }, library);
+
+    expect(action(nodes)).toBeUndefined();
+  });
+
+  it('offers nothing without the rectangle the position arrived in', () => {
+    // Naming the photograph to the server takes both halves. A button that asked with no rectangle
+    // would be a request the server could only refuse.
+    const nodes = libraryPhotoPopupNodes(
+      { reference: 'abc123' },
+      { ...library, bbox: null },
+      () => undefined,
+    );
+
+    expect(action(nodes)).toBeUndefined();
+  });
+
+  it('offers nothing for a pin the library named nothing', () => {
+    const nodes = libraryPhotoPopupNodes({ title: 'no reference at all' }, library, () => undefined);
+
+    expect(action(nodes)).toBeUndefined();
   });
 });

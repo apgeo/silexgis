@@ -41,6 +41,25 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
     private const string RecheckUrl = "/api/v1/photo-libraries/photoprism/recheck";
     private const string ThumbnailUrl = "/api/v1/photo-libraries/photoprism/thumbnails/";
 
+    /// <summary>
+    /// The route that writes, aimed at the one invented photograph the stub reports. The rectangle
+    /// rides on the address exactly as it does for the map, because it is the same question: it says
+    /// where to look for the photograph and never where to put what is made from it.
+    /// </summary>
+    private const string FeatureUrl =
+        $"/api/v1/photo-libraries/photoprism/photographs/aa11bb22cc33/feature?bbox={Bbox}";
+
+    /// <summary>
+    /// A second invented photograph, far enough from the first that nothing created at one is near
+    /// the other. Every test class in this suite shares one database, so a case asserting that
+    /// nothing was already standing nearby has to stand somewhere nothing else builds — otherwise it
+    /// passes or fails on which order the tests happened to run in.
+    /// </summary>
+    private const string LonePhotographReference = "bb22cc33dd44";
+
+    private const string LoneFeatureUrl =
+        $"/api/v1/photo-libraries/photoprism/photographs/{LonePhotographReference}/feature?bbox={Bbox}";
+
     /// <summary>An invented rectangle whose four numbers all differ, so a transposition shows.</summary>
     private const string Bbox = "21.5,45.125,24.25,46.75";
 
@@ -565,6 +584,216 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         }
     }
 
+    // ------------------------------------------------ a photograph becomes an object in the registry
+
+    /// <summary>
+    /// The whole gesture, and the two things that make it worth having: the position is the one the
+    /// library reported, and the object it created says where that came from.
+    /// </summary>
+    /// <remarks>
+    /// The request deliberately carries a coordinate this route has no field for. Members a body
+    /// carries and a request has no home for are ignored, which is exactly the property worth
+    /// pinning: a body able to nudge the position would turn this into a way of putting an object
+    /// anywhere at all while it looked as though a camera had measured it.
+    /// </remarks>
+    [Fact]
+    public async Task A_photograph_becomes_a_cave_at_the_position_the_library_reported()
+    {
+        library.AnswersGeo(LonePhotograph);
+
+        var created = await PostAsync(admin, LoneFeatureUrl, new
+        {
+            kind = "cave",
+            name = "Invented cave from a picture",
+            latitude = 0.0,
+            longitude = 0.0,
+        });
+
+        created.Status.ShouldBe(HttpStatusCode.Created, created.Body);
+        created.Json.GetProperty("kind").GetString().ShouldBe("cave");
+        created.Json.GetProperty("name").GetString().ShouldBe("Invented cave from a picture");
+        created.Json.GetProperty("nearby").GetArrayLength().ShouldBe(0);
+
+        var id = created.Json.GetProperty("featureId").GetString()!;
+        var envelope = await JsonAsync(admin, $"/api/v1/features/{id}");
+        var coordinates = envelope.GetProperty("feature").GetProperty("geometry").GetProperty("coordinates");
+        coordinates[0].GetDouble().ShouldBe(24.113457);
+        coordinates[1].GetDouble().ShouldBe(46.612819);
+
+        // A cave's own point is a cache of its main entrance's, so a cave built around a photograph
+        // is a cave *and* the entrance that carries that position. Without it the cave would draw
+        // nowhere, which is the opposite of what somebody creating one from a picture asked for.
+        envelope.GetProperty("cave").GetProperty("entranceCount").GetInt32().ShouldBe(1);
+
+        // The answer to "where did this cave's position come from?", years later.
+        var properties = envelope.GetProperty("feature").GetProperty("properties");
+        properties.GetProperty("photoLibrarySource").GetString().ShouldBe("photoprism");
+        properties.GetProperty("photoLibraryReference").GetString().ShouldBe(LonePhotographReference);
+
+        // And on the entrance as well, which is the row the coordinate actually lives on: a reader
+        // who opens it to ask where its position came from is asking exactly what these keys answer.
+        var entrances = await JsonAsync(admin, $"/api/v1/caves/{id}/entrances");
+        var entranceId = entrances[0].GetProperty("id").GetString()!;
+        (await JsonAsync(admin, $"/api/v1/features/{entranceId}"))
+            .GetProperty("feature").GetProperty("properties")
+            .GetProperty("photoLibraryReference").GetString().ShouldBe(LonePhotographReference);
+    }
+
+    /// <summary>
+    /// A photograph the library does not report at that reference in that rectangle. The rectangle
+    /// is a place to look and never a position: naming one the photograph is not in finds nothing,
+    /// rather than putting an object where the rectangle is.
+    /// </summary>
+    [Fact]
+    public async Task A_reference_the_library_does_not_report_there_creates_nothing()
+    {
+        library.AnswersGeo(OnePhotograph);
+        var before = await FeatureCountAsync();
+
+        var refused = await PostAsync(
+            admin,
+            $"/api/v1/photo-libraries/photoprism/photographs/nosuchreference/feature?bbox={Bbox}",
+            new { kind = "cave", name = "Should not exist" });
+
+        refused.Status.ShouldBe(HttpStatusCode.NotFound, refused.Body);
+        CodeOf(refused.Body).ShouldBe("photo_library.photograph_not_found");
+        (await FeatureCountAsync()).ShouldBe(before);
+    }
+
+    /// <summary>
+    /// A library that did not answer creates nothing. There is no fallback position to reach for
+    /// here and there must never be one: a coordinate no camera measured, filed as though one had,
+    /// is worse than no object at all.
+    /// </summary>
+    [Fact]
+    public async Task A_library_that_did_not_answer_creates_nothing()
+    {
+        library.Answers(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError)
+        {
+            Content = new StringContent("<html>the library is having trouble</html>", Encoding.UTF8, "text/html"),
+        });
+        var before = await FeatureCountAsync();
+
+        var refused = await PostAsync(admin, FeatureUrl, new { kind = "cave", name = "Should not exist" });
+
+        refused.Status.ShouldBe(HttpStatusCode.ServiceUnavailable, refused.Body);
+        CodeOf(refused.Body).ShouldBe(PhotoLibraryException.UnavailableCode);
+        (await FeatureCountAsync()).ShouldBe(before);
+    }
+
+    /// <summary>
+    /// The audience rule reaches the route that writes, and reaches it before the library is asked
+    /// anything at all: an account that may not see these photographs may not build objects out of
+    /// one either, and asking the library on their behalf would already have been the disclosure.
+    /// </summary>
+    [Fact]
+    public async Task Creating_from_a_photograph_is_refused_to_everybody_outside_the_audience()
+    {
+        library.AnswersGeo(OnePhotograph);
+
+        var refused = await PostAsync(viewer, FeatureUrl, new { kind = "cave", name = "Should not exist" });
+        refused.Status.ShouldBe(HttpStatusCode.Forbidden, refused.Body);
+        CodeOf(refused.Body).ShouldBe("photo_library.forbidden");
+
+        var stranger = await PostAsync(anonymous, FeatureUrl, new { kind = "cave", name = "Should not exist" });
+        stranger.Status.ShouldBe(HttpStatusCode.Unauthorized, stranger.Body);
+
+        library.Calls.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Forty photographs of one entrance must not quietly become forty caves — and must not be
+    /// refused either, because the person who took them is the only one who can tell the
+    /// forty-first picture of a known hole from a second hole four metres away.
+    /// </summary>
+    [Fact]
+    public async Task A_second_photograph_of_the_same_place_is_warned_about_rather_than_refused()
+    {
+        library.AnswersGeo(OnePhotograph);
+
+        var first = await PostAsync(admin, FeatureUrl, new { kind = "cave", name = "First reading" });
+        first.Status.ShouldBe(HttpStatusCode.Created, first.Body);
+
+        var second = await PostAsync(admin, FeatureUrl, new { kind = "cave", name = "Second reading" });
+        second.Status.ShouldBe(HttpStatusCode.Created, second.Body);
+
+        // Information, not a refusal: the object asked for was created, and the answer says what was
+        // already standing there. Named exactly — every class in this suite shares one database, so
+        // "something came back" would pass on a neighbour some other test left behind.
+        var entrances = await JsonAsync(admin, $"/api/v1/caves/{first.Json.GetProperty("featureId").GetString()}/entrances");
+        var firstEntranceId = entrances[0].GetProperty("id").GetString();
+
+        // The entrance is what is reported rather than the cave, because a cave is not a position of
+        // its own: its point is its main entrance's.
+        second.Json.GetProperty("nearby").EnumerateArray().ShouldContain(hit =>
+            hit.GetProperty("featureId").GetString() == firstEntranceId
+            && hit.GetProperty("kind").GetString() == "caveEntrance"
+            && hit.GetProperty("distanceMeters").GetDouble() <= 1);
+    }
+
+    /// <summary>
+    /// An entrance belongs to a cave and cannot exist without one, so the cave is named — and naming
+    /// it is a write on it, because adding the first entrance moves the cave's own point on the map.
+    /// A cave that is not there and one the caller may not read answer the same way.
+    /// </summary>
+    [Fact]
+    public async Task An_entrance_hangs_on_a_cave_the_caller_may_add_to()
+    {
+        library.AnswersGeo(OnePhotograph);
+
+        var cave = await PostAsync(admin, FeatureUrl, new { kind = "cave", name = "A cave with one entrance" });
+        cave.Status.ShouldBe(HttpStatusCode.Created, cave.Body);
+        var caveId = cave.Json.GetProperty("featureId").GetString()!;
+
+        var missing = await PostAsync(admin, FeatureUrl, new
+        {
+            kind = "caveEntrance",
+            name = "Should not exist",
+            caveFeatureId = Guid.NewGuid(),
+        });
+        missing.Status.ShouldBe(HttpStatusCode.NotFound, missing.Body);
+        CodeOf(missing.Body).ShouldBe("photo_library.cave_not_found");
+
+        var created = await PostAsync(admin, FeatureUrl, new
+        {
+            kind = "caveEntrance",
+            name = "A second entrance",
+            caveFeatureId = caveId,
+        });
+        created.Status.ShouldBe(HttpStatusCode.Created, created.Body);
+
+        var id = created.Json.GetProperty("featureId").GetString()!;
+        var envelope = await JsonAsync(admin, $"/api/v1/features/{id}");
+        envelope.GetProperty("entrance").GetProperty("caveFeatureId").GetString().ShouldBe(caveId);
+
+        // A camera's own fix is a GPS reading, and saying so is what lets somebody later tell this
+        // position from one that was dragged onto a map.
+        envelope.GetProperty("entrance").GetProperty("positionQuality").GetString().ShouldBe("gps");
+        envelope.GetProperty("feature").GetProperty("properties")
+            .GetProperty("photoLibraryReference").GetString().ShouldBe("aa11bb22cc33");
+    }
+
+    /// <summary>
+    /// The two shapes the body has to refuse. A centerline is a line and a photograph is one point;
+    /// a feature of "another kind" is defined by the installation's own taxonomy, and one that names
+    /// none is not a request anybody can answer.
+    /// </summary>
+    [Fact]
+    public async Task A_photograph_cannot_become_a_line_or_a_feature_of_no_kind()
+    {
+        library.AnswersGeo(OnePhotograph);
+
+        var line = await PostAsync(admin, FeatureUrl, new { kind = "centerline", name = "Not a line" });
+        line.Status.ShouldBe(HttpStatusCode.BadRequest, line.Body);
+
+        var untyped = await PostAsync(admin, FeatureUrl, new { kind = "generic", name = "Of no kind" });
+        untyped.Status.ShouldBe(HttpStatusCode.BadRequest, untyped.Body);
+
+        // Refused in front of the library rather than after it: a body nobody can act on is not a
+        // reason to open a socket to a neighbouring container.
+        library.Calls.ShouldBeEmpty();
+    }
+
     // ------------------------------------------------------------------------------------ support
 
     /// <summary>
@@ -638,6 +867,15 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
     ]}
     """;
 
+    /// <summary>The photograph nothing else in this suite builds anything near.</summary>
+    private const string LonePhotograph = """
+    {"type":"FeatureCollection","features":[
+      {"id":"2","type":"Feature","geometry":{"type":"Point","coordinates":[24.113457,46.612819]},
+       "properties":{"Hash":"bb22cc33dd44","UID":"psinvented5","Title":"A photograph of nowhere",
+                     "TakenAt":"2026-02-03T04:05:06Z"}}
+    ]}
+    """;
+
     private static async Task<JsonElement> JsonAsync(HttpClient client, string url)
     {
         var response = await client.GetAsync(url);
@@ -650,6 +888,33 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
 
     private static string? CodeOf(string problemBody) =>
         JsonDocument.Parse(problemBody).RootElement.GetProperty("code").GetString();
+
+    /// <summary>One answer, kept whole: the status, the raw body for a failed assertion to print,
+    /// and the parsed body for the assertion itself.</summary>
+    private sealed record Answer(HttpStatusCode Status, string Body, JsonElement Json);
+
+    private static async Task<Answer> PostAsync(HttpClient client, string url, object body)
+    {
+        var response = await client.PostAsJsonAsync(url, body);
+        var raw = await response.Content.ReadAsStringAsync();
+
+        JsonElement parsed = default;
+        if (raw.Length > 0)
+        {
+            using var document = JsonDocument.Parse(raw);
+            parsed = document.RootElement.Clone();
+        }
+
+        return new Answer(response.StatusCode, raw, parsed);
+    }
+
+    /// <summary>
+    /// How many features this installation holds, as the registry itself reports it. Used either
+    /// side of a refusal, because "nothing was created" is the assertion that matters on every path
+    /// where the position could not be established — and a response code alone does not make it.
+    /// </summary>
+    private async Task<int> FeatureCountAsync() =>
+        (await JsonAsync(admin, "/api/v1/features?pageSize=1")).GetProperty("totalItems").GetInt32();
 
     private sealed record LibraryCall(string Method, string Url, string? Authorization, string? ApiKey);
 

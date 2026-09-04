@@ -66,6 +66,7 @@ const answered: LibraryPhotoLoadState = {
   truncated: false,
   omittedCount: 0,
   readAt: '2026-09-04T10:11:12Z',
+  bbox: '21.5,45.125,24.25,46.75',
   pictureUrlTemplate: '/api/v1/photo-libraries/immich/thumbnails/{reference}?size={size}',
   pictures: false,
   picturesSuppressed: false,

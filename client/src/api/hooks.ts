@@ -1405,6 +1405,55 @@ export function useRecheckPhotoLibrary() {
   });
 }
 
+/**
+ * What one photograph in a neighbouring library is to become in this installation's own registry.
+ *
+ * Note what is not in it: a coordinate. The caller names a photograph and a rectangle to look for
+ * it in, and the server reads the position from the library that holds it — a body able to carry a
+ * latitude would be a way of putting an object anywhere at all while it looked as though a camera
+ * had measured it, and the provenance is the whole point of creating one this way.
+ */
+export type LibraryPhotoFeatureRequest = components['schemas']['PhotoLibraryFeatureRequest'];
+export type LibraryPhotoFeatureCreated = components['schemas']['PhotoLibraryFeatureCreatedDto'];
+
+/**
+ * An object already in the registry near where a photograph was taken.
+ *
+ * Information rather than a refusal: the answer comes back beside an object that was created, and
+ * it exists because forty photographs of one entrance would otherwise quietly become forty caves.
+ * An empty list is not a promise that nothing is there — the server searches only what this caller
+ * may both read and place exactly.
+ */
+export type LibraryPhotoNearbyFeature = components['schemas']['PhotoLibraryNearbyFeatureDto'];
+
+/**
+ * Creates a cave, an entrance, or a feature of another kind at the position one photograph in a
+ * neighbouring library records.
+ *
+ * The map overlays are refreshed by the caller rather than here: they are OpenLayers sources loaded
+ * imperatively per viewport, not query-cache entries, so what has to happen after this is a reload
+ * of the extent on screen and not an invalidation.
+ */
+export function useCreateFeatureFromLibraryPhoto() {
+  return useMutation({
+    mutationFn: (input: {
+      source: LibraryPhotoSource;
+      reference: string;
+      bbox: string;
+      body: LibraryPhotoFeatureRequest;
+    }) =>
+      unwrap(
+        api.POST('/api/v1/photo-libraries/{source}/photographs/{reference}/feature', {
+          params: {
+            path: { source: input.source, reference: input.reference },
+            query: { bbox: input.bbox },
+          },
+          body: input.body,
+        }),
+      ),
+  });
+}
+
 export type SearchResult = components['schemas']['SearchResultDto'];
 export type SearchFeatureItem = components['schemas']['SearchFeatureItemDto'];
 export type SearchTripItem = components['schemas']['SearchTripItemDto'];
