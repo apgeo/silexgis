@@ -333,13 +333,14 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
 
-        var readable = Cave(Readable, editorId, guarded: false);
-        var guarded = Cave(Guarded, strangerId, guarded: true);
+        var caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
+        var readable = Cave(Readable, editorId, guarded: false, caveTypeId);
+        var guarded = Cave(Guarded, strangerId, guarded: true, caveTypeId);
 
         // Held back by an explicit refusal rather than by visibility: the seeded editors read past
         // visibility at the widest scope, so a matrix built on a private row would be proving that
         // the query ran and nothing about what it withheld.
-        var hidden = Cave(Hidden, strangerId, guarded: false);
+        var hidden = Cave(Hidden, strangerId, guarded: false, caveTypeId);
         foreach (var cave in new[] { readable, guarded, hidden })
         {
             db.Features.Add(cave);
@@ -399,7 +400,7 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         return (readable.Id, guarded.Id, hidden.Id);
     }
 
-    private static Feature Cave(string name, Guid ownerId, bool guarded)
+    private static Feature Cave(string name, Guid ownerId, bool guarded, long caveTypeId)
     {
         var id = Guid.NewGuid();
         return new Feature
@@ -414,6 +415,13 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
             // this row in. A guard nothing reads is a guard that does not hold.
             IsProtectedEffective = guarded,
             AncestorIds = [id],
+            // A cave is two rows: the feature and the subtype row that carries its
+            // cave-specific attributes. The database only guards the direction that cannot
+            // happen anyway — a subtype row without its feature — so a fixture that writes the
+            // feature alone leaves behind a state no write path can produce and every read path
+            // that projects a cave falls over, for every reader of the listing rather than only
+            // for whoever owns the row.
+            Cave = new Cave { Id = id, CaveTypeId = caveTypeId },
         };
     }
 

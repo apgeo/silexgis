@@ -456,6 +456,18 @@ public sealed class TripStatsTests : IAsyncLifetime, IDisposable
             db.FeatureAncestors.Add(new FeatureAncestor { FeatureId = id, AncestorId = ancestorId });
         }
 
+        // The containment edge, which is the one of the three the array and the closure are
+        // derived from. Writing the two derived halves without it leaves a feature whose stored
+        // ancestry says it has a parent and whose edges say it is a root, which the integrity
+        // verifier is right to report — and because that verifier reads the whole database and
+        // several classes assert it finds nothing at all, the failure lands on some unrelated
+        // test, naming identifiers that belong to no test at all.
+        if (parentId is { } containedBy)
+        {
+            db.FeatureHierarchyEdges.Add(
+                new FeatureHierarchyEdge { ParentId = containedBy, ChildId = id, IsPrimary = true });
+        }
+
         await db.SaveChangesAsync();
         return id;
     }
