@@ -1307,6 +1307,15 @@ export type LibraryPhotoStatus = components['schemas']['PhotoLibraryStatusDto'];
 export type LibraryPhotoCollection = components['schemas']['LibraryPhotoFeatureCollection'];
 
 /**
+ * What one library said about itself when the server last asked it.
+ *
+ * A separate answer from the overlay's own load state, and the two are not interchangeable: this
+ * one says whether the library is working at all, and the load state says what came back for the
+ * rectangle currently on screen. A library can be perfectly healthy and hold nothing here.
+ */
+export type LibraryPhotoHealth = components['schemas']['PhotoLibraryHealthDto'];
+
+/**
  * The photo libraries this account may see, or none.
  *
  * A query rather than an imperative fetch, unlike the map loaders below it: there is no viewport
@@ -1344,6 +1353,24 @@ export async function fetchLibraryPhotoFeatures(
       params: { path: { source }, query: { bbox } },
     }),
   );
+}
+
+/**
+ * Asks the server to re-open one library's picture delivery and to forget what it last heard
+ * about that library's health.
+ *
+ * The status answer is invalidated on success rather than patched, because the point of pressing
+ * this is to find out what the library says now: a button that reopened the pictures and left the
+ * health line describing the state before the fix would look like a button that does nothing.
+ */
+export function useRecheckPhotoLibrary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (source: LibraryPhotoSource) =>
+      unwrap(api.POST('/api/v1/photo-libraries/{source}/recheck', { params: { path: { source } } })),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.photoLibraryStatus }),
+  });
 }
 
 export type SearchResult = components['schemas']['SearchResultDto'];

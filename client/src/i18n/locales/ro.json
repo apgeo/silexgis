@@ -3963,6 +3963,18 @@
     "noTitle": "Fără titlu",
     "thumbnailFailed": "Fotografia nu a putut fi încărcată.",
     "asPictures": "Arată fotografiile propriu-zise",
-    "picturesSuppressed": "Prea multe fotografii aici pentru a fi arătate ca imagini — apropie harta."
+    "picturesSuppressed": "Prea multe fotografii aici pentru a fi arătate ca imagini — apropie harta.",
+    "health": {
+      "notAnswering": "Fototeca este configurată, dar nu a răspuns. Verifică dacă rulează și dacă adresa este corectă.",
+      "credentialRefused": "Fototeca nu a acceptat credențialul cu care este configurată această instalare. Emite unul nou în fototecă și setează-l aici.",
+      "missingPermissions": "Credențialului folosit de această instalare îi lipsesc: {{permissions}}. Adaugă-i-le în setările fototecii.",
+      "unreadable": "Fototeca a răspuns, dar într-un fel pe care această instalare nu l-a putut citi.",
+      "picturesStopped": "Fotografiile din această fototecă nu mai sunt cerute: a răspuns unei cereri de imagine fără imagine, ceea ce poate însemna că nu mai ajunge la originalele ei.",
+      "versionChecked": "Versiunea {{version}} · verificat {{when}}",
+      "checked": "Verificat {{when}}",
+      "recheckFailed": "Fototeca tot nu a răspuns, așa că nimic nu s-a schimbat."
+    },
+    "notConnected": "{{library}} nu este conectată: această instalare nu are adresă sau credențial pentru ea.",
+    "recheck": "Verifică din nou"
   }
 }

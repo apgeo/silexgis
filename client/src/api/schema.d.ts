@@ -7583,7 +7583,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Which neighbouring photo libraries this installation has been given, and whether the caller may see them. Reaches no library. */
+        /** Which neighbouring photo libraries this installation has been given, whether the caller may see them, and what each library said when it was last asked. */
         get: {
             parameters: {
                 query?: never;
@@ -19746,14 +19746,25 @@ export interface components {
             /** Format: int32 */
             trackMatchToleranceSeconds?: number;
         };
+        PhotoLibraryHealthDto: {
+            reach: string;
+            version: null | string;
+            missingPermissions: string[];
+            picturesAvailable: boolean;
+            failureCode: null | string;
+            /** Format: date-time */
+            probedAt: null | string;
+        };
         PhotoLibraryProviderDto: {
             source: string;
             name: string;
             configured: boolean;
+            health: components["schemas"]["PhotoLibraryHealthDto"];
         };
         PhotoLibraryStatusDto: {
             mayRead: boolean;
             providers: components["schemas"]["PhotoLibraryProviderDto"][];
+            unconfigured: components["schemas"]["PhotoLibraryProviderDto"][];
         };
         PhotoNearbyDto: {
             /** Format: uuid */

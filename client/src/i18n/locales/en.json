@@ -3963,6 +3963,18 @@
     "noTitle": "Untitled",
     "thumbnailFailed": "The photograph could not be loaded.",
     "asPictures": "Show the photographs themselves",
-    "picturesSuppressed": "Too many photographs here to show them as pictures — zoom in."
+    "picturesSuppressed": "Too many photographs here to show them as pictures — zoom in.",
+    "health": {
+      "notAnswering": "This library is configured but did not answer. Check that it is running and that the address is right.",
+      "credentialRefused": "This library would not accept the credential this installation is configured with. Issue a new one in the library and set it here.",
+      "missingPermissions": "The credential this installation uses is missing: {{permissions}}. Add them to it in the library's own settings.",
+      "unreadable": "This library answered, but not in a way this installation could read.",
+      "picturesStopped": "Photographs from this library are not being fetched: it answered a picture request without a picture, which can mean it cannot reach its originals.",
+      "versionChecked": "Version {{version}} · checked {{when}}",
+      "checked": "Checked {{when}}",
+      "recheckFailed": "The library still did not answer, so nothing changed."
+    },
+    "notConnected": "{{library}} is not connected: this installation has no address or credential for it.",
+    "recheck": "Check again"
   }
 }

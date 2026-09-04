@@ -679,6 +679,16 @@ export default function MapPage() {
     [libraryStatus],
   );
 
+  // The products this build can read that nobody supplied an address for. The server answers this
+  // for a full administrator and with an empty list for everybody else, so nothing here decides
+  // who is told; what it earns is the one thing an empty layer panel cannot say for itself —
+  // whether there is nothing to look at because nothing was connected. No overlay is made for
+  // these: a layer that can only ever draw nothing is not a layer.
+  const unconfiguredPhotoLibraries = useMemo(
+    () => (libraryStatus?.mayRead ? (libraryStatus.unconfigured ?? []) : []),
+    [libraryStatus],
+  );
+
   // Overlays for those libraries. Not registered with the built-ins on mount, because their
   // existence is a server answer that arrives after it — the same way imported files and
   // georeferenced rasters are registered — and followed by the pending-order pass, because a saved
@@ -893,6 +903,7 @@ export default function MapPage() {
       onRasterVisibleChange={setRasterVisible}
       onOverlayVisibilityChanged={onOverlayVisibilityChanged}
       photoLibraries={photoLibraries}
+      unconfiguredPhotoLibraries={unconfiguredPhotoLibraries}
       visibleLibraryPhotoSources={libraryPhotoSources}
       treeNonce={treeNonce}
       tagFilter={tagFilter}

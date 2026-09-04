@@ -48,8 +48,8 @@ public static class PhotoLibraryEndpoints
 
         libraries.MapGet("/status", StatusAsync)
             .WithSummary(
-                "Which neighbouring photo libraries this installation has been given, and whether "
-                + "the caller may see them. Reaches no library.");
+                "Which neighbouring photo libraries this installation has been given, whether the "
+                + "caller may see them, and what each library said when it was last asked.");
 
         // One route per library rather than one merged route: the source is a path segment and not
         // a filter, because it selects which foreign installation is called, and a caller naming a
@@ -78,12 +78,26 @@ public static class PhotoLibraryEndpoints
     }
 
     /// <summary>
-    /// What this installation has, said without asking any library anything.
+    /// What this installation has, and what each of them said when it was last asked.
     /// </summary>
     /// <remarks>
-    /// A caller outside the audience is told <c>mayRead: false</c> and given an empty list rather
+    /// <para>
+    /// A caller outside the audience is told <c>mayRead: false</c> and given empty lists rather
     /// than a refusal: the client needs one answer to decide whether to offer the layer at all, and
     /// a refusal that also named the products would answer a question the caller may not ask.
+    /// Nothing is asked of any library on their behalf.
+    /// </para>
+    /// <para>
+    /// The libraries are asked together rather than one after another. They are separate
+    /// installations with separate uptime, and asking them in turn would make one stopped container
+    /// cost the whole answer its own timeout before the other was even reached — the same reason
+    /// each of them is drawn by its own overlay rather than merged into one.
+    /// </para>
+    /// <para>
+    /// A probe never throws, so this route answers whatever the libraries do. Its cost is bounded
+    /// on the far side of the call: each library holds its last answer for a short window, so a
+    /// status page refreshed twice, or read by two people at once, costs one round of requests.
+    /// </para>
     /// </remarks>
     private static async Task<Results<Ok<PhotoLibraryStatusDto>, UnauthorizedHttpResult>> StatusAsync(
         IEnumerable<IPhotoLibrary> libraries,
@@ -99,18 +113,37 @@ public static class PhotoLibraryEndpoints
 
         if (!PhotoLibraryAudienceRule.MayRead(ctx, options.Value.Audience))
         {
-            return TypedResults.Ok(new PhotoLibraryStatusDto(false, []));
+            return TypedResults.Ok(new PhotoLibraryStatusDto(false, [], []));
         }
 
-        var providers = libraries
-            .Where(library => library.IsConfigured)
-            .Select(library => new PhotoLibraryProviderDto(
+        var configured = libraries.Where(library => library.IsConfigured).ToList();
+        var health = await Task.WhenAll(configured.Select(library => library.ProbeAsync(ct)));
+
+        var providers = configured
+            .Select((library, index) => new PhotoLibraryProviderDto(
                 PhotoLibrarySlugs.Slug(library.Source),
                 PhotoLibrarySlugs.Name(library.Source),
-                Configured: true))
+                Configured: true,
+                PhotoLibraryHealthDto.Of(health[index], library.PicturesAvailable)))
             .ToList();
 
-        return TypedResults.Ok(new PhotoLibraryStatusDto(true, providers));
+        // Which products this installation could run and has not is told to a full administrator
+        // and to nobody else, and the decision is taken here rather than by a panel that declines
+        // to draw a line. It is the answer to the one question an empty layer panel cannot answer
+        // on its own: whether there is nothing to see because nothing was connected.
+        var unconfigured = new List<PhotoLibraryProviderDto>();
+        if (ctx.IsFullAdmin)
+        {
+            unconfigured.AddRange(libraries
+                .Where(library => !library.IsConfigured)
+                .Select(library => new PhotoLibraryProviderDto(
+                    PhotoLibrarySlugs.Slug(library.Source),
+                    PhotoLibrarySlugs.Name(library.Source),
+                    Configured: false,
+                    PhotoLibraryHealthDto.Of(LibraryHealth.NotAsked, picturesAvailable: false))));
+        }
+
+        return TypedResults.Ok(new PhotoLibraryStatusDto(true, providers, unconfigured));
     }
 
     /// <summary>

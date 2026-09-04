@@ -116,6 +116,16 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         status.GetProperty("mayRead").GetBoolean().ShouldBeTrue();
         status.GetProperty("providers").GetArrayLength().ShouldBe(0);
 
+        // An empty layer panel cannot say why it is empty, so the answer names the products this
+        // build can read and no address was supplied for. Nothing was asked of them: they report
+        // that nothing was asked, which is a different answer from reporting that they did not
+        // answer.
+        var unconfigured = status.GetProperty("unconfigured");
+        unconfigured.GetArrayLength().ShouldBe(2);
+        unconfigured[0].GetProperty("configured").GetBoolean().ShouldBeFalse();
+        unconfigured[0].GetProperty("health").GetProperty("reach").GetString().ShouldBe("unknown");
+        unconfigured[0].GetProperty("health").GetProperty("probedAt").ValueKind.ShouldBe(JsonValueKind.Null);
+
         var collection = await JsonAsync(caller, $"{MapUrl}?bbox={Bbox}");
         collection.GetProperty("features").GetArrayLength().ShouldBe(0);
         collection.GetProperty("picturesAvailable").GetBoolean().ShouldBeFalse();
@@ -162,10 +172,12 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden, body);
         CodeOf(body).ShouldBe("photo_library.forbidden");
 
-        // Told no without also being told which products this installation runs.
+        // Told no without also being told which products this installation runs — nor which it
+        // could run and does not, which is the same disclosure said the other way round.
         var status = await JsonAsync(viewer, StatusUrl);
         status.GetProperty("mayRead").GetBoolean().ShouldBeFalse();
         status.GetProperty("providers").GetArrayLength().ShouldBe(0);
+        status.GetProperty("unconfigured").GetArrayLength().ShouldBe(0);
 
         (await viewer.PostAsync(RecheckUrl, content: null)).StatusCode
             .ShouldBe(HttpStatusCode.Forbidden);
@@ -194,7 +206,15 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
 
         var collection = await JsonAsync(caller, $"{MapUrl}?bbox={Bbox}");
         collection.GetProperty("features").GetArrayLength().ShouldBe(1);
-        (await JsonAsync(caller, StatusUrl)).GetProperty("mayRead").GetBoolean().ShouldBeTrue();
+
+        var status = await JsonAsync(caller, StatusUrl);
+        status.GetProperty("mayRead").GetBoolean().ShouldBeTrue();
+        status.GetProperty("providers").GetArrayLength().ShouldBe(1);
+
+        // Opening the libraries to every account does not make every account an administrator.
+        // Which products this installation could run and has not is an installation fact with no
+        // errand behind it for somebody who cannot change it.
+        status.GetProperty("unconfigured").GetArrayLength().ShouldBe(0);
     }
 
     /// <summary>Every route needs a session, including the one that reaches nothing.</summary>
@@ -471,8 +491,6 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         using var caller = await AuthHelper.BearerClientAsync(both, email);
         using var browser = both.CreateClient();
 
-        (await JsonAsync(caller, StatusUrl)).GetProperty("providers").GetArrayLength().ShouldBe(2);
-
         var fromWhole = await JsonAsync(caller, $"{OtherMapUrl}?bbox={Bbox}");
         fromWhole.GetProperty("source").GetString().ShouldBe("immich");
         fromWhole.GetProperty("libraryName").GetString().ShouldBe("Immich");
@@ -504,6 +522,24 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
             .Replace("/immich/", "/photoprism/", StringComparison.Ordinal);
 
         (await browser.GetAsync(crossed)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // Asked last on purpose. This route asks both libraries what state they are in, so calling
+        // it earlier would put its requests among the ones counted above — and what is counted
+        // above is that reading one library asks nothing of the other.
+        var status = await JsonAsync(caller, StatusUrl);
+        status.GetProperty("providers").GetArrayLength().ShouldBe(2);
+        status.GetProperty("unconfigured").GetArrayLength().ShouldBe(0);
+
+        foreach (var provider in status.GetProperty("providers").EnumerateArray())
+        {
+            // Both stubs answer everything, so both are reachable here. What this pins is that the
+            // health of each library is carried per library rather than as one verdict for the
+            // pair: they are separate installations with separate uptime, and one answer for both
+            // would be as broken as the more broken of them.
+            provider.GetProperty("health").GetProperty("reach").GetString().ShouldBe("reachable");
+            provider.GetProperty("health").GetProperty("probedAt").ValueKind
+                .ShouldNotBe(JsonValueKind.Null);
+        }
     }
 
     // ------------------------------------------------------------------------------------ support
