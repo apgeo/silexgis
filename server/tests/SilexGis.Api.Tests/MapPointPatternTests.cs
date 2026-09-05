@@ -239,11 +239,11 @@ public sealed class MapPointPatternTests : IAsyncLifetime, IDisposable
         // huddle of the same entrances are the same answer to both of them. The bearings between
         // pairs are what tells those apart, and they are binned into the same sectors a cave's
         // passage trends are, so the same rose draws both.
-        const string bbox = "24.0,44.0,24.6,44.6";
+        const string bbox = "25.0,43.0,25.6,43.4";
         for (var i = 0; i < 10; i++)
         {
             // Due east of one another, a few kilometres apart: every joining line runs 090.
-            await CreateCaveWithEntranceAsync(owner, $"Pp Line {i}", 24.10 + (0.04 * i), 44.30);
+            await CreateCaveWithEntranceAsync(owner, $"Pp Line {i}", 25.10 + (0.04 * i), 43.20);
         }
 
         // The minimum separation is stated rather than left to its default, which is the
@@ -278,10 +278,10 @@ public sealed class MapPointPatternTests : IAsyncLifetime, IDisposable
     [Fact]
     public async Task A_curve_asked_for_without_simulations_reports_no_band_rather_than_a_flat_one()
     {
-        const string bbox = "23.0,45.0,23.6,45.6";
+        const string bbox = "21.0,43.0,21.6,43.4";
         for (var i = 0; i < 12; i++)
         {
-            await CreateCaveWithEntranceAsync(owner, $"Pp NoBand {i}", 23.05 + (0.045 * i), 45.05 + (0.04 * i));
+            await CreateCaveWithEntranceAsync(owner, $"Pp NoBand {i}", 21.05 + (0.045 * i), 43.05 + (0.03 * i));
         }
 
         var body = await PatternAsync(owner, bbox, "&simulations=0");
@@ -321,8 +321,49 @@ public sealed class MapPointPatternTests : IAsyncLifetime, IDisposable
         await ExpectAsync(owner, "?bbox=24,44,23,43", HttpStatusCode.BadRequest, "map.invalid_bbox");
     }
 
+    /// <summary>
+    /// Margin between a window here and the bulk-seeded box. Smaller than the one the document
+    /// sweep keeps, and deliberately so: that test searches payload text for the digits of its own
+    /// point and needs room for a coincidence. This one needs only that no seeded entrance falls
+    /// inside the window, which is a question of overlap; the margin is there for the edges.
+    /// </summary>
+    private const double SeedClearanceDegrees = 0.1;
+
+    /// <summary>
+    /// Every statistic here is computed over <em>every</em> entrance in the window, so a window
+    /// overlapping the bulk-seeded box measures a hundred thousand caves this class never created.
+    /// Checked on the way to the endpoint rather than remembered per test, because the failure it
+    /// prevents is silent in the way that matters: the numbers that come back are still numbers.
+    /// </summary>
+    private static void AssertWindowBelongsToThisClass(string bbox)
+    {
+        var edges = bbox.Split(',');
+        if (edges.Length != 4 || !double.TryParse(edges[0], out var west)) return;
+        var south = double.Parse(edges[1]);
+        var east = double.Parse(edges[2]);
+        var north = double.Parse(edges[3]);
+
+        const double clearance = SeedClearanceDegrees;
+        var overlapsSeeding =
+            west < PerformanceTests.SeedEast + clearance
+            && east > PerformanceTests.SeedWest - clearance
+            && south < PerformanceTests.SeedNorth + clearance
+            && north > PerformanceTests.SeedSouth - clearance;
+
+        overlapsSeeding.ShouldBeFalse(
+            $"The window ({west}, {south}) to ({east}, {north}) overlaps the box the performance "
+            + $"fixture bulk-seeds across, ({PerformanceTests.SeedWest}, {PerformanceTests.SeedSouth}) to "
+            + $"({PerformanceTests.SeedEast}, {PerformanceTests.SeedNorth}). These statistics read every "
+            + "entrance in the window, so about a thousand caves belonging to that fixture would be "
+            + "counted here — and the run would still look ordinary, because a pair count and a rose "
+            + "computed over the wrong set are both perfectly well-formed numbers. Move this window "
+            + "south of the seeded box, as the rest of this class does; do not relax the assertion "
+            + "to match whatever came back.");
+    }
+
     private async Task<JsonObject> PatternAsync(HttpClient client, string bbox, string extra)
     {
+        AssertWindowBelongsToThisClass(bbox);
         var response = await client.GetAsync($"/api/v1/map/point-pattern?bbox={bbox}{extra}");
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<JsonObject>())!;
