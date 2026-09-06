@@ -172,6 +172,11 @@ a constraint the client does not have — and a code the client generated is the
 one changed field and leave the rest of the row alone, and the thirty-odd server-side fields the
 device knows nothing about are never cleared by an upload that did not mention them.
 
+The converse is a real limit and is stated in `01-protocol.md`: because an absent member and an
+explicit `null` are the same bytes on the wire, **this generation cannot clear a field**. Sending
+`"description": null` leaves the stored description alone. A device that must clear one sends a
+space until a later generation gives the row shape a way to say it.
+
 **Sync routes are bearer-only, always.** No sync route joins the anonymous allow-list, and no
 capability token ever appears in a sync payload. The one anonymous route in this package is the QR
 landing lookup, which carries no coordinate and no name. *(the other half of rule 10)*

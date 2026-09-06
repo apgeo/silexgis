@@ -62,6 +62,35 @@ public sealed class FeatureIntegrityVerifier(SilexGisDbContext db)
             }
         }
 
+        // A cave is two rows and only one direction of the pair is guarded: the caves row
+        // carries a composite foreign key on (id, kind) into the feature row, so a caves row
+        // without its feature is impossible, while a feature of kind Cave that lost — or was
+        // never given — its caves row is a state nothing refuses. It is worth reporting because
+        // the consequence is not local: everything cave-specific a reader is shown comes off
+        // that second row, so a single broken one used to answer the whole listing with a
+        // server error, for every reader of the archive rather than for whoever owns it.
+        //
+        // Only Cave is checked. cave_entrances and centerlines are paired with their features
+        // the same way, but every read path that reaches one does so through a query the
+        // database composes, where a feature missing its half simply fails to match instead of
+        // failing the request — so nothing observed so far argues for reporting them, and a
+        // check earns its place by the failure it catches.
+        //
+        // Ignoring the soft-delete filters on both sides: a soft delete stamps the feature and
+        // leaves the subtype row alone, so comparing a filtered subtype set against the
+        // unfiltered feature set read above would report every soft-deleted cave in the
+        // installation.
+        var caveSubtypeIds = (await db.Caves.IgnoreQueryFilters().Select(c => c.Id).ToListAsync(ct))
+            .ToHashSet();
+        foreach (var feature in features)
+        {
+            if (feature.Kind == FeatureKind.Cave && !caveSubtypeIds.Contains(feature.Id))
+            {
+                problems.Add(new IntegrityProblem("subtype_row_missing", feature.Id,
+                    "a feature of kind Cave has no row in its subtype table"));
+            }
+        }
+
         // Cycles (the rules tolerate them; their presence is itself the violation).
         foreach (var feature in features)
         {

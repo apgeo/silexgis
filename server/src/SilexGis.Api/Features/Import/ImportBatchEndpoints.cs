@@ -129,6 +129,24 @@ public static class ImportBatchEndpoints
             .Select(f => new { f.Id, f.Name, f.Kind, f.DeletedAt })
             .ToDictionaryAsync(f => f.Id, ct);
 
+        // The same for trips, with one difference that matters after an undo: a reverted trip is
+        // removed rather than soft-deleted, so the line's pointer at it is already null and there
+        // is nothing left to look up. What the line recorded of the source row answers instead.
+        var tripIds = items.Where(i => i.TripLogId is not null).Select(i => i.TripLogId!.Value).ToList();
+        var trips = tripIds.Count == 0
+            ? []
+            : await db.TripLogs.AsNoTracking()
+                .VisibleTo(ctx, AccessDomain.TripLogs)
+                .Where(t => tripIds.Contains(t.Id))
+                .Select(t => new { t.Id, t.Title })
+                .ToDictionaryAsync(t => t.Id, t => t.Title, ct);
+
+        // Only a trip spreadsheet's lines carry a recorded trip title. Every other source stores
+        // the source row's own attributes here verbatim, so a file whose rows happen to carry a
+        // "title" attribute would otherwise be read back as the title of a trip that does not
+        // exist — and would hand the reader a name the line above deliberately withheld.
+        var recordsTripTitles = batch.Source == ImportSource.TripCsv;
+
         var names = await GeofileNamesAsync(db, [batch], ct);
         return TypedResults.Ok(new ImportBatchDetailDto(
             StagedImportEndpoints.ToDto(
@@ -147,9 +165,38 @@ public static class ImportBatchEndpoints
                         i.SourceFeatureId,
                         i.RuleId,
                         i.RuleName,
-                        i.Action);
+                        i.Action,
+                        i.TripLogId,
+                        (i.TripLogId is { } tid ? trips.GetValueOrDefault(tid) : null)
+                            ?? (recordsTripTitles ? RecordedTitle(i.SourceProperties) : null));
                 })
             ]));
+    }
+
+    /// <summary>
+    /// The title the line recorded of the row it was written from, if it recorded one. Read out
+    /// of the stored source rather than out of the object, because after an undo the object is
+    /// the one thing that is not there any more.
+    ///
+    /// <para>
+    /// Only ever asked of a trip spreadsheet's lines. What a line stores here is whatever its
+    /// source was: for a trip row it is the parsed row, whose title is the trip's; for a vector
+    /// or photo import it is the source object's own attributes, where a "title" is the file
+    /// author's word for something else entirely.
+    /// </para>
+    /// </summary>
+    private static string? RecordedTitle(string json)
+    {
+        var properties = ParseProperties(json);
+        if (properties.ValueKind != JsonValueKind.Object
+            || !properties.TryGetProperty("title", out var title)
+            || title.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var value = title.GetString();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     private static async Task<Results<Ok<ImportBatchDto>, UnauthorizedHttpResult, ProblemHttpResult>> RevertAsync(
@@ -234,7 +281,11 @@ public static class ImportBatchEndpoints
                 item.SourceFeatureId,
                 item.RuleId,
                 item.RuleName,
-                item.Action),
+                item.Action,
+                // This route is reached through a feature, so the line it answers with is a
+                // feature's line and carries no trip.
+                null,
+                null),
             ParseProperties(item.SourceProperties)));
     }
 

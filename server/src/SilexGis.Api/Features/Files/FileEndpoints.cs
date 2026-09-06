@@ -651,12 +651,17 @@ public static class FileEndpoints
     {
         // The one refusal a client is expected to answer: it names the document already
         // holding these bytes so the warning can say what it collides with, and the caller
-        // repeats the upload with allowDuplicate to store it anyway.
+        // repeats the upload with allowDuplicate to store it anyway. The identifier travels as a
+        // member of its own as well as inside the sentence — the sentence is for a person to
+        // read, and a client that reads it back out of the prose breaks the day it is reworded
+        // or translated.
         UploadItemReasons.Duplicate => ApiProblems.Conflict(
             DuplicateCode,
             outcome.DuplicateOfDocumentId is { } id
                 ? $"This content is already stored as document {id}."
-                : "This content is already stored."),
+                : "This content is already stored.",
+            "duplicateOfDocumentId",
+            outcome.DuplicateOfDocumentId),
         UploadItemReasons.FilingRefused => ApiProblems.Forbidden(UploadDestinationBinding.FilingForbiddenCode),
         UploadItemReasons.PathRefused => ApiProblems.BadRequest(UploadDestinationBinding.PathRefusedCode),
         null => ApiProblems.BadRequest("file.upload_failed"),

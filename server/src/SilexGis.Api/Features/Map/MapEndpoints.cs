@@ -14,6 +14,7 @@ using SilexGis.Domain.Import;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Trips;
 
 namespace SilexGis.Api.Features.Map;
 
@@ -30,6 +31,31 @@ public sealed record CenterlineFeatureCollection(
     int WithheldCount,
     bool Detail,
     int FlatCount);
+
+/// <summary>
+/// A GeoJSON FeatureCollection of trip geometries, plus the two things a reader cannot work out
+/// from the features alone: whether the request stopped at its cap, and how many trips in the
+/// date window have no position at all. Both are GeoJSON foreign members, so a plain GeoJSON
+/// reader still parses the collection.
+/// </summary>
+/// <param name="Truncated">
+/// The request reached the per-request row cap and there are trips it did not answer with.
+/// Counted in <em>trips</em> and never in features, because one trip states up to two shapes of
+/// its own: a client comparing a feature count against the published cap would call a complete
+/// answer truncated as soon as a single trip stated both of them.
+/// </param>
+/// <param name="UnlocatedCount">
+/// Trips in the window that state no position of their own and name no cave this caller may both
+/// read and place — so they are on no map at any viewport. Reported rather than dropped: a map
+/// that silently omits them tells a reader the window holds fewer trips than it does, and the
+/// honest answer to "where was this one" is that nobody recorded it. A window figure and not a
+/// viewport one, because a trip with no position is in no viewport by definition.
+/// </param>
+public sealed record TripLogFeatureCollection(
+    string Type,
+    IReadOnlyList<GeoFeature> Features,
+    bool Truncated,
+    int UnlocatedCount);
 
 /// <summary>
 /// The elevation model the 3D scene should draw its ground from, when this installation has one.
@@ -97,7 +123,7 @@ public static class MapEndpoints
             .WithSummary("Imported geofile rows as GeoJSON for the given bbox.");
         api.MapGet("/map/trip-logs", TripLogsAsync)
             .WithTags("Map")
-            .WithSummary("Trip-log geometries as GeoJSON for the given bbox and date range.");
+            .WithSummary("Trip-log geometries as GeoJSON for the given bbox, date range and list filters; a trip with no shape of its own is placed at a cave it names when the caller may both read and place it, and counted as unlocated otherwise.");
         api.MapGet("/map/cave-centerlines", CaveCenterlinesAsync)
             .WithTags("Map")
             .WithSummary("Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted. z=true opts in to altitudes, which the flat display skeleton cannot carry.");
@@ -443,12 +469,49 @@ public static class MapEndpoints
             withZ ? rows.Count(r => r.Included && !r.HasZ) : 0));
     }
 
-    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> TripLogsAsync(
+    /// <summary>
+    /// A trip's position is a chain of three, and a trip takes the first link it has: the shape
+    /// it drew of itself, else where its party met, else the caves its roles name. The third link
+    /// exists because a trip read out of a club's historical spreadsheet has no geometry at all —
+    /// the sheet records which cave, not where — so without it the whole of an imported archive is
+    /// a map with nothing on it.
+    ///
+    /// <para>
+    /// The first two links are the trip's own statements and are served exactly to exactly the
+    /// readers of the trip, which is a decision taken elsewhere and pinned by its own test. The
+    /// third is not the trip's to give away: it is a cave's position, so it passes the two gates
+    /// that govern a cave named on a trip, in that order — may this caller read the cave at all,
+    /// and may this caller place it exactly — and then the same placement question is asked again
+    /// of the entrance whose coordinate is actually being handed over. A cave that fails any of
+    /// them contributes nothing: no snapped point, no blurred one, no dot at all. Blurring is
+    /// wrong here in a way it is not for a feature layer, because the reader is not told the point
+    /// is approximate and would read a grid-snapped cave as where the trip went.
+    /// </para>
+    ///
+    /// <para>
+    /// A cave the caller may not read is refused in silence — the response says nothing about the
+    /// trip having named anything — because an answer that differed from the answer for a cave
+    /// that does not exist is an answer somebody can go looking for.
+    /// </para>
+    ///
+    /// <para>
+    /// Only caves derive a position, never the areas a trip names. An area is a massif, and the
+    /// point at the middle of a massif is not a place anybody went; a map drawing it would show an
+    /// invented position that reads exactly like a recorded one. A trip whose only geographic
+    /// statement is an area is therefore unlocated, and is counted as such rather than placed.
+    /// </para>
+    /// </summary>
+    private static async Task<Results<Ok<TripLogFeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> TripLogsAsync(
         string bbox,
         DateOnly? from,
         DateOnly? to,
+        string? types,
+        string? states,
+        string? visibilities,
+        bool? hadIncident,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
+        FeatureProtection protection,
         IOptions<MapOptions> mapOptions,
         CancellationToken ct)
     {
@@ -463,19 +526,60 @@ public static class MapEndpoints
             return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
         }
 
+        if (!TryParseTripFilters(types, states, visibilities, out var typeIds, out var stateWords, out var visibilityWords, out var badFilter))
+        {
+            return badFilter!;
+        }
+
         var polygon = box.ToPolygon();
+        var cap = mapOptions.Value.MaxPoints;
+
+        // Every narrowing is composed into the visibility-filtered query rather than applied to
+        // its results, so the counts below are counts of what this caller may read.
+        var window = db.TripLogs.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.TripLogs)
+            .OverlappingDays(x => x.TripDate, x => x.TripDateEnd, from, to);
+
+        if (typeIds.Count > 0)
+        {
+            window = window.Where(x => x.TripTypeId != null && typeIds.Contains(x.TripTypeId.Value));
+        }
+
+        if (stateWords.Count > 0)
+        {
+            window = window.Where(x => stateWords.Contains(x.State));
+        }
+
+        if (visibilityWords.Count > 0)
+        {
+            window = window.Where(x => visibilityWords.Contains(x.Visibility));
+        }
+
+        if (hadIncident is { } incident)
+        {
+            window = window.Where(x => x.HadIncident == incident);
+        }
+
         // Either position puts the trip in the window. A trip that states only where its party
         // meets is a trip somebody looking at a map wants to find — that is what the meeting
         // point is a column for — and a filter that asked about the sketch alone would leave
         // every such trip off the map with nothing to say it had been left off.
-        var query = db.TripLogs.AsNoTracking()
-            .VisibleTo(ctx, AccessDomain.TripLogs)
+        var stated = await window
             .Where(x => (x.Geom != null && x.Geom.Intersects(polygon))
-                || (x.MeetingGeom != null && x.MeetingGeom.Intersects(polygon)));
+                || (x.MeetingGeom != null && x.MeetingGeom.Intersects(polygon)))
+            .OrderBy(x => x.Id)
+            .Take(cap)
+            .ToListAsync(ct);
 
-        query = query.OverlappingDays(x => x.TripDate, x => x.TripDateEnd, from, to);
-
-        var rows = await query.OrderBy(x => x.Id).Take(mapOptions.Value.MaxPoints).ToListAsync(ct);
+        // The trips with nothing of their own, over the whole window and deliberately not over
+        // the viewport: a trip that turns out to have no position anywhere is in no viewport, so
+        // a viewport-shaped question could never find the ones this response has to report.
+        var shapeless = await window
+            .Where(x => x.Geom == null && x.MeetingGeom == null)
+            .OrderBy(x => x.Id)
+            .Select(x => new ShapelessTrip(x.Id, x.Title, x.TripDate))
+            .Take(cap)
+            .ToListAsync(ct);
 
         // One feature per shape the trip states, each saying which it is, rather than one feature
         // carrying whichever happened to be there. The two mean different things — where the trip
@@ -488,30 +592,228 @@ public static class MapEndpoints
         // a cave system a county away would otherwise answer a request for this window with that
         // distant cave system, which the caller would draw as though it were in view. A window
         // asks what is in it, and the answer holds nothing else.
-        var features = new List<GeoFeature>(rows.Count);
-        foreach (var x in rows)
+        var features = new List<GeoFeature>(stated.Count);
+        foreach (var x in stated)
         {
             if (x.Geom is not null && x.Geom.Intersects(polygon))
             {
-                features.Add(GeoFeature.Of(x.Geom, Properties(x, "sketch")));
+                features.Add(GeoFeature.Of(x.Geom, Properties(x.Id, x.Title, x.TripDate, "sketch")));
             }
 
             if (x.MeetingGeom is not null && x.MeetingGeom.Intersects(polygon))
             {
-                features.Add(GeoFeature.Of(x.MeetingGeom, Properties(x, "meeting")));
+                features.Add(GeoFeature.Of(x.MeetingGeom, Properties(x.Id, x.Title, x.TripDate, "meeting")));
             }
         }
 
-        return TypedResults.Ok(FeatureCollection.Of(features));
-
-        static Dictionary<string, object?> Properties(TripLog trip, string kind) => new()
+        var derived = await DerivedTripPointsAsync(db, protection, ctx, [.. shapeless.Select(t => t.Id)], ct);
+        var unlocated = 0;
+        foreach (var trip in shapeless)
         {
-            ["id"] = trip.Id,
-            ["title"] = trip.Title,
-            ["tripDate"] = trip.TripDate.ToString("O"),
+            if (!derived.TryGetValue(trip.Id, out var point))
+            {
+                unlocated++;
+                continue;
+            }
+
+            if (!point.Geom.Intersects(polygon))
+            {
+                continue; // located, just not here — the window's business, not this viewport's
+            }
+
+            var props = Properties(trip.Id, trip.Title, trip.TripDate, "cave");
+            props["caveId"] = point.CaveId;
+            props["caveName"] = point.CaveName;
+            features.Add(GeoFeature.Of(point.Geom, props));
+        }
+
+        // Truncation is a count of trips and never of features: the cap is applied to rows, and
+        // one row answers with up to two shapes of its own.
+        var truncated = stated.Count >= cap || shapeless.Count >= cap;
+        return TypedResults.Ok(new TripLogFeatureCollection("FeatureCollection", features, truncated, unlocated));
+
+        static Dictionary<string, object?> Properties(Guid id, string title, DateOnly date, string kind) => new()
+        {
+            ["id"] = id,
+            ["title"] = title,
+            ["tripDate"] = date.ToString("O"),
             ["kind"] = kind,
         };
     }
+
+    /// <summary>A trip that states no position of its own, and the little a map feature needs of it.</summary>
+    private sealed record ShapelessTrip(Guid Id, string Title, DateOnly TripDate);
+
+    /// <summary>Where a trip with no shape of its own sits, and which cave put it there.</summary>
+    private sealed record DerivedTripPoint(Geometry Geom, Guid CaveId, string? CaveName);
+
+    /// <summary>
+    /// The position each of the given trips inherits from the caves its roles name, for trips
+    /// that state none of their own. A trip absent from the result has no position this caller
+    /// may be shown — which covers a trip naming no cave, a trip naming one this caller may not
+    /// read, a trip naming one this caller may read but not place, and a trip naming one nobody
+    /// has ever surveyed an entrance for. Those four are deliberately one answer: telling them
+    /// apart is telling a caller which caves a response has refused to name.
+    /// </summary>
+    private static async Task<Dictionary<Guid, DerivedTripPoint>> DerivedTripPointsAsync(
+        SilexGisDbContext db,
+        FeatureProtection protection,
+        AccessContext ctx,
+        IReadOnlyList<Guid> tripIds,
+        CancellationToken ct)
+    {
+        if (tripIds.Count == 0)
+        {
+            return [];
+        }
+
+        // Role-agnostic, as everywhere else a trip's caves are asked for: the question is which
+        // caves the trip named, not what it did in them.
+        var pairs = await TripRoleLinks.PairsForAsync(db, tripIds, FeatureKind.Cave, ct);
+        if (pairs.Count == 0)
+        {
+            return [];
+        }
+
+        // The two gates, in order and in their one home: readability of the cave, then whether
+        // this caller may place it exactly. Asked once for the whole page rather than per trip.
+        var disclosable = await TripCaveDisclosure.DisclosableCaveIdsAsync(
+            db, protection, ctx, [.. pairs.Select(p => p.FeatureId).Distinct()], ct);
+        if (disclosable.Count == 0)
+        {
+            return [];
+        }
+
+        var caveIds = disclosable.ToList();
+        var caveNames = await db.Features.AsNoTracking()
+            .Where(f => caveIds.Contains(f.Id))
+            .Select(f => new { f.Id, f.Name })
+            .ToDictionaryAsync(f => f.Id, f => f.Name, ct);
+
+        // A cave's own row carries no position; its entrances do. The entrance is where the
+        // coordinate actually comes from, so the placement question is asked of it as well as of
+        // the cave above — an entrance can carry protection of its own that its cave does not —
+        // and one it refuses is left out entirely rather than blurred.
+        var entrances = await db.Features.AsNoTracking()
+            .Where(f => f.Kind == FeatureKind.CaveEntrance
+                && f.Geom != null
+                && caveIds.Contains(f.Entrance!.CaveFeatureId))
+            .Select(f => new
+            {
+                f.Id,
+                f.Geom,
+                CaveId = f.Entrance!.CaveFeatureId,
+                f.Entrance!.IsMain,
+            })
+            .OrderBy(f => f.Id)
+            .ToListAsync(ct);
+        if (entrances.Count == 0)
+        {
+            return [];
+        }
+
+        var exactView = await protection.ExactViewIdsAsync(ctx, [.. entrances.Select(e => e.Id)], ct);
+
+        // One point per cave: the main entrance where one is marked, otherwise the lowest id, so
+        // the same cave lands in the same place on every request rather than wandering between
+        // its entrances as the database feels like ordering them.
+        var caveGeom = new Dictionary<Guid, Geometry>();
+        foreach (var entrance in entrances.OrderByDescending(e => e.IsMain).ThenBy(e => e.Id))
+        {
+            if (entrance.Geom is not Point || !exactView.Contains(entrance.Id))
+            {
+                continue;
+            }
+
+            caveGeom.TryAdd(entrance.CaveId, entrance.Geom);
+        }
+
+        // One dot per trip, not one per cave it named. A weekend that reached three caves is one
+        // trip, and three dots would make a reader counting the map disagree with a reader
+        // counting the list; the lowest cave id is picked so the choice is the same every time.
+        var byTrip = new Dictionary<Guid, DerivedTripPoint>();
+        foreach (var pair in pairs.OrderBy(p => p.FeatureId))
+        {
+            if (byTrip.ContainsKey(pair.TripId) || !caveGeom.TryGetValue(pair.FeatureId, out var geom))
+            {
+                continue;
+            }
+
+            byTrip[pair.TripId] = new DerivedTripPoint(geom, pair.FeatureId, caveNames.GetValueOrDefault(pair.FeatureId));
+        }
+
+        return byTrip;
+    }
+
+    /// <summary>
+    /// The trip layer's narrowings, in the same comma-separated spelling the trip listing uses so
+    /// a filter carried from the list to the map survives the journey unchanged. A word this
+    /// application does not have is refused rather than dropped: a layer that quietly ignored half
+    /// a filter would draw an answer to a question nobody asked.
+    /// </summary>
+    private static bool TryParseTripFilters(
+        string? types,
+        string? states,
+        string? visibilities,
+        out List<long> typeIds,
+        out List<ActivityState> stateWords,
+        out List<Visibility> visibilityWords,
+        out ProblemHttpResult? problem)
+    {
+        typeIds = [];
+        stateWords = [];
+        visibilityWords = [];
+        problem = null;
+
+        foreach (var word in SplitFilter(types))
+        {
+            if (!long.TryParse(word, out var typeId))
+            {
+                problem = ApiProblems.BadRequest("map.invalid_trip_filter", $"Unknown trip type '{word}'.");
+                return false;
+            }
+
+            typeIds.Add(typeId);
+        }
+
+        foreach (var word in SplitFilter(states))
+        {
+            if (!Enum.TryParse<ActivityState>(word, ignoreCase: true, out var state)
+                || !Enum.IsDefined(state)
+                || !ActivityStates.IsTripLogState(state))
+            {
+                problem = ApiProblems.BadRequest("map.invalid_trip_filter", $"Unknown state '{word}'.");
+                return false;
+            }
+
+            stateWords.Add(state);
+        }
+
+        foreach (var word in SplitFilter(visibilities))
+        {
+            if (!Enum.TryParse<Visibility>(word, ignoreCase: true, out var visibility) || !Enum.IsDefined(visibility))
+            {
+                problem = ApiProblems.BadRequest("map.invalid_trip_filter", $"Unknown visibility '{word}'.");
+                return false;
+            }
+
+            visibilityWords.Add(visibility);
+        }
+
+        typeIds = [.. typeIds.Distinct()];
+        stateWords = [.. stateWords.Distinct()];
+        visibilityWords = [.. visibilityWords.Distinct()];
+        return true;
+    }
+
+    /// <summary>
+    /// One facet's chosen words. Blank entries are dropped rather than refused, because a control
+    /// that clears its last choice by leaving a trailing comma has not made a mistake.
+    /// </summary>
+    private static IEnumerable<string> SplitFilter(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> GeofileFeaturesAsync(
         Guid id,

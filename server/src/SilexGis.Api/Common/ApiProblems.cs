@@ -42,4 +42,18 @@ public static class ApiProblems
     public static ProblemHttpResult Conflict(string code, string? detail = null) =>
         TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status409Conflict,
             extensions: new Dictionary<string, object?> { ["code"] = code });
+
+    /// <summary>
+    /// A conflict carrying one machine-readable fact about what it collided with.
+    /// </summary>
+    /// <remarks>
+    /// The detail sentence is for a person to read, and only the code is a contract. A client
+    /// that needs the identifier of the thing in the way has to be given it as a member of its
+    /// own — scraping it back out of English prose makes rewording or translating that sentence
+    /// a silent break in whatever was parsing it.
+    /// </remarks>
+    public static ProblemHttpResult Conflict(
+        string code, string? detail, string member, object? value) =>
+        TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status409Conflict,
+            extensions: new Dictionary<string, object?> { ["code"] = code, [member] = value });
 }

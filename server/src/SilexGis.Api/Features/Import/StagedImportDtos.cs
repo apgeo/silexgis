@@ -157,6 +157,13 @@ public sealed record ImportBatchDto(
     IReadOnlyList<ImportFailureDto> Failures);
 
 /// <summary>One line of a batch: what a source row became, under which rule.</summary>
+/// <remarks>
+/// <c>TripTitle</c> is answered even where the trip itself is gone, out of what the line recorded
+/// at the time. A feature survives an undo — soft-deleted, keeping its identifier — but a trip is
+/// removed outright and the line's pointer at it goes null with it. Without a title kept here, a
+/// reverted trip import would render as a column of lines saying nothing at all, and "what did
+/// that import create" is exactly the question somebody looking at a reverted batch is asking.
+/// </remarks>
 public sealed record ImportBatchItemDto(
     long Id,
     Guid? FeatureId,
@@ -167,7 +174,9 @@ public sealed record ImportBatchItemDto(
     long? SourceFeatureId,
     string? RuleId,
     string? RuleName,
-    ImportDecisionAction Action);
+    ImportDecisionAction Action,
+    Guid? TripLogId,
+    string? TripTitle);
 
 /// <summary>
 /// Where an object came from: which file, which rule, who confirmed it, when. The source

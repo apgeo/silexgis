@@ -23,6 +23,9 @@ import type {
   PatternRuleOutcome,
   SpeleogeneticPatternKind,
   TerrainBuildStatus,
+  TripCsvDateOrderSource,
+  TripCsvDiagnosticCode,
+  TripCsvField,
   SurveyModelInfo,
 } from '../api/hooks.ts';
 import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
@@ -777,6 +780,74 @@ describe('i18n locales', () => {
       ),
     );
     expect(missing).toEqual([]);
+  });
+
+  /**
+   * The import wizard builds three of its key names from a value the server sent, so the scan
+   * that reads literal keys out of the source cannot see them. A word the server adds to any
+   * of these three vocabularies therefore fails to compile here until it has been named in
+   * both languages — which is the only thing standing between a new diagnostic code and a
+   * reviewer reading the raw enum name off the screen.
+   */
+  it('names every part of a sheet, every reason a row was refused, and every way a date order was settled', () => {
+    const fields: Record<TripCsvField, true> = {
+      sourceId: true,
+      startDate: true,
+      endDate: true,
+      title: true,
+      country: true,
+      massif: true,
+      subArea: true,
+      caves: true,
+      proposers: true,
+      participants: true,
+      details: true,
+      details2: true,
+      tripType: true,
+      errors: true,
+    };
+    const problems: Record<TripCsvDiagnosticCode, true> = {
+      mappedColumnMissing: true,
+      mappedColumnTaken: true,
+      unmappedColumn: true,
+      raggedRow: true,
+      blankRow: true,
+      requiredFieldEmpty: true,
+      dateUnreadable: true,
+      dateOutOfRange: true,
+      dateTwoDigitYear: true,
+      dateAmbiguous: true,
+      dateOrderConflict: true,
+      valueDropped: true,
+      duplicateSourceId: true,
+      tooManyColumns: true,
+      noHeader: true,
+      unterminatedQuote: true,
+    };
+    const sources: Record<TripCsvDateOrderSource, true> = { stated: true, file: true, conflict: true };
+
+    const missing = (
+      [
+        ['fields', Object.keys(fields)],
+        ['problems', Object.keys(problems)],
+        ['dateOrderSources', Object.keys(sources)],
+      ] as const
+    ).flatMap(([group, names]) =>
+      names.flatMap((name) =>
+        [
+          ['en', en],
+          ['ro', ro],
+        ]
+          .filter(([, locale]) => typeof lookup(locale as object, `tripImport.${group}.${name}`) !== 'string')
+          .map(([language]) => `${language as string}: tripImport.${group}.${name}`),
+      ),
+    );
+    expect(missing).toEqual([]);
+
+    // And no more than the server can send: a word left behind by a rename is a phrase
+    // nothing will ever show, and the only way anybody finds it is a test like this one.
+    expect(Object.keys(en.tripImport.problems).sort()).toEqual(Object.keys(problems).sort());
+    expect(Object.keys(en.tripImport.fields).sort()).toEqual(Object.keys(fields).sort());
   });
 
   it('names every numbered division a content hit can carry, and no more', () => {

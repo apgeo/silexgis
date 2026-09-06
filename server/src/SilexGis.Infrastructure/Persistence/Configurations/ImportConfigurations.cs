@@ -88,6 +88,29 @@ public sealed class PhotoImportSessionConfiguration : IEntityTypeConfiguration<P
     }
 }
 
+public sealed class TripImportSessionConfiguration : IEntityTypeConfiguration<TripImportSession>
+{
+    public void Configure(EntityTypeBuilder<TripImportSession> builder)
+    {
+        builder.ToTable("trip_import_sessions");
+        builder.Property(x => x.Id).ValueGeneratedNever();
+
+        builder.Property(x => x.Options).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+        builder.Property(x => x.Decisions).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+
+        // A review of a file that is gone is not a review; deleting the upload takes it.
+        builder.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.StoredFileId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // One review per person per file: two people going through the same sheet keep their own
+        // decisions instead of overwriting each other. The unique index is what makes that true
+        // of the database rather than of the handler.
+        builder.HasIndex(x => new { x.StoredFileId, x.UserId }).IsUnique();
+    }
+}
+
 public sealed class ImportBatchConfiguration : IEntityTypeConfiguration<ImportBatch>
 {
     public void Configure(EntityTypeBuilder<ImportBatch> builder)
@@ -151,6 +174,10 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // batch that says "a cave was created here from a photograph somebody has since
         // deleted" is still the answer somebody needs.
         builder.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.SourceFileId).OnDelete(DeleteBehavior.SetNull);
+        // A trip deleted by hand afterwards leaves the line that says it was imported, the same
+        // way a deleted upload does. Taking the line with it would erase the record of an import
+        // one of whose rows somebody later removed, which is exactly the import worth finding.
+        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(x => x.ImportBatchId);
         // "Where did this cave come from?" is a lookup by feature, and it is the question the
@@ -159,5 +186,8 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // "What did this photograph become?" is the same question asked from the other end, and
         // it is what the attachment panel asks about every picture it shows.
         builder.HasIndex(x => x.SourceFileId).HasFilter("source_file_id is not null");
+        // "Which import produced this trip?" — the same question the feature index answers, asked
+        // of the objects a spreadsheet becomes.
+        builder.HasIndex(x => x.TripLogId).HasFilter("trip_log_id is not null");
     }
 }

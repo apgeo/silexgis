@@ -20,22 +20,21 @@ import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
+import { tripPalette as palette } from '../../map/markerPalette.ts';
 import { coarsePointer } from '../../map/pointer.ts';
 import { readTripGeometry, writeTripGeometry, type TripGeometry, type TripShape } from './tripGeometry.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
 const DEFAULT_CENTER: [number, number] = [25.6, 45.65];
 
-const SKETCH_COLOUR = '#146262';
-
 const sketchStyle = new Style({
   image: new CircleStyle({
     radius: 7,
-    fill: new Fill({ color: SKETCH_COLOUR }),
-    stroke: new Stroke({ color: '#fff', width: 2 }),
+    fill: new Fill({ color: palette.sketch }),
+    stroke: new Stroke({ color: palette.stroke, width: 2 }),
   }),
-  stroke: new Stroke({ color: SKETCH_COLOUR, width: 3 }),
-  fill: new Fill({ color: 'rgba(20, 98, 98, 0.2)' }),
+  stroke: new Stroke({ color: palette.sketch, width: 3 }),
+  fill: new Fill({ color: palette.sketchFill }),
 });
 
 interface Props {

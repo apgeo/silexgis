@@ -31,11 +31,13 @@ const ImportWorkspacePage = lazy(() => import('./pages/geodata/ImportWorkspacePa
 const PhotoImportWorkspacePage = lazy(() => import('./pages/geodata/PhotoImportWorkspacePage.tsx'));
 const SpeologieSearchPage = lazy(() => import('./pages/catalogue/SpeologieSearchPage.tsx'));
 const SpeologieImportPage = lazy(() => import('./pages/catalogue/SpeologieImportPage.tsx'));
+const TripImportPage = lazy(() => import('./pages/trips/TripImportPage.tsx'));
 const TermRulesPage = lazy(() => import('./pages/admin/TermRulesPage.tsx'));
 const ChecklistsPage = lazy(() => import('./pages/checklists/ChecklistsPage.tsx'));
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const MyTripsPage = lazy(() => import('./pages/trips/MyTripsPage.tsx'));
+const TripStatsPage = lazy(() => import('./pages/trips/TripStatsPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const TripReportPage = lazy(() => import('./pages/trips/TripReportPage.tsx'));
 const EventListPage = lazy(() => import('./pages/events/EventListPage.tsx'));
@@ -148,6 +150,9 @@ export const routes: RouteObject[] = [
           { path: '/calendar', element: <Loadable><CalendarPage /></Loadable> },
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/mine', element: <Loadable><MyTripsPage /></Loadable> },
+          { path: '/trip-logs/stats', element: <Loadable><TripStatsPage /></Loadable> },
+          { path: '/trip-logs/import', element: <Loadable><TripImportPage /></Loadable> },
+          { path: '/trip-logs/import/:fileId', element: <Loadable><TripImportPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
           { path: '/trip-logs/:id/report', element: <Loadable><TripReportPage /></Loadable> },
           { path: '/events', element: <Loadable><EventListPage /></Loadable> },

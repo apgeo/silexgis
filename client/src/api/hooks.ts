@@ -165,6 +165,13 @@ export const queryKeys = {
   // choices, so changing a rule set or the duplicate radius is a different question rather
   // than a stale answer to the same one.
   importPreview: (geofileId: string, body: unknown) => ['import-preview', geofileId, body] as const,
+  tripImportSession: (fileId: string) => ['trip-import-session', fileId] as const,
+  tripImportColumns: (fileId: string) => ['trip-import-columns', fileId] as const,
+  // Same reasoning as the vector preview: reading a sheet is a pure function of the file and
+  // the choices, so moving a column mapping or the day/month order is a different question
+  // rather than a stale answer to the same one.
+  tripImportPreview: (fileId: string, body: unknown) => ['trip-import-preview', fileId, body] as const,
+  photoLibraryStatus: ['photo-libraries', 'status'] as const,
   speologieStatus: ['speologie', 'status'] as const,
   // The whole request is the key. A catalogue search is a pure function of the term, the county
   // and the page, so changing any of them is a different question rather than a stale answer to
@@ -213,6 +220,9 @@ export const queryKeys = {
   tripLogMap: (bbox: string, from: string, to: string) =>
     ['map', 'trip-logs', bbox, from, to] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
+  tripLogFacets: (params: TripLogFacetParams) => ['trip-logs', 'facets', params] as const,
+  tripLogGrouping: (params: TripLogGroupingParams) => ['trip-logs', 'grouping', params] as const,
+  tripLogStats: (params: TripLogFacetParams) => ['trip-logs', 'stats', params] as const,
   myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
@@ -314,7 +324,15 @@ async function unwrap<T>(
   const { data, error, response } = await call;
   if (error !== undefined || data === undefined) {
     const problem = error as { code?: string; detail?: string } | undefined;
-    throw new ApiError(response.status, problem?.code, problem?.detail);
+    // The whole problem object travels, not only the two members every screen reads: a refusal
+    // that carries a machine-readable fact of its own is otherwise recoverable only by matching
+    // it out of the English detail sentence.
+    throw new ApiError(
+      response.status,
+      problem?.code,
+      problem?.detail,
+      problem as Record<string, unknown> | undefined,
+    );
   }
   return data;
 }
@@ -1277,6 +1295,213 @@ export async function fetchCenterlineFeatures(
 /** Imperative fetch used by the OpenLayers photo overlay loader (not a hook). */
 export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureCollection> {
   return unwrap(api.GET('/api/v1/map/photos', { params: { query: { bbox } } }));
+}
+
+export type TripLogFeatureCollection = components['schemas']['TripLogFeatureCollection'];
+
+/** The narrowings the trip overlay may carry, spelled as the trip listing spells them. */
+export interface TripLogMapFilter {
+  from?: string;
+  to?: string;
+  types?: string[];
+  states?: string[];
+  visibilities?: string[];
+  hadIncident?: boolean;
+}
+
+/**
+ * Imperative fetch used by the OpenLayers trip overlay loader (not a hook).
+ *
+ * Every facet is sent as one comma-separated word list, which is how the trip listing spells the
+ * same narrowings in its own address — so a filter carried from the list to the map arrives
+ * unchanged rather than being translated into a second dialect on the way. An empty facet is
+ * omitted entirely: an empty string would be a filter naming nothing, which the server is right
+ * to refuse.
+ */
+export async function fetchTripLogFeatures(
+  bbox: string,
+  filter: TripLogMapFilter = {},
+): Promise<TripLogFeatureCollection> {
+  const list = (values?: string[]) => (values && values.length > 0 ? values.join(',') : undefined);
+  return unwrap(api.GET('/api/v1/map/trip-logs', {
+    params: {
+      query: {
+        bbox,
+        from: filter.from,
+        to: filter.to,
+        types: list(filter.types),
+        states: list(filter.states),
+        visibilities: list(filter.visibilities),
+        hadIncident: filter.hadIncident,
+      },
+    },
+  }));
+}
+
+/**
+ * Which neighbouring photo library a request is about, named the way the server names it.
+ *
+ * Taken from the generated contract rather than written here as a union of the products that
+ * happen to exist today: a third one added on the server would leave a hand-written union
+ * type-checking against a value it has never heard of, and failing only at runtime.
+ */
+export type LibraryPhotoSource = LibraryPhotoProvider['source'];
+export type LibraryPhotoProvider = components['schemas']['PhotoLibraryProviderDto'];
+export type LibraryPhotoStatus = components['schemas']['PhotoLibraryStatusDto'];
+export type LibraryPhotoCollection = components['schemas']['LibraryPhotoFeatureCollection'];
+
+/**
+ * What one library said about itself when the server last asked it.
+ *
+ * A separate answer from the overlay's own load state, and the two are not interchangeable: this
+ * one says whether the library is working at all, and the load state says what came back for the
+ * rectangle currently on screen. A library can be perfectly healthy and hold nothing here.
+ */
+export type LibraryPhotoHealth = components['schemas']['PhotoLibraryHealthDto'];
+
+/**
+ * How long a reading of a library's health stands, matching the window the server holds one for.
+ *
+ * Stated once and used for both the freshness and the timer below, so the two cannot drift apart
+ * into a client that re-asks faster than the server will ever answer differently, or slower than
+ * the operator loop the short window was chosen for: restart a container, look at the line.
+ */
+const PHOTO_LIBRARY_HEALTH_WINDOW_MS = 30_000;
+
+/**
+ * The photo libraries this account may see, or none.
+ *
+ * A query rather than an imperative fetch, unlike the map loaders below it: there is no viewport
+ * in this question, so it is asked once and answered from cache while the map is panned. An
+ * account outside the audience is told it may read nothing and given an empty list — the answer
+ * a client needs in order to decide whether to offer the overlay at all, without being told which
+ * products this installation runs.
+ *
+ * It used to be held for five minutes, which was right while the answer was a static one about
+ * what an operator had typed into a settings file. The answer now carries what each library said
+ * when it was last asked, and the server holds one such reading for half a minute — so anything
+ * held here for longer hands an operator a health line older than the server was ever willing to
+ * serve, and the short window on the far side buys nothing on the path anybody actually uses.
+ * Kept to the same half minute for that reason, and asked again while somebody is looking at it,
+ * because what it describes is the state of another container and changes without anything
+ * happening in this browser.
+ *
+ * The timer runs only while there is a library to report on: an installation that runs none of
+ * these products has nothing to poll for, and the answer for it cannot change until somebody
+ * restarts the server with a new setting. It also stops of its own accord while the tab is in the
+ * background, which is the default and is wanted here — a map left open in a tab nobody is
+ * looking at should not keep a neighbouring container awake.
+ */
+export function usePhotoLibraries() {
+  return useQuery({
+    queryKey: queryKeys.photoLibraryStatus,
+    queryFn: () => unwrap(api.GET('/api/v1/photo-libraries/status')),
+    staleTime: PHOTO_LIBRARY_HEALTH_WINDOW_MS,
+    refetchInterval: (query) =>
+      (query.state.data?.providers?.length ?? 0) > 0 ? PHOTO_LIBRARY_HEALTH_WINDOW_MS : false,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Imperative fetch used by the photo-library overlays (not a hook), one library per call.
+ *
+ * Imperative for the reason every other map loader here is: a bbox that changes with every pan is
+ * an unbounded cache key, and the loader's own sequence guard is cheaper than fighting a query
+ * cache for last-write-wins.
+ *
+ * The library is a path segment rather than a filter, because it selects which foreign
+ * installation is called. One request per library, never one for both: they are separate
+ * installations with separate uptime, and a joined request would be as slow as the slower of them
+ * and as broken as the more broken one.
+ */
+export async function fetchLibraryPhotoFeatures(
+  source: LibraryPhotoSource,
+  bbox: string,
+): Promise<LibraryPhotoCollection> {
+  return unwrap(
+    api.GET('/api/v1/photo-libraries/{source}/map', {
+      params: { path: { source }, query: { bbox } },
+    }),
+  );
+}
+
+/**
+ * Asks the server to re-open one library's picture delivery and to forget what it last heard
+ * about that library's health.
+ *
+ * The status answer is invalidated rather than patched, because the point of pressing this is to
+ * find out what the library says now: a button that reopened the pictures and left the health
+ * line describing the state before the fix would look like a button that does nothing.
+ *
+ * Invalidated whether the call succeeded or not, and that is the case it matters in. A recheck
+ * fails precisely when the library is still not working — which is when an operator has just
+ * tried something and is watching this panel to find out whether it took. The server forgets its
+ * held reading on both paths too, so re-asking here is what turns that into a line on the screen.
+ */
+export function useRecheckPhotoLibrary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (source: LibraryPhotoSource) =>
+      // unwrapVoid, not unwrap: this route answers 204 with no body, and unwrap treats an absent
+      // body as a failure. Through unwrap the button reported "the library still did not answer"
+      // every time the recheck succeeded — the one message that must never be wrong, on the one
+      // control an operator presses when they already suspect something is broken.
+      unwrapVoid(
+        api.POST('/api/v1/photo-libraries/{source}/recheck', { params: { path: { source } } }),
+      ),
+    onSettled: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.photoLibraryStatus }),
+  });
+}
+
+/**
+ * What one photograph in a neighbouring library is to become in this installation's own registry.
+ *
+ * Note what is not in it: a coordinate. The caller names a photograph and a rectangle to look for
+ * it in, and the server reads the position from the library that holds it — a body able to carry a
+ * latitude would be a way of putting an object anywhere at all while it looked as though a camera
+ * had measured it, and the provenance is the whole point of creating one this way.
+ */
+export type LibraryPhotoFeatureRequest = components['schemas']['PhotoLibraryFeatureRequest'];
+export type LibraryPhotoFeatureCreated = components['schemas']['PhotoLibraryFeatureCreatedDto'];
+
+/**
+ * An object already in the registry near where a photograph was taken.
+ *
+ * Information rather than a refusal: the answer comes back beside an object that was created, and
+ * it exists because forty photographs of one entrance would otherwise quietly become forty caves.
+ * An empty list is not a promise that nothing is there — the server searches only what this caller
+ * may both read and place exactly.
+ */
+export type LibraryPhotoNearbyFeature = components['schemas']['PhotoLibraryNearbyFeatureDto'];
+
+/**
+ * Creates a cave, an entrance, or a feature of another kind at the position one photograph in a
+ * neighbouring library records.
+ *
+ * The map overlays are refreshed by the caller rather than here: they are OpenLayers sources loaded
+ * imperatively per viewport, not query-cache entries, so what has to happen after this is a reload
+ * of the extent on screen and not an invalidation.
+ */
+export function useCreateFeatureFromLibraryPhoto() {
+  return useMutation({
+    mutationFn: (input: {
+      source: LibraryPhotoSource;
+      reference: string;
+      bbox: string;
+      body: LibraryPhotoFeatureRequest;
+    }) =>
+      unwrap(
+        api.POST('/api/v1/photo-libraries/{source}/photographs/{reference}/feature', {
+          params: {
+            path: { source: input.source, reference: input.reference },
+            query: { bbox: input.bbox },
+          },
+          body: input.body,
+        }),
+      ),
+  });
 }
 
 export type SearchResult = components['schemas']['SearchResultDto'];
@@ -2549,13 +2774,134 @@ export interface TripLogListParams {
    * gathered nothing rather than refusing, so an id cannot be probed for existence here.
    */
   expeditionId?: string;
+  /**
+   * Area features the trips name, comma-separated. Alternatives: a trip naming any of them is
+   * kept, and each one reaches everything the containment hierarchy puts inside it. Like the cave
+   * and the camp, an area this caller may not read answers with an empty page rather than a
+   * refusal, so an id cannot be probed for existence — and one such id empties the whole answer
+   * rather than being dropped from the list.
+   */
+  areaIds?: string;
+  /**
+   * People on the roster, comma-separated and alternatives to each other. The answer is still only
+   * the trips this caller may read, so it never assembles where a person has been out of trips the
+   * asker cannot open — which is why the caller's own list of trips, whose whole point is that it
+   * names nobody, has no such member.
+   */
+  participantIds?: string;
+  /** Trip type ids, comma-separated. Alternatives: a trip of any of them is kept. */
+  types?: string;
+  /** Lifecycle words, comma-separated, spelled the way the contract spells them. */
+  states?: string;
+  /** Audience words, comma-separated, spelled the way the contract spells them. */
+  visibilities?: string;
+  /** Whether something went wrong. Omitted means no opinion, not "no". */
+  hadIncident?: boolean;
+  /**
+   * `date`, `title`, `created` or `updated`, a leading minus for descending. The order is the
+   * server's: re-sorting the page it handed back would reorder one page, which is a different
+   * and wrong answer as soon as there is more than one.
+   */
+  sort?: string;
 }
+
+/** One option a filter panel may offer, and how many trips it would leave. */
+export type TripFacetValue = components['schemas']['TripFacetValueDto'];
+
+/** What every option in the trip listing's filter panel would leave, for this caller. */
+export type TripListFacets = components['schemas']['TripListFacetsDto'];
+
+/**
+ * Everything the counts are asked about. It is the listing's own parameters minus the three that
+ * change no count — which page, how big, and in what order — so a panel and the page it sits over
+ * are demonstrably asking one question.
+ */
+export type TripLogFacetParams = Omit<TripLogListParams, 'page' | 'pageSize' | 'sort'>;
 
 export function useTripLogs(params: TripLogListParams) {
   return useQuery({
     queryKey: queryKeys.tripLogs(params),
     queryFn: () => unwrap(api.GET('/api/v1/trip-logs', { params: { query: params } })),
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * How many trips each filter option would leave, counted over the trips this caller may read.
+ *
+ * Its own request rather than a shape of the listing's, because it is a different question about
+ * the same query and every caller who only wants rows would otherwise pay for the counts. Keeping
+ * the last answer on screen matters more here than anywhere: the panel is what somebody is
+ * clicking, and options that vanish and return under the cursor make it unusable.
+ */
+export function useTripLogFacets(params: TripLogFacetParams) {
+  return useQuery({
+    queryKey: queryKeys.tripLogFacets(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/facets', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** One slice of a trip listing, and what it holds. */
+export type TripGroup = components['schemas']['TripGroupDto'];
+
+/** A trip listing broken into slices, over the trips this caller may read. */
+export type TripListGrouping = components['schemas']['TripListGroupingDto'];
+
+/**
+ * What the slices are cut from and what they are cut by. The narrowings are the listing's own,
+ * minus the three that change no slice — which page, how big, and in what order — so the shape
+ * above the table and the table itself are demonstrably about one set of trips.
+ */
+export type TripLogGroupingParams = TripLogFacetParams & {
+  /** `year`, `type`, `state`, `visibility`, `incident`, `area` or `participant`. */
+  groupBy?: string;
+  /** The second level. Must differ from the first, which the server refuses rather than ignores. */
+  thenBy?: string;
+};
+
+/**
+ * A trip listing broken into slices.
+ *
+ * Its own request rather than a shape of the page's, for the same reason the counts are: it is a
+ * different question about the same query, and nobody who only wants rows should pay for it. The
+ * previous answer is kept on screen while a new one is fetched, because the panel is what
+ * somebody is clicking and slices that vanish and return under the cursor make it unusable.
+ */
+export function useTripLogGrouping(params: TripLogGroupingParams, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.tripLogGrouping(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/grouping', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** One year of a filtered trip listing, and how much ground had been covered by the end of it. */
+export type TripStatsYear = components['schemas']['TripStatsYearDto'];
+
+/** How the filtered trips break down along one dimension, longest first. */
+export type TripStatsBreakdown = components['schemas']['TripStatsBreakdownDto'];
+
+/** What a filtered trip listing adds up to, over the trips this caller may read. */
+export type TripStats = components['schemas']['TripStatsDto'];
+
+/**
+ * What the filtered trips add up to.
+ *
+ * It takes the listing's own narrowings and nothing else, so "the current filter" means one thing
+ * on the insights page and on the list. A figure worked out from a second, similar-looking filter
+ * would disagree with the table under the one condition nobody checks by eye: a reader who may
+ * open only part of the archive. The previous answer is kept while a new one loads, because the
+ * scope toggle and the filter are things somebody is clicking and charts that blank out and
+ * return under the cursor read as breakage.
+ */
+export function useTripLogStats(params: TripLogFacetParams, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripLogStats(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/stats', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+    enabled,
   });
 }
 
@@ -4223,6 +4569,138 @@ export function useProcessingJob(jobId: number | undefined) {
     // Stopped by the answer rather than by a timer: a settled job is asked about no more.
     refetchInterval: (query) => (jobUnsettled(query.state.data?.status) ? 1500 : false),
     retry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// A club's trip spreadsheet into trips
+// ---------------------------------------------------------------------------
+
+export type TripImportOptions = components['schemas']['TripImportOptions'];
+export type TripImportDecision = components['schemas']['TripImportDecision'];
+export type TripImportRowAction = components['schemas']['TripImportRowAction'];
+export type TripImportSession = components['schemas']['TripImportSessionDto'];
+export type TripImportColumns = components['schemas']['TripImportColumnsDto'];
+export type TripImportPreview = components['schemas']['TripImportPreviewDto'];
+export type TripImportPreviewRequest = components['schemas']['TripImportPreviewRequest'];
+export type TripImportRow = components['schemas']['TripImportRowDto'];
+export type TripImportProblem = components['schemas']['TripImportProblemDto'];
+export type TripImportProposals = components['schemas']['TripImportProposalsDto'];
+export type TripImportPersonMatch = components['schemas']['TripImportPersonMatch'];
+export type TripImportFeatureMatch = components['schemas']['TripImportFeatureMatch'];
+export type TripImportTermMatch = components['schemas']['TripImportTermMatch'];
+export type TripImportCommitResult = components['schemas']['TripImportCommitResultDto'];
+export type TripCsvField = components['schemas']['TripCsvField'];
+export type TripCsvDateOrder = components['schemas']['TripCsvDateOrder'];
+export type TripCsvDateOrderSource = components['schemas']['TripCsvDateOrderSource'];
+export type TripCsvDiagnosticCode = components['schemas']['TripCsvDiagnosticCode'];
+
+/**
+ * The saved review of one uploaded sheet. Answers with defaults rather than a 404 when
+ * nobody has reviewed this file yet, so the screen has something to open with.
+ */
+export function useTripImportSession(fileId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.tripImportSession(fileId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-imports/{fileId}/session', { params: { path: { fileId: fileId! } } }),
+      ),
+    enabled: Boolean(fileId),
+  });
+}
+
+/**
+ * Saves the review as the reviewer works. Deliberately does not invalidate the session
+ * query: the browser already holds what it just sent, and refetching would make every tick
+ * of the table fight the answer coming back.
+ */
+export function useSaveTripImportSession() {
+  return useMutation({
+    mutationFn: ({
+      fileId,
+      body,
+    }: {
+      fileId: string;
+      body: { options: TripImportOptions; decisions: Record<string, TripImportDecision> };
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-imports/{fileId}/session', { params: { path: { fileId } }, body }),
+      ),
+  });
+}
+
+/**
+ * The sheet's own header line, for the mapping controls. Read from the stored file rather
+ * than from a parse, so it still answers when the parse itself failed — which is exactly
+ * when somebody needs to re-point a column.
+ */
+export function useTripImportColumns(fileId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.tripImportColumns(fileId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-imports/{fileId}/columns', { params: { path: { fileId: fileId! } } }),
+      ),
+    enabled: Boolean(fileId),
+    // A refusal here is the server's settled answer about this file, and asking again three
+    // times only holds the screen in its loading state through the whole backoff.
+    retry: false,
+  });
+}
+
+/** The dry run. A POST because the options are a body, but it creates nothing. */
+export function useTripImportPreview(
+  fileId: string | undefined,
+  body: TripImportPreviewRequest,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.tripImportPreview(fileId ?? '', body),
+    queryFn: () =>
+      unwrap(
+        api.POST('/api/v1/trip-imports/{fileId}/preview', {
+          params: { path: { fileId: fileId! } },
+          body,
+        }),
+      ),
+    enabled: Boolean(fileId) && enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/**
+ * Confirms the review. The options travel with it rather than being read back from the saved
+ * row: a second tab left open on different choices must not decide what a thousand trips
+ * become.
+ */
+export function useCommitTripImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      fileId,
+      body,
+    }: {
+      fileId: string;
+      body: {
+        options: TripImportOptions;
+        lines: number[];
+        decisions: Record<string, TripImportDecision>;
+      };
+    }) =>
+      unwrap(
+        api.POST('/api/v1/trip-imports/{fileId}/commit', { params: { path: { fileId } }, body }),
+      ),
+    onSuccess: () => {
+      // A confirmation writes trips, may add area and cave features, records a batch that can
+      // be undone, and spends the review that produced it — five surfaces go stale at once.
+      void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+      void queryClient.invalidateQueries({ queryKey: ['features'] });
+      void queryClient.invalidateQueries({ queryKey: ['caves'] });
+      void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      void queryClient.invalidateQueries({ queryKey: ['trip-import-session'] });
+    },
   });
 }
 

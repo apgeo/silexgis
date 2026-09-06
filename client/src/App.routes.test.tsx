@@ -54,4 +54,13 @@ describe('the addresses this application hands out', () => {
   it('include the calendar the sidebar sends people to', () => {
     expect(matchRoutes(routes, '/calendar')).toBeTruthy();
   });
+
+  // A button above the trip listing sends people here carrying their filter, and the address is
+  // a static word standing where a trip's identifier otherwise stands — so it is exactly the kind
+  // that can be swallowed by the route beside it instead of failing to be registered at all.
+  it('include the trip insights page the listing sends people to', () => {
+    const matched = matchRoutes(routes, '/trip-logs/stats');
+    expect(matched).toBeTruthy();
+    expect(matched?.at(-1)?.route.path).toBe('/trip-logs/stats');
+  });
 });

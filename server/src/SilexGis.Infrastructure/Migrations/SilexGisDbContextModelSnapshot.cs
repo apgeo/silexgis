@@ -3693,6 +3693,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnName("source_properties")
                         .HasDefaultValueSql("'{}'::jsonb");
 
+                    b.Property<Guid?>("TripLogId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trip_log_id");
+
                     b.HasKey("Id")
                         .HasName("pk_import_batch_items");
 
@@ -3709,6 +3713,10 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("SourceFileId")
                         .HasDatabaseName("ix_import_batch_items_source_file_id")
                         .HasFilter("source_file_id is not null");
+
+                    b.HasIndex("TripLogId")
+                        .HasDatabaseName("ix_import_batch_items_trip_log_id")
+                        .HasFilter("trip_log_id is not null");
 
                     b.ToTable("import_batch_items", (string)null);
                 });
@@ -5624,6 +5632,55 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("trip_checklist_ticks", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripImportSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Decisions")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("decisions")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<string>("Options")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("options")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
+                    b.Property<Guid>("StoredFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("stored_file_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_trip_import_sessions");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_trip_import_sessions_user_id");
+
+                    b.HasIndex("StoredFileId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_trip_import_sessions_stored_file_id_user_id");
+
+                    b.ToTable("trip_import_sessions", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.TripInvitation", b =>
                 {
                     b.Property<long>("Id")
@@ -5907,6 +5964,9 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("OwnerUserId")
                         .HasDatabaseName("ix_trip_logs_owner_user_id");
+
+                    b.HasIndex("State")
+                        .HasDatabaseName("ix_trip_logs_state");
 
                     b.HasIndex("TripDate")
                         .HasDatabaseName("ix_trip_logs_trip_date");
@@ -7639,6 +7699,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("SourceFileId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_import_batch_items_stored_files_source_file_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.TripLog", null)
+                        .WithMany()
+                        .HasForeignKey("TripLogId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_import_batch_items_trip_logs_trip_log_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.MapView", b =>
@@ -7952,6 +8018,23 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_trip_checklist_ticks_checklist_items_checklist_id_item_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.TripImportSession", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.StoredFile", null)
+                        .WithMany()
+                        .HasForeignKey("StoredFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_trip_import_sessions_files_stored_file_id");
+
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_trip_import_sessions_users_user_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripInvitation", b =>

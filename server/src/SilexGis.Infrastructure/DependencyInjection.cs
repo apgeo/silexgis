@@ -67,6 +67,9 @@ public static class DependencyInjection
         services.AddScoped<Import.ImportCommitService>();
         services.AddScoped<Import.PhotoCandidateService>();
         services.AddScoped<Import.PhotoCommitService>();
+        services.AddScoped<Import.TripCsvFileReader>();
+        services.AddScoped<Import.TripImportResolver>();
+        services.AddScoped<Import.TripImportCommitService>();
 
         // The Romanian community cave catalogue, which this installation reads and imports from.
         // Off unless an operator supplies a key, and absent rather than broken when they have not.
@@ -84,8 +87,58 @@ public static class DependencyInjection
             });
         services.AddSingleton<Catalogue.SpeologieClient>();
         services.AddScoped<Catalogue.SpeologieImportService>();
+
+        // The neighbouring photo libraries: separate products, each with its own database, its own
+        // storage and its own accounts, which this installation reads photographs' positions from
+        // and proxies their pictures through. Neither is this application's archive, nothing is
+        // filed into either, and nothing moves between them or between them and anything else. An
+        // installation may run one, both or neither; each is off unless an operator supplies an
+        // address and a credential, and absent rather than broken when they have not.
+        //
+        // Each client is a singleton for the opposite reason from the cave catalogue's above.
+        // Nothing here is being rationed: these run on this host, in this deployment, on this
+        // operator's own electricity, and spacing requests to them would slow this application's
+        // map down for a politeness nobody is owed. There is deliberately no minimum interval
+        // between calls and no serialising gate. They outlive a request because of what they hold,
+        // and the two hold different things: one keeps the credential its pictures are served under,
+        // and the other keeps every located photograph's position, because the library behind it
+        // publishes no way to ask what is inside a rectangle and its whole located library is
+        // therefore read in one answer and scanned in memory. Both keep the sticky flag that stops
+        // asking a library for pictures once one answer suggested it cannot reach its own originals.
+        //
+        // The transports decompress because both a viewport's worth of positions and a whole
+        // library's worth are very compressible JSON.
+        services.Configure<PhotoLibraries.PhotoLibraryOptions>(
+            configuration.GetSection(PhotoLibraries.PhotoLibraryOptions.SectionName));
+        services.Configure<PhotoLibraries.ImmichOptions>(
+            configuration.GetSection(PhotoLibraries.ImmichOptions.SectionName));
+        services.Configure<PhotoLibraries.PhotoPrismOptions>(
+            configuration.GetSection(PhotoLibraries.PhotoPrismOptions.SectionName));
+        services.AddHttpClient(PhotoLibraries.ImmichClient.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AutomaticDecompression = System.Net.DecompressionMethods.All,
+            });
+        services.AddHttpClient(PhotoLibraries.PhotoPrismClient.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AutomaticDecompression = System.Net.DecompressionMethods.All,
+            });
+
+        // Each registered twice: once as itself, so a surface can name the product, and once behind
+        // the shared contract, so everything above iterates over "the libraries this installation
+        // has" and a further product joining is an addition rather than a rewrite. An installation
+        // that configured neither still resolves both — they report themselves absent and open no
+        // socket, which is what makes running one, both or none all supported installations.
+        services.AddSingleton<PhotoLibraries.ImmichClient>();
+        services.AddSingleton<PhotoLibraries.IPhotoLibrary>(
+            sp => sp.GetRequiredService<PhotoLibraries.ImmichClient>());
+        services.AddSingleton<PhotoLibraries.PhotoPrismClient>();
+        services.AddSingleton<PhotoLibraries.IPhotoLibrary>(
+            sp => sp.GetRequiredService<PhotoLibraries.PhotoPrismClient>());
         services.AddScoped<Trips.TripTypeWriteService>();
         services.AddScoped<Trips.TripSectionWriter>();
+        services.AddScoped<Trips.TripLogWriteService>();
         services.AddScoped<Documents.DocumentWriteService>();
         services.AddScoped<Documents.DocumentTypeWriteService>();
         services.AddScoped<Documents.CabinetWriteService>();

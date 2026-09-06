@@ -16,6 +16,8 @@ import {
   useFeature,
   useFeatureTypes,
   useCan,
+  useTripLog,
+  useTripTypes,
   useUpdateFeature,
   type FeatureUpdate,
 } from '../../api/hooks.ts';
@@ -29,10 +31,13 @@ import {
   type ClusterSelection,
   type EntranceSelection,
   type FeatureSelection,
+  type TripSelection,
 } from '../../stores/workspaceStore.ts';
 import { type HistoryRestore } from '../history/HistoryPanel.tsx';
 import { applyFeatureRestore } from '../history/historyModel.ts';
 import FeatureEditModal, { type FeatureAttributeValues } from '../features/FeatureEditModal.tsx';
+import TripStateTag from '../trips/TripStateTag.tsx';
+import { tripTypeLabelOf } from '../trips/tripTypes.ts';
 import MultiSelectionCard from './MultiSelectionCard.tsx';
 import PanelDock from './PanelDock.tsx';
 import SelectionSections, { PanelSectionsMenu } from './SelectionSections.tsx';
@@ -74,6 +79,12 @@ export default function SelectionPanel({ scope = 'main' }: { scope?: PanelScope 
 
     if (selection.kind === 'cluster') {
       return <ClusterCard selection={selection} />;
+    }
+
+    // Named before the fall-through rather than left to it: the last arm reads a cave id off the
+    // selection, and a kind that carries none would render an empty cave card instead of failing.
+    if (selection.kind === 'trip') {
+      return <TripCard selection={selection} />;
     }
 
     return <CaveCard selection={selection} scope={scope} />;
@@ -162,6 +173,60 @@ function ClusterCard({ selection }: { selection: ClusterSelection }) {
           </Button>
         ))}
       </Flex>
+    </div>
+  );
+}
+
+/**
+ * A trip picked off the map layer. Deliberately short: this is the panel beside a map, and what a
+ * reader wants of a dot they just clicked is which day it was, what kind of trip, and a way
+ * through to the account itself — not the account rendered in a column two hundred pixels wide.
+ *
+ * The way through is the router rather than a link that reloads the page, so the map, its layers
+ * and everything already fetched survive the trip to the trip.
+ */
+function TripCard({ selection }: { selection: TripSelection }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { data: trip, isPending } = useTripLog(selection.tripId);
+  const { data: tripTypes } = useTripTypes();
+
+  if (isPending || !trip) {
+    return (
+      <Flex align="center" justify="center" style={{ height: '100%' }}>
+        <Spin />
+      </Flex>
+    );
+  }
+
+  const typeName = tripTypeLabelOf(trip.tripTypeId, tripTypes, t);
+  // An end day is written down only when the trip ran over more than one, so an absent one is not
+  // a gap in the record and must not be drawn as a range ending nowhere.
+  const days = trip.tripDateEnd && trip.tripDateEnd !== trip.tripDate
+    ? `${trip.tripDate} – ${trip.tripDateEnd}`
+    : trip.tripDate;
+
+  return (
+    <div style={{ padding: 12 }} data-testid="trip-selection-card">
+      <Typography.Title level={5} style={{ marginTop: 0 }}>
+        {trip.title}
+      </Typography.Title>
+      <Descriptions size="small" column={1} items={[
+        { key: 'date', label: t('trips.date'), children: days },
+        ...(typeName ? [{ key: 'type', label: t('trips.type'), children: typeName }] : []),
+        { key: 'state', label: t('trips.state'), children: <TripStateTag state={trip.state} /> },
+      ]}
+      />
+      <Button
+        type="primary"
+        size="small"
+        icon={<ExportOutlined />}
+        style={{ marginTop: 12 }}
+        onClick={() => navigate(`/trips/${selection.tripId}`)}
+        data-testid="trip-selection-open"
+      >
+        {t('trips.openTrip')}
+      </Button>
     </div>
   );
 }

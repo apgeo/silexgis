@@ -1406,13 +1406,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Trip-log geometries as GeoJSON for the given bbox and date range. */
+        /** Trip-log geometries as GeoJSON for the given bbox, date range and list filters; a trip with no shape of its own is placed at a cave it names when the caller may both read and place it, and counted as unlocated otherwise. */
         get: {
             parameters: {
                 query: {
                     bbox: string;
                     from?: string;
                     to?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -1426,7 +1430,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["FeatureCollection"];
+                        "application/json": components["schemas"]["TripLogFeatureCollection"];
                     };
                 };
             };
@@ -7390,6 +7394,389 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-imports/{fileId}/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's review of this spreadsheet, resumed where they left it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportSessionDto"];
+                    };
+                };
+            };
+        };
+        /** Saves the review as the reviewer works; nothing is created. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripImportSessionWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportSessionDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-imports/{fileId}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The sheet's header, and which field each column was taken for. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportColumnsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-imports/{fileId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reads the sheet under the current choices and answers a page of it. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripImportPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportPreviewDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-imports/{fileId}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records the chosen rows as trips, as one batch that reverts as a unit. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TripImportCommitRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripImportCommitResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which neighbouring photo libraries this installation has been given, whether the caller may see them, and what each library said when it was last asked. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoLibraryStatusDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Located photographs held in one neighbouring photo library, as GeoJSON points for the given bbox. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                };
+                header?: never;
+                path: {
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryPhotoFeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/thumbnails/{reference}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Streams one photograph's rendering from a neighbouring photo library; token-authenticated. */
+        get: {
+            parameters: {
+                query?: {
+                    size?: string;
+                    token?: string;
+                };
+                header?: never;
+                path: {
+                    source: string;
+                    reference: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopens a library's picture delivery after an answer that was not a picture closed it. Deliberately the only way back: nothing reopens it on a timer. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/photographs/{reference}/feature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates a cave, an entrance or another feature at the position one photograph in a neighbouring library was taken; the position is read from the library, never sent. */
+        post: {
+            parameters: {
+                query: {
+                    bbox: string;
+                };
+                header?: never;
+                path: {
+                    source: string;
+                    reference: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhotoLibraryFeatureRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PhotoLibraryFeatureCreatedDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files": {
         parameters: {
             query?: never;
@@ -10575,7 +10962,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged trip logs with date/cave filters; visibility-filtered. */
+        /** Paged trip logs, visibility-filtered. Narrowable by an overlapping date window, by a cave, a camp, and by comma-separated lists of area, person on the roster, trip type, lifecycle state and audience, plus whether something went wrong; orderable by date, title, creation or last change with a leading minus for descending. Values inside one list are alternatives and the narrowings are combined, so an empty list means no opinion rather than nothing. An area reaches everything the containment hierarchy puts inside it. Naming a cave, area or person this caller may not read answers with an empty page rather than a refusal. */
         get: {
             parameters: {
                 query?: {
@@ -10585,7 +10972,14 @@ export interface paths {
                     to?: string;
                     caveId?: string;
                     expeditionId?: string;
+                    areaIds?: string;
+                    participantIds?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
                     search?: string;
+                    sort?: string;
                 };
                 header?: never;
                 path?: never;
@@ -10630,6 +11024,199 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many trips each filter option would leave, counted over the same visibility-filtered query the page is taken from, with the facet's own choices left out so each option answers “and this one too”. Two callers get different numbers for the same option and both are right — these are counts of what that caller may read. */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    caveId?: string;
+                    expeditionId?: string;
+                    areaIds?: string;
+                    participantIds?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripListFacetsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The narrowed listing as a spreadsheet — every trip the filter leaves and not only the page being looked at, visibility-filtered exactly as the page is. Bounded, and the file says so in its own first lines when the bound was reached. */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    caveId?: string;
+                    expeditionId?: string;
+                    areaIds?: string;
+                    participantIds?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
+                    search?: string;
+                    sort?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/grouping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same narrowed listing broken into slices, one or two levels deep, each slice carrying its trip count, the days it spans, the purposes it was for and who was on it. Grouped by year, type, state, visibility, incident, area or person. A trip counts into every area and every person it holds, so those slice counts add up to more than the trips — the answer says so rather than leaving a reader to notice. */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    caveId?: string;
+                    expeditionId?: string;
+                    areaIds?: string;
+                    participantIds?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
+                    search?: string;
+                    groupBy?: string;
+                    thenBy?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripListGroupingDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the same narrowed listing adds up to: trips per year, what they were for, where they went, who was on them, and how many distinct areas had been reached by the end of each year. Counted over the trips this caller may read, so the totals are the reader’s and not the archive’s. A trip counts into every area and every person it holds, so those breakdowns add up to more than the trips — the answer says so rather than leaving a reader to notice. */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    caveId?: string;
+                    expeditionId?: string;
+                    areaIds?: string;
+                    participantIds?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripStatsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18187,6 +18774,9 @@ export interface components {
             ruleId: null | string;
             ruleName: null | string;
             action: components["schemas"]["ImportDecisionAction"];
+            /** Format: uuid */
+            tripLogId: null | string;
+            tripTitle: null | string;
         };
         /** @enum {unknown} */
         ImportBatchMode: "reviewed" | "autoCreated";
@@ -18359,7 +18949,7 @@ export interface components {
             photoClusterRadiusMeters: number;
         };
         /** @enum {unknown} */
-        ImportSource: "vectorFile" | "photos" | "deviceSync" | "externalCatalogue";
+        ImportSource: "vectorFile" | "photos" | "deviceSync" | "externalCatalogue" | "tripCsv";
         /** @enum {unknown} */
         ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
         /** @enum {unknown} */
@@ -18386,6 +18976,19 @@ export interface components {
             score: null | number;
             class: components["schemas"]["KarstificationClass"];
             components: components["schemas"]["KarstificationComponentDto"][];
+        };
+        LibraryPhotoFeatureCollection: {
+            type: string;
+            features: components["schemas"]["GeoFeature"][];
+            source: string;
+            libraryName: string;
+            picturesAvailable: boolean;
+            pictureUrlTemplate: null | string;
+            /** Format: date-time */
+            readAt: string;
+            truncated: boolean;
+            /** Format: int32 */
+            omittedCount: number;
         };
         LinkKindDto: {
             /** Format: int64 */
@@ -19391,6 +19994,49 @@ export interface components {
             cameraClockOffsetSeconds?: number;
             /** Format: int32 */
             trackMatchToleranceSeconds?: number;
+        };
+        PhotoLibraryFeatureCreatedDto: {
+            /** Format: uuid */
+            featureId: string;
+            name: string;
+            kind: components["schemas"]["FeatureKind"];
+            nearby: components["schemas"]["PhotoLibraryNearbyFeatureDto"][];
+        };
+        PhotoLibraryFeatureRequest: {
+            kind: components["schemas"]["FeatureKind"];
+            name: string;
+            /** Format: int64 */
+            featureTypeId: null | number;
+            /** Format: uuid */
+            caveFeatureId: null | string;
+        };
+        PhotoLibraryHealthDto: {
+            reach: string;
+            version: null | string;
+            missingPermissions: string[];
+            picturesAvailable: boolean;
+            failureCode: null | string;
+            /** Format: date-time */
+            probedAt: null | string;
+        };
+        PhotoLibraryNearbyFeatureDto: {
+            /** Format: uuid */
+            featureId: string;
+            name: null | string;
+            kind: components["schemas"]["FeatureKind"];
+            /** Format: double */
+            distanceMeters: number;
+        };
+        PhotoLibraryProviderDto: {
+            source: string;
+            name: string;
+            configured: boolean;
+            health: components["schemas"]["PhotoLibraryHealthDto"];
+        };
+        PhotoLibraryStatusDto: {
+            mayRead: boolean;
+            providers: components["schemas"]["PhotoLibraryProviderDto"][];
+            unconfigured: components["schemas"]["PhotoLibraryProviderDto"][];
         };
         PhotoNearbyDto: {
             /** Format: uuid */
@@ -20558,9 +21204,262 @@ export interface components {
             /** Format: int32 */
             total: number;
         };
+        /** @enum {unknown} */
+        TripCsvDateOrder: "dayFirst" | "monthFirst";
+        /** @enum {unknown} */
+        TripCsvDateOrderSource: "stated" | "file" | "conflict";
+        /** @enum {unknown} */
+        TripCsvDiagnosticCode: "mappedColumnMissing" | "mappedColumnTaken" | "unmappedColumn" | "raggedRow" | "blankRow" | "requiredFieldEmpty" | "dateUnreadable" | "dateOutOfRange" | "dateTwoDigitYear" | "dateAmbiguous" | "dateOrderConflict" | "valueDropped" | "duplicateSourceId" | "tooManyColumns" | "noHeader" | "unterminatedQuote";
+        /** @enum {unknown} */
+        TripCsvField: "sourceId" | "startDate" | "endDate" | "title" | "country" | "massif" | "subArea" | "caves" | "proposers" | "participants" | "details" | "details2" | "tripType" | "errors";
+        /** @enum {unknown} */
+        TripCsvSeverity: "warning" | "error";
         TripExpeditionRequest: {
             /** Format: uuid */
             expeditionId?: null | string;
+        };
+        TripFacetValueDto: {
+            value: string;
+            label: null | string;
+            /** Format: int32 */
+            count: number;
+        };
+        TripGroupDto: {
+            value: string;
+            label: null | string;
+            /** Format: int32 */
+            count: number;
+            /** Format: date */
+            firstDay: string;
+            /** Format: date */
+            lastDay: string;
+            topTypes: components["schemas"]["TripFacetValueDto"][];
+            topPeople: components["schemas"]["TripFacetValueDto"][];
+            groups: components["schemas"]["TripGroupDto"][];
+        };
+        TripImportCandidate: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        TripImportColumnsDto: {
+            header: string[];
+            resolvedColumns: {
+                [key: string]: string;
+            };
+            unmappedColumns: string[];
+            problems: components["schemas"]["TripImportProblemDto"][];
+        };
+        TripImportCommitRequest: {
+            options: components["schemas"]["TripImportOptions"];
+            lines: number[];
+            decisions: null | {
+                [key: string]: components["schemas"]["TripImportDecision"];
+            };
+        };
+        TripImportCommitResultDto: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            createdTripCount: number;
+            /** Format: int32 */
+            createdFeatureCount: number;
+            /** Format: int32 */
+            skippedCount: number;
+            failures: components["schemas"]["TripImportFailureDto"][];
+        };
+        TripImportDecision: {
+            action?: null | components["schemas"]["TripImportRowAction"];
+        };
+        TripImportFailureDto: {
+            /** Format: int32 */
+            line: number;
+            title: null | string;
+            code: string;
+            reason: string;
+        };
+        TripImportFeatureMatch: {
+            source: string;
+            state: components["schemas"]["TripImportMatchState"];
+            /** Format: uuid */
+            featureId: null | string;
+            name: null | string;
+            candidates: components["schemas"]["TripImportCandidate"][];
+            willCreate: boolean;
+        };
+        /** @enum {unknown} */
+        TripImportMatchState: "matched" | "unmatched" | "ambiguous";
+        TripImportOptions: {
+            delimiter?: string;
+            multiValueSeparators?: string;
+            slashSeparatedFields?: components["schemas"]["TripCsvField"][];
+            dateOrder?: components["schemas"]["TripCsvDateOrder"];
+            columns?: {
+                [key: string]: string;
+            };
+            visibility?: components["schemas"]["Visibility"];
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            createMissingCaves?: boolean;
+            createMissingAreas?: boolean;
+            createMissingCavers?: boolean;
+            createMissingTripTypes?: boolean;
+            tripTypeChoices?: {
+                [key: string]: number;
+            };
+            tripTypeNames?: {
+                [key: string]: string;
+            };
+            caverChoices?: {
+                [key: string]: string;
+            };
+            featureChoices?: {
+                [key: string]: string;
+            };
+        };
+        TripImportPersonMatch: {
+            source: string;
+            state: components["schemas"]["TripImportMatchState"];
+            /** Format: uuid */
+            caverId: null | string;
+            name: null | string;
+            candidates: components["schemas"]["TripImportCandidate"][];
+            mayCreate: boolean;
+            willCreate: boolean;
+        };
+        TripImportPreviewDto: {
+            items: components["schemas"]["TripImportRowDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+            filteredLines: number[];
+            selectableLines: number[];
+            truncated: boolean;
+            /** Format: int32 */
+            rowCount: number;
+            /** Format: int32 */
+            readableRowCount: number;
+            /** Format: int32 */
+            failedRowCount: number;
+            /** Format: int32 */
+            skippedRowCount: number;
+            header: string[];
+            resolvedColumns: {
+                [key: string]: string;
+            };
+            unmappedColumns: string[];
+            dateOrder: components["schemas"]["TripCsvDateOrder"];
+            dateOrderSource: components["schemas"]["TripCsvDateOrderSource"];
+            /** Format: int32 */
+            ambiguousDateRows: number;
+            problems: components["schemas"]["TripImportProblemDto"][];
+            proposals: components["schemas"]["TripImportProposalsDto"];
+        };
+        TripImportPreviewRequest: {
+            options: components["schemas"]["TripImportOptions"];
+            /** Format: int32 */
+            page: null | number;
+            /** Format: int32 */
+            pageSize: null | number;
+            search: null | string;
+        };
+        TripImportProblemDto: {
+            /** Format: int32 */
+            line: number;
+            severity: components["schemas"]["TripCsvSeverity"];
+            code: components["schemas"]["TripCsvDiagnosticCode"];
+            field: null | components["schemas"]["TripCsvField"];
+            column: null | string;
+            detail: null | string;
+        };
+        TripImportProposalsDto: {
+            tripTypes: components["schemas"]["TripImportTermMatch"][];
+            people: components["schemas"]["TripImportPersonMatch"][];
+            caves: components["schemas"]["TripImportFeatureMatch"][];
+            areas: components["schemas"]["TripImportFeatureMatch"][];
+            /** Format: int32 */
+            newTripTypeCount: number;
+            /** Format: int32 */
+            newCaverCount: number;
+            /** Format: int32 */
+            newCaveCount: number;
+            /** Format: int32 */
+            newAreaCount: number;
+            /** Format: int32 */
+            ambiguousPersonCount: number;
+            /** Format: int32 */
+            uncreatablePersonCount: number;
+            /** Format: int32 */
+            ambiguousPlaceCount: number;
+        };
+        /** @enum {unknown} */
+        TripImportRowAction: "create" | "skip" | null;
+        TripImportRowDto: {
+            /** Format: int32 */
+            line: number;
+            sourceId: null | string;
+            /** Format: date */
+            startDate: null | string;
+            /** Format: date */
+            endDate: null | string;
+            startDateText: null | string;
+            endDateText: null | string;
+            title: null | string;
+            country: null | string;
+            massif: null | string;
+            subArea: null | string;
+            caves: string[];
+            proposers: string[];
+            participants: string[];
+            details: null | string;
+            details2: null | string;
+            tripType: null | string;
+            errors: null | string;
+            unmapped: {
+                [key: string]: string;
+            };
+            warnings: components["schemas"]["TripImportProblemDto"][];
+            decision: null | components["schemas"]["TripImportDecision"];
+            resolution: null | components["schemas"]["TripImportRowResolution"];
+        };
+        TripImportRowResolution: {
+            /** Format: int32 */
+            line: number;
+            tripType: null | components["schemas"]["TripImportTermMatch"];
+            caves: components["schemas"]["TripImportFeatureMatch"][];
+            massif: null | components["schemas"]["TripImportFeatureMatch"];
+            subArea: null | components["schemas"]["TripImportFeatureMatch"];
+            proposers: components["schemas"]["TripImportPersonMatch"][];
+            participants: components["schemas"]["TripImportPersonMatch"][];
+            locationNote: null | string;
+        };
+        TripImportSessionDto: {
+            /** Format: uuid */
+            fileId: string;
+            fileName: string;
+            options: components["schemas"]["TripImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["TripImportDecision"];
+            };
+            /** Format: date-time */
+            updatedAt: null | string;
+        };
+        TripImportSessionWriteRequest: {
+            options: components["schemas"]["TripImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["TripImportDecision"];
+            };
+        };
+        TripImportTermMatch: {
+            source: string;
+            state: components["schemas"]["TripImportMatchState"];
+            /** Format: int64 */
+            id: null | number;
+            name: null | string;
+            willCreate: boolean;
         };
         TripInvitationCreateRequest: {
             /** Format: uuid */
@@ -20614,6 +21513,27 @@ export interface components {
         };
         TripInvitationSelectionRequest: {
             selected?: null | boolean;
+        };
+        TripListFacetsDto: {
+            /** Format: int32 */
+            matching: number;
+            /** Format: int32 */
+            overall: number;
+            types: components["schemas"]["TripFacetValueDto"][];
+            states: components["schemas"]["TripFacetValueDto"][];
+            visibilities: components["schemas"]["TripFacetValueDto"][];
+            incident: components["schemas"]["TripFacetValueDto"][];
+            participants: components["schemas"]["TripFacetValueDto"][];
+            areas: components["schemas"]["TripFacetValueDto"][];
+        };
+        TripListGroupingDto: {
+            groupBy: string;
+            thenBy: string;
+            /** Format: int32 */
+            matching: number;
+            overlapping: boolean;
+            truncated: boolean;
+            groups: components["schemas"]["TripGroupDto"][];
         };
         TripLogDto: {
             /** Format: uuid */
@@ -20685,6 +21605,13 @@ export interface components {
             canStandDownCallout: boolean;
             meetingGeom: null | components["schemas"]["GeoJsonGeometry"];
             checklistReadiness: null | components["schemas"]["TripChecklistReadinessDto"];
+        };
+        TripLogFeatureCollection: {
+            type: string;
+            features: components["schemas"]["GeoFeature"][];
+            truncated: boolean;
+            /** Format: int32 */
+            unlocatedCount: number;
         };
         TripLogTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
@@ -20843,6 +21770,32 @@ export interface components {
             latestTripDate: null | string;
             /** Format: int32 */
             photographs: number;
+        };
+        TripStatsBreakdownDto: {
+            overlapping: boolean;
+            /** Format: int32 */
+            distinct: number;
+            values: components["schemas"]["TripFacetValueDto"][];
+        };
+        TripStatsDto: {
+            /** Format: int32 */
+            matching: number;
+            /** Format: int32 */
+            overall: number;
+            years: components["schemas"]["TripStatsYearDto"][];
+            types: components["schemas"]["TripStatsBreakdownDto"];
+            areas: components["schemas"]["TripStatsBreakdownDto"];
+            participants: components["schemas"]["TripStatsBreakdownDto"];
+        };
+        TripStatsYearDto: {
+            /** Format: int32 */
+            year: number;
+            /** Format: int32 */
+            trips: number;
+            /** Format: int32 */
+            newAreas: number;
+            /** Format: int32 */
+            areasSoFar: number;
         };
         TripTypeDto: {
             /** Format: int64 */

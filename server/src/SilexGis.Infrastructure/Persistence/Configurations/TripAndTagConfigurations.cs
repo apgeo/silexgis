@@ -68,6 +68,13 @@ public sealed class TripLogConfiguration : IEntityTypeConfiguration<TripLog>
         // handful of rows rather than every trip ever recorded, and it is the state that stays
         // small — almost every row is a trip that already happened.
         builder.HasIndex(x => new { x.CalloutState, x.CalloutAlarmAt });
+        // The two columns the filter panel groups on. Both are asked as a count per value over
+        // every trip the caller may read, which without an index is a scan of the whole table for
+        // each of them every time somebody opens a facet. The audience column and the went-wrong
+        // flag are grouped the same way and are deliberately left unindexed: they have three and
+        // two values, so an index over them selects most of the table and the planner ignores it.
+        builder.HasIndex(x => x.TripTypeId);
+        builder.HasIndex(x => x.State);
     }
 }
 

@@ -14,30 +14,28 @@ import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
 import { useTripLogMap, type CalendarEntry } from '../../api/hooks.ts';
+import { tripPalette as palette } from '../../map/markerPalette.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
 const DEFAULT_CENTER: [number, number] = [25.6, 45.65];
-
-const WHERE_COLOUR = '#146262';
-const MEETING_COLOUR = '#bc5090';
 
 /** Where the trip worked: the shape it drew of itself. */
 const whereStyle = new Style({
   image: new CircleStyle({
     radius: 6,
-    fill: new Fill({ color: WHERE_COLOUR }),
-    stroke: new Stroke({ color: '#fff', width: 2 }),
+    fill: new Fill({ color: palette.sketch }),
+    stroke: new Stroke({ color: palette.stroke, width: 2 }),
   }),
-  stroke: new Stroke({ color: WHERE_COLOUR, width: 3 }),
-  fill: new Fill({ color: 'rgba(20, 98, 98, 0.2)' }),
+  stroke: new Stroke({ color: palette.sketch, width: 3 }),
+  fill: new Fill({ color: palette.sketchFill }),
 });
 
 /** Where its party met: a different place, and hollow so it cannot be mistaken for the first. */
 const meetingStyle = new Style({
   image: new CircleStyle({
     radius: 6,
-    fill: new Fill({ color: 'rgba(255, 255, 255, 0.9)' }),
-    stroke: new Stroke({ color: MEETING_COLOUR, width: 3 }),
+    fill: new Fill({ color: palette.meetingCentre }),
+    stroke: new Stroke({ color: palette.meeting, width: 3 }),
   }),
 });
 

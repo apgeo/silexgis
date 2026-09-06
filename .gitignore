@@ -172,3 +172,7 @@ TestResults/
 *.received.*
 # Editor-local settings
 .vscode/
+
+# Python bytecode from local scripts
+__pycache__/
+*.pyc

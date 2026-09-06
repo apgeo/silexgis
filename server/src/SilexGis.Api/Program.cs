@@ -38,6 +38,7 @@ using SilexGis.Api.Features.MapViews;
 using SilexGis.Api.Features.FeatureSets;
 using SilexGis.Api.Features.Permissions;
 using SilexGis.Api.Features.Photos;
+using SilexGis.Api.Features.PhotoLibraries;
 using SilexGis.Api.Features.MapLayers;
 using SilexGis.Api.Features.Me;
 using SilexGis.Api.Features.Notifications;
@@ -135,6 +136,9 @@ try
         .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
     builder.Services.AddSingleton<IFileAccessTokenService, FileAccessTokenService>();
     builder.Services.AddSingleton<IUnsubscribeTokens, UnsubscribeTokenService>();
+    // Its own protection purpose, so a token minted for a picture held in a neighbouring photo
+    // library can never be redeemed against this application's own stored files.
+    builder.Services.AddSingleton<ILibraryPhotoTokenService, LibraryPhotoTokenService>();
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<SilexGisDbContext>("database");
     builder.Services.AddOptions<AboutOptions>()
@@ -160,6 +164,7 @@ try
     builder.Services.AddScoped<AdminTestSendThrottle>();
 builder.Services.AddScoped<GroupAnnouncementThrottle>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
+    builder.Services.AddScoped<SilexGis.Infrastructure.Trips.ITripRosterAnnouncer, SilexGis.Api.Features.TripLogs.TripRosterAnnouncer>();
     // One resolver per resource-link target world; the directory is what the link
     // surface fans out through for display, the picker feed and the authoring floor.
     builder.Services.AddScoped<IResLinkTargetResolver, FeatureTargetResolver>();
@@ -296,6 +301,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapPhotoImportEndpoints();
     api.MapImportBatchEndpoints();
     api.MapCatalogueEndpoints();
+    api.MapTripImportEndpoints();
+    api.MapPhotoLibraryEndpoints();
+    api.MapPhotoLibraryFeatureEndpoints();
     api.MapJobEndpoints();
     api.MapExportEndpoints();
     api.MapFileEndpoints();

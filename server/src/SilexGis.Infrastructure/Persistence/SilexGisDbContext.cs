@@ -88,6 +88,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<PhotoImportSession> PhotoImportSessions => Set<PhotoImportSession>();
 
+    public DbSet<TripImportSession> TripImportSessions => Set<TripImportSession>();
+
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
 
     public DbSet<ImportBatchItem> ImportBatchItems => Set<ImportBatchItem>();

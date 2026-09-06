@@ -45,6 +45,52 @@ export const closestApproachPalette = {
   casing: 'rgba(255, 255, 255, 0.85)',
 } as const;
 
+/**
+ * The three things a trip can be drawn as, and they are three because they mean three different
+ * things. The shape a trip drew of itself is where the party worked; its meeting point is where
+ * the party gathered, which is routinely a car park in a village; and a dot inherited from a cave
+ * the trip names is neither — it is the cave's own surveyed entrance, standing in for a trip that
+ * recorded no geometry at all.
+ *
+ * Drawing any two of them alike would put a car park where the reader read a cave, so each is
+ * given both its own colour and its own outline: filled disc, hollow ring, square. Colour alone
+ * is not enough — a reader who cannot separate teal from magenta still has to be able to tell a
+ * worked cave from a rendezvous.
+ */
+export const tripPalette = {
+  /** Where the trip worked: the shape it drew of itself. */
+  sketch: '#146262',
+  /** Wash under a sketch that is a line or an area rather than a single point. */
+  sketchFill: 'rgba(20, 98, 98, 0.2)',
+  /** Where its party met: a different place, drawn hollow so it cannot be mistaken for the first. */
+  meeting: '#bc5090',
+  /** The hollow ring's centre — near-opaque rather than clear, so the basemap does not read as fill. */
+  meetingCentre: 'rgba(255, 255, 255, 0.9)',
+  /**
+   * A position the trip never stated, inherited from a cave it names. Deliberately unlike both of
+   * the trip's own statements: it is an answer assembled from somewhere else, and a reader must
+   * not take it for a coordinate the trip recorded.
+   */
+  derived: '#5a3fa0',
+  stroke: '#ffffff',
+} as const;
+
+/**
+ * Photographs held by a photo library this installation does not own — one hue per library.
+ *
+ * Deliberately clear of every hue already on this map: the entrance teal, the approximate-entrance
+ * orange, the surface-feature browns, the centerline maroon, the closest-approach blue, and the
+ * purple the in-house photo pin is drawn in (which lives inline in that layer rather than here).
+ * Two pins for the same photograph is a real state — one library may hold what the other does not,
+ * which is the comparison this exists for — so the two libraries have to be told apart at a glance
+ * and neither may be mistaken for a photograph this installation holds itself.
+ */
+export const libraryPhotoPalette = {
+  immich: '#c41d7f',
+  photoprism: '#237804',
+  stroke: '#ffffff',
+} as const;
+
 /** Where the feature-type symbol images are served from; the server sends the file name only. */
 export function featureSymbolUrl(symbolFile: string): string {
   return `/feature_symbols/${encodeURIComponent(symbolFile)}`;
