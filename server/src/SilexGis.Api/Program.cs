@@ -355,6 +355,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapAdminSettingsEndpoints();
     api.MapAdminTemplateEndpoints();
     api.MapTerrainBuildEndpoints();
+    api.MapTerrainProbeEndpoints();
     api.MapSyncEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))

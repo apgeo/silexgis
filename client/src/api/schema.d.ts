@@ -2690,6 +2690,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terrain/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ground height at coordinates the caller supplies; requires Read on the Terrain domain and carries no cave data at all. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TerrainProbeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainProbeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/probe/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ground height under cave entrances and sinkholes; requires Read on the Terrain domain and, per feature, the right to read it and to place it exactly. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TerrainFeatureProbeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainFeatureProbeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -17508,6 +17588,8 @@ export interface components {
             elevationColumn?: null | string;
             wktColumn?: null | string;
         };
+        /** @enum {unknown} */
+        DemSampleOutcome: "sampled" | "outsideCoverage" | "noData";
         DensityCellDto: {
             /** Format: double */
             west: number;
@@ -21138,8 +21220,44 @@ export interface components {
             fetchCoverage?: null | boolean;
             sources?: null | components["schemas"]["TerrainBuildSourceRequest"][];
         };
+        TerrainFeatureProbeDto: {
+            hasTerrain: boolean;
+            samples: components["schemas"]["TerrainFeatureProbeSampleDto"][];
+        };
+        TerrainFeatureProbeRequest: {
+            featureIds: string[];
+        };
+        TerrainFeatureProbeSampleDto: {
+            /** Format: uuid */
+            featureId: string;
+            outcome: components["schemas"]["DemSampleOutcome"];
+            /** Format: double */
+            elevationM: null | number;
+        };
         /** @enum {unknown} */
         TerrainHeightDatum: "orthometric" | "ellipsoidal";
+        TerrainProbeDto: {
+            hasTerrain: boolean;
+            samples: components["schemas"]["TerrainProbeSampleDto"][];
+        };
+        TerrainProbePointRequest: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+        };
+        TerrainProbeRequest: {
+            points: components["schemas"]["TerrainProbePointRequest"][];
+        };
+        TerrainProbeSampleDto: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            outcome: components["schemas"]["DemSampleOutcome"];
+            /** Format: double */
+            elevationM: null | number;
+        };
         TerrainRasterUploadDto: {
             reference: string;
             /** Format: int64 */

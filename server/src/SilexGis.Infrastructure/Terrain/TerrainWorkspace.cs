@@ -141,6 +141,9 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
     /// <summary>What a build's own pyramid directory is called inside its folder.</summary>
     private const string TilesDirectoryName = "tiles";
 
+    /// <summary>What a build's prepared rasters are kept in, inside its folder.</summary>
+    private const string PreparedDirectoryName = "prepared";
+
     private readonly string root = Path.GetFullPath(options.Value.BuildRoot, AppContext.BaseDirectory);
     private readonly string spool = Path.GetFullPath(options.Value.SpoolRoot, AppContext.BaseDirectory);
     private readonly string published = Path.GetFullPath(options.Value.PublishRoot, AppContext.BaseDirectory);
@@ -187,6 +190,18 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
 
     /// <summary>This build's pyramid inside its own folder, whether or not it has been made yet.</summary>
     public string TilesFor(Guid buildId) => Path.Combine(RootFor(buildId), TilesDirectoryName);
+
+    /// <summary>
+    /// Where this build's prepared rasters are, whether or not any have been written yet.
+    /// </summary>
+    /// <remarks>
+    /// Named without being created, for the same reason the root is: anything asking where a
+    /// build's rasters were so that it can read or forget them must not put the directory back by
+    /// asking. The one name lives here rather than at each caller, because a second spelling of it
+    /// is a reader looking in an empty directory beside a full one and reporting no coverage.
+    /// </remarks>
+    public string PreparedFor(Guid buildId) =>
+        Path.Combine(RootFor(buildId), PreparedDirectoryName);
 
     /// <summary>Whether this build's pyramid is where terrain is served from, asked of the disk.</summary>
     /// <remarks>
@@ -363,7 +378,7 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
         var directories = new TerrainBuildDirectories(
             buildRoot,
             Path.Combine(buildRoot, "input"),
-            Path.Combine(buildRoot, "prepared"),
+            Path.Combine(buildRoot, PreparedDirectoryName),
             Path.Combine(buildRoot, "scratch"),
             Path.Combine(buildRoot, TilesDirectoryName));
 

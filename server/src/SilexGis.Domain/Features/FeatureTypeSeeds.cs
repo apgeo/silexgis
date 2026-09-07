@@ -44,6 +44,14 @@ public static class FeatureTypeSeeds
     public const string WorkArea = "work_area";
 
     /// <summary>
+    /// A closed surface depression — a doline or swallow hole. It is resolved by this code wherever
+    /// depressions are counted, measured or asked about as a class rather than drawn, so a rename of
+    /// the shipped kind fails the build instead of turning those answers into empty ones that look
+    /// perfectly reasonable.
+    /// </summary>
+    public const string Sinkhole = "sinkhole";
+
+    /// <summary>
     /// A mapped fracture or fault trace: the line somebody drew where the rock is broken. It is
     /// resolved by this code when a cave's passage trends are compared against the structure around
     /// it, so a rename of the shipped kind fails the build rather than turning that comparison into

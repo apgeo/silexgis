@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.Geo;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
@@ -24,7 +25,7 @@ namespace SilexGis.Api.Features.Features;
 public static class AreaKarstStatisticsEndpoints
 {
     /// <summary>The feature type whose outlines count as mapped depressions.</summary>
-    private const string DepressionTypeCode = "sinkhole";
+    private const string DepressionTypeCode = FeatureTypeSeeds.Sinkhole;
 
     public static RouteGroupBuilder MapAreaKarstStatisticsEndpoints(this RouteGroupBuilder api)
     {
