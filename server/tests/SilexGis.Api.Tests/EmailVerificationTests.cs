@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// Registration confirmation, the anonymous confirm link, and the administrator's switch that
 /// makes a confirmed address a condition of signing in.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class EmailVerificationTests : IAsyncLifetime, IDisposable
+public sealed class EmailVerificationTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

@@ -29,8 +29,7 @@ namespace SilexGis.Api.Tests;
 /// two agree, and the third describes a different cave.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable
+public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     // A traverse of twelve fifty-metre legs running one way and climbing two metres a leg, with a
     // fan of six wall shots at every one of its thirteen stations. The proportions are the point:

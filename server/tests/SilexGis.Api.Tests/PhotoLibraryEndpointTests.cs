@@ -37,8 +37,7 @@ namespace SilexGis.Api.Tests;
 /// library and no coordinate names a real place.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
+public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string StatusUrl = "/api/v1/photo-libraries/status";
     private const string MapUrl = "/api/v1/photo-libraries/photoprism/map";

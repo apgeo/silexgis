@@ -28,8 +28,7 @@ namespace SilexGis.Api.Tests;
 /// class shares one database). Drains are driven directly instead, which is also what makes the
 /// digest testable without waiting a day.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable
+public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

@@ -19,8 +19,7 @@ namespace SilexGis.Api.Tests;
 /// coordinates and a protected cave vanishes, in both directions and on every read
 /// path, for callers without the exact-location permission.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class FeatureLinkTests : IAsyncLifetime, IDisposable
+public sealed class FeatureLinkTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

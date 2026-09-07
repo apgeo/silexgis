@@ -29,8 +29,7 @@ namespace SilexGis.Api.Tests;
 /// return.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable
+public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const double Longitude = 24.0;
 

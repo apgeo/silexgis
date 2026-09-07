@@ -19,8 +19,7 @@ namespace SilexGis.Api.Tests;
 /// exactly one primary, duplicates), children listing under visibility filtering,
 /// the protection guard on re-parenting, and the subtree behavior of soft deletes.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable
+public sealed class FeatureHierarchyTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

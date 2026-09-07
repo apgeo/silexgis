@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// facing an explicit deny. Each asserts the matching positive in the same test, so a
 /// fixture that quietly stopped working cannot pass for a passing security assertion.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CabinetApiTests : IAsyncLifetime, IDisposable
+public sealed class CabinetApiTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

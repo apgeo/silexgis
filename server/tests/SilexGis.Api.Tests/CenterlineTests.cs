@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// view the exact location of every protected feature above it, whether the protection
 /// root is the cave itself or an area containing it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CenterlineTests : IAsyncLifetime, IDisposable
+public sealed class CenterlineTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

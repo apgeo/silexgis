@@ -12,8 +12,7 @@ namespace SilexGis.Api.Tests;
 /// because it needs a request budget tight enough to trip deliberately, which would starve any
 /// other test sharing the factory.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AdminTestSendRateLimitTests : IAsyncLifetime, IDisposable
+public sealed class AdminTestSendRateLimitTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>Three requests obtain the bearer token; the fourth is the first test-send.</summary>
     private const string Budget = "4";

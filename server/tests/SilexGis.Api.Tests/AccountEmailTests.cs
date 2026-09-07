@@ -22,8 +22,7 @@ namespace SilexGis.Api.Tests;
 /// The harness cannot replace registered services, so the token is minted here through the same
 /// Identity provider the endpoint uses rather than read out of a captured message.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class AccountEmailTests : IAsyncLifetime, IDisposable
+public sealed class AccountEmailTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// there would otherwise leave the guard's own list silently shorter than the seeder's.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionRosterRoleVocabularyTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionRosterRoleVocabularyTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string Route = "/api/v1/expedition-roster-roles";
 

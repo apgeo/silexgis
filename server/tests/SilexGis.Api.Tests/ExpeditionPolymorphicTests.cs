@@ -23,8 +23,7 @@ namespace SilexGis.Api.Tests;
 /// caller receives as a fault rather than a refusal. Every one of them is driven here rather
 /// than read, because an omission is invisible until somebody hits it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionPolymorphicTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionPolymorphicTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

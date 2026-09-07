@@ -19,8 +19,7 @@ namespace SilexGis.Api.Tests;
 /// answer is assembled on the server: a page handed the trips and left to fetch positions for the
 /// caves they name would be deciding, on the client, what a camp's map may show.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionMapTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionMapTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const double ExactLon = 25.44721;
     private const double ExactLat = 45.53127;

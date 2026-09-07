@@ -18,8 +18,7 @@ namespace SilexGis.Api.Tests;
 /// who may read and write a camp, the version precondition, the lifecycle table behind one
 /// endpoint, and a list that pages the same rows whatever order the database felt like.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;

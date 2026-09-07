@@ -23,8 +23,7 @@ namespace SilexGis.Api.Tests;
 /// redacted for callers without exact view, and still preserved across their edits.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripAndTagTests : IAsyncLifetime, IDisposable
+public sealed class TripAndTagTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string WorldBbox = "-180,-90,180,90";
 

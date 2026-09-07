@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// test that only names what was refused would pass just as well against an endpoint that had
 /// stopped working altogether.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class SyncUploadTests : IAsyncLifetime, IDisposable
+public sealed class SyncUploadTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const double OpenLon = 25.11223;
     // Deliberately far from the coordinates the proximity assertions use: a test about an

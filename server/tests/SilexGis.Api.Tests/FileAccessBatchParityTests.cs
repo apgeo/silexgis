@@ -26,8 +26,7 @@ namespace SilexGis.Api.Tests;
 /// is then checked for actually discriminating — a caller who sees none of the files, or all
 /// of them, would make the comparison pass while proving nothing.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class FileAccessBatchParityTests : IAsyncLifetime, IDisposable
+public sealed class FileAccessBatchParityTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

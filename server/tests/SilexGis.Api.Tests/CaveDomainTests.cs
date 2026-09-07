@@ -23,8 +23,7 @@ namespace SilexGis.Api.Tests;
 /// the write guard that keeps a non-exact editor from overwriting what they never saw,
 /// subtree soft delete, and EF ↔ SQL parity of the feature visibility filter for caves.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CaveDomainTests : IAsyncLifetime, IDisposable
+public sealed class CaveDomainTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

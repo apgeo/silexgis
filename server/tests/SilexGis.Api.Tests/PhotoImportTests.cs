@@ -26,8 +26,7 @@ namespace SilexGis.Api.Tests;
 /// write access; replacing a camera's own fix because somebody dragged something; and printing a
 /// photograph's coordinates beside a file whose original is being withheld.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PhotoImportTests : IAsyncLifetime, IDisposable
+public sealed class PhotoImportTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

@@ -29,8 +29,7 @@ namespace SilexGis.Api.Tests;
 /// too.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class MapDensityTests : IAsyncLifetime, IDisposable
+public sealed class MapDensityTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>This installation's shipped location-protection grid, and therefore the floor.</summary>
     private const double GridMeters = 5000d;

@@ -19,8 +19,7 @@ namespace SilexGis.Api.Tests;
 /// rows by a per-run marker and never counts the whole answer — another class's seeded areas would
 /// otherwise race these.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class WorkAreaTests : IAsyncLifetime, IDisposable
+public sealed class WorkAreaTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

@@ -39,8 +39,7 @@ namespace SilexGis.Api.Tests;
 /// itself however the account it holds is privileged.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class SyncAdministratorReadTests : IAsyncLifetime, IDisposable
+public sealed class SyncAdministratorReadTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>The product as an operator who has configured nothing receives it.</summary>
     private readonly SilexGisApiFactory shipped;

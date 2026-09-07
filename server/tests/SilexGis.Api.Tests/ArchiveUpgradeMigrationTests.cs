@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// It runs on a database of its own, migrated only as far as the schema that predates
 /// documents, so the upgrade can be driven forwards over rows that were written before it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ArchiveUpgradeMigrationTests : IAsyncLifetime
+public sealed class ArchiveUpgradeMigrationTests : IAsyncLifetime, IClassFixture<PostgresFixture>
 {
     /// <summary>The last schema that knew nothing about documents. Matched by name so it
     /// survives being renumbered.</summary>

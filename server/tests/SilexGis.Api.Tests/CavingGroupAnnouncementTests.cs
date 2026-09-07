@@ -26,8 +26,7 @@ namespace SilexGis.Api.Tests;
 /// test, so a fixture that quietly stopped producing anything cannot pass as a security
 /// assertion.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable
+public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string connectionString;

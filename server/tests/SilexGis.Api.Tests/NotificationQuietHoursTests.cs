@@ -32,8 +32,7 @@ namespace SilexGis.Api.Tests;
 /// now(), which is why nothing here drains.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class NotificationQuietHoursTests : IAsyncLifetime, IDisposable
+public sealed class NotificationQuietHoursTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>02:30 UTC on an ordinary summer night — 05:30 in Bucharest, deep inside a window
     /// that opened at 22:00 and closes at 07:00.</summary>

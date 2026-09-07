@@ -35,8 +35,7 @@ namespace SilexGis.Api.Tests;
 /// first answer successfully and name the thing it is supposed to be carrying — the document,
 /// the file, the cave — before its silence about the position counts for anything.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDisposable
+public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     // Far enough from any obfuscation grid that a rounded position cannot contain these
     // digits by accident, and distinctive enough to find in a payload as text. They must also

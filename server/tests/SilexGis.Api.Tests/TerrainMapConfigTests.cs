@@ -35,8 +35,7 @@ namespace SilexGis.Api.Tests;
 /// that a build's declared datum reaches the scene, not merely that some number does.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class TerrainMapConfigTests : IAsyncLifetime, IDisposable
+public sealed class TerrainMapConfigTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string MountedUrl = "/terrain/";
     private const string MountedCredit = "Baked by hand from data somebody already had";

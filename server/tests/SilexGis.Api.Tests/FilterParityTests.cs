@@ -28,8 +28,7 @@ namespace SilexGis.Api.Tests;
 /// one of two protected roots. The forms may never diverge: a mismatch is a security
 /// bug, not a flake.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class FilterParityTests : IAsyncLifetime, IDisposable
+public sealed class FilterParityTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

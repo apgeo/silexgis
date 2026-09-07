@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// prove nothing about the rule under test — it would prove only that the account held no
 /// editing rights. Every negative case here sits beside the positive one it is the shadow of.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class EventLifecycleTests : IAsyncLifetime, IDisposable
+public sealed class EventLifecycleTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

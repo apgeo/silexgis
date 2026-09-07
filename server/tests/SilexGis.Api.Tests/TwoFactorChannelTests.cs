@@ -16,8 +16,7 @@ namespace SilexGis.Api.Tests;
 /// The two delivered second factors end to end: enrolling with a code that really arrives,
 /// signing in with one, and the rules that stop a method being switched on when it could not work.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable
+public sealed class TwoFactorChannelTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private string email = null!;

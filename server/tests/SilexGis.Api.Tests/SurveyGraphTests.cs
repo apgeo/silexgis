@@ -23,8 +23,7 @@ namespace SilexGis.Api.Tests;
 /// shape of the network, that running the job twice leaves one set of rows, and that a caller who
 /// may not place the cave is told about none of it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable
+public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

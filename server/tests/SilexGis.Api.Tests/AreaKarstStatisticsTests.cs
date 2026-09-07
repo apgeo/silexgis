@@ -30,8 +30,7 @@ namespace SilexGis.Api.Tests;
 /// found by it.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AreaKarstStatisticsTests : IAsyncLifetime, IDisposable
+public sealed class AreaKarstStatisticsTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

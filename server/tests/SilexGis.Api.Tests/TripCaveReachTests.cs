@@ -33,8 +33,7 @@ namespace SilexGis.Api.Tests;
 /// but unguarded proves nothing about the second — so caves are built with both said out loud,
 /// and a case that means one of them creates a cave that fails only that gate.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable
+public sealed class TripCaveReachTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

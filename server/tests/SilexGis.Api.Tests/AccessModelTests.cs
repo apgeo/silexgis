@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// no-amplification bound on the per-object grant surface, and the last-full-admin
 /// lockout guard.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AccessModelTests : IAsyncLifetime, IDisposable
+public sealed class AccessModelTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

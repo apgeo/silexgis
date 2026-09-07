@@ -31,8 +31,7 @@ namespace SilexGis.Api.Tests;
 /// refresh window defensible: without them the credential on the lost device outlives the password
 /// it was obtained with by weeks.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class CredentialRevocationTests : IDisposable
+public sealed class CredentialRevocationTests : IDisposable, IClassFixture<PostgresFixture>
 {
     private const string NewPassword = "integration-test-pass-2";
     private const string DeviceRedirectUri = "http://127.0.0.1:54321/callback";

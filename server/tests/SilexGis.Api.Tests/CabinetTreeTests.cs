@@ -16,8 +16,7 @@ namespace SilexGis.Api.Tests;
 /// really is a database operation (it is the one thing the pure rules cannot prove), and
 /// that sibling-name uniqueness is the database's answer rather than a convention.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public class CabinetTreeTests(PostgresFixture postgres) : IDisposable
+public class CabinetTreeTests(PostgresFixture postgres) : IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory = new(postgres.ConnectionString);
 

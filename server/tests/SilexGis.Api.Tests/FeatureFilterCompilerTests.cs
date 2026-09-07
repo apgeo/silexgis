@@ -27,8 +27,7 @@ namespace SilexGis.Api.Tests;
 /// what guarantees that, and these cases are what stop a later refactor from reversing the order.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable
+public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private string tag = null!;

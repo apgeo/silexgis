@@ -36,8 +36,7 @@ namespace SilexGis.Api.Tests;
 /// shared by the whole collection.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class CalendarTests : IAsyncLifetime, IDisposable
+public sealed class CalendarTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

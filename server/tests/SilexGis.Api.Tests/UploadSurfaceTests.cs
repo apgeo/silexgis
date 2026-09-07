@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// from what the upload claims, the size limit is installation configuration, and every
 /// file response names the document it belongs to.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable
+public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

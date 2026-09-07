@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// nothing at all would otherwise look exactly like a lane that correctly passed a row over.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class JobQueueLaneTests : IDisposable
+public sealed class JobQueueLaneTests : IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

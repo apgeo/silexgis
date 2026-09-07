@@ -28,8 +28,7 @@ namespace SilexGis.Api.Tests;
 /// trivially safe and useless.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class DocumentFilterWorldTests : IAsyncLifetime, IDisposable
+public sealed class DocumentFilterWorldTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private string tag = null!;

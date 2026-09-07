@@ -21,8 +21,7 @@ namespace SilexGis.Api.Tests;
 /// absolutely (a protected chain never yields exact geometry, whatever the share); and
 /// the requires-login mode, where the caller's own permissions gate the read.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class FeatureShareTests : IAsyncLifetime, IDisposable
+public sealed class FeatureShareTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

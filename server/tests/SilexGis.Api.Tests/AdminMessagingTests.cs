@@ -17,8 +17,7 @@ namespace SilexGis.Api.Tests;
 /// The administrator's messaging settings and message wording: who may see them, what happens to
 /// the secrets, and the rules the template editor enforces.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable
+public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string connectionString;

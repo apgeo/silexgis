@@ -18,8 +18,7 @@ namespace SilexGis.Api.Tests;
 /// is what happens when a schema is tightened — documents written under the looser one stay
 /// valid, because they are re-checked against the version they were actually written under.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DocumentMetadataTests : IAsyncLifetime, IDisposable
+public sealed class DocumentMetadataTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

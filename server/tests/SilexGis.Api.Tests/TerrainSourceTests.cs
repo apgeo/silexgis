@@ -37,8 +37,7 @@ namespace SilexGis.Api.Tests;
 /// all sea" is a fact this test states rather than one it hopes the bucket will supply.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable
+public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>The cell this stub refuses, standing in for one that is entirely ocean.</summary>
     private const string UnpublishedCell = "E023";

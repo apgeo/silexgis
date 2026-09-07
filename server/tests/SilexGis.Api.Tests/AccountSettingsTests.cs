@@ -22,8 +22,7 @@ namespace SilexGis.Api.Tests;
 /// with an optional map point, the avatar, interface and notification preferences, the account
 /// data export, and the credential changes.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable
+public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

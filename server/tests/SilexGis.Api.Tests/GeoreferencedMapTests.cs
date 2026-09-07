@@ -21,8 +21,7 @@ namespace SilexGis.Api.Tests;
 /// signed delivery URL with range requests; visibility, the protected-cave omission rule
 /// and the exact-location grant that lifts it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable
+public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

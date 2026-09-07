@@ -32,8 +32,7 @@ namespace SilexGis.Api.Tests;
 /// rather than reporting a cave flat at sea level.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SurveySegmentSubstrateTests : IAsyncLifetime, IDisposable
+public sealed class SurveySegmentSubstrateTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

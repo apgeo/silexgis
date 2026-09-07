@@ -36,8 +36,7 @@ namespace SilexGis.Api.Tests;
 /// shares one database and other classes assert the integrity verifier finds nothing at all.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class CaveSubtypeMissingTests : IAsyncLifetime, IDisposable
+public sealed class CaveSubtypeMissingTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly LogCapture logs = new();

@@ -17,8 +17,7 @@ namespace SilexGis.Api.Tests;
 /// audience says and no further, and that a right over every trip confers nothing here while an
 /// entry naming one event does.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class EventAccessDomainTests : IAsyncLifetime, IDisposable
+public sealed class EventAccessDomainTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

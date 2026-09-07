@@ -13,8 +13,7 @@ namespace SilexGis.Api.Tests;
 /// gate (mfa_required → code → session), recovery codes, disable — plus the per-IP
 /// rate limiter on the auth surface.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable
+public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private string email = null!;
@@ -115,8 +114,7 @@ public sealed class MfaAndRateLimitTests : IAsyncLifetime, IDisposable
 /// The per-IP fixed window on the auth surface. Its own class because it needs a limit tight
 /// enough to trip deliberately, which would starve any other test sharing the factory.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AuthRateLimitTests(PostgresFixture postgres) : IDisposable
+public sealed class AuthRateLimitTests(PostgresFixture postgres) : IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory =
         new(postgres.ConnectionString, new Dictionary<string, string?>

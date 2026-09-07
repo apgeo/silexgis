@@ -17,8 +17,7 @@ namespace SilexGis.Api.Tests;
 /// on POST, visibility filtering, the map layer, and the resolver envelope for subtyped
 /// kinds (cave, entrance).
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class FeatureTests : IAsyncLifetime, IDisposable
+public sealed class FeatureTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

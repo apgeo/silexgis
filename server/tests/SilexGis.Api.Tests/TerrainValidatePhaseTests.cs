@@ -34,8 +34,7 @@ namespace SilexGis.Api.Tests;
 /// pyramid is served out of viewers' own caches for a week with no request reaching the server.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TerrainValidatePhaseTests : IAsyncLifetime, IDisposable
+public sealed class TerrainValidatePhaseTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly PostgresFixture postgres;
     private readonly SilexGisApiFactory factory;

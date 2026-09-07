@@ -26,8 +26,7 @@ namespace SilexGis.Api.Tests;
 /// lose the pictures in it.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AlbumAndPublicGalleryTests : IAsyncLifetime, IDisposable
+public sealed class AlbumAndPublicGalleryTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

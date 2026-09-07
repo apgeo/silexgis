@@ -30,8 +30,7 @@ namespace SilexGis.Api.Tests;
 /// whole group — not the answering rules themselves, which have one home and one suite.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class EventInvitationTests : IAsyncLifetime, IDisposable
+public sealed class EventInvitationTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

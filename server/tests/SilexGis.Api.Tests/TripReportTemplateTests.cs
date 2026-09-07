@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// its producer already has, so a layout naming a part of the record this reader is not given
 /// produces a document without that line — not an error, and not the line.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable
+public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

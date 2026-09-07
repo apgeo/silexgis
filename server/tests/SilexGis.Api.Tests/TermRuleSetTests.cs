@@ -16,8 +16,7 @@ namespace SilexGis.Api.Tests;
 /// the installation inherits is an administrator's — because promoting a set changes what
 /// everybody else's next import proposes.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TermRuleSetTests : IAsyncLifetime, IDisposable
+public sealed class TermRuleSetTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

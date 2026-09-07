@@ -27,8 +27,7 @@ namespace SilexGis.Api.Tests;
 /// passing security assertion.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable
+public sealed class UploadDestinationTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

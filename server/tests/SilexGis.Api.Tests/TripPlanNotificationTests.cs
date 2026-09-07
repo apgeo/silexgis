@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// same test as the person who is not.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable
+public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

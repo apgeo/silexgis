@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// layer → re-export; plus export endpoints with visibility filtering and location
 /// obfuscation, and geofile/job access rules.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class GeofileTests : IAsyncLifetime, IDisposable
+public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string WorldBbox = "-180,-90,180,90";
 

@@ -19,8 +19,7 @@ namespace SilexGis.Api.Tests;
 /// sign-in config endpoint and the linked-providers management surface. The provider
 /// redirect handshake itself is framework code and is verified manually.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExternalAuthTests : IDisposable
+public sealed class ExternalAuthTests : IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string connectionString;

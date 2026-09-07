@@ -38,8 +38,7 @@ namespace SilexGis.Api.Tests;
 /// fails here rather than silently matching something else.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class AnonymousSurfaceTests(PostgresFixture postgres) : IDisposable
+public sealed class AnonymousSurfaceTests(PostgresFixture postgres) : IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory = new(postgres.ConnectionString);
 

@@ -22,8 +22,7 @@ namespace SilexGis.Api.Tests;
 /// what comes back is what the caller may see, and that neither the rows nor the count nor a
 /// refusal's wording says anything about rows they may not.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable
+public sealed class FilterEndpointTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private string tag = null!;

@@ -34,8 +34,7 @@ namespace SilexGis.Api.Tests;
 /// only has to put real elevation data in the directory this step reads, without a network.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TerrainPreparePhaseTests : IAsyncLifetime, IDisposable
+public sealed class TerrainPreparePhaseTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>The Romanian national projected grid, in metres.</summary>
     private const int Stereo70 = 31700;

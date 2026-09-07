@@ -31,8 +31,7 @@ namespace SilexGis.Api.Tests;
 /// rather than one that happens not to fire. The one exception is the administrator,
 /// whose whole point is that the walk never runs for them.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable
+public sealed class DocumentAccessParityTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

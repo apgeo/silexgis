@@ -26,8 +26,7 @@ namespace SilexGis.Api.Tests;
 /// none of which should depend on which office suite an operator deployed.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable
+public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string WordMediaType = "application/msword";
 

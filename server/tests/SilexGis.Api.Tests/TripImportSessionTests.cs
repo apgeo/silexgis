@@ -23,8 +23,7 @@ namespace SilexGis.Api.Tests;
 /// placeholder people, written to exercise the reading rather than to resemble anybody's records.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripImportSessionTests : IAsyncLifetime, IDisposable
+public sealed class TripImportSessionTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

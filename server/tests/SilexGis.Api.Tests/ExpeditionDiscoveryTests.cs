@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// The PostGIS container is shared across the collection, so every assertion here is about
 /// specific marked rows rather than totals.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionDiscoveryTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionDiscoveryTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;

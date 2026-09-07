@@ -31,8 +31,7 @@ namespace SilexGis.Api.Tests;
 /// archive would say nothing about what this query decided.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DocumentContentSearchTests : IAsyncLifetime, IDisposable
+public sealed class DocumentContentSearchTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

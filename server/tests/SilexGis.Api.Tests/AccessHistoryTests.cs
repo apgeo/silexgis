@@ -38,8 +38,7 @@ namespace SilexGis.Api.Tests;
 /// The reader is a Viewer throughout. An Editor reads past visibility across every content
 /// domain by design, so a refusal proved against one would prove nothing.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AccessHistoryTests : IAsyncLifetime, IDisposable
+public sealed class AccessHistoryTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

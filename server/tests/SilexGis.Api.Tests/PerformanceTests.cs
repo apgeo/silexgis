@@ -23,8 +23,7 @@ namespace SilexGis.Api.Tests;
 /// The wall-clock budget catches regressions loosely — the EXPLAIN pins below state the
 /// reason the map scales, and those are the durable contract.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PerformanceTests : IDisposable
+public sealed class PerformanceTests : IDisposable, IClassFixture<PostgresFixture>
 {
     private const int CaveCount = 2000;
     private const int EntrancesPerCave = 50; // 100k entrance features

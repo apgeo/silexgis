@@ -30,8 +30,7 @@ namespace SilexGis.Api.Tests;
 /// whichever class started next — and a test that overrode the setting would pass while the shipped
 /// default was wrong, which is the only failure worth catching here.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class SpeleoLocClientRegistrationTests : IDisposable
+public sealed class SpeleoLocClientRegistrationTests : IDisposable, IClassFixture<PostgresFixture>
 {
     private const string CaverEmail = "speleoloc-device@test.local";
 

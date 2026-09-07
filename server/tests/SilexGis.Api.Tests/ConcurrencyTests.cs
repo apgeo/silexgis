@@ -19,8 +19,7 @@ namespace SilexGis.Api.Tests;
 /// GETs carry the ETag, writes honor If-Match with 412 on staleness, and a fresh ETag is
 /// issued after every successful update.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable
+public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;

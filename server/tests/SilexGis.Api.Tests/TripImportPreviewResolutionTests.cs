@@ -31,8 +31,7 @@ namespace SilexGis.Api.Tests;
 /// in the next and the ambiguity rule would fire for the wrong reason.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposable
+public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

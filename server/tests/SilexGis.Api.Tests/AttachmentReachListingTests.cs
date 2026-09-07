@@ -32,8 +32,7 @@ namespace SilexGis.Api.Tests;
 /// would say nothing about what this query decided.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AttachmentReachListingTests : IAsyncLifetime, IDisposable
+public sealed class AttachmentReachListingTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

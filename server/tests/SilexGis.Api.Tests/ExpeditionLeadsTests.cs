@@ -28,8 +28,7 @@ namespace SilexGis.Api.Tests;
 /// the same disclosure as a coordinate and a more inviting one.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionLeadsTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionLeadsTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

@@ -31,8 +31,7 @@ namespace SilexGis.Api.Tests;
 /// The withheld side is always a Viewer. The seeded Editors group reads past visibility by
 /// design, so an Editor who cannot see something proves nothing about the rule.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripReportDocumentTests : IAsyncLifetime, IDisposable
+public sealed class TripReportDocumentTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     // Distinctive enough to find in a document as text, and far enough from any obfuscation
     // grid that a rounded position could not contain these digits by accident. They belong to

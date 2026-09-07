@@ -31,8 +31,7 @@ namespace SilexGis.Api.Tests;
 /// of.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class EventSeriesTests : IAsyncLifetime, IDisposable
+public sealed class EventSeriesTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

@@ -34,8 +34,7 @@ namespace SilexGis.Api.Tests;
 /// looking at either half alone.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CavePassageShapeTests : IAsyncLifetime, IDisposable
+public sealed class CavePassageShapeTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const double OriginLongitude = 25.5;
     private const double OriginLatitude = 45.5;

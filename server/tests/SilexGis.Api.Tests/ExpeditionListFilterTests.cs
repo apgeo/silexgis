@@ -16,8 +16,7 @@ namespace SilexGis.Api.Tests;
 /// Every case here carries its own marker word in the camp names and searches for it, because the
 /// database outlives one test class and a bare state filter would answer with everybody's camps.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionListFilterTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionListFilterTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;

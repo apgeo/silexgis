@@ -27,8 +27,7 @@ namespace SilexGis.Api.Tests;
 /// total the fractions are taken over would pass a check on the one bin and fail this.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class HypsometryTests : IAsyncLifetime, IDisposable
+public sealed class HypsometryTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const double AreaWest = 25.40;
     private const double AreaEast = 25.55;

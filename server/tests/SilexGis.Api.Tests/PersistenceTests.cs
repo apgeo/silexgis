@@ -13,8 +13,7 @@ using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
 
-[Collection(PostgresCollection.Name)]
-public sealed class PersistenceTests : IDisposable
+public sealed class PersistenceTests : IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

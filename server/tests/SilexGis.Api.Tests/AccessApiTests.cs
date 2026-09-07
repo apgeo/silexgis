@@ -19,8 +19,7 @@ namespace SilexGis.Api.Tests;
 /// written directly onto one object, and the two answers a client needs — what may I do,
 /// and why. Every write here moves authorization, so the guards are the point.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AccessApiTests : IAsyncLifetime, IDisposable
+public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient admin = null!;

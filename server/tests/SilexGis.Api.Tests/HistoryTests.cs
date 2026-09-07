@@ -22,8 +22,7 @@ namespace SilexGis.Api.Tests;
 /// mirrors the live DTO masking — including its "current protection state governs" rule —
 /// and the soft-delete forensics a timeline exists to show.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class HistoryTests : IAsyncLifetime, IDisposable
+public sealed class HistoryTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

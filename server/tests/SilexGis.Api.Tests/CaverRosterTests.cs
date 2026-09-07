@@ -23,8 +23,7 @@ namespace SilexGis.Api.Tests;
 /// pins in place, and the invariant the people model exists to hold — an account-less
 /// caver's presence changes no authorization decision anywhere.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CaverRosterTests : IAsyncLifetime, IDisposable
+public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private string suffix = null!;

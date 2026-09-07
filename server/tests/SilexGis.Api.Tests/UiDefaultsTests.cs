@@ -12,8 +12,7 @@ namespace SilexGis.Api.Tests;
 /// The installation's starting interface arrangement, and the two things it must not be: a policy
 /// that overwrites what somebody chose, and a key inside the per-user preferences document.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class UiDefaultsTests : IAsyncLifetime, IDisposable
+public sealed class UiDefaultsTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

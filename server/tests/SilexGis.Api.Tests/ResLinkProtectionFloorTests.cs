@@ -30,8 +30,7 @@ namespace SilexGis.Api.Tests;
 /// Every negative asserts its matching positive in the same test, so a fixture that
 /// quietly stopped working cannot pass for a passing refusal.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable
+public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly ITestOutputHelper output;

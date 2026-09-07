@@ -33,8 +33,7 @@ namespace SilexGis.Api.Tests;
 /// from memory, so it cannot drift into a description of what the server was believed to do.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class SyncAuthTests : IDisposable
+public sealed class SyncAuthTests : IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>
     /// A loopback address with the ephemeral port an installed application would have bound. The

@@ -22,8 +22,7 @@ namespace SilexGis.Api.Tests;
 /// for reads as exactly that rather than as an absent answer.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripCalloutFieldsTests : IAsyncLifetime, IDisposable
+public sealed class TripCalloutFieldsTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string connectionString;

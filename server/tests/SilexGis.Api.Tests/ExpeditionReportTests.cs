@@ -33,8 +33,7 @@ namespace SilexGis.Api.Tests;
 /// The withheld side is always a Viewer with no grant. The seeded Editors group reads past
 /// visibility by design, so an Editor who cannot see something proves nothing about the rule.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

@@ -28,8 +28,7 @@ namespace SilexGis.Api.Tests;
 /// so, rather than answering with empty text. A caller that could not tell those apart would
 /// store a link pointing at a passage it never found.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PageTextTests : IAsyncLifetime, IDisposable
+public sealed class PageTextTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string PageOneText = "Beyond the second sump the passage widens into a chamber.";
 

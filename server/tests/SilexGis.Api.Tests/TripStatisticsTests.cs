@@ -34,8 +34,7 @@ namespace SilexGis.Api.Tests;
 /// names a cave once per link, so a trip that named a cave twice is one trip. Neither mistake fails
 /// a build. Both make a club's page report more people underground than were there.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripStatisticsTests : IAsyncLifetime
+public sealed class TripStatisticsTests : IAsyncLifetime, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

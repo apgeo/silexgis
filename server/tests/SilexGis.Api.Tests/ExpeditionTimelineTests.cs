@@ -21,8 +21,7 @@ namespace SilexGis.Api.Tests;
 /// there, because the timeline route would not take a camp as its subject; these drive them from
 /// the outside, which is the only place the leak would actually have happened.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionTimelineTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionTimelineTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;

@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// ownership gives them exact view of it — which is what stops a fixture that quietly stopped
 /// attaching anything from reading as a passing security assertion.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AssociationDisclosureTests : IAsyncLifetime, IDisposable
+public sealed class AssociationDisclosureTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

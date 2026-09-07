@@ -34,8 +34,7 @@ namespace SilexGis.Api.Tests;
 /// silently built too few rows to page could not read as a working page limit.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class SyncPageSizeTests : IAsyncLifetime, IDisposable
+public sealed class SyncPageSizeTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>The product as an operator who has configured nothing receives it.</summary>
     private readonly SilexGisApiFactory shipped;

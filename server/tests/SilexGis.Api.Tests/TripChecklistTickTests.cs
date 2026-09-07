@@ -32,8 +32,7 @@ namespace SilexGis.Api.Tests;
 /// a confirmation back would be a disclosure rule nobody wrote.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class TripChecklistTickTests : IAsyncLifetime, IDisposable
+public sealed class TripChecklistTickTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

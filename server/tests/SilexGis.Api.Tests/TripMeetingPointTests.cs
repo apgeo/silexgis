@@ -26,8 +26,7 @@ namespace SilexGis.Api.Tests;
 /// door. Every surface that emits it is asked here, not only the trip's own reading, because the
 /// trip's own reading is the one door that was designed to be right.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class TripMeetingPointTests : IAsyncLifetime, IDisposable
+public sealed class TripMeetingPointTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string WorldBbox = "-180,-90,180,90";
 

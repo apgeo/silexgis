@@ -18,8 +18,7 @@ namespace SilexGis.Api.Tests;
 /// bytes have to be the format the name claims, that a corrected source is a new revision of the
 /// same document, and that the whole archive is withheld from a caller who may not place the cave.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SurveySourceTests : IAsyncLifetime, IDisposable
+public sealed class SurveySourceTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

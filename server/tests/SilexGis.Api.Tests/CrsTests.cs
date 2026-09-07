@@ -11,8 +11,7 @@ namespace SilexGis.Api.Tests;
 /// so the vendored 3D survey viewer never has to reach a public web service to find out what
 /// coordinate system a survey is in.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CrsTests : IAsyncLifetime, IDisposable
+public sealed class CrsTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

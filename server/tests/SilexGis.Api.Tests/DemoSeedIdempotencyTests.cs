@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// It runs on a database of its own so the dataset does not sit underneath other tests, whose
 /// counts are their own business.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DemoSeedIdempotencyTests : IAsyncLifetime
+public sealed class DemoSeedIdempotencyTests : IAsyncLifetime, IClassFixture<PostgresFixture>
 {
     private static readonly Guid Owner = new("00000000-0000-0000-0000-0000000000d1");
 

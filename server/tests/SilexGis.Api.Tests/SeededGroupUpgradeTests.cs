@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// It runs on a database of its own, because it rewinds migration state and empties a
 /// domain's entries — neither of which a database shared with other tests could survive.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SeededGroupUpgradeTests : IAsyncLifetime, IDisposable
+public sealed class SeededGroupUpgradeTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>The migration that carries the upload right onto already-seeded groups.
     /// Matched by name, not by timestamp, so it survives being renumbered.</summary>

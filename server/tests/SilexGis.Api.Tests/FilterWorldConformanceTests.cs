@@ -408,8 +408,7 @@ public sealed class MapViewWorldFixture : WorldFixture
 /// stays true after somebody adds the tenth one in a hurry.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable
+public sealed class FilterWorldConformanceTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private static readonly WorldFixture[] Fixtures =
     [

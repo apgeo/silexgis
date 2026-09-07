@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// about the total this query computes.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable
+public sealed class DocumentContentSearchSqlTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private string nonce = string.Empty;

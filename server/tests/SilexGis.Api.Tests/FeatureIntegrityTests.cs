@@ -21,8 +21,7 @@ namespace SilexGis.Api.Tests;
 /// bypassed the aggregate write service, so a test that went through the service could
 /// never produce the state being checked for.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable
+public sealed class FeatureIntegrityTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private Guid ownerId;

@@ -78,8 +78,7 @@ internal sealed class ChargingTestChannel : INotificationChannel
 /// The installation's own lower ceiling is proved separately, below.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDisposable
+public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>
     /// What one copy of this fixture's notice is weighed at: the pieces the announcement wording

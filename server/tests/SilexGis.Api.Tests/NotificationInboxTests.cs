@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// withdrawn — and every test below that turns on somebody having lost access would pass without
 /// the code under test doing anything at all.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class NotificationInboxTests : IAsyncLifetime, IDisposable
+public sealed class NotificationInboxTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

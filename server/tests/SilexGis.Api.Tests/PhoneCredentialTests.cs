@@ -17,8 +17,7 @@ namespace SilexGis.Api.Tests;
 /// it covers: repointing a confirmed number from the profile form, buying another text by
 /// deleting the number, and guessing a six-digit code for free.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable
+public sealed class PhoneCredentialTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

@@ -18,8 +18,7 @@ namespace SilexGis.Api.Tests;
 /// in at most one camp, the camp's own trip listing showing only what its reader may read, and
 /// what deleting either end does and does not take with it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionMembershipTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionMembershipTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;

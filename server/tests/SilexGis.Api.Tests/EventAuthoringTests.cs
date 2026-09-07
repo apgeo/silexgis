@@ -23,8 +23,7 @@ namespace SilexGis.Api.Tests;
 /// it" would prove nothing about the audience — only that the account held no editing rights.
 /// Each negative assertion sits beside the positive one it is the shadow of.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class EventAuthoringTests : IAsyncLifetime, IDisposable
+public sealed class EventAuthoringTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// exclusion test also names a row that must arrive — otherwise a fixture that silently built
 /// nothing would read as a working refusal.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable
+public sealed class SyncProtocolTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;

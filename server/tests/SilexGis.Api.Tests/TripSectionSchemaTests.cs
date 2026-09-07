@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// that actually rewrites the section is measured against the schema as it now stands.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripSectionSchemaTests : IAsyncLifetime, IDisposable
+public sealed class TripSectionSchemaTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

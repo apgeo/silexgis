@@ -32,8 +32,7 @@ namespace SilexGis.Api.Tests;
 /// the widest scope by design, so a refusal aimed at an editor would prove nothing.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable
+public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

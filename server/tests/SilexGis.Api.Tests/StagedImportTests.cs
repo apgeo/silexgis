@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// quietly, which are creating without review where the installation forbids it, and answering
 /// "there is already something within twelve metres" about a cave the caller may not locate.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class StagedImportTests : IAsyncLifetime, IDisposable
+public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

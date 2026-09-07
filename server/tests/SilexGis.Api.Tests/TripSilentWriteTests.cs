@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// changed between them — because an assertion that nothing was sent passes just as well when the
 /// sending was never wired up at all.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class TripSilentWriteTests : IAsyncLifetime, IDisposable
+public sealed class TripSilentWriteTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

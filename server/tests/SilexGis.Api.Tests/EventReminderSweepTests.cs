@@ -31,8 +31,7 @@ namespace SilexGis.Api.Tests;
 /// it, which is also the assertion that the setting is what governs the window.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class EventReminderSweepTests : IAsyncLifetime, IDisposable
+public sealed class EventReminderSweepTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>
     /// What the pass takes in one go. Held here as the number this suite drives against rather

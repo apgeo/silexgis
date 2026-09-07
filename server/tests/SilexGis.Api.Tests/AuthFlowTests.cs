@@ -19,8 +19,7 @@ namespace SilexGis.Api.Tests;
 /// Exercises the real OIDC surface end-to-end: cookie login → authorize (code + PKCE) →
 /// token exchange → bearer-protected API → refresh grant.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AuthFlowTests : IDisposable
+public sealed class AuthFlowTests : IDisposable, IClassFixture<PostgresFixture>
 {
     private const string AdminEmail = "admin@test.local";
     private const string AdminPassword = "bootstrap-admin-pass-1";

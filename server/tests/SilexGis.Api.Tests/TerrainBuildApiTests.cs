@@ -29,8 +29,7 @@ namespace SilexGis.Api.Tests;
 /// the refusal was about the right and not about the fixture.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TerrainBuildApiTests : IAsyncLifetime, IDisposable
+public sealed class TerrainBuildApiTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

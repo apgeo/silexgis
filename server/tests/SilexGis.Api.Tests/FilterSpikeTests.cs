@@ -28,8 +28,7 @@ namespace SilexGis.Api.Tests;
 /// upgrade.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class FilterSpikeTests : IAsyncLifetime, IDisposable
+public sealed class FilterSpikeTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

@@ -22,8 +22,7 @@ namespace SilexGis.Api.Tests;
 /// rather than per person per trip. Code that got any of these wrong would compile.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripInvitationSubjectTests : IAsyncLifetime, IDisposable
+public sealed class TripInvitationSubjectTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string SubjectConstraint = "ck_trip_invitations_one_subject";
 

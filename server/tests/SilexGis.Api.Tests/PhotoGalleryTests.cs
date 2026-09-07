@@ -27,8 +27,7 @@ namespace SilexGis.Api.Tests;
 /// photograph whose subject the caller may not place.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable
+public sealed class PhotoGalleryTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

@@ -21,8 +21,7 @@ namespace SilexGis.Api.Tests;
 /// normal API workout the integrity verifier finds the derived state (closures,
 /// effective protection, mirrors, delegated access) fully consistent.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
+public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const double ExactLon = 25.44721;
     private const double ExactLat = 45.53127;

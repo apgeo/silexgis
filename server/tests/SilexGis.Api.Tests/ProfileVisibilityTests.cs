@@ -19,8 +19,7 @@ namespace SilexGis.Api.Tests;
 /// administrator each see of a member, that the picker cannot be used as an address oracle, and
 /// that no attribution row falls back to somebody's address.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable
+public sealed class ProfileVisibilityTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

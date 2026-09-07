@@ -28,8 +28,7 @@ namespace SilexGis.Api.Tests;
 /// by ten orders of magnitude.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PolygonMorphometryTests : IAsyncLifetime, IDisposable
+public sealed class PolygonMorphometryTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>
     /// A 200 m by 50 m rectangle whose long side bears 060°, centred near 46.05 N 26.35 E.

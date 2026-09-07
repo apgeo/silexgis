@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// current, so nothing could be observed on it.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TaxonomyWideningTests : IAsyncLifetime
+public sealed class TaxonomyWideningTests : IAsyncLifetime, IClassFixture<PostgresFixture>
 {
     private readonly string adminConnectionString;
     private readonly string databaseName = $"silexgis_taxonomy_{Guid.NewGuid():N}";

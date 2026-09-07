@@ -33,8 +33,7 @@ namespace SilexGis.Api.Tests;
 /// reason.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class TripsOfTheCallerTests : IAsyncLifetime, IDisposable
+public sealed class TripsOfTheCallerTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

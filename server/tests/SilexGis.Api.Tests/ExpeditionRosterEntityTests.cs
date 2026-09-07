@@ -15,8 +15,7 @@ namespace SilexGis.Api.Tests;
 /// stored end always means "and they stayed on to", nothing constrains one stay against another,
 /// and a person is counted once however many roles they held.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionRosterEntityTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionRosterEntityTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private Guid ownerId;

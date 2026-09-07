@@ -29,8 +29,7 @@ namespace SilexGis.Api.Tests;
 /// positive half is what makes the missing half a refusal rather than an empty database.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class TripMapDerivedPositionTests : IAsyncLifetime, IDisposable
+public sealed class TripMapDerivedPositionTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     // This suite's own corner of the world and its own day. The database is shared between
     // suites, and both the unlocated figure and the truncation flag are counts over everything

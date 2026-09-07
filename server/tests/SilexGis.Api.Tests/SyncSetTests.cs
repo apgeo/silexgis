@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// root is checked against the caller's own reads, and that the announced contract version
 /// is a fixed statement about this build rather than something an installation may set.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SyncSetTests : IAsyncLifetime, IDisposable
+public sealed class SyncSetTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;

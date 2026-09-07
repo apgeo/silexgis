@@ -12,8 +12,7 @@ namespace SilexGis.Api.Tests;
 /// choice, so the test that matters is the one where the operator has chosen something other than
 /// the default: a setting that only ever answers its default proves nothing about being bound.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class NotificationConfigTests(PostgresFixture postgres)
+public sealed class NotificationConfigTests(PostgresFixture postgres) : IClassFixture<PostgresFixture>
 {
     private sealed record Answer(string BadgeTransport);
 

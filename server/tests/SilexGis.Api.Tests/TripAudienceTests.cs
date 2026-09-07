@@ -28,8 +28,7 @@ namespace SilexGis.Api.Tests;
 /// widens an audience on the way past.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripAudienceTests : IAsyncLifetime, IDisposable
+public sealed class TripAudienceTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

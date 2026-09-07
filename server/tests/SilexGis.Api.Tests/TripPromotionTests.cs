@@ -35,8 +35,7 @@ namespace SilexGis.Api.Tests;
 /// it is the absence of, so a route that refused everybody would fail here rather than look safe.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class TripPromotionTests : IAsyncLifetime, IDisposable
+public sealed class TripPromotionTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

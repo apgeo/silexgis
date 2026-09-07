@@ -23,8 +23,7 @@ namespace SilexGis.Api.Tests;
 /// stopped attaching the photo, or stopped reading a capture point out of it, would take the
 /// positive assertion down with it rather than passing as a security guarantee.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PhotoBytesProtectionTests : IAsyncLifetime, IDisposable
+public sealed class PhotoBytesProtectionTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

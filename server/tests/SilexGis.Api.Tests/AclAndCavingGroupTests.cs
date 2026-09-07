@@ -22,8 +22,7 @@ namespace SilexGis.Api.Tests;
 /// ManagePermissions gates the per-object access endpoints, newly granted people are
 /// notified, and caving groups have their own lifecycle rules.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable
+public sealed class AclAndCavingGroupTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

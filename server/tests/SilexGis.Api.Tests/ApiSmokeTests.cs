@@ -7,8 +7,7 @@ using SilexGis.Api.Tests.Support;
 
 namespace SilexGis.Api.Tests;
 
-[Collection(PostgresCollection.Name)]
-public sealed class ApiSmokeTests : IDisposable
+public sealed class ApiSmokeTests : IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

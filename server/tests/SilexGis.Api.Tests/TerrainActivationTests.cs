@@ -36,8 +36,7 @@ namespace SilexGis.Api.Tests;
 /// fails, with both requests in flight at once.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TerrainActivationTests : IAsyncLifetime, IDisposable
+public sealed class TerrainActivationTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string publishRoot = Path.Combine(

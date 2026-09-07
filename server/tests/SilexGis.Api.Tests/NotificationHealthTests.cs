@@ -27,8 +27,7 @@ namespace SilexGis.Api.Tests;
 /// status at a chosen age; the paths that put a row into each status are covered where they are
 /// written.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class NotificationHealthTests : IAsyncLifetime, IDisposable
+public sealed class NotificationHealthTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private const string HealthUrl = "/api/v1/admin/notifications/health";
     private const string DeliveriesUrl = "/api/v1/admin/notifications/deliveries";

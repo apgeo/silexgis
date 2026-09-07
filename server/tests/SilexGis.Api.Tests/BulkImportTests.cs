@@ -28,8 +28,7 @@ namespace SilexGis.Api.Tests;
 /// ordinary archives stopped importing and nobody noticed until a club handed one over".
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class BulkImportTests : IAsyncLifetime, IDisposable
+public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

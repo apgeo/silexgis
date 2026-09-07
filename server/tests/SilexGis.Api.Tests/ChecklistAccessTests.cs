@@ -17,8 +17,7 @@ namespace SilexGis.Api.Tests;
 /// right over every trip confers nothing here, and that a list an administrator publishes for
 /// the whole installation is an ordinary row rather than a case of its own.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ChecklistAccessTests : IAsyncLifetime, IDisposable
+public sealed class ChecklistAccessTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

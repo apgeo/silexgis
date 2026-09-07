@@ -14,8 +14,7 @@ namespace SilexGis.Api.Tests;
 /// lifecycle, the anonymous shared endpoint exposing name+config only, and explicit
 /// grants on a view.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class MapViewTests : IAsyncLifetime, IDisposable
+public sealed class MapViewTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;

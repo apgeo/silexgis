@@ -29,8 +29,7 @@ namespace SilexGis.Api.Tests;
 /// left for an administrator who can see both.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable
+public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

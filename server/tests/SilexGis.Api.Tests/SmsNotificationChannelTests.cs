@@ -44,8 +44,7 @@ namespace SilexGis.Api.Tests;
 /// by hand would be asserting its own arrangement.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable
+public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>
     /// What one copy of this fixture's notice is weighed at before anybody is handed it: the

@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// routes exist to prevent. Every assertion below therefore reads the words the anchor now
 /// names, not just its state.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class AnnotatedTextApiTests : IAsyncLifetime, IDisposable
+public sealed class AnnotatedTextApiTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

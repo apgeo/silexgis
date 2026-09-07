@@ -27,8 +27,7 @@ namespace SilexGis.Api.Tests;
 /// Driven through the writer rather than a route: the rules are what this proves, and they hold
 /// whatever surface eventually calls them.
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionSharingCascadeTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

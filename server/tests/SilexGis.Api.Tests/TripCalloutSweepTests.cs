@@ -28,8 +28,7 @@ namespace SilexGis.Api.Tests;
 /// asserted in the same test as the person who is not.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripCalloutSweepTests : IAsyncLifetime, IDisposable
+public sealed class TripCalloutSweepTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string connectionString;

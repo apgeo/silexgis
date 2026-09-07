@@ -18,8 +18,7 @@ namespace SilexGis.Api.Tests;
 /// Resolving a code printed on a cave label for somebody who is not signed in: what a code that
 /// resolves discloses, and that every reason a code does not resolve looks the same.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PublicQrLandingTests : IAsyncLifetime, IDisposable
+public sealed class PublicQrLandingTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 
@@ -350,8 +349,7 @@ public sealed class PublicQrLandingTests : IAsyncLifetime, IDisposable
 /// has to be tightened enough to trip on purpose and any other test sharing the application
 /// would starve behind it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PublicQrRateLimitTests(PostgresFixture postgres) : IDisposable
+public sealed class PublicQrRateLimitTests(PostgresFixture postgres) : IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory =
         new(postgres.ConnectionString, new Dictionary<string, string?>

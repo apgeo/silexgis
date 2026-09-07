@@ -19,8 +19,7 @@ namespace SilexGis.Api.Tests;
 /// the resulting depths would be wrong by an amount nobody would think to question.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class WorkingSridBehaviourTests(PostgresFixture postgres)
+public sealed class WorkingSridBehaviourTests(PostgresFixture postgres) : IClassFixture<PostgresFixture>
 {
     private static readonly int WorkingSrid = new SpatialOptions().WorkingSrid;
 

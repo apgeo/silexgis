@@ -27,8 +27,7 @@ namespace SilexGis.Api.Tests;
 /// design, so an Editor seeing nothing would prove nothing.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripListFacetTests : IAsyncLifetime, IDisposable
+public sealed class TripListFacetTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

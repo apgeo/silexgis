@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// refusal is asserted beside the permission it is the absence of.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripInvitationTests : IAsyncLifetime, IDisposable
+public sealed class TripInvitationTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

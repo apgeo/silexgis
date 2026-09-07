@@ -15,8 +15,7 @@ namespace SilexGis.Api.Tests;
 /// stored end date always means "and it ran on to", and a working area is held in the one
 /// reference system every geometry in this schema is held in.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionEntityTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionEntityTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private Guid ownerId;

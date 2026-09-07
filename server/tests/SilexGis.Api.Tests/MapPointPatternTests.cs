@@ -26,8 +26,7 @@ namespace SilexGis.Api.Tests;
 /// Each test uses a window of its own for the same reason.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class MapPointPatternTests : IAsyncLifetime, IDisposable
+public sealed class MapPointPatternTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

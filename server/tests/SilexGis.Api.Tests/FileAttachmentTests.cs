@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// "georeferencedMap", "mapView", "cavingGroup", and "storedFile" for taggings only).
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable
+public sealed class FileAttachmentTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

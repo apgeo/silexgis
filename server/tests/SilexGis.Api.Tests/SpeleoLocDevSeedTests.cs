@@ -35,8 +35,7 @@ namespace SilexGis.Api.Tests;
 /// It runs on a database and an application of its own, because it mints a bootstrap
 /// administrator and a named account, and the shared test database belongs to everybody.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SpeleoLocDevSeedTests : IAsyncLifetime
+public sealed class SpeleoLocDevSeedTests : IAsyncLifetime, IClassFixture<PostgresFixture>
 {
     private const string AdminEmail = "seed-admin@dev.local";
     private const string AdminPassword = "dev-seed-admin-pass-1";

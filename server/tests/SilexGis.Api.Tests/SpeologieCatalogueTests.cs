@@ -34,8 +34,7 @@ namespace SilexGis.Api.Tests;
 /// one. No test here has, or needs, a working key.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable
+public sealed class SpeologieCatalogueTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>Stands in for the operator's own key. The real one is never in this repository.</summary>
     private const string FakeApiKey = "not-a-real-key-0000";

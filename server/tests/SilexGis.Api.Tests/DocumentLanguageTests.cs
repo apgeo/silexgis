@@ -30,8 +30,7 @@ namespace SilexGis.Api.Tests;
 /// counted over the whole archive would say nothing about what this query decided.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DocumentLanguageTests : IAsyncLifetime, IDisposable
+public sealed class DocumentLanguageTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>
     /// Romanian written without diacritics and without any of the short words the detector

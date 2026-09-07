@@ -18,8 +18,7 @@ namespace SilexGis.Api.Tests;
 /// cave the caller may not read is not disclosed by the question, and the decision is a record
 /// that can be taken back without being erased.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class CaveQrPublicationTests : IAsyncLifetime, IDisposable
+public sealed class CaveQrPublicationTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

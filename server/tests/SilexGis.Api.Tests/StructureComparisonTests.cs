@@ -33,8 +33,7 @@ namespace SilexGis.Api.Tests;
 /// a different neighbourhood.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class StructureComparisonTests : IAsyncLifetime, IDisposable
+public sealed class StructureComparisonTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     /// <summary>
     /// The bearing every fixture's passage runs at. Chosen in the middle of a ten-degree sector so

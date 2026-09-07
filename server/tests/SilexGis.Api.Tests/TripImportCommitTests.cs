@@ -35,8 +35,7 @@ namespace SilexGis.Api.Tests;
 /// written to exercise the rules rather than to resemble anybody's records.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable
+public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

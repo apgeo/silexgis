@@ -30,8 +30,7 @@ namespace SilexGis.Api.Tests;
 /// holding that membership proves nothing at all.
 /// </para>
 /// </remarks>
-[Collection(PostgresCollection.Name)]
-public sealed class TripAttendanceLimitTests : IAsyncLifetime, IDisposable
+public sealed class TripAttendanceLimitTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

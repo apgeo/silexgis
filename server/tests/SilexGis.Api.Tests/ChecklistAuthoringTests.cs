@@ -18,8 +18,7 @@ namespace SilexGis.Api.Tests;
 /// as though it were not there, and that rewriting a line keeps the confirmations made against
 /// it.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable
+public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string suffix = Guid.NewGuid().ToString("N")[..8];

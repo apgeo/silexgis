@@ -26,8 +26,7 @@ namespace SilexGis.Api.Tests;
 /// about what they do.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TerrainPipelineRegistrationTests : IAsyncLifetime
+public sealed class TerrainPipelineRegistrationTests : IAsyncLifetime, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

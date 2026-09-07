@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// their hash or their recorded format having moved.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TextExtractionPipelineTests : IAsyncLifetime, IDisposable
+public sealed class TextExtractionPipelineTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

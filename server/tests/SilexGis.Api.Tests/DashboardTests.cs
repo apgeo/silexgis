@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// a *delta* around a freshly-read baseline — absolute totals would race other test classes'
 /// seeded rows.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DashboardTests : IAsyncLifetime, IDisposable
+public sealed class DashboardTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

@@ -23,8 +23,7 @@ namespace SilexGis.Api.Tests;
 /// that refused everything would pass a test that only checked the refusals.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripParticipantRoleVocabularyTests : IAsyncLifetime, IDisposable
+public sealed class TripParticipantRoleVocabularyTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

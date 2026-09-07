@@ -20,8 +20,7 @@ namespace SilexGis.Api.Tests;
 /// listing says about how many people were there. The camp governs every one of these routes, so
 /// what a caller may do with a stay is what they may do with the camp.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class ExpeditionRosterTests : IAsyncLifetime, IDisposable
+public sealed class ExpeditionRosterTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;

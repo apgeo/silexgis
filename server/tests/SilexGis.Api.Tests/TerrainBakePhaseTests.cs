@@ -34,8 +34,7 @@ namespace SilexGis.Api.Tests;
 /// believed, and published.
 /// </para>
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TerrainBakePhaseTests : IAsyncLifetime, IDisposable
+public sealed class TerrainBakePhaseTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly PostgresFixture postgres;
     private readonly SilexGisApiFactory factory;

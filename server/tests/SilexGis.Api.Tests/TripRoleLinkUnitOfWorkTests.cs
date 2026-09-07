@@ -21,8 +21,7 @@ namespace SilexGis.Api.Tests;
 /// all, silently, with the save reporting success. Anything writing several trips before saving
 /// once — an import, a dataset laid down in a block — is exactly where that bites.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class TripRoleLinkUnitOfWorkTests : IAsyncLifetime, IDisposable
+public sealed class TripRoleLinkUnitOfWorkTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
 

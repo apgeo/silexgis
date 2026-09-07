@@ -25,8 +25,7 @@ namespace SilexGis.Api.Tests;
 /// tests look at the rows the write path produces and at the invariants the database
 /// itself refuses to break.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DocumentModelTests : IAsyncLifetime, IDisposable
+public sealed class DocumentModelTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;

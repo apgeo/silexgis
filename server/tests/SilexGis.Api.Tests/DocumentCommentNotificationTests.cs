@@ -24,8 +24,7 @@ namespace SilexGis.Api.Tests;
 /// asserts the matching positive in the same test, so a fixture that quietly stopped producing
 /// anything cannot pass as a security assertion.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class DocumentCommentNotificationTests : IAsyncLifetime, IDisposable
+public sealed class DocumentCommentNotificationTests : IAsyncLifetime, IDisposable, IClassFixture<PostgresFixture>
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
