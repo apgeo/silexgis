@@ -47,7 +47,7 @@ public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable, 
         // anything claimable in the shared database every couple of seconds, and a tick landing
         // between a request and the assertions a few milliseconds later would turn "nobody has
         // been told yet" into a failure about code that is working.
-        factory = new SilexGisApiFactory(connectionString, null, TestHostTweaks.WithoutJobWorker);
+        factory = new SilexGisApiFactory(connectionString, null, JobWorkers.RemoveFrom);
     }
 
     public async Task InitializeAsync()
@@ -323,7 +323,7 @@ public sealed class CavingGroupAnnouncementTests : IAsyncLifetime, IDisposable, 
             // The queue's own worker is stopped for this factory too, so the pass runs once,
             // here, where the test can see it. Left running it would race the call below and the
             // duplicate that proves the guard works would look like the guard failing.
-            TestHostTweaks.WithoutJobWorker);
+            JobWorkers.RemoveFrom);
 
         var suffix = Guid.NewGuid().ToString("N")[..8];
         await using (var scope = capped.Services.CreateAsyncScope())

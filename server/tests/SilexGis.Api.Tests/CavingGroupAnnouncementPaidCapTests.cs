@@ -135,7 +135,7 @@ public sealed class CavingGroupAnnouncementPaidCapTests : IAsyncLifetime, IDispo
             },
             services =>
             {
-                TestHostTweaks.WithoutJobWorker(services);
+                JobWorkers.RemoveFrom(services);
                 foreach (var registered in services
                     .Where(d => d.ServiceType == typeof(INotificationChannel))
                     .ToList())

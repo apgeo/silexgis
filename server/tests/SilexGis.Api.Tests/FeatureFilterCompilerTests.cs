@@ -41,6 +41,35 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// The rows the whole-table questions are asked about.
+    ///
+    /// <para>
+    /// They used to be answered by whatever the rest of the suite had left in a shared database,
+    /// which meant the assertions were about somebody else's rows and passed for reasons this class
+    /// had no say in. Now the class owns its database, so a corpus it did not create is an empty
+    /// one, and "is this column ever empty" over zero rows is true of nothing. The mix matters as
+    /// much as the count: the type is the one identity column that is genuinely nullable, so the
+    /// corpus carries rows both with and without it, or the last assertion is trivially satisfied.
+    /// </para>
+    /// </summary>
+    private async Task SeedCorpusAsync()
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Editor, $"fc-corpus-{tag}@t.local");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var typeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+
+        Rootless(db, typeId, ownerId, $"Corpus typed public {tag}", Visibility.Public);
+        Rootless(db, typeId, ownerId, $"Corpus typed private {tag}");
+        // The schema pairs the two: ck_features_generic_type says a row is Generic exactly when it
+        // carries a type. So the untyped row in the corpus has to be a kind that names itself.
+        Rootless(db, null, ownerId, $"Corpus untyped {tag}", kind: FeatureKind.Cave);
+        await db.SaveChangesAsync();
+    }
+
     // ---------- every condition reaches the database ----------
 
     public static TheoryData<string, FilterOp, FilterValue[]> EveryLeaf()
@@ -174,6 +203,8 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
     [Fact]
     public async Task Asking_whether_a_column_that_is_never_empty_is_empty_gets_a_straight_answer()
     {
+        await SeedCorpusAsync();
+
         // The vocabulary offers the emptiness pair on every identity field, so a person can pick it
         // for a feature's kind. The identity leaf reads "no values given" as "matches nothing" —
         // right for a multi-select somebody cleared, wrong for the two operators where no values is
@@ -207,6 +238,8 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
     [Fact]
     public async Task An_empty_filter_matches_everything_rather_than_being_a_special_case()
     {
+        await SeedCorpusAsync();
+
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var compiler = new FeatureFilterCompiler(db);
@@ -323,18 +356,19 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
     /// </remarks>
     private static Feature Rootless(
         SilexGisDbContext db,
-        long typeId,
+        long? typeId,
         Guid ownerId,
         string name,
         Visibility visibility = Visibility.Private,
-        string properties = "{}")
+        string properties = "{}",
+        FeatureKind kind = FeatureKind.Generic)
     {
         var id = Guid.NewGuid();
         var feature = new Feature
         {
             Id = id,
             Name = name,
-            Kind = FeatureKind.Generic,
+            Kind = kind,
             FeatureTypeId = typeId,
             OwnerUserId = ownerId,
             Visibility = visibility,

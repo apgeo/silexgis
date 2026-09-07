@@ -567,7 +567,7 @@ public sealed class SmsNotificationChannelTests : IAsyncLifetime, IDisposable, I
                 ["Security:TwoFactorResendIntervalSeconds"] = "0",
                 ["Auth:RateLimitPerMinute"] = "500",
             },
-            TestHostTweaks.WithoutJobWorker);
+            JobWorkers.RemoveFrom);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();

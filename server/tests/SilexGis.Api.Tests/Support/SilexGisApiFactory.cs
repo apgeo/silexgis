@@ -28,6 +28,27 @@ public sealed class SilexGisApiFactory(
     /// </summary>
     public MessageCapture Messages { get; } = new();
 
+    /// <summary>
+    /// Every client this factory makes waits as long as the test itself is allowed to.
+    ///
+    /// <para>
+    /// HttpClient's default deadline is 100 seconds, which is a statement about a network nobody
+    /// here is crossing: these requests are in-process. Under a full parallel run the deadline is
+    /// reachable anyway — hosts are being built and accounts hashed on every other thread — and
+    /// when it is reached the request is cancelled client-side and reported as
+    /// <c>TaskCanceledException … the client aborted the request</c> with a duration of one
+    /// millisecond, in whichever class happened to be slowest. Two full runs recorded eight such
+    /// failures each with no test in common between them, which is the signature of a deadline
+    /// rather than of a defect. The work still has to finish, so let it: a test that genuinely
+    /// hangs is caught by the test runner's own timeout, which reports it as itself.
+    /// </para>
+    /// </summary>
+    protected override void ConfigureClient(HttpClient client)
+    {
+        base.ConfigureClient(client);
+        client.Timeout = Timeout.InfiniteTimeSpan;
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Db:ConnectionString", connectionString);
