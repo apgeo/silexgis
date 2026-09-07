@@ -31,6 +31,7 @@ let recheckState = {
 
 vi.mock('../../api/hooks.ts', () => ({
   useTags: () => ({ data: [] }),
+  useTripTypes: () => ({ data: [] }),
   useRecheckPhotoLibrary: () => recheckState,
 }));
 

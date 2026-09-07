@@ -63,6 +63,23 @@ public class DependencyRuleTests
     }
 
     [Fact]
+    public void Domain_does_not_depend_on_the_raster_library()
+    {
+        // Reading pixels out of a file is a native library's job and it belongs behind the
+        // infrastructure seam. Domain says what a height means and what may be told to whom; it
+        // must not know what a dataset handle is. The rule matters more than most here because the
+        // library's handles fault the whole process rather than throwing when they are misused, so
+        // a domain type holding one turns a rule into an abort — and because nothing else stops it:
+        // adding the package to the domain project would compile perfectly well.
+        var result = Types.InAssembly(typeof(Visibility).Assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny("OSGeo", "MaxRev")
+            .GetResult();
+
+        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
+    }
+
+    [Fact]
     public void Domain_does_not_depend_on_the_survey_format_readers()
     {
         // The readers for the compiled survey formats parse untrusted uploaded bytes, which is

@@ -330,6 +330,16 @@ public static class DependencyInjection
         services.AddSingleton<Domain.Terrain.ITerrainRasterPreparer, Terrain.GdalTerrainRasterPreparer>();
         services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainPreparePhase>();
 
+        // Reading heights back out of those rasters. One instance for the application: it keeps
+        // datasets open behind a gate only one caller holds at a time, because the raster library's
+        // handles fault the whole process rather than throwing when two threads touch one, and
+        // reopening a file per point would spend a profile's whole request in header reads.
+        services.AddSingleton<Domain.Terrain.IDemSampleService, Terrain.GdalDemSampler>();
+
+        // What ground each of a build's prepared rasters covers, described once and kept beside the
+        // build. Scoped because it reads and writes rows.
+        services.AddScoped<Terrain.TerrainRasterIndex>();
+
         // Turning those rasters into tiles. The program that does that is a command-line tool, run
         // by a service of its own that this application never speaks to directly — the two meet on
         // a directory they share — and that service is optional. So the step is registered whether
