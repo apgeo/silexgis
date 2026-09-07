@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using SilexGis.Domain;
 using SilexGis.Domain.Messaging;
 
@@ -30,25 +32,41 @@ public sealed class SilexGisApiFactory(
     {
         builder.UseSetting("Db:ConnectionString", connectionString);
         builder.UseSetting("Db:AutoMigrate", "true");
-        // The OIDC client registration is (re)seeded from PublicUrl on startup and the DB is
-        // shared across factories — every test factory must use the TestServer origin.
+        // The OIDC client registration is (re)seeded from PublicUrl on startup, and one database
+        // is shared by every factory a class builds — so every test factory must use the
+        // TestServer origin.
         builder.UseSetting("PublicUrl", "http://localhost");
-        // The notification worker never runs in tests. Every test class shares one PostGIS
-        // container, so a background drain started by one factory would route and settle rows
-        // another class had just queued — and every "nothing was sent" assertion would go flaky.
-        // Tests drive the delivery service directly instead.
+        // The notification worker never runs in tests. A class owns its database, so a drain can
+        // no longer reach another class's rows — but it still races the class that queued them,
+        // settling an outbox row between the request and the assertion a few milliseconds later,
+        // which turns "nothing was sent" into an intermittent failure about correct code. Tests
+        // drive the delivery service directly instead.
         builder.UseSetting("Notifications:PollSeconds", "0");
         // Nor does the pass that looks for overdue parties, and for a sharper version of the same
-        // reason: it does not merely read rows, it writes them. Left running under one class it
-        // would move another class's armed trip to overdue and queue an alarm nobody asked for —
-        // in a file containing no bug, at whichever tick happened to land there. A class that
-        // wants the pass switched on passes its own interval, which is applied after this.
+        // reason: it does not merely read rows, it writes them. Left running it would move the
+        // class's own armed trip to overdue and queue an alarm nobody asked for, at whichever tick
+        // happened to land there. A class that wants the pass switched on passes its own interval,
+        // which is applied after this.
         builder.UseSetting("TripCallout:SweepInterval", "00:00:00");
         // The reminder rides that same pass, and a pass a class runs by hand still reads every
-        // trip in the shared database — so the run-up window is closed too. A class exercising the
-        // reminder opens it deliberately, which is also the only way another class's trip can end
-        // up stamped as reminded about.
+        // trip in that class's database — so the run-up window is closed too. A class exercising
+        // the reminder opens it deliberately.
         builder.UseSetting("TripCallout:ReminderLead", "00:00:00");
+        // The file store and the key ring default to a path under the test binaries, which every
+        // host in the process would otherwise share. Keyed by database name they are per test
+        // class — the same place for every factory a class builds, and nowhere another class
+        // reaches once each class owns its database.
+        var scopeName = new NpgsqlConnectionStringBuilder(connectionString).Database!;
+        // Under the build output rather than Path.GetTempPath(): /tmp here is a tmpfs, i.e. RAM,
+        // and a hundred classes writing uploads into it takes memory from everything else on the
+        // machine. `dotnet clean` reclaims this; a reboot reclaims the other.
+        var scopeRoot = Path.Combine(AppContext.BaseDirectory, "test-data", scopeName);
+        builder.UseSetting("Files:Root", Path.Combine(scopeRoot, "files"));
+        builder.UseSetting("Keys:Path", Path.Combine(scopeRoot, "keys"));
+        // Sign-in throttling is a property under test in a few classes, which set their own limit
+        // below this line and therefore still win. Everywhere else it is an accident of the traffic
+        // a class generates for itself: raise it so a class's own requests cannot trip it.
+        builder.UseSetting("Auth:RateLimitPerMinute", "100000");
         if (settings is not null)
         {
             foreach (var (key, value) in settings)
@@ -66,6 +84,10 @@ public sealed class SilexGisApiFactory(
             services.AddScoped<CapturingSmsSender>();
             services.AddScoped<ISmsSender>(sp => sp.GetRequiredService<CapturingSmsSender>());
             services.AddScoped<ISmsDelivery>(sp => sp.GetRequiredService<CapturingSmsSender>());
+            // Password hashing is deliberately expensive in production and nothing here asserts
+            // on its cost. At the shipped iteration count it is the single largest CPU item in a
+            // run that creates an account for almost every test.
+            services.Configure<PasswordHasherOptions>(o => o.IterationCount = 1000);
             configureServices?.Invoke(services);
         });
     }

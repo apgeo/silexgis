@@ -78,9 +78,15 @@ try
     // SILEXGIS__{Section}__{Key} environment variables override appsettings.
     builder.Configuration.AddEnvironmentVariables("SILEXGIS__");
 
+    // preserveStaticLogger keeps the bootstrap logger above in place rather than freezing it into
+    // the configured one. Without it, a process that builds more than one host — which is every
+    // parallel test run — fails the second build with "the logger is already frozen", surfacing as
+    // a nondeterministic test failure with nothing to connect it to logging. The cost is that the
+    // seeder warnings and the fatal below keep writing through the bootstrap console sink, so those
+    // specific lines do not honour Serilog:MinimumLevel or any non-console sink configured later.
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
-        .ReadFrom.Services(services));
+        .ReadFrom.Services(services), preserveStaticLogger: true);
 
     // Contract hygiene: enums as strings; strict numbers — the web
     // default (AllowReadingFromString) would advertise every numeric as "number | string"
