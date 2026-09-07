@@ -1406,13 +1406,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Trip-log geometries as GeoJSON for the given bbox and date range. */
+        /** Trip-log geometries as GeoJSON for the given bbox, date range and list filters; a trip with no shape of its own is placed at a cave it names when the caller may both read and place it, and counted as unlocated otherwise. */
         get: {
             parameters: {
                 query: {
                     bbox: string;
                     from?: string;
                     to?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
                 };
                 header?: never;
                 path?: never;
@@ -1426,7 +1430,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["FeatureCollection"];
+                        "application/json": components["schemas"]["TripLogFeatureCollection"];
                     };
                 };
             };
@@ -10958,7 +10962,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Paged trip logs with date/cave filters; visibility-filtered. */
+        /** Paged trip logs, visibility-filtered. Narrowable by an overlapping date window, by a cave, a camp, and by comma-separated lists of area, person on the roster, trip type, lifecycle state and audience, plus whether something went wrong; orderable by date, title, creation or last change with a leading minus for descending. Values inside one list are alternatives and the narrowings are combined, so an empty list means no opinion rather than nothing. An area reaches everything the containment hierarchy puts inside it. Naming a cave, area or person this caller may not read answers with an empty page rather than a refusal. */
         get: {
             parameters: {
                 query?: {
@@ -10968,7 +10972,14 @@ export interface paths {
                     to?: string;
                     caveId?: string;
                     expeditionId?: string;
+                    areaIds?: string;
+                    participantIds?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
                     search?: string;
+                    sort?: string;
                 };
                 header?: never;
                 path?: never;
@@ -11013,6 +11024,199 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many trips each filter option would leave, counted over the same visibility-filtered query the page is taken from, with the facet's own choices left out so each option answers “and this one too”. Two callers get different numbers for the same option and both are right — these are counts of what that caller may read. */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    caveId?: string;
+                    expeditionId?: string;
+                    areaIds?: string;
+                    participantIds?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripListFacetsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The narrowed listing as a spreadsheet — every trip the filter leaves and not only the page being looked at, visibility-filtered exactly as the page is. Bounded, and the file says so in its own first lines when the bound was reached. */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    caveId?: string;
+                    expeditionId?: string;
+                    areaIds?: string;
+                    participantIds?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
+                    search?: string;
+                    sort?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/grouping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same narrowed listing broken into slices, one or two levels deep, each slice carrying its trip count, the days it spans, the purposes it was for and who was on it. Grouped by year, type, state, visibility, incident, area or person. A trip counts into every area and every person it holds, so those slice counts add up to more than the trips — the answer says so rather than leaving a reader to notice. */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    caveId?: string;
+                    expeditionId?: string;
+                    areaIds?: string;
+                    participantIds?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
+                    search?: string;
+                    groupBy?: string;
+                    thenBy?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripListGroupingDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the same narrowed listing adds up to: trips per year, what they were for, where they went, who was on them, and how many distinct areas had been reached by the end of each year. Counted over the trips this caller may read, so the totals are the reader’s and not the archive’s. A trip counts into every area and every person it holds, so those breakdowns add up to more than the trips — the answer says so rather than leaving a reader to notice. */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    caveId?: string;
+                    expeditionId?: string;
+                    areaIds?: string;
+                    participantIds?: string;
+                    types?: string;
+                    states?: string;
+                    visibilities?: string;
+                    hadIncident?: boolean;
+                    search?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripStatsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -21014,6 +21218,25 @@ export interface components {
             /** Format: uuid */
             expeditionId?: null | string;
         };
+        TripFacetValueDto: {
+            value: string;
+            label: null | string;
+            /** Format: int32 */
+            count: number;
+        };
+        TripGroupDto: {
+            value: string;
+            label: null | string;
+            /** Format: int32 */
+            count: number;
+            /** Format: date */
+            firstDay: string;
+            /** Format: date */
+            lastDay: string;
+            topTypes: components["schemas"]["TripFacetValueDto"][];
+            topPeople: components["schemas"]["TripFacetValueDto"][];
+            groups: components["schemas"]["TripGroupDto"][];
+        };
         TripImportCandidate: {
             /** Format: uuid */
             id: string;
@@ -21291,6 +21514,27 @@ export interface components {
         TripInvitationSelectionRequest: {
             selected?: null | boolean;
         };
+        TripListFacetsDto: {
+            /** Format: int32 */
+            matching: number;
+            /** Format: int32 */
+            overall: number;
+            types: components["schemas"]["TripFacetValueDto"][];
+            states: components["schemas"]["TripFacetValueDto"][];
+            visibilities: components["schemas"]["TripFacetValueDto"][];
+            incident: components["schemas"]["TripFacetValueDto"][];
+            participants: components["schemas"]["TripFacetValueDto"][];
+            areas: components["schemas"]["TripFacetValueDto"][];
+        };
+        TripListGroupingDto: {
+            groupBy: string;
+            thenBy: string;
+            /** Format: int32 */
+            matching: number;
+            overlapping: boolean;
+            truncated: boolean;
+            groups: components["schemas"]["TripGroupDto"][];
+        };
         TripLogDto: {
             /** Format: uuid */
             id: string;
@@ -21361,6 +21605,13 @@ export interface components {
             canStandDownCallout: boolean;
             meetingGeom: null | components["schemas"]["GeoJsonGeometry"];
             checklistReadiness: null | components["schemas"]["TripChecklistReadinessDto"];
+        };
+        TripLogFeatureCollection: {
+            type: string;
+            features: components["schemas"]["GeoFeature"][];
+            truncated: boolean;
+            /** Format: int32 */
+            unlocatedCount: number;
         };
         TripLogTransitionRequest: {
             state?: null | components["schemas"]["ActivityState"];
@@ -21519,6 +21770,32 @@ export interface components {
             latestTripDate: null | string;
             /** Format: int32 */
             photographs: number;
+        };
+        TripStatsBreakdownDto: {
+            overlapping: boolean;
+            /** Format: int32 */
+            distinct: number;
+            values: components["schemas"]["TripFacetValueDto"][];
+        };
+        TripStatsDto: {
+            /** Format: int32 */
+            matching: number;
+            /** Format: int32 */
+            overall: number;
+            years: components["schemas"]["TripStatsYearDto"][];
+            types: components["schemas"]["TripStatsBreakdownDto"];
+            areas: components["schemas"]["TripStatsBreakdownDto"];
+            participants: components["schemas"]["TripStatsBreakdownDto"];
+        };
+        TripStatsYearDto: {
+            /** Format: int32 */
+            year: number;
+            /** Format: int32 */
+            trips: number;
+            /** Format: int32 */
+            newAreas: number;
+            /** Format: int32 */
+            areasSoFar: number;
         };
         TripTypeDto: {
             /** Format: int64 */

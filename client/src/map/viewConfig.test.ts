@@ -11,6 +11,9 @@ const baseUi: Omit<WorkspaceUiState, 'overlayOrder'> = {
   centerlinesVisible: true,
   heatmapVisible: true,
   photosVisible: false,
+  tripsVisible: true,
+  tripsFrom: '2019-01-01',
+  tripsTo: '2019-12-31',
   libraryPhotoSources: [],
   geofileIds: [],
   rasters: [],
@@ -178,5 +181,42 @@ describe('the 3D camera a saved view can carry', () => {
     // No Cartesian triple, and every angle in the range degrees live in rather than radians.
     expect(written).not.toMatch(/"[xyz]":/);
     expect(Math.abs(captureViewConfig(baseUi).camera3d!.heading)).toBeGreaterThan(Math.PI * 2);
+  });
+});
+
+describe('viewConfig trip overlay', () => {
+  it('round-trips the overlay and its day window', () => {
+    const restored = applyViewConfig(captureViewConfig(baseUi));
+    expect(restored?.tripsVisible).toBe(true);
+    expect(restored?.tripsFrom).toBe('2019-01-01');
+    expect(restored?.tripsTo).toBe('2019-12-31');
+  });
+
+  it('treats a saved view that predates the trip overlay as off, and its window as unbounded', () => {
+    // The overlay is opt-in, so a view saved before it existed must not switch it on for whoever
+    // opens it. Its window has no bound for the same reason: an absent bound is "every trip",
+    // which is what such a view was showing, and defaulting either end to a date would silently
+    // narrow a saved view to a period nobody chose.
+    const legacy = {
+      configVersion: 1,
+      center: [25.3, 45.7],
+      zoom: 10,
+      entrancesVisible: true,
+      surfaceFeaturesVisible: true,
+      geofileIds: [],
+      rasters: [],
+      tagFilter: null,
+    };
+    const restored = applyViewConfig(legacy);
+    expect(restored?.tripsVisible).toBe(false);
+    expect(restored?.tripsFrom).toBeUndefined();
+    expect(restored?.tripsTo).toBeUndefined();
+  });
+
+  it('keeps the document at version 1 when the trip fields are written', () => {
+    // Never bumped: everything added since the first release is an optional field with a
+    // documented default, and raising the number would make every view saved from that moment
+    // unopenable by anything already deployed.
+    expect(captureViewConfig(baseUi).configVersion).toBe(1);
   });
 });

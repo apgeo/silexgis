@@ -2,12 +2,22 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import LayerTree from '@terrestris/react-geo/dist/LayerTree/LayerTree';
 import LayerTransparencySlider from '@terrestris/react-geo/dist/Slider/LayerTransparencySlider/LayerTransparencySlider';
-import { Alert, Button, Checkbox, Collapse, Divider, InputNumber, Radio, Select, Slider, Typography } from 'antd';
+import { Alert, Button, Checkbox, Collapse, Divider, Input, InputNumber, Radio, Select, Slider, Typography } from 'antd';
 import type OlLayerBase from 'ol/layer/Base';
 import { useTranslation } from 'react-i18next';
+import {
+  useRecheckPhotoLibrary,
+  useTags,
+  useTripTypes,
+  type GeofileInfo,
+  type LibraryPhotoProvider,
+  type MapConfig,
+  type MapLayerInfo,
+  type RasterMapInfo,
+} from '../../api/hooks.ts';
+import { tripTypeLabelOf } from '../trips/tripTypes.ts';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
-import { useRecheckPhotoLibrary, useTags, type GeofileInfo, type LibraryPhotoProvider, type MapConfig, type MapLayerInfo, type RasterMapInfo } from '../../api/hooks.ts';
 import {
   CENTERLINE_LAYER_ID,
   getCenterlineLoadState,
@@ -26,6 +36,13 @@ import { ENTRANCE_LAYER_ID } from '../../map/entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from '../../map/featureLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID } from '../../map/heatmapLayer.ts';
 import { PHOTO_LAYER_ID } from '../../map/photoLayer.ts';
+import {
+  TRIP_LAYER_ID,
+  getTripLoadState,
+  subscribeTripLoadState,
+  type TripLayerFilter,
+  type TripLoadState,
+} from '../../map/tripLayer.ts';
 import { getOverlayGroup } from '../../map/mapContext.ts';
 
 /**
@@ -96,6 +113,17 @@ interface LayerPanelProps {
   onTagFilterChange: (slug: string | null) => void;
   /** True while the centerline overlay is on — its detail controls are hidden otherwise. */
   centerlinesVisible: boolean;
+  /** True while the trip overlay is on — its filters are hidden otherwise. */
+  tripsVisible: boolean;
+  /** What the trip overlay is currently asking for. */
+  tripFilter: TripLayerFilter;
+  onTripFilterChange: (filter: TripLayerFilter) => void;
+  /**
+   * How many narrowings of a filter carried here from the trip listing this overlay cannot ask
+   * about. Said out loud rather than swallowed: a map answering a broader question than the list
+   * the reader came from would look like the list had been wrong.
+   */
+  unappliedTripFilters: number;
   /** Installation limits; undefined until /map/config has loaded. */
   mapConfig?: MapConfig;
   /** This viewer's overrides; undefined fields follow the installation. */
@@ -131,6 +159,10 @@ export default function LayerPanel({
   tagFilter,
   onTagFilterChange,
   centerlinesVisible,
+  tripsVisible,
+  tripFilter,
+  onTripFilterChange,
+  unappliedTripFilters,
   mapConfig,
   centerlineDetailZoom,
   centerlineMaxPaths,
@@ -144,6 +176,11 @@ export default function LayerPanel({
   const [centerlineLoad, setCenterlineLoad] = useState<CenterlineLoadState>(getCenterlineLoadState);
   useEffect(() => subscribeCenterlineLoadState(setCenterlineLoad), []);
 
+  // The same channel for the trip overlay: how many trips are drawn, whether the answer stopped
+  // at the server's cap, and how many trips in the window have no position at all.
+  const [tripLoad, setTripLoad] = useState<TripLoadState>(getTripLoadState);
+  useEffect(() => subscribeTripLoadState(setTripLoad), []);
+  const { data: tripTypes } = useTripTypes();
   // Each photo-library overlay reports what its library answered; this panel is where that gets
   // explained, because on a map an empty answer, a failed request and an overlay still waiting all
   // look like the same blank patch.
@@ -272,6 +309,8 @@ export default function LayerPanel({
         return t('map.heatmap');
       case PHOTO_LAYER_ID:
         return t('map.photos');
+      case TRIP_LAYER_ID:
+        return t('map.tripsLayer');
       case CLOSEST_APPROACH_LAYER_ID:
         return t('map.closestApproach');
       default:
@@ -438,6 +477,86 @@ export default function LayerPanel({
           </div>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {t('map.centerlineLimitsHint')}
+          </Typography.Text>
+        </div>
+      )}
+      {tripsVisible && (
+        <div style={{ marginTop: 8 }} data-testid="map-trip-filters">
+          {/* Honest in three states, because an empty overlay and a failed request look identical
+              on a map: "no trips here" is a claim that may only be made once an answer arrived. */}
+          {tripLoad.status === 'error' ? (
+            <Alert type="warning" showIcon style={{ marginBottom: 8 }} title={t('map.tripsFailed')} />
+          ) : (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }} data-testid="map-trip-count">
+              {tripLoad.status === 'loading'
+                ? t('map.tripsLoading')
+                : t('map.tripsShown', { count: tripLoad.shownTripCount })}
+            </Typography.Text>
+          )}
+          {tripLoad.truncated && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ margin: '8px 0' }}
+              title={t('map.tripsTruncated', { count: mapConfig?.maxPoints ?? 0 })}
+            />
+          )}
+          {/* The point of the whole layer for an imported archive: a trip whose only record of
+              where it went is a cave nobody may place has no dot, and saying nothing about it
+              would make the map read as though the trip did not exist. */}
+          {tripLoad.unlocatedCount > 0 && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ margin: '8px 0' }}
+              title={t('map.tripsUnlocated', { count: tripLoad.unlocatedCount })}
+              data-testid="map-trips-unlocated"
+            />
+          )}
+          {unappliedTripFilters > 0 && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ margin: '8px 0' }}
+              title={t('map.tripsFilterUnapplied', { count: unappliedTripFilters })}
+            />
+          )}
+          <div className="trip-layer-filters">
+            <label>
+              <span>{t('map.tripsFrom')}</span>
+              <Input
+                size="small"
+                type="date"
+                value={tripFilter.from ?? ''}
+                onChange={(e) => onTripFilterChange({ ...tripFilter, from: e.target.value || undefined })}
+                data-testid="map-trips-from"
+              />
+            </label>
+            <label>
+              <span>{t('map.tripsTo')}</span>
+              <Input
+                size="small"
+                type="date"
+                value={tripFilter.to ?? ''}
+                onChange={(e) => onTripFilterChange({ ...tripFilter, to: e.target.value || undefined })}
+                data-testid="map-trips-to"
+              />
+            </label>
+          </div>
+          <Select
+            mode="multiple"
+            allowClear
+            size="small"
+            optionFilterProp="label"
+            placeholder={t('map.tripsTypeFilter')}
+            style={{ width: '100%', marginTop: 8 }}
+            value={tripFilter.types ?? []}
+            options={tripTypes?.map((x) => ({ value: String(x.id), label: tripTypeLabelOf(x.id, tripTypes, t) }))}
+            onChange={(values: string[]) => onTripFilterChange({ ...tripFilter, types: values })}
+            data-testid="map-trips-types"
+          />
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('map.tripsFilterHint')}
           </Typography.Text>
         </div>
       )}

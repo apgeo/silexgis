@@ -31,7 +31,18 @@ export interface ClusterSelection {
   zoom: number;
 }
 
-export type WorkspaceSelection = EntranceSelection | FeatureSelection | CaveSelection | ClusterSelection;
+/** A trip picked off the map layer; the card fetches the trip and links to its page. */
+export interface TripSelection {
+  kind: 'trip';
+  tripId: string;
+}
+
+export type WorkspaceSelection =
+  | EntranceSelection
+  | FeatureSelection
+  | CaveSelection
+  | ClusterSelection
+  | TripSelection;
 
 /** One member of a multi-selection: a reference, never a payload, like everything else here. */
 export interface SelectedRef {

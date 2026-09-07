@@ -86,6 +86,15 @@ import {
 import { ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer } from '../map/heatmapLayer.ts';
 import { GEOFILE_LAYER_PREFIX, attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer, setPhotosEnabled } from '../map/photoLayer.ts';
+import { readTripListFilter } from './trips/tripListFilter.ts';
+import {
+  TRIP_LAYER_ID,
+  attachTripLoader,
+  createTripLayer,
+  setTripLayerFilter,
+  setTripsEnabled,
+  type TripLayerFilter,
+} from '../map/tripLayer.ts';
 import { attachPhotoPopup } from '../map/photoPopup.ts';
 import {
   attachLibraryPhotoLoader,
@@ -190,6 +199,12 @@ export default function MapPage() {
   const [centerlinesVisible, setCenterlinesVisible] = useState(false);
   const [heatmapVisible, setHeatmapVisible] = useState(false);
   const [photosVisible, setPhotosVisible] = useState(false);
+  const [tripsVisible, setTripsVisible] = useState(false);
+  // What the trip overlay is asking for. Held here rather than only in the layer module so a
+  // saved view can restore it and the panel can show what is currently being asked.
+  const [tripFilter, setTripFilter] = useState<TripLayerFilter>({});
+  // How many of a carried listing filter's narrowings this overlay cannot ask about.
+  const [unappliedTripFilters, setUnappliedTripFilters] = useState(0);
   // Which neighbouring photo libraries are switched on, by the name the server gives each. A
   // list rather than a flag per product, so pointing this installation at a different library
   // needs no new state here and no new field in a saved view.
@@ -300,6 +315,7 @@ export default function MapPage() {
       [ENTRANCE_LAYER_ID, createEntranceLayer],
       [CENTERLINE_LAYER_ID, createCenterlineLayer],
       [PHOTO_LAYER_ID, createPhotoLayer],
+    [TRIP_LAYER_ID, createTripLayer],
       // On top of the data it is drawn over: it is one short line answering a question somebody
       // asked, and it is of no use at all under the surveys it joins.
       [CLOSEST_APPROACH_LAYER_ID, createClosestApproachLayer],
@@ -317,6 +333,7 @@ export default function MapPage() {
     const detachCenterlineLoader = attachCenterlineLoader(map);
     const detachGeofileLoader = attachGeofileLoader(map);
     const detachPhotoLoader = attachPhotoLoader(map);
+    const detachTripLoader = attachTripLoader(map);
     const detachPhotoPopup = attachPhotoPopup(map);
     // The foreign libraries' end of the same two things. Attached unconditionally: both are
     // gated on a layer being switched on, and no library configured means no layer to switch on.
@@ -372,6 +389,7 @@ export default function MapPage() {
       detachCenterlineLoader();
       detachGeofileLoader();
       detachPhotoLoader();
+      detachTripLoader();
       detachPhotoPopup();
       detachLibraryPhotoLoader();
       detachLibraryPhotoPopup();
@@ -487,6 +505,7 @@ export default function MapPage() {
   const requestedViewId = searchParams.get('view');
   const requestedAreaId = searchParams.get('area');
   const requestedModelId = searchParams.get('model');
+  const requestedTrips = searchParams.get('trips');
 
   // A view picked elsewhere (?view=<id>, e.g. from the dashboard) is applied on arrival, then
   // the param is consumed. It is a one-shot instruction, not a description of the URL: the
@@ -511,6 +530,54 @@ export default function MapPage() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applyView is stable for this use
   }, [savedViews, requestedViewId, setSearchParams]);
+
+  /**
+   * The trip listing's "show on map" button (?trips=1, plus the narrowings it was showing).
+   *
+   * Consumed on arrival like the params above — it is an instruction and not a description of the
+   * URL — but the layer is left on afterwards, because the overlay somebody asked for is a place
+   * they stay rather than a camera move that finishes.
+   *
+   * Only the narrowings this overlay can actually answer are adopted. The listing can also cut by
+   * who was on the trip, which areas it named, one cave and one camp, and none of those are
+   * questions the map layer asks; carrying them silently would draw an answer to a question
+   * nobody asked. They are counted instead, and the panel says how many were left behind.
+   */
+  useEffect(() => {
+    if (!requestedTrips) {
+      return;
+    }
+    const carried = readTripListFilter(searchParams);
+    setTripFilter({
+      from: carried.from,
+      to: carried.to,
+      types: carried.types,
+      states: carried.states,
+      visibilities: carried.visibilities,
+      hadIncident: carried.hadIncident,
+    });
+    setUnappliedTripFilters(
+      [
+        carried.search !== '',
+        carried.participantIds.length > 0,
+        carried.areaIds.length > 0,
+        carried.caveId !== undefined,
+        carried.expeditionId !== undefined,
+      ].filter(Boolean).length,
+    );
+    setTripsVisible(true);
+    setSearchParams(
+      (params) => {
+        for (const key of ['trips', 'q', 'from', 'to', 'types', 'states', 'visibilities',
+          'hadIncident', 'participantIds', 'areaIds', 'caveId', 'expeditionId', 'page', 'sort']) {
+          params.delete(key);
+        }
+        return params;
+      },
+      { replace: true },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a one-shot instruction, read once
+  }, [requestedTrips]);
 
   // A survey model picked elsewhere (?model=<id>, from a cave's model list) opens the survey
   // viewer beside the map. Consumed on arrival like ?view= and ?area= above, and for the same
@@ -694,6 +761,16 @@ export default function MapPage() {
     setPhotosEnabled(photosVisible); // gate the bbox loader so hidden = no fetches
   }, [photosVisible]);
 
+  useEffect(() => {
+    findOverlayLayer(TRIP_LAYER_ID)?.setVisible(tripsVisible);
+    setTripsEnabled(tripsVisible); // gate the bbox loader so hidden = no fetches
+  }, [tripsVisible]);
+
+  // The narrowings reach the layer module, which is what the loader reads on every fetch — a
+  // panned map must ask the same question the panel last set. Setting them re-asks immediately.
+  useEffect(() => {
+    setTripLayerFilter(tripFilter);
+  }, [tripFilter]);
   // The libraries this account may see. A caller outside the audience is told it may read nothing
   // and given an empty list, which is the same answer to this question as an installation that has
   // been given no library: either way there is nothing to offer, and neither is told which
@@ -758,6 +835,8 @@ export default function MapPage() {
       setHeatmapVisible(visible);
     } else if (id === PHOTO_LAYER_ID) {
       setPhotosVisible(visible);
+    } else if (id === TRIP_LAYER_ID) {
+      setTripsVisible(visible);
     } else if (libraryPhotoSourceOf(id)) {
       const source = libraryPhotoSourceOf(id)!;
       setLibraryPhotoSources((current) =>
@@ -778,6 +857,9 @@ export default function MapPage() {
       centerlinesVisible,
       heatmapVisible,
       photosVisible,
+      tripsVisible,
+      tripsFrom: tripFilter.from,
+      tripsTo: tripFilter.to,
       libraryPhotoSources,
       geofileIds: visibleGeofileIds,
       rasters: visibleRasterIds.map((id) => ({ id, opacity: rasterOpacity[id] })),
@@ -863,6 +945,11 @@ export default function MapPage() {
     setCenterlinesVisible(ui.centerlinesVisible);
     setHeatmapVisible(ui.heatmapVisible);
     setPhotosVisible(ui.photosVisible);
+    setTripsVisible(ui.tripsVisible);
+    // Only the window is restored, and deliberately not the facet narrowings: those are carried
+    // from a listing somebody was reading at the time, and a view reopened months later would
+    // otherwise silently answer for a filter whose reason nobody remembers.
+    setTripFilter((current) => ({ ...current, from: ui.tripsFrom, to: ui.tripsTo }));
     setLibraryPhotoSources(ui.libraryPhotoSources);
     for (const id of visibleGeofileIds) {
       if (!ui.geofileIds.includes(id)) {
@@ -938,6 +1025,10 @@ export default function MapPage() {
         surfaceFeaturesChanged();
       }}
       centerlinesVisible={centerlinesVisible}
+      tripsVisible={tripsVisible}
+      tripFilter={tripFilter}
+      onTripFilterChange={setTripFilter}
+      unappliedTripFilters={unappliedTripFilters}
       mapConfig={mapConfig}
       centerlineDetailZoom={centerlineDetailZoom}
       centerlineMaxPaths={centerlineMaxPaths}

@@ -220,6 +220,9 @@ export const queryKeys = {
   tripLogMap: (bbox: string, from: string, to: string) =>
     ['map', 'trip-logs', bbox, from, to] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
+  tripLogFacets: (params: TripLogFacetParams) => ['trip-logs', 'facets', params] as const,
+  tripLogGrouping: (params: TripLogGroupingParams) => ['trip-logs', 'grouping', params] as const,
+  tripLogStats: (params: TripLogFacetParams) => ['trip-logs', 'stats', params] as const,
   myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
@@ -1292,6 +1295,47 @@ export async function fetchCenterlineFeatures(
 /** Imperative fetch used by the OpenLayers photo overlay loader (not a hook). */
 export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureCollection> {
   return unwrap(api.GET('/api/v1/map/photos', { params: { query: { bbox } } }));
+}
+
+export type TripLogFeatureCollection = components['schemas']['TripLogFeatureCollection'];
+
+/** The narrowings the trip overlay may carry, spelled as the trip listing spells them. */
+export interface TripLogMapFilter {
+  from?: string;
+  to?: string;
+  types?: string[];
+  states?: string[];
+  visibilities?: string[];
+  hadIncident?: boolean;
+}
+
+/**
+ * Imperative fetch used by the OpenLayers trip overlay loader (not a hook).
+ *
+ * Every facet is sent as one comma-separated word list, which is how the trip listing spells the
+ * same narrowings in its own address — so a filter carried from the list to the map arrives
+ * unchanged rather than being translated into a second dialect on the way. An empty facet is
+ * omitted entirely: an empty string would be a filter naming nothing, which the server is right
+ * to refuse.
+ */
+export async function fetchTripLogFeatures(
+  bbox: string,
+  filter: TripLogMapFilter = {},
+): Promise<TripLogFeatureCollection> {
+  const list = (values?: string[]) => (values && values.length > 0 ? values.join(',') : undefined);
+  return unwrap(api.GET('/api/v1/map/trip-logs', {
+    params: {
+      query: {
+        bbox,
+        from: filter.from,
+        to: filter.to,
+        types: list(filter.types),
+        states: list(filter.states),
+        visibilities: list(filter.visibilities),
+        hadIncident: filter.hadIncident,
+      },
+    },
+  }));
 }
 
 /**
@@ -2730,13 +2774,134 @@ export interface TripLogListParams {
    * gathered nothing rather than refusing, so an id cannot be probed for existence here.
    */
   expeditionId?: string;
+  /**
+   * Area features the trips name, comma-separated. Alternatives: a trip naming any of them is
+   * kept, and each one reaches everything the containment hierarchy puts inside it. Like the cave
+   * and the camp, an area this caller may not read answers with an empty page rather than a
+   * refusal, so an id cannot be probed for existence — and one such id empties the whole answer
+   * rather than being dropped from the list.
+   */
+  areaIds?: string;
+  /**
+   * People on the roster, comma-separated and alternatives to each other. The answer is still only
+   * the trips this caller may read, so it never assembles where a person has been out of trips the
+   * asker cannot open — which is why the caller's own list of trips, whose whole point is that it
+   * names nobody, has no such member.
+   */
+  participantIds?: string;
+  /** Trip type ids, comma-separated. Alternatives: a trip of any of them is kept. */
+  types?: string;
+  /** Lifecycle words, comma-separated, spelled the way the contract spells them. */
+  states?: string;
+  /** Audience words, comma-separated, spelled the way the contract spells them. */
+  visibilities?: string;
+  /** Whether something went wrong. Omitted means no opinion, not "no". */
+  hadIncident?: boolean;
+  /**
+   * `date`, `title`, `created` or `updated`, a leading minus for descending. The order is the
+   * server's: re-sorting the page it handed back would reorder one page, which is a different
+   * and wrong answer as soon as there is more than one.
+   */
+  sort?: string;
 }
+
+/** One option a filter panel may offer, and how many trips it would leave. */
+export type TripFacetValue = components['schemas']['TripFacetValueDto'];
+
+/** What every option in the trip listing's filter panel would leave, for this caller. */
+export type TripListFacets = components['schemas']['TripListFacetsDto'];
+
+/**
+ * Everything the counts are asked about. It is the listing's own parameters minus the three that
+ * change no count — which page, how big, and in what order — so a panel and the page it sits over
+ * are demonstrably asking one question.
+ */
+export type TripLogFacetParams = Omit<TripLogListParams, 'page' | 'pageSize' | 'sort'>;
 
 export function useTripLogs(params: TripLogListParams) {
   return useQuery({
     queryKey: queryKeys.tripLogs(params),
     queryFn: () => unwrap(api.GET('/api/v1/trip-logs', { params: { query: params } })),
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * How many trips each filter option would leave, counted over the trips this caller may read.
+ *
+ * Its own request rather than a shape of the listing's, because it is a different question about
+ * the same query and every caller who only wants rows would otherwise pay for the counts. Keeping
+ * the last answer on screen matters more here than anywhere: the panel is what somebody is
+ * clicking, and options that vanish and return under the cursor make it unusable.
+ */
+export function useTripLogFacets(params: TripLogFacetParams) {
+  return useQuery({
+    queryKey: queryKeys.tripLogFacets(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/facets', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** One slice of a trip listing, and what it holds. */
+export type TripGroup = components['schemas']['TripGroupDto'];
+
+/** A trip listing broken into slices, over the trips this caller may read. */
+export type TripListGrouping = components['schemas']['TripListGroupingDto'];
+
+/**
+ * What the slices are cut from and what they are cut by. The narrowings are the listing's own,
+ * minus the three that change no slice — which page, how big, and in what order — so the shape
+ * above the table and the table itself are demonstrably about one set of trips.
+ */
+export type TripLogGroupingParams = TripLogFacetParams & {
+  /** `year`, `type`, `state`, `visibility`, `incident`, `area` or `participant`. */
+  groupBy?: string;
+  /** The second level. Must differ from the first, which the server refuses rather than ignores. */
+  thenBy?: string;
+};
+
+/**
+ * A trip listing broken into slices.
+ *
+ * Its own request rather than a shape of the page's, for the same reason the counts are: it is a
+ * different question about the same query, and nobody who only wants rows should pay for it. The
+ * previous answer is kept on screen while a new one is fetched, because the panel is what
+ * somebody is clicking and slices that vanish and return under the cursor make it unusable.
+ */
+export function useTripLogGrouping(params: TripLogGroupingParams, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.tripLogGrouping(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/grouping', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** One year of a filtered trip listing, and how much ground had been covered by the end of it. */
+export type TripStatsYear = components['schemas']['TripStatsYearDto'];
+
+/** How the filtered trips break down along one dimension, longest first. */
+export type TripStatsBreakdown = components['schemas']['TripStatsBreakdownDto'];
+
+/** What a filtered trip listing adds up to, over the trips this caller may read. */
+export type TripStats = components['schemas']['TripStatsDto'];
+
+/**
+ * What the filtered trips add up to.
+ *
+ * It takes the listing's own narrowings and nothing else, so "the current filter" means one thing
+ * on the insights page and on the list. A figure worked out from a second, similar-looking filter
+ * would disagree with the table under the one condition nobody checks by eye: a reader who may
+ * open only part of the archive. The previous answer is kept while a new one loads, because the
+ * scope toggle and the filter are things somebody is clicking and charts that blank out and
+ * return under the cursor read as breakage.
+ */
+export function useTripLogStats(params: TripLogFacetParams, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripLogStats(params),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/stats', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+    enabled,
   });
 }
 

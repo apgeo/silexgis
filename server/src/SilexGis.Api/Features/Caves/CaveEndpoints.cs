@@ -51,6 +51,7 @@ public static class CaveEndpoints
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> accessOptions,
+        ILoggerFactory loggers,
         int? page,
         int? pageSize,
         string? sort,
@@ -121,16 +122,57 @@ public static class CaveEndpoints
             query = query.Where(f => f.Geom != null && f.Geom.Intersects(polygon));
         }
 
+        // Taken before the ordering, because this is a set to report and not a page: sorting it
+        // would put a sort on every listing the installation serves for a condition that is
+        // almost always empty, and bounding it keeps a badly damaged archive from paying per
+        // broken row on every request.
+        var subtypelessQuery = query.Where(f => f.Cave == null)
+            .Select(f => f.Id).Take(SubtypelessReportLimit);
+
         query = ApplySort(query, sort);
 
         var (p, size) = Paging.Normalize(page, pageSize);
-        var total = await query.CountAsync(ct);
-        var rows = await query.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+
+        // A cave that has lost the subtype row carrying everything cave-specific has nothing
+        // left to list: every column past the name comes from the half that is missing. Such a
+        // row is left out — and it is left out of the count and of the page window alike, both
+        // measured over the same filtered set, because a total and a window that describe
+        // different sets stop being a pagination at all. Counting only listable rows while
+        // paging over a set that still held the broken ones was exactly that: a client walks
+        // ceil(total / pageSize) pages and asks for no more, so every broken row sorting ahead
+        // of the tail pushed one readable cave past the last page anyone would request. That
+        // cave was in the archive, undamaged and readable one at a time, and reachable through
+        // no page of this listing — the failure the broken row caused moved onto a row that was
+        // perfectly fine, which is worse than the server error this all started from.
+        //
+        // Noticing the broken rows is then a separate, bounded query rather than a side effect
+        // of the window, which also makes the report honest: it names every broken row the
+        // caller could see, not only those that happened to fall on the page being fetched.
+        var listableQuery = query.Where(f => f.Cave != null);
+        var total = await listableQuery.CountAsync(ct);
+        var rows = await listableQuery.Skip((p - 1) * size).Take(size).ToListAsync(ct);
+
+        ReportSubtypeless(loggers, await subtypelessQuery.ToListAsync(ct));
+
+        // The filter above is what guarantees the subtype row is there; the pattern match is
+        // how that guarantee is taken, rather than asserting it with a null-forgiving operator
+        // whose cost when it is ever wrong is a server error for every reader of the archive.
+        var listable = new List<(Feature Feature, Cave Cave)>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (row.Cave is { } cave)
+            {
+                listable.Add((row, cave));
+            }
+        }
 
         // Exact view is decided per row against every protected root above it.
-        var exactIds = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(f => f.Id)], ct);
+        var exactIds = await protection.ExactViewIdsAsync(
+            ctx, [.. listable.Select(pair => pair.Feature.Id)], ct);
         var grid = accessOptions.Value.LocationGridMeters;
-        var items = rows.Select(f => f.ToListItem(exactIds.Contains(f.Id), grid)).ToList();
+        var items = listable
+            .Select(pair => pair.Feature.ToListItem(pair.Cave, exactIds.Contains(pair.Feature.Id), grid))
+            .ToList();
         return TypedResults.Ok(new PagedResult<CaveListItemDto>(items, p, size, total));
     }
 
@@ -142,6 +184,7 @@ public static class CaveEndpoints
         FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> accessOptions,
+        ILoggerFactory loggers,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -152,10 +195,19 @@ public static class CaveEndpoints
             return ApiProblems.NotFound("cave.not_found");
         }
 
+        if (feature.Cave is not { } cave)
+        {
+            // A feature of this kind with no subtype row is not a cave anybody can be shown, and
+            // it is nothing the reader can act on either, so it is answered as absent and
+            // reported to whoever runs the installation.
+            ReportSubtypeless(loggers, [feature.Id]);
+            return ApiProblems.NotFound("cave.not_found");
+        }
+
         var exact = (await protection.ExactViewIdsAsync(ctx, [feature.Id], ct)).Contains(feature.Id);
         var parents = await ParentsAsync(db, ctx!, feature.Id, ct);
         await Concurrency.EmitETagAsync(http, db, VersionedTable.Features, feature.Id, ct);
-        return TypedResults.Ok(feature.ToDto(exact, accessOptions.Value.LocationGridMeters, parents));
+        return TypedResults.Ok(feature.ToDto(cave, exact, accessOptions.Value.LocationGridMeters, parents));
     }
 
     private static async Task<Results<Ok<CaveSummaryDto>, ProblemHttpResult>> GetSummaryAsync(
@@ -167,12 +219,19 @@ public static class CaveEndpoints
         IFileAccessTokenService tokens,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> accessOptions,
+        ILoggerFactory loggers,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var feature = await CaveFeatureAsync(db.Features.AsNoTracking(), id, ct);
         if (feature is null || !(await access.DecideAsync(ctx, AccessAction.Read, feature, ct)).Allowed)
         {
+            return ApiProblems.NotFound("cave.not_found");
+        }
+
+        if (feature.Cave is not { } cave)
+        {
+            ReportSubtypeless(loggers, [feature.Id]);
             return ApiProblems.NotFound("cave.not_found");
         }
 
@@ -275,7 +334,7 @@ public static class CaveEndpoints
             CanViewExactLocation: exactIds.Contains(id));
 
         return TypedResults.Ok(new CaveSummaryDto(
-            feature.Id, feature.Name ?? string.Empty, feature.Cave!.EntranceCount,
+            feature.Id, feature.Name ?? string.Empty, cave.EntranceCount,
             centerlineCount, surveyModelCount, attachmentCount, tripLogCount, mainDto, caps,
             headline));
     }
@@ -353,7 +412,7 @@ public static class CaveEndpoints
         // The creator owns the row, so the mapping is exact by construction.
         return TypedResults.Created(
             $"/api/v1/caves/{feature.Id}",
-            feature.ToDto(exact: true, accessOptions.Value.LocationGridMeters, parentDtos));
+            feature.ToDto(cave, exact: true, accessOptions.Value.LocationGridMeters, parentDtos));
     }
 
     private static async Task<Results<Ok<CaveDto>, UnauthorizedHttpResult, ProblemHttpResult>> UpdateAsync(
@@ -366,6 +425,7 @@ public static class CaveEndpoints
         FeatureWriteService writer,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> accessOptions,
+        ILoggerFactory loggers,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -392,7 +452,15 @@ public static class CaveEndpoints
             return ApiProblems.Forbidden(CavingGroupBindingRules.ForbiddenCode);
         }
 
-        var cave = feature.Cave!;
+        if (feature.Cave is not { } cave)
+        {
+            // The same answer the read paths give, for the same reason: there is no cave here to
+            // change. A write cannot mend the row either — what is missing is a whole row this
+            // endpoint has no fields for — so answering it as absent is the honest reply, and the
+            // report is what gets it in front of somebody who can repair it.
+            ReportSubtypeless(loggers, [feature.Id]);
+            return ApiProblems.NotFound("cave.not_found");
+        }
 
         // Write-path protection guard: a caller without exact view only ever saw
         // obfuscated values (null address/registry/notes), so ignore any change they
@@ -431,7 +499,7 @@ public static class CaveEndpoints
         await db.SaveChangesAsync(ct);
         await Concurrency.EmitETagAsync(http, db, VersionedTable.Features, feature.Id, ct);
         var parents = await ParentsAsync(db, ctx, feature.Id, ct);
-        return TypedResults.Ok(feature.ToDto(exact, accessOptions.Value.LocationGridMeters, parents));
+        return TypedResults.Ok(feature.ToDto(cave, exact, accessOptions.Value.LocationGridMeters, parents));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
@@ -470,8 +538,45 @@ public static class CaveEndpoints
         return TypedResults.NoContent();
     }
 
+    /// <summary>
+    /// Loads the cave aggregate. The subtype row is included and may still come back null: the
+    /// include is a left join, and only the other direction of the pair is guaranteed by the
+    /// database. Every caller that needs the subtype row checks for it and answers a row without
+    /// one as absent — update included, because the fields it takes cannot supply a missing row.
+    /// Delete is the one path that still works on such a row, and works without asking: it stamps
+    /// the feature, which is the half that is there.
+    /// </summary>
     private static Task<Feature?> CaveFeatureAsync(IQueryable<Feature> features, Guid id, CancellationToken ct) =>
         features.Include(f => f.Cave).FirstOrDefaultAsync(f => f.Id == id && f.Kind == FeatureKind.Cave, ct);
+
+    /// <summary>
+    /// How many subtype-less rows one listing names before the report stops enumerating them.
+    /// An installation that has damaged a great many rows needs to be told that and pointed at
+    /// the verifier, not handed a log line proportional to the damage on every page it serves.
+    /// </summary>
+    private const int SubtypelessReportLimit = 50;
+
+    /// <summary>
+    /// Records cave features found without the subtype row that makes them caves. Such a row is
+    /// left out of whatever was being answered, and this is what keeps that from being a silent
+    /// omission — a listing that quietly hid a broken row would leave nobody with any way to
+    /// learn it exists. Warned rather than refused because the reader cannot repair it and the
+    /// rest of the archive is perfectly answerable; the integrity verifier reports the same rows
+    /// under its own name so an installation can find them without reading logs.
+    /// </summary>
+    private static void ReportSubtypeless(ILoggerFactory loggers, IReadOnlyList<Guid> featureIds)
+    {
+        if (featureIds.Count == 0)
+        {
+            return;
+        }
+
+        loggers.CreateLogger(typeof(CaveEndpoints)).LogWarning(
+            "Left {Count} feature(s) of kind Cave out of a cave read because the cave subtype row "
+            + "is missing: {FeatureIds}. The integrity verifier reports these as subtype_row_missing.",
+            featureIds.Count,
+            string.Join(", ", featureIds));
+    }
 
     /// <summary>Breadcrumb data: the containment parents the caller may see, primary edge first.</summary>
     private static async Task<IReadOnlyList<CaveParentDto>> ParentsAsync(

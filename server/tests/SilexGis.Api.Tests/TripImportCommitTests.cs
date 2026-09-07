@@ -666,6 +666,83 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable
     }
 
 
+    /// <summary>
+    /// The invariant underneath the rollback, stated on its own: a confirmation never leaves a
+    /// feature of kind cave without the subtype row that makes it one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A cave is two rows — the feature, which carries the name, the access control and the
+    /// representative point, and the subtype row that carries everything cave-specific. The
+    /// database guards one direction of that pair and only one: the subtype row's foreign key is
+    /// composite on identifier and kind, so a subtype row without its feature cannot exist. The
+    /// other way round nothing stops, and nothing before this asked. It is worth asking because
+    /// the consequence is not local: the listing projects the subtype of every row it returns, so
+    /// a single feature missing its half answers the whole page with a server error, for every
+    /// reader of the archive rather than for whoever owns the row.
+    /// </para>
+    /// <para>
+    /// The row this drives fails <em>after</em> its cave was created and saved, which is the only
+    /// moment at which the two halves could be parted: the places a row invents have to reach the
+    /// database before the trip write can be asked whether the caves it names exist, so a cave is
+    /// already stored by the time the purpose that cannot be filled in refuses the row. Stated as
+    /// an invariant over this run's own features rather than as a count, because it is a property
+    /// the importer owes on every path, not a fact about this sheet.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_confirmation_never_leaves_a_cave_feature_without_its_cave_row()
+    {
+        await SeedStrictTripTypeAsync();
+
+        var fileId = await UploadAsync("cave-rollback.csv", CaveRollbackSheet());
+        var result = await CommitAsync(fileId, [2, 3, 4], createEverything: true);
+
+        // Two rows landed, each inventing a massif, a sub-area and a cave.
+        result.GetProperty("createdTripCount").GetInt32().ShouldBe(2);
+        result.GetProperty("createdFeatureCount").GetInt32().ShouldBe(6);
+
+        var failures = result.GetProperty("failures").EnumerateArray().ToList();
+        failures.Count.ShouldBe(1);
+        failures[0].GetProperty("line").GetInt32().ShouldBe(3);
+        failures[0].GetProperty("code").GetString().ShouldBe("trip_log.field_data_invalid");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        // Nothing the failed row invented survives, its cave included.
+        (await db.Features.AsNoTracking().IgnoreQueryFilters()
+            .CountAsync(f => f.Name == $"Masivul Beta {tag}"
+                || f.Name == $"Valea Beta {tag}"
+                || f.Name == $"Pestera Beta {tag}"))
+            .ShouldBe(0);
+
+        // Scoped to this run's own account and suffix: one database is shared by the whole
+        // suite, so a query over every cave in it is a failure waiting for a busier run.
+        var mine = await db.Features.AsNoTracking().IgnoreQueryFilters()
+            .Where(f => f.OwnerUserId == editorId && f.Name != null && f.Name.Contains(tag))
+            .Select(f => new { f.Id, f.Name, f.Kind })
+            .ToListAsync();
+        var mineIds = mine.Select(f => f.Id).ToHashSet();
+
+        // The positive half, without which "no cave feature is missing its row" would read the
+        // same against a confirmation that created no caves at all.
+        var caveFeatureIds = mine.Where(f => f.Kind == FeatureKind.Cave).Select(f => f.Id).ToList();
+        caveFeatureIds.Count.ShouldBe(2);
+
+        var subtypeIds = (await db.Caves.AsNoTracking().IgnoreQueryFilters()
+            .Where(c => mineIds.Contains(c.Id)).Select(c => c.Id).ToListAsync()).ToHashSet();
+        caveFeatureIds.Where(id => !subtypeIds.Contains(id)).ShouldBeEmpty();
+
+        // And nothing else about these features is half-written either — the closure rows, the
+        // ancestor arrays and the effective protection flags all agree with the edges. Filtered
+        // to this run's own features because the verifier reads the whole database.
+        var problems = await scope.ServiceProvider
+            .GetRequiredService<FeatureIntegrityVerifier>().VerifyAsync();
+        problems.Where(p => mineIds.Contains(p.FeatureId)).ShouldBeEmpty();
+    }
+
+
     [Fact]
     public async Task A_row_that_cannot_be_recorded_is_a_listed_failure_and_the_rest_still_land()
     {
@@ -869,9 +946,10 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
 
-        var readable = Cave($"Pestera Vizibila {tag}", editorId, Visibility.Public, guarded: false);
-        var guarded = Cave($"Pestera Ascunsa {tag}", strangerId, Visibility.Public, guarded: true);
-        var hidden = Cave($"Pestera Interzisa {tag}", strangerId, Visibility.Public, guarded: false);
+        var caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
+        var readable = Cave($"Pestera Vizibila {tag}", editorId, Visibility.Public, guarded: false, caveTypeId);
+        var guarded = Cave($"Pestera Ascunsa {tag}", strangerId, Visibility.Public, guarded: true, caveTypeId);
+        var hidden = Cave($"Pestera Interzisa {tag}", strangerId, Visibility.Public, guarded: false, caveTypeId);
         foreach (var cave in new[] { readable, guarded, hidden })
         {
             db.Features.Add(cave);
@@ -899,7 +977,8 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable
         return (readable.Id, guarded.Id, hidden.Id);
     }
 
-    private static Feature Cave(string name, Guid ownerId, Visibility visibility, bool guarded)
+    private static Feature Cave(
+        string name, Guid ownerId, Visibility visibility, bool guarded, long caveTypeId)
     {
         var id = Guid.NewGuid();
         return new Feature
@@ -914,6 +993,13 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable
             // this row in. A guard nothing reads is a guard that does not hold.
             IsProtectedEffective = guarded,
             AncestorIds = [id],
+            // A cave is two rows: the feature and the subtype row that carries its
+            // cave-specific attributes. The database only guards the direction that cannot
+            // happen anyway — a subtype row without its feature — so a fixture that writes the
+            // feature alone leaves behind a state no write path can produce and every read path
+            // that projects a cave falls over, for every reader of the listing rather than only
+            // for whoever owns the row.
+            Cave = new Cave { Id = id, CaveTypeId = caveTypeId },
         };
     }
 
@@ -929,6 +1015,17 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable
         + $"1,05/03/2024,Prima tura {tag},Masivul Alfa {tag},Valea Alfa {tag},{Ana},explorare {tag}\r\n"
         + $"2,17/04/2024,A doua tura {tag},Masivul Beta {tag},Valea Beta {tag},{Ana},{StrictType}\r\n"
         + $"3,18/04/2024,A treia tura {tag},Masivul Gama {tag},Valea Gama {tag},{Ana},explorare {tag}\r\n";
+
+    /// <summary>
+    /// The same three rows as the sheet above, each also naming a cave of its own. Separate
+    /// rather than folded into that one because both of the tests there count the features a
+    /// confirmation creates exactly, and a cave apiece changes every one of those numbers.
+    /// </summary>
+    private string CaveRollbackSheet() =>
+        "Nr crt.,Data inceput,Titlu,Masiv/zona,Subzona,Pesteri,Participanti,Tip\r\n"
+        + $"1,05/03/2024,Prima tura {tag},Masivul Alfa {tag},Valea Alfa {tag},Pestera Alfa {tag},{Ana},explorare {tag}\r\n"
+        + $"2,17/04/2024,A doua tura {tag},Masivul Beta {tag},Valea Beta {tag},Pestera Beta {tag},{Ana},{StrictType}\r\n"
+        + $"3,18/04/2024,A treia tura {tag},Masivul Gama {tag},Valea Gama {tag},Pestera Gama {tag},{Ana},explorare {tag}\r\n";
 
     private string StrictType => $"Cartare stricta {tag}";
 

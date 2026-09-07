@@ -72,19 +72,20 @@ public sealed class TripImportResolutionTests : IAsyncLifetime, IDisposable
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
 
             Seed(
                 db,
                 // Readable and placeable: public, and nothing above it guards a position.
-                Cave(readable, strangerId, Visibility.Public, protectedLocation: false),
+                Cave(readable, strangerId, Visibility.Public, protectedLocation: false, caveTypeId),
 
                 // Readable but not placeable: equally public, guarded. The one thing that differs
                 // between this cave and the one above it is the guard.
-                Cave(guarded, strangerId, Visibility.Public, protectedLocation: true),
+                Cave(guarded, strangerId, Visibility.Public, protectedLocation: true, caveTypeId),
 
                 // Neither: somebody else's private cave, with no grant of any kind reaching this
                 // caller — not a share, not a set, not a group.
-                Cave(hidden, strangerId, Visibility.Private, protectedLocation: false));
+                Cave(hidden, strangerId, Visibility.Private, protectedLocation: false, caveTypeId));
             await db.SaveChangesAsync();
         }
 
@@ -127,7 +128,8 @@ public sealed class TripImportResolutionTests : IAsyncLifetime, IDisposable
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            Seed(db, Cave(guarded, strangerId, Visibility.Public, protectedLocation: true));
+            var caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
+            Seed(db, Cave(guarded, strangerId, Visibility.Public, protectedLocation: true, caveTypeId));
             await db.SaveChangesAsync();
         }
 
@@ -346,7 +348,8 @@ public sealed class TripImportResolutionTests : IAsyncLifetime, IDisposable
             Participants = participants ?? [],
         };
 
-    private static Feature Cave(string name, Guid ownerId, Visibility visibility, bool protectedLocation)
+    private static Feature Cave(
+        string name, Guid ownerId, Visibility visibility, bool protectedLocation, long caveTypeId)
     {
         var id = Guid.NewGuid();
         return new Feature
@@ -361,6 +364,13 @@ public sealed class TripImportResolutionTests : IAsyncLifetime, IDisposable
             // put this row in. A guard nothing reads is a guard that does not hold.
             IsProtectedEffective = protectedLocation,
             AncestorIds = [id],
+            // A cave is two rows: the feature and the subtype row that carries its
+            // cave-specific attributes. The database only guards the direction that cannot
+            // happen anyway — a subtype row without its feature — so a fixture that writes the
+            // feature alone leaves behind a state no write path can produce and every read path
+            // that projects a cave falls over, for every reader of the listing rather than only
+            // for whoever owns the row.
+            Cave = new Cave { Id = id, CaveTypeId = caveTypeId },
         };
     }
 

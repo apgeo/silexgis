@@ -108,6 +108,10 @@ function renderPanel(
       onTagFilterChange={vi.fn()}
       centerlinesVisible={false}
       onCenterlineLimitsChange={vi.fn()}
+      tripsVisible={false}
+      tripFilter={{}}
+      onTripFilterChange={vi.fn()}
+      unappliedTripFilters={0}
     />,
   );
 }

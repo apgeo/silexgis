@@ -411,3 +411,217 @@ public sealed class TripLogTransitionRequestValidator : AbstractValidator<TripLo
         RuleFor(x => x.State).NotNull().IsInEnum();
     }
 }
+
+/// <summary>
+/// One option in a filter panel, and how many trips it would leave.
+/// </summary>
+/// <param name="Value">The word or id the listing takes for this option, spelled exactly as the
+/// listing's own parameter takes it, so a panel never has to translate its own answer back.</param>
+/// <param name="Label">What to call it, for the options whose names live in a table rather than
+/// in a vocabulary the client already holds — a person, an area. Null where the client has the
+/// vocabulary and translates it, which is every option a reader sees in their own language.</param>
+/// <param name="Count">Trips this caller may read that the option would leave. Somebody with
+/// different access sees a different number for the same option, and both are right.</param>
+public sealed record TripFacetValueDto(string Value, string? Label, int Count);
+
+/// <summary>
+/// What every option in the trip listing's filter panel would leave, counted over the trips this
+/// caller may read.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <paramref name="Matching"/> over <paramref name="Overall"/> is the figure that sits above the
+/// table: how many trips the filter leaves, out of how many this caller may read at all. Both
+/// halves are about the caller, so the fraction never implies rows are being hidden by the filter
+/// that are in fact being hidden by access.
+/// </para>
+/// <para>
+/// Each list leaves its own facet's choices out of the count, so an option says how many trips it
+/// would leave rather than how many it leaves now. Without that, every option a reader has not
+/// picked inside a facet they have already used reads as zero.
+/// </para>
+/// <para>
+/// Appended, and appended only. This record is constructed positionally and has runs of members
+/// of the same type, so a value inserted in the middle is absorbed silently by the neighbour it
+/// displaces.
+/// </para>
+/// </remarks>
+public sealed record TripListFacetsDto(
+    int Matching,
+    int Overall,
+    IReadOnlyList<TripFacetValueDto> Types,
+    IReadOnlyList<TripFacetValueDto> States,
+    IReadOnlyList<TripFacetValueDto> Visibilities,
+    IReadOnlyList<TripFacetValueDto> Incident,
+    IReadOnlyList<TripFacetValueDto> Participants,
+    IReadOnlyList<TripFacetValueDto> Areas)
+{
+    /// <summary>
+    /// The answer when a filter named something the caller may not read. Every number is zero and
+    /// nothing is listed — the same silence the page gives, because a panel that showed counts
+    /// beside a page that showed nothing would say the rows exist.
+    /// </summary>
+    public static TripListFacetsDto Empty { get; } = new(0, 0, [], [], [], [], [], []);
+}
+
+/// <summary>
+/// One slice of a trip listing, and what it holds.
+/// </summary>
+/// <param name="Value">The word or id the listing's own parameter takes for this slice, so a
+/// reader can go from the slice to its trips without anything translating anything. Empty for the
+/// trips that hold nothing at all under the dimension.</param>
+/// <param name="Label">What to call it, for the slices whose names live in a table rather than in
+/// a vocabulary the client already holds — a person, an area. Null everywhere else.</param>
+/// <param name="Count">Trips in this slice that this caller may read.</param>
+/// <param name="FirstDay">The earliest day any trip in the slice began.</param>
+/// <param name="LastDay">The latest day any trip in the slice ran to — its own end where it has
+/// one, and its start where it does not, because a span with no end ran for one day.</param>
+/// <param name="TopTypes">The purposes this slice's trips were for, most first, by id.</param>
+/// <param name="TopPeople">Who was on them, most first, counted distinct by person: a roster row
+/// is one person doing one job, so leading and surveying is two rows and one person who went
+/// once.</param>
+/// <param name="Groups">The second level, sliced within this one. Empty when nothing was asked
+/// for, and never nested further.</param>
+public sealed record TripGroupDto(
+    string Value,
+    string? Label,
+    int Count,
+    DateOnly FirstDay,
+    DateOnly LastDay,
+    IReadOnlyList<TripFacetValueDto> TopTypes,
+    IReadOnlyList<TripFacetValueDto> TopPeople,
+    IReadOnlyList<TripGroupDto> Groups);
+
+/// <summary>
+/// A trip listing broken into slices, over the trips this caller may read.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <paramref name="Overlapping"/> is the honest half of the answer. Two of the dimensions hold
+/// more than one value per trip — a trip names several areas and carries several people — so a
+/// trip counts into every slice it belongs to and the slice counts add up to more than
+/// <paramref name="Matching"/>. That is the right answer to "how many trips did each caver do"
+/// and a wrong-looking one wherever the axis does not say it, so the answer carries the flag
+/// rather than leaving a reader to notice.
+/// </para>
+/// <para>
+/// Appended, and appended only. This record is constructed positionally and has runs of members
+/// of the same type, so a value inserted in the middle is absorbed silently by the neighbour it
+/// displaces.
+/// </para>
+/// </remarks>
+/// <param name="GroupBy">The dimension asked for, spelled as it was asked.</param>
+/// <param name="ThenBy">The second dimension, or "none".</param>
+/// <param name="Matching">Trips the filter leaves, and the population the slices are cut from.
+/// Where <paramref name="Truncated"/> is set this is what was actually sliced, not what the
+/// filter matched.</param>
+/// <param name="Overlapping">A trip counts into every value it holds, so the slice counts
+/// legitimately exceed <paramref name="Matching"/>.</param>
+/// <param name="Truncated">The filter matched more trips than a grouping answers over, so this
+/// is a shape of the first of them rather than of all of them. A reader narrows the filter; a
+/// figure that quietly stopped at a limit is worse than one that says it did.</param>
+/// <param name="Groups">The slices, longest first, with the trips holding nothing under the
+/// dimension last.</param>
+public sealed record TripListGroupingDto(
+    string GroupBy,
+    string ThenBy,
+    int Matching,
+    bool Overlapping,
+    bool Truncated,
+    IReadOnlyList<TripGroupDto> Groups)
+{
+    /// <summary>
+    /// The answer when a filter named something this caller may not read, or when nothing was
+    /// asked to be grouped by. No slices and nothing counted — the same silence the page gives.
+    /// </summary>
+    public static TripListGroupingDto Empty { get; } = new("none", "none", 0, false, false, []);
+}
+
+/// <summary>
+/// One year of a filtered trip listing: what was done in it, and how much of the ground had been
+/// covered by the end of it.
+/// </summary>
+/// <remarks>
+/// Appended, and appended only. This record is constructed positionally and is a run of members
+/// of the same type, so a value inserted in the middle is absorbed silently by the neighbour it
+/// displaces.
+/// </remarks>
+/// <param name="Year">The year the trips began in. A trip whose span crosses midnight on New
+/// Year's Eve belongs to the year it started, exactly as it does in a grouping.</param>
+/// <param name="Trips">Trips this caller may read that the filter left in that year. Zero for a
+/// year inside the span that holds none, so a quiet year reads as a flat stretch rather than
+/// being closed up.</param>
+/// <param name="NewAreas">Areas reached for the first time that year, counted over the filtered
+/// trips only — an area the club first visited outside the filter counts as new here, because
+/// this is a curve of what the filter shows and not of what the archive knows.</param>
+/// <param name="AreasSoFar">Distinct areas reached by the end of that year, running. This is the
+/// figure no other one gives: a curve still climbing says new ground is being found, and one
+/// flattening says the same places are being revisited.</param>
+public sealed record TripStatsYearDto(int Year, int Trips, int NewAreas, int AreasSoFar);
+
+/// <summary>
+/// How the filtered trips break down along one dimension, longest first.
+/// </summary>
+/// <remarks>
+/// Appended, and appended only, for the reason the other listing records carry.
+/// </remarks>
+/// <param name="Overlapping">A trip counts into every value it holds, so these counts
+/// legitimately add up to more than the trips the filter left. True for the dimensions that hold
+/// more than one value per trip — where a trip went, and who was on it — and the axis has to say
+/// so, because a total that quietly exceeds its population is the one figure nobody checks.</param>
+/// <param name="Distinct">How many distinct values there are, which is more than were handed back
+/// wherever the list was bounded. A page showing forty bars of two hundred values says so with
+/// this rather than implying there are forty.</param>
+/// <param name="Values">The values, longest first, with the trips holding nothing under the
+/// dimension last however many of them there are.</param>
+public sealed record TripStatsBreakdownDto(
+    bool Overlapping,
+    int Distinct,
+    IReadOnlyList<TripFacetValueDto> Values);
+
+/// <summary>
+/// What a filtered trip listing adds up to, counted over the trips this caller may read.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <paramref name="Matching"/> over <paramref name="Overall"/> is the same fraction the list
+/// prints above its table, and it is here so the page can say whose totals these are. Both halves
+/// are about the caller: somebody with different access sees different figures for the same
+/// filter and both are right. A page that printed an unqualified total would be making a claim
+/// about the archive out of a count of one reader's share of it.
+/// </para>
+/// <para>
+/// Appended, and appended only. This record is constructed positionally and has runs of members
+/// of the same type, so a value inserted in the middle is absorbed silently by the neighbour it
+/// displaces.
+/// </para>
+/// </remarks>
+/// <param name="Matching">Trips the filter left, of the trips this caller may read.</param>
+/// <param name="Overall">Trips this caller may read at all, before any narrowing.</param>
+/// <param name="Years">One row per year of the filtered span, in order.</param>
+/// <param name="Types">What the trips were for, by trip type id.</param>
+/// <param name="Areas">Where they went, through the same gated walk of the containment hierarchy
+/// the area filter and the area counts make.</param>
+/// <param name="Participants">Who was on them, distinct by person: a roster row is one person
+/// doing one job, so leading and surveying one trip is one person who went once.</param>
+public sealed record TripStatsDto(
+    int Matching,
+    int Overall,
+    IReadOnlyList<TripStatsYearDto> Years,
+    TripStatsBreakdownDto Types,
+    TripStatsBreakdownDto Areas,
+    TripStatsBreakdownDto Participants)
+{
+    /// <summary>
+    /// The answer when a filter named something this caller may not read. Every figure is zero
+    /// and nothing is listed — the same silence the page and the option counts give, because
+    /// charts drawn beside an empty page would say the rows exist.
+    /// </summary>
+    public static TripStatsDto Empty { get; } = new(
+        0,
+        0,
+        [],
+        new TripStatsBreakdownDto(false, 0, []),
+        new TripStatsBreakdownDto(true, 0, []),
+        new TripStatsBreakdownDto(true, 0, []));
+}

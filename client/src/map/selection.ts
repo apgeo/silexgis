@@ -7,6 +7,7 @@ import type { SelectedRef, WorkspaceSelection } from '../stores/workspaceStore.t
 import { ENTRANCE_LAYER_ID } from './entranceLayer.ts';
 import { SURFACE_FEATURE_LAYER_ID } from './featureLayer.ts';
 import { isHitTestable } from './hitTesting.ts';
+import { TRIP_LAYER_ID } from './tripLayer.ts';
 import { coarsePointer } from './pointer.ts';
 
 /**
@@ -55,6 +56,13 @@ export function attachSelection(
           } else {
             onPick({ kind: 'entrance', entranceId: props.id, caveId: props.caveId });
           }
+          handled = true;
+          return true;
+        }
+        if (layerId === TRIP_LAYER_ID && typeof props.id === 'string') {
+          // A trip has no place in a multi-selection: the set is a set of things on the ground
+          // that can be compared with each other, and a trip is an account of a day.
+          onPick({ kind: 'trip', tripId: props.id });
           handled = true;
           return true;
         }

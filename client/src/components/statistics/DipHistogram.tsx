@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EChartsOption } from 'echarts';
 
-import { axisStyle, paletteFor } from './chartTheme.ts';
+import { axisStyle, paletteFor, themedTooltip } from './chartTheme.ts';
 import { useECharts } from './useECharts.ts';
 
 /**
@@ -83,7 +83,7 @@ export default function DipHistogram({ bins, height = 260 }: DipHistogramProps) 
       ],
       // Spread over the base tooltip rather than replacing it, so the themed background survives:
       // a top-level key set here replaces the shared one wholesale rather than merging into it.
-      tooltip: { ...paletteTooltip(palette), trigger: 'axis' },
+      tooltip: { ...themedTooltip(palette), trigger: 'axis' },
     };
   }, [bins, countAxis, token, t]);
 
@@ -104,12 +104,4 @@ export default function DipHistogram({ bins, height = 260 }: DipHistogramProps) 
       <div ref={container} data-testid="chart-dip" style={{ width: '100%', height }} />
     </Space>
   );
-}
-
-function paletteTooltip(palette: ReturnType<typeof paletteFor>) {
-  return {
-    backgroundColor: palette.tooltipBackground,
-    borderColor: palette.axisLine,
-    textStyle: { color: palette.tooltipText },
-  };
 }

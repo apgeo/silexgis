@@ -5965,6 +5965,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("OwnerUserId")
                         .HasDatabaseName("ix_trip_logs_owner_user_id");
 
+                    b.HasIndex("State")
+                        .HasDatabaseName("ix_trip_logs_state");
+
                     b.HasIndex("TripDate")
                         .HasDatabaseName("ix_trip_logs_trip_date");
 

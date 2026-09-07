@@ -28,6 +28,15 @@ export interface ViewConfig {
   heatmapVisible?: boolean;
   /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
   photosVisible?: boolean;
+  /** Added after v1 shipped; older saved views omit it (treated as false — an opt-in overlay). */
+  tripsVisible?: boolean;
+  /**
+   * The day window the trip overlay asks with, inclusive, as `yyyy-MM-dd`. Added after v1 shipped;
+   * older saved views omit either bound, and an absent bound is no bound rather than today — a
+   * view saved before this existed asked about every trip, and reopening it must go on doing so.
+   */
+  tripsFrom?: string;
+  tripsTo?: string;
   /**
    * Which photo libraries were switched on, named the way the server names each. Added after v1
    * shipped; older saved views omit it (treated as none — these are opt-in overlays).
@@ -70,6 +79,9 @@ export interface WorkspaceUiState {
   centerlinesVisible: boolean;
   heatmapVisible: boolean;
   photosVisible: boolean;
+  tripsVisible: boolean;
+  tripsFrom?: string;
+  tripsTo?: string;
   libraryPhotoSources: string[];
   geofileIds: string[];
   rasters: { id: string; opacity?: number }[];
@@ -103,6 +115,9 @@ export function captureViewConfig(
     centerlinesVisible: ui.centerlinesVisible,
     heatmapVisible: ui.heatmapVisible,
     photosVisible: ui.photosVisible,
+    tripsVisible: ui.tripsVisible,
+    tripsFrom: ui.tripsFrom,
+    tripsTo: ui.tripsTo,
     libraryPhotoSources: ui.libraryPhotoSources,
     geofileIds: ui.geofileIds,
     rasters: ui.rasters,
@@ -130,6 +145,9 @@ export function applyViewConfig(config: unknown): WorkspaceUiState | null {
     centerlinesVisible: parsed.centerlinesVisible ?? false,
     heatmapVisible: parsed.heatmapVisible ?? false,
     photosVisible: parsed.photosVisible ?? false,
+    tripsVisible: parsed.tripsVisible ?? false,
+    tripsFrom: parsed.tripsFrom,
+    tripsTo: parsed.tripsTo,
     libraryPhotoSources: parsed.libraryPhotoSources ?? [],
     geofileIds: parsed.geofileIds ?? [],
     rasters: parsed.rasters ?? [],

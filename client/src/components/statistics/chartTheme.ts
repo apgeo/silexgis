@@ -83,11 +83,24 @@ export function baseOption(token: GlobalToken, reduceMotion: boolean) {
     // browser-error sweep would (correctly) record as a defect. The margins below are sized for
     // the axis labels these charts actually draw.
     grid: { left: 64, right: 24, top: 24, bottom: 56 },
-    tooltip: {
-      backgroundColor: palette.tooltipBackground,
-      borderColor: palette.axisLine,
-      textStyle: { color: palette.tooltipText },
-    },
+    tooltip: themedTooltip(palette),
+  };
+}
+
+/**
+ * The themed part of a tooltip, for a chart that has to set one of its own.
+ *
+ * A top-level key in a chart's options replaces the shared one wholesale rather than merging into
+ * it, so a chart that sets nothing but a trigger loses the background, the border and the text
+ * colour with it — and in the dark theme draws a pale default tooltip over a dark card. Spread
+ * this in first, then set the trigger. One home rather than a copy per chart, because a copy is
+ * how the two drift apart.
+ */
+export function themedTooltip(palette: ChartPalette) {
+  return {
+    backgroundColor: palette.tooltipBackground,
+    borderColor: palette.axisLine,
+    textStyle: { color: palette.tooltipText },
   };
 }
 

@@ -175,14 +175,22 @@ public sealed record CaveWriteRequest(
 internal static class CaveMapping
 {
     /// <summary>
-    /// Maps the cave aggregate (feature row + cave subtype row, subtype loaded) applying
-    /// location protection: without exact view the main-entrance point is grid-snapped
-    /// and precise-location text fields are redacted.
+    /// Maps the cave aggregate (feature row + cave subtype row) applying location protection:
+    /// without exact view the main-entrance point is grid-snapped and precise-location text
+    /// fields are redacted.
     /// </summary>
+    /// <param name="c">
+    /// The subtype row, passed rather than read off the feature's navigation on purpose. Only
+    /// one direction of the pair is guarded by the database — the subtype row carries a
+    /// composite foreign key on identifier and kind, so it cannot exist without its feature,
+    /// while a feature that has lost its subtype row is a state nothing refuses. Reading the
+    /// navigation here would turn such a row into a null dereference inside a projection, which
+    /// is a server error for whoever asked; taking the row as an argument makes every caller
+    /// decide what to do about a missing one where it still has an answer to give.
+    /// </param>
     public static CaveDto ToDto(
-        this Feature f, bool exact, double gridMeters, IReadOnlyList<CaveParentDto> parents)
+        this Feature f, Cave c, bool exact, double gridMeters, IReadOnlyList<CaveParentDto> parents)
     {
-        var c = f.Cave!;
         return new CaveDto(
             f.Id, f.Kind, f.Name ?? string.Empty, c.OtherToponyms, c.IdentificationCode,
             c.CaveTypeId, f.Description, c.Website, c.Region, c.HydrographicBasin,
@@ -203,9 +211,14 @@ internal static class CaveMapping
             f.OwnerUserId, f.CavingGroupId, f.Visibility, f.CreatedAt, f.UpdatedAt);
     }
 
-    public static CaveListItemDto ToListItem(this Feature f, bool exact, double gridMeters)
+    /// <summary>
+    /// One row of the cave listing. The subtype row is a parameter for the reason spelled out on
+    /// the single-cave mapping above: a listing that dereferenced a missing one would answer the
+    /// whole page with a server error, for every reader of the archive rather than for whoever
+    /// owns the broken row.
+    /// </summary>
+    public static CaveListItemDto ToListItem(this Feature f, Cave c, bool exact, double gridMeters)
     {
-        var c = f.Cave!;
         return new CaveListItemDto(
             f.Id, f.Kind, f.Name ?? string.Empty, c.IdentificationCode, c.CaveTypeId,
             c.Region, c.SurveyedLength, c.Depth, c.ExplorationStatus, f.LocationProtected,

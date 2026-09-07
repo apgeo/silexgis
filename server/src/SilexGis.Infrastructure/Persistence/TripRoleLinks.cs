@@ -47,6 +47,50 @@ public static class TripRoleLinks
                select tripMember.EntityId!.Value;
     }
 
+    /// <summary>
+    /// The trips any trip role names any of these features on, as a subquery a caller composes
+    /// into its own visibility-filtered query. The set of features is itself a query, so a
+    /// caller narrowing by an area and everything inside it keeps the whole question in one
+    /// statement rather than reading a list of ids and asking again with it.
+    ///
+    /// Ids repeat, for the same reason the single-feature form's do: two roles or two links may
+    /// name the same feature on one trip, and two named features may sit on one trip. A caller
+    /// counting trips reduces them.
+    /// </summary>
+    public static IQueryable<Guid> TripIdsNamingAny(SilexGisDbContext db, IQueryable<Guid> featureIds)
+    {
+        var roleIds = RoleIds(db);
+        return from featureMember in db.ResLinkMembers.AsNoTracking()
+               where featureMember.FeatureId != null && featureIds.Contains(featureMember.FeatureId.Value)
+               join link in db.ResLinks.AsNoTracking() on featureMember.ResLinkId equals link.Id
+               where link.RelationTypeId != null && roleIds.Contains(link.RelationTypeId.Value)
+               join tripMember in db.ResLinkMembers.AsNoTracking()
+                   on featureMember.ResLinkId equals tripMember.ResLinkId
+               where tripMember.EntityType == AttachedEntityType.TripLog && tripMember.EntityId != null
+               select tripMember.EntityId!.Value;
+    }
+
+    /// <summary>
+    /// The trips any trip role names any of these features on, over a set of ids the caller has
+    /// already read and gated. A sibling of the query-taking form rather than a replacement: a
+    /// caller whose set of features is itself decided row by row — because the decision cannot be
+    /// written as a predicate — has nothing to compose, and passing it back through a subquery
+    /// would only hide that the ids were materialised.
+    /// </summary>
+    public static IQueryable<Guid> TripIdsNamingAny(
+        SilexGisDbContext db, IReadOnlyCollection<Guid> featureIds)
+    {
+        var roleIds = RoleIds(db);
+        return from featureMember in db.ResLinkMembers.AsNoTracking()
+               where featureMember.FeatureId != null && featureIds.Contains(featureMember.FeatureId.Value)
+               join link in db.ResLinks.AsNoTracking() on featureMember.ResLinkId equals link.Id
+               where link.RelationTypeId != null && roleIds.Contains(link.RelationTypeId.Value)
+               join tripMember in db.ResLinkMembers.AsNoTracking()
+                   on featureMember.ResLinkId equals tripMember.ResLinkId
+               where tripMember.EntityType == AttachedEntityType.TripLog && tripMember.EntityId != null
+               select tripMember.EntityId!.Value;
+    }
+
     /// <summary>The features any trip role names on this trip, as a composable subquery.</summary>
     public static IQueryable<Guid> FeatureIdsNamedBy(SilexGisDbContext db, Guid tripId)
     {
@@ -82,17 +126,26 @@ public static class TripRoleLinks
         SilexGisDbContext db, IQueryable<Guid> tripIds, IReadOnlyCollection<Guid>? featureIds = null)
     {
         var roleIds = RoleIds(db);
-        return from tripMember in db.ResLinkMembers.AsNoTracking()
-               where tripMember.EntityType == AttachedEntityType.TripLog
-                   && tripMember.EntityId != null
-                   && tripIds.Contains(tripMember.EntityId.Value)
-               join link in db.ResLinks.AsNoTracking() on tripMember.ResLinkId equals link.Id
-               where link.RelationTypeId != null && roleIds.Contains(link.RelationTypeId.Value)
-               join featureMember in db.ResLinkMembers.AsNoTracking()
-                   on tripMember.ResLinkId equals featureMember.ResLinkId
-               where featureMember.FeatureId != null
-                   && (featureIds == null || featureIds.Contains(featureMember.FeatureId.Value))
-               select new TripFeaturePair(tripMember.EntityId!.Value, featureMember.FeatureId!.Value);
+        var all = from tripMember in db.ResLinkMembers.AsNoTracking()
+                  where tripMember.EntityType == AttachedEntityType.TripLog
+                      && tripMember.EntityId != null
+                      && tripIds.Contains(tripMember.EntityId.Value)
+                  join link in db.ResLinks.AsNoTracking() on tripMember.ResLinkId equals link.Id
+                  where link.RelationTypeId != null && roleIds.Contains(link.RelationTypeId.Value)
+                  join featureMember in db.ResLinkMembers.AsNoTracking()
+                      on tripMember.ResLinkId equals featureMember.ResLinkId
+                  where featureMember.FeatureId != null
+                  select new { tripMember.EntityId, featureMember.FeatureId };
+
+        // Two shapes rather than one predicate carrying a null check: an absent narrowing is the
+        // absence of a condition, and writing it as a comparison against a captured null asks the
+        // translator to fold something it has no reason to.
+        if (featureIds is not null)
+        {
+            all = all.Where(pair => featureIds.Contains(pair.FeatureId!.Value));
+        }
+
+        return all.Select(pair => new TripFeaturePair(pair.EntityId!.Value, pair.FeatureId!.Value));
     }
 
     /// <summary>

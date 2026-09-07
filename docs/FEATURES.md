@@ -153,6 +153,23 @@ feature and walkthroughs of whole jobs.
   head* — so nobody has to invent a job to record a circumstance. That detail is part of the trip
   and goes no further than the trip does: you cannot search for the trips somebody led, because that
   is a question about a person, assembled out of records the asker may never be allowed to read.
+- **Finding the trips you want, and saying what you found** — the trip list is not one search box.
+  You narrow it by kind of trip, by lifecycle state, by who may read it, by whether anything went
+  wrong, by who was there and by the area worked in; several values in one of those means *any of
+  them*, and different ones together means *all of them*. Beside every choice is the number of trips
+  it would leave you with — counted over the trips **you** may read, so two people legitimately see
+  different numbers beside the same option and neither is being misled. Above the table, a plain
+  count of how many the filter left out of how many there are, so a narrowing is never a mystery.
+  The whole filter sits in the address, so a view is a link you can send somebody and the back button
+  walks the views you chose. You can arrange the result into groups, two levels deep — by year, kind,
+  state, audience, incident, area or person — each group saying how many trips, over what span of
+  dates, the commonest kinds and the people who appear most, with their counts. Where a trip can
+  belong to more than one group at once, the screen says so rather than letting the totals quietly
+  add up to more than the number of trips. And the whole filtered set downloads as a spreadsheet,
+  showing exactly the trips the screen showed and nothing you may not read; if it is too large to
+  hand over whole, the file says so inside itself. Narrowing by a person here is not the same
+  question as asking *which trips did this person lead* — the roles stay inside the trip, and the
+  page of your own trips is still worked out from whoever is signed in and asked about nobody else.
 - **What it all adds up to** — a person, a cave and a club each get their totals: trips, hours
   underground, metres surveyed, first visits, how many people, how many trips had an incident. Every
   one of them is counted **over the trips you may read**, and the screen says so, because two people
@@ -162,6 +179,17 @@ feature and walkthroughs of whole jobs.
   up an older trip from the archive corrects the figures instead of leaving a stale flag behind.
   Any of the three can be saved as a spreadsheet, which carries exactly what the screen carried and
   says whose totals they are, because a file gets forwarded and read months later.
+- **What a club's trips add up to, on one page** — from the trip list, one button opens the same
+  trips as charts: how many trips each year, what they were for, where they went and who was on
+  them, largest first. Beside the yearly bars runs the figure a trip log cannot otherwise be asked
+  for — how many distinct areas the trips had reached by the end of each year. A line still climbing
+  says the club is finding new ground; a line flattening under bars that are not says it is going
+  back to ground it already knows. Everything is counted over the trips **you** may read, and each
+  card's title says which trips it is drawing, because you can switch between the filter you came in
+  with and everything you may read, and a title that did not move with the switch would be a lie.
+  Where a trip counts into more than one bar — it went to two areas, it had four people — the page
+  says so, and where there are more names than bars it says how many it is showing out of how many
+  there are.
 - **A trip that has not happened yet asks people, and the answers keep their own order** — a trip's
   page has a list of who was asked and what each of them said: coming, not coming, or not answered
   yet, with a line of their own beside it. Whoever may read the trip answers for themselves; whoever
