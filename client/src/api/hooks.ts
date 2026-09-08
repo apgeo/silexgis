@@ -1572,56 +1572,13 @@ export function useCreateFeatureFromLibraryPhoto() {
  * A list of a neighbouring library is a way of looking through pictures rather than a second map;
  * where each was taken is the map's question, and the map is the surface that answers it.
  */
-export interface LibraryPhotograph {
-  photographId: string;
-  reference: string;
-  title: string | null;
-  takenAt: string | null;
-  /** `image`, `video`, or null meaning the library did not say. Null never means image. */
-  kind: string | null;
-}
+export type LibraryPhotograph = components['schemas']['LibraryPhotographDto'];
 
 /** One page of a neighbouring library, and the few things a grid needs to explain itself. */
-export interface LibraryPhotographPage {
-  source: LibraryPhotoSource;
-  libraryName: string;
-  items: LibraryPhotograph[];
-  page: number;
-  pageSize: number;
-  /**
-   * How many photographs **the library** holds for this request, or null when it publishes no way
-   * to ask. Never a number this application worked out: a surface reading null says the total is
-   * unknown rather than showing a guess a reader cannot tell from a fact.
-   */
-  total: number | null;
-  hasMore: boolean;
-  /** The page asked for was larger than this installation will ask a library for. */
-  pageSizeCapped: boolean;
-  picturesAvailable: boolean;
-  pictureUrlTemplate: string | null;
-  readAt: string;
-}
+export type LibraryPhotographPage = components['schemas']['LibraryPhotographPageDto'];
 
 /** One photograph in full, as far as the library that holds it will say. */
-export interface LibraryPhotographDetail {
-  source: LibraryPhotoSource;
-  libraryName: string;
-  photographId: string;
-  reference: string;
-  title: string | null;
-  description: string | null;
-  takenAt: string | null;
-  kind: string | null;
-  cameraMake: string | null;
-  cameraModel: string | null;
-  lens: string | null;
-  aperture: number | null;
-  shutterSpeed: string | null;
-  iso: number | null;
-  focalLengthMm: number | null;
-  picturesAvailable: boolean;
-  pictureUrlTemplate: string | null;
-}
+export type LibraryPhotographDetail = components['schemas']['LibraryPhotographDetailDto'];
 
 /**
  * What a page of a library is asked for. No rectangle, by construction — and no words either:
@@ -1713,38 +1670,7 @@ export interface LibrarySearchQuery {
  * running API.
  * </p>
  */
-export interface LibraryPhotographSearchPage {
-  source: LibraryPhotoSource;
-  libraryName: string;
-  /**
-   * Which of the two questions was put, decided by which product answered — each offers exactly
-   * one search. Never a report of what the far side is currently able to do: whether a library
-   * that ranks by meaning has its picture recognition switched on is readable only by an
-   * administrator of that product, and nothing here pretends to know it.
-   */
-  matching: LibrarySearchMatching;
-  /**
-   * The words actually put to the library, which are not always the words that were typed: one of
-   * the two products reads a colon as naming one of its own fields, so the separators come out
-   * before the text is sent. Shown when it differs from the box, because otherwise the answer is
-   * to a question the reader cannot see. Empty when the reduction left nothing, which is the one
-   * case where no library was asked at all.
-   */
-  searched: string;
-  items: LibraryPhotograph[];
-  page: number;
-  pageSize: number;
-  /**
-   * Whether the library says the answer continues. For a ranking that means the ordering goes on,
-   * not that more photographs matched — nothing was matched.
-   */
-  hasMore: boolean;
-  pageSizeCapped: boolean;
-  picturesAvailable: boolean;
-  pictureUrlTemplate: string | null;
-  /** When the library was read, or null when none was asked — see `searched`. */
-  readAt: string | null;
-}
+export type LibraryPhotographSearchPage = components['schemas']['LibraryPhotographSearchPageDto'];
 
 /** The address of one page of one search. */
 function searchUrl(source: LibraryPhotoSource, query: LibrarySearchQuery): string {

@@ -7732,6 +7732,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/photo-libraries/{source}/photographs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page of the photographs one neighbouring library holds, newest first. Carries no position of any kind and takes no rectangle and no words. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryPhotographPageDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/photographs/{photographId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everything one neighbouring library will say about one photograph it holds, except where it was taken. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    source: string;
+                    photographId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryPhotographDetailDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page of what a neighbouring library makes of a set of words, and which of the two questions it answered — matching text, or ordering by meaning. No total: neither product counts what a sentence matches. */
+        get: {
+            parameters: {
+                query?: {
+                    q?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryPhotographSearchPageDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/photo-libraries/{source}/photographs/{reference}/feature": {
         parameters: {
             query?: never;
@@ -18990,6 +19112,71 @@ export interface components {
             /** Format: int32 */
             omittedCount: number;
         };
+        LibraryPhotographDetailDto: {
+            source: string;
+            libraryName: string;
+            photographId: string;
+            reference: string;
+            title: null | string;
+            description: null | string;
+            /** Format: date-time */
+            takenAt: null | string;
+            kind: null | string;
+            cameraMake: null | string;
+            cameraModel: null | string;
+            lens: null | string;
+            /** Format: double */
+            aperture: null | number;
+            shutterSpeed: null | string;
+            /** Format: int32 */
+            iso: null | number;
+            /** Format: double */
+            focalLengthMm: null | number;
+            picturesAvailable: boolean;
+            pictureUrlTemplate: null | string;
+        };
+        LibraryPhotographDto: {
+            photographId: string;
+            reference: string;
+            title: null | string;
+            /** Format: date-time */
+            takenAt: null | string;
+            kind: null | string;
+        };
+        LibraryPhotographPageDto: {
+            source: string;
+            libraryName: string;
+            items: components["schemas"]["LibraryPhotographDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            total: null | number;
+            hasMore: boolean;
+            pageSizeCapped: boolean;
+            picturesAvailable: boolean;
+            pictureUrlTemplate: null | string;
+            /** Format: date-time */
+            readAt: string;
+        };
+        LibraryPhotographSearchPageDto: {
+            source: string;
+            libraryName: string;
+            matching: string;
+            searched: string;
+            items: components["schemas"]["LibraryPhotographDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            hasMore: boolean;
+            pageSizeCapped: boolean;
+            picturesAvailable: boolean;
+            pictureUrlTemplate: null | string;
+            /** Format: date-time */
+            readAt: null | string;
+        };
         LinkKindDto: {
             /** Format: int64 */
             id: number;
@@ -20030,11 +20217,14 @@ export interface components {
         PhotoLibraryProviderDto: {
             source: string;
             name: string;
+            search: string;
             configured: boolean;
             health: components["schemas"]["PhotoLibraryHealthDto"];
         };
         PhotoLibraryStatusDto: {
             mayRead: boolean;
+            /** Format: int32 */
+            maxSearchLength: number;
             providers: components["schemas"]["PhotoLibraryProviderDto"][];
             unconfigured: components["schemas"]["PhotoLibraryProviderDto"][];
         };
