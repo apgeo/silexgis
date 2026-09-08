@@ -44,19 +44,43 @@ function searched(page: LibraryPage): page is LibraryPhotographSearchPage {
 export type BrowseState =
   | 'loading'
   | 'refused'
+  | 'credentialRefused'
+  | 'notUnderstood'
   | 'searchTooLong'
+  | 'pageTooDeep'
   | 'silent'
   | 'empty'
   | 'endOfList'
   | 'photographs';
 
 /**
- * The refusal this application answers with when it will not put a search to a library at all.
+ * The refusals and failures this screen tells apart, by the stable code each carries.
  *
- * Read from the refusal's own code rather than matched out of its sentence, which is prose written
- * for a person and may be reworded or translated without anything here noticing.
+ * <p>
+ * Read from the code rather than matched out of the sentence beside it, which is prose written for
+ * a person and may be reworded or translated without anything here noticing — and never from the
+ * status, which is the same for most of these: a library that refused this installation's
+ * credential and a library that is stopped both reach the browser as a 503.
+ * </p>
+ * <p>
+ * That last pair is the whole reason this list is longer than one entry. "The library did not
+ * answer; it may be stopped, or still starting up" is the right sentence for exactly one of these
+ * and sends an administrator to restart a healthy container for the other, whose fix is to issue a
+ * new credential. The far side answering something this build cannot read is a third thing again —
+ * a contract that changed, or a defect on this side — and reading as an outage it would be looked
+ * for in the wrong place entirely.
+ * </p>
  */
-const SearchTooLong = 'photo_library.search_too_long';
+const Codes = {
+  /** This application would not put the words to any library: they were longer than it will send. */
+  searchTooLong: 'photo_library.search_too_long',
+  /** A page further into the library than this installation will ask for. */
+  pageTooDeep: 'photo_library.page_too_deep',
+  /** The library refused the credential this installation is configured with. */
+  credentialRefused: 'photo_library.unauthorized',
+  /** The library answered, and not with anything this build could read. */
+  notUnderstood: 'photo_library.rejected',
+} as const;
 
 export interface BrowseStateInput {
   /** Nothing has arrived yet and nothing failed. */
@@ -68,38 +92,56 @@ export interface BrowseStateInput {
 }
 
 /**
- * Which of the four this is.
+ * Which of these this is.
  *
  * <p>
- * A failure wins over a page in hand, and that is deliberate: while paging keeps the previous
- * page on screen, a page that failed to turn must not read as the library answering. What the
- * screen then shows is the words for the failure above whatever is still drawn, which is the
- * honest description of exactly that situation.
+ * A failure wins over a page in hand, and that is deliberate: while paging keeps the previous page
+ * on screen, a page that failed to turn must not read as the library answering. The screen then
+ * shows the failure instead of the grid, because what is still in hand is the answer to a page the
+ * reader has already left, and leaving it drawn under a heading that says nothing about which page
+ * it is would be the same conflation from the other direction.
  * </p>
  * <p>
- * A refusal is told apart from a silence because the two send a reader somewhere completely
- * different: one is a right they do not have, and the other is a container somebody has to look
- * at. Read from the refusal's status rather than from its sentence, which is prose written for a
- * person and may be reworded without anything here noticing.
- * </p>
- * <p>
- * And both are told apart from a question this application declined to put to the library at all,
- * which is the one state where nothing is wrong with anything.
+ * Every state below the first two is here because collapsing it into "the library did not answer"
+ * sends somebody to the wrong place: to a container that is running for a credential that was
+ * refused, to a library for a question this application declined to put to it, and to a fault
+ * nobody has for a request this application built out of range.
  * </p>
  */
 export function browseState({ isPending, error, page }: BrowseStateInput): BrowseState {
   if (error) {
-    if (error instanceof ApiError && error.code === SearchTooLong) {
-      // The library was never asked. A search that outgrew what this installation will put in a
-      // request to a neighbour arrives here from an address somebody was given rather than from
-      // the box, and a screen reporting "the library did not answer" for a question nobody put to
-      // it sends a reader to look at a container that is fine.
-      return 'searchTooLong';
+    if (error instanceof ApiError && (error.status === 403 || error.status === 401)) {
+      // A right this account does not have, which is nothing to do with the library.
+      return 'refused';
     }
 
-    return error instanceof ApiError && (error.status === 403 || error.status === 401)
-      ? 'refused'
-      : 'silent';
+    if (error instanceof ApiError) {
+      switch (error.code) {
+        // The library was never asked. A search that outgrew what this installation will put in a
+        // request to a neighbour arrives here from an address somebody was given rather than from
+        // the box, and a screen reporting "the library did not answer" for a question nobody put
+        // to it sends a reader to look at a container that is fine.
+        case Codes.searchTooLong:
+          return 'searchTooLong';
+        // Nor was it asked for this one: a page beginning further into the library than this
+        // installation will ask for. Also not reachable from the controls, which step one page at
+        // a time.
+        case Codes.pageTooDeep:
+          return 'pageTooDeep';
+        // It answered, and refused the credential this whole installation reaches it with. The
+        // fix is a new credential, and no amount of restarting produces one.
+        case Codes.credentialRefused:
+          return 'credentialRefused';
+        // It answered something this build could not read, which is a contract that moved or a
+        // defect on this side — and in neither case a library that is down.
+        case Codes.notUnderstood:
+          return 'notUnderstood';
+        default:
+          break;
+      }
+    }
+
+    return 'silent';
   }
 
   if (isPending || !page) {
@@ -227,8 +269,21 @@ export function countLine(page: LibraryPage): CountLine | null {
   }
 
   if (searched(page)) {
+    // A ranking and a set of matches are counted in the same numbers and mean different things, so
+    // they are not described in the same sentence. "There are more" over an ordering of the whole
+    // library reads as "more matched", and nothing matched: the ordering simply continues, and it
+    // continues for as long as the library holds anything — so a reader can page for ever under a
+    // sentence that sounds like a promise of relevance. Said as what it is instead.
+    const ranked = page.matching === 'meaning';
+
     return {
-      key: page.hasMore ? 'libraryPhotos.search.showingMore' : 'libraryPhotos.search.showing',
+      key: ranked
+        ? page.hasMore
+          ? 'libraryPhotos.search.showingRankedMore'
+          : 'libraryPhotos.search.showingRanked'
+        : page.hasMore
+          ? 'libraryPhotos.search.showingMore'
+          : 'libraryPhotos.search.showing',
       values: { count: shown },
     };
   }
@@ -258,6 +313,10 @@ export function countLine(page: LibraryPage): CountLine | null {
 export interface SearchWording {
   placeholder: string;
   explains: string;
+  /** What an answer with nothing in it means, which is not the same thing for the two products. */
+  empty: string;
+  /** What a search that failed means, which is also not the same thing for the two products. */
+  silent: string;
 }
 
 export function searchWording(matching: LibrarySearchMatching): SearchWording {
@@ -265,9 +324,97 @@ export function searchWording(matching: LibrarySearchMatching): SearchWording {
     ? {
         placeholder: 'libraryPhotos.search.placeholderMeaning',
         explains: 'libraryPhotos.search.byMeaning',
+        // An ordering of the whole library always has a front, so an answer with nothing at the
+        // front of it is not a statement about the words at all: it means the library ordered
+        // nothing, which is what a library whose picture recognition is switched off does. Nothing
+        // here claims to know that it is switched off — that is readable only by an administrator
+        // of that product — but sending a reader away to think of better words would be the one
+        // reading the answer rules out.
+        empty: 'libraryPhotos.search.noRanking',
+        // And a search that failed against such a library has a second ordinary cause the browse
+        // route does not have, so the sentence names both rather than the one that sends an
+        // operator to restart a container that is running perfectly.
+        silent: 'libraryPhotos.search.silentByMeaning',
       }
     : {
         placeholder: 'libraryPhotos.search.placeholderText',
         explains: 'libraryPhotos.search.textOnly',
+        empty: 'libraryPhotos.search.empty',
+        silent: 'libraryPhotos.browse.silent',
       };
+}
+
+/**
+ * What the empty grid says it is, which is four different facts drawn the same way.
+ *
+ * A page past the end of a listing that holds plenty; a library that holds nothing at all; a
+ * search that matched nothing, which is about the words rather than about the library; and an
+ * ordering with nothing in it, which is about neither and means the library ranked nothing. The
+ * last one is arrived at from the words alone in the fifth case below: a search whose text was
+ * reduced to nothing this product could search for was never put to any library.
+ */
+export function emptyMessage(
+  state: BrowseState,
+  page: LibraryPage | undefined,
+  wording: SearchWording,
+): string {
+  if (state === 'endOfList') {
+    return 'libraryPhotos.browse.pastEnd';
+  }
+
+  if (page && searched(page)) {
+    return page.searched === '' ? 'libraryPhotos.search.nothingLeft' : wording.empty;
+  }
+
+  return 'libraryPhotos.browse.empty';
+}
+
+/**
+ * The one thing said above the grid when something went wrong, and how loudly.
+ *
+ * <p>
+ * Here rather than as five conditions in the middle of markup, because which sentence a failure
+ * gets is the whole of what this screen owes an operator and it is decided by two facts — the
+ * state, and which of the two questions was being asked. A wrong sentence here does not look like
+ * a defect: it looks like a working screen describing a different fault, and somebody spends an
+ * afternoon on the container it named.
+ * </p>
+ */
+export interface BrowseProblem {
+  key: string;
+  values?: Record<string, number>;
+  kind: 'error' | 'warning' | 'info';
+}
+
+export function problemOf(
+  state: BrowseState,
+  searching: boolean,
+  wording: SearchWording,
+  maxSearchLength: number,
+): BrowseProblem | null {
+  switch (state) {
+    case 'refused':
+      return { key: 'libraryPhotos.refusals.notAllowed', kind: 'error' };
+    case 'credentialRefused':
+      return { key: 'libraryPhotos.health.credentialRefused', kind: 'error' };
+    case 'notUnderstood':
+      return { key: 'libraryPhotos.health.unreadable', kind: 'warning' };
+    case 'searchTooLong':
+      // Nothing is wrong with anything: the box is still there to clear, and the library was never
+      // asked. The number is the server's own, so the sentence cannot outlive the limit it states.
+      return {
+        key: 'libraryPhotos.search.tooLong',
+        values: { count: maxSearchLength },
+        kind: 'info',
+      };
+    case 'pageTooDeep':
+      return { key: 'libraryPhotos.browse.pageTooDeep', kind: 'info' };
+    case 'silent':
+      // A failed search of a library that ranks by meaning has a cause a listing cannot have, and
+      // the sentence for it names both possibilities instead of the one that sends an operator to
+      // a healthy container.
+      return { key: searching ? wording.silent : 'libraryPhotos.browse.silent', kind: 'warning' };
+    default:
+      return null;
+  }
 }

@@ -36,8 +36,16 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// anything should be.
 /// </para>
 /// </remarks>
+/// <param name="MaxSearchLength">
+/// The longest run of words this installation will put in a request to a library. Published rather
+/// than left for a screen to hold a copy of, because a screen that both stops the box short of the
+/// limit and prints the limit in the sentence explaining a refusal has two copies of one number —
+/// and the day the server's moves, the sentence goes on stating the old one on the surface whose
+/// whole argument is that its numbers can be checked.
+/// </param>
 public sealed record PhotoLibraryStatusDto(
     bool MayRead,
+    int MaxSearchLength,
     IReadOnlyList<PhotoLibraryProviderDto> Providers,
     IReadOnlyList<PhotoLibraryProviderDto> Unconfigured);
 

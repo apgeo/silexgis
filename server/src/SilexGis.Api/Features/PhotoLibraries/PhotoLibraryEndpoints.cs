@@ -113,7 +113,8 @@ public static class PhotoLibraryEndpoints
 
         if (!PhotoLibraryAudienceRule.MayRead(ctx, options.Value.Audience))
         {
-            return TypedResults.Ok(new PhotoLibraryStatusDto(false, [], []));
+            return TypedResults.Ok(new PhotoLibraryStatusDto(
+                false, PhotoLibrarySearchEndpoints.MaxSearchLength, [], []));
         }
 
         var configured = libraries.Where(library => library.IsConfigured).ToList();
@@ -148,7 +149,8 @@ public static class PhotoLibraryEndpoints
                     PhotoLibraryHealthDto.Of(LibraryHealth.NotAsked, picturesAvailable: false))));
         }
 
-        return TypedResults.Ok(new PhotoLibraryStatusDto(true, providers, unconfigured));
+        return TypedResults.Ok(new PhotoLibraryStatusDto(
+            true, PhotoLibrarySearchEndpoints.MaxSearchLength, providers, unconfigured));
     }
 
     /// <summary>

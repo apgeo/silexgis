@@ -70,6 +70,48 @@ public static class PhotoLibraryBrowseEndpoints
     /// </remarks>
     public const int MaxPageSize = 200;
 
+    /// <summary>
+    /// A page so far into a library that this installation will not ask for it.
+    /// </summary>
+    /// <remarks>
+    /// One of these two products documents a hundred thousand as the largest offset it will accept,
+    /// and this refuses a page beyond that rather than sending it. The refusal is the point: an
+    /// out-of-range request sent anyway comes back as a failure from the far side, and a failure
+    /// from the far side is reported to a reader as the library not answering — which sends an
+    /// operator to look at a container that is working, for a request this application knew was out
+    /// of range before it built it. Unreachable from the screen, which only ever steps one page at
+    /// a time; reachable from an address somebody typed or was handed.
+    /// </remarks>
+    public const int MaxOffset = 100_000;
+
+    /// <summary>
+    /// A page number beyond what this installation will ask a library for.
+    /// </summary>
+    public const string PageTooDeepCode = "photo_library.page_too_deep";
+
+    /// <summary>
+    /// Whether this page begins further into the library than this installation will ask, with the
+    /// refusal to answer with when it does.
+    /// </summary>
+    /// <remarks>
+    /// Checked on the page's first photograph rather than on the page number alone, because how far
+    /// in a page number reaches depends on how large the pages are: page 500 of sixty and page 500
+    /// of two hundred are different distances into the same library.
+    ///
+    /// <para>
+    /// Public because both routes that page through a library decide it here, and because it is
+    /// pinned by a test: the failure it prevents is invisible in an answer, since a request that
+    /// went out and came back refused looks from the outside like a library that is down.
+    /// </para>
+    /// </remarks>
+    public static ProblemHttpResult? TooDeep(int page, int size) =>
+        (page - 1L) * size > MaxOffset
+            ? ApiProblems.BadRequest(
+                PageTooDeepCode,
+                $"This installation asks a photo library for at most the first {MaxOffset} "
+                + "photographs, and that page begins past them.")
+            : null;
+
     public static RouteGroupBuilder MapPhotoLibraryBrowseEndpoints(this RouteGroupBuilder api)
     {
         ArgumentNullException.ThrowIfNull(api);
@@ -146,6 +188,11 @@ public static class PhotoLibraryBrowseEndpoints
         var wanted = pageSize ?? DefaultPageSize;
         var size = Math.Clamp(wanted, 1, MaxPageSize);
         var number = Math.Max(1, page ?? 1);
+
+        if (TooDeep(number, size) is { } tooDeep)
+        {
+            return tooDeep;
+        }
 
         LibraryPhotoListPage answer;
         try

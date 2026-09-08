@@ -36,12 +36,26 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// the words describe.
 ///
 /// <para>
-/// Set from the question this integration put and the answer it got, rather than from anything the
-/// library says about itself: on one of the two products, whether picture recognition is switched
-/// on at all is readable only by an administrator of that product, and a credential belonging to
-/// this installation is not one. So this reports what happened, which is the only thing this
-/// application is in a position to know.
+/// This is which question was put, decided by the route that was called — each product offers
+/// exactly one search — and not by anything the library reported about itself. Nothing probes
+/// whether the far side is currently able to do what its contract offers, and that is the honest
+/// limit rather than a gap: on the product that ranks by meaning, whether picture recognition is
+/// switched on is readable only by an administrator of that product, and the one credential this
+/// installation holds need not be one.
 /// </para>
+/// <para>
+/// So this never quietly changes to the other value. A library that ranks by meaning with its
+/// recognition switched off does not start matching text instead — it ranks nothing, or refuses the
+/// question — and the surface says which of those happened rather than describing it as a different
+/// kind of search.
+/// </para>
+/// </param>
+/// <param name="Searched">
+/// The words actually put to the library. Not always the words that were typed: one of the two
+/// products reads a colon as naming one of its own fields, so the separators come out before the
+/// text is sent. A screen showing what was typed over an answer to something else is the failure
+/// this exists to prevent. Empty when the reduction left nothing, which is the one case where no
+/// library was asked at all.
 /// </param>
 /// <param name="Items">What came back, in the order the library put it — which for a ranking is the order that is the answer.</param>
 /// <param name="Page">Which page this is, one-based.</param>
@@ -59,11 +73,17 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// Where one photograph's rendering is fetched from, with <c>{reference}</c> and <c>{size}</c> to
 /// substitute. Null when this library must not be asked for pictures.
 /// </param>
-/// <param name="ReadAt">When this answer was read from the library.</param>
+/// <param name="ReadAt">
+/// When this answer was read from the library, or null when no library was asked — which is what
+/// happens when the words reduced to nothing this product could search for. A time stamped for a
+/// reading that never happened would be a false statement on the one line a reader would use to
+/// decide whether the far side was reached at all.
+/// </param>
 public sealed record LibraryPhotographSearchPageDto(
     string Source,
     string LibraryName,
     string Matching,
+    string Searched,
     IReadOnlyList<LibraryPhotographDto> Items,
     int Page,
     int PageSize,
@@ -71,7 +91,7 @@ public sealed record LibraryPhotographSearchPageDto(
     bool PageSizeCapped,
     bool PicturesAvailable,
     string? PictureUrlTemplate,
-    DateTimeOffset ReadAt)
+    DateTimeOffset? ReadAt)
 {
     public static LibraryPhotographSearchPageDto Of(
         LibraryPhotoSearchPage answer,
@@ -88,6 +108,7 @@ public sealed record LibraryPhotographSearchPageDto(
             PhotoLibrarySlugs.Slug(source),
             PhotoLibrarySlugs.Name(source),
             LibraryPhotographMapping.MatchingSlug(answer.Matching),
+            answer.Searched,
             [.. answer.Photos.Select(LibraryPhotographMapping.Of)],
             page,
             pageSize,

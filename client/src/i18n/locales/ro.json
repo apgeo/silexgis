@@ -4033,7 +4033,8 @@
       "readAt": "Citit din fototecă la {{when}}",
       "previous": "Înapoi",
       "next": "Înainte",
-      "page": "Pagina {{page}}"
+      "page": "Pagina {{page}}",
+      "pageTooDeep": "Acea pagină este mai adânc în fototecă decât cere această instalare, așa că nu s-a cerut nimic. Întoarce-te spre prima pagină."
     },
     "search": {
       "placeholderText": "Caută în titluri, descrieri și etichete",
@@ -4043,7 +4044,13 @@
       "showing": "Se afișează {{count}} fotografii",
       "showingMore": "Se afișează {{count}} fotografii, iar fototeca spune că mai sunt și altele",
       "empty": "Nu a venit nimic pentru acele cuvinte. Este vorba despre cuvinte, nu despre fototecă, care poate conține multe.",
-      "tooLong": "O căutare aici are cel mult {{count}} caractere, iar aceasta a fost mai lungă, așa că nu s-a cerut nimic fototecii."
+      "tooLong": "O căutare aici are cel mult {{count}} caractere, iar aceasta a fost mai lungă, așa că nu s-a cerut nimic fototecii.",
+      "showingRanked": "Se afișează {{count}} fotografii din fruntea ordinii acestei fototeci",
+      "showingRankedMore": "Se afișează {{count}} fotografii din fruntea ordinii acestei fototeci, care continuă dincolo de ele — tot ce conține fototeca se află undeva în ea, deci paginile următoare nu sunt alte potriviri.",
+      "noRanking": "Această fototecă nu a pus nimic în ordine pentru acele cuvinte. O ordine are întotdeauna o frunte, deci nu este vorba despre cuvinte: fototeca nu a ordonat nimic, ceea ce se întâmplă când recunoașterea imaginilor este oprită.",
+      "silentByMeaning": "Această fototecă nu a răspuns căutării. Recunoașterea imaginilor poate fi oprită, caz în care nu poate răspunde deloc cuvintelor după înțeles — sau fototeca poate fi oprită ori încă pornește.",
+      "reduced": "Această fototecă citește două puncte ca numind unul dintre câmpurile ei, așa că i s-a cerut: {{words}}",
+      "nothingLeft": "Nu au mai rămas cuvinte după scoaterea separatorilor de câmp, așa că nu s-a cerut nimic niciunei fototeci."
     },
     "detail": {
       "title": "Fotografie",

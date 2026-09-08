@@ -4033,7 +4033,8 @@
       "readAt": "Read from the library {{when}}",
       "previous": "Previous",
       "next": "Next",
-      "page": "Page {{page}}"
+      "page": "Page {{page}}",
+      "pageTooDeep": "That page is further into the library than this installation will ask for, so nothing was asked. Go back towards the first page."
     },
     "search": {
       "placeholderText": "Search titles, captions and labels",
@@ -4043,7 +4044,13 @@
       "showing": "Showing {{count}} photographs",
       "showingMore": "Showing {{count}} photographs, and the library says there are more",
       "empty": "Nothing came back for those words. That is about the words rather than about the library, which may hold plenty.",
-      "tooLong": "A search here is at most {{count}} characters and this one was longer, so nothing was asked of the library."
+      "tooLong": "A search here is at most {{count}} characters and this one was longer, so nothing was asked of the library.",
+      "showingRanked": "Showing {{count}} pictures from the front of this library's ordering",
+      "showingRankedMore": "Showing {{count}} pictures from the front of this library's ordering, which continues past them — everything the library holds is somewhere in it, so further pages are not further matches.",
+      "noRanking": "This library put nothing in order for those words. An ordering always has a front, so this is not about the words: the library ranked nothing at all, which is what happens when its picture recognition is switched off.",
+      "silentByMeaning": "This library did not answer the search. Its picture recognition may be switched off, in which case it cannot answer words by meaning at all — or the library may be stopped, or still starting up.",
+      "reduced": "This library reads a colon as naming one of its own fields, so it was asked for: {{words}}",
+      "nothingLeft": "There were no words left once the field separators were taken out, so no library was asked anything."
     },
     "detail": {
       "title": "Photograph",

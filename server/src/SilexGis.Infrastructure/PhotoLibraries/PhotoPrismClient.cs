@@ -380,14 +380,23 @@ public sealed class PhotoPrismClient(
             // would have gone out is "give me the library" — which would come back as a full page
             // under a heading saying it matched what they typed. An empty answer is the honest one:
             // there are no words here to match anything with.
+            //
+            // No time is stamped on it. Nothing was read, no socket was opened, and a page saying
+            // when it was read from the library would be a false statement of fact on the one line
+            // a reader would use to decide whether the library was reached at all.
             return new LibraryPhotoSearchPage(
-                [], LibrarySearchMatching.Text, HasMore: false, DateTimeOffset.UtcNow);
+                [], LibrarySearchMatching.Text, Searched: string.Empty, HasMore: false, ReadAt: null);
         }
 
         var answered = await PageAsync(search.Page, search.PageSize, words, ct);
 
+        // The words as they were put, which is not always the words as they were typed: the
+        // reduction below takes out the separator this product reads as naming one of its own
+        // fields. Published so a surface can say what was asked when it differs from what is in the
+        // box, rather than leaving a reader to conclude this application disagrees with the
+        // product's own search box for no reason it can see.
         return new LibraryPhotoSearchPage(
-            answered.Photos, LibrarySearchMatching.Text, answered.HasMore, DateTimeOffset.UtcNow);
+            answered.Photos, LibrarySearchMatching.Text, words, answered.HasMore, DateTimeOffset.UtcNow);
     }
 
     /// <summary>
@@ -472,6 +481,23 @@ public sealed class PhotoPrismClient(
                 }
             }
 
+            // Rows this build cannot name both a photograph and a picture from are dropped, and a
+            // page that lost rows shows fewer than the library sent. Said out loud rather than left
+            // to be inferred from a short page: a page of sixty that arrives as five looks exactly
+            // like a small library, and if a version change over there renames a field this reads,
+            // whole pages empty while nothing anywhere says an assumption stopped holding.
+            if (photos.Count < handedOver)
+            {
+                logger.LogWarning(
+                    "The {Source} photo library answered {Question} with {HandedOver} rows, of which "
+                    + "{Unreadable} named no photograph and picture this build could use; they are "
+                    + "not shown.",
+                    Source,
+                    words is null ? "a listing" : "a search",
+                    handedOver,
+                    handedOver - photos.Count);
+            }
+
             // A full page is a page that may have had more behind it, which is the safe way round:
             // offering a next page that turns out empty costs one request, while withholding one
             // hides the rest of the library behind a control that is not there.
@@ -507,11 +533,14 @@ public sealed class PhotoPrismClient(
     /// </para>
     /// <para>
     /// So the separator that makes a pair is taken out and what is left is words. Nothing is
-    /// refused and nothing is reported: somebody who typed a colon was searching for something, and
-    /// on a surface that has no filters the honest reading of their text is the words in it. Null
-    /// when nothing is left, which the caller answers with nothing found rather than by asking for
-    /// the whole library — words that were never sent must not come back as a page that looks like
-    /// they matched everything.
+    /// refused: somebody who typed a colon was searching for something, and on a surface that has
+    /// no filters the honest reading of their text is the words in it. What is left is carried back
+    /// on the answer, though, because a search that was quietly rewritten on the way out answers a
+    /// different question from the one still showing in the box — and a person who knows this
+    /// product's own grammar would otherwise have no way to learn why it behaves differently here.
+    /// Null when nothing is left, which the caller answers with nothing found rather than by asking
+    /// for the whole library — words that were never sent must not come back as a page that looks
+    /// like they matched everything.
     /// </para>
     /// </remarks>
     private static string? WordsOnly(string? text)

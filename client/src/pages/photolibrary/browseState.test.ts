@@ -2,7 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../api/client.ts';
 import type { LibraryPhotographPage, LibraryPhotographSearchPage } from '../../api/hooks.ts';
-import { browseState, countLine, pagingOf, searchWording, stepPage } from './browseState.ts';
+import {
+  browseState,
+  countLine,
+  emptyMessage,
+  pagingOf,
+  problemOf,
+  searchWording,
+  stepPage,
+} from './browseState.ts';
 
 /**
  * What a page of a neighbouring library is able to say, and what its paging may offer.
@@ -42,7 +50,7 @@ const answer = (
   const { items, total: _total, ...rest } = page();
   void _total;
 
-  return { ...rest, matching: 'text', items, ...over };
+  return { ...rest, matching: 'text', searched: 'rope', items, ...over };
 };
 
 describe('what a page of a neighbouring library can say', () => {
@@ -99,10 +107,60 @@ describe('what a page of a neighbouring library can say', () => {
     expect(
       browseState({
         isPending: false,
-        error: new ApiError(400, 'photo_library.rejected'),
+        error: new ApiError(400, 'photo_library.unavailable'),
         page: undefined,
       }),
     ).toBe('silent');
+  });
+
+  /**
+   * The three failures that all arrive as the same status and mean completely different things.
+   *
+   * Both endpoints answer every failure of a neighbouring library with the same code, so what
+   * separates them is the code each carries. A credential the far side refused rendered as "it may
+   * be stopped, or still starting up" is the inverse of the failure this split exists to prevent:
+   * an administrator restarts a container that is running perfectly, and the fix — issuing a new
+   * credential — is the one thing the sentence did not mention.
+   */
+  it('tells a refused credential from an unreadable answer from a library that is down', () => {
+    expect(
+      browseState({
+        isPending: false,
+        error: new ApiError(503, 'photo_library.unauthorized'),
+        page: undefined,
+      }),
+    ).toBe('credentialRefused');
+
+    expect(
+      browseState({
+        isPending: false,
+        error: new ApiError(503, 'photo_library.rejected'),
+        page: undefined,
+      }),
+    ).toBe('notUnderstood');
+
+    expect(
+      browseState({
+        isPending: false,
+        error: new ApiError(503, 'photo_library.unavailable'),
+        page: undefined,
+      }),
+    ).toBe('silent');
+  });
+
+  /**
+   * A page this application declined to ask for is not a library that failed. Reachable only from
+   * an address somebody typed, and reported as the neighbour being down it would send an operator
+   * to look for a fault in a container that answered nothing because nothing was sent to it.
+   */
+  it('tells a page it would not ask for from a library that did not answer', () => {
+    expect(
+      browseState({
+        isPending: false,
+        error: new ApiError(400, 'photo_library.page_too_deep'),
+        page: undefined,
+      }),
+    ).toBe('pageTooDeep');
   });
 
   /**
@@ -247,6 +305,26 @@ describe('what the line above the grid says', () => {
     });
 
     expect(countLine(answer({ matching: 'meaning', hasMore: true }))).toEqual({
+      key: 'libraryPhotos.search.showingRankedMore',
+      values: { count: 1 },
+    });
+  });
+
+  /**
+   * An ordering that continues is not a set of matches that continues, and the two must not be
+   * described by one sentence. The library that ranks puts everything it holds in the ordering, so
+   * "there are more" is true of every page until the reader has walked the whole library — read as
+   * "more matched", it promises relevance the far side never claimed.
+   */
+  it('says a ranking continues rather than that more matched', () => {
+    expect(countLine(answer({ matching: 'meaning', hasMore: false }))).toEqual({
+      key: 'libraryPhotos.search.showingRanked',
+      values: { count: 1 },
+    });
+
+    // The control: the product that does match text says the other thing, because for it there is
+    // a set of matches and the library really is saying it holds more of them.
+    expect(countLine(answer({ matching: 'text', hasMore: true }))).toEqual({
       key: 'libraryPhotos.search.showingMore',
       values: { count: 1 },
     });
@@ -284,11 +362,104 @@ describe('how a search box describes itself', () => {
     expect(searchWording('text')).toEqual({
       placeholder: 'libraryPhotos.search.placeholderText',
       explains: 'libraryPhotos.search.textOnly',
+      empty: 'libraryPhotos.search.empty',
+      silent: 'libraryPhotos.browse.silent',
     });
 
     expect(searchWording('meaning')).toEqual({
       placeholder: 'libraryPhotos.search.placeholderMeaning',
       explains: 'libraryPhotos.search.byMeaning',
+      empty: 'libraryPhotos.search.noRanking',
+      silent: 'libraryPhotos.search.silentByMeaning',
     });
+  });
+
+  /**
+   * Nothing at the front of an ordering is not a statement about the words.
+   *
+   * The library that ranks puts everything it holds in order of closeness, so the ordering always
+   * has a front: an answer with nothing in it means the library ordered nothing, which is what a
+   * library with its picture recognition switched off does. Told that it is about the words, a
+   * reader spends the afternoon on better words for a library that was never looking at pictures.
+   */
+  it('does not blame the words for an ordering that ranked nothing', () => {
+    expect(emptyMessage('empty', answer({ items: [], matching: 'meaning' }), searchWording('meaning')))
+      .toBe('libraryPhotos.search.noRanking');
+
+    expect(emptyMessage('empty', answer({ items: [], matching: 'text' }), searchWording('text')))
+      .toBe('libraryPhotos.search.empty');
+  });
+
+  /**
+   * Words that were reduced to nothing were put to nobody, so the empty grid says that rather than
+   * reporting an answer no library gave.
+   */
+  it('says when there were no words left to ask anybody about', () => {
+    expect(
+      emptyMessage('empty', answer({ items: [], searched: '' }), searchWording('text')),
+    ).toBe('libraryPhotos.search.nothingLeft');
+  });
+
+  /** A listing keeps its own two sentences, neither of which is a search's. */
+  it('keeps a listing past its end apart from a library that holds nothing', () => {
+    expect(emptyMessage('endOfList', page({ items: [], page: 2 }), searchWording('text')))
+      .toBe('libraryPhotos.browse.pastEnd');
+    expect(emptyMessage('empty', page({ items: [] }), searchWording('text')))
+      .toBe('libraryPhotos.browse.empty');
+  });
+});
+
+/**
+ * The one sentence a failure gets.
+ *
+ * Which one is decided by the state and by which of the two questions was being put, and a wrong
+ * choice here does not look like a defect: it looks like a working screen describing a fault
+ * somebody else has, and the afternoon goes on the container it named.
+ */
+describe('what a failure is told to the reader as', () => {
+  const text = searchWording('text');
+  const meaning = searchWording('meaning');
+
+  it('names the credential when the library refused it, and the container only when it is silent', () => {
+    expect(problemOf('credentialRefused', false, text, 200)?.key)
+      .toBe('libraryPhotos.health.credentialRefused');
+    expect(problemOf('notUnderstood', false, text, 200)?.key)
+      .toBe('libraryPhotos.health.unreadable');
+    expect(problemOf('silent', false, text, 200)?.key).toBe('libraryPhotos.browse.silent');
+    expect(problemOf('refused', false, text, 200)?.key).toBe('libraryPhotos.refusals.notAllowed');
+  });
+
+  /**
+   * A failed search of a library that ranks by meaning has an ordinary cause a listing cannot
+   * have — its picture recognition being switched off — so the sentence names both possibilities
+   * rather than the one that sends an operator to a healthy container.
+   */
+  it('names both causes when a search by meaning fails', () => {
+    expect(problemOf('silent', true, meaning, 200)?.key)
+      .toBe('libraryPhotos.search.silentByMeaning');
+
+    // The control: the same failure of a listing has only the one cause, so it keeps the one
+    // sentence.
+    expect(problemOf('silent', false, meaning, 200)?.key).toBe('libraryPhotos.browse.silent');
+  });
+
+  /**
+   * The length in the sentence is the server's, not a copy kept here. A screen holding its own copy
+   * goes on stating the old number the day the server's moves, on the one surface whose argument is
+   * that its numbers can be checked.
+   */
+  it('states the length the server refused with', () => {
+    expect(problemOf('searchTooLong', true, text, 120)).toEqual({
+      key: 'libraryPhotos.search.tooLong',
+      values: { count: 120 },
+      kind: 'info',
+    });
+  });
+
+  it('says nothing at all while there is nothing wrong', () => {
+    expect(problemOf('photographs', false, text, 200)).toBeNull();
+    expect(problemOf('loading', false, text, 200)).toBeNull();
+    expect(problemOf('empty', false, text, 200)).toBeNull();
+    expect(problemOf('endOfList', false, text, 200)).toBeNull();
   });
 });

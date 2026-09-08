@@ -11,17 +11,18 @@ import {
 } from '../../api/hooks.ts';
 import LibraryPhotoDrawer from '../../components/photolibrary/LibraryPhotoDrawer.tsx';
 import LibraryPhotoGrid from '../../components/photolibrary/LibraryPhotoGrid.tsx';
-import { browseState, countLine, pagingOf, searchWording, stepPage } from './browseState.ts';
+import {
+  browseState,
+  countLine,
+  emptyMessage,
+  pagingOf,
+  problemOf,
+  searchWording,
+  stepPage,
+} from './browseState.ts';
 
 /** Pictures per page. The same number this installation's own gallery shows. */
 const PageSize = 60;
-
-/**
- * The longest search this installation will put in a request to a neighbouring library. The server
- * refuses anything longer, and the box below stops short of it — so the refusal is reachable only
- * from an address somebody was handed, which is where it is answered with a sentence.
- */
-const MaxSearchLength = 200;
 
 /**
  * Looking through a photo library this installation does not own.
@@ -108,8 +109,10 @@ export default function PhotoLibraryPage() {
   }
 
   // An installation that runs none of these products is a supported installation, not a broken
-  // one — so this says what is true rather than showing an empty grid.
-  if (libraries.length === 0 || !source) {
+  // one — so this says what is true rather than showing an empty grid. An answer that never
+  // arrived lands here too, and deliberately: with nothing said about which libraries exist there
+  // is no library to draw and nothing further down has a number it could trust.
+  if (!status || libraries.length === 0 || !source) {
     return (
       <Alert
         type="info"
@@ -135,9 +138,23 @@ export default function PhotoLibraryPage() {
 
   const library = libraries.find((entry) => entry.source === source);
 
-  // What this library does with words decides what the box invites and what its answer is called.
-  // Read from what the server published about the product rather than guessed at from its name.
+  // What this library does with words decides what the box invites, what its answer is called, and
+  // what an empty or failed answer from it means. Read from what the server published about the
+  // product rather than guessed at from its name.
   const wording = searchWording(library?.search ?? 'text');
+
+  // The one sentence a failure gets, decided by the state and by which question was being put. The
+  // length in it is the server's own rather than a second copy kept here: this box both stops short
+  // of the limit and prints it in the sentence explaining the refusal, and two copies of one number
+  // is how a screen goes on stating the old one after the server's has moved.
+  const problem = problemOf(state, searching, wording, status.maxSearchLength);
+
+  // The words as they were actually put to the library, which one of the two products reduces on
+  // the way out. Compared against what is in the address rather than against what is in the box,
+  // because the box may have been typed into again since this answer was asked for.
+  const reduced = data && 'searched' in data && data.searched !== words.trim()
+    ? data.searched
+    : null;
 
   return (
     <div style={{ padding: 24, height: '100%', overflow: 'auto' }}>
@@ -173,7 +190,7 @@ export default function PhotoLibraryPage() {
             empty library. */}
         <Input.Search
           allowClear
-          maxLength={MaxSearchLength}
+          maxLength={status.maxSearchLength}
           placeholder={t(wording.placeholder)}
           defaultValue={words}
           onSearch={(value) => setFilter('q', value || undefined)}
@@ -212,32 +229,32 @@ export default function PhotoLibraryPage() {
         />
       )}
 
-      {state === 'refused' && (
-        <Alert type="error" showIcon message={t('libraryPhotos.refusals.notAllowed')} />
-      )}
-
-      {/* A search this application would not put to any library, being longer than it will put in
-          a request to a neighbour. Not a failure of anything: the box above is still there to
-          clear, and saying "the library did not answer" would send a reader to look at a container
-          that is working perfectly. */}
-      {state === 'searchTooLong' && (
+      {/* One sentence, chosen where the choosing can be checked. Several different things draw an
+          empty screen — a right nobody has, a credential the library refused, an answer this build
+          could not read, a question this application declined to put at all, and a library that is
+          actually stopped — and a surface that renders them as one is why somebody spends an
+          afternoon on a container that was working. */}
+      {problem && (
         <Alert
-          type="info"
+          type={problem.kind}
           showIcon
-          message={t('libraryPhotos.search.tooLong', { count: MaxSearchLength })}
+          style={{ marginBottom: 12 }}
+          message={t(problem.key, problem.values)}
+          data-testid="library-photo-problem"
         />
       )}
 
-      {/* Three answers, never one. A blank page because the library holds nothing matching, a blank
-          page because the library did not answer, and a page still filling are different facts,
-          and a surface that renders all three as emptiness is why somebody spends an afternoon
-          debugging a library that was working. */}
-      {state === 'silent' && (
+      {/* What was actually asked, when it is not what was typed. One of the two products reads a
+          colon as naming one of its own fields, so the separators come out before the words are
+          sent — which is what stops a search box from becoming a way of asking where a photograph
+          was taken. A reader who knows that product's own grammar would otherwise see this
+          application disagree with it and have nothing anywhere to explain why. */}
+      {reduced !== null && reduced !== '' && (
         <Alert
-          type="warning"
+          type="info"
           showIcon
-          message={t('libraryPhotos.browse.silent')}
-          data-testid="library-photo-silent"
+          style={{ marginBottom: 12 }}
+          message={t('libraryPhotos.search.reduced', { words: reduced })}
         />
       )}
 
@@ -256,11 +273,17 @@ export default function PhotoLibraryPage() {
               {counted && t(counted.key, counted.values)}
             </Typography.Text>
 
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {t('libraryPhotos.browse.readAt', {
-                when: new Date(data.readAt).toLocaleTimeString(i18n.resolvedLanguage),
-              })}
-            </Typography.Text>
+            {/* Only where a library was actually read. A search whose words reduced to nothing this
+                product could search for was put to nobody, and a time stamped for a reading that
+                never happened is a false statement on the one line a reader would use to decide
+                whether the far side was reached at all. */}
+            {data.readAt !== null && (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t('libraryPhotos.browse.readAt', {
+                  when: new Date(data.readAt).toLocaleTimeString(i18n.resolvedLanguage),
+                })}
+              </Typography.Text>
+            )}
           </Flex>
 
           <LibraryPhotoGrid
@@ -268,18 +291,11 @@ export default function PhotoLibraryPage() {
             photographs={data.items}
             pictureUrlTemplate={data.pictureUrlTemplate}
             onOpen={setOpen}
-            emptyText={
-              // The three ways of arriving at an empty grid, kept apart. A step past the end of a
-              // listing that holds plenty — which one of the two products offers every time its
-              // library happens to hold an exact multiple of a page; a library that holds nothing
-              // at all; and a search that matched nothing, which is a fact about the words rather
-              // than about the library and must not be read as the library being empty.
-              state === 'endOfList'
-                ? t('libraryPhotos.browse.pastEnd')
-                : searching
-                  ? t('libraryPhotos.search.empty')
-                  : t('libraryPhotos.browse.empty')
-            }
+            // The ways of arriving at an empty grid, kept apart where the keeping apart can be
+            // checked: a step past the end of a listing that holds plenty, a library that holds
+            // nothing at all, a search that matched nothing, an ordering that ranked nothing, and
+            // words that were reduced to nothing anybody could be asked about.
+            emptyText={t(emptyMessage(state, data, wording))}
           />
 
           <Flex justify="center" style={{ marginTop: 16 }}>

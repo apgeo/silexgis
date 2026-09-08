@@ -70,16 +70,45 @@ public sealed record LibraryPhotoSearchQuery(string Text, int Page, int PageSize
 /// </remarks>
 /// <param name="Photos">What came back, in the order the library gave it.</param>
 /// <param name="Matching">
-/// How this answer was made, which is what the library did rather than what the product is
-/// advertised as doing. Set from the question this integration put and the answer it got.
+/// Which of the two questions was put, which is decided by the route this integration called and
+/// not by anything the far side reported about itself. Each product offers exactly one search, so
+/// this follows from which product answered.
+///
+/// <para>
+/// Nothing here probes whether the far side is currently able to do what its contract offers, and
+/// the omission is deliberate rather than pending: on the product that ranks by meaning, whether
+/// picture recognition is switched on is readable only by an administrator <em>of that product</em>,
+/// and the one credential this installation holds need not be one. A guess dressed as a
+/// capability check would be worse than the honest limit.
+/// </para>
+/// <para>
+/// So this never silently becomes the other value. A library that ranks by meaning with its
+/// recognition switched off does not quietly start matching text — it ranks nothing, or refuses the
+/// question — and both of those are reported as themselves, by an empty ordering and by a failure,
+/// rather than by this saying something else happened.
+/// </para>
+/// </param>
+/// <param name="Searched">
+/// The words actually put to the library, which are not always the words somebody typed: one of
+/// these products reads a colon as naming one of its own fields, so the separators are taken out
+/// before the text is sent and what is left is words. Published because a search whose text was
+/// changed on the way out answers a different question from the one on the screen, and a reader
+/// with no way to see the difference concludes the library disagrees with its own search box.
+/// Empty when the reduction left nothing, which is the one case where no library was asked at all.
 /// </param>
 /// <param name="HasMore">
 /// Whether the library says there is another page behind this one. For a ranking that means the
 /// ordering continues, not that more photographs match — nothing was matched.
 /// </param>
-/// <param name="ReadAt">When this answer was read from the library.</param>
+/// <param name="ReadAt">
+/// When this answer was read from the library, or null when no library was asked — which happens
+/// when the words reduced to nothing this product could search for. A time stamped for a reading
+/// that never happened is a false statement of fact on the one line a reader would use to decide
+/// whether the far side was reached at all.
+/// </param>
 public sealed record LibraryPhotoSearchPage(
     IReadOnlyList<LibraryListedPhoto> Photos,
     LibrarySearchMatching Matching,
+    string Searched,
     bool HasMore,
-    DateTimeOffset ReadAt);
+    DateTimeOffset? ReadAt);

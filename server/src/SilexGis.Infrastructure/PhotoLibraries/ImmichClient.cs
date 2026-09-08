@@ -488,8 +488,15 @@ public sealed class ImmichClient(
         // of what matched, and nothing matched: this route ranks the whole library and hands back a
         // slice of the ranking, so the only honest arithmetic is how many came back and whether the
         // ordering continues.
+        // The words are published back exactly as they were put, because on this library they are
+        // put as they were typed: it reads them as a description and binds no pair, prefix or
+        // operator to a field, so there is nothing here to reduce them to.
         return new LibraryPhotoSearchPage(
-            answered.Photos, LibrarySearchMatching.Meaning, answered.HasMore, DateTimeOffset.UtcNow);
+            answered.Photos,
+            LibrarySearchMatching.Meaning,
+            search.Text,
+            answered.HasMore,
+            DateTimeOffset.UtcNow);
     }
 
     /// <summary>
@@ -536,7 +543,8 @@ public sealed class ImmichClient(
                     $"The photo library did not answer {question} with a list of photographs.");
             }
 
-            var photos = new List<LibraryListedPhoto>(items.GetArrayLength());
+            var handedOver = items.GetArrayLength();
+            var photos = new List<LibraryListedPhoto>(handedOver);
 
             foreach (var item in items.EnumerateArray())
             {
@@ -544,6 +552,19 @@ public sealed class ImmichClient(
                 {
                     photos.Add(photo);
                 }
+            }
+
+            // A row this build cannot name a photograph from is dropped, and a page that lost rows
+            // is a page whose count is smaller than what the library sent. Said out loud here for
+            // the same reason the positions are: a page of sixty that arrives as five looks exactly
+            // like a small library, and if a version change over there renames the field this reads,
+            // every page empties while nothing anywhere says an assumption stopped holding.
+            if (photos.Count < handedOver)
+            {
+                logger.LogWarning(
+                    "The {Source} photo library answered {Question} with {HandedOver} rows, of which "
+                    + "{Unreadable} named no photograph this build could use; they are not shown.",
+                    Source, question, handedOver, handedOver - photos.Count);
             }
 
             // What this library says about a further page is a page number rather than a flag, and
@@ -559,7 +580,7 @@ public sealed class ImmichClient(
                     ? total
                     : (int?)null;
 
-            return (photos, items.GetArrayLength(), hasMore, stated);
+            return (photos, handedOver, hasMore, stated);
         }
     }
 

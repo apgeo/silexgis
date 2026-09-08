@@ -4,9 +4,11 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Shouldly;
+using SilexGis.Api.Features.PhotoLibraries;
 using SilexGis.Domain.PhotoLibraries;
 using SilexGis.Infrastructure.PhotoLibraries;
 
@@ -210,6 +212,100 @@ public sealed class PhotoLibrarySearchTests
         answer.HasMore.ShouldBeFalse();
         answer.Matching.ShouldBe(LibrarySearchMatching.Text);
         prism.Calls.ShouldBeEmpty();
+
+        // Nothing was searched for, and no time is stamped for a reading that never happened. The
+        // screen prints that time as "read from the library", which is the one line a reader would
+        // use to decide whether the far side was reached at all.
+        answer.Searched.ShouldBeEmpty();
+        answer.ReadAt.ShouldBeNull();
+    }
+
+    /// <summary>
+    /// The words the library was actually given come back with its answer, because they are not
+    /// always the words that were typed.
+    /// </summary>
+    /// <remarks>
+    /// The reduction that keeps a search box from becoming a way of asking where a photograph was
+    /// taken also changes what somebody asked for, and a screen that shows the typed words above an
+    /// answer to different ones is telling a reader this application disagrees with the product's
+    /// own search box for no reason they can see. The other product is given the sentence whole and
+    /// says so by publishing it unchanged.
+    /// </remarks>
+    [Fact]
+    public async Task What_the_library_was_actually_given_comes_back_with_the_answer()
+    {
+        var prism = new LibraryStub();
+        prism.Answers(_ => Json("[]"));
+
+        var reduced = await Prism(prism).SearchAsync(
+            new LibraryPhotoSearchQuery("label:cave muddy", 1, 60), default);
+
+        reduced.Searched.ShouldBe("label cave muddy");
+        reduced.ReadAt.ShouldNotBeNull();
+
+        var immich = new LibraryStub();
+        immich.Answers(_ => Json(ImmichPage("[]", total: 0, nextPage: null)));
+
+        // Nothing to reduce on the library that reads a sentence: it binds no pair to a field, so
+        // taking anything out would only change what somebody asked for.
+        (await Immich(immich).SearchAsync(new LibraryPhotoSearchQuery("label:cave muddy", 1, 60), default))
+            .Searched.ShouldBe("label:cave muddy");
+    }
+
+    /// <summary>
+    /// A page that lost rows says so where an operator can see it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A row this build cannot name a photograph from is left out, which is right — every address
+    /// built from it later assumes the shape this build expects. What is wrong is losing it in
+    /// silence: the count above the grid then describes five photographs on a page the library
+    /// filled with sixty, and if a version change over there renames one of these fields, whole
+    /// pages arrive empty and read as a library that holds nothing.
+    /// </para>
+    /// <para>
+    /// Said in the log rather than on the screen, as the map path already says it about positions
+    /// it could not read: it is a fact about this build's assumptions rather than about the
+    /// library, and a reader has nothing to do with it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_page_that_lost_rows_says_so_where_an_operator_can_see_it()
+    {
+        var prismLog = new Recorder();
+        var prism = new LibraryStub();
+
+        // One row naming both a photograph and a picture, and one whose picture nothing names.
+        prism.Answers(_ => Json(
+            $$"""[{{PrismRow(PrismUid, PrismHash)}},{"UID":"psinvented0000000two"}]"""));
+
+        var matched = await Prism(prism, logger: prismLog)
+            .SearchAsync(new LibraryPhotoSearchQuery("rope", 1, 60), default);
+
+        matched.Photos.Count.ShouldBe(1);
+        prismLog.Warnings.ShouldContain(line => line.Contains('2') && line.Contains("not shown"));
+
+        var immichLog = new Recorder();
+        var immich = new LibraryStub();
+        immich.Answers(_ => Json(ImmichPage(
+            $$"""[{{ImmichRow(First)}},{"id":"not-an-identifier-of-that-shape"}]""",
+            total: 2,
+            nextPage: null)));
+
+        var ranked = await Immich(immich, logger: immichLog)
+            .SearchAsync(new LibraryPhotoSearchQuery("rope", 1, 60), default);
+
+        ranked.Photos.Count.ShouldBe(1);
+        immichLog.Warnings.ShouldContain(line => line.Contains('2') && line.Contains("not shown"));
+
+        // The control: a page every row of which could be read says nothing, so the warning means
+        // what it says rather than appearing under every page.
+        var quiet = new Recorder();
+        var whole = new LibraryStub();
+        whole.Answers(_ => Json($"[{PrismRow(PrismUid, PrismHash)}]"));
+
+        await Prism(whole, logger: quiet).SearchAsync(new LibraryPhotoSearchQuery("rope", 1, 60), default);
+        quiet.Warnings.ShouldBeEmpty();
     }
 
     // ------------------------------------------------------------- what may be said about a page
@@ -235,6 +331,44 @@ public sealed class PhotoLibrarySearchTests
 
         immich.Only.Body.ShouldContain("\"page\":3");
         immich.Only.Body.ShouldContain("\"size\":20");
+    }
+
+    /// <summary>
+    /// A page beginning further into a library than this installation will ask for is refused here,
+    /// not sent.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both products document a limit on how far in a request may begin, and a request past it
+    /// comes back refused. That refusal reaches a reader as "this library did not answer", which
+    /// sends whoever reads it to look at a container that is running perfectly — for a request this
+    /// application knew was out of range before it built it.
+    /// </para>
+    /// <para>
+    /// Measured in photographs rather than in pages, because how far a page number reaches depends
+    /// on how large the pages are: the same page number is two different distances into the same
+    /// library at sixty and at two hundred a page.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void A_page_further_in_than_this_installation_will_ask_for_is_refused()
+    {
+        const int ceiling = PhotoLibraryBrowseEndpoints.MaxOffset;
+
+        // The last page that still begins inside what this installation will ask for.
+        PhotoLibraryBrowseEndpoints.TooDeep((ceiling / 200) + 1, 200).ShouldBeNull();
+        PhotoLibraryBrowseEndpoints.TooDeep(1, 60).ShouldBeNull();
+
+        // And the first one past it, refused with a code of its own rather than as a library that
+        // did not answer.
+        var refused = PhotoLibraryBrowseEndpoints.TooDeep((ceiling / 200) + 2, 200);
+        refused.ShouldNotBeNull();
+        refused.ProblemDetails.Extensions["code"]
+            .ShouldBe(PhotoLibraryBrowseEndpoints.PageTooDeepCode);
+
+        // A page number large enough to overflow a smaller arithmetic than the one this uses is
+        // still just a refusal.
+        PhotoLibraryBrowseEndpoints.TooDeep(int.MaxValue, 200).ShouldNotBeNull();
     }
 
     /// <summary>
@@ -420,7 +554,10 @@ public sealed class PhotoLibrarySearchTests
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
 
-    private static PhotoPrismClient Prism(LibraryStub stub, Action<PhotoPrismOptions>? configure = null)
+    private static PhotoPrismClient Prism(
+        LibraryStub stub,
+        Action<PhotoPrismOptions>? configure = null,
+        ILogger<PhotoPrismClient>? logger = null)
     {
         var options = new PhotoPrismOptions
         {
@@ -435,10 +572,15 @@ public sealed class PhotoLibrarySearchTests
         configure?.Invoke(options);
 
         return new PhotoPrismClient(
-            new OneClient(stub), Options.Create(options), NullLogger<PhotoPrismClient>.Instance);
+            new OneClient(stub),
+            Options.Create(options),
+            logger ?? NullLogger<PhotoPrismClient>.Instance);
     }
 
-    private static ImmichClient Immich(LibraryStub stub, Action<ImmichOptions>? configure = null)
+    private static ImmichClient Immich(
+        LibraryStub stub,
+        Action<ImmichOptions>? configure = null,
+        ILogger<ImmichClient>? logger = null)
     {
         var options = new ImmichOptions
         {
@@ -453,7 +595,35 @@ public sealed class PhotoLibrarySearchTests
             new OneClient(stub),
             Options.Create(options),
             new NeverStopping(),
-            NullLogger<ImmichClient>.Instance);
+            logger ?? NullLogger<ImmichClient>.Instance);
+    }
+
+    /// <summary>
+    /// A logger that keeps what was warned about, so a test can assert on something that is
+    /// deliberately not on any screen.
+    /// </summary>
+    private sealed class Recorder : ILogger<PhotoPrismClient>, ILogger<ImmichClient>
+    {
+        public List<string> Warnings { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            ArgumentNullException.ThrowIfNull(formatter);
+
+            if (logLevel >= LogLevel.Warning)
+            {
+                Warnings.Add(formatter(state, exception));
+            }
+        }
     }
 
     /// <summary>The code a call was refused with, so a test names the sentence an operator is sent.</summary>

@@ -40,6 +40,16 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// this is the browsing surface with words in front of it, and where a photograph was taken is the
 /// map's question.
 /// </para>
+/// <para>
+/// <b>The words travel in the address rather than in a body, and that is a trade taken with its
+/// eyes open.</b> Against it: an address is written down by things this application does not
+/// control — a proxy's log, a browser's history, a link somebody forwards — and against a library
+/// that turns coordinates into place names, words can be place names. For it: a search that lives
+/// in the address is a view somebody can send to the person who would recognise the picture, which
+/// is most of what this surface is for, and the page number deliberately does not travel with it.
+/// The words are this installation's own accounts searching their own club's library, and the
+/// trade is revisited with the rest of what may be said about a neighbouring library's contents.
+/// </para>
 /// </summary>
 public static class PhotoLibrarySearchEndpoints
 {
@@ -145,6 +155,15 @@ public static class PhotoLibrarySearchEndpoints
         var wanted = pageSize ?? PhotoLibraryBrowseEndpoints.DefaultPageSize;
         var size = Math.Clamp(wanted, 1, PhotoLibraryBrowseEndpoints.MaxPageSize);
         var number = Math.Max(1, page ?? 1);
+
+        // The same distance the listing will go and no further, refused here rather than sent: a
+        // page past what a library will accept comes back as a failure from the far side, and a
+        // failure from the far side reads as the library being down for a request this application
+        // built out of range.
+        if (PhotoLibraryBrowseEndpoints.TooDeep(number, size) is { } tooDeep)
+        {
+            return tooDeep;
+        }
 
         LibraryPhotoSearchPage answer;
         try

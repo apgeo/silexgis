@@ -1378,6 +1378,13 @@ export type LibraryPhotoStatus = Omit<
 > & {
   providers: LibraryPhotoProvider[];
   unconfigured: LibraryPhotoProvider[];
+  /**
+   * The longest run of words the server will put in a request to a library. Read rather than held
+   * as a second copy here: this screen both stops its box short of the limit and prints the limit
+   * in the sentence explaining a refusal, and two copies of one number is how a sentence goes on
+   * stating the old one after the server's has moved.
+   */
+  maxSearchLength: number;
 };
 export type LibraryPhotoCollection = components['schemas']['LibraryPhotoFeatureCollection'];
 
@@ -1709,8 +1716,21 @@ export interface LibrarySearchQuery {
 export interface LibraryPhotographSearchPage {
   source: LibraryPhotoSource;
   libraryName: string;
-  /** Which of the two questions this answer came from — what happened, not what was advertised. */
+  /**
+   * Which of the two questions was put, decided by which product answered — each offers exactly
+   * one search. Never a report of what the far side is currently able to do: whether a library
+   * that ranks by meaning has its picture recognition switched on is readable only by an
+   * administrator of that product, and nothing here pretends to know it.
+   */
   matching: LibrarySearchMatching;
+  /**
+   * The words actually put to the library, which are not always the words that were typed: one of
+   * the two products reads a colon as naming one of its own fields, so the separators come out
+   * before the text is sent. Shown when it differs from the box, because otherwise the answer is
+   * to a question the reader cannot see. Empty when the reduction left nothing, which is the one
+   * case where no library was asked at all.
+   */
+  searched: string;
   items: LibraryPhotograph[];
   page: number;
   pageSize: number;
@@ -1722,7 +1742,8 @@ export interface LibraryPhotographSearchPage {
   pageSizeCapped: boolean;
   picturesAvailable: boolean;
   pictureUrlTemplate: string | null;
-  readAt: string;
+  /** When the library was read, or null when none was asked — see `searched`. */
+  readAt: string | null;
 }
 
 /** The address of one page of one search. */
