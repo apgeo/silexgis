@@ -18,6 +18,19 @@ namespace SilexGis.Domain.Filters;
 /// anyway. Position is reachable only through the spatial field below, whose anchors are resolved
 /// against what the caller may already place exactly.
 /// </para>
+/// <para>
+/// That absence covers containment as well, and it is the reason a statistic scoped to one karst
+/// area does not arrive here as a condition. Naming an ancestor would be a permanent stored key
+/// that answers "is this row under that area" for rows the caller never receives; a scope is
+/// instead resolved to a set of identifiers before the filter runs, inside the caller's own
+/// visibility walk, so a row they may not read is never in the set to begin with.
+/// </para>
+/// <para>
+/// Some fields below belong to the cave subtype rather than to the feature row. They are declared
+/// on this world all the same, because a person filtering a list of caves is filtering features and
+/// should not have to know which of the two tables a column sits in; a feature that is not a cave
+/// simply has nothing there, and reads as empty.
+/// </para>
 /// </remarks>
 public static class FeatureFilterFields
 {
@@ -35,6 +48,37 @@ public static class FeatureFilterFields
 
     public const string CreatedAt = "createdAt";
     public const string UpdatedAt = "updatedAt";
+
+    /// <summary>
+    /// The named region a cave is recorded as lying in.
+    /// </summary>
+    /// <remarks>
+    /// Declarable, unlike the localisation fields immediately beside it in the record. A cave's
+    /// closest address, land-registry number and location notes are withheld from a caller who may
+    /// read the cave but not place it exactly, so filtering on one of those would answer a question
+    /// the record itself refuses to answer. The region is not withheld: every caller who may read
+    /// the cave is already shown it, on the cave page and in the listing, and the shipped cave
+    /// listing already filters by it for everybody. Offering it here narrows the same set the same
+    /// way and discloses nothing new.
+    /// </remarks>
+    public const string Region = "region";
+
+    /// <summary>The rock the cave is recorded as being formed in.</summary>
+    public const string RockTypeId = "rockTypeId";
+
+    /// <summary>Surveyed length in metres, as recorded on the cave.</summary>
+    public const string SurveyedLength = "surveyedLength";
+
+    /// <summary>
+    /// Depth in metres, as recorded on the cave — a vertical extent, not a height above sea level.
+    /// </summary>
+    /// <remarks>
+    /// The altitude beside it in the record is deliberately not declared. An altitude is a
+    /// coordinate: asked one range at a time it narrows to a height, and a height plus the little
+    /// else a listing gives away is enough to place a cave whose position is closed to the caller.
+    /// A depth is a measurement of the cave itself and locates nothing.
+    /// </remarks>
+    public const string Depth = "depth";
 
     /// <summary>
     /// A typed property declared by the feature's own type. Addressed as
@@ -68,6 +112,10 @@ public static class FeatureFilterFields
             new FieldDescriptor(LocationProtected, "filters.fields.protected", FieldKind.Boolean),
             new FieldDescriptor(CreatedAt, "filters.fields.created", FieldKind.Instant),
             new FieldDescriptor(UpdatedAt, "filters.fields.updated", FieldKind.Instant),
+            new FieldDescriptor(Region, "filters.fields.region", FieldKind.Text),
+            new FieldDescriptor(RockTypeId, "filters.fields.rockType", FieldKind.Id, Options: "rockTypes"),
+            new FieldDescriptor(SurveyedLength, "filters.fields.surveyedLength", FieldKind.Number),
+            new FieldDescriptor(Depth, "filters.fields.depth", FieldKind.Number),
         ],
         // Neither the spatial field nor the proximity sort is declared, because neither is served
         // yet. A vocabulary is an offer: a field listed here is one the builder shows, somebody

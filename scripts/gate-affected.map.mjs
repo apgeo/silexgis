@@ -114,7 +114,9 @@ export const groups = {
   ],
   resLinks: ['AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests'],
   search: ['DocumentContentSearchSqlTests', 'DocumentContentSearchTests'],
-  statistics: ['DashboardTests', 'TripStatisticsTests'],
+  statistics: [
+    'DashboardTests', 'RegistryStatisticsSqlTests', 'RegistryStatisticsTests', 'TripStatisticsTests',
+  ],
   dashboard: ['DashboardTests'],
   tags: ['TripAndTagTests'],
   taxonomies: [
@@ -242,6 +244,7 @@ export const areas = {
   'server/src/SilexGis.Domain/ResLinks/': 'resLinks',
   'server/src/SilexGis.Domain/Settings/': 'settings',
   'server/src/SilexGis.Domain/Terrain/': 'terrain',
+  'server/src/SilexGis.Domain/Statistics/': 'statistics',
   'server/src/SilexGis.Domain/Trips/': 'trips',
   // Infrastructure areas
   'server/src/SilexGis.Infrastructure/Catalogue/': 'catalogue',
@@ -261,6 +264,7 @@ export const areas = {
   'server/src/SilexGis.Infrastructure/Sms/': 'sms',
   'server/src/SilexGis.Infrastructure/Surveys/': 'surveys',
   'server/src/SilexGis.Infrastructure/Terrain/': 'terrain',
+  'server/src/SilexGis.Infrastructure/Statistics/': 'statistics',
   'server/src/SilexGis.Infrastructure/Trips/': 'trips',
 };
 
@@ -309,7 +313,8 @@ export const crossCutting = {
   permissionClasses: [
     'AccessApiTests', 'AccessHistoryTests', 'AccessModelTests', 'AclAndCavingGroupTests',
     'AdminMessagingTests', 'AlbumAndPublicGalleryTests', 'AnnotatedTextApiTests', 'AuthFlowTests',
-    'BulkImportTests', 'CabinetApiTests', 'CaveDomainTests', 'CaveQrPublicationTests',
+    'BulkImportTests', 'CabinetApiTests', 'CaveDomainTests', 'CaveOverburdenTests',
+    'CaveQrPublicationTests',
     'CaverRosterTests', 'CavingGroupAnnouncementTests', 'CenterlineTests',
     'ChecklistAuthoringTests', 'DocumentAccessApiTests', 'DocumentCommentApiTests',
     'DocumentLanguageTests', 'DocumentMetadataTests', 'EventAuthoringTests',
@@ -343,7 +348,8 @@ export const crossCutting = {
     'FileAccessBatchParityTests', 'FileAttachmentTests', 'FilterParityTests',
     'FilterWorldConformanceTests', 'GeofileTests', 'GeoreferencedMapTests', 'HistoryTests',
     'HypsometryTests', 'MapDensityTests', 'MapPointPatternTests', 'PhotoBytesProtectionTests',
-    'PhotoImportTests', 'PolygonMorphometryTests', 'ProtectionDepthTests', 'ResLinkApiTests',
+    'PhotoImportTests', 'PolygonMorphometryTests', 'ProtectionDepthTests',
+    'RegistryStatisticsTests', 'ResLinkApiTests',
     'ResLinkProtectionFloorTests', 'SpeleoLocDevSeedTests', 'SpeologieCatalogueTests',
     'StagedImportTests', 'StructureComparisonTests', 'SurveyGraphTests', 'SurveyModelTests',
     'SurveySegmentSubstrateTests', 'SurveySourceTests', 'SyncPageSizeTests', 'SyncProtocolTests',

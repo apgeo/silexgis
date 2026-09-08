@@ -143,6 +143,34 @@ public class FilterValidationTests
             .ShouldNotBeEmpty();
     }
 
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(1e300)]
+    public void A_number_no_stored_measurement_could_be_compared_against_is_refused(double value)
+    {
+        // The refusal has to happen here rather than at the column. A number this size does not
+        // narrow a filter — it either overflows the conversion to the fixed-point type the columns
+        // use, which reaches the caller as a server error for what was a bad request, or it loses
+        // the digits that told it apart from its neighbour and quietly means something else.
+        Validate(Over("feature", new ConditionNode(
+            "depth", FilterOp.Equals, [new NumberValue(value)])))
+            .ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public void A_number_within_the_range_a_measurement_can_hold_is_accepted()
+    {
+        // The other half, so the refusal above is a bound rather than a numeric field that never
+        // works: a depth of a few hundred metres, and a range around it, both pass.
+        Validate(Over("feature", new ConditionNode(
+            "depth", FilterOp.Equals, [new NumberValue(-412.5)])))
+            .ShouldBeEmpty();
+        Validate(Over("feature", new ConditionNode(
+            "depth", FilterOp.Between, [new NumberValue(0), new NumberValue(1_500)])))
+            .ShouldBeEmpty();
+    }
+
     [Fact]
     public void An_empty_group_is_refused_because_it_has_no_honest_meaning()
     {

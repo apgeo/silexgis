@@ -14314,6 +14314,260 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/registry/distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How one measured column is distributed over the caves the caller may read. */
+        get: {
+            parameters: {
+                query?: {
+                    measure?: string;
+                    bins?: number;
+                    minimumBinCaveCount?: number;
+                    percentiles?: string;
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RegistryDistribution"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/registry/distribution/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same distribution, as a spreadsheet. */
+        get: {
+            parameters: {
+                query?: {
+                    measure?: string;
+                    bins?: number;
+                    minimumBinCaveCount?: number;
+                    percentiles?: string;
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/registry/correlation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How two measured columns move together over the caves the caller may read. */
+        get: {
+            parameters: {
+                query?: {
+                    x?: string;
+                    y?: string;
+                    logarithmic?: boolean;
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RegistryCorrelationDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/registry/correlation/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same fit, as a spreadsheet. */
+        get: {
+            parameters: {
+                query?: {
+                    x?: string;
+                    y?: string;
+                    logarithmic?: boolean;
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/registry/regions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many caves stand under each region, over those the caller may place. */
+        get: {
+            parameters: {
+                query?: {
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RegistryRegionBreakdownDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/registry/regions/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same breakdown, as a spreadsheet. */
+        get: {
+            parameters: {
+                query?: {
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/taggings": {
         parameters: {
             query?: never;
@@ -17909,6 +18163,15 @@ export interface components {
             cabinetId: null | string;
             tagName: null | string;
         };
+        DistributionBin: {
+            /** Format: double */
+            lowerBound: number;
+            /** Format: double */
+            upperBound: number;
+            /** Format: int32 */
+            count: number;
+            merged: boolean;
+        };
         /** @enum {unknown} */
         DocumentAnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange";
         DocumentCommentCreateRequest: {
@@ -19341,6 +19604,18 @@ export interface components {
             twoFactorCode?: null | string;
             twoFactorMethod?: null | components["schemas"]["TwoFactorMethod"];
         };
+        LognormalFit: {
+            /** Format: double */
+            mu: number;
+            /** Format: double */
+            sigma: number;
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            median: number;
+            /** Format: double */
+            mean: number;
+        };
         MailSettingsDto: {
             enabled: boolean;
             host: string;
@@ -20027,6 +20302,18 @@ export interface components {
             parentId: string;
             isPrimary: boolean;
         };
+        ParetoTailFit: {
+            /** Format: double */
+            alpha: number;
+            /** Format: double */
+            lowerBound: number;
+            /** Format: int32 */
+            tailCount: number;
+            /** Format: double */
+            alphaStandardError: number;
+            /** Format: double */
+            kolmogorovSmirnov: number;
+        };
         PassageNetworkFigures: {
             /** Format: int32 */
             nodeCount: number;
@@ -20557,6 +20844,57 @@ export interface components {
             email: string;
             password: string;
             displayName: null | string;
+        };
+        RegistryCorrelationDto: {
+            x: components["schemas"]["RegistryMeasure"];
+            y: components["schemas"]["RegistryMeasure"];
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            slope: null | number;
+            /** Format: double */
+            intercept: null | number;
+            /** Format: double */
+            rSquared: null | number;
+            /** Format: double */
+            correlation: null | number;
+            logarithmic: boolean;
+            basis: string;
+        };
+        RegistryDistribution: {
+            measure: components["schemas"]["RegistryMeasure"];
+            /** Format: int32 */
+            caveCount: number;
+            /** Format: int32 */
+            measuredCount: number;
+            /** Format: double */
+            minimum: null | number;
+            /** Format: double */
+            maximum: null | number;
+            bins: components["schemas"]["DistributionBin"][];
+            percentiles: components["schemas"]["RegistryPercentileRow"][];
+            lognormal: null | components["schemas"]["LognormalFit"];
+            paretoTail: null | components["schemas"]["ParetoTailFit"];
+            basis: string;
+        };
+        /** @enum {unknown} */
+        RegistryMeasure: "surveyedLength" | "estimatedLength" | "depth" | "positiveDepth" | "negativeDepth" | "realExtension" | "projectedExtension" | "volume" | "area" | "ramificationIndex";
+        RegistryPercentileRow: {
+            /** Format: double */
+            fraction: number;
+            /** Format: double */
+            value: null | number;
+        };
+        RegistryRegionBreakdownDto: {
+            /** Format: int32 */
+            caveCount: number;
+            regions: components["schemas"]["RegistryRegionRow"][];
+            basis: string;
+        };
+        RegistryRegionRow: {
+            region: null | string;
+            /** Format: int32 */
+            caveCount: number;
         };
         /** @enum {unknown} */
         ReportTemplateKind: "trip" | "expedition";

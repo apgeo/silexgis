@@ -3118,7 +3118,11 @@
       "tripDate": "Data turei",
       "hadIncident": "A avut incident",
       "state": "Stare",
-      "language": "Limbă"
+      "language": "Limbă",
+      "region": "Regiune",
+      "rockType": "Tip de rocă",
+      "surveyedLength": "Lungime cartată (m)",
+      "depth": "Denivelare (m)"
     },
     "problems": {
       "noWorlds": "Alege cel puțin un fel de obiect de căutat.",

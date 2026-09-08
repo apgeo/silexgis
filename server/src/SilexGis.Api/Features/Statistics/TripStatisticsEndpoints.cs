@@ -16,12 +16,23 @@ namespace SilexGis.Api.Features.Statistics;
 /// request, and counted over the trips the caller may read.
 /// </summary>
 /// <remarks>
-/// These are read surfaces and nothing here is askable: a total may be looked at, never filtered
-/// or sorted by. That is the same rule the trip filter vocabulary states about the two questions it
-/// refuses — which trips visited a cave, and which trips a named person was on — and for the same
-/// reason: both are answers about a cave and about a person assembled out of rows the asker may
-/// never see, and a figure that moves under a filter gives the answer just as surely as the rows
-/// would have.
+/// The subjects below are read surfaces and nothing about them is askable: a total may be looked
+/// at, never filtered or sorted by. That is the same rule the trip filter vocabulary states about
+/// the two questions it refuses — which trips visited a cave, and which trips a named person was
+/// on — and for the same reason: both are answers about a cave and about a person assembled out of
+/// rows the asker may never see, and a figure that moves under a filter gives the answer just as
+/// surely as the rows would have.
+///
+/// <b>That rule is about these subjects and not about the whole path they are served under.</b>
+/// The registry-wide statistics answer beneath the same path segment and are deliberately
+/// narrowable, by a closed set of four scope fields, over a set already cut to what the caller may
+/// read and — wherever the answer touches a place — to what they may place exactly. The difference
+/// is what the subject is: a total about one named person or one named cave is an assertion about
+/// that person or that cave, and moving it under a filter interrogates them; a distribution over
+/// the registry is an assertion about the set, and narrowing the set is what makes it readable at
+/// all. Those disclosure controls are stated where that family is defined. Neither contract is
+/// visible in the generated schema, so a reader who takes this paragraph for a rule about every
+/// route under this path gets the wrong rule for half of them.
 ///
 /// Each subject answers twice: once as figures on a screen, once as a file. Both go through the
 /// same permission ladder and the same query, in the shape below — a file is read once and then

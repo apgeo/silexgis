@@ -38,6 +38,19 @@ public static class FilterValidation
     public const int MaxTextValueLength = 200;
 
     /// <summary>
+    /// How large a number may be before it stops being comparable to a stored measurement.
+    /// </summary>
+    /// <remarks>
+    /// A numeric condition arrives as a floating-point value and is compared against a fixed-point
+    /// column, so the comparison is only meaningful over the range both can hold. Past this the
+    /// conversion either overflows — which would be a server error for what is really a bad
+    /// request — or silently drops the digits that made the value different from its neighbour. The
+    /// bound is far beyond any length, depth or radius in metres that a real record carries, so it
+    /// refuses only documents nobody drew.
+    /// </remarks>
+    public const double MaxNumberMagnitude = 1e15;
+
+    /// <summary>
     /// Problems with the document, as sentences. Empty means it can be compiled.
     /// </summary>
     /// <param name="vocabularies">
@@ -219,6 +232,13 @@ public static class FilterValidation
             if (value is TextValue text && text.Value.Length > MaxTextValueLength)
             {
                 errors.Add($"A value is longer than {MaxTextValueLength} characters.");
+                return;
+            }
+
+            if (value is NumberValue number
+                && (!double.IsFinite(number.Value) || Math.Abs(number.Value) > MaxNumberMagnitude))
+            {
+                errors.Add($"'{condition.Field}' was given a number it cannot be compared against.");
                 return;
             }
         }

@@ -3118,7 +3118,11 @@
       "tripDate": "Trip date",
       "hadIncident": "Had an incident",
       "state": "State",
-      "language": "Language"
+      "language": "Language",
+      "region": "Region",
+      "rockType": "Rock type",
+      "surveyedLength": "Surveyed length (m)",
+      "depth": "Depth (m)"
     },
     "problems": {
       "noWorlds": "Choose at least one kind of object to search.",
