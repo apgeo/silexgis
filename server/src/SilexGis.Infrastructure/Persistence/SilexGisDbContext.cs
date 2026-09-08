@@ -201,6 +201,10 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<TerrainBuildRaster> TerrainBuildRasters => Set<TerrainBuildRaster>();
 
+    public DbSet<TerrainDerivativeLayer> TerrainDerivativeLayers => Set<TerrainDerivativeLayer>();
+
+    public DbSet<TerrainDerivativeRaster> TerrainDerivativeRasters => Set<TerrainDerivativeRaster>();
+
     public DbSet<SyncSet> SyncSets => Set<SyncSet>();
 
     public DbSet<SyncSetMember> SyncSetMembers => Set<SyncSetMember>();

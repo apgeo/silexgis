@@ -336,9 +336,22 @@ public static class DependencyInjection
         // reopening a file per point would spend a profile's whole request in header reads.
         services.AddSingleton<Domain.Terrain.IDemSampleService, Terrain.GdalDemSampler>();
 
+        // Drawing the ground from those rasters: shaded relief, steepness, facing and the rest. One
+        // instance, because it holds nothing between calls — but note that it does not serialise
+        // them either, and the raster library's handles fault the whole process rather than throwing
+        // when two threads touch one, so whatever drives it either takes one piece of work at a time
+        // or holds a gate of its own.
+        services.AddSingleton<Domain.Terrain.ITerrainDerivativeComputer, Terrain.GdalDemDerivatives>();
+
         // What ground each of a build's prepared rasters covers, described once and kept beside the
         // build. Scoped because it reads and writes rows.
         services.AddScoped<Terrain.TerrainRasterIndex>();
+
+        // The register of pictures drawn from those rasters, and the job that draws them. Both
+        // scoped because they read and write rows; the job kind runs on the terrain worker, which is
+        // what keeps a picture from being drawn from rasters a build is in the middle of rewriting.
+        services.AddScoped<Terrain.TerrainDerivativeCatalogue>();
+        services.AddScoped<IProcessingJobHandler, TerrainDerivativeHandler>();
 
         // Turning those rasters into tiles. The program that does that is a command-line tool, run
         // by a service of its own that this application never speaks to directly — the two meet on

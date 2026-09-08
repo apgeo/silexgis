@@ -135,6 +135,7 @@ try
         .SetApplicationName("silexgis")
         .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
     builder.Services.AddSingleton<IFileAccessTokenService, FileAccessTokenService>();
+    builder.Services.AddSingleton<ITerrainRasterTokenService, TerrainRasterTokenService>();
     builder.Services.AddSingleton<IUnsubscribeTokens, UnsubscribeTokenService>();
     // Its own protection purpose, so a token minted for a picture held in a neighbouring photo
     // library can never be redeemed against this application's own stored files.
@@ -357,6 +358,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapAdminTemplateEndpoints();
     api.MapTerrainBuildEndpoints();
     api.MapTerrainProbeEndpoints();
+    api.MapTerrainDerivativeEndpoints();
     api.MapSyncEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
