@@ -60,6 +60,7 @@ const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
 const DocumentDetailPage = lazy(() => import('./pages/documents/DocumentDetailPage.tsx'));
 const UploadsPage = lazy(() => import('./pages/documents/UploadsPage.tsx'));
 const GalleryPage = lazy(() => import('./pages/gallery/GalleryPage.tsx'));
+const PhotoLibraryPage = lazy(() => import('./pages/photolibrary/PhotoLibraryPage.tsx'));
 const AlbumsPage = lazy(() => import('./pages/gallery/AlbumsPage.tsx'));
 const AlbumDetailPage = lazy(() => import('./pages/gallery/AlbumDetailPage.tsx'));
 const PublicGalleryPage = lazy(() => import('./pages/gallery/PublicGalleryPage.tsx'));
@@ -174,6 +175,7 @@ export const routes: RouteObject[] = [
           { path: '/cabinets', element: <Loadable><CabinetsPage /></Loadable> },
           { path: '/uploads', element: <Loadable><UploadsPage /></Loadable> },
           { path: '/gallery', element: <Loadable><GalleryPage /></Loadable> },
+          { path: '/photo-library', element: <Loadable><PhotoLibraryPage /></Loadable> },
           { path: '/albums', element: <Loadable><AlbumsPage /></Loadable> },
           { path: '/albums/:id', element: <Loadable><AlbumDetailPage /></Loadable> },
           { path: '/documents/:id', element: <Loadable><DocumentDetailPage /></Loadable> },

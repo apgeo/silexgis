@@ -88,6 +88,37 @@ The account holds the Viewer role and belongs to Demo Caving Club, so it can rea
 public, everything visible to signed-in accounts, and everything that club may see. Treat it as
 what it is: a second party that exists so location protection can be watched working.
 
+## Running a test installation (public demo logins)
+
+An installation meant for strangers to try — a public demo, a place to show the application
+without handing out accounts — can announce working demo credentials on its own sign-in page:
+
+```bash
+SILEXGIS__TestLogins__Enabled=true
+# SILEXGIS__TestLogins__Password=test-login-pass-1   # the default; all three accounts share it
+```
+
+At the next start this seeds three accounts and the sign-in page lists them, each with a
+fill-in button and a note on what it may do:
+
+| Account | Holds |
+|---|---|
+| `admin@test.local` | **Full Administrators** — sees and edits everything, settings and accounts included |
+| `editor@test.local` | **Editors** — creates and edits content, no user/permission administration, no exact protected locations |
+| `viewer@test.local` | the signed-in baseline only — browses what is visible to all accounts |
+
+Be clear about what the switch does: **it prints an administrator login on a public page.**
+Never set it on an installation holding data anybody cares about. The password is one shared,
+configurable value; changing it in configuration is applied to the existing accounts at the
+next start, so the page never advertises a credential that does not work. Lockout is disabled
+on these three accounts — with a public password it would only be a way for one visitor to
+lock the demo for everyone else.
+
+Because visitors can (and will) change or delete data, pair the switch with a scheduled reset
+to a captured baseline — the `silexgis-baseline` / `silexgis-reset` commands and the
+`silexgis-reset.timer` unit, described in
+[docs/DEPLOY-SERVER.md](DEPLOY-SERVER.md#test-installations-a-data-baseline-and-a-scheduled-reset).
+
 ## Enabling HTTPS
 
 **Anything other than `localhost` needs it, or nobody can sign in.** This is worth reading
@@ -1201,6 +1232,8 @@ the reasoning beside each one.
 | `SILEXGIS__Sync__DuplicateRadiusMeters` | `50` | how close something already in the registry has to be to a row a phone just created before the answer mentions it. Reporting only — it never refuses a row. `0` turns the report off; values above 5000 are brought back to 5000. The same figure a file import uses, because how close two entrances can be before they are probably one is a property of the karst rather than of the channel |
 | `SILEXGIS__SpeleoLocDev__Allow` | `false` | permits `seed-speleoloc-dev` on a host that is not in development. That command creates a login, so it is refused without this |
 | `SILEXGIS__SpeleoLocDev__MemberPassword` | `dev-member-pass-1` | the password `member@dev.local` is created with. The default is printed in this guide, so set your own if you allow the command at all |
+| `SILEXGIS__TestLogins__Enabled` | `false` | seeds three demo accounts (full administrator, editor, viewer) and prints their credentials on the sign-in page for anyone who reaches it. For throwaway test installations only — see "Running a test installation" above |
+| `SILEXGIS__TestLogins__Password` | `test-login-pass-1` | the one password all three demo accounts share. A change is applied to existing accounts at the next start, so the page never advertises a credential that does not work |
 | `SILEXGIS__Mail__Enabled` / `__Host` / `__Port` | `false` / — / `587` | SMTP server; unset means messages go to the log |
 | `SILEXGIS__Mail__Security` | `Auto` | `Auto`, `StartTls`, `SslOnConnect` (465) or `None` |
 | `SILEXGIS__Mail__FromAddress` / `__FromName` | — / `SilexGIS` | sender of every message |

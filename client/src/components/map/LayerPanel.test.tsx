@@ -31,6 +31,9 @@ let recheckState = {
 
 vi.mock('../../api/hooks.ts', () => ({
   useTags: () => ({ data: [] }),
+  // The trips overlay's own filter reads the purposes a trip can have. None configured here: the
+  // mock replaces the module wholesale, so a hook left out of it is undefined at the call site and
+  // every case in this file dies on the render rather than on what it was written to check.
   useTripTypes: () => ({ data: [] }),
   useRecheckPhotoLibrary: () => recheckState,
 }));
@@ -58,7 +61,7 @@ const healthy: LibraryPhotoHealth = {
 };
 
 function library(health: LibraryPhotoHealth): LibraryPhotoProvider {
-  return { source: 'immich', name: 'Immich', configured: true, health };
+  return { source: 'immich', name: 'Immich', search: 'meaning', configured: true, health };
 }
 
 const answered: LibraryPhotoLoadState = {
@@ -303,6 +306,7 @@ describe('the photo-library block of the layer panel', () => {
         {
           source: 'photoprism',
           name: 'PhotoPrism',
+          search: 'text',
           configured: false,
           health: {
             reach: 'unknown',

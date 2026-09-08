@@ -455,7 +455,7 @@ public sealed class ImmichPhotoLibraryTests
         // Nothing reopens it on a timer. A person does — and the recheck itself asks the library
         // about the credential rather than about a picture, so it proves the address and the key
         // without asking it to resolve a single file on disk.
-        stub.AnswersJson("""{"name":"an invented key","permissions":["map.read","asset.view"]}""");
+        stub.AnswersJson("""{"name":"an invented key","permissions":["map.read","asset.view","asset.read"]}""");
         await library.RecheckOriginalsAsync(default);
 
         library.PicturesAvailable.ShouldBeTrue();

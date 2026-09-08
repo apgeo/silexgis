@@ -113,7 +113,8 @@ public static class PhotoLibraryEndpoints
 
         if (!PhotoLibraryAudienceRule.MayRead(ctx, options.Value.Audience))
         {
-            return TypedResults.Ok(new PhotoLibraryStatusDto(false, [], []));
+            return TypedResults.Ok(new PhotoLibraryStatusDto(
+                false, PhotoLibrarySearchEndpoints.MaxSearchLength, [], []));
         }
 
         var configured = libraries.Where(library => library.IsConfigured).ToList();
@@ -123,6 +124,7 @@ public static class PhotoLibraryEndpoints
             .Select((library, index) => new PhotoLibraryProviderDto(
                 PhotoLibrarySlugs.Slug(library.Source),
                 PhotoLibrarySlugs.Name(library.Source),
+                LibraryPhotographMapping.MatchingSlug(library.SearchMatching),
                 Configured: true,
                 PhotoLibraryHealthDto.Of(health[index], library.PicturesAvailable)))
             .ToList();
@@ -139,11 +141,16 @@ public static class PhotoLibraryEndpoints
                 .Select(library => new PhotoLibraryProviderDto(
                     PhotoLibrarySlugs.Slug(library.Source),
                     PhotoLibrarySlugs.Name(library.Source),
+                    // Answerable for a library nobody has configured, because it is a fact about
+                    // the product rather than about this installation's copy of it, and nothing is
+                    // asked of anybody to know it.
+                    LibraryPhotographMapping.MatchingSlug(library.SearchMatching),
                     Configured: false,
                     PhotoLibraryHealthDto.Of(LibraryHealth.NotAsked, picturesAvailable: false))));
         }
 
-        return TypedResults.Ok(new PhotoLibraryStatusDto(true, providers, unconfigured));
+        return TypedResults.Ok(new PhotoLibraryStatusDto(
+            true, PhotoLibrarySearchEndpoints.MaxSearchLength, providers, unconfigured));
     }
 
     /// <summary>
@@ -261,7 +268,9 @@ public static class PhotoLibraryEndpoints
         // collection, and only for a caller the audience rule has just admitted. Nothing downstream
         // of it decides anything again: an address handed out is a decision already taken.
         var picturesAvailable = library.PicturesAvailable;
-        var template = picturesAvailable ? PictureTemplate(which, tokens.CreateToken(which)) : null;
+        var template = picturesAvailable
+            ? LibraryPictureAddress.Template(which, tokens.CreateToken(which))
+            : null;
 
         return TypedResults.Ok(LibraryPhotoFeatureCollection.Of(
             features, which, picturesAvailable, template, page.ReadAt, truncated, omitted));
@@ -414,12 +423,4 @@ public static class PhotoLibraryEndpoints
 
         return TypedResults.NoContent();
     }
-
-    /// <summary>
-    /// The address of one rendering, with the two placeholders a client substitutes and nothing
-    /// else. The origin, the path and the credential are this application's.
-    /// </summary>
-    private static string PictureTemplate(PhotoLibrarySource source, string token) =>
-        $"/api/v1/photo-libraries/{PhotoLibrarySlugs.Slug(source)}/thumbnails/{{reference}}"
-        + $"?size={{size}}&token={Uri.EscapeDataString(token)}";
 }

@@ -18,7 +18,8 @@ using Therion.Blender.Parsing;
 namespace SilexGis.Api.Tests;
 
 /// <summary>
-/// The two read surfaces that answer what a cave's survey measures the cave to be.
+/// The read surfaces that answer what a cave's survey measures the cave to be — how long it is,
+/// which way it runs, and what shape its network of passages has.
 ///
 /// <para>
 /// The load-bearing test in here is the three-way one. Everything this work rests on is the claim
@@ -364,6 +365,21 @@ public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable
         var absent = await viewer.GetAsync($"/api/v1/caves/{Guid.NewGuid()}/statistics");
         absent.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await Code(absent)).ShouldBe("cave.not_found");
+
+        // The shape of the network is behind the same door as the length and the bearings. It is
+        // only a set of counts, but it was measured from a drawing of where the passages are, and
+        // answering it to somebody kept from the position would say the cave exists and has been
+        // surveyed.
+        var mineTopology = await TopologyAsync(owner, caveId);
+        mineTopology.GetProperty("nodeCount").GetInt32().ShouldBe(TraverseLegs + 1);
+
+        var topology = await viewer.GetAsync($"/api/v1/caves/{caveId}/topology");
+        topology.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await Code(topology)).ShouldBe("cave.not_found");
+
+        var absentTopology = await viewer.GetAsync($"/api/v1/caves/{Guid.NewGuid()}/topology");
+        absentTopology.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await Code(absentTopology)).ShouldBe("cave.not_found");
     }
 
     [Fact]
@@ -388,6 +404,12 @@ public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable
         var orientation = await viewer.GetAsync($"/api/v1/caves/{caveId}/orientation");
         orientation.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await Code(orientation)).ShouldBe("cave.not_found");
+
+        (await TopologyAsync(owner, caveId)).GetProperty("branchCount").GetInt32().ShouldBe(1);
+
+        var topology = await viewer.GetAsync($"/api/v1/caves/{caveId}/topology");
+        topology.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await Code(topology)).ShouldBe("cave.not_found");
     }
 
     [Fact]
@@ -410,6 +432,96 @@ public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable
         var emptyStats = await owner.GetAsync($"/api/v1/caves/{Guid.Empty}/statistics");
         emptyStats.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await Code(emptyStats)).ShouldBe("validation.failed");
+
+        (await anonymous.GetAsync($"/api/v1/caves/{caveId}/topology"))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        var emptyTopology = await owner.GetAsync($"/api/v1/caves/{Guid.Empty}/topology");
+        emptyTopology.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await Code(emptyTopology)).ShouldBe("validation.failed");
+
+        // A cave the caller may see whose network has never been measured says so in its own
+        // words. Reporting it as a missing cave would say the cave had gone, and reporting a row
+        // of zeroes would say it had been surveyed and found to have nothing.
+        var unmeasured = await owner.GetAsync($"/api/v1/caves/{caveId}/topology");
+        unmeasured.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await Code(unmeasured)).ShouldBe("cave_topology.not_measured");
+    }
+
+    /// <summary>
+    /// The figures are measured when the file is read, and they are read back with the two counts
+    /// that say how much of the file became network. A reading that lost legs still produces
+    /// entirely reasonable-looking figures, so the counts travel with them rather than being
+    /// available separately to whoever thinks to ask.
+    /// </summary>
+    [Fact]
+    public async Task The_measured_network_is_read_back_with_what_the_reading_dropped_and_merged()
+    {
+        var caveId = await CreateCaveAsync();
+        var modelId = await UploadLocalLoxAsync(caveId, SplayedSurveyFile());
+        await RunQueuedGraphJobAsync(modelId);
+
+        var topology = await TopologyAsync(owner, caveId);
+
+        topology.GetProperty("surveyModelId").GetGuid().ShouldBe(modelId);
+
+        // The fixture is one traverse of twelve legs with wall shots hanging off every station.
+        // The wall shots are not passage, so the network is the traverse and nothing else: one
+        // branch between two dead ends, and no loop anywhere.
+        topology.GetProperty("nodeCount").GetInt32().ShouldBe(TraverseLegs + 1);
+        topology.GetProperty("edgeCount").GetInt32().ShouldBe(TraverseLegs);
+        topology.GetProperty("componentCount").GetInt32().ShouldBe(1);
+        topology.GetProperty("reducedNodeCount").GetInt32().ShouldBe(2);
+        topology.GetProperty("reducedEdgeCount").GetInt32().ShouldBe(1);
+        topology.GetProperty("cyclomaticNumber").GetInt32().ShouldBe(0);
+        topology.GetProperty("branchCount").GetInt32().ShouldBe(1);
+        topology.GetProperty("extremityCount").GetInt32().ShouldBe(2);
+        topology.GetProperty("junctionCount").GetInt32().ShouldBe(0);
+
+        // Present and a number, not merely present: null here would mean nobody had looked, which
+        // is exactly the state these two counts exist to distinguish from "nothing was lost".
+        topology.GetProperty("droppedShotCount").GetInt32().ShouldBe(0);
+        topology.GetProperty("mergedStationCount").GetInt32().ShouldBe(0);
+    }
+
+    /// <summary>
+    /// Reading the file again replaces the figures rather than leaving the previous reading's
+    /// beside the new stations. A stored figure that outlives the reading it was computed from is
+    /// worse than no figure, because nothing about it looks stale.
+    /// </summary>
+    [Fact]
+    public async Task Reading_the_file_again_replaces_the_measured_network_rather_than_adding_to_it()
+    {
+        var caveId = await CreateCaveAsync();
+        var modelId = await UploadLocalLoxAsync(caveId, SplayedSurveyFile());
+        await RunQueuedGraphJobAsync(modelId);
+
+        var first = (await TopologyAsync(owner, caveId)).GetProperty("computedAt").GetDateTime();
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
+                .Single(h => h.Kind == ProcessingJobKinds.SurveyGraph);
+            var model = await db.SurveyModels.SingleAsync(m => m.Id == modelId);
+            model.Status = SurveyModelStatus.Pending;
+            await db.SaveChangesAsync();
+
+            var job = (await db.ProcessingJobs
+                    .Where(j => j.Kind == ProcessingJobKinds.SurveyGraph)
+                    .ToListAsync())
+                .Single(j => JsonSerializer
+                    .Deserialize<SurveyGraphPayload>(j.Payload, JsonSerializerOptions.Web)
+                    ?.SurveyModelId == modelId);
+
+            await handler.ExecuteAsync(job, CancellationToken.None);
+
+            (await db.SurveyTopologies.CountAsync(t => t.SurveyModelId == modelId)).ShouldBe(1);
+        }
+
+        var second = await TopologyAsync(owner, caveId);
+        second.GetProperty("computedAt").GetDateTime().ShouldBeGreaterThanOrEqualTo(first);
+        second.GetProperty("branchCount").GetInt32().ShouldBe(1);
     }
 
     private async Task<JsonElement> StatisticsAsync(HttpClient client, Guid caveId)
@@ -422,6 +534,13 @@ public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable
     private async Task<JsonElement> OrientationAsync(HttpClient client, Guid caveId)
     {
         var response = await client.GetAsync($"/api/v1/caves/{caveId}/orientation");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private async Task<JsonElement> TopologyAsync(HttpClient client, Guid caveId)
+    {
+        var response = await client.GetAsync($"/api/v1/caves/{caveId}/topology");
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }

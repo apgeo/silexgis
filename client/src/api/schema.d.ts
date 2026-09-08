@@ -5351,6 +5351,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/topology": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The shape of one cave's passage network. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveTopologyDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{id}/hypsometry": {
         parameters: {
             query?: never;
@@ -8019,6 +8057,128 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/photographs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page of the photographs one neighbouring library holds, newest first. Carries no position of any kind and takes no rectangle and no words. */
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryPhotographPageDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/photographs/{photographId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everything one neighbouring library will say about one photograph it holds, except where it was taken. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    source: string;
+                    photographId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryPhotographDetailDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One page of what a neighbouring library makes of a set of words, and which of the two questions it answered — matching text, or ordering by meaning. No total: neither product counts what a sentence matches. */
+        get: {
+            parameters: {
+                query?: {
+                    q?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryPhotographSearchPageDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -17293,6 +17453,7 @@ export interface components {
             openRegistration: boolean;
             externalOnly: boolean;
             providers: components["schemas"]["ExternalProviderInfo"][];
+            testLogins?: null | components["schemas"]["TestLoginInfo"][];
         };
         AvatarPresetRequest: {
             preset: string;
@@ -17743,6 +17904,74 @@ export interface components {
             mainEntrance: null | components["schemas"]["CaveMainEntranceDto"];
             permissions: components["schemas"]["CavePermissionsDto"];
             headlinePicture: null | components["schemas"]["CaveHeadlinePictureDto"];
+        };
+        CaveTopologyDto: {
+            /** Format: uuid */
+            caveId: string;
+            /** Format: uuid */
+            surveyModelId: string;
+            /** Format: int32 */
+            droppedShotCount: null | number;
+            /** Format: int32 */
+            mergedStationCount: null | number;
+            /** Format: int32 */
+            nodeCount: number;
+            /** Format: int32 */
+            edgeCount: number;
+            /** Format: int32 */
+            componentCount: number;
+            /** Format: int32 */
+            reducedNodeCount: number;
+            /** Format: int32 */
+            reducedEdgeCount: number;
+            /** Format: int32 */
+            reducedComponentCount: number;
+            /** Format: int32 */
+            cyclomaticNumber: number;
+            /** Format: int32 */
+            extremityCount: number;
+            /** Format: int32 */
+            junctionCount: number;
+            /** Format: double */
+            alpha: null | number;
+            /** Format: double */
+            beta: null | number;
+            /** Format: double */
+            gamma: null | number;
+            /** Format: double */
+            meanDegree: null | number;
+            /** Format: double */
+            degreeStandardDeviation: null | number;
+            /** Format: double */
+            degreeCoefficientOfVariation: null | number;
+            /** Format: double */
+            correlationOfVertexDegree: null | number;
+            /** Format: int32 */
+            branchCount: number;
+            /** Format: int32 */
+            loopingBranchCount: number;
+            /** Format: double */
+            meanBranchLengthM: null | number;
+            /** Format: double */
+            branchLengthCoefficientOfVariation: null | number;
+            /** Format: double */
+            minBranchLengthM: null | number;
+            /** Format: double */
+            maxBranchLengthM: null | number;
+            /** Format: double */
+            lengthEntropy: null | number;
+            /** Format: double */
+            orientationEntropy: null | number;
+            /** Format: double */
+            meanTortuosity: null | number;
+            /** Format: double */
+            averageShortestPathLength: null | number;
+            /** Format: double */
+            centralPointDominance: null | number;
+            /** Format: double */
+            averageClusteringCoefficient: null | number;
+            /** Format: date-time */
+            computedAt: string;
         };
         CaveWriteRequest: {
             name: string;
@@ -19588,6 +19817,71 @@ export interface components {
             /** Format: int32 */
             omittedCount: number;
         };
+        LibraryPhotographDetailDto: {
+            source: string;
+            libraryName: string;
+            photographId: string;
+            reference: string;
+            title: null | string;
+            description: null | string;
+            /** Format: date-time */
+            takenAt: null | string;
+            kind: null | string;
+            cameraMake: null | string;
+            cameraModel: null | string;
+            lens: null | string;
+            /** Format: double */
+            aperture: null | number;
+            shutterSpeed: null | string;
+            /** Format: int32 */
+            iso: null | number;
+            /** Format: double */
+            focalLengthMm: null | number;
+            picturesAvailable: boolean;
+            pictureUrlTemplate: null | string;
+        };
+        LibraryPhotographDto: {
+            photographId: string;
+            reference: string;
+            title: null | string;
+            /** Format: date-time */
+            takenAt: null | string;
+            kind: null | string;
+        };
+        LibraryPhotographPageDto: {
+            source: string;
+            libraryName: string;
+            items: components["schemas"]["LibraryPhotographDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            total: null | number;
+            hasMore: boolean;
+            pageSizeCapped: boolean;
+            picturesAvailable: boolean;
+            pictureUrlTemplate: null | string;
+            /** Format: date-time */
+            readAt: string;
+        };
+        LibraryPhotographSearchPageDto: {
+            source: string;
+            libraryName: string;
+            matching: string;
+            searched: string;
+            items: components["schemas"]["LibraryPhotographDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            hasMore: boolean;
+            pageSizeCapped: boolean;
+            picturesAvailable: boolean;
+            pictureUrlTemplate: null | string;
+            /** Format: date-time */
+            readAt: null | string;
+        };
         LinkKindDto: {
             /** Format: int64 */
             id: number;
@@ -20652,11 +20946,14 @@ export interface components {
         PhotoLibraryProviderDto: {
             source: string;
             name: string;
+            search: string;
             configured: boolean;
             health: components["schemas"]["PhotoLibraryHealthDto"];
         };
         PhotoLibraryStatusDto: {
             mayRead: boolean;
+            /** Format: int32 */
+            maxSearchLength: number;
             providers: components["schemas"]["PhotoLibraryProviderDto"][];
             unconfigured: components["schemas"]["PhotoLibraryProviderDto"][];
         };
@@ -22011,6 +22308,11 @@ export interface components {
         };
         /** @enum {unknown} */
         TerrainSurfaceFit: "horn" | "zevenbergenThorne" | null;
+        TestLoginInfo: {
+            email: string;
+            password: string;
+            role: string;
+        };
         TestMessageRequest: {
             recipient: string;
         };

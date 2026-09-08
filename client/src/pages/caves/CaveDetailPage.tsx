@@ -58,6 +58,7 @@ import CaveOverburdenPanel from '../../components/statistics/CaveOverburdenPanel
 import CaveStructurePanel from '../../components/statistics/CaveStructurePanel.tsx';
 import CaveOrientationPanel from '../../components/statistics/CaveOrientationPanel.tsx';
 import CaveStatisticsPanel from '../../components/statistics/CaveStatisticsPanel.tsx';
+import CaveTopologyPanel from '../../components/statistics/CaveTopologyPanel.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import QrPublicationModal from '../../components/qr/QrPublicationModal.tsx';
@@ -405,6 +406,10 @@ export default function CaveDetailPage() {
           follow the survey, and a survey uploaded today changes them without any trip being
           written up. */}
       {id && <CaveStatisticsPanel caveId={id} />}
+
+      {/* After the lengths and before the bearings: how much passage there is, then how it is put
+          together, then which way it runs. All three are measured from the same line work. */}
+      {id && <CaveTopologyPanel caveId={id} />}
 
       {id && <CaveOrientationPanel caveId={id} />}
 

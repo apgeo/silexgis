@@ -185,6 +185,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SurveyLrud> SurveyLruds => Set<SurveyLrud>();
 
+    public DbSet<SurveyTopology> SurveyTopologies => Set<SurveyTopology>();
+
     public DbSet<UserAddress> UserAddresses => Set<UserAddress>();
 
     public DbSet<UserNotificationPreference> UserNotificationPreferences => Set<UserNotificationPreference>();

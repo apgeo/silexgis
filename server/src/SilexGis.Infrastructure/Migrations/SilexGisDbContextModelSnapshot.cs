@@ -5315,6 +5315,137 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("survey_stations", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyTopology", b =>
+                {
+                    b.Property<Guid>("SurveyModelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("survey_model_id");
+
+                    b.Property<double?>("Alpha")
+                        .HasColumnType("double precision")
+                        .HasColumnName("alpha");
+
+                    b.Property<double?>("AverageClusteringCoefficient")
+                        .HasColumnType("double precision")
+                        .HasColumnName("average_clustering_coefficient");
+
+                    b.Property<double?>("AverageShortestPathLength")
+                        .HasColumnType("double precision")
+                        .HasColumnName("average_shortest_path_length");
+
+                    b.Property<double?>("Beta")
+                        .HasColumnType("double precision")
+                        .HasColumnName("beta");
+
+                    b.Property<int>("BranchCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("branch_count");
+
+                    b.Property<double?>("BranchLengthCoefficientOfVariation")
+                        .HasColumnType("double precision")
+                        .HasColumnName("branch_length_coefficient_of_variation");
+
+                    b.Property<double?>("CentralPointDominance")
+                        .HasColumnType("double precision")
+                        .HasColumnName("central_point_dominance");
+
+                    b.Property<int>("ComponentCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("component_count");
+
+                    b.Property<DateTime>("ComputedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("computed_at");
+
+                    b.Property<double?>("CorrelationOfVertexDegree")
+                        .HasColumnType("double precision")
+                        .HasColumnName("correlation_of_vertex_degree");
+
+                    b.Property<int>("CyclomaticNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("cyclomatic_number");
+
+                    b.Property<double?>("DegreeCoefficientOfVariation")
+                        .HasColumnType("double precision")
+                        .HasColumnName("degree_coefficient_of_variation");
+
+                    b.Property<double?>("DegreeStandardDeviation")
+                        .HasColumnType("double precision")
+                        .HasColumnName("degree_standard_deviation");
+
+                    b.Property<int>("EdgeCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("edge_count");
+
+                    b.Property<int>("ExtremityCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("extremity_count");
+
+                    b.Property<double?>("Gamma")
+                        .HasColumnType("double precision")
+                        .HasColumnName("gamma");
+
+                    b.Property<int>("JunctionCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("junction_count");
+
+                    b.Property<double?>("LengthEntropy")
+                        .HasColumnType("double precision")
+                        .HasColumnName("length_entropy");
+
+                    b.Property<int>("LoopingBranchCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("looping_branch_count");
+
+                    b.Property<double?>("MaxBranchLengthM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("max_branch_length_m");
+
+                    b.Property<double?>("MeanBranchLengthM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("mean_branch_length_m");
+
+                    b.Property<double?>("MeanDegree")
+                        .HasColumnType("double precision")
+                        .HasColumnName("mean_degree");
+
+                    b.Property<double?>("MeanTortuosity")
+                        .HasColumnType("double precision")
+                        .HasColumnName("mean_tortuosity");
+
+                    b.Property<double?>("MinBranchLengthM")
+                        .HasColumnType("double precision")
+                        .HasColumnName("min_branch_length_m");
+
+                    b.Property<int>("NodeCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("node_count");
+
+                    b.Property<double?>("OrientationEntropy")
+                        .HasColumnType("double precision")
+                        .HasColumnName("orientation_entropy");
+
+                    b.Property<int>("ReducedComponentCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("reduced_component_count");
+
+                    b.Property<int>("ReducedEdgeCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("reduced_edge_count");
+
+                    b.Property<int>("ReducedNodeCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("reduced_node_count");
+
+                    b.HasKey("SurveyModelId")
+                        .HasName("pk_survey_topology");
+
+                    b.HasIndex("CyclomaticNumber")
+                        .HasDatabaseName("ix_survey_topology_cyclomatic_number");
+
+                    b.ToTable("survey_topology", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.SyncSet", b =>
                 {
                     b.Property<Guid>("Id")
@@ -8324,6 +8455,18 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_survey_stations_survey_models_survey_model_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.SurveyTopology", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.SurveyModel", "SurveyModel")
+                        .WithOne()
+                        .HasForeignKey("SilexGis.Domain.Entities.SurveyTopology", "SurveyModelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_survey_topology_survey_models_survey_model_id");
+
+                    b.Navigation("SurveyModel");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.SyncSet", b =>

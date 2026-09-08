@@ -279,6 +279,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCaveSurveyStatisticsEndpoints();
     api.MapCaveCrossSectionEndpoints();
     api.MapCavePatternEndpoints();
+    api.MapCaveTopologyEndpoints();
     api.MapCaveHypsometryEndpoints();
     api.MapCaveOverburdenEndpoints();
     api.MapCaveStructureComparisonEndpoints();
@@ -306,6 +307,8 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCatalogueEndpoints();
     api.MapTripImportEndpoints();
     api.MapPhotoLibraryEndpoints();
+    api.MapPhotoLibraryBrowseEndpoints();
+    api.MapPhotoLibrarySearchEndpoints();
     api.MapPhotoLibraryFeatureEndpoints();
     api.MapJobEndpoints();
     api.MapExportEndpoints();
@@ -374,6 +377,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         // Permission groups must exist before the bootstrap admin joins Full Administrators.
         await PermissionGroupSeeder.SeedAsync(db);
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
+        await TestLoginSeeder.SeedAsync(scope.ServiceProvider);
 
         // Registration joins new accounts to these groups by slug; a slug naming no
         // group would silently do nothing per signup, so it is called out once here.

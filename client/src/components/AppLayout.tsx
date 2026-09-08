@@ -9,7 +9,13 @@ import { Avatar, Dropdown, Flex, Layout, Menu, Select, Typography, theme } from 
 import { useTranslation } from 'react-i18next';
 import { useLanguageChoice } from '../i18n/languageChoice.ts';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { hasAccessAction, useCapabilities, useMe, type AccessDomainName } from '../api/hooks.ts';
+import {
+  hasAccessAction,
+  useCapabilities,
+  useMe,
+  usePhotoLibraries,
+  type AccessDomainName,
+} from '../api/hooks.ts';
 import { useAuth } from '../auth/auth.tsx';
 import NotificationBell from './NotificationBell.tsx';
 import { useIsFullAdmin } from './reslinks/permissions.ts';
@@ -50,6 +56,13 @@ export default function AppLayout() {
   // every domain's links read from — so the rank, not a domain right, decides who is
   // offered the page that authors it.
   const isFullAdmin = useIsFullAdmin();
+  // Asked once, and not watched. The rail wants one thing from this answer — whether there is a
+  // neighbouring library this account may look through — and that cannot change without the server
+  // being restarted. Whether a library is up right now changes on its own and is worth watching,
+  // but only on a surface showing it: this component is mounted on every page for the whole of a
+  // session, so a timer here would be a request twice a minute for every signed-in account, for
+  // ever, to decide whether to draw one rail entry.
+  const { data: photoLibraries } = usePhotoLibraries({ watchingHealth: false });
 
   // "settings" and "notifications" are listed so an unmatched path does not fall through to
   // highlighting the map; neither matches a menu item, so nothing lights up while one is open,
@@ -58,7 +71,7 @@ export default function AppLayout() {
   // one keeps the camps item lit.
   const sections = [
     'map3d', 'dashboard', 'work-areas', 'caves', 'features', 'geodata', 'catalogue/speologie',
-    'gallery', 'albums', 'cabinets',
+    'gallery', 'albums', 'photo-library', 'cabinets',
     'uploads', 'documents', 'calendar', 'events',
     // Before the trip list, because the list's own prefix matches this path too and the first
     // match is the one taken. Behind it, the reviewer reading a spreadsheet is shown the rail
@@ -92,6 +105,11 @@ export default function AppLayout() {
     // screen — the preview included — to anyone who may not. A read check here would offer an
     // afternoon's review to somebody whose first request is turned down.
     tripLogCreate: hasAccessAction(capabilities?.domains.tripLogs, 'create'),
+    // Two facts, both from the server: whether this account may reach the neighbouring photo
+    // libraries at all, and whether this installation has been given one. Neither is a right of
+    // this application's own, and an installation that runs none of these products has nothing
+    // behind the page — so the rail offers it only when there is something there.
+    photoLibrary: (photoLibraries?.mayRead ?? false) && (photoLibraries?.providers.length ?? 0) > 0,
     isFullAdmin,
   });
 
