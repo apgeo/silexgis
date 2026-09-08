@@ -71,18 +71,18 @@ public interface IPhotoLibrary
     Task<LibraryPhotoPage> PhotosInAsync(Envelope bounds, int limit, CancellationToken ct);
 
     /// <summary>
-    /// Whether words may be sent to this library's own text matching.
+    /// What this library does with words: matches them against text somebody wrote down, or ranks
+    /// what it holds by how close the pictures are to what the words describe.
     /// </summary>
     /// <remarks>
-    /// False is a real answer rather than a shortcoming to be worked around: one of these products
-    /// matches text over titles, captions and keywords, and the other's only text-shaped question
-    /// is a similarity search over meaning, which is a different feature answering a different
-    /// question. A library that cannot match words is asked none, and the surface says so — because
-    /// the failure this prevents is the one the far side makes easy: a parameter that is neither
-    /// honoured nor refused comes back as a full, unfiltered page with the reader's words still in
-    /// the search box.
+    /// Published rather than kept inside the client, because it decides what a person is invited to
+    /// type. A box reading "describe the picture" over a library that matches words literally is a
+    /// promise the far side cannot keep, and the reader who types "muddy crawl" into it concludes
+    /// the library is empty rather than that they asked the wrong kind of question. It is a
+    /// property and not a method: it is a fact about the product, known without asking anybody, and
+    /// reading it must never open a socket.
     /// </remarks>
-    bool SupportsTextSearch { get; }
+    LibrarySearchMatching SearchMatching { get; }
 
     /// <summary>
     /// One page of this library's photographs, newest first, carrying no position of any kind.
@@ -102,6 +102,28 @@ public interface IPhotoLibrary
     /// </para>
     /// </remarks>
     Task<LibraryPhotoListPage> ListAsync(LibraryPhotoQuery query, CancellationToken ct);
+
+    /// <summary>
+    /// One page of what this library makes of a set of words, in the order it puts them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A separate call from the listing rather than a parameter on it, because the two are not the
+    /// same question narrowed by different amounts. A listing is what the library holds, newest
+    /// first; a search is whatever the far side does with a sentence, and against one of these
+    /// products that is an ordering of the whole library by closeness to the words rather than a
+    /// narrowing of anything. Merging them would have put the reader's words into one route that
+    /// answers two incompatible things and reports its count the same way for both.
+    /// </para>
+    /// <para>
+    /// The words go to the far side and nothing is narrowed afterwards. That is the only order
+    /// available — neither product will accept a set of identifiers to search within, so there is
+    /// no way to ask it about a chosen subset — and it is why what comes back is described by
+    /// <see cref="LibraryPhotoSearchPage"/> as a page of an answer somebody else composed rather
+    /// than as a count of anything.
+    /// </para>
+    /// </remarks>
+    Task<LibraryPhotoSearchPage> SearchAsync(LibraryPhotoSearchQuery search, CancellationToken ct);
 
     /// <summary>
     /// Everything this library will say about one photograph, or null when it reports none under

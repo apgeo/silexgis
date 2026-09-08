@@ -4024,8 +4024,6 @@
     "browse": {
       "title": "Fototeca",
       "noPositionShown": "Locul în care au fost făcute aceste fotografii nu este afișat aici. Harta este locul unde sunt așezate fotografiile unei fototeci.",
-      "search": "Caută în această fototecă",
-      "searchUnsupported": "{{library}} nu caută după cuvinte, așa că aici nu există cu ce să fie căutată.",
       "showingOf": "Se afișează {{shown}} din {{total}} fotografii pe care le are fototeca",
       "showingUnknownTotal": "Se afișează {{count}} fotografii. Această fototecă nu spune câte are.",
       "pageCapped": "Această instalare cere cel mult {{count}} fotografii odată.",
@@ -4036,6 +4034,16 @@
       "previous": "Înapoi",
       "next": "Înainte",
       "page": "Pagina {{page}}"
+    },
+    "search": {
+      "placeholderText": "Caută în titluri, descrieri și etichete",
+      "placeholderMeaning": "Descrie fotografia",
+      "textOnly": "Această fototecă potrivește cuvintele tale cu titluri, descrieri și etichete scrise de cineva. Nu se uită la fotografiile propriu-zise, așa că un cuvânt pe care nu l-a scris nimeni nu găsește nimic, oricât de bine ar descrie ce se vede.",
+      "byMeaning": "Această fototecă îți citește cuvintele ca pe o descriere și așază tot ce conține în ordinea apropierii fiecărei fotografii de ea. Nimic nu este potrivit exact și nimic nu este lăsat deoparte, așa că vezi ce a găsit mai apropiat — nu există un număr al celor care corespund.",
+      "showing": "Se afișează {{count}} fotografii",
+      "showingMore": "Se afișează {{count}} fotografii, iar fototeca spune că mai sunt și altele",
+      "empty": "Nu a venit nimic pentru acele cuvinte. Este vorba despre cuvinte, nu despre fototecă, care poate conține multe.",
+      "tooLong": "O căutare aici are cel mult {{count}} caractere, iar aceasta a fost mai lungă, așa că nu s-a cerut nimic fototecii."
     },
     "detail": {
       "title": "Fotografie",

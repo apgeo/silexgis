@@ -4,13 +4,24 @@ import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { Alert, Button, Flex, Input, Segmented, Skeleton, Space, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { usePhotoLibraries, usePhotoLibraryPhotographs } from '../../api/hooks.ts';
+import {
+  usePhotoLibraries,
+  usePhotoLibraryPhotographs,
+  usePhotoLibrarySearch,
+} from '../../api/hooks.ts';
 import LibraryPhotoDrawer from '../../components/photolibrary/LibraryPhotoDrawer.tsx';
 import LibraryPhotoGrid from '../../components/photolibrary/LibraryPhotoGrid.tsx';
-import { browseState, pagingOf, stepPage } from './browseState.ts';
+import { browseState, countLine, pagingOf, searchWording, stepPage } from './browseState.ts';
 
 /** Pictures per page. The same number this installation's own gallery shows. */
 const PageSize = 60;
+
+/**
+ * The longest search this installation will put in a request to a neighbouring library. The server
+ * refuses anything longer, and the box below stops short of it — so the refusal is reachable only
+ * from an address somebody was handed, which is where it is answered with a sentence.
+ */
+const MaxSearchLength = 200;
 
 /**
  * Looking through a photo library this installation does not own.
@@ -44,13 +55,23 @@ export default function PhotoLibraryPage() {
     ?? libraries[0]?.source;
   const words = params.get('q') ?? '';
 
-  const query = useMemo(
-    () => ({ page, pageSize: PageSize, q: words || undefined }),
-    [page, words],
-  );
+  // Two questions, two routes, and never both at once. Asking a library what it holds and asking
+  // what it makes of a sentence are different questions with differently shaped answers — one of
+  // the two products replies to the second with an ordering of its whole library rather than with
+  // a narrowed list — so the screen asks one of them and says which one it is showing.
+  const searching = words.trim().length > 0;
 
-  const { data, isPending, error } = usePhotoLibraryPhotographs(source, query);
+  const listing = useMemo(() => ({ page, pageSize: PageSize }), [page]);
+  const search = useMemo(() => ({ q: words.trim(), page, pageSize: PageSize }), [page, words]);
+
+  // The listing is not asked for while a search is on screen, and the search is not asked for
+  // without words: each hook is given the library only when its own question is the one being put.
+  const listed = usePhotoLibraryPhotographs(searching ? undefined : source, listing);
+  const found = usePhotoLibrarySearch(source, search);
+  const { data, isPending, error } = searching ? found : listed;
+
   const state = browseState({ isPending, error, page: data });
+  const counted = data ? countLine(data) : null;
   // The page being asked for, not the page in hand: while one is being turned they differ, and the
   // controls follow the question rather than the answer that is still on screen.
   const paging = pagingOf(data, page);
@@ -114,6 +135,10 @@ export default function PhotoLibraryPage() {
 
   const library = libraries.find((entry) => entry.source === source);
 
+  // What this library does with words decides what the box invites and what its answer is called.
+  // Read from what the server published about the product rather than guessed at from its name.
+  const wording = searchWording(library?.search ?? 'text');
+
   return (
     <div style={{ padding: 24, height: '100%', overflow: 'auto' }}>
       <Typography.Title level={3} style={{ marginTop: 0 }}>
@@ -140,25 +165,32 @@ export default function PhotoLibraryPage() {
           />
         )}
 
-        {/* Offered only where the library can answer it. One of the two products matches text over
-            what a photograph says about itself and the other has no such question at all, and a
-            box that quietly did nothing would be worse than no box: the server refuses the words
-            rather than dropping them, so this control and that refusal agree. */}
-        {data?.textSearchSupported === false ? (
-          <Typography.Text type="secondary">
-            {t('libraryPhotos.browse.searchUnsupported', { library: data.libraryName })}
-          </Typography.Text>
-        ) : (
-          <Input.Search
-            allowClear
-            placeholder={t('libraryPhotos.browse.search')}
-            defaultValue={words}
-            onSearch={(value) => setFilter('q', value || undefined)}
-            style={{ width: 260 }}
-            data-testid="library-photo-search"
-          />
-        )}
+        {/* Worded by what the library will actually do with the words, which the server publishes
+            for each product. Both can be searched and they answer differently: one looks the words
+            up in what somebody wrote down, the other compares them to the pictures themselves. A
+            box inviting a description of a photograph over a library that can only look words up
+            is a promise the far side cannot keep, and the nothing that comes back reads as an
+            empty library. */}
+        <Input.Search
+          allowClear
+          maxLength={MaxSearchLength}
+          placeholder={t(wording.placeholder)}
+          defaultValue={words}
+          onSearch={(value) => setFilter('q', value || undefined)}
+          style={{ width: 280 }}
+          data-testid="library-photo-search"
+        />
       </Flex>
+
+      {/* What kind of question was just asked, said where the answer to it is. Shown once there is
+          an answer to explain: somebody who searched for a thing they remember seeing and got
+          nothing is owed the difference between "this library holds nothing like that" and "this
+          library was never looking at the pictures". */}
+      {searching && (
+        <Typography.Paragraph type="secondary" style={{ maxWidth: 720 }}>
+          {t(wording.explains)}
+        </Typography.Paragraph>
+      )}
 
       {/* The library's own state, which is a different question from what came back for this page.
           A library can be perfectly healthy and hold nothing matching. */}
@@ -184,17 +216,15 @@ export default function PhotoLibraryPage() {
         <Alert type="error" showIcon message={t('libraryPhotos.refusals.notAllowed')} />
       )}
 
-      {/* Words this application would not put to this library — carried in the address from a
-          search of the other one, most often. Not a failure of anything: the box above is still
-          there to clear, and saying "the library did not answer" would send a reader to look at a
-          container that is working perfectly. */}
-      {state === 'searchUnsupported' && (
+      {/* A search this application would not put to any library, being longer than it will put in
+          a request to a neighbour. Not a failure of anything: the box above is still there to
+          clear, and saying "the library did not answer" would send a reader to look at a container
+          that is working perfectly. */}
+      {state === 'searchTooLong' && (
         <Alert
           type="info"
           showIcon
-          message={t('libraryPhotos.browse.searchUnsupported', {
-            library: library?.name ?? source,
-          })}
+          message={t('libraryPhotos.search.tooLong', { count: MaxSearchLength })}
         />
       )}
 
@@ -223,14 +253,7 @@ export default function PhotoLibraryPage() {
                   belongs would be telling a reader the club has sixty photographs. Counted only
                   where there is something to count: a page with nothing on it says what it is
                   below, and "showing 0" over it would be a second, worse way of saying it. */}
-              {paging.shown === 0
-                ? null
-                : paging.total === null
-                  ? t('libraryPhotos.browse.showingUnknownTotal', { count: paging.shown })
-                  : t('libraryPhotos.browse.showingOf', {
-                      shown: paging.shown,
-                      total: paging.total,
-                    })}
+              {counted && t(counted.key, counted.values)}
             </Typography.Text>
 
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -246,13 +269,16 @@ export default function PhotoLibraryPage() {
             pictureUrlTemplate={data.pictureUrlTemplate}
             onOpen={setOpen}
             emptyText={
-              // The two ways of arriving at an empty grid, kept apart. One is a library holding
-              // nothing that matches; the other is a step past the end of a listing that holds
-              // plenty — and one of the two products offers that step every time its library
-              // happens to hold an exact multiple of a page.
+              // The three ways of arriving at an empty grid, kept apart. A step past the end of a
+              // listing that holds plenty — which one of the two products offers every time its
+              // library happens to hold an exact multiple of a page; a library that holds nothing
+              // at all; and a search that matched nothing, which is a fact about the words rather
+              // than about the library and must not be read as the library being empty.
               state === 'endOfList'
                 ? t('libraryPhotos.browse.pastEnd')
-                : t('libraryPhotos.browse.empty')
+                : searching
+                  ? t('libraryPhotos.search.empty')
+                  : t('libraryPhotos.browse.empty')
             }
           />
 

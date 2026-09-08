@@ -4024,8 +4024,6 @@
     "browse": {
       "title": "Photo library",
       "noPositionShown": "Where these pictures were taken is not shown here. The map is where a library's photographs are placed.",
-      "search": "Search this library",
-      "searchUnsupported": "{{library}} does not match words, so there is nothing to search it with here.",
       "showingOf": "Showing {{shown}} of {{total}} photographs the library holds",
       "showingUnknownTotal": "Showing {{count}} photographs. This library does not say how many it holds.",
       "pageCapped": "This installation asks for at most {{count}} pictures at a time.",
@@ -4036,6 +4034,16 @@
       "previous": "Previous",
       "next": "Next",
       "page": "Page {{page}}"
+    },
+    "search": {
+      "placeholderText": "Search titles, captions and labels",
+      "placeholderMeaning": "Describe the picture",
+      "textOnly": "This library matches your words against titles, captions and labels somebody wrote down. It does not look at the pictures themselves, so a word nobody wrote finds nothing however well it describes what is there.",
+      "byMeaning": "This library reads your words as a description and puts everything it holds in order of how close each picture is to it. Nothing is matched and nothing is left out, so what you see is the closest it found — there is no count of what fits.",
+      "showing": "Showing {{count}} photographs",
+      "showingMore": "Showing {{count}} photographs, and the library says there are more",
+      "empty": "Nothing came back for those words. That is about the words rather than about the library, which may hold plenty.",
+      "tooLong": "A search here is at most {{count}} characters and this one was longer, so nothing was asked of the library."
     },
     "detail": {
       "title": "Photograph",

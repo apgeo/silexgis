@@ -75,6 +75,19 @@ public sealed class ImmichClient(
     private const string SearchRoute = "api/search/metadata";
 
     /// <summary>
+    /// The route a set of words is put to. Part of this library's published contract, and the only
+    /// question it has that takes a sentence: it turns the words into a description of an image and
+    /// orders what it holds by closeness to that description.
+    /// </summary>
+    /// <remarks>
+    /// It takes the same filters the listing route takes, and none of them is geographic — there is
+    /// no coordinate, no rectangle and no radius on any of this library's search requests. So a
+    /// search cannot be asked about a place, and this application does not pretend it can by
+    /// narrowing the answer afterwards and calling the result a search of that place.
+    /// </remarks>
+    private const string SmartSearchRoute = "api/search/smart";
+
+    /// <summary>
     /// The most photographs asked for in one page however this installation is configured. A page
     /// is what somebody is looking at; anything above this is a listing nobody reads and a request
     /// somebody else's container has to answer.
@@ -363,17 +376,25 @@ public sealed class ImmichClient(
     }
 
     /// <summary>
-    /// This library has no text matching worth offering as one.
+    /// This library answers words by meaning rather than by matching them.
     /// </summary>
     /// <remarks>
-    /// Its structured search filters over columns — dates, cameras, people, tags — rather than over
-    /// anything somebody would type as a sentence, and its one text-shaped question is a similarity
-    /// search over what a picture <em>looks like</em>, which is a different feature answering a
-    /// different question and belongs on a surface that says so. Rather than pass words to a filter
-    /// that would match almost nothing while looking like a search, this library is asked none and
-    /// the surface tells the reader why there is no box.
+    /// <para>
+    /// It has no text matching worth offering as one: its structured filters are over columns —
+    /// dates, cameras, people, tags — rather than over anything somebody would type as a sentence.
+    /// What it does have is a question of a different kind, which turns the words into a
+    /// description of an image and orders what it holds by how close each picture is to that
+    /// description. So nothing is matched and nothing is excluded, and the front of that ordering
+    /// is what a page of a search is.
+    /// </para>
+    /// <para>
+    /// Two consequences the surfaces above have to carry rather than smooth over. There is no count
+    /// of matches, because there is no set of matches. And a search that finds nothing useful is
+    /// not the same as a library holding nothing: the ordering always has a front, so what comes
+    /// back is whatever was least unlike the words.
+    /// </para>
     /// </remarks>
-    public bool SupportsTextSearch => false;
+    public LibrarySearchMatching SearchMatching => LibrarySearchMatching.Meaning;
 
     /// <summary>
     /// One page of the library, newest first, asked for without a rectangle.
@@ -397,16 +418,6 @@ public sealed class ImmichClient(
         ArgumentNullException.ThrowIfNull(query);
         EnsureConfigured();
 
-        if (!string.IsNullOrWhiteSpace(query.Text))
-        {
-            // Refused rather than dropped. A caller that sends words to a library which cannot
-            // match them gets a full unfiltered page back with nothing in it saying the words were
-            // ignored, which is a search box that looks like it worked.
-            throw new PhotoLibraryException(
-                PhotoLibraryException.RejectedCode,
-                "This photo library does not match text, so it is not asked to.");
-        }
-
         var size = Math.Clamp(query.PageSize, 1, ListPageCeiling);
         var page = Math.Max(1, query.Page);
 
@@ -419,7 +430,85 @@ public sealed class ImmichClient(
             CultureInfo.InvariantCulture,
             $$"""{"page":{{page}},"size":{{size}},"order":"desc"}""");
 
-        var url = new Uri(BaseAddress(Options.BaseUrl), SearchRoute);
+        var answered = await AskAsync(
+            new Uri(BaseAddress(Options.BaseUrl), SearchRoute), body, "a listing", ct);
+
+        // Checked against what the library handed over rather than against what survived the
+        // reading: the check below asks whether the stated total can be a total of the photographs
+        // already paged past, and the library paged past every row it sent — not the subset of them
+        // this application could name.
+        return new LibraryPhotoListPage(
+            answered.Photos,
+            TotalOf(answered.StatedTotal, page, size, answered.HandedOver, answered.HasMore),
+            answered.HasMore,
+            DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>
+    /// One page of what this library makes of a set of words.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A different route from the listing, and a different kind of answer. This one turns the words
+    /// into a description of an image and orders the library by how close each picture is to it, so
+    /// what comes back is the front of an ordering rather than the photographs that matched: there
+    /// is no matching, nothing is excluded, and no number anywhere counts a set that does not
+    /// exist. That is why the answer comes back in a record with no total in it.
+    /// </para>
+    /// <para>
+    /// The words go over as they were typed. This route reads them as a description and not as a
+    /// query language — there is no pair, prefix or operator it binds to a field — so unlike the
+    /// other product's grammar there is nothing here to reduce them to, and reducing them would
+    /// change what somebody asked for. What they must not do is escape the string they travel in,
+    /// which is why they are written by the serialiser rather than put between quotation marks.
+    /// </para>
+    /// </remarks>
+    public async Task<LibraryPhotoSearchPage> SearchAsync(
+        LibraryPhotoSearchQuery search, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(search);
+        EnsureConfigured();
+
+        var size = Math.Clamp(search.PageSize, 1, ListPageCeiling);
+        var page = Math.Max(1, search.Page);
+
+        // Written out rather than serialised from an object, for the same reason the listing is:
+        // what leaves this machine is exactly these three fields and cannot silently grow a fourth.
+        // The words themselves go through the serialiser, because they are somebody's sentence and
+        // a quotation mark or a backslash in them would otherwise end the string early and turn the
+        // rest of what they typed into a different request.
+        var body = string.Create(
+            CultureInfo.InvariantCulture,
+            $$"""{"query":{{JsonSerializer.Serialize(search.Text, Json)}},"page":{{page}},"size":{{size}}}""");
+
+        var answered = await AskAsync(
+            new Uri(BaseAddress(Options.BaseUrl), SmartSearchRoute), body, "a search", ct);
+
+        // Whatever number came back beside this page is left where it was found. A total is a count
+        // of what matched, and nothing matched: this route ranks the whole library and hands back a
+        // slice of the ranking, so the only honest arithmetic is how many came back and whether the
+        // ordering continues.
+        return new LibraryPhotoSearchPage(
+            answered.Photos, LibrarySearchMatching.Meaning, answered.HasMore, DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>
+    /// Puts one question to this library and reads the page of photographs out of its answer.
+    /// </summary>
+    /// <remarks>
+    /// One place for it because the two routes that page through photographs — the listing's and
+    /// the search's — answer in the same shape, and reading that shape twice is how one of them
+    /// ends up quietly disagreeing with the other about what an unreadable row or a missing next
+    /// page means.
+    /// </remarks>
+    /// <param name="question">
+    /// What was asked, for the sentence an operator reads when the answer was not of the expected
+    /// shape. It says which of the two questions came back wrong, because they are different
+    /// routes and a library can serve one and not the other.
+    /// </param>
+    private async Task<(IReadOnlyList<LibraryListedPhoto> Photos, int HandedOver, bool HasMore, int? StatedTotal)>
+        AskAsync(Uri url, string body, string question, CancellationToken ct)
+    {
         using var response = await PostJsonAsync(url, body, ct);
 
         JsonDocument document;
@@ -444,7 +533,7 @@ public sealed class ImmichClient(
             {
                 throw new PhotoLibraryException(
                     PhotoLibraryException.RejectedCode,
-                    "The photo library did not answer a listing with a list of photographs.");
+                    $"The photo library did not answer {question} with a list of photographs.");
             }
 
             var photos = new List<LibraryListedPhoto>(items.GetArrayLength());
@@ -458,18 +547,19 @@ public sealed class ImmichClient(
             }
 
             // What this library says about a further page is a page number rather than a flag, and
-            // an absent one is the end of the listing.
+            // an absent one is the end of the answer.
             var hasMore = assets.TryGetProperty("nextPage", out var next)
                 && next.ValueKind == JsonValueKind.String
                 && !string.IsNullOrWhiteSpace(next.GetString());
 
-            // Checked against what the library handed over rather than against what survived the
-            // reading: the check below asks whether the stated total can be a total of the
-            // photographs already paged past, and the library paged past every row it sent — not
-            // the subset of them this application could name.
-            return new LibraryPhotoListPage(
-                photos, TotalOf(assets, page, size, items.GetArrayLength(), hasMore), hasMore,
-                DateTimeOffset.UtcNow);
+            var stated = assets.TryGetProperty("total", out var value)
+                && value.ValueKind == JsonValueKind.Number
+                && value.TryGetInt32(out var total)
+                && total >= 0
+                    ? total
+                    : (int?)null;
+
+            return (photos, items.GetArrayLength(), hasMore, stated);
         }
     }
 
@@ -499,12 +589,9 @@ public sealed class ImmichClient(
     /// have been paged past and let exactly the totals this guard exists to suppress through.
     /// </para>
     /// </remarks>
-    private static int? TotalOf(JsonElement assets, int page, int size, int handedOver, bool hasMore)
+    private static int? TotalOf(int? stated, int page, int size, int handedOver, bool hasMore)
     {
-        if (!assets.TryGetProperty("total", out var value)
-            || value.ValueKind != JsonValueKind.Number
-            || !value.TryGetInt32(out var total)
-            || total < 0)
+        if (stated is not { } total)
         {
             return null;
         }

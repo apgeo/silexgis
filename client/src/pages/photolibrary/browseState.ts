@@ -1,6 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { ApiError } from '../../api/client.ts';
-import type { LibraryPhotographPage } from '../../api/hooks.ts';
+import type {
+  LibraryPhotographPage,
+  LibraryPhotographSearchPage,
+  LibrarySearchMatching,
+} from '../../api/hooks.ts';
+
+/**
+ * What the grid is drawing: a page of the library, or a page of what the library made of somebody's
+ * words.
+ *
+ * Two shapes rather than one with a flag, because they answer different questions and are allowed
+ * to say different things about themselves. A listing can state how many the library holds; a
+ * search cannot state how many match, because neither of the products behind this counts that —
+ * one ranks everything it holds and so has no set of matches, and the other counts only the page it
+ * has just sent.
+ */
+export type LibraryPage = LibraryPhotographPage | LibraryPhotographSearchPage;
+
+/** Whether this answer came from a search, which is the only thing that carries how it matched. */
+function searched(page: LibraryPage): page is LibraryPhotographSearchPage {
+  return 'matching' in page;
+}
 
 /**
  * What a page of a neighbouring library is currently able to say.
@@ -23,19 +44,19 @@ import type { LibraryPhotographPage } from '../../api/hooks.ts';
 export type BrowseState =
   | 'loading'
   | 'refused'
-  | 'searchUnsupported'
+  | 'searchTooLong'
   | 'silent'
   | 'empty'
   | 'endOfList'
   | 'photographs';
 
 /**
- * The refusal a library that does not match text answers words with.
+ * The refusal this application answers with when it will not put a search to a library at all.
  *
  * Read from the refusal's own code rather than matched out of its sentence, which is prose written
  * for a person and may be reworded or translated without anything here noticing.
  */
-const TextSearchUnsupported = 'photo_library.text_search_unsupported';
+const SearchTooLong = 'photo_library.search_too_long';
 
 export interface BrowseStateInput {
   /** Nothing has arrived yet and nothing failed. */
@@ -43,7 +64,7 @@ export interface BrowseStateInput {
   /** What the request failed with, or null.  */
   error: unknown;
   /** The page in hand, which may be the previous one while the next arrives. */
-  page: LibraryPhotographPage | undefined;
+  page: LibraryPage | undefined;
 }
 
 /**
@@ -68,11 +89,12 @@ export interface BrowseStateInput {
  */
 export function browseState({ isPending, error, page }: BrowseStateInput): BrowseState {
   if (error) {
-    if (error instanceof ApiError && error.code === TextSearchUnsupported) {
-      // The library was never asked. Words carried in the address outlive the box they were typed
-      // into — switching library keeps them — and a screen reporting "the library did not answer"
-      // for a question nobody put to it sends a reader to look at a container that is fine.
-      return 'searchUnsupported';
+    if (error instanceof ApiError && error.code === SearchTooLong) {
+      // The library was never asked. A search that outgrew what this installation will put in a
+      // request to a neighbour arrives here from an address somebody was given rather than from
+      // the box, and a screen reporting "the library did not answer" for a question nobody put to
+      // it sends a reader to look at a container that is fine.
+      return 'searchTooLong';
     }
 
     return error instanceof ApiError && (error.status === 403 || error.status === 401)
@@ -135,7 +157,7 @@ export interface BrowsePaging {
  *   the end of the listing on a next control the previous page enabled.
  */
 export function pagingOf(
-  page: LibraryPhotographPage | undefined,
+  page: LibraryPage | undefined,
   asked: number,
 ): BrowsePaging {
   if (!page) {
@@ -150,7 +172,10 @@ export function pagingOf(
     // how a reader arrives somewhere neither of them describes.
     hasPrevious: current && page.page > 1,
     hasNext: current && page.hasMore,
-    total: page.total,
+    // A search carries no total and is not missing one: nothing counted what a sentence matched,
+    // so there is no number to be unknown. Both arrive here as null and the line below the grid
+    // says which of the two silences it is.
+    total: searched(page) ? null : page.total,
     shown: page.items.length,
     current,
   };
@@ -169,4 +194,80 @@ export function stepPage(current: number, direction: -1 | 1, paging: BrowsePagin
   }
 
   return Math.max(1, current - 1);
+}
+
+/**
+ * The one line above the grid that says how much is being shown, and what that number is a count
+ * of.
+ *
+ * <p>
+ * Here rather than in the middle of markup because it is the whole honesty of this screen in four
+ * branches, and because the branches are the kind that only ever get checked by rendering and
+ * looking. Two of them are the listing's — the library states how many it holds, or it publishes
+ * no way to ask — and two are the search's, where <b>no product states how many match</b>: one
+ * orders everything it holds by closeness to the words and so has no set of matches to count, and
+ * the other counts only the page it has just sent. So a search says how many came back and whether
+ * there are more, and never a total, because a total there would be a number this application
+ * invented and a reader cannot tell an invented number from a counted one.
+ * </p>
+ * <p>
+ * Null when there is nothing on the page: what an empty grid is doing there is said inside it, and
+ * "showing 0" above it would be a second, worse way of saying the same thing.
+ * </p>
+ */
+export interface CountLine {
+  key: string;
+  values: Record<string, number>;
+}
+
+export function countLine(page: LibraryPage): CountLine | null {
+  const shown = page.items.length;
+  if (shown === 0) {
+    return null;
+  }
+
+  if (searched(page)) {
+    return {
+      key: page.hasMore ? 'libraryPhotos.search.showingMore' : 'libraryPhotos.search.showing',
+      values: { count: shown },
+    };
+  }
+
+  return page.total === null
+    ? { key: 'libraryPhotos.browse.showingUnknownTotal', values: { count: shown } }
+    : { key: 'libraryPhotos.browse.showingOf', values: { shown, total: page.total } };
+}
+
+/**
+ * What to invite somebody to type into the search box of a given library, and what to tell them
+ * about the answer they will get.
+ *
+ * <p>
+ * The two products answer a different question, and this is the one place that decides how each is
+ * described. A box reading "describe the picture" over a library that matches words against titles
+ * and captions is a promise the far side cannot keep: somebody types what they remember seeing,
+ * nothing comes back, and what they conclude is that the library is empty rather than that they
+ * asked the wrong kind of question.
+ * </p>
+ * <p>
+ * Driven by what the server published about the product rather than by naming the products here,
+ * so a third one added on the server arrives with wording rather than with a default that happens
+ * to be wrong for it.
+ * </p>
+ */
+export interface SearchWording {
+  placeholder: string;
+  explains: string;
+}
+
+export function searchWording(matching: LibrarySearchMatching): SearchWording {
+  return matching === 'meaning'
+    ? {
+        placeholder: 'libraryPhotos.search.placeholderMeaning',
+        explains: 'libraryPhotos.search.byMeaning',
+      }
+    : {
+        placeholder: 'libraryPhotos.search.placeholderText',
+        explains: 'libraryPhotos.search.textOnly',
+      };
 }

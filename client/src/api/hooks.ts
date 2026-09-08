@@ -179,6 +179,10 @@ export const queryKeys = {
     ['photo-libraries', source, 'photographs', query] as const,
   libraryPhotograph: (source: string, photographId: string) =>
     ['photo-libraries', source, 'photograph', photographId] as const,
+  // The words are part of the question, so they are part of the key. An answer held under a key
+  // that did not name them would put one search's pictures under another search's words.
+  librarySearch: (source: string, query: LibrarySearchQuery) =>
+    ['photo-libraries', source, 'search', query] as const,
   speologieStatus: ['speologie', 'status'] as const,
   // The whole request is the key. A catalogue search is a pure function of the term, the county
   // and the page, so changing any of them is a different question rather than a stale answer to
@@ -1353,8 +1357,28 @@ export async function fetchTripLogFeatures(
  * type-checking against a value it has never heard of, and failing only at runtime.
  */
 export type LibraryPhotoSource = LibraryPhotoProvider['source'];
-export type LibraryPhotoProvider = components['schemas']['PhotoLibraryProviderDto'];
-export type LibraryPhotoStatus = components['schemas']['PhotoLibraryStatusDto'];
+/**
+ * How a neighbouring library answers words: `text` when it matches them against what somebody wrote
+ * down about a photograph — a title, a caption, a keyword, a label its own classifier produced —
+ * and `meaning` when it turns them into a description of an image and orders what it holds by
+ * closeness to that description.
+ *
+ * Read rather than assumed, because it decides what a person is invited to type: a box reading
+ * "describe the picture" over a library that can only look up words is a promise the far side
+ * cannot keep, and the empty answer that follows reads as an empty library.
+ */
+export type LibrarySearchMatching = 'text' | 'meaning';
+
+export type LibraryPhotoProvider = components['schemas']['PhotoLibraryProviderDto'] & {
+  search: LibrarySearchMatching;
+};
+export type LibraryPhotoStatus = Omit<
+  components['schemas']['PhotoLibraryStatusDto'],
+  'providers' | 'unconfigured'
+> & {
+  providers: LibraryPhotoProvider[];
+  unconfigured: LibraryPhotoProvider[];
+};
 export type LibraryPhotoCollection = components['schemas']['LibraryPhotoFeatureCollection'];
 
 /**
@@ -1418,7 +1442,12 @@ export interface PhotoLibraryStatusUse {
 export function usePhotoLibraries({ watchingHealth = true }: PhotoLibraryStatusUse = {}) {
   return useQuery({
     queryKey: queryKeys.photoLibraryStatus,
-    queryFn: () => unwrap(api.GET('/api/v1/photo-libraries/status')),
+    // Named as the shape the server sends. This answer says how each library answers words, which
+    // a screen reads to word its search box, and the contract types this client is built against
+    // are read from a running API rather than from the source — so until they are read again the
+    // field is described here instead.
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/photo-libraries/status')) as Promise<LibraryPhotoStatus>,
     staleTime: PHOTO_LIBRARY_HEALTH_WINDOW_MS,
     refetchInterval: (query) =>
       watchingHealth && (query.state.data?.providers?.length ?? 0) > 0
@@ -1561,8 +1590,6 @@ export interface LibraryPhotographPage {
   hasMore: boolean;
   /** The page asked for was larger than this installation will ask a library for. */
   pageSizeCapped: boolean;
-  /** Whether words may be matched against this library at all. */
-  textSearchSupported: boolean;
   picturesAvailable: boolean;
   pictureUrlTemplate: string | null;
   readAt: string;
@@ -1589,12 +1616,14 @@ export interface LibraryPhotographDetail {
   pictureUrlTemplate: string | null;
 }
 
-/** What a page of a library is asked for. No rectangle, by construction. */
+/**
+ * What a page of a library is asked for. No rectangle, by construction — and no words either:
+ * asking a library what it holds and asking what it makes of a sentence are different questions
+ * with differently shaped answers, and they are different routes.
+ */
 export interface LibraryPhotographQuery {
   page: number;
   pageSize: number;
-  /** Words for the library's own text matching, where it has any. */
-  q?: string;
 }
 
 /** The address of one page of one library. Built here so the two hooks below cannot disagree. */
@@ -1603,9 +1632,6 @@ function photographsUrl(source: LibraryPhotoSource, query: LibraryPhotographQuer
     page: String(query.page),
     pageSize: String(query.pageSize),
   });
-  if (query.q) {
-    search.set('q', query.q);
-  }
   return `/api/v1/photo-libraries/${encodeURIComponent(source)}/photographs?${search.toString()}`;
 }
 
@@ -1651,6 +1677,94 @@ export function usePhotoLibraryPhotographs(
     // through this application's own attempts at the far side, so three more rounds with a
     // second's, two seconds' and four seconds' wait between them add nothing but the seven seconds
     // a reader spends before the sentence written for exactly this case appears.
+    retry: false,
+  });
+}
+
+/** What a search of a library is asked for. */
+export interface LibrarySearchQuery {
+  /** The words. Never empty: the server refuses a search with nothing to search for. */
+  q: string;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * One page of what a neighbouring library made of a set of words.
+ *
+ * <p>
+ * <b>There is no total here, and there is not meant to be one.</b> Neither of the products behind
+ * this can say how many photographs match a sentence: one ranks everything it holds by how close
+ * each picture is to what the words describe, so there is no set of matches to count, and the other
+ * counts only the page it has just sent. A number in this position would be invented, and nothing
+ * on a screen distinguishes an invented number from a counted one. What can honestly be shown is
+ * how many came back and whether the library says there are more.
+ * </p>
+ * <p>
+ * Written out here rather than read from the generated contract types. It is the server's record
+ * field for field, and it becomes the generated one the next time the contract is read from a
+ * running API.
+ * </p>
+ */
+export interface LibraryPhotographSearchPage {
+  source: LibraryPhotoSource;
+  libraryName: string;
+  /** Which of the two questions this answer came from — what happened, not what was advertised. */
+  matching: LibrarySearchMatching;
+  items: LibraryPhotograph[];
+  page: number;
+  pageSize: number;
+  /**
+   * Whether the library says the answer continues. For a ranking that means the ordering goes on,
+   * not that more photographs matched — nothing was matched.
+   */
+  hasMore: boolean;
+  pageSizeCapped: boolean;
+  picturesAvailable: boolean;
+  pictureUrlTemplate: string | null;
+  readAt: string;
+}
+
+/** The address of one page of one search. */
+function searchUrl(source: LibraryPhotoSource, query: LibrarySearchQuery): string {
+  const search = new URLSearchParams({
+    q: query.q,
+    page: String(query.page),
+    pageSize: String(query.pageSize),
+  });
+  return `/api/v1/photo-libraries/${encodeURIComponent(source)}/search?${search.toString()}`;
+}
+
+/**
+ * What one neighbouring library makes of a set of words.
+ *
+ * A separate hook from the listing because it is a separate question with a differently shaped
+ * answer, and keeping them apart is what lets a screen say which of the two it is showing. The
+ * words go to the far side untouched by anything here: what a sentence means is the library's
+ * decision, and a guess at its grammar made in a browser would be a second, wrong copy of it.
+ */
+export function usePhotoLibrarySearch(
+  source: LibraryPhotoSource | undefined,
+  query: LibrarySearchQuery,
+) {
+  return useQuery({
+    queryKey: queryKeys.librarySearch(source ?? '', query),
+    queryFn: () => readJson<LibraryPhotographSearchPage>(searchUrl(source!, query)),
+    enabled: source !== undefined && query.q.length > 0,
+    // The previous answer is kept on screen only while a page of the same search is being turned.
+    // Not across a change of words, and not across a change of library: an answer to one question
+    // drawn under another question's words is the one thing this screen must never show, and it is
+    // exactly what a grid that does not empty between searches would show.
+    placeholderData: (previous?: LibraryPhotographSearchPage, previousQuery?: { queryKey: readonly unknown[] }) => {
+      const asked = previousQuery?.queryKey[3] as LibrarySearchQuery | undefined;
+      return previous?.source === source && asked?.q === query.q ? previous : undefined;
+    },
+    staleTime: 30_000,
+    // The same two as the listing, for the same two reasons: every answer carries a freshly minted,
+    // short-lived credential in each picture's address, so asking again is a page of derivatives
+    // fetched afresh out of a neighbouring container for a screen nobody has touched — and a
+    // library that did not answer has already been asked as often as this application is willing.
+    refetchOnWindowFocus: false,
     retry: false,
   });
 }

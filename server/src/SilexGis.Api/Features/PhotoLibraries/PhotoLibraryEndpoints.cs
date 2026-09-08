@@ -123,6 +123,7 @@ public static class PhotoLibraryEndpoints
             .Select((library, index) => new PhotoLibraryProviderDto(
                 PhotoLibrarySlugs.Slug(library.Source),
                 PhotoLibrarySlugs.Name(library.Source),
+                LibraryPhotographMapping.MatchingSlug(library.SearchMatching),
                 Configured: true,
                 PhotoLibraryHealthDto.Of(health[index], library.PicturesAvailable)))
             .ToList();
@@ -139,6 +140,10 @@ public static class PhotoLibraryEndpoints
                 .Select(library => new PhotoLibraryProviderDto(
                     PhotoLibrarySlugs.Slug(library.Source),
                     PhotoLibrarySlugs.Name(library.Source),
+                    // Answerable for a library nobody has configured, because it is a fact about
+                    // the product rather than about this installation's copy of it, and nothing is
+                    // asked of anybody to know it.
+                    LibraryPhotographMapping.MatchingSlug(library.SearchMatching),
                     Configured: false,
                     PhotoLibraryHealthDto.Of(LibraryHealth.NotAsked, picturesAvailable: false))));
         }

@@ -58,14 +58,14 @@ public sealed class PhotoLibraryBrowseTests
     {
         var prism = new LibraryStub();
         prism.Answers(_ => Json("[]"));
-        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60, null), default);
+        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60), default);
 
         prism.Only.Url.ShouldContain("/api/v1/photos?");
         prism.Only.Url.ShouldNotContain("/api/v1/geo");
 
         var immich = new LibraryStub();
         immich.Answers(_ => Json(ImmichPage("[]", total: 0, nextPage: null)));
-        await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60, null), default);
+        await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60), default);
 
         immich.Only.Url.ShouldContain("/api/search/metadata");
         immich.Only.Url.ShouldNotContain("/api/map/markers");
@@ -86,7 +86,7 @@ public sealed class PhotoLibraryBrowseTests
     {
         var prism = new LibraryStub();
         prism.Answers(_ => Json($"[{PrismRow(PrismUid, PrismHash)}]"));
-        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60, null), default);
+        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60), default);
 
         foreach (var word in (string[])["latlng", "lat=", "lng=", "bbox", "dist=", "s2=", "olc="])
         {
@@ -95,7 +95,7 @@ public sealed class PhotoLibraryBrowseTests
 
         var immich = new LibraryStub();
         immich.Answers(_ => Json(ImmichPage($"[{ImmichRow(First)}]", total: 1, nextPage: null)));
-        await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60, null), default);
+        await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60), default);
 
         immich.Only.Url.ShouldNotContain("bbox");
 
@@ -118,12 +118,12 @@ public sealed class PhotoLibraryBrowseTests
     {
         var prism = new LibraryStub();
         prism.Answers(_ => Json("[]"));
-        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60, null), default);
+        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60), default);
         prism.Only.Url.ShouldContain("order=newest");
 
         var immich = new LibraryStub();
         immich.Answers(_ => Json(ImmichPage("[]", total: 0, nextPage: null)));
-        await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60, null), default);
+        await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60), default);
         immich.Only.Body.ShouldContain("\"order\":\"desc\"");
     }
 
@@ -135,7 +135,7 @@ public sealed class PhotoLibraryBrowseTests
     {
         var prism = new LibraryStub();
         prism.Answers(_ => Json("[]"));
-        await Prism(prism).ListAsync(new LibraryPhotoQuery(3, 20, null), default);
+        await Prism(prism).ListAsync(new LibraryPhotoQuery(3, 20), default);
 
         // The third page of twenty begins after forty, and the count asked for is the page rather
         // than everything up to it.
@@ -144,109 +144,10 @@ public sealed class PhotoLibraryBrowseTests
 
         var immich = new LibraryStub();
         immich.Answers(_ => Json(ImmichPage("[]", total: 0, nextPage: null)));
-        await Immich(immich).ListAsync(new LibraryPhotoQuery(3, 20, null), default);
+        await Immich(immich).ListAsync(new LibraryPhotoQuery(3, 20), default);
 
         immich.Only.Body.ShouldContain("\"page\":3");
         immich.Only.Body.ShouldContain("\"size\":20");
-    }
-
-    // ---------------------------------------------------------------------------- matching words
-
-    /// <summary>
-    /// One product matches words and is given them; the other does not and is asked nothing at all.
-    /// </summary>
-    /// <remarks>
-    /// The last line is the one that matters. A library that cannot match text and is sent some
-    /// answers with a full unfiltered page and no sign that the words were dropped, which is a
-    /// search box that looks like it worked — so the refusal happens before a socket is opened.
-    /// </remarks>
-    [Fact]
-    public async Task Words_go_only_to_the_library_that_matches_them()
-    {
-        var prism = new LibraryStub();
-        prism.Answers(_ => Json("[]"));
-        var prismLibrary = Prism(prism);
-
-        prismLibrary.SupportsTextSearch.ShouldBeTrue();
-        await prismLibrary.ListAsync(new LibraryPhotoQuery(1, 60, "rope traverse"), default);
-
-        // Escaped on the way out, so what somebody typed stays one value of one parameter whatever
-        // punctuation they used — an ampersand that arrived unescaped would be a second parameter
-        // this application never meant to send.
-        prism.Only.Url.ShouldContain("q=rope%20traverse");
-
-        var immich = new LibraryStub();
-        var immichLibrary = Immich(immich);
-
-        immichLibrary.SupportsTextSearch.ShouldBeFalse();
-        (await Refused(() => immichLibrary.ListAsync(new LibraryPhotoQuery(1, 60, "rope"), default)))
-            .ShouldBe(PhotoLibraryException.RejectedCode);
-
-        immich.Calls.ShouldBeEmpty();
-    }
-
-    /// <summary>
-    /// Words typed into a search box stay words, and cannot become a filter of any kind.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The parameter the words go into is not a text field on this product: it is parsed into the
-    /// same form the request's own parameters bind to, so a <c>name:value</c> pair typed into a
-    /// search box would set a field rather than match a word. This asserts that no such pair
-    /// survives, and it asserts it about the fields it would matter most for.
-    /// </para>
-    /// <para>
-    /// A place first, because that one is not a bug in a search box — it is the whole premise of
-    /// this surface. A listing narrowed to a circle around a point is a way of reading a
-    /// photograph's coordinate off which page it appears on, one halving at a time, on a surface
-    /// built to carry no position at all. Then the order and the quality floor, which this call
-    /// sets deliberately and which a pair would override, and the state fields, which reach
-    /// photographs the library's own owner marked as not for general viewing.
-    /// </para>
-    /// </remarks>
-    [Fact]
-    public async Task A_search_cannot_become_a_filter_of_any_kind()
-    {
-        var prism = new LibraryStub();
-        prism.Answers(_ => Json("[]"));
-
-        await Prism(prism).ListAsync(
-            new LibraryPhotoQuery(
-                1, 60, "lat:45.18 lng:23.21 dist:1 quality:0 order:oldest private:true archived:true"),
-            default);
-
-        var url = prism.Only.Url;
-
-        // The escaped form is what goes on the wire, so the separator is looked for in both
-        // spellings: a test reading only the plain one would pass while every filter went through
-        // percent-encoded, which is exactly how this would ship unnoticed.
-        var sent = url[(url.IndexOf("&q=", StringComparison.Ordinal) + 3)..];
-        sent.ShouldNotContain(":");
-        sent.ShouldNotContain("%3A");
-        sent.ShouldNotContain("%3a");
-
-        // The words themselves survive — this reduces a search, it does not refuse one.
-        sent.ShouldContain("lat");
-        sent.ShouldContain("45.18");
-
-        // And what this application decided remains what it decided.
-        url.ShouldContain("order=newest");
-        url.ShouldContain("quality=");
-    }
-
-    /// <summary>
-    /// A search that was nothing but filter syntax asks for the whole listing rather than for a
-    /// page of nothing.
-    /// </summary>
-    [Fact]
-    public async Task A_search_left_with_no_words_is_no_search()
-    {
-        var prism = new LibraryStub();
-        prism.Answers(_ => Json("[]"));
-
-        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60, " : "), default);
-
-        prism.Only.Url.ShouldNotContain("&q=");
     }
 
     // -------------------------------------------------------------------- counts, and their honesty
@@ -260,7 +161,7 @@ public sealed class PhotoLibraryBrowseTests
         var stub = new LibraryStub();
         stub.Answers(_ => Json(ImmichPage($"[{ImmichRow(First)},{ImmichRow(Second)}]", total: 412, nextPage: "2")));
 
-        var page = await Immich(stub).ListAsync(new LibraryPhotoQuery(1, 2, null), default);
+        var page = await Immich(stub).ListAsync(new LibraryPhotoQuery(1, 2), default);
 
         page.Total.ShouldBe(412);
         page.HasMore.ShouldBeTrue();
@@ -283,7 +184,7 @@ public sealed class PhotoLibraryBrowseTests
         var stub = new LibraryStub();
         stub.Answers(_ => Json(ImmichPage($"[{ImmichRow(First)},{ImmichRow(Second)}]", total: 2, nextPage: "2")));
 
-        var page = await Immich(stub).ListAsync(new LibraryPhotoQuery(1, 2, null), default);
+        var page = await Immich(stub).ListAsync(new LibraryPhotoQuery(1, 2), default);
 
         page.Total.ShouldBeNull();
         page.HasMore.ShouldBeTrue();
@@ -292,7 +193,7 @@ public sealed class PhotoLibraryBrowseTests
         var last = new LibraryStub();
         last.Answers(_ => Json(ImmichPage($"[{ImmichRow(First)},{ImmichRow(Second)}]", total: 2, nextPage: null)));
 
-        (await Immich(last).ListAsync(new LibraryPhotoQuery(1, 2, null), default)).Total.ShouldBe(2);
+        (await Immich(last).ListAsync(new LibraryPhotoQuery(1, 2), default)).Total.ShouldBe(2);
     }
 
     /// <summary>
@@ -311,7 +212,7 @@ public sealed class PhotoLibraryBrowseTests
         var full = new LibraryStub();
         full.Answers(_ => Json($"[{PrismRow(PrismUid, PrismHash)},{PrismRow("psinvented0000000two", "bb22cc33dd44ee55ff66")}]"));
 
-        var page = await Prism(full).ListAsync(new LibraryPhotoQuery(1, 2, null), default);
+        var page = await Prism(full).ListAsync(new LibraryPhotoQuery(1, 2), default);
 
         page.Total.ShouldBeNull();
         page.HasMore.ShouldBeTrue();
@@ -319,7 +220,7 @@ public sealed class PhotoLibraryBrowseTests
         var short_ = new LibraryStub();
         short_.Answers(_ => Json($"[{PrismRow(PrismUid, PrismHash)}]"));
 
-        var end = await Prism(short_).ListAsync(new LibraryPhotoQuery(1, 2, null), default);
+        var end = await Prism(short_).ListAsync(new LibraryPhotoQuery(1, 2), default);
 
         end.Total.ShouldBeNull();
         end.HasMore.ShouldBeFalse();
@@ -347,7 +248,7 @@ public sealed class PhotoLibraryBrowseTests
              {{PrismRow("psinvented000000three", "cc33dd44ee55ff66aa11")}}]
             """));
 
-        var page = await Prism(stub).ListAsync(new LibraryPhotoQuery(1, 60, null), default);
+        var page = await Prism(stub).ListAsync(new LibraryPhotoQuery(1, 60), default);
 
         page.Photos.Count.ShouldBe(2);
         page.Photos.Select(p => p.PhotographId)
@@ -374,7 +275,7 @@ public sealed class PhotoLibraryBrowseTests
              {{PrismRow("psinvented000000three", "cc33dd44ee55ff66aa11")}}]
             """));
 
-        var page = await Prism(stub).ListAsync(new LibraryPhotoQuery(1, 3, null), default);
+        var page = await Prism(stub).ListAsync(new LibraryPhotoQuery(1, 3), default);
 
         page.Photos.Count.ShouldBe(2);
         page.HasMore.ShouldBeTrue();
@@ -399,7 +300,7 @@ public sealed class PhotoLibraryBrowseTests
             total: 2,
             nextPage: "2")));
 
-        var page = await Immich(stub).ListAsync(new LibraryPhotoQuery(1, 2, null), default);
+        var page = await Immich(stub).ListAsync(new LibraryPhotoQuery(1, 2), default);
 
         page.Photos.Count.ShouldBe(1);
         page.Total.ShouldBeNull();
@@ -415,7 +316,7 @@ public sealed class PhotoLibraryBrowseTests
         stub.Answers(_ => Json(
             $$"""[{{PrismRow(PrismUid, PrismHash)}},{"UID":"psinvented0000000two","Hash":"bb22cc33dd44ee55ff66","Type":"video"}]"""));
 
-        var page = await Prism(stub).ListAsync(new LibraryPhotoQuery(1, 60, null), default);
+        var page = await Prism(stub).ListAsync(new LibraryPhotoQuery(1, 60), default);
 
         page.Photos[0].Kind.ShouldBeNull();
         page.Photos[1].Kind.ShouldBe(LibraryPhotoKind.Video);
@@ -436,7 +337,7 @@ public sealed class PhotoLibraryBrowseTests
         var prism = new LibraryStub();
         prism.Answers(_ => Json($"[{PrismRow(PrismUid, PrismHash)}]"));
 
-        var listed = (await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60, null), default)).Photos[0];
+        var listed = (await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60), default)).Photos[0];
 
         listed.PhotographId.ShouldBe(PrismUid);
         listed.Reference.ShouldBe(PrismHash);
@@ -445,7 +346,7 @@ public sealed class PhotoLibraryBrowseTests
         var immich = new LibraryStub();
         immich.Answers(_ => Json(ImmichPage($"[{ImmichRow(First)}]", total: 1, nextPage: null)));
 
-        var other = (await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60, null), default)).Photos[0];
+        var other = (await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60), default)).Photos[0];
 
         other.PhotographId.ShouldBe(First);
         other.Reference.ShouldBe(First);
@@ -469,7 +370,7 @@ public sealed class PhotoLibraryBrowseTests
             : WithPreviewToken(Json($"[{PrismRow(PrismUid, PrismHash)}]"), "invented0token"));
 
         var library = Prism(stub);
-        await library.ListAsync(new LibraryPhotoQuery(1, 60, null), default);
+        await library.ListAsync(new LibraryPhotoQuery(1, 60), default);
 
         await using var picture = await library.ThumbnailAsync(
             PrismHash, LibraryThumbnailSize.Small, ifNoneMatch: null, default);
@@ -635,7 +536,7 @@ public sealed class PhotoLibraryBrowseTests
         var prism = new LibraryStub();
         var prismLibrary = Prism(prism, options => options.Enabled = false);
 
-        (await Refused(() => prismLibrary.ListAsync(new LibraryPhotoQuery(1, 60, null), default)))
+        (await Refused(() => prismLibrary.ListAsync(new LibraryPhotoQuery(1, 60), default)))
             .ShouldBe(PhotoLibraryException.NotConfiguredCode);
         (await Refused(() => prismLibrary.DetailAsync(PrismUid, default)))
             .ShouldBe(PhotoLibraryException.NotConfiguredCode);
@@ -643,7 +544,7 @@ public sealed class PhotoLibraryBrowseTests
         var immich = new LibraryStub();
         var immichLibrary = Immich(immich, options => options.Enabled = false);
 
-        (await Refused(() => immichLibrary.ListAsync(new LibraryPhotoQuery(1, 60, null), default)))
+        (await Refused(() => immichLibrary.ListAsync(new LibraryPhotoQuery(1, 60), default)))
             .ShouldBe(PhotoLibraryException.NotConfiguredCode);
         (await Refused(() => immichLibrary.DetailAsync(First, default)))
             .ShouldBe(PhotoLibraryException.NotConfiguredCode);
@@ -669,19 +570,19 @@ public sealed class PhotoLibraryBrowseTests
             Content = new StringContent("<html>not this product</html>", Encoding.UTF8, "text/html"),
         });
 
-        (await Refused(() => Prism(markup).ListAsync(new LibraryPhotoQuery(1, 60, null), default)))
+        (await Refused(() => Prism(markup).ListAsync(new LibraryPhotoQuery(1, 60), default)))
             .ShouldBe(PhotoLibraryException.RejectedCode);
 
         var wrongShape = new LibraryStub();
         wrongShape.Answers(_ => Json("""{"photos":[]}"""));
 
-        (await Refused(() => Prism(wrongShape).ListAsync(new LibraryPhotoQuery(1, 60, null), default)))
+        (await Refused(() => Prism(wrongShape).ListAsync(new LibraryPhotoQuery(1, 60), default)))
             .ShouldBe(PhotoLibraryException.RejectedCode);
 
         var noAssets = new LibraryStub();
         noAssets.Answers(_ => Json("""{"albums":{"items":[]}}"""));
 
-        (await Refused(() => Immich(noAssets).ListAsync(new LibraryPhotoQuery(1, 60, null), default)))
+        (await Refused(() => Immich(noAssets).ListAsync(new LibraryPhotoQuery(1, 60), default)))
             .ShouldBe(PhotoLibraryException.RejectedCode);
     }
 

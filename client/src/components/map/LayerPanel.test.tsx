@@ -61,7 +61,7 @@ const healthy: LibraryPhotoHealth = {
 };
 
 function library(health: LibraryPhotoHealth): LibraryPhotoProvider {
-  return { source: 'immich', name: 'Immich', configured: true, health };
+  return { source: 'immich', name: 'Immich', search: 'meaning', configured: true, health };
 }
 
 const answered: LibraryPhotoLoadState = {
@@ -303,6 +303,7 @@ describe('the photo-library block of the layer panel', () => {
         {
           source: 'photoprism',
           name: 'PhotoPrism',
+          search: 'text',
           configured: false,
           health: {
             reach: 'unknown',

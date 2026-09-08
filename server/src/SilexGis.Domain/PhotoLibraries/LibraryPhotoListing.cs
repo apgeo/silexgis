@@ -80,13 +80,16 @@ public sealed record LibraryPhotoListPage(
 /// What is asked of a library for one page of a listing. Deliberately small, and deliberately
 /// without a rectangle: see <see cref="LibraryListedPhoto"/>.
 /// </summary>
+/// <remarks>
+/// It takes no words either, and that is not an omission. Asking a library what it holds and asking
+/// it what it makes of a sentence are two different questions with two different answers — one of
+/// these products replies to the second with an ordering over everything it holds rather than with
+/// a narrowed listing — so they are two calls, and this is the one that has nothing to say about
+/// words.
+/// </remarks>
 /// <param name="Page">One-based, as both products count pages and offsets from a page number here.</param>
 /// <param name="PageSize">How many at most, already clamped to what this installation will ask for.</param>
-/// <param name="Text">
-/// Words to match, passed to the library's own text matching, or null. Never sent to a library that
-/// has none — a parameter silently dropped by the far end is a search box that looks like it worked.
-/// </param>
-public sealed record LibraryPhotoQuery(int Page, int PageSize, string? Text);
+public sealed record LibraryPhotoQuery(int Page, int PageSize);
 
 /// <summary>
 /// One photograph in full, as far as the library that holds it will say.

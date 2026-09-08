@@ -43,6 +43,30 @@ public sealed record PhotoLibraryStatusDto(
 
 /// <param name="Source">Which product it is, as the address names it.</param>
 /// <param name="Name">What to call it on a screen. Never the product identifier a route is built from.</param>
+/// <param name="Search">
+/// What this product does with words: <c>text</c> when it matches them against what somebody wrote
+/// down about a photograph — a title, a caption, a keyword, a label its own classifier produced —
+/// and <c>meaning</c> when it turns them into a description of an image and orders what it holds by
+/// closeness to that description.
+///
+/// <para>
+/// Published rather than left to a client to assume, because it decides what a person is invited to
+/// type. A box reading "describe the picture" over a library that can only look up words is a
+/// promise the far side cannot keep: somebody types what they remember seeing, nothing comes back,
+/// and the conclusion they draw is that the library is empty rather than that they asked the wrong
+/// kind of question.
+/// </para>
+/// <para>
+/// It is what the product offers by its own published contract, known without asking it anything —
+/// so it is answered for a library nobody has configured as readily as for one that is running.
+/// Whether an answer actually came back that way is a separate fact, and each answer carries it.
+/// </para>
+/// <para>
+/// A fact about the product, not about the caller: every account reaching this integration reaches
+/// a library through one credential belonging to the whole installation, so there is one answer and
+/// every caller who may reach the feature gets it.
+/// </para>
+/// </param>
 /// <param name="Configured">
 /// An address and a credential are set. Whether anything answers at that address is a different
 /// question, and it is <see cref="Health"/> that answers it.
@@ -53,6 +77,7 @@ public sealed record PhotoLibraryStatusDto(
 public sealed record PhotoLibraryProviderDto(
     string Source,
     string Name,
+    string Search,
     bool Configured,
     PhotoLibraryHealthDto Health);
 

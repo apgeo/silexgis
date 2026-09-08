@@ -85,12 +85,6 @@ public sealed record LibraryPhotographDto(
 /// for. A shortened page that does not say it was shortened is a wrong answer, and this is the only
 /// thing that says it.
 /// </param>
-/// <param name="TextSearchSupported">
-/// Whether words may be matched against this library at all. False for a product whose only
-/// text-shaped question is a different feature; a surface reading false does not offer a search box,
-/// and the route refuses words rather than dropping them — a parameter neither honoured nor refused
-/// comes back as a full unfiltered page with the reader's words still in the box.
-/// </param>
 /// <param name="PicturesAvailable">
 /// Whether this library may be asked for image bytes. False when it answered a picture request with
 /// something that was not a picture, which can mean it has lost the disk its originals live on —
@@ -113,7 +107,6 @@ public sealed record LibraryPhotographPageDto(
     int? Total,
     bool HasMore,
     bool PageSizeCapped,
-    bool TextSearchSupported,
     bool PicturesAvailable,
     string? PictureUrlTemplate,
     DateTimeOffset ReadAt);
@@ -190,6 +183,20 @@ internal static class LibraryPhotographMapping
         LibraryPhotoKind.Video => "video",
         null => null,
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
+
+    /// <summary>
+    /// How a library's way of answering words is named on the wire. Written out rather than taken
+    /// from the enumeration's own <c>ToString</c>, which is a C# identifier a refactoring tool is
+    /// allowed to change under a client that reads it — and this one is read by a client to decide
+    /// what a person is invited to type, so a silent rename would leave a box inviting a
+    /// description of a picture over a library that matches words literally.
+    /// </summary>
+    public static string MatchingSlug(LibrarySearchMatching matching) => matching switch
+    {
+        LibrarySearchMatching.Text => "text",
+        LibrarySearchMatching.Meaning => "meaning",
+        _ => throw new ArgumentOutOfRangeException(nameof(matching)),
     };
 
     public static LibraryPhotographDto Of(LibraryListedPhoto photo) =>

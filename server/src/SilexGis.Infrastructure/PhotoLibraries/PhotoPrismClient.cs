@@ -317,7 +317,14 @@ public sealed class PhotoPrismClient(
     /// its keywords, and the labels its own classifier wrote — through the same search grammar its
     /// own interface uses, so what somebody types here means what it means over there.
     /// </summary>
-    public bool SupportsTextSearch => true;
+    /// <remarks>
+    /// Text and not meaning, and the difference is worth being plain about because the product does
+    /// run a classifier of its own: what that classifier produces is a fixed vocabulary of words
+    /// written onto a photograph, which is then matched as words like any other. Nothing here
+    /// compares a sentence to a picture, so a search for something nobody wrote down finds nothing
+    /// however well it describes what is in the library.
+    /// </remarks>
+    public LibrarySearchMatching SearchMatching => LibrarySearchMatching.Text;
 
     /// <summary>
     /// One page of the library, newest first, asked for without a rectangle.
@@ -338,16 +345,71 @@ public sealed class PhotoPrismClient(
     public async Task<LibraryPhotoListPage> ListAsync(LibraryPhotoQuery query, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        var answered = await PageAsync(query.Page, query.PageSize, words: null, ct);
+
+        // The total is left unknown on purpose. This product does send a count beside a page, but
+        // it counts what that page holds — a number the page already is — and nothing in the answer
+        // says how many the library holds altogether. An unknown total said plainly is a better
+        // answer than a number a reader cannot tell from a fact.
+        return new LibraryPhotoListPage(
+            answered.Photos, Total: null, answered.HasMore, DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>
+    /// One page of what this library makes of a set of words.
+    /// </summary>
+    /// <remarks>
+    /// The same route the listing uses, asked the same way with the words added, because on this
+    /// product that <em>is</em> the search: there is no second question to put to it. What differs
+    /// is what the answer is allowed to claim — a page of a listing is a page of the library, and a
+    /// page of a search is a page of what one sentence matched — and that is carried in the two
+    /// different records they come back in.
+    /// </remarks>
+    public async Task<LibraryPhotoSearchPage> SearchAsync(
+        LibraryPhotoSearchQuery search, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(search);
         EnsureConfigured();
 
-        var count = Math.Clamp(query.PageSize, 1, ViewportCountCeiling);
+        var words = WordsOnly(search.Text);
+        if (words is null)
+        {
+            // Somebody typed something this library could only have read as a filter, and taking
+            // the filter out left no words at all. Nothing is asked, because the question that
+            // would have gone out is "give me the library" — which would come back as a full page
+            // under a heading saying it matched what they typed. An empty answer is the honest one:
+            // there are no words here to match anything with.
+            return new LibraryPhotoSearchPage(
+                [], LibrarySearchMatching.Text, HasMore: false, DateTimeOffset.UtcNow);
+        }
+
+        var answered = await PageAsync(search.Page, search.PageSize, words, ct);
+
+        return new LibraryPhotoSearchPage(
+            answered.Photos, LibrarySearchMatching.Text, answered.HasMore, DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>
+    /// One page of the library, newest first, with or without words to match.
+    /// </summary>
+    /// <remarks>
+    /// One place for the question so the listing and the search cannot drift apart in what they ask
+    /// for beyond the words: the order and the quality floor are decisions of this installation, and
+    /// two copies of them would eventually disagree about which photographs a library is considered
+    /// to hold depending on whether somebody had typed anything.
+    /// </remarks>
+    private async Task<(IReadOnlyList<LibraryListedPhoto> Photos, bool HasMore)> PageAsync(
+        int page, int pageSize, string? words, CancellationToken ct)
+    {
+        EnsureConfigured();
+
+        var count = Math.Clamp(pageSize, 1, ViewportCountCeiling);
 
         // Widened before it is multiplied, so a page number far past the end of any library
         // produces a large offset rather than a negative one: the far side answers an offset past
         // the end with an empty page, and would answer a negative one with nobody knows what.
-        var offset = (int)Math.Clamp((Math.Max(1, query.Page) - 1L) * count, 0, int.MaxValue);
-
-        var words = WordsOnly(query.Text);
+        var offset = (int)Math.Clamp((Math.Max(1, page) - 1L) * count, 0, int.MaxValue);
 
         var url = new Uri(
             BaseAddress(Options.BaseUrl),
@@ -419,13 +481,7 @@ public sealed class PhotoPrismClient(
             // full page would otherwise make this false, disable the next control, and put
             // everything past that offset out of reach with nothing on the screen saying the
             // listing stopped.
-            //
-            // The total is left unknown on purpose. This product does send a count beside a page,
-            // but it counts what that page holds — a number the page already is — and nothing in
-            // the answer says how many the library holds altogether. An unknown total said plainly
-            // is a better answer than a number a reader cannot tell from a fact.
-            return new LibraryPhotoListPage(
-                photos, Total: null, HasMore: handedOver >= count, DateTimeOffset.UtcNow);
+            return (photos, handedOver >= count);
         }
     }
 
@@ -443,7 +499,7 @@ public sealed class PhotoPrismClient(
     /// viewing; and, worst of all here, it includes every field naming a place.
     /// </para>
     /// <para>
-    /// That last one is why this exists rather than being left to a length check. A listing that
+    /// That last one is why this exists rather than being left to a length check. A search that
     /// passed the text through would let anybody narrow it to a circle around a point and read a
     /// photograph's coordinate off the result to whatever precision they had patience for — on a
     /// surface whose whole premise is that it carries no position at all. A premise that a search
@@ -452,7 +508,10 @@ public sealed class PhotoPrismClient(
     /// <para>
     /// So the separator that makes a pair is taken out and what is left is words. Nothing is
     /// refused and nothing is reported: somebody who typed a colon was searching for something, and
-    /// on a surface that has no filters the honest reading of their text is the words in it.
+    /// on a surface that has no filters the honest reading of their text is the words in it. Null
+    /// when nothing is left, which the caller answers with nothing found rather than by asking for
+    /// the whole library — words that were never sent must not come back as a page that looks like
+    /// they matched everything.
     /// </para>
     /// </remarks>
     private static string? WordsOnly(string? text)

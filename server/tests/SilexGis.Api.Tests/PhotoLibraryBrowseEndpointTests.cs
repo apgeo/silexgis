@@ -19,10 +19,9 @@ namespace SilexGis.Api.Tests;
 /// <para>
 /// The far side is a whole separate product and is not run here. What is proved instead is
 /// everything on this side of the socket: that an installation given no library asks nothing of
-/// anybody, that the audience is decided on the server rather than by not drawing a page, that
-/// words are refused rather than dropped by a library which cannot match them, that a page which
-/// was capped says so — and the one that matters most, that <b>nothing on either of these
-/// responses is a position</b>. That last is asserted against the serialised body rather than
+/// anybody, that the audience is decided on the server rather than by not drawing a page, that a
+/// listing carries no words however an address is written, that a page which was capped says so —
+/// and the one that matters most, that <b>nothing on either of these responses is a position</b>. That last is asserted against the serialised body rather than
 /// against the record's fields, because a field added later would be caught by the first and not
 /// by the second.
 /// </para>
@@ -39,9 +38,7 @@ public sealed class PhotoLibraryBrowseEndpointTests : IAsyncLifetime, IDisposabl
     private const string DetailUrl = $"{ListUrl}/psinvented5";
 
     private const string FakeToken = "not-a-real-token-0000";
-    private const string FakeApiKey = "not-a-real-key-0000";
     private const string LibraryAddress = "http://photo-library.invalid:2342";
-    private const string OtherLibraryAddress = "http://other-photo-library.invalid:2283";
 
     /// <summary>An invented identifier and an invented hash, of the shapes this product mints.</summary>
     private const string Uid = "psinvented5";
@@ -253,7 +250,6 @@ public sealed class PhotoLibraryBrowseEndpointTests : IAsyncLifetime, IDisposabl
         page.GetProperty("page").GetInt32().ShouldBe(2);
         page.GetProperty("pageSize").GetInt32().ShouldBe(10);
         page.GetProperty("pageSizeCapped").GetBoolean().ShouldBeFalse();
-        page.GetProperty("textSearchSupported").GetBoolean().ShouldBeTrue();
         page.GetProperty("picturesAvailable").GetBoolean().ShouldBeTrue();
         page.GetProperty("pictureUrlTemplate").GetString().ShouldNotBeNullOrEmpty();
 
@@ -297,40 +293,24 @@ public sealed class PhotoLibraryBrowseEndpointTests : IAsyncLifetime, IDisposabl
     }
 
     /// <summary>
-    /// Words are passed to a library that matches them, and refused for one that does not — rather
-    /// than dropped.
+    /// A listing takes no words at all, whatever is put in the address.
     /// </summary>
     /// <remarks>
-    /// A parameter neither honoured nor refused comes back as a full unfiltered page with the
-    /// reader's words still in the box, which is the one failure this route can produce that looks
-    /// exactly like a working search.
+    /// The two questions are two routes on purpose — one asks a library what it holds, the other
+    /// asks what it makes of a sentence, and the second comes back from one of the two products as
+    /// an ordering of the whole library rather than as a narrowing of anything. So a listing has
+    /// nowhere to put words, and a parameter left over in a bookmarked address cannot quietly
+    /// narrow, reorder or empty it.
     /// </remarks>
     [Fact]
-    public async Task Words_are_passed_to_a_library_that_matches_them_and_refused_by_one_that_does_not()
+    public async Task A_listing_takes_no_words_whatever_is_in_the_address()
     {
         library.AnswersListing(OnePhotograph);
 
         (await JsonAsync(admin, $"{ListUrl}?q=rope")).GetProperty("items").GetArrayLength().ShouldBe(1);
-        library.Only.Url.ShouldContain("q=rope");
 
-        var other = new LibraryStub();
-        using var both = Configured(library, other);
-        var email = $"pb-two-{Guid.NewGuid():N}"[..20] + "@t.local";
-        await AuthHelper.CreateUserAsync(both, GlobalRoles.Admin, email);
-        using var caller = await AuthHelper.BearerClientAsync(both, email);
-
-        var refused = await caller.GetAsync($"{OtherListUrl}?q=rope");
-        var body = await refused.Content.ReadAsStringAsync();
-        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
-        CodeOf(body).ShouldBe(PhotoLibraryBrowseEndpoints.TextSearchUnsupportedCode);
-
-        // The refusal is made before anything leaves this machine, and the same library answers a
-        // listing perfectly well when it is not asked to match words.
-        other.Calls.ShouldBeEmpty();
-
-        other.AnswersListing("""{"assets":{"count":0,"items":[],"total":0,"nextPage":null}}""");
-        (await JsonAsync(caller, OtherListUrl)).GetProperty("textSearchSupported").GetBoolean()
-            .ShouldBeFalse();
+        library.Only.Url.ShouldNotContain("q=rope");
+        library.Only.Url.ShouldContain("order=newest");
     }
 
     /// <summary>
@@ -510,37 +490,21 @@ public sealed class PhotoLibraryBrowseEndpointTests : IAsyncLifetime, IDisposabl
      "Iso":400,"FNumber":0,"Exposure":"1/125"}
     """;
 
-    private SilexGisApiFactory Configured(LibraryStub stub, LibraryStub? other = null)
-    {
-        var settings = new Dictionary<string, string?>
-        {
-            ["PhotoLibraries:PhotoPrism:Enabled"] = "true",
-            ["PhotoLibraries:PhotoPrism:BaseUrl"] = LibraryAddress,
-            ["PhotoLibraries:PhotoPrism:AccessToken"] = FakeToken,
-        };
-
-        if (other is not null)
-        {
-            settings["PhotoLibraries:Immich:Enabled"] = "true";
-            settings["PhotoLibraries:Immich:BaseUrl"] = OtherLibraryAddress;
-            settings["PhotoLibraries:Immich:ApiKey"] = FakeApiKey;
-        }
-
-        return new SilexGisApiFactory(
+    /// <summary>
+    /// One product configured and the other not, which is also the state the case above about a
+    /// library this installation does not run depends on.
+    /// </summary>
+    private SilexGisApiFactory Configured(LibraryStub stub) =>
+        new(
             connectionString,
-            settings,
-            services =>
+            new Dictionary<string, string?>
             {
-                services.AddHttpClient(PhotoPrismClient.HttpClientName)
-                    .ConfigurePrimaryHttpMessageHandler(() => stub);
-
-                if (other is not null)
-                {
-                    services.AddHttpClient(ImmichClient.HttpClientName)
-                        .ConfigurePrimaryHttpMessageHandler(() => other);
-                }
-            });
-    }
+                ["PhotoLibraries:PhotoPrism:Enabled"] = "true",
+                ["PhotoLibraries:PhotoPrism:BaseUrl"] = LibraryAddress,
+                ["PhotoLibraries:PhotoPrism:AccessToken"] = FakeToken,
+            },
+            services => services.AddHttpClient(PhotoPrismClient.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => stub));
 
     private static async Task<JsonElement> JsonAsync(HttpClient client, string url)
     {

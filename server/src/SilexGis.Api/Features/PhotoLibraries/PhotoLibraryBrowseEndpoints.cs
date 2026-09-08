@@ -26,12 +26,15 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// taken; it decides that where positions are emitted, and nothing is emitted here.
 /// </para>
 /// <para>
-/// One thing this route takes could undo that on its own, and it is dealt with where it is sent
-/// rather than here: the words from a search box. One of the two products parses that parameter
-/// into the same form its own filters bind to, geographic ones included, so text passed through
-/// verbatim would let a listing be narrowed to a circle around a point — and a coordinate read off
-/// which page a photograph falls on is a coordinate this surface published. The client that talks
-/// to that product reduces what it is given to words before sending it, and says so at length.
+/// These two routes take no words either. Asking a library what it holds and asking it what it
+/// makes of a sentence are different questions with differently shaped answers — one of the two
+/// products replies to the second with an ordering of its whole library rather than with a
+/// narrowed list — so words have a route of their own, and the count it publishes says what it is
+/// a count of. Keeping them apart also keeps one dangerous parameter in one place: the same
+/// product parses a search box's text into the form its own filters bind to, geographic ones
+/// included, so text passed through verbatim would let a list be narrowed to a circle around a
+/// point, and a coordinate read off which page a photograph falls on is a coordinate this surface
+/// published.
 /// </para>
 /// <para>
 /// Nothing is stored and nothing is held between calls. The library is asked for one page, its
@@ -51,16 +54,6 @@ public static class PhotoLibraryBrowseEndpoints
     public const string PhotographNotFoundCode = "photo_library.photograph_not_found";
 
     /// <summary>
-    /// Words were sent to a library that does not match text. Refused rather than dropped: a
-    /// parameter the far end neither honours nor rejects comes back as a full unfiltered page, with
-    /// nothing in it saying so and the reader's words still in the search box.
-    /// </summary>
-    public const string TextSearchUnsupportedCode = "photo_library.text_search_unsupported";
-
-    /// <summary>Words longer than this installation will put in a request to a neighbour.</summary>
-    public const string SearchTooLongCode = "photo_library.search_too_long";
-
-    /// <summary>
     /// Pictures per page when a caller asks for no particular number. The same number this
     /// application's own gallery shows, because it is the same gesture on the same screens.
     /// </summary>
@@ -77,12 +70,6 @@ public static class PhotoLibraryBrowseEndpoints
     /// </remarks>
     public const int MaxPageSize = 200;
 
-    /// <summary>
-    /// The longest run of words passed to a library's own search. Long enough for a sentence and
-    /// short enough that nothing unbounded is put into a request to a neighbour.
-    /// </summary>
-    public const int MaxSearchLength = 200;
-
     public static RouteGroupBuilder MapPhotoLibraryBrowseEndpoints(this RouteGroupBuilder api)
     {
         ArgumentNullException.ThrowIfNull(api);
@@ -92,7 +79,7 @@ public static class PhotoLibraryBrowseEndpoints
         libraries.MapGet("/{source}/photographs", ListAsync)
             .WithSummary(
                 "One page of the photographs one neighbouring library holds, newest first. Carries "
-                + "no position of any kind and takes no rectangle.");
+                + "no position of any kind and takes no rectangle and no words.");
 
         libraries.MapGet("/{source}/photographs/{photographId}", DetailAsync)
             .WithSummary(
@@ -123,7 +110,6 @@ public static class PhotoLibraryBrowseEndpoints
         string source,
         int? page,
         int? pageSize,
-        string? q,
         IEnumerable<IPhotoLibrary> libraries,
         ILibraryPhotoTokenService tokens,
         IOptions<PhotoLibraryOptions> options,
@@ -160,26 +146,11 @@ public static class PhotoLibraryBrowseEndpoints
         var wanted = pageSize ?? DefaultPageSize;
         var size = Math.Clamp(wanted, 1, MaxPageSize);
         var number = Math.Max(1, page ?? 1);
-        var text = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
-
-        if (text is { Length: > MaxSearchLength })
-        {
-            return ApiProblems.BadRequest(
-                SearchTooLongCode,
-                $"A search of at most {MaxSearchLength} characters is passed to a photo library.");
-        }
-
-        if (text is not null && !library.SupportsTextSearch)
-        {
-            return ApiProblems.BadRequest(
-                TextSearchUnsupportedCode,
-                "This photo library does not match text, so words are not sent to it.");
-        }
 
         LibraryPhotoListPage answer;
         try
         {
-            answer = await library.ListAsync(new LibraryPhotoQuery(number, size, text), ct);
+            answer = await library.ListAsync(new LibraryPhotoQuery(number, size), ct);
         }
         catch (PhotoLibraryException e)
         {
@@ -209,7 +180,6 @@ public static class PhotoLibraryBrowseEndpoints
             answer.Total,
             answer.HasMore,
             PageSizeCapped: wanted > size,
-            library.SupportsTextSearch,
             picturesAvailable,
             template,
             answer.ReadAt));
