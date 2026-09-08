@@ -322,9 +322,23 @@ public sealed class AreaKarstStatisticsTests : IAsyncLifetime, IDisposable, ICla
         // indexed passes a plan assertion at test scale. With the scan closed off, a form the GIN
         // index can serve produces an index scan and a form it cannot still produces a sequential
         // one, so the two are told apart.
-        await connection.ExecuteAsync("SET LOCAL enable_seqscan = off");
+        // In a transaction, because that is the only place SET LOCAL does anything: outside one
+        // PostgreSQL answers "SET LOCAL can only be used in transaction blocks", leaves the setting
+        // alone and carries on. This ran outside one until the classes stopped sharing a database,
+        // and the assertion below passed on the strength of a features table other classes had
+        // filled — the planner reached for the index because the table was big, not because the
+        // predicate could use it. That is the exact failure the paragraph above says it is here to
+        // prevent, so it is worth stating twice: without the transaction this test proves nothing.
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            await connection.OpenAsync();
+        }
+
+        await using var transaction = await connection.BeginTransactionAsync();
+        await connection.ExecuteAsync("SET LOCAL enable_seqscan = off", transaction: transaction);
         var plan = string.Join(
-            '\n', await connection.QueryAsync<string>($"EXPLAIN {sql}", parameters));
+            '\n',
+            await connection.QueryAsync<string>($"EXPLAIN {sql}", parameters, transaction: transaction));
 
         plan.ShouldContain("ix_features_ancestor_ids", Case.Insensitive, plan);
     }
