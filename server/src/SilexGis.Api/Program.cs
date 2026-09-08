@@ -342,6 +342,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTripParticipantRoleEndpoints();
     api.MapExpeditionRosterRoleEndpoints();
     api.MapTripStatisticsEndpoints();
+    api.MapRegistryStatisticsEndpoints();
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
     api.MapAccessHistoryEndpoints();

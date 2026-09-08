@@ -78,6 +78,25 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable
             { $"{FeatureFilterFields.PropertyPrefix}sinkhole:wet", FilterOp.Equals, [new BooleanValue(true)] },
             { $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.IsEmpty, [] },
             { $"{FeatureFilterFields.PropertyPrefix}sinkhole:depth_m", FilterOp.IsNotEmpty, [] },
+            // The cave subtype arms. Every one of them is a join the feature world had no reason
+            // to emit before, so translation is the whole point of exercising them here.
+            { FeatureFilterFields.Region, FilterOp.Contains, [new TextValue("Apuseni")] },
+            { FeatureFilterFields.Region, FilterOp.StartsWith, [new TextValue("Ap")] },
+            { FeatureFilterFields.Region, FilterOp.Equals, [new TextValue("Apuseni")] },
+            { FeatureFilterFields.Region, FilterOp.IsEmpty, [] },
+            { FeatureFilterFields.Region, FilterOp.IsNotEmpty, [] },
+            { FeatureFilterFields.RockTypeId, FilterOp.Equals, [new IdValue("1")] },
+            { FeatureFilterFields.RockTypeId, FilterOp.In, [new IdValue("1"), new IdValue("2")] },
+            { FeatureFilterFields.RockTypeId, FilterOp.IsEmpty, [] },
+            { FeatureFilterFields.RockTypeId, FilterOp.IsNotEmpty, [] },
+            { FeatureFilterFields.SurveyedLength, FilterOp.Equals, [new NumberValue(100)] },
+            { FeatureFilterFields.SurveyedLength, FilterOp.LessThan, [new NumberValue(500)] },
+            { FeatureFilterFields.SurveyedLength, FilterOp.GreaterThan, [new NumberValue(10)] },
+            { FeatureFilterFields.SurveyedLength, FilterOp.Between, [new NumberValue(10), new NumberValue(500)] },
+            { FeatureFilterFields.SurveyedLength, FilterOp.IsEmpty, [] },
+            { FeatureFilterFields.SurveyedLength, FilterOp.IsNotEmpty, [] },
+            { FeatureFilterFields.Depth, FilterOp.Between, [new NumberValue(-5.5), new NumberValue(120.25)] },
+            { FeatureFilterFields.Depth, FilterOp.IsNotEmpty, [] },
         };
 
         return data;
@@ -236,6 +255,105 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable
         count.ShouldBe(0);
     }
 
+    // ---------- the measured columns ----------
+
+    [Fact]
+    public async Task A_range_over_a_measured_column_includes_both_ends_and_leaves_the_unmeasured_out()
+    {
+        // A depth or a length is stored to the centimetre, and the value a person types arrives as
+        // a floating-point number. The two only agree if the caller's value is converted to the
+        // stored type rather than the column being widened to the caller's, so the boundary cases
+        // are the test: a cave recorded at exactly the low end and one at exactly the high end are
+        // both inside the range somebody drew around them.
+        //
+        // The third cave is the one that matters most. A cave whose length was never recorded is
+        // not a cave of length zero, and a range that swept it in would put every unmeasured
+        // record into the first bin of any histogram built on this.
+        var ownerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Editor, $"fc-num-{tag}@t.local");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var caveTypeId = await db.CaveTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+
+        RootlessCave(db, caveTypeId, ownerId, $"Short {tag}", surveyedLength: 100.00m);
+        RootlessCave(db, caveTypeId, ownerId, $"Long {tag}", surveyedLength: 2_500.50m);
+        RootlessCave(db, caveTypeId, ownerId, $"Longer {tag}", surveyedLength: 2_500.51m);
+        RootlessCave(db, caveTypeId, ownerId, $"Unmeasured {tag}", surveyedLength: null);
+        await db.SaveChangesAsync();
+
+        var compiler = new FeatureFilterCompiler(db);
+
+        async Task<List<string>> Matching(FilterOp op, FilterValue[] values)
+        {
+            var predicate = compiler.Compile(
+                new ConditionNode(FeatureFilterFields.SurveyedLength, op, values));
+            return await db.Features.AsNoTracking()
+                .Where(predicate)
+                .Where(f => f.Name!.EndsWith(tag))
+                .Select(f => f.Name!)
+                .OrderBy(name => name)
+                .ToListAsync();
+        }
+
+        (await Matching(FilterOp.Between, [new NumberValue(100), new NumberValue(2_500.50)]))
+            .ShouldBe([$"Long {tag}", $"Short {tag}"]);
+        (await Matching(FilterOp.LessThan, [new NumberValue(100)])).ShouldBeEmpty();
+        (await Matching(FilterOp.GreaterThan, [new NumberValue(2_500.50)]))
+            .ShouldBe([$"Longer {tag}"]);
+        (await Matching(FilterOp.Equals, [new NumberValue(2_500.50)]))
+            .ShouldBe([$"Long {tag}"]);
+        (await Matching(FilterOp.IsEmpty, [])).ShouldBe([$"Unmeasured {tag}"]);
+        (await Matching(FilterOp.IsNotEmpty, []))
+            .ShouldBe([$"Long {tag}", $"Longer {tag}", $"Short {tag}"]);
+    }
+
+    [Fact]
+    public async Task The_region_and_the_rock_answer_about_caves_and_say_nothing_about_anything_else()
+    {
+        var ownerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Editor, $"fc-reg-{tag}@t.local");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var caveTypeId = await db.CaveTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var rockTypeId = await db.RockTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        var featureTypeId = await db.FeatureTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+
+        RootlessCave(db, caveTypeId, ownerId, $"Placed {tag}", region: "Munții Apuseni", rockTypeId: rockTypeId);
+        RootlessCave(db, caveTypeId, ownerId, $"Elsewhere {tag}", region: "Banat");
+        Rootless(db, featureTypeId, ownerId, $"Boulder {tag}");
+        await db.SaveChangesAsync();
+
+        var compiler = new FeatureFilterCompiler(db);
+
+        async Task<List<string>> Matching(string field, FilterOp op, FilterValue[] values)
+        {
+            var predicate = compiler.Compile(new ConditionNode(field, op, values));
+            return await db.Features.AsNoTracking()
+                .Where(predicate)
+                .Where(f => f.Name!.EndsWith(tag))
+                .Select(f => f.Name!)
+                .OrderBy(name => name)
+                .ToListAsync();
+        }
+
+        // Folded the way every other text comparison in this application is folded, so a register
+        // typed without diacritics finds the same rows as one typed with them.
+        (await Matching(FeatureFilterFields.Region, FilterOp.Contains, [new TextValue("muntii apuseni")]))
+            .ShouldBe([$"Placed {tag}"]);
+        (await Matching(FeatureFilterFields.RockTypeId, FilterOp.In, [new IdValue(rockTypeId.ToString())]))
+            .ShouldBe([$"Placed {tag}"]);
+
+        // A feature that is not a cave has no row on the other side of the join. It reads as
+        // having no region rather than as matching one, which is what keeps a boulder out of a
+        // regional breakdown.
+        (await Matching(FeatureFilterFields.Region, FilterOp.IsEmpty, []))
+            .ShouldBe([$"Boulder {tag}"]);
+        (await Matching(FeatureFilterFields.Region, FilterOp.IsNotEmpty, []))
+            .ShouldBe([$"Elsewhere {tag}", $"Placed {tag}"]);
+    }
+
     // ---------- a filter can never widen what a caller may see ----------
 
     [Fact]
@@ -310,6 +428,99 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable
 
         // The negation matches every row in the database; the walk is what keeps the private one out.
         visibleToOutsider.ShouldNotContain($"Hidden {tag}");
+    }
+
+    [Fact]
+    public async Task A_measured_column_matching_a_private_cave_still_does_not_return_it_to_an_outsider()
+    {
+        // The subtype columns reach the database through a join the feature world never emitted
+        // before, and a join is exactly where a predicate can quietly escape the set it was meant
+        // to be composed inside. The outsider is a Viewer rather than an Editor on purpose: the
+        // seeded editing group reads past visibility at the widest scope there is, so an Editor
+        // seeing nothing here would have proved nothing at all.
+        var ownerId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Editor, $"fc-nowner2-{tag}@t.local");
+        var outsiderId = await AuthHelper.CreateUserAsync(
+            factory, GlobalRoles.Viewer, $"fc-nout2-{tag}@t.local");
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var caveTypeId = await db.CaveTypes.AsNoTracking().Select(t => t.Id).FirstAsync();
+        RootlessCave(db, caveTypeId, ownerId, $"Private {tag}", surveyedLength: 1_234.56m, region: "Apuseni");
+        await db.SaveChangesAsync();
+
+        var compiler = new FeatureFilterCompiler(db);
+
+        async Task<int> CountAsync(Guid callerId, ConditionNode condition) =>
+            await db.Features.AsNoTracking()
+                .VisibleTo(
+                    new AccessContext(callerId, isFullAdmin: false, [], []),
+                    db.Features,
+                    db.FeatureSetMembers)
+                .Where(compiler.Compile(condition))
+                .Where(f => f.Name!.EndsWith(tag))
+                .CountAsync();
+
+        foreach (var condition in new[]
+        {
+            new ConditionNode(
+                FeatureFilterFields.SurveyedLength,
+                FilterOp.Between,
+                [new NumberValue(1_000), new NumberValue(2_000)]),
+            new ConditionNode(
+                FeatureFilterFields.Region, FilterOp.Contains, [new TextValue("Apuseni")]),
+        })
+        {
+            // The owner proves the condition genuinely matches the row, without which the
+            // outsider's zero would only say the fixture was empty.
+            (await CountAsync(ownerId, condition)).ShouldBe(1, condition.Field);
+            (await CountAsync(outsiderId, condition)).ShouldBe(0, condition.Field);
+        }
+    }
+
+    /// <summary>
+    /// A cave, stamped the way a rootless feature is, with its subtype row attached.
+    /// </summary>
+    /// <remarks>
+    /// The subtype row cannot exist without a feature of the right kind — the database holds a
+    /// composite key on identifier and kind and a check constraint beside it — so the pair is
+    /// built together here rather than left to a caller to remember.
+    /// </remarks>
+    private static Feature RootlessCave(
+        SilexGisDbContext db,
+        long caveTypeId,
+        Guid ownerId,
+        string name,
+        decimal? surveyedLength = null,
+        decimal? depth = null,
+        string? region = null,
+        long? rockTypeId = null)
+    {
+        var id = Guid.NewGuid();
+        var feature = new Feature
+        {
+            Id = id,
+            Name = name,
+            Kind = FeatureKind.Cave,
+            OwnerUserId = ownerId,
+            Visibility = Visibility.Private,
+            AncestorIds = [id],
+            Properties = "{}",
+        };
+
+        feature.Cave = new Cave
+        {
+            Id = id,
+            CaveTypeId = caveTypeId,
+            SurveyedLength = surveyedLength,
+            Depth = depth,
+            Region = region,
+            RockTypeId = rockTypeId,
+        };
+
+        db.Features.Add(feature);
+        db.FeatureAncestors.Add(new FeatureAncestor { FeatureId = id, AncestorId = id });
+        return feature;
     }
 
     /// <summary>
