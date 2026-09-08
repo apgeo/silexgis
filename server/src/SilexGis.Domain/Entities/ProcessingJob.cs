@@ -152,6 +152,16 @@ public static class ProcessingJobKinds
     public const string TerrainBuild = "terrain-build";
 
     /// <summary>
+    /// Draw one picture of the ground — shaded relief, steepness, facing — from every elevation
+    /// raster of one build, and record what was written beside the row that asked for it.
+    /// </summary>
+    /// <remarks>
+    /// A job rather than something a request waits for, because it reads every raster of a build in
+    /// turn and each one is a whole-file pass: minutes for a small area, longer for a real one.
+    /// </remarks>
+    public const string TerrainDerivative = "terrain-derivative";
+
+    /// <summary>
     /// The kinds that run on a worker of their own rather than on the general one.
     /// </summary>
     /// <remarks>
@@ -169,6 +179,12 @@ public static class ProcessingJobKinds
     /// run twice while a kind in neither is never run at all, both of which look exactly like an
     /// idle queue.
     /// </para>
+    /// <para>
+    /// Drawing a picture of the ground belongs on this side too, and not only because it is long.
+    /// It reads a build's prepared rasters, which a build of the same ground is in the middle of
+    /// rewriting; sharing one worker with builds is what makes it impossible for the two to run at
+    /// once over the same files.
+    /// </para>
     /// </remarks>
-    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild];
+    public static readonly IReadOnlyList<string> TerrainLane = [TerrainBuild, TerrainDerivative];
 }

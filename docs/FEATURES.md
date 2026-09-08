@@ -110,6 +110,15 @@ feature and walkthroughs of whole jobs.
   application: draw a rectangle on a map, and it obtains the data, converts it, bakes the tiles
   and checks them, saying where it has got to as it goes. That last route needs one extra service
   a plain installation does not run. Everyone who wants none of it is unaffected.
+- **Pictures drawn from that elevation** — shaded relief, steepness, facing, ruggedness,
+  topographic position, roughness or a colour relief, computed once from a finished build and shown
+  to everyone who may read terrain as ordinary map layers. Each one belongs to the build it was
+  drawn from, so **activating a different build marks every picture of the old one as out of date**,
+  where the reader sees it rather than in a log — a shaded relief that disagrees with the heights
+  beneath it otherwise looks like a fault in the cave data. They live under their build and are
+  deleted with it. Some relief measures the elevation library cannot produce — geomorphons,
+  curvature, and flow direction, accumulation and the wetness index — are simply absent rather than
+  approximated under a borrowed name.
 - **Trips** — a trip is logged over the days it actually ran, with who was there, what came of it
   and how long was spent underground, and it can be sketched on a map: a point, a line or an area
   for where it happened. That sketch is shown exactly to everyone who may read the trip, including

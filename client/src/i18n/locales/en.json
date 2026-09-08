@@ -168,6 +168,28 @@
       "notPublished": "That build has no surface to draw. Its tiles were either never read back and found whole, or they are no longer where terrain is served from.",
       "active": "That build is the terrain the scene is drawing. Choose other terrain, or stop drawing this one, before removing it.",
       "running": "That build has not finished. Its files are being written right now, so it can be removed once it has stopped, whichever way it stops."
+    },
+    "derivatives": {
+      "title": "Ground pictures",
+      "hint": "Shaded relief, steepness and facing, computed from an elevation build.",
+      "stale": "Out of date",
+      "staleHint": "Computed from elevation this installation no longer serves. It is still drawn, but it will not agree with the heights beneath it.",
+      "totalSize": "{{size}} on disk",
+      "statuses": {
+        "queued": "Queued",
+        "computing": "Computing",
+        "ready": "Ready",
+        "failed": "Failed"
+      },
+      "kinds": {
+        "hillshade": "Shaded relief",
+        "slope": "Steepness",
+        "aspect": "Facing",
+        "ruggednessIndex": "Ruggedness",
+        "positionIndex": "Topographic position",
+        "roughness": "Roughness",
+        "colourRelief": "Coloured relief"
+      }
     }
   },
   "dashboard": {

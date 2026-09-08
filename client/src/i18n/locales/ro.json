@@ -168,6 +168,28 @@
       "notPublished": "Generarea nu are nicio suprafață de desenat. Fie dalele nu au fost niciodată recitite și găsite întregi, fie nu mai sunt acolo de unde se servește relieful.",
       "active": "Generarea aceasta este relieful pe care îl desenează scena. Alege alt relief sau oprește desenarea acestuia înainte de a-l șterge.",
       "running": "Generarea nu s-a încheiat. Fișierele ei se scriu chiar acum, așa că poate fi ștearsă după ce se oprește, oricum s-ar opri."
+    },
+    "derivatives": {
+      "title": "Imagini ale terenului",
+      "hint": "Relief umbrit, pantă și orientare, calculate dintr-o construcție de altitudini.",
+      "stale": "Depășită",
+      "staleHint": "Calculată din altitudini pe care instalarea nu le mai servește. Este în continuare desenată, dar nu se va potrivi cu înălțimile de dedesubt.",
+      "totalSize": "{{size}} pe disc",
+      "statuses": {
+        "queued": "La coadă",
+        "computing": "În calcul",
+        "ready": "Gata",
+        "failed": "Eșuată"
+      },
+      "kinds": {
+        "hillshade": "Relief umbrit",
+        "slope": "Pantă",
+        "aspect": "Orientare",
+        "ruggednessIndex": "Asperitate",
+        "positionIndex": "Poziție topografică",
+        "roughness": "Rugozitate",
+        "colourRelief": "Relief colorat"
+      }
     }
   },
   "dashboard": {

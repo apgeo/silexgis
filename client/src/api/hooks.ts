@@ -308,6 +308,7 @@ export const queryKeys = {
   terrainBuildList: (params: TerrainBuildPageParams) => ['terrain', 'builds', 'page', params] as const,
   terrainBuild: (id: string) => ['terrain', 'builds', 'detail', id] as const,
   terrainSourceDirectories: ['terrain', 'source-directories'] as const,
+  terrainDerivatives: ['terrain', 'derivatives'] as const,
   expeditions: (params: ExpeditionListParams) => ['expeditions', 'list', params] as const,
   expedition: (id: string) => ['expeditions', 'detail', id] as const,
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
@@ -6785,6 +6786,59 @@ export function useEditEventSeriesFollowing() {
     // Every occurrence of the series is an ordinary event on its own page and its own row of the
     // calendar, so an edit reaching a dozen of them has moved a dozen things this cache holds.
     onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+export type TerrainDerivativeLayerInfo = components['schemas']['TerrainDerivativeLayerDto'];
+export type TerrainDerivativeRasterInfo = components['schemas']['TerrainDerivativeRasterDto'];
+export type TerrainDerivativeCreate = components['schemas']['TerrainDerivativeCreateRequest'];
+
+/** How long a computed picture's addresses stay usable, less a margin to re-read them in. */
+const TERRAIN_DERIVATIVE_REFRESH_MS = 8 * 60_000;
+
+/**
+ * The computed pictures of the ground, each carrying the addresses of its rasters and whether the
+ * elevation beneath it has since been replaced.
+ *
+ * Re-read while a picture is still being computed, and re-read slowly the rest of the time: the
+ * addresses in each raster carry a signature that expires after ten minutes, so a page left open
+ * on the map would otherwise be holding layers whose next range request is refused.
+ */
+export function useTerrainDerivatives(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.terrainDerivatives,
+    queryFn: () => unwrap(api.GET('/api/v1/terrain/derivatives')),
+    enabled,
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some(
+        (layer) => layer.status === 'queued' || layer.status === 'computing',
+      )
+        ? 2000
+        : TERRAIN_DERIVATIVE_REFRESH_MS,
+  });
+}
+
+/** Asks for a picture of the ground to be computed from one elevation build. */
+export function useRequestTerrainDerivative() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: TerrainDerivativeCreate) =>
+      unwrap(api.POST('/api/v1/terrain/derivatives', { body: request })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainDerivatives });
+    },
+  });
+}
+
+/** Removes a computed picture and the rasters it left on disk. */
+export function useDeleteTerrainDerivative() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/terrain/derivatives/{id}', { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainDerivatives });
+    },
   });
 }
 

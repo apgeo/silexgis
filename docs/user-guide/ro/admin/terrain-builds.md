@@ -142,6 +142,35 @@ Două refuzuri de reținut:
 
 ---
 
+## Imagini desenate dintr-o generare
+
+Altitudinile unei generări încheiate pot fi transformate și în **imagini ale terenului** — relief
+umbrit, pantă, orientare, rugozitate, poziție topografică, asperitate sau un relief colorat. Sunt
+calculate o singură dată de instalare, pe același lucrător care face generările, iar apoi oricine
+are dreptul de a citi terenul le vede în lista de straturi a hărții, la **Imagini ale terenului**:
+activați una și se desenează sub peșteri.
+
+Fiecare imagine aparține generării din care a fost desenată. **Când activați o altă generare, orice
+imagine desenată din cea veche este marcată ca depășită** și o spune lângă numele ei în lista de
+straturi. Rămâne acolo și se desenează în continuare — un relief umbrit depășit este adesea mai bun
+decât niciunul — dar se vede dintr-o privire că terenul de sub ea a fost înlocuit, ceea ce altfel ar
+părea o problemă a datelor despre peșteri.
+
+Două precizări despre ce este și ce nu este aceasta:
+
+- **Cererea unei imagini se face deocamdată prin interfața de programare, nu dintr-o pagină.**
+  Pagina Teren nu are încă un formular pentru ea. Odată ce o imagine există, tot ce face un cititor
+  cu ea — activarea, transparența, dimensiunea, marcajul de depășire — se află în lista de straturi.
+- **Unele lucruri nu pot fi calculate aici și nu sunt oferite sub un nume împrumutat.** Geomorfonii,
+  curbura și direcția scurgerii, acumularea scurgerii și indicele de umiditate nu sunt produse de
+  biblioteca de altitudini folosită de această instalare, deci lipsesc în loc să fie aproximate prin
+  ceva care le seamănă.
+
+Fișierele stau sub generarea însăși, deci **ștergerea unei generări îi șterge și imaginile**, iar
+dimensiunea lor este raportată lângă ele în lista de straturi.
+
+---
+
 ## Probleme frecvente
 
 | Mesaj | Înseamnă |

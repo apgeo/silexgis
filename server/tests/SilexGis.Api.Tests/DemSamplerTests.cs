@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using System.Collections.Concurrent;
 using MaxRev.Gdal.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using OSGeo.GDAL;
 using OSGeo.OSR;
 using Shouldly;
+using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Geo;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Terrain;
+using System.Collections.Concurrent;
 
 namespace SilexGis.Api.Tests;
 
@@ -31,6 +32,7 @@ namespace SilexGis.Api.Tests;
 /// behave the same way. The arithmetic is never proved against them.
 /// </para>
 /// </remarks>
+[Collection(RasterScratchCollection.Name)]
 public sealed class DemSamplerTests : IDisposable
 {
     /// <summary>The undulation measured over Piatra Craiului, used as a real correction size.</summary>

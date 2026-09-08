@@ -3,6 +3,7 @@ using MaxRev.Gdal.Core;
 using OSGeo.GDAL;
 using OSGeo.OSR;
 using Shouldly;
+using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Terrain;
@@ -27,6 +28,7 @@ namespace SilexGis.Api.Tests;
 /// asserting the work still finishes, which it can only do by overriding it.
 /// </para>
 /// </summary>
+[Collection(RasterScratchCollection.Name)]
 public sealed class GdalScratchDirectoryTests : IDisposable
 {
     private readonly string root = Path.Combine(

@@ -144,6 +144,15 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
     /// <summary>What a build's prepared rasters are kept in, inside its folder.</summary>
     private const string PreparedDirectoryName = "prepared";
 
+    /// <summary>What the pictures drawn from those rasters are kept in, inside its folder.</summary>
+    /// <remarks>
+    /// Beside the prepared rasters and never among them. Everything that reads a build's elevation
+    /// enumerates that one directory and describes whatever raster it finds there, so a shaded
+    /// relief written into it would be read back as ground and sampled for heights — a picture of
+    /// brightness answering questions about metres, with nothing anywhere saying so.
+    /// </remarks>
+    private const string DerivativesDirectoryName = "derivatives";
+
     private readonly string root = Path.GetFullPath(options.Value.BuildRoot, AppContext.BaseDirectory);
     private readonly string spool = Path.GetFullPath(options.Value.SpoolRoot, AppContext.BaseDirectory);
     private readonly string published = Path.GetFullPath(options.Value.PublishRoot, AppContext.BaseDirectory);
@@ -202,6 +211,30 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
     /// </remarks>
     public string PreparedFor(Guid buildId) =>
         Path.Combine(RootFor(buildId), PreparedDirectoryName);
+
+    /// <summary>
+    /// Where the pictures drawn from this build's rasters are, whether or not any have been drawn.
+    /// </summary>
+    /// <remarks>
+    /// Inside the build's own folder rather than in the store uploaded files go to, for three
+    /// reasons that point the same way. They live exactly as long as the build does, and the sweep
+    /// that takes a deleted build's folder away therefore takes them with it rather than leaving
+    /// gigabytes no row names. Every file in the upload store is expected to have a catalogue row
+    /// naming the revision and the person it belongs to, and a picture the server drew from public
+    /// elevation has neither. And they are large, regenerable and per build, which is what the
+    /// terrain volume is sized for and the upload disk is not.
+    /// </remarks>
+    public string DerivativesFor(Guid buildId) =>
+        Path.Combine(RootFor(buildId), DerivativesDirectoryName);
+
+    /// <summary>Takes one computed picture's rasters away, leaving the build's own alone.</summary>
+    /// <remarks>
+    /// Named here rather than spelled out at the place that deletes a row, because where a
+    /// picture's files sit is this type's knowledge and a second spelling of it is a delete that
+    /// silently removes nothing while reporting success.
+    /// </remarks>
+    public void RemoveDerivative(Guid buildId, Guid layerId) =>
+        Discard(Path.Combine(DerivativesFor(buildId), layerId.ToString("N")));
 
     /// <summary>Whether this build's pyramid is where terrain is served from, asked of the disk.</summary>
     /// <remarks>

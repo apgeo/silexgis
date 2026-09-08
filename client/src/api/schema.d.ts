@@ -2770,6 +2770,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/terrain/derivatives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Computed pictures of the ground, each saying whether the elevation beneath it has since been replaced; requires Read on the Terrain domain. */
+        get: {
+            parameters: {
+                query?: {
+                    buildId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainDerivativeLayerDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Asks for a picture of the ground to be computed from an elevation build; requires Execute on the Terrain domain. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TerrainDerivativeCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainDerivativeLayerDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/derivatives/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a computed picture and the rasters it left on disk; requires Delete on the Terrain domain. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/derivatives/{id}/rasters/{rasterId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One computed raster, for a tile reader; opened by the signed address the listing hands out. */
+        get: {
+            parameters: {
+                query?: {
+                    token?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                    rasterId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -21298,6 +21435,83 @@ export interface components {
             fetchCoverage?: null | boolean;
             sources?: null | components["schemas"]["TerrainBuildSourceRequest"][];
         };
+        TerrainColourStop: {
+            /** Format: double */
+            elevation?: number;
+            /** Format: uint8 */
+            red?: number;
+            /** Format: uint8 */
+            green?: number;
+            /** Format: uint8 */
+            blue?: number;
+            /** Format: uint8 */
+            alpha?: number;
+        };
+        /** @enum {unknown} */
+        TerrainDerivative: "hillshade" | "slope" | "aspect" | "ruggednessIndex" | "positionIndex" | "roughness" | "colourRelief";
+        TerrainDerivativeCreateRequest: {
+            /** Format: uuid */
+            terrainBuildId: string;
+            derivative: components["schemas"]["TerrainDerivative"];
+            name: string;
+            lighting: null | components["schemas"]["TerrainHillshadeLighting"];
+            /** Format: double */
+            azimuthDegrees: null | number;
+            /** Format: double */
+            altitudeDegrees: null | number;
+            /** Format: double */
+            zFactor: null | number;
+            surfaceFit: null | components["schemas"]["TerrainSurfaceFit"];
+            slopeUnit: null | components["schemas"]["TerrainSlopeUnit"];
+            ruggednessFit: null | components["schemas"]["TerrainRuggednessFit"];
+            computeEdges: null | boolean;
+            colourRamp: null | components["schemas"]["TerrainColourStop"][];
+        };
+        TerrainDerivativeLayerDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            terrainBuildId: string;
+            derivative: components["schemas"]["TerrainDerivative"];
+            name: string;
+            settings: string;
+            status: components["schemas"]["TerrainDerivativeStatus"];
+            errorCode: null | string;
+            message: null | string;
+            /** Format: int32 */
+            version: number;
+            /** Format: int64 */
+            sizeBytes: number;
+            stale: boolean;
+            /** Format: date-time */
+            computedAt: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            rasters: components["schemas"]["TerrainDerivativeRasterDto"][];
+        };
+        TerrainDerivativeRasterDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: double */
+            west: number;
+            /** Format: double */
+            south: number;
+            /** Format: double */
+            east: number;
+            /** Format: double */
+            north: number;
+            /** Format: int32 */
+            width: number;
+            /** Format: int32 */
+            height: number;
+            /** Format: double */
+            pixelSizeDegrees: number;
+            /** Format: int64 */
+            sizeBytes: number;
+            url: string;
+        };
+        /** @enum {unknown} */
+        TerrainDerivativeStatus: "queued" | "computing" | "ready" | "failed";
         TerrainFeatureProbeDto: {
             hasTerrain: boolean;
             samples: components["schemas"]["TerrainFeatureProbeSampleDto"][];
@@ -21314,6 +21528,8 @@ export interface components {
         };
         /** @enum {unknown} */
         TerrainHeightDatum: "orthometric" | "ellipsoidal";
+        /** @enum {unknown} */
+        TerrainHillshadeLighting: "single" | "multidirectional" | null;
         TerrainProbeDto: {
             hasTerrain: boolean;
             samples: components["schemas"]["TerrainProbeSampleDto"][];
@@ -21341,6 +21557,10 @@ export interface components {
             /** Format: int64 */
             sizeBytes: number;
         };
+        /** @enum {unknown} */
+        TerrainRuggednessFit: "riley" | "wilson" | null;
+        /** @enum {unknown} */
+        TerrainSlopeUnit: "degrees" | "percent" | null;
         TerrainSourceDirectoriesDto: {
             roots: string[];
         };
@@ -21350,6 +21570,8 @@ export interface components {
             /** Format: double */
             surveyHeightOffsetM: number;
         };
+        /** @enum {unknown} */
+        TerrainSurfaceFit: "horn" | "zevenbergenThorne" | null;
         TestMessageRequest: {
             recipient: string;
         };
