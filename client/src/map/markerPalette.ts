@@ -46,6 +46,21 @@ export const closestApproachPalette = {
 } as const;
 
 /**
+ * The one reading on an overburden curve a reader pressed, marked where it was taken.
+ *
+ * A bright red is chosen against everything else drawn near it: the survey line under it is a dark
+ * desaturated maroon and the answer-to-a-question blue is already spoken for, so the mark reads as
+ * neither a passage nor a measurement between caves. It is transient — one point at a time, gone
+ * when the reader presses elsewhere — which is why it is allowed to be the loudest thing on the
+ * map for as long as it is there.
+ */
+export const overburdenHighlightPalette = {
+  mark: '#f5222d',
+  /** Casing under the mark and halo behind its label, so both stay legible over any basemap. */
+  casing: 'rgba(255, 255, 255, 0.85)',
+} as const;
+
+/**
  * The three things a trip can be drawn as, and they are three because they mean three different
  * things. The shape a trip drew of itself is where the party worked; its meeting point is where
  * the party gathered, which is routinely a car park in a village; and a dot inherited from a cave

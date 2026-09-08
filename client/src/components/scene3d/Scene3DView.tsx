@@ -31,6 +31,10 @@ import {
   attachClosestApproach3d,
   type ClosestApproach3DHandle,
 } from '../../scene3d/closestApproach3d.ts';
+import {
+  attachOverburdenHighlight3d,
+  type OverburdenHighlight3DHandle,
+} from '../../scene3d/overburdenHighlight3d.ts';
 import { geoJsonBounds } from '../../scene3d/geoJson3d.ts';
 import type { OverlayRect } from '../../scene3d/overlayPlacement.ts';
 import { activePreset, presetCamera, type Camera3DPreset } from '../../scene3d/presets3d.ts';
@@ -328,6 +332,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // for the same reason the walls are: nothing about it is camera-driven — it is drawn because
   // somebody asked a question on a cave's page, and it stays until they ask a different one.
   const approachRef = useRef<ClosestApproach3DHandle | null>(null);
+  // The place on a passage a reading from the overburden curve came from. Held apart for the same
+  // reason: it is drawn because somebody pressed a point on a chart on a cave's page, and it stays
+  // until they press a different one.
+  const overburdenRef = useRef<OverburdenHighlight3DHandle | null>(null);
   const [dataState, setDataState] = useState<CaveData3DState>(EMPTY_CAVE_DATA_3D_STATE);
   const [caveFramable, setCaveFramable] = useState(false);
 
@@ -368,12 +376,17 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // joins.
     const approach = attachClosestApproach3d(engine, (caveId) => data.caveSurveyTop(caveId));
     approachRef.current = approach;
+    const overburden = attachOverburdenHighlight3d(engine, (caveId) => data.caveSurveyTop(caveId));
+    overburdenRef.current = overburden;
     const unsubscribeMesh = mesh.subscribe(setMeshState);
     const unsubscribeState = data.subscribe((next) => {
       setDataState(next);
       // A load is where the survey tops are learned, and both ends of the measured line hang from
       // them. Redrawing here is what keeps the line joined to the surveys rather than floating.
       approach.refresh();
+      // The mark on a passage hangs from the same tops for the same reason, and drifts off the
+      // passage it belongs to if it is not redrawn with them.
+      overburden.refresh();
       // Whether there is a cave to frame changes with every load, and only the loader knows.
       setCaveFramable(data.caveBounds() !== undefined);
       // The callout holds what it was handed when the thing was clicked, and a load replaces every
@@ -488,6 +501,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       unsubscribeMesh();
       approach.detach();
       approachRef.current = null;
+      overburden.detach();
+      overburdenRef.current = null;
       data.detach();
       dataRef.current = null;
       // Releases the graphics memory the walls hold; a scene handed back with a mesh still on it
@@ -750,6 +765,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     // And the measured line, whose two ends hang from the tops of two different caves under the
     // one rule: left behind, it would join two surveys that had both moved out from under it.
     approachRef.current?.setAltitudePlacement(placement);
+    // And the mark on a passage, which hangs from one cave's top under the same rule.
+    overburdenRef.current?.setAltitudePlacement(placement);
   }, [placement, engineVersion, showingHere]);
 
   // Which cave's walls are held. The selection names a cave both when a cave was picked and when

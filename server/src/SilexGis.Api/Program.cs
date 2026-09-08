@@ -278,6 +278,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCaveCrossSectionEndpoints();
     api.MapCavePatternEndpoints();
     api.MapCaveHypsometryEndpoints();
+    api.MapCaveOverburdenEndpoints();
     api.MapCaveStructureComparisonEndpoints();
     api.MapCaveClosestApproachEndpoints();
     api.MapCrsEndpoints();

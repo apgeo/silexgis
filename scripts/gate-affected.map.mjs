@@ -67,7 +67,8 @@ export const groups = {
     'ProtectionDepthTests',
   ],
   caves: [
-    'AssociationDisclosureTests', 'CaveDomainTests', 'CaveSubtypeMissingTests', 'CenterlineTests',
+    'AssociationDisclosureTests', 'CaveDomainTests', 'CaveOverburdenTests',
+    'CaveSubtypeMissingTests', 'CenterlineTests',
     'HypsometryTests', 'ProtectionDepthTests', 'StructureComparisonTests', 'SurveyMeshTests',
     'SurveyModelTests',
   ],
@@ -133,7 +134,7 @@ export const groups = {
   ],
   sms: ['MfaAndRateLimitTests', 'TwoFactorChannelTests'],
   surveys: [
-    'CavePassageShapeTests', 'CaveSurveyStatisticsTests', 'HypsometryTests',
+    'CaveOverburdenTests', 'CavePassageShapeTests', 'CaveSurveyStatisticsTests', 'HypsometryTests',
     'StructureComparisonTests',
     'SurveyFormatReaderTests', 'SurveyGraphExtractorTests', 'SurveyGraphTests',
     'SurveyMeshTests', 'SurveyModelTests', 'SurveyPlacementTests',
@@ -159,7 +160,7 @@ export const groups = {
   // The elevation surface: the chain that builds it, the phases it runs, and the settings and
   // registration that decide whether it runs at all.
   terrain: [
-    'DemSamplerTests', 'GdalScratchDirectoryTests', 'JobQueueLaneTests',
+    'CaveOverburdenTests', 'DemSamplerTests', 'GdalScratchDirectoryTests', 'JobQueueLaneTests',
     'TerrainActivationTests', 'TerrainBakePhaseTests', 'TerrainBuildApiTests',
     'TerrainBuildHeightTests', 'TerrainBuildPipelineTests', 'TerrainCellFetchTests',
     'TerrainMapConfigTests', 'TerrainOptionsTests', 'TerrainPipelineRegistrationTests',
@@ -332,7 +333,8 @@ export const crossCutting = {
   locationClasses: [
     'AccessHistoryTests', 'AclAndCavingGroupTests', 'AreaKarstStatisticsTests',
     'AssociationDisclosureTests', 'AttachmentReachListingTests', 'CalendarTests',
-    'CaveDomainTests', 'CavePassageShapeTests', 'CaveSurveyStatisticsTests', 'CenterlineTests',
+    'CaveDomainTests', 'CaveOverburdenTests', 'CavePassageShapeTests',
+    'CaveSurveyStatisticsTests', 'CenterlineTests',
     'ClosestApproachTests', 'ConcurrencyTests', 'DashboardTests', 'DocumentAccessApiTests',
     'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
     'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests', 'ExpeditionLeadsTests',
