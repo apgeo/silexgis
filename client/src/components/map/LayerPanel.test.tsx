@@ -31,6 +31,10 @@ let recheckState = {
 
 vi.mock('../../api/hooks.ts', () => ({
   useTags: () => ({ data: [] }),
+  // The trips overlay's own filter reads the purposes a trip can have. None configured here: the
+  // mock replaces the module wholesale, so a hook left out of it is undefined at the call site and
+  // every case in this file dies on the render rather than on what it was written to check.
+  useTripTypes: () => ({ data: [] }),
   useRecheckPhotoLibrary: () => recheckState,
 }));
 
