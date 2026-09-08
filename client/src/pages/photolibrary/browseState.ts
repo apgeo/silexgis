@@ -6,11 +6,18 @@ import type { LibraryPhotographPage } from '../../api/hooks.ts';
  * What a page of a neighbouring library is currently able to say.
  *
  * <p>
- * Four answers rather than one absence, because collapsing them is the characteristic failure of
- * this integration: <b>a grid still filling</b>, <b>a library that holds nothing matching</b>, <b>a
- * library that did not answer</b> and <b>an account that may not look</b> all draw an empty page,
- * and only the first of them means "wait". Somebody has spent an afternoon on a library that was
- * working every time these have been rendered as one.
+ * Several answers rather than one absence, because collapsing them is the characteristic failure
+ * of this integration: <b>a grid still filling</b>, <b>a library that holds nothing matching</b>,
+ * <b>a library that did not answer</b>, <b>an account that may not look</b> and <b>a page past the
+ * end of the listing</b> all draw an empty page, and only the first of them means "wait". Somebody
+ * has spent an afternoon on a library that was working every time these have been rendered as one.
+ * </p>
+ * <p>
+ * The last of them is the one arrived at from the other direction, and it is not hypothetical: one
+ * of the two products can only say "there may be more" — a page that came back full is all it
+ * knows — so a library holding an exact multiple of the page size offers one page too many every
+ * time. Rendered as "this library holds nothing matching", that tells a reader with thousands of
+ * photographs in front of them that their library is empty.
  * </p>
  */
 export type BrowseState =
@@ -19,6 +26,7 @@ export type BrowseState =
   | 'searchUnsupported'
   | 'silent'
   | 'empty'
+  | 'endOfList'
   | 'photographs';
 
 /**
@@ -76,7 +84,16 @@ export function browseState({ isPending, error, page }: BrowseStateInput): Brows
     return 'loading';
   }
 
-  return page.items.length === 0 ? 'empty' : 'photographs';
+  if (page.items.length > 0) {
+    return 'photographs';
+  }
+
+  // Nothing on a page after the first is the end of the listing, not an empty library: a library
+  // that held nothing matching would have held nothing on the first page either. Both ways of
+  // getting here are ordinary — a library whose size is an exact multiple of the page size always
+  // offers one page too many, and a listing can also lose rows on the other side of the socket
+  // between one page being drawn and the next being asked for.
+  return page.page > 1 ? 'endOfList' : 'empty';
 }
 
 /**
@@ -101,18 +118,41 @@ export interface BrowsePaging {
   total: number | null;
   /** How many are on this page. Always knowable, and never confused with the total. */
   shown: number;
+  /**
+   * Whether the page in hand is the answer to the page being asked for.
+   *
+   * False while a page is being turned, because the answer still on screen is the previous one —
+   * kept there on purpose, so the grid does not empty and refill.
+   */
+  current: boolean;
 }
 
-export function pagingOf(page: LibraryPhotographPage | undefined): BrowsePaging {
+/**
+ * @param asked The page the screen is currently asking for, which is not always the page in hand.
+ *   Required rather than inferred, because inferring it is the defect: while a page is being
+ *   turned the answer on screen is the previous one, and controls built from what <em>it</em> said
+ *   describe a page the reader has already left. Two steps in quick succession then land one past
+ *   the end of the listing on a next control the previous page enabled.
+ */
+export function pagingOf(
+  page: LibraryPhotographPage | undefined,
+  asked: number,
+): BrowsePaging {
   if (!page) {
-    return { hasPrevious: false, hasNext: false, total: null, shown: 0 };
+    return { hasPrevious: false, hasNext: false, total: null, shown: 0, current: false };
   }
 
+  const current = page.page === asked;
+
   return {
-    hasPrevious: page.page > 1,
-    hasNext: page.hasMore,
+    // Neither control is offered until the answer catches up with the question. What is on screen
+    // meanwhile is the previous page, and stepping from a page that is not the one being drawn is
+    // how a reader arrives somewhere neither of them describes.
+    hasPrevious: current && page.page > 1,
+    hasNext: current && page.hasMore,
     total: page.total,
     shown: page.items.length,
+    current,
   };
 }
 

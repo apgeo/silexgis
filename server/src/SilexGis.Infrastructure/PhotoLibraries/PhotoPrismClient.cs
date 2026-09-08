@@ -347,6 +347,8 @@ public sealed class PhotoPrismClient(
         // the end with an empty page, and would answer a negative one with nobody knows what.
         var offset = (int)Math.Clamp((Math.Max(1, query.Page) - 1L) * count, 0, int.MaxValue);
 
+        var words = WordsOnly(query.Text);
+
         var url = new Uri(
             BaseAddress(Options.BaseUrl),
             "api/v1/photos?count=" + count.ToString(CultureInfo.InvariantCulture)
@@ -358,11 +360,9 @@ public sealed class PhotoPrismClient(
             // The same floor the map applies, so the two surfaces do not disagree about which
             // photographs this installation considers worth showing at all.
             + "&quality=" + Math.Clamp(Options.MinQuality, 0, 7).ToString(CultureInfo.InvariantCulture)
-            // The reader's words go into the parameter this product parses its own search grammar
-            // from, so what somebody types means here what it means in the library's own interface.
-            + (string.IsNullOrWhiteSpace(query.Text)
-                ? string.Empty
-                : "&q=" + Uri.EscapeDataString(query.Text)));
+            // The reader's words, reduced to words first — see below for why that reduction is the
+            // difference between a search box and a way of asking where a photograph was taken.
+            + (words is null ? string.Empty : "&q=" + Uri.EscapeDataString(words)));
 
         using var response = await SendJsonAsync(url, ct);
 
@@ -394,7 +394,13 @@ public sealed class PhotoPrismClient(
                     "The photo library did not answer a listing with a list of photographs.");
             }
 
-            var photos = new List<LibraryListedPhoto>(document.RootElement.GetArrayLength());
+            // What the library handed over, before anything is dropped. It is a different number
+            // from the one below it whenever a row cannot be read, and the two are not
+            // interchangeable: this one is the library's answer to "was this page full", and the
+            // other is how much of that answer this application could use.
+            var handedOver = document.RootElement.GetArrayLength();
+
+            var photos = new List<LibraryListedPhoto>(handedOver);
 
             foreach (var element in document.RootElement.EnumerateArray())
             {
@@ -408,13 +414,58 @@ public sealed class PhotoPrismClient(
             // offering a next page that turns out empty costs one request, while withholding one
             // hides the rest of the library behind a control that is not there.
             //
+            // Counted against what the library handed over rather than against what survived the
+            // reading, and that distinction is the whole of it: one unreadable row on an otherwise
+            // full page would otherwise make this false, disable the next control, and put
+            // everything past that offset out of reach with nothing on the screen saying the
+            // listing stopped.
+            //
             // The total is left unknown on purpose. This product does send a count beside a page,
             // but it counts what that page holds — a number the page already is — and nothing in
             // the answer says how many the library holds altogether. An unknown total said plainly
             // is a better answer than a number a reader cannot tell from a fact.
             return new LibraryPhotoListPage(
-                photos, Total: null, HasMore: photos.Count >= count, DateTimeOffset.UtcNow);
+                photos, Total: null, HasMore: handedOver >= count, DateTimeOffset.UtcNow);
         }
+    }
+
+    /// <summary>
+    /// The reader's words, reduced to words.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The parameter these words go into is not a text field.</b> This product parses it into
+    /// the same form its request parameters bind to, so a <c>name:value</c> pair typed into a
+    /// search box sets a field of that form rather than matching anything — and every family of
+    /// field is reachable that way. That includes the two this call sets deliberately a few lines
+    /// above, so a pair could undo the quality floor this installation applies or the order its
+    /// paging depends on; it includes the fields naming what the library considers not for general
+    /// viewing; and, worst of all here, it includes every field naming a place.
+    /// </para>
+    /// <para>
+    /// That last one is why this exists rather than being left to a length check. A listing that
+    /// passed the text through would let anybody narrow it to a circle around a point and read a
+    /// photograph's coordinate off the result to whatever precision they had patience for — on a
+    /// surface whose whole premise is that it carries no position at all. A premise that a search
+    /// box can undo is not a premise.
+    /// </para>
+    /// <para>
+    /// So the separator that makes a pair is taken out and what is left is words. Nothing is
+    /// refused and nothing is reported: somebody who typed a colon was searching for something, and
+    /// on a surface that has no filters the honest reading of their text is the words in it.
+    /// </para>
+    /// </remarks>
+    private static string? WordsOnly(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var words = string.Join(
+            ' ', text.Replace(':', ' ').Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        return words.Length == 0 ? null : words;
     }
 
     /// <summary>

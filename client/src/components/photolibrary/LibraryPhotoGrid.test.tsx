@@ -106,6 +106,29 @@ describe('a page of a neighbouring library', () => {
     expect(onOpen).toHaveBeenCalledWith('psinvented1');
   });
 
+  /**
+   * A library that said "video" is not described as a photograph. The tile shows a still, the page
+   * around it is counted and captioned in photographs, and without a mark the only thing saying
+   * otherwise is opening it.
+   */
+  it('marks a tile the library called a video, and marks nothing it said nothing about', () => {
+    grid({
+      photographs: [
+        { ...photographs[0], kind: 'video' },
+        photographs[1],
+        { ...photographs[0], photographId: 'psinvented3', reference: 'cc33dd44ee55', kind: 'image' },
+      ],
+    });
+
+    const marks = screen.getAllByTestId('library-photo-tile-video');
+    expect(marks).toHaveLength(1);
+    expect(marks[0].textContent).toBe('Video');
+
+    // The word reaches anything that reads the button rather than the picture, so a reader who
+    // never sees the corner of the tile is told the same thing.
+    expect(screen.getByLabelText('An invented picture (Video)')).toBeTruthy();
+  });
+
   it('says so rather than drawing nothing when the library holds nothing matching', () => {
     grid({ photographs: [] });
 

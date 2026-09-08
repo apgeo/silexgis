@@ -26,6 +26,14 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// taken; it decides that where positions are emitted, and nothing is emitted here.
 /// </para>
 /// <para>
+/// One thing this route takes could undo that on its own, and it is dealt with where it is sent
+/// rather than here: the words from a search box. One of the two products parses that parameter
+/// into the same form its own filters bind to, geographic ones included, so text passed through
+/// verbatim would let a listing be narrowed to a circle around a point — and a coordinate read off
+/// which page a photograph falls on is a coordinate this surface published. The client that talks
+/// to that product reduces what it is given to words before sending it, and says so at length.
+/// </para>
+/// <para>
 /// Nothing is stored and nothing is held between calls. The library is asked for one page, its
 /// answer is turned into a response, and the answer is gone when the response is written — which is
 /// why there is no table, no job and no migration behind any of this. The credential that reaches

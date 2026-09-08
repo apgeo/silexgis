@@ -8,8 +8,7 @@ import {
   inboxPollIntervalMs,
   isInboxTransport,
 } from '../notifications/transport.ts';
-import { userManager } from '../auth/auth.tsx';
-import { api, ApiError, lastReadETag } from './client.ts';
+import { api, ApiError, lastReadETag, readJson } from './client.ts';
 import type { components, paths } from './schema';
 
 export type CaveListItem = components['schemas']['CaveListItemDto'];
@@ -1376,6 +1375,15 @@ export type LibraryPhotoHealth = components['schemas']['PhotoLibraryHealthDto'];
  */
 const PHOTO_LIBRARY_HEALTH_WINDOW_MS = 30_000;
 
+export interface PhotoLibraryStatusUse {
+  /**
+   * Whether this caller is watching what the libraries answered when they were last asked, rather
+   * than only whether this installation has one. False asks once and lets other callers' timers
+   * refresh it.
+   */
+  watchingHealth?: boolean;
+}
+
 /**
  * The photo libraries this account may see, or none.
  *
@@ -1399,15 +1407,24 @@ const PHOTO_LIBRARY_HEALTH_WINDOW_MS = 30_000;
  * restarts the server with a new setting. It also stops of its own accord while the tab is in the
  * background, which is the default and is wanted here — a map left open in a tab nobody is
  * looking at should not keep a neighbouring container awake.
+ *
+ * And it runs only for a caller that is watching the health. Two things read this answer and they
+ * want different halves of it: a surface showing whether a library is up is watching something
+ * that changes on its own, while a caller asking only whether there is a library to offer at all
+ * is asking something that cannot change without a server restart. The second kind mounts for the
+ * whole of a session, on every page — so a timer inherited from the first would turn a question
+ * asked once into a request twice a minute, for every signed-in account, forever.
  */
-export function usePhotoLibraries() {
+export function usePhotoLibraries({ watchingHealth = true }: PhotoLibraryStatusUse = {}) {
   return useQuery({
     queryKey: queryKeys.photoLibraryStatus,
     queryFn: () => unwrap(api.GET('/api/v1/photo-libraries/status')),
     staleTime: PHOTO_LIBRARY_HEALTH_WINDOW_MS,
     refetchInterval: (query) =>
-      (query.state.data?.providers?.length ?? 0) > 0 ? PHOTO_LIBRARY_HEALTH_WINDOW_MS : false,
-    refetchOnWindowFocus: true,
+      watchingHealth && (query.state.data?.providers?.length ?? 0) > 0
+        ? PHOTO_LIBRARY_HEALTH_WINDOW_MS
+        : false,
+    refetchOnWindowFocus: watchingHealth,
   });
 }
 
@@ -1580,40 +1597,6 @@ export interface LibraryPhotographQuery {
   q?: string;
 }
 
-/**
- * A GET this application answers, asked without the generated client.
- *
- * The typed client is built from the contract document the server publishes, so a route added in
- * the same change as the screen that reads it cannot be reached through it until that document has
- * been read again. This asks for it directly, and matches the generated client in the two respects
- * every caller depends on: the account's bearer travels with the request, and a refusal arrives as
- * the same error carrying the server's own stable code, so the screens can go on choosing their
- * wording from the code rather than from a sentence.
- */
-async function readJson<T>(url: string): Promise<T> {
-  const user = await userManager.getUser();
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      ...(user?.access_token ? { Authorization: `Bearer ${user.access_token}` } : {}),
-    },
-  });
-
-  if (!response.ok) {
-    const problem = (await response.json().catch(() => undefined)) as
-      | Record<string, unknown>
-      | undefined;
-    throw new ApiError(
-      response.status,
-      typeof problem?.code === 'string' ? problem.code : undefined,
-      typeof problem?.detail === 'string' ? problem.detail : undefined,
-      problem,
-    );
-  }
-
-  return (await response.json()) as T;
-}
-
 /** The address of one page of one library. Built here so the two hooks below cannot disagree. */
 function photographsUrl(source: LibraryPhotoSource, query: LibraryPhotographQuery): string {
   const search = new URLSearchParams({
@@ -1657,6 +1640,18 @@ export function usePhotoLibraryPhotographs(
     // long enough to feel instant is also a page that stops being what the library holds. Half a
     // minute is the same window this application already holds a library's health for.
     staleTime: 30_000,
+    // Not on coming back to the tab, unlike almost everything else here, and the reason is the
+    // picture addresses rather than the photographs. Each answer carries a freshly minted,
+    // short-lived credential in every tile's address, so an answer asked for again is sixty
+    // addresses the browser has never seen and cannot revalidate — a page of derivatives fetched
+    // afresh through this application and out of the neighbouring container, for a screen nobody
+    // has touched.
+    refetchOnWindowFocus: false,
+    // Not retried here. The refusal a library that did not answer produces has already been
+    // through this application's own attempts at the far side, so three more rounds with a
+    // second's, two seconds' and four seconds' wait between them add nothing but the seven seconds
+    // a reader spends before the sentence written for exactly this case appears.
+    retry: false,
   });
 }
 
@@ -1679,6 +1674,11 @@ export function usePhotoLibraryPhotograph(
       ),
     enabled: source !== undefined && photographId !== null,
     staleTime: 30_000,
+    // The same two as the listing, for the same two reasons: the picture address in this answer
+    // carries a credential that is new every time, and a library that did not answer has already
+    // been asked as often as this application is willing to ask.
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 }
 

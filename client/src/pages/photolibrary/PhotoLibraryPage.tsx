@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { Alert, Button, Flex, Input, Segmented, Skeleton, Space, Spin, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -51,7 +51,23 @@ export default function PhotoLibraryPage() {
 
   const { data, isPending, error } = usePhotoLibraryPhotographs(source, query);
   const state = browseState({ isPending, error, page: data });
-  const paging = pagingOf(data);
+  // The page being asked for, not the page in hand: while one is being turned they differ, and the
+  // controls follow the question rather than the answer that is still on screen.
+  const paging = pagingOf(data, page);
+
+  // An address naming a product this installation does not run draws the library it does run, and
+  // says so by correcting itself. Left alone, the address and the screen would disagree for as long
+  // as the reader had the page open — and the address is the half that gets copied and sent on, so
+  // a link saying one archive would go on delivering another with nothing anywhere admitting it.
+  useEffect(() => {
+    if (named === null || source === undefined || named === source) {
+      return;
+    }
+
+    const corrected = new URLSearchParams(params);
+    corrected.set('source', source);
+    setParams(corrected, { replace: true });
+  }, [named, source, params, setParams]);
 
   if (askingStatus) {
     return <Spin style={{ display: 'block', marginTop: '20vh' }} />;
@@ -197,20 +213,24 @@ export default function PhotoLibraryPage() {
 
       {state === 'loading' && <Skeleton active paragraph={{ rows: 8 }} />}
 
-      {(state === 'photographs' || state === 'empty') && data && (
+      {(state === 'photographs' || state === 'empty' || state === 'endOfList') && data && (
         <>
           <Flex justify="space-between" align="center" wrap gap={8} style={{ marginBottom: 8 }}>
             <Typography.Text type="secondary">
               {/* Two sentences, because there are two answers and only one of them is a number.
                   One product states how many it holds and the other publishes no way to ask, and a
                   page that showed the count of what is on screen where the size of the library
-                  belongs would be telling a reader the club has sixty photographs. */}
-              {paging.total === null
-                ? t('libraryPhotos.browse.showingUnknownTotal', { count: paging.shown })
-                : t('libraryPhotos.browse.showingOf', {
-                    shown: paging.shown,
-                    total: paging.total,
-                  })}
+                  belongs would be telling a reader the club has sixty photographs. Counted only
+                  where there is something to count: a page with nothing on it says what it is
+                  below, and "showing 0" over it would be a second, worse way of saying it. */}
+              {paging.shown === 0
+                ? null
+                : paging.total === null
+                  ? t('libraryPhotos.browse.showingUnknownTotal', { count: paging.shown })
+                  : t('libraryPhotos.browse.showingOf', {
+                      shown: paging.shown,
+                      total: paging.total,
+                    })}
             </Typography.Text>
 
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -225,7 +245,15 @@ export default function PhotoLibraryPage() {
             photographs={data.items}
             pictureUrlTemplate={data.pictureUrlTemplate}
             onOpen={setOpen}
-            emptyText={t('libraryPhotos.browse.empty')}
+            emptyText={
+              // The two ways of arriving at an empty grid, kept apart. One is a library holding
+              // nothing that matches; the other is a step past the end of a listing that holds
+              // plenty — and one of the two products offers that step every time its library
+              // happens to hold an exact multiple of a page.
+              state === 'endOfList'
+                ? t('libraryPhotos.browse.pastEnd')
+                : t('libraryPhotos.browse.empty')
+            }
           />
 
           <Flex justify="center" style={{ marginTop: 16 }}>

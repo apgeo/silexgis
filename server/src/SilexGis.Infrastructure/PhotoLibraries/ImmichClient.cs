@@ -463,8 +463,12 @@ public sealed class ImmichClient(
                 && next.ValueKind == JsonValueKind.String
                 && !string.IsNullOrWhiteSpace(next.GetString());
 
+            // Checked against what the library handed over rather than against what survived the
+            // reading: the check below asks whether the stated total can be a total of the
+            // photographs already paged past, and the library paged past every row it sent — not
+            // the subset of them this application could name.
             return new LibraryPhotoListPage(
-                photos, TotalOf(assets, page, size, photos.Count, hasMore), hasMore,
+                photos, TotalOf(assets, page, size, items.GetArrayLength(), hasMore), hasMore,
                 DateTimeOffset.UtcNow);
         }
     }
@@ -488,8 +492,14 @@ public sealed class ImmichClient(
     /// contradicts the paging is reported as unknown, because a wrong number a reader cannot tell
     /// from a right one is worse than no number at all.
     /// </para>
+    /// <para>
+    /// <paramref name="handedOver"/> is how many rows the library put on this page, not how many of
+    /// them could be read. The two differ whenever a row is unreadable, and the check only holds
+    /// with the first: counting what survived would shrink the number of photographs believed to
+    /// have been paged past and let exactly the totals this guard exists to suppress through.
+    /// </para>
     /// </remarks>
-    private static int? TotalOf(JsonElement assets, int page, int size, int shown, bool hasMore)
+    private static int? TotalOf(JsonElement assets, int page, int size, int handedOver, bool hasMore)
     {
         if (!assets.TryGetProperty("total", out var value)
             || value.ValueKind != JsonValueKind.Number
@@ -499,7 +509,7 @@ public sealed class ImmichClient(
             return null;
         }
 
-        var seen = ((page - 1) * (long)size) + shown;
+        var seen = ((page - 1) * (long)size) + handedOver;
 
         return total > seen || (total == seen && !hasMore) ? total : null;
     }

@@ -105,6 +105,25 @@ describe('what a page of a neighbouring library can say', () => {
   });
 });
 
+/**
+ * A page past the end of the listing is not an empty library.
+ *
+ * Reached in the ordinary course of things: one of the two products can only say "there may be
+ * more", because all it knows is that the page it sent came back full — so a library holding an
+ * exact multiple of the page size offers one page too many every time. Told that its library holds
+ * nothing matching, a club with thousands of photographs goes looking for a fault nobody has.
+ */
+describe('a page past the end of the listing', () => {
+  it('is told apart from a library that holds nothing matching', () => {
+    expect(browseState({ isPending: false, error: null, page: page({ page: 2, items: [] }) }))
+      .toBe('endOfList');
+
+    // The first page with nothing on it is the other thing entirely: nothing here matches.
+    expect(browseState({ isPending: false, error: null, page: page({ page: 1, items: [] }) }))
+      .toBe('empty');
+  });
+});
+
 describe('what the paging may offer', () => {
   /**
    * A next page follows what the library said, never a total: one of the two products states how
@@ -112,13 +131,13 @@ describe('what the paging may offer', () => {
    * against one library and silently offer nothing against the other.
    */
   it('offers the next page from what the library said rather than from a count', () => {
-    expect(pagingOf(page({ total: null, hasMore: true })).hasNext).toBe(true);
-    expect(pagingOf(page({ total: 412, hasMore: false })).hasNext).toBe(false);
+    expect(pagingOf(page({ total: null, hasMore: true }), 1).hasNext).toBe(true);
+    expect(pagingOf(page({ total: 412, hasMore: false }), 1).hasNext).toBe(false);
   });
 
   it('offers a previous page only after the first', () => {
-    expect(pagingOf(page({ page: 1 })).hasPrevious).toBe(false);
-    expect(pagingOf(page({ page: 2 })).hasPrevious).toBe(true);
+    expect(pagingOf(page({ page: 1 }), 1).hasPrevious).toBe(false);
+    expect(pagingOf(page({ page: 2 }), 2).hasPrevious).toBe(true);
   });
 
   /**
@@ -127,21 +146,45 @@ describe('what the paging may offer', () => {
    * reader the club has sixty photographs.
    */
   it('keeps what is shown apart from what the library holds', () => {
-    const known = pagingOf(page({ total: 412 }));
+    const known = pagingOf(page({ total: 412 }), 1);
     expect(known.shown).toBe(1);
     expect(known.total).toBe(412);
 
-    const unknown = pagingOf(page({ total: null }));
+    const unknown = pagingOf(page({ total: null }), 1);
     expect(unknown.shown).toBe(1);
     expect(unknown.total).toBeNull();
   });
 
+  /**
+   * While a page is being turned the answer on screen is the previous one, kept there on purpose so
+   * the grid does not empty and refill. What that answer says about paging is about the page the
+   * reader has already left — so a next control built from it lets a second step land one page past
+   * the end of the listing, where the screen has nothing to draw and says the library holds nothing.
+   */
+  it('offers neither step while the answer in hand is not the answer to the question', () => {
+    const turning = pagingOf(page({ page: 2, hasMore: true }), 3);
+
+    expect(turning.current).toBe(false);
+    expect(turning.hasNext).toBe(false);
+    expect(turning.hasPrevious).toBe(false);
+
+    // What is drawn is still described, because it is still on the screen.
+    expect(turning.shown).toBe(1);
+
+    // The control: the same answer, once it is the answer to the question being asked.
+    const arrived = pagingOf(page({ page: 2, hasMore: true }), 2);
+    expect(arrived.current).toBe(true);
+    expect(arrived.hasNext).toBe(true);
+    expect(arrived.hasPrevious).toBe(true);
+  });
+
   it('says nothing at all before an answer has arrived', () => {
-    expect(pagingOf(undefined)).toEqual({
+    expect(pagingOf(undefined, 1)).toEqual({
       hasPrevious: false,
       hasNext: false,
       total: null,
       shown: 0,
+      current: false,
     });
   });
 
@@ -151,11 +194,11 @@ describe('what the paging may offer', () => {
    * already said is not there.
    */
   it('refuses a step past either end', () => {
-    const last = pagingOf(page({ page: 3, hasMore: false }));
+    const last = pagingOf(page({ page: 3, hasMore: false }), 3);
     expect(stepPage(3, 1, last)).toBe(3);
     expect(stepPage(3, -1, last)).toBe(2);
 
-    const first = pagingOf(page({ page: 1, hasMore: true }));
+    const first = pagingOf(page({ page: 1, hasMore: true }), 1);
     expect(stepPage(1, -1, first)).toBe(1);
     expect(stepPage(1, 1, first)).toBe(2);
   });

@@ -56,9 +56,13 @@ export default function AppLayout() {
   // every domain's links read from — so the rank, not a domain right, decides who is
   // offered the page that authors it.
   const isFullAdmin = useIsFullAdmin();
-  // Answered once for the whole session and refreshed on its own cadence; the rail reads it only
-  // to decide whether to offer the page.
-  const { data: photoLibraries } = usePhotoLibraries();
+  // Asked once, and not watched. The rail wants one thing from this answer — whether there is a
+  // neighbouring library this account may look through — and that cannot change without the server
+  // being restarted. Whether a library is up right now changes on its own and is worth watching,
+  // but only on a surface showing it: this component is mounted on every page for the whole of a
+  // session, so a timer here would be a request twice a minute for every signed-in account, for
+  // ever, to decide whether to draw one rail entry.
+  const { data: photoLibraries } = usePhotoLibraries({ watchingHealth: false });
 
   // "settings" and "notifications" are listed so an unmatched path does not fall through to
   // highlighting the map; neither matches a menu item, so nothing lights up while one is open,

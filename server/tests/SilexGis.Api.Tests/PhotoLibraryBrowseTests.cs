@@ -185,6 +185,70 @@ public sealed class PhotoLibraryBrowseTests
         immich.Calls.ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// Words typed into a search box stay words, and cannot become a filter of any kind.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The parameter the words go into is not a text field on this product: it is parsed into the
+    /// same form the request's own parameters bind to, so a <c>name:value</c> pair typed into a
+    /// search box would set a field rather than match a word. This asserts that no such pair
+    /// survives, and it asserts it about the fields it would matter most for.
+    /// </para>
+    /// <para>
+    /// A place first, because that one is not a bug in a search box — it is the whole premise of
+    /// this surface. A listing narrowed to a circle around a point is a way of reading a
+    /// photograph's coordinate off which page it appears on, one halving at a time, on a surface
+    /// built to carry no position at all. Then the order and the quality floor, which this call
+    /// sets deliberately and which a pair would override, and the state fields, which reach
+    /// photographs the library's own owner marked as not for general viewing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_search_cannot_become_a_filter_of_any_kind()
+    {
+        var prism = new LibraryStub();
+        prism.Answers(_ => Json("[]"));
+
+        await Prism(prism).ListAsync(
+            new LibraryPhotoQuery(
+                1, 60, "lat:45.18 lng:23.21 dist:1 quality:0 order:oldest private:true archived:true"),
+            default);
+
+        var url = prism.Only.Url;
+
+        // The escaped form is what goes on the wire, so the separator is looked for in both
+        // spellings: a test reading only the plain one would pass while every filter went through
+        // percent-encoded, which is exactly how this would ship unnoticed.
+        var sent = url[(url.IndexOf("&q=", StringComparison.Ordinal) + 3)..];
+        sent.ShouldNotContain(":");
+        sent.ShouldNotContain("%3A");
+        sent.ShouldNotContain("%3a");
+
+        // The words themselves survive — this reduces a search, it does not refuse one.
+        sent.ShouldContain("lat");
+        sent.ShouldContain("45.18");
+
+        // And what this application decided remains what it decided.
+        url.ShouldContain("order=newest");
+        url.ShouldContain("quality=");
+    }
+
+    /// <summary>
+    /// A search that was nothing but filter syntax asks for the whole listing rather than for a
+    /// page of nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_search_left_with_no_words_is_no_search()
+    {
+        var prism = new LibraryStub();
+        prism.Answers(_ => Json("[]"));
+
+        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60, " : "), default);
+
+        prism.Only.Url.ShouldNotContain("&q=");
+    }
+
     // -------------------------------------------------------------------- counts, and their honesty
 
     /// <summary>
@@ -288,6 +352,57 @@ public sealed class PhotoLibraryBrowseTests
         page.Photos.Count.ShouldBe(2);
         page.Photos.Select(p => p.PhotographId)
             .ShouldBe(["psinvented0000000one", "psinvented000000three"]);
+    }
+
+    /// <summary>
+    /// A row left out does not take the rest of the library with it.
+    /// </summary>
+    /// <remarks>
+    /// Whether there is a page behind this one is the library's answer to "was this page full", and
+    /// the library filled it. Counted after the unreadable rows were dropped it would be one short
+    /// of full, the next control would be disabled, and everything past this offset would be out of
+    /// reach through this surface — with nothing on the screen saying the listing stopped early.
+    /// </remarks>
+    [Fact]
+    public async Task A_full_page_with_a_row_left_out_still_offers_the_next_page()
+    {
+        var stub = new LibraryStub();
+        stub.Answers(_ => Json(
+            $$"""
+            [{{PrismRow(PrismUid, PrismHash)}},
+             {"UID":"not a uid","Hash":"{{PrismHash}}"},
+             {{PrismRow("psinvented000000three", "cc33dd44ee55ff66aa11")}}]
+            """));
+
+        var page = await Prism(stub).ListAsync(new LibraryPhotoQuery(1, 3, null), default);
+
+        page.Photos.Count.ShouldBe(2);
+        page.HasMore.ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// A total is weighed against what the library handed over, not against what could be read.
+    /// </summary>
+    /// <remarks>
+    /// Two rows sent, one of them unreadable, a further page promised, and a total of two: whatever
+    /// that field counts it is not how many the library holds, and it is suppressed. Weighed
+    /// against the one row that survived instead, two would look larger than the photographs paged
+    /// past and would be published — putting the size of a page on the screen under the words for
+    /// the size of the library, for a library of any size at all.
+    /// </remarks>
+    [Fact]
+    public async Task A_total_is_weighed_against_what_the_library_handed_over()
+    {
+        var stub = new LibraryStub();
+        stub.Answers(_ => Json(ImmichPage(
+            $$"""[{{ImmichRow(First)}},{"id":"not-an-identifier","type":"IMAGE"}]""",
+            total: 2,
+            nextPage: "2")));
+
+        var page = await Immich(stub).ListAsync(new LibraryPhotoQuery(1, 2, null), default);
+
+        page.Photos.Count.ShouldBe(1);
+        page.Total.ShouldBeNull();
     }
 
     /// <summary>

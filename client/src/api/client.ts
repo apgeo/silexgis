@@ -75,15 +75,19 @@ export function retryQuery(failureCount: number, error: unknown): boolean {
  */
 export const api = createClient<paths>({ baseUrl: '/' });
 
-api.use({
-  async onRequest({ request }) {
+// The signed-in account, on every request. Named and exported rather than written inline, because
+// one other caller has to make a request the same way this client does — see the read below.
+export const carriesTheAccountsBearer = {
+  async onRequest({ request }: { request: Request }) {
     const user = await userManager.getUser();
     if (user?.access_token) {
       request.headers.set('Authorization', `Bearer ${user.access_token}`);
     }
     return request;
   },
-});
+};
+
+api.use(carriesTheAccountsBearer);
 
 // The language the person is reading the site in, on every request.
 //
@@ -165,4 +169,60 @@ if (import.meta.env.DEV) {
       return response;
     },
   });
+}
+
+/**
+ * One GET, made the way the generated client makes one, for a route the contract document does not
+ * describe yet.
+ *
+ * <p>
+ * The typed client is built from the contract the server publishes, so a route added in the same
+ * change as the screen reading it cannot be reached through that client until the document has been
+ * generated again. This is the way through meanwhile — and it goes through the same steps rather
+ * than around them, which is the whole reason it lives here beside them rather than beside its
+ * callers.
+ * </p>
+ * <p>
+ * Three of those steps matter and each is a defect if it is skipped. The account's bearer, or the
+ * request is refused. The language the person is reading in, or a sentence the server wrote comes
+ * back in a language they did not choose — and these routes have such sentences, because what a
+ * neighbouring library said is the server's to word. And the trail of requests kept in development,
+ * without which an error report is silent about exactly the newest and least-proven surface.
+ * </p>
+ * <p>
+ * Refusals arrive as the same error carrying the server's own stable code, so a screen goes on
+ * choosing its wording from the code rather than from a sentence written for a person.
+ * </p>
+ */
+export async function readJson<T>(path: string): Promise<T> {
+  const request = new Request(new URL(path, window.location.origin), {
+    headers: { Accept: 'application/json' },
+  });
+
+  await carriesTheAccountsBearer.onRequest({ request });
+  sendsTheReadingLanguage.onRequest({ request });
+
+  const response = await fetch(request);
+
+  if (import.meta.env.DEV) {
+    recordBreadcrumb(
+      'api',
+      `${request.method} ${new URL(request.url).pathname} → ${response.status}`,
+    );
+  }
+
+  if (!response.ok) {
+    const problem = (await response.json().catch(() => undefined)) as
+      | Record<string, unknown>
+      | undefined;
+
+    throw new ApiError(
+      response.status,
+      typeof problem?.code === 'string' ? problem.code : undefined,
+      typeof problem?.detail === 'string' ? problem.detail : undefined,
+      problem,
+    );
+  }
+
+  return (await response.json()) as T;
 }

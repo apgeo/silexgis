@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { PictureOutlined } from '@ant-design/icons';
+import { PictureOutlined, VideoCameraOutlined } from '@ant-design/icons';
 import { Empty, Flex, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { LibraryPhotograph, LibraryPhotoSource } from '../../api/hooks.ts';
@@ -70,6 +70,8 @@ export default function LibraryPhotoGrid({
           borderColor={token.colorBorderSecondary}
           background={token.colorFillQuaternary}
           radius={token.borderRadius}
+          mask={token.colorBgMask}
+          onMask={token.colorTextLightSolid}
         />
       ))}
     </Flex>
@@ -84,6 +86,10 @@ interface LibraryPhotoTileProps {
   borderColor: string;
   background: string;
   radius: number;
+  /** Behind the mark on a tile that is not a photograph. Over a picture, so never a page colour. */
+  mask: string;
+  /** On that mark. Fixed against the mask rather than against the page, for the same reason. */
+  onMask: string;
 }
 
 /**
@@ -111,6 +117,8 @@ function LibraryPhotoTile({
   borderColor,
   background,
   radius,
+  mask,
+  onMask,
 }: LibraryPhotoTileProps) {
   const { t, i18n } = useTranslation();
   const [failed, setFailed] = useState(() =>
@@ -124,14 +132,26 @@ function LibraryPhotoTile({
   const title = photograph.title ?? t('libraryPhotos.noTitle');
   const takenAt = photograph.takenAt ? new Date(photograph.takenAt) : null;
 
+  // What the library said this is, and only what it said. A kind it never stated stays unstated:
+  // most of these tiles are photographs and drawing one with a picture mark is an admitted guess
+  // about a shape, but calling something a photograph in words is a claim, and this application
+  // makes it only where the library did.
+  //
+  // A film drawn as an ordinary tile is that claim made silently. What the tile shows is a still,
+  // so without this mark a page counted and captioned as photographs would be showing something
+  // that is not one, with nothing on it saying so.
+  const isVideo = photograph.kind === 'video';
+  const label = isVideo ? `${title} (${t('libraryPhotos.video')})` : title;
+
   return (
     <figure style={{ margin: 0 }} data-testid="library-photo-tile">
       <button
         type="button"
         onClick={() => onOpen(photograph.photographId)}
-        aria-label={title}
+        aria-label={label}
         style={{
           padding: 0,
+          position: 'relative',
           border: `1px solid ${borderColor}`,
           borderRadius: radius,
           overflow: 'hidden',
@@ -145,7 +165,7 @@ function LibraryPhotoTile({
         {picture ? (
           <img
             src={picture}
-            alt={title}
+            alt={label}
             data-testid="library-photo-tile-picture"
             // Native lazy loading rather than an observer of our own: the browser already knows
             // what is on screen, and it keeps working while the tab is in the background.
@@ -171,6 +191,31 @@ function LibraryPhotoTile({
               style={{ fontSize: 28, opacity: 0.45 }}
             />
           </Flex>
+        )}
+
+        {isVideo && (
+          <span
+            data-testid="library-photo-tile-video"
+            style={{
+              position: 'absolute',
+              left: 6,
+              bottom: 6,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '0 6px',
+              borderRadius: radius,
+              background: mask,
+              color: onMask,
+              fontSize: 11,
+              lineHeight: '18px',
+            }}
+          >
+            {/* The word carries it; the icon is decoration beside the word, and the button's own
+                label already says it for anything not reading the picture. */}
+            <VideoCameraOutlined aria-hidden />
+            {t('libraryPhotos.video')}
+          </span>
         )}
       </button>
 
