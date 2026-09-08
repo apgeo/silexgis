@@ -54,6 +54,7 @@ import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import CaveCrossSectionPanel from '../../components/statistics/CaveCrossSectionPanel.tsx';
 import CavePatternPanel from '../../components/statistics/CavePatternPanel.tsx';
 import CaveHypsometryPanel from '../../components/statistics/CaveHypsometryPanel.tsx';
+import CaveOverburdenPanel from '../../components/statistics/CaveOverburdenPanel.tsx';
 import CaveStructurePanel from '../../components/statistics/CaveStructurePanel.tsx';
 import CaveOrientationPanel from '../../components/statistics/CaveOrientationPanel.tsx';
 import CaveStatisticsPanel from '../../components/statistics/CaveStatisticsPanel.tsx';
@@ -412,6 +413,11 @@ export default function CaveDetailPage() {
       {id && <CaveStructurePanel caveId={id} />}
 
       {id && <CaveHypsometryPanel caveId={id} canEdit={canEdit} />}
+
+      {/* After the heights it is measured against: how deep the passage lies is one reading and
+          how much rock stands between it and the daylight is the next, and the second only makes
+          sense once the first has said where the passage is. */}
+      {id && <CaveOverburdenPanel caveId={id} />}
 
       {/* Last of the survey figures, because it is the only one that proposes rather than
           measures: it reads the shape, the trend and the profile above it and suggests what kind

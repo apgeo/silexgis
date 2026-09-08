@@ -241,6 +241,7 @@ export const queryKeys = {
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
   caveHypsometry: (id: string) => ['caves', id, 'hypsometry'] as const,
+  caveOverburden: (id: string) => ['caves', id, 'overburden'] as const,
   caveLevelBands: (id: string) => ['caves', id, 'level-bands'] as const,
   areaHypsometry: (id: string) => ['features', id, 'entrance-hypsometry'] as const,
   caveStructureComparison: (id: string, areaId: string) =>
@@ -5814,6 +5815,38 @@ export function useCaveHypsometry(caveId: string | undefined) {
     staleTime: 5 * 60_000,
     // A cave this caller may read but not place exactly is refused with the same answer as one
     // that does not exist. Retrying asks the same question again.
+    retry: false,
+  });
+}
+
+/**
+ * How much rock lies over a cave's passages, along their length.
+ *
+ * This is cave data rather than a terrain figure: the curve is the passage set against the surface
+ * above it, so anything holding it can work out where the passage runs. A caller who may read the
+ * cave but may not place it exactly is refused with the same "no such cave" a never-created cave
+ * gets, which is why nothing here retries and why the panel drawing it renders nothing at all on an
+ * error rather than an empty card.
+ */
+export type CaveOverburden = components['schemas']['CaveOverburdenDto'];
+
+/** One reading along the passage: where it was taken, and what the ground was found to be there. */
+export type CaveOverburdenSample = components['schemas']['CaveOverburdenSampleDto'];
+
+/** Whether a ground height could be read at one place, and if not, why not. */
+export type DemSampleOutcome = components['schemas']['DemSampleOutcome'];
+
+export function useCaveOverburden(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveOverburden(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{id}/overburden', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    // Recomputed per request from line work and from prepared elevation data, neither of which
+    // changes without somebody uploading or building something.
+    staleTime: 5 * 60_000,
+    // A cave this caller may read but not place exactly is refused with the same answer as one that
+    // does not exist. Retrying asks the same question again.
     retry: false,
   });
 }

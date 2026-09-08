@@ -83,6 +83,11 @@ import {
   attachClosestApproachLine,
   createClosestApproachLayer,
 } from '../map/closestApproachLayer.ts';
+import {
+  OVERBURDEN_HIGHLIGHT_LAYER_ID,
+  attachOverburdenHighlight,
+  createOverburdenHighlightLayer,
+} from '../map/overburdenHighlightLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer } from '../map/heatmapLayer.ts';
 import { GEOFILE_LAYER_PREFIX, attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer, setPhotosEnabled } from '../map/photoLayer.ts';
@@ -319,6 +324,9 @@ export default function MapPage() {
       // On top of the data it is drawn over: it is one short line answering a question somebody
       // asked, and it is of no use at all under the surveys it joins.
       [CLOSEST_APPROACH_LAYER_ID, createClosestApproachLayer],
+      // Topmost of all: it is a single mark saying "the reading you pressed came from here", and
+      // one that anything at all could cover is a mark that failed to answer the question.
+      [OVERBURDEN_HIGHLIGHT_LAYER_ID, createOverburdenHighlightLayer],
     ] as const) {
       if (!findOverlayLayer(id)) {
         getOverlayGroup().getLayers().push(create());
@@ -328,6 +336,10 @@ export default function MapPage() {
     // Nothing camera-driven about it: it draws what was last measured, wherever that is, and
     // stays until a different pair is measured or the panel clears it.
     const detachApproach = attachClosestApproachLine();
+    // Same arrangement, same reason: it marks whichever reading was pressed last on an overburden
+    // curve, wherever in the world that is, and stays until another is pressed or the panel clears
+    // it.
+    const detachOverburdenHighlight = attachOverburdenHighlight();
     const detachLoader = attachEntranceLoader(map);
     const detachFeatureLoader = attachSurfaceFeatureLoader(map);
     const detachCenterlineLoader = attachCenterlineLoader(map);
@@ -384,6 +396,7 @@ export default function MapPage() {
       controller.dispose();
       setEditController(null);
       detachApproach();
+      detachOverburdenHighlight();
       detachLoader();
       detachFeatureLoader();
       detachCenterlineLoader();

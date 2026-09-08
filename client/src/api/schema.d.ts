@@ -5338,6 +5338,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/overburden": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How much rock lies over one cave's passages, along their length. Requires Read on the Terrain domain, and is withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveOverburdenDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{id}/structure-comparison": {
         parameters: {
             query?: never;
@@ -17123,6 +17161,46 @@ export interface components {
             byLength: components["schemas"]["OrientationMeasure"];
             bins: components["schemas"]["OrientationBin"][];
             dip: null | components["schemas"]["DipSummary"];
+        };
+        CaveOverburdenDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            hasTerrain: boolean;
+            /** Format: double */
+            passageLengthM: number;
+            /** Format: int32 */
+            coveredSampleCount: number;
+            /** Format: double */
+            minOverburdenM: null | number;
+            /** Format: double */
+            maxOverburdenM: null | number;
+            /** Format: double */
+            meanOverburdenM: null | number;
+            samples: components["schemas"]["CaveOverburdenSampleDto"][];
+        };
+        CaveOverburdenSampleDto: {
+            /** Format: double */
+            distanceAlongM: number;
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            passageAltitudeM: number;
+            outcome: components["schemas"]["DemSampleOutcome"];
+            /** Format: double */
+            groundAltitudeM: null | number;
+            /** Format: double */
+            overburdenM: null | number;
+            /** Format: int32 */
+            pathIndex: null | number;
+            /** Format: int32 */
+            segmentIndex: number;
         };
         CaveParentDto: {
             /** Format: uuid */

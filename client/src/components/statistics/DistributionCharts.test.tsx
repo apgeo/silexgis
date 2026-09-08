@@ -162,7 +162,52 @@ describe('the chart layer draws real elements', () => {
     await waitFor(() => expect(frame.querySelector('svg')).not.toBeNull());
     expect(frame.querySelectorAll('path').length).toBeGreaterThan(1);
   });
+
+  it('breaks the curve where a value is missing rather than joining across the gap', async () => {
+    // A curve known over part of its range asserts a value everywhere the line crosses, so a
+    // straight run over the middle would invent the part nobody measured. The break has to reach
+    // the drawing, which is why this renders rather than inspecting the options.
+    const joined = renderThemed(
+      <EnvelopeChart
+        x={[0, 1, 2, 3, 4]}
+        curve={[1, 2, 3, 2, 1]}
+        lower={[0, 1, 2, 1, 0]}
+        upper={[2, 3, 4, 3, 2]}
+        xLabel="Distance (m)"
+        yLabel="Depth (m)"
+        testId="chart-envelope-joined"
+      />,
+    );
+    const whole = await screen.findByTestId('chart-envelope-joined');
+    await waitFor(() => expect(whole.querySelector('svg')).not.toBeNull());
+    const wholeSubpaths = subpathCount(whole);
+    joined.unmount();
+
+    renderThemed(
+      <EnvelopeChart
+        x={[0, 1, 2, 3, 4]}
+        curve={[1, 2, null, 2, 1]}
+        lower={[0, 1, null, 1, 0]}
+        upper={[2, 3, null, 3, 2]}
+        xLabel="Distance (m)"
+        yLabel="Depth (m)"
+        testId="chart-envelope-gapped"
+      />,
+    );
+    const gapped = await screen.findByTestId('chart-envelope-gapped');
+    await waitFor(() => expect(gapped.querySelector('svg')).not.toBeNull());
+
+    // A line drawn in two pieces has more subpaths than the same line drawn in one.
+    expect(subpathCount(gapped)).toBeGreaterThan(wholeSubpaths);
+  });
 });
+
+/** How many separate strokes the drawing is made of — an "M" begins each one. */
+function subpathCount(frame: HTMLElement): number {
+  return Array.from(frame.querySelectorAll('path'))
+    .map((node) => (node.getAttribute('d') ?? '').match(/M/g)?.length ?? 0)
+    .reduce((total, count) => total + count, 0);
+}
 
 describe('the honesty properties the charts are supposed to have', () => {
   it('leaves an empty bin as a gap on a logarithmic axis rather than inventing a count', async () => {

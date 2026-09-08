@@ -25,6 +25,7 @@ import {
   type CenterlineLoadState,
 } from '../../map/centerlineLayer.ts';
 import { CLOSEST_APPROACH_LAYER_ID } from '../../map/closestApproachLayer.ts';
+import { OVERBURDEN_HIGHLIGHT_LAYER_ID } from '../../map/overburdenHighlightLayer.ts';
 import {
   getLibraryPhotoLoadStates,
   libraryPhotoSourceOf,
@@ -313,6 +314,8 @@ export default function LayerPanel({
         return t('map.tripsLayer');
       case CLOSEST_APPROACH_LAYER_ID:
         return t('map.closestApproach');
+      case OVERBURDEN_HIGHLIGHT_LAYER_ID:
+        return t('map.overburdenHighlight');
       default:
         // Geofile/raster layers carry their catalog name on the OL layer itself.
         return (layer.get('name') as string | undefined) ?? id ?? '';

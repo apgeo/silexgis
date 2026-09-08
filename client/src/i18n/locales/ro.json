@@ -341,6 +341,7 @@
     "features": "Elemente",
     "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată.",
     "closestApproach": "Cea mai mică distanță",
+    "overburdenHighlight": "Citirea rocii de deasupra",
     "georeferencedMaps": "Hărți georeferențiate"
   },
   "dialog": {
@@ -3899,6 +3900,43 @@
     "structureRose": "Trasee de fractură ({{count}} pe o rază de {{radius}} m)",
     "areaStructureRose": "Trasee de fractură ({{count}} în această zonă)",
     "dolineRose": "Axele lungi ale depresiunilor ({{count}} contururi)"
+  },
+  "overburden": {
+    "title": "Roca de deasupra",
+    "loading": "Se măsoară roca de deasupra…",
+    "nothingMeasured": "Această peșteră nu are traseu de-a lungul căruia să se măsoare, deci nu există unde să se întrebe câtă rocă se află deasupra.",
+    "noAltitudesTitle": "Traseul acestei peșteri nu conține altitudini.",
+    "noAltitudesReason": "Câtă rocă se află deasupra înseamnă suprafața terenului minus altitudinea galeriei, iar o ridicare topografică înregistrată ca plan nu are altitudinea până la care să se măsoare. Un profil de zerouri ar desena întreaga peșteră întinsă la suprafață.",
+    "noTerrainBuilt": "Pe această instalare nu a fost pregătit niciun model de elevație, deci înălțimea terenului de deasupra acestei peșteri nu este cunoscută nicăieri. Aceasta nu este o afirmație despre peșteră.",
+    "noCoverageHere": "Există date de elevație pregătite aici, dar niciuna nu ajunge la această peșteră. Terenul de deasupra ei este necunoscut, nu la nivelul mării.",
+    "axisDistance": "Distanța de-a lungul galeriei (m)",
+    "axisThickness": "Rocă deasupra (m)",
+    "thinnest": "Cea mai subțire",
+    "thickest": "Cea mai groasă",
+    "mean": "Medie",
+    "passageLength": "Galerie măsurată",
+    "coverage": "Citiri cu înălțimea terenului",
+    "coverageValue": "{{covered}} din {{total}}",
+    "unitMetres": "{{value}} m",
+    "notMeasured": "—",
+    "figuresScope": "Cifrele sunt calculate pe citirile care au obținut o înălțime a terenului și pe niciuna alta, deci o peșteră acoperită parțial de datele de elevație este descrisă doar pe acea parte. O grosime negativă este raportată așa cum a fost măsurată: înseamnă că modelul de elevație pune suprafața sub galerie, iar cele două nu se potrivesc.",
+    "gap": {
+      "outsideCoverage": "Curba se întrerupe acolo unde niciun model de elevație pregătit nu ajunge la galerie. Nimeni nu știe înălțimea terenului acolo, de aceea linia se oprește în loc să treacă peste gol.",
+      "noData": "Curba se întrerupe acolo unde modelul de elevație ajunge la galerie, dar nu înregistrează nimic — o gaură în model, nu o galerie la suprafață.",
+      "mixed": "Curba se întrerupe în două feluri de locuri: unde niciun model de elevație pregătit nu ajunge la galerie și unde modelul ajunge, dar nu înregistrează nimic. Niciunul nu înseamnă o galerie la suprafață."
+    },
+    "distanceNote": "Axa orizontală arată câtă galerie se află înaintea fiecărei citiri, în ordinea în care o înregistrează traseul. O ridicare topografică este o rețea, nu o singură parcurgere a peșterii, deci este o lungime și nu un traseu pe care l-ar putea urma cineva.",
+    "pressToLocate": "Apăsați un punct de pe curbă pentru a marca locul unde a fost luată citirea, pe hartă și în scena 3D.",
+    "readout": "{{distance}} de-a lungul · {{thickness}} · segmentul {{segment}} al traseului",
+    "readoutWhere": "{{distance}} de-a lungul galeriei",
+    "readoutThickness": "{{value}} de rocă deasupra",
+    "readoutSegment": "Segmentul {{index}} al traseului",
+    "readoutAbsent": {
+      "outsideCoverage": "Nicio dată de elevație nu ajunge aici",
+      "noData": "Datele de elevație nu înregistrează nimic aici"
+    },
+    "markLabel": "{{value}} de rocă deasupra",
+    "markLabelAbsent": "Roca de deasupra nu se cunoaște aici"
   },
   "crossSection": {
     "title": "Dimensiunea galeriilor",
