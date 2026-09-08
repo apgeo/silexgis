@@ -216,7 +216,7 @@ public sealed class PhotoLibraryProbeTests
         health.Reach.ShouldBe(LibraryReach.Reachable);
         health.Version.ShouldBe("1.142.0");
         health.FailureCode.ShouldBeNull();
-        health.MissingPermissions.ShouldBe(["asset.view"]);
+        health.MissingPermissions.ShouldBe(["asset.view", "asset.read"]);
 
         stub.Asked.Count.ShouldBe(2);
         stub.Asked[1].ShouldEndWith(ImmichKey);
@@ -227,7 +227,7 @@ public sealed class PhotoLibraryProbeTests
     /// needs no permission of its own — which is exactly the key an operator most needs told about.
     /// </summary>
     [Fact]
-    public async Task A_key_that_carries_nothing_is_still_described_and_both_rights_are_named()
+    public async Task A_key_that_carries_nothing_is_still_described_and_every_right_is_named()
     {
         var stub = new LibraryStub()
             .Answering(ImmichVersion, """{"major":1,"minor":142,"patch":0}""")
@@ -236,13 +236,13 @@ public sealed class PhotoLibraryProbeTests
         var health = await Immich(stub).ProbeAsync(default);
 
         health.Reach.ShouldBe(LibraryReach.Reachable);
-        health.MissingPermissions.ShouldBe(["map.read", "asset.view"]);
+        health.MissingPermissions.ShouldBe(["map.read", "asset.view", "asset.read"]);
     }
 
     /// <summary>
     /// The entry that stands for everything satisfies both. Read as sufficient rather than as a
     /// name this build does not recognise, or every operator who minted a key without narrowing it
-    /// — which is the default the library's own screen offers — would be told to add two rights
+    /// — which is the default the library's own screen offers — would be told to add rights
     /// they already have.
     /// </summary>
     [Fact]
@@ -279,7 +279,7 @@ public sealed class PhotoLibraryProbeTests
             .Answering(ImmichVersion, """{"major":1,"minor":142,"patch":0}""")
             .Answering(
                 ImmichKey,
-                """{"name":"an invented key","permissions":["asset.view","album.read","map.read"]}""");
+                """{"name":"an invented key","permissions":["asset.view","album.read","map.read","asset.read"]}""");
 
         (await Immich(stub).ProbeAsync(default)).MissingPermissions.ShouldBeEmpty();
     }

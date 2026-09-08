@@ -130,7 +130,12 @@ public sealed class ImmichClient(
     /// already have.
     /// </para>
     /// </remarks>
-    private static readonly string[] RequiredPermissions = ["map.read", "asset.view"];
+    // Every right this integration actually uses, so that a key missing one is named before a
+    // screen fails on it rather than after. `map.read` reads the positions, `asset.view` fetches
+    // the pictures, and `asset.read` is what the listing and the search go through — a key
+    // carrying only the first two passes the health check and then refuses every browse and
+    // every search, which is the health check reporting on something adjacent to the question.
+    private static readonly string[] RequiredPermissions = ["map.read", "asset.view", "asset.read"];
 
     /// <summary>The entry a key carries when it was minted with no narrowing at all.</summary>
     private const string EveryPermission = "all";
