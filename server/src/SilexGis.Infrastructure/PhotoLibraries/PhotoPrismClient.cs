@@ -313,6 +313,323 @@ public sealed class PhotoPrismClient(
     }
 
     /// <summary>
+    /// This product matches text over what a photograph says about itself — its title, its caption,
+    /// its keywords, and the labels its own classifier wrote — through the same search grammar its
+    /// own interface uses, so what somebody types here means what it means over there.
+    /// </summary>
+    public bool SupportsTextSearch => true;
+
+    /// <summary>
+    /// One page of the library, newest first, asked for without a rectangle.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A different route from the one the map uses, and deliberately. The route that takes a
+    /// rectangle can only answer photographs that have a position, which is the smaller half of a
+    /// club's library — everything taken underground, every scan, every camera with no receiver is
+    /// missing from it. A list of the library has to show those, so it asks the route that knows
+    /// about all of them, and that route takes no rectangle at all.
+    /// </para>
+    /// <para>
+    /// Nothing is held between calls: one page is asked for, and it is gone when the response is
+    /// written.
+    /// </para>
+    /// </remarks>
+    public async Task<LibraryPhotoListPage> ListAsync(LibraryPhotoQuery query, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        EnsureConfigured();
+
+        var count = Math.Clamp(query.PageSize, 1, ViewportCountCeiling);
+
+        // Widened before it is multiplied, so a page number far past the end of any library
+        // produces a large offset rather than a negative one: the far side answers an offset past
+        // the end with an empty page, and would answer a negative one with nobody knows what.
+        var offset = (int)Math.Clamp((Math.Max(1, query.Page) - 1L) * count, 0, int.MaxValue);
+
+        var url = new Uri(
+            BaseAddress(Options.BaseUrl),
+            "api/v1/photos?count=" + count.ToString(CultureInfo.InvariantCulture)
+            + "&offset=" + offset.ToString(CultureInfo.InvariantCulture)
+            // Newest first, asked for rather than assumed. This route takes an order and the one
+            // the map uses does not, so without saying so the two surfaces would each be ordered by
+            // whatever their own route happened to default to.
+            + "&order=newest"
+            // The same floor the map applies, so the two surfaces do not disagree about which
+            // photographs this installation considers worth showing at all.
+            + "&quality=" + Math.Clamp(Options.MinQuality, 0, 7).ToString(CultureInfo.InvariantCulture)
+            // The reader's words go into the parameter this product parses its own search grammar
+            // from, so what somebody types means here what it means in the library's own interface.
+            + (string.IsNullOrWhiteSpace(query.Text)
+                ? string.Empty
+                : "&q=" + Uri.EscapeDataString(query.Text)));
+
+        using var response = await SendJsonAsync(url, ct);
+
+        // Every answer from this product carries the picture credential, so listing the library
+        // refreshes it exactly as a map pan does — which is what lets a grid of thumbnails load for
+        // somebody who never opened the map.
+        CapturePreviewToken(response);
+
+        var payload = await response.Content.ReadAsStringAsync(ct);
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(payload);
+        }
+        catch (JsonException e)
+        {
+            throw new PhotoLibraryException(
+                PhotoLibraryException.RejectedCode,
+                "The photo library's answer was not readable as JSON.", e);
+        }
+
+        using (document)
+        {
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                throw new PhotoLibraryException(
+                    PhotoLibraryException.RejectedCode,
+                    "The photo library did not answer a listing with a list of photographs.");
+            }
+
+            var photos = new List<LibraryListedPhoto>(document.RootElement.GetArrayLength());
+
+            foreach (var element in document.RootElement.EnumerateArray())
+            {
+                if (TryReadListed(element, out var photo))
+                {
+                    photos.Add(photo);
+                }
+            }
+
+            // A full page is a page that may have had more behind it, which is the safe way round:
+            // offering a next page that turns out empty costs one request, while withholding one
+            // hides the rest of the library behind a control that is not there.
+            //
+            // The total is left unknown on purpose. This product does send a count beside a page,
+            // but it counts what that page holds — a number the page already is — and nothing in
+            // the answer says how many the library holds altogether. An unknown total said plainly
+            // is a better answer than a number a reader cannot tell from a fact.
+            return new LibraryPhotoListPage(
+                photos, Total: null, HasMore: photos.Count >= count, DateTimeOffset.UtcNow);
+        }
+    }
+
+    /// <summary>
+    /// Everything this library will say about one photograph, or null when it reports none under
+    /// that identifier.
+    /// </summary>
+    /// <remarks>
+    /// The identifier asked for is the photograph's own, which on this product is not the string
+    /// its pictures are fetched with: that one is a hash of the picture's contents. It is read back
+    /// out of this answer, so a detail panel shows the larger rendering without a second question.
+    /// </remarks>
+    public async Task<LibraryPhotoDetail?> DetailAsync(string photographId, CancellationToken ct)
+    {
+        EnsureConfigured();
+
+        if (!PhotoLibraryHttp.IsSafeReference(photographId))
+        {
+            throw new PhotoLibraryException(
+                PhotoLibraryException.RejectedCode,
+                "That is not an identifier this application will ask a photo library about.");
+        }
+
+        var url = new Uri(BaseAddress(Options.BaseUrl), $"api/v1/photos/{photographId}");
+
+        // A photograph the library does not report is an answer rather than a failure: it may have
+        // been deleted or re-identified over there since the page listing it was drawn, and telling
+        // a reader the library is broken would send them looking for a fault nobody has.
+        using var response = await SendJsonAsync(url, missingIsAnswer: true, ct);
+        if (response is null)
+        {
+            return null;
+        }
+
+        CapturePreviewToken(response);
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        }
+        catch (JsonException e)
+        {
+            throw new PhotoLibraryException(
+                PhotoLibraryException.RejectedCode,
+                "The photo library's answer was not readable as JSON.", e);
+        }
+
+        using (document)
+        {
+            return TryReadDetail(document.RootElement, photographId, out var detail) ? detail : null;
+        }
+    }
+
+    /// <summary>
+    /// One row of a listing. A row this application cannot name both a photograph and a picture
+    /// from is left out rather than drawn as a gap: every address built from it later needs both.
+    /// </summary>
+    private static bool TryReadListed(JsonElement element, out LibraryListedPhoto photo)
+    {
+        photo = default;
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        var uid = Text(element, "UID");
+        var hash = PictureHash(element);
+
+        // Both end up in a request path, so both are checked against what this application is
+        // willing to send rather than passed on as they were written.
+        if (!PhotoLibraryHttp.IsSafeReference(uid) || !PhotoLibraryHttp.IsSafeReference(hash))
+        {
+            return false;
+        }
+
+        photo = new LibraryListedPhoto(
+            PhotographId: uid!,
+            Reference: hash!,
+            Title: Text(element, "Title"),
+            TakenAt: Moment(element, "TakenAt"),
+            Kind: KindOf(element));
+
+        return true;
+    }
+
+    private static bool TryReadDetail(
+        JsonElement element, string photographId, out LibraryPhotoDetail? detail)
+    {
+        detail = null;
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        var hash = PictureHash(element);
+        if (!PhotoLibraryHttp.IsSafeReference(hash))
+        {
+            // The photograph is there and no picture of it can be asked for, which is not a detail
+            // panel: every field below would be rendered around an empty frame.
+            return false;
+        }
+
+        detail = new LibraryPhotoDetail(
+            PhotographId: photographId,
+            Reference: hash!,
+            Title: Text(element, "Title"),
+            // Two names, because this product keeps a short line and a longer one and either may be
+            // the only thing anybody wrote. Neither is invented from the other.
+            Description: Text(element, "Description") ?? Text(element, "Caption"),
+            TakenAt: Moment(element, "TakenAt"),
+            Kind: KindOf(element),
+            CameraMake: Text(element, "CameraMake"),
+            CameraModel: Text(element, "CameraModel"),
+            Lens: Text(element, "LensModel"),
+            Aperture: Number(element, "FNumber"),
+            ShutterSpeed: Text(element, "Exposure"),
+            Iso: Whole(element, "Iso"),
+            FocalLengthMm: Number(element, "FocalLength"));
+
+        return true;
+    }
+
+    /// <summary>
+    /// The string this product's pictures are fetched with: a hash of the picture's own contents,
+    /// which it states beside the photograph and, on a fuller answer, on each file under it.
+    /// </summary>
+    /// <remarks>
+    /// The primary file is the one wanted where there are several — a photograph here can carry a
+    /// raw original, a sidecar and a rendering, and only one of them is what its own interface
+    /// shows. Where nothing is marked primary the first file naming a hash is taken.
+    /// </remarks>
+    private static string? PictureHash(JsonElement element)
+    {
+        if (Text(element, "Hash") is { } stated)
+        {
+            return stated;
+        }
+
+        if (!element.TryGetProperty("Files", out var files) || files.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        string? first = null;
+
+        foreach (var file in files.EnumerateArray())
+        {
+            if (file.ValueKind != JsonValueKind.Object || Text(file, "Hash") is not { } hash)
+            {
+                continue;
+            }
+
+            if (file.TryGetProperty("Primary", out var primary)
+                && primary.ValueKind == JsonValueKind.True)
+            {
+                return hash;
+            }
+
+            first ??= hash;
+        }
+
+        return first;
+    }
+
+    /// <summary>
+    /// What the library says a photograph is. A kind is stated only when it is not a plain image,
+    /// so its absence is not a statement that it is one — which is why this stays three-valued all
+    /// the way to the screen.
+    /// </summary>
+    private static LibraryPhotoKind? KindOf(JsonElement element) =>
+        Text(element, "Type") is { } type
+        && string.Equals(type, "video", StringComparison.OrdinalIgnoreCase)
+            ? LibraryPhotoKind.Video
+            : null;
+
+    /// <summary>A string the library wrote, or null where it wrote nothing worth showing.</summary>
+    private static string? Text(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && !string.IsNullOrWhiteSpace(value.GetString())
+            ? value.GetString()
+            : null;
+
+    private static DateTimeOffset? Moment(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && value.TryGetDateTimeOffset(out var when)
+            ? when
+            : null;
+
+    /// <summary>
+    /// A measurement the library states, or null. Zero is read as unsaid rather than as a value:
+    /// this product writes a zero into these fields for a picture whose own metadata carried
+    /// nothing, and a panel reporting an aperture of zero would state something nobody measured.
+    /// </summary>
+    private static double? Number(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetDouble(out var read)
+        && read > 0
+            ? read
+            : null;
+
+    /// <summary>A whole measurement, on the same reading of zero.</summary>
+    private static int? Whole(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out var read)
+        && read > 0
+            ? read
+            : null;
+
+    /// <summary>
     /// One rendering's bytes. Exactly one attempt, no retry and no backoff, whatever
     /// <c>MaxRetries</c> says.
     /// </summary>
@@ -535,7 +852,22 @@ public sealed class PhotoPrismClient(
     /// separation is the guard rather than a tidiness: a retry against a library that cannot reach
     /// its originals is a second deletion.
     /// </remarks>
-    private async Task<HttpResponseMessage> SendJsonAsync(Uri url, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendJsonAsync(Uri url, CancellationToken ct) =>
+        // Never null: only a caller that says a missing thing is an answer can be given one.
+        (await SendJsonAsync(url, missingIsAnswer: false, ct))!;
+
+    /// <summary>
+    /// The same question, for a caller asking about one named thing that may not be there.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="missingIsAnswer"/> turns the far side's "no such thing" into a null rather
+    /// than a refusal, and only for a caller that asked for it. It is not leniency: a photograph
+    /// deleted or re-identified over there is an ordinary answer somebody has to be shown, while
+    /// the same status from a route that names no particular thing means this application asked a
+    /// question the library does not understand — which is a defect here and must stay loud.
+    /// </remarks>
+    private async Task<HttpResponseMessage?> SendJsonAsync(
+        Uri url, bool missingIsAnswer, CancellationToken ct)
     {
         var attempts = Math.Max(0, Options.MaxRetries) + 1;
         var client = CreateClient();
@@ -589,6 +921,12 @@ public sealed class PhotoPrismClient(
                 logger.LogWarning(
                     "The {Source} photo library answered {Status}; trying once more.", Source, status);
                 continue;
+            }
+
+            if (missingIsAnswer && response.StatusCode == HttpStatusCode.NotFound)
+            {
+                response.Dispose();
+                return null;
             }
 
             if (!response.IsSuccessStatusCode)

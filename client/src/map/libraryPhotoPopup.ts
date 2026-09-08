@@ -4,6 +4,7 @@ import type MapBrowserEvent from 'ol/MapBrowserEvent';
 import Overlay from 'ol/Overlay';
 import type Point from 'ol/geom/Point';
 import i18n from '../i18n';
+import { libraryPictureUrl } from '../photolibrary/pictureUrl.ts';
 import { getLibraryPhotoLoadState, libraryPhotoSourceOf } from './libraryPhotoLayer.ts';
 
 /**
@@ -86,20 +87,6 @@ function instant(value: unknown): Date | undefined {
  * This is a string from a library this installation does not own, and the browser is where it
  * becomes a URL; two guards on one value is the right number when one of them is somebody else's.
  */
-function pictureUrl(
-  template: string | null,
-  reference: string | undefined,
-  size: 'small' | 'large',
-): string | undefined {
-  if (!template || !reference) {
-    return undefined;
-  }
-  // Replaced through a function rather than with a string, because `$&` and its siblings are
-  // substitution syntax in a replacement string — a reference is foreign text and must not be
-  // able to reach into the template around it.
-  const encoded = encodeURIComponent(reference);
-  return template.replace('{reference}', () => encoded).replace('{size}', () => size);
-}
 
 /**
  * Builds the balloon body for one photograph held in a photo library this installation does not
@@ -136,7 +123,7 @@ export function libraryPhotoPopupNodes(
   const title = text(props.title);
   const reference = text(props.reference);
 
-  const picture = pictureUrl(library.pictureUrlTemplate, reference, 'large');
+  const picture = libraryPictureUrl(library.pictureUrlTemplate, reference, 'large');
   if (picture) {
     const img = document.createElement('img');
     img.src = picture;

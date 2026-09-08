@@ -71,6 +71,50 @@ public interface IPhotoLibrary
     Task<LibraryPhotoPage> PhotosInAsync(Envelope bounds, int limit, CancellationToken ct);
 
     /// <summary>
+    /// Whether words may be sent to this library's own text matching.
+    /// </summary>
+    /// <remarks>
+    /// False is a real answer rather than a shortcoming to be worked around: one of these products
+    /// matches text over titles, captions and keywords, and the other's only text-shaped question
+    /// is a similarity search over meaning, which is a different feature answering a different
+    /// question. A library that cannot match words is asked none, and the surface says so — because
+    /// the failure this prevents is the one the far side makes easy: a parameter that is neither
+    /// honoured nor refused comes back as a full, unfiltered page with the reader's words still in
+    /// the search box.
+    /// </remarks>
+    bool SupportsTextSearch { get; }
+
+    /// <summary>
+    /// One page of this library's photographs, newest first, carrying no position of any kind.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing is held between calls. This is one question asked of the library for one page a
+    /// person is looking at, and the answer is gone when the response is written — unlike the map,
+    /// whose positions one of these products can only give whole and which are therefore kept.
+    /// Where the product offers paging of its own, this pages through it rather than reading more
+    /// than a page and cutting it up here.
+    /// </para>
+    /// <para>
+    /// What comes back describes the library, not the caller: this integration reaches every
+    /// library through one credential belonging to the whole installation, so there is one answer
+    /// and every caller who may reach the feature at all gets that one.
+    /// </para>
+    /// </remarks>
+    Task<LibraryPhotoListPage> ListAsync(LibraryPhotoQuery query, CancellationToken ct);
+
+    /// <summary>
+    /// Everything this library will say about one photograph, or null when it reports none under
+    /// that identifier.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than a failure, because a photograph deleted or re-identified on the far side is
+    /// an ordinary answer somebody has to be shown and not a fault of this installation. Whatever
+    /// the library does not say is absent from the result and is never inferred from anything else.
+    /// </remarks>
+    Task<LibraryPhotoDetail?> DetailAsync(string photographId, CancellationToken ct);
+
+    /// <summary>
     /// One derivative's bytes, streamed. <paramref name="reference"/> is how the far side names the
     /// derivative — which is not always how it names the photograph — and is refused unless it is a
     /// shape this application is willing to put in a request path.

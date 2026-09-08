@@ -11,6 +11,7 @@
     "geodata": "Geodata",
     "gallery": "Photographs",
     "albums": "Albums",
+    "photoLibrary": "Photo library",
     "cabinets": "Cabinets",
     "uploads": "Uploads",
     "trips": "Trip logs",
@@ -4020,6 +4021,35 @@
   },
   "libraryPhotos": {
     "layerName": "Photo library ({{library}})",
+    "browse": {
+      "title": "Photo library",
+      "noPositionShown": "Where these pictures were taken is not shown here. The map is where a library's photographs are placed.",
+      "search": "Search this library",
+      "searchUnsupported": "{{library}} does not match words, so there is nothing to search it with here.",
+      "showingOf": "Showing {{shown}} of {{total}} photographs the library holds",
+      "showingUnknownTotal": "Showing {{count}} photographs. This library does not say how many it holds.",
+      "pageCapped": "This installation asks for at most {{count}} pictures at a time.",
+      "empty": "This library holds nothing matching.",
+      "silent": "This library did not answer, so there is nothing to show. It may be stopped, or still starting up.",
+      "readAt": "Read from the library {{when}}",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {{page}}"
+    },
+    "detail": {
+      "title": "Photograph",
+      "takenAt": "Taken",
+      "camera": "Camera",
+      "lens": "Lens",
+      "aperture": "Aperture",
+      "exposure": "Exposure",
+      "iso": "ISO",
+      "focalLength": "Focal length",
+      "library": "Library",
+      "isVideo": "This is a video. Only a still of it is shown here.",
+      "gone": "This library no longer reports that photograph. The list was read a moment ago and the library has changed since.",
+      "silent": "This library did not answer about that photograph."
+    },
     "source": {
       "immich": "Immich",
       "photoprism": "PhotoPrism"

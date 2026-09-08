@@ -303,6 +303,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCatalogueEndpoints();
     api.MapTripImportEndpoints();
     api.MapPhotoLibraryEndpoints();
+    api.MapPhotoLibraryBrowseEndpoints();
     api.MapPhotoLibraryFeatureEndpoints();
     api.MapJobEndpoints();
     api.MapExportEndpoints();

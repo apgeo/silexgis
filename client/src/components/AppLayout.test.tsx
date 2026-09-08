@@ -28,6 +28,11 @@ vi.mock('../api/hooks.ts', () => ({
   // The header's bell reads this; the mock replaces the module wholesale, so a hook left out
   // here is undefined at the call site and every test in this file dies on the render.
   useUnreadNotificationCount: () => ({ data: unreadNotifications }),
+  // The rail asks whether this installation has a neighbouring photo library the reader may look
+  // through. Answered as an installation that runs none of these products, which is the shipped
+  // shape: what this file is about is the destinations the capabilities carry, and the photo
+  // libraries are gated on a separate answer of their own — pinned in the nav cases below.
+  usePhotoLibraries: () => ({ data: undefined }),
   // The real helper, inlined: the mock replaces the module wholesale.
   hasAccessAction: (actions: string | undefined, flag: string) =>
     (actions ?? '').split(',').map((x) => x.trim()).includes(flag),
@@ -313,6 +318,7 @@ describe('AppLayout nav destinations', () => {
     taxonomyWrite: true,
     featureCreate: true,
     tripLogCreate: true,
+    photoLibrary: true,
     isFullAdmin: true,
   };
 
@@ -366,6 +372,7 @@ describe('AppLayout nav destinations', () => {
       taxonomyWrite: false,
       featureCreate: false,
       tripLogCreate: false,
+      photoLibrary: false,
       isFullAdmin: false,
     });
     const keys = items.map((item) => item.key);
@@ -398,6 +405,27 @@ describe('AppLayout nav destinations', () => {
     expect(activityOf(reader)).toContain('trip-logs');
 
     expect(activityOf(everything)).toContain('trip-logs/import');
+  });
+
+  it('offers the neighbouring photo library only when there is one to look through', () => {
+    // Not gated on a right of this application's own. Who may reach those libraries is one
+    // installation-wide setting the server answers, and an installation that runs none of these
+    // products has nothing behind the page — so an entry offered on the documents right would
+    // send most readers of most installations to a sentence saying there is nothing there.
+    const libraryOf = (gates: Parameters<typeof buildNavItems>[1]) => {
+      const group = buildNavItems(i18n.t, gates).find(
+        (item) => item.key === `${GROUP_PREFIX}library`,
+      );
+      return isNavGroup(group!) ? group.children.map((child) => child.key) : [];
+    };
+
+    expect(libraryOf(everything)).toContain('photo-library');
+
+    const without = { ...everything, photoLibrary: false };
+    expect(libraryOf(without)).not.toContain('photo-library');
+    // The control: this installation's own gallery is still offered, so what disappeared is the
+    // neighbouring library and not the group around it.
+    expect(libraryOf(without)).toContain('gallery');
   });
 });
 

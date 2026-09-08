@@ -5,6 +5,7 @@ import {
   AppstoreOutlined,
   BorderOuterOutlined,
   CalendarOutlined,
+  CameraOutlined,
   CarOutlined,
   CheckSquareOutlined,
   CloudUploadOutlined,
@@ -70,6 +71,15 @@ export type NavGates = {
   featureCreate: boolean;
   /** Recording trips, which is what reading a spreadsheet of them ends in. */
   tripLogCreate: boolean;
+  /**
+   * Whether this installation has a neighbouring photo library the caller may look through.
+   *
+   * Not a right of this application's own: who may reach those libraries is one installation-wide
+   * setting the server answers, and an installation that runs none of these products has nothing
+   * behind the page at all. Offered here only when both are true, because a rail entry leading to
+   * a sentence saying there is nothing to see is a rail entry nobody wants twice.
+   */
+  photoLibrary: boolean;
   isFullAdmin: boolean;
 };
 
@@ -206,7 +216,16 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
     ]),
     // The filing tree is readable by anyone who may read documents at all; what
     // is on a shelf is decided per document, not by hiding the shelf.
-    ...group('library', <ReadOutlined />, t('nav.groups.library'), libraryPages),
+    ...group('library', <ReadOutlined />, t('nav.groups.library'), [
+      ...libraryPages,
+      // Beside this installation's own gallery, because it is the same gesture — looking through
+      // pictures — and not filed under the map, because it is not one. Gated apart from the
+      // documents right: what is on the other side is a separate product's archive, and reading
+      // it is a different act from reading this installation's own.
+      ...(gates.photoLibrary
+        ? [{ key: 'photo-library', icon: <CameraOutlined />, label: t('nav.photoLibrary') }]
+        : []),
+    ]),
     ...group('activity', <FieldTimeOutlined />, t('nav.groups.activity'), [
       // Everything dated, read as one list. Not gated on a right: it spans two
       // families of row and the answer is narrowed to what each reader may open,

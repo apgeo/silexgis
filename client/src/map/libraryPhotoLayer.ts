@@ -7,6 +7,11 @@ import { transformExtent } from 'ol/proj';
 import VectorSource from 'ol/source/Vector';
 import { Icon, Style } from 'ol/style';
 import { fetchLibraryPhotoFeatures, type LibraryPhotoSource } from '../api/hooks.ts';
+import {
+  libraryPictureFailed,
+  libraryPictureUrl,
+  markLibraryPictureFailed,
+} from '../photolibrary/pictureUrl.ts';
 import { declutterOption } from './declutter.ts';
 import { libraryPhotoPalette } from './markerPalette.ts';
 
@@ -110,22 +115,19 @@ const styles = new globalThis.Map<LibraryPhotoSource, Style[]>();
  */
 export const LIBRARY_PHOTO_PICTURE_LIMIT = 180;
 
-/**
- * References whose picture failed, per library. A failed picture falls back to its pin and is
- * never asked for again.
- *
- * This is the balloon's rule, and it binds harder here. A failure in a balloon is one request; a
- * failure in a marker style is one per photograph in view, on every frame. And against a library
- * whose originals have gone away it is not merely wasteful: in one of the two products, asking for
- * a picture whose original cannot be resolved is itself what removes the photograph from the index.
- * A retry loop would be a deletion loop.
- */
-const failedPictures = new globalThis.Map<LibraryPhotoSource, Set<string>>();
-
 /** Loaded picture styles, keyed by library and reference, so panning re-uses rather than re-fetches. */
 const pictureStyles = new globalThis.Map<string, Style>();
 const pictureLoads = new Set<string>();
 
+/**
+ * The style one photograph's own picture is drawn in, once it has arrived.
+ *
+ * A picture that failed falls back to its pin and is never asked for again, and which pictures
+ * those are is remembered in one place for the whole application — the ledger imported above. The
+ * rule binds hardest here: a failure in a balloon is one request, while a failure in a marker style
+ * is one per photograph in view on every frame, and against a library whose originals have gone
+ * away that is a deletion loop rather than a slow map.
+ */
 function pictureStyleFor(
   source: LibraryPhotoSource,
   reference: string,
@@ -136,15 +138,14 @@ function pictureStyleFor(
   if (ready) {
     return ready;
   }
-  if (pictureLoads.has(key) || failedPictures.get(source)?.has(reference)) {
+  if (pictureLoads.has(key) || libraryPictureFailed(source, reference)) {
     return undefined; // in flight, or already known bad — the pin stands in either case
   }
 
-  // Replaced through a function rather than with a string: `$&` and its siblings are substitution
-  // syntax in a replacement, and a reference is foreign text that must not reach into the template
-  // around it. The same guard the balloon applies to the same value.
-  const encoded = encodeURIComponent(reference);
-  const src = template.replace('{reference}', () => encoded).replace('{size}', () => 'small');
+  const src = libraryPictureUrl(template, reference, 'small');
+  if (!src) {
+    return undefined;
+  }
 
   pictureLoads.add(key);
   const image = new Image();
@@ -169,12 +170,7 @@ function pictureStyleFor(
   });
   image.addEventListener('error', () => {
     pictureLoads.delete(key);
-    let failed = failedPictures.get(source);
-    if (!failed) {
-      failed = new Set<string>();
-      failedPictures.set(source, failed);
-    }
-    failed.add(reference);
+    markLibraryPictureFailed(source, reference);
   });
   image.src = src;
   return undefined;

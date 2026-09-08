@@ -8,6 +8,7 @@ import {
   inboxPollIntervalMs,
   isInboxTransport,
 } from '../notifications/transport.ts';
+import { userManager } from '../auth/auth.tsx';
 import { api, ApiError, lastReadETag } from './client.ts';
 import type { components, paths } from './schema';
 
@@ -172,6 +173,13 @@ export const queryKeys = {
   // rather than a stale answer to the same one.
   tripImportPreview: (fileId: string, body: unknown) => ['trip-import-preview', fileId, body] as const,
   photoLibraryStatus: ['photo-libraries', 'status'] as const,
+  // The whole question is in the key — library, page and words — because every part of it changes
+  // what came back. A page held under a key that did not name the words would answer the next
+  // search with the previous one's pictures.
+  libraryPhotographs: (source: string, query: LibraryPhotographQuery) =>
+    ['photo-libraries', source, 'photographs', query] as const,
+  libraryPhotograph: (source: string, photographId: string) =>
+    ['photo-libraries', source, 'photograph', photographId] as const,
   speologieStatus: ['speologie', 'status'] as const,
   // The whole request is the key. A catalogue search is a pure function of the term, the county
   // and the page, so changing any of them is a different question rather than a stale answer to
@@ -1501,6 +1509,176 @@ export function useCreateFeatureFromLibraryPhoto() {
           body: input.body,
         }),
       ),
+  });
+}
+
+/**
+ * One photograph a neighbouring library holds, as a list of it reports one.
+ *
+ * There is no latitude and no longitude here, and there is no shape of this record that has them.
+ * A list of a neighbouring library is a way of looking through pictures rather than a second map;
+ * where each was taken is the map's question, and the map is the surface that answers it.
+ */
+export interface LibraryPhotograph {
+  photographId: string;
+  reference: string;
+  title: string | null;
+  takenAt: string | null;
+  /** `image`, `video`, or null meaning the library did not say. Null never means image. */
+  kind: string | null;
+}
+
+/** One page of a neighbouring library, and the few things a grid needs to explain itself. */
+export interface LibraryPhotographPage {
+  source: LibraryPhotoSource;
+  libraryName: string;
+  items: LibraryPhotograph[];
+  page: number;
+  pageSize: number;
+  /**
+   * How many photographs **the library** holds for this request, or null when it publishes no way
+   * to ask. Never a number this application worked out: a surface reading null says the total is
+   * unknown rather than showing a guess a reader cannot tell from a fact.
+   */
+  total: number | null;
+  hasMore: boolean;
+  /** The page asked for was larger than this installation will ask a library for. */
+  pageSizeCapped: boolean;
+  /** Whether words may be matched against this library at all. */
+  textSearchSupported: boolean;
+  picturesAvailable: boolean;
+  pictureUrlTemplate: string | null;
+  readAt: string;
+}
+
+/** One photograph in full, as far as the library that holds it will say. */
+export interface LibraryPhotographDetail {
+  source: LibraryPhotoSource;
+  libraryName: string;
+  photographId: string;
+  reference: string;
+  title: string | null;
+  description: string | null;
+  takenAt: string | null;
+  kind: string | null;
+  cameraMake: string | null;
+  cameraModel: string | null;
+  lens: string | null;
+  aperture: number | null;
+  shutterSpeed: string | null;
+  iso: number | null;
+  focalLengthMm: number | null;
+  picturesAvailable: boolean;
+  pictureUrlTemplate: string | null;
+}
+
+/** What a page of a library is asked for. No rectangle, by construction. */
+export interface LibraryPhotographQuery {
+  page: number;
+  pageSize: number;
+  /** Words for the library's own text matching, where it has any. */
+  q?: string;
+}
+
+/**
+ * A GET this application answers, asked without the generated client.
+ *
+ * The typed client is built from the contract document the server publishes, so a route added in
+ * the same change as the screen that reads it cannot be reached through it until that document has
+ * been read again. This asks for it directly, and matches the generated client in the two respects
+ * every caller depends on: the account's bearer travels with the request, and a refusal arrives as
+ * the same error carrying the server's own stable code, so the screens can go on choosing their
+ * wording from the code rather than from a sentence.
+ */
+async function readJson<T>(url: string): Promise<T> {
+  const user = await userManager.getUser();
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      ...(user?.access_token ? { Authorization: `Bearer ${user.access_token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const problem = (await response.json().catch(() => undefined)) as
+      | Record<string, unknown>
+      | undefined;
+    throw new ApiError(
+      response.status,
+      typeof problem?.code === 'string' ? problem.code : undefined,
+      typeof problem?.detail === 'string' ? problem.detail : undefined,
+      problem,
+    );
+  }
+
+  return (await response.json()) as T;
+}
+
+/** The address of one page of one library. Built here so the two hooks below cannot disagree. */
+function photographsUrl(source: LibraryPhotoSource, query: LibraryPhotographQuery): string {
+  const search = new URLSearchParams({
+    page: String(query.page),
+    pageSize: String(query.pageSize),
+  });
+  if (query.q) {
+    search.set('q', query.q);
+  }
+  return `/api/v1/photo-libraries/${encodeURIComponent(source)}/photographs?${search.toString()}`;
+}
+
+/**
+ * One page of a neighbouring library's photographs.
+ *
+ * A query rather than an imperative fetch, unlike the map loaders: a page is a thing somebody is
+ * looking at rather than a viewport that changes with every pan, so paging back and forth is
+ * answered from the cache instead of asking a neighbouring container again.
+ *
+ * `keepPreviousData` so turning a page keeps the grid on screen while the next one arrives. The
+ * alternative is a page that empties and refills, which reads as a library that briefly held
+ * nothing — and telling "nothing here" apart from "not yet" is most of what this screen owes its
+ * reader.
+ */
+export function usePhotoLibraryPhotographs(
+  source: LibraryPhotoSource | undefined,
+  query: LibraryPhotographQuery,
+) {
+  return useQuery({
+    queryKey: queryKeys.libraryPhotographs(source ?? '', query),
+    queryFn: () => readJson<LibraryPhotographPage>(photographsUrl(source!, query)),
+    enabled: source !== undefined,
+    // Turning a page keeps the grid on screen while the next one arrives, so the page does not
+    // empty and refill — which reads as a library that briefly held nothing, and telling "nothing
+    // here" apart from "not yet" is most of what this screen owes its reader. Only within one
+    // library, though: one library's photographs drawn under another's name would be wrong in the
+    // way that matters here, because opening one would ask the wrong library about it.
+    placeholderData: (previous?: LibraryPhotographPage) =>
+      previous?.source === source ? previous : undefined,
+    // The far side is a separate product somebody else is filing pictures into, so a page held for
+    // long enough to feel instant is also a page that stops being what the library holds. Half a
+    // minute is the same window this application already holds a library's health for.
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Everything one library will say about one photograph.
+ *
+ * Asked by the photograph's own identifier, which is not the string its picture is fetched with:
+ * on one of the two products that one is a hash of the picture's contents and names no photograph
+ * at all.
+ */
+export function usePhotoLibraryPhotograph(
+  source: LibraryPhotoSource | undefined,
+  photographId: string | null,
+) {
+  return useQuery({
+    queryKey: queryKeys.libraryPhotograph(source ?? '', photographId ?? ''),
+    queryFn: () =>
+      readJson<LibraryPhotographDetail>(
+        `/api/v1/photo-libraries/${encodeURIComponent(source!)}/photographs/${encodeURIComponent(photographId!)}`,
+      ),
+    enabled: source !== undefined && photographId !== null,
+    staleTime: 30_000,
   });
 }
 

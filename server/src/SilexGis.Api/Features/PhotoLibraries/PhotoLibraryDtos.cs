@@ -215,6 +215,22 @@ public sealed record LibraryPhotoFeatureCollection(
 }
 
 /// <summary>
+/// The address one photograph's rendering is fetched from, with the two placeholders a client
+/// substitutes and nothing else. The origin, the path and the credential are this application's.
+/// </summary>
+/// <remarks>
+/// One home for the shape, because more than one surface hands it out — the map overlay and the
+/// browsing grid — and two copies of an address that carries a credential would part company the
+/// first time either moved, leaving one of them minting tokens for a path that no longer exists.
+/// </remarks>
+internal static class LibraryPictureAddress
+{
+    public static string Template(PhotoLibrarySource source, string token) =>
+        $"/api/v1/photo-libraries/{PhotoLibrarySlugs.Slug(source)}/thumbnails/{{reference}}"
+        + $"?size={{size}}&token={Uri.EscapeDataString(token)}";
+}
+
+/// <summary>
 /// How a neighbouring library is named in an address, and on a screen.
 /// </summary>
 /// <remarks>

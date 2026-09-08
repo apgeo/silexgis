@@ -261,7 +261,9 @@ public static class PhotoLibraryEndpoints
         // collection, and only for a caller the audience rule has just admitted. Nothing downstream
         // of it decides anything again: an address handed out is a decision already taken.
         var picturesAvailable = library.PicturesAvailable;
-        var template = picturesAvailable ? PictureTemplate(which, tokens.CreateToken(which)) : null;
+        var template = picturesAvailable
+            ? LibraryPictureAddress.Template(which, tokens.CreateToken(which))
+            : null;
 
         return TypedResults.Ok(LibraryPhotoFeatureCollection.Of(
             features, which, picturesAvailable, template, page.ReadAt, truncated, omitted));
@@ -414,12 +416,4 @@ public static class PhotoLibraryEndpoints
 
         return TypedResults.NoContent();
     }
-
-    /// <summary>
-    /// The address of one rendering, with the two placeholders a client substitutes and nothing
-    /// else. The origin, the path and the credential are this application's.
-    /// </summary>
-    private static string PictureTemplate(PhotoLibrarySource source, string token) =>
-        $"/api/v1/photo-libraries/{PhotoLibrarySlugs.Slug(source)}/thumbnails/{{reference}}"
-        + $"?size={{size}}&token={Uri.EscapeDataString(token)}";
 }

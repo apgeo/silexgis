@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -64,6 +65,21 @@ public sealed class ImmichClient(
     /// says so.
     /// </remarks>
     private const string KeyRoute = "api/api-keys/me";
+
+    /// <summary>
+    /// The route a page of the library is asked for. Part of this library's published contract and
+    /// what its own interface uses, which is why it is this one and not the timeline route: that
+    /// one is keyed by calendar month and is marked by its own authors as promising nothing to
+    /// anybody outside the product.
+    /// </summary>
+    private const string SearchRoute = "api/search/metadata";
+
+    /// <summary>
+    /// The most photographs asked for in one page however this installation is configured. A page
+    /// is what somebody is looking at; anything above this is a listing nobody reads and a request
+    /// somebody else's container has to answer.
+    /// </summary>
+    public const int ListPageCeiling = 500;
 
     /// <summary>The header the key travels on. Never a query parameter: this library accepts one there too, and a whole-library credential in an address is a credential in browser history, in a referer and in every log between here and there.</summary>
     private const string ApiKeyHeader = "x-api-key";
@@ -345,6 +361,324 @@ public sealed class ImmichClient(
 
         return new LibraryPhotoPage(found, truncated, current.ReadAt);
     }
+
+    /// <summary>
+    /// This library has no text matching worth offering as one.
+    /// </summary>
+    /// <remarks>
+    /// Its structured search filters over columns — dates, cameras, people, tags — rather than over
+    /// anything somebody would type as a sentence, and its one text-shaped question is a similarity
+    /// search over what a picture <em>looks like</em>, which is a different feature answering a
+    /// different question and belongs on a surface that says so. Rather than pass words to a filter
+    /// that would match almost nothing while looking like a search, this library is asked none and
+    /// the surface tells the reader why there is no box.
+    /// </remarks>
+    public bool SupportsTextSearch => false;
+
+    /// <summary>
+    /// One page of the library, newest first, asked for without a rectangle.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not answered from the reading this process holds, and that is the point of it. That reading
+    /// is of the <em>located</em> library — the only thing the route behind it reports — so a list
+    /// built from it would silently omit every photograph with no position, which in a caving club
+    /// is most of them: everything taken underground, every scan, every camera with no receiver. A
+    /// listing is therefore a live question, and holds nothing between calls.
+    /// </para>
+    /// <para>
+    /// The search route rather than the timeline: the timeline is keyed by calendar month and is
+    /// marked by this library's own authors as carrying no promise to anybody outside the product,
+    /// while this one is part of the contract, pages, and is what its own interface uses.
+    /// </para>
+    /// </remarks>
+    public async Task<LibraryPhotoListPage> ListAsync(LibraryPhotoQuery query, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        EnsureConfigured();
+
+        if (!string.IsNullOrWhiteSpace(query.Text))
+        {
+            // Refused rather than dropped. A caller that sends words to a library which cannot
+            // match them gets a full unfiltered page back with nothing in it saying the words were
+            // ignored, which is a search box that looks like it worked.
+            throw new PhotoLibraryException(
+                PhotoLibraryException.RejectedCode,
+                "This photo library does not match text, so it is not asked to.");
+        }
+
+        var size = Math.Clamp(query.PageSize, 1, ListPageCeiling);
+        var page = Math.Max(1, query.Page);
+
+        // Written out rather than serialised from an object, so what leaves this machine is exactly
+        // these three fields and cannot silently grow a fourth: every field here is a question
+        // asked about somebody else's photographs. The order is asked for rather than assumed — a
+        // listing that quietly came back oldest-first would look like a working feature showing the
+        // wrong decade.
+        var body = string.Create(
+            CultureInfo.InvariantCulture,
+            $$"""{"page":{{page}},"size":{{size}},"order":"desc"}""");
+
+        var url = new Uri(BaseAddress(Options.BaseUrl), SearchRoute);
+        using var response = await PostJsonAsync(url, body, ct);
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        }
+        catch (JsonException e)
+        {
+            throw new PhotoLibraryException(
+                PhotoLibraryException.RejectedCode,
+                "The photo library's answer was not readable as JSON.", e);
+        }
+
+        using (document)
+        {
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("assets", out var assets)
+                || assets.ValueKind != JsonValueKind.Object
+                || !assets.TryGetProperty("items", out var items)
+                || items.ValueKind != JsonValueKind.Array)
+            {
+                throw new PhotoLibraryException(
+                    PhotoLibraryException.RejectedCode,
+                    "The photo library did not answer a listing with a list of photographs.");
+            }
+
+            var photos = new List<LibraryListedPhoto>(items.GetArrayLength());
+
+            foreach (var item in items.EnumerateArray())
+            {
+                if (TryReadListed(item, out var photo))
+                {
+                    photos.Add(photo);
+                }
+            }
+
+            // What this library says about a further page is a page number rather than a flag, and
+            // an absent one is the end of the listing.
+            var hasMore = assets.TryGetProperty("nextPage", out var next)
+                && next.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(next.GetString());
+
+            return new LibraryPhotoListPage(
+                photos, TotalOf(assets, page, size, photos.Count, hasMore), hasMore,
+                DateTimeOffset.UtcNow);
+        }
+    }
+
+    /// <summary>
+    /// How many photographs <b>the library</b> holds for this request, or null when what it sent
+    /// cannot be that number.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The library states a total beside every page, and it is published as read: it is a fact
+    /// about the library rather than about whoever asked, because every caller reaches this library
+    /// through one credential belonging to the whole installation and so there is one answer to
+    /// give. The day that stops being true, this is one of the places that has to change.
+    /// </para>
+    /// <para>
+    /// It is checked against the paging first, and that check is the honest part. A number smaller
+    /// than the photographs already handed out cannot be a total of them, and a number equal to
+    /// them while a further page is promised cannot be either — both are what a field counting
+    /// something narrower than the whole collection looks like. Neither is corrected: a total that
+    /// contradicts the paging is reported as unknown, because a wrong number a reader cannot tell
+    /// from a right one is worse than no number at all.
+    /// </para>
+    /// </remarks>
+    private static int? TotalOf(JsonElement assets, int page, int size, int shown, bool hasMore)
+    {
+        if (!assets.TryGetProperty("total", out var value)
+            || value.ValueKind != JsonValueKind.Number
+            || !value.TryGetInt32(out var total)
+            || total < 0)
+        {
+            return null;
+        }
+
+        var seen = ((page - 1) * (long)size) + shown;
+
+        return total > seen || (total == seen && !hasMore) ? total : null;
+    }
+
+    /// <summary>
+    /// One row of a listing. A row this application cannot name a photograph from is left out
+    /// rather than drawn as a gap: every address built from it later assumes the identifier is the
+    /// shape this build expects.
+    /// </summary>
+    /// <remarks>
+    /// This library names a photograph and the picture of it with the same string, so one value
+    /// answers both. It is written from the parsed identifier rather than from what arrived, so
+    /// what goes into a request path is a shape this application produced.
+    /// </remarks>
+    private static bool TryReadListed(JsonElement element, out LibraryListedPhoto photo)
+    {
+        photo = default;
+
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty("id", out var identifier)
+            || identifier.ValueKind != JsonValueKind.String
+            || !Guid.TryParse(identifier.GetString(), out var id))
+        {
+            return false;
+        }
+
+        var name = id.ToString("D");
+
+        photo = new LibraryListedPhoto(
+            PhotographId: name,
+            Reference: name,
+            // This library keeps no title of its own for a photograph. Left null rather than filled
+            // in from the file's name, which is a fact about a disk rather than something anybody
+            // wrote about the picture — and a screen showing it under a heading reading "title"
+            // would be saying somebody named it.
+            Title: null,
+            // The date the listing is ordered by, so what a reader sees under each picture is the
+            // date the order in front of them was made with.
+            TakenAt: Moment(element, "fileCreatedAt"),
+            Kind: KindOf(element));
+
+        return true;
+    }
+
+    /// <summary>
+    /// Everything this library will say about one photograph, or null when it reports none under
+    /// that identifier.
+    /// </summary>
+    /// <remarks>
+    /// The camera facts come from what the library read out of the picture itself, where it sends
+    /// them. Nothing is inferred: a field the answer does not carry stays absent all the way to the
+    /// screen, because a camera model this application guessed would be a claim about somebody
+    /// else's photograph that nobody made.
+    /// </remarks>
+    public async Task<LibraryPhotoDetail?> DetailAsync(string photographId, CancellationToken ct)
+    {
+        EnsureConfigured();
+
+        // Parsed rather than merely checked, and written back out from the parsed value: this
+        // library names photographs in one shape, and anything else is a question it would answer
+        // with a refusal this application would then have to explain.
+        if (!Guid.TryParse(photographId, out var id))
+        {
+            return null;
+        }
+
+        var name = id.ToString("D");
+        var url = new Uri(BaseAddress(Options.BaseUrl), $"api/assets/{name}");
+
+        // A photograph the library does not report is an answer rather than a failure: it may have
+        // been deleted over there since the page listing it was drawn, and telling a reader the
+        // library is broken would send them looking for a fault nobody has.
+        using var response = await SendJsonAsync(url, missingIsAnswer: true, ct);
+        if (response is null)
+        {
+            return null;
+        }
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        }
+        catch (JsonException e)
+        {
+            throw new PhotoLibraryException(
+                PhotoLibraryException.RejectedCode,
+                "The photo library's answer was not readable as JSON.", e);
+        }
+
+        using (document)
+        {
+            var element = document.RootElement;
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            // The picture's own facts live under their own object here, and its absence is
+            // ordinary: a picture whose metadata carried none, or a library that keeps them behind
+            // a right this installation's credential does not carry.
+            var exif = element.TryGetProperty("exifInfo", out var read)
+                && read.ValueKind == JsonValueKind.Object
+                    ? read
+                    : default;
+
+            return new LibraryPhotoDetail(
+                PhotographId: name,
+                Reference: name,
+                // No title of its own — see the listing above.
+                Title: null,
+                Description: Text(exif, "description"),
+                // The moment written into the picture where there is one, and the moment the
+                // library filed it under otherwise. In that order, because the first is when
+                // somebody stood there and the second is when a file arrived on a disk.
+                TakenAt: Moment(exif, "dateTimeOriginal") ?? Moment(element, "fileCreatedAt"),
+                Kind: KindOf(element),
+                CameraMake: Text(exif, "make"),
+                CameraModel: Text(exif, "model"),
+                Lens: Text(exif, "lensModel"),
+                Aperture: Number(exif, "fNumber"),
+                ShutterSpeed: Text(exif, "exposureTime"),
+                Iso: Whole(exif, "iso"),
+                FocalLengthMm: Number(exif, "focalLength"));
+        }
+    }
+
+    /// <summary>
+    /// What the library says a photograph is, from the word it files it under. Anything that is
+    /// neither of the two words this application knows is left unsaid rather than read as an image.
+    /// </summary>
+    private static LibraryPhotoKind? KindOf(JsonElement element) => Text(element, "type") switch
+    {
+        { } type when string.Equals(type, "VIDEO", StringComparison.OrdinalIgnoreCase) =>
+            LibraryPhotoKind.Video,
+        { } type when string.Equals(type, "IMAGE", StringComparison.OrdinalIgnoreCase) =>
+            LibraryPhotoKind.Image,
+        _ => null,
+    };
+
+    /// <summary>A string the library wrote, or null where it wrote nothing worth showing.</summary>
+    private static string? Text(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && !string.IsNullOrWhiteSpace(value.GetString())
+            ? value.GetString()
+            : null;
+
+    private static DateTimeOffset? Moment(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && value.TryGetDateTimeOffset(out var when)
+            ? when
+            : null;
+
+    /// <summary>
+    /// A measurement the library states, or null. Zero is read as unsaid rather than as a value: a
+    /// panel reporting an aperture of zero would state something nobody measured.
+    /// </summary>
+    private static double? Number(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetDouble(out var read)
+        && read > 0
+            ? read
+            : null;
+
+    /// <summary>A whole measurement, on the same reading of zero.</summary>
+    private static int? Whole(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out var read)
+        && read > 0
+            ? read
+            : null;
 
     /// <summary>
     /// The reading in force, re-read when it is old enough and re-readable.
@@ -758,7 +1092,34 @@ public sealed class ImmichClient(
     /// separation is the guard rather than a tidiness: a retry against a library that cannot reach
     /// its originals is a second chance to lose a photograph.
     /// </remarks>
-    private async Task<HttpResponseMessage> SendJsonAsync(Uri url, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendJsonAsync(Uri url, CancellationToken ct) =>
+        // Never null: only a caller that says a missing thing is an answer can be given one.
+        (await SendJsonAsync(url, missingIsAnswer: false, ct))!;
+
+    /// <summary>
+    /// One question asked about a named thing that may not be there any more.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="missingIsAnswer"/> turns the far side's "no such thing" into a null rather
+    /// than a refusal, and only for a caller that asked for it. It is not leniency: a photograph
+    /// deleted over there is an ordinary answer somebody has to be shown, while the same status
+    /// from a route naming no particular thing means this application asked a question the library
+    /// does not understand — which is a defect on this side and must stay loud.
+    /// </remarks>
+    private Task<HttpResponseMessage?> SendJsonAsync(
+        Uri url, bool missingIsAnswer, CancellationToken ct) =>
+        SendJsonAsync(HttpMethod.Get, url, body: null, missingIsAnswer, ct);
+
+    /// <summary>
+    /// One question whose parameters do not fit in an address, asked with a body this application
+    /// writes out itself. Everything else about it — the credential, the retries, the refusal
+    /// codes, the insistence on an answer in JSON — is the same as for any other question.
+    /// </summary>
+    private async Task<HttpResponseMessage> PostJsonAsync(Uri url, string body, CancellationToken ct) =>
+        (await SendJsonAsync(HttpMethod.Post, url, body, missingIsAnswer: false, ct))!;
+
+    private async Task<HttpResponseMessage?> SendJsonAsync(
+        HttpMethod method, Uri url, string? body, bool missingIsAnswer, CancellationToken ct)
     {
         var attempts = Math.Max(0, Options.MaxRetries) + 1;
         var client = CreateClient();
@@ -768,9 +1129,17 @@ public sealed class ImmichClient(
             HttpResponseMessage response;
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                using var request = new HttpRequestMessage(method, url);
                 Authorise(request);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                if (body is not null)
+                {
+                    // Built inside the loop, because a content already sent cannot be sent again —
+                    // a retry that re-used it would fail on the stream rather than on whatever made
+                    // the first attempt worth repeating.
+                    request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                }
 
                 response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             }
@@ -812,6 +1181,12 @@ public sealed class ImmichClient(
                 logger.LogWarning(
                     "The {Source} photo library answered {Status}; trying once more.", Source, status);
                 continue;
+            }
+
+            if (missingIsAnswer && response.StatusCode == HttpStatusCode.NotFound)
+            {
+                response.Dispose();
+                return null;
             }
 
             if (!response.IsSuccessStatusCode)

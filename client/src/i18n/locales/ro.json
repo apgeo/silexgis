@@ -11,6 +11,7 @@
     "geodata": "Geodate",
     "gallery": "Fotografii",
     "albums": "Albume",
+    "photoLibrary": "Fototeca",
     "cabinets": "Dulapuri",
     "uploads": "Încărcări",
     "trips": "Jurnale de tură",
@@ -4020,6 +4021,35 @@
   },
   "libraryPhotos": {
     "layerName": "Fototecă ({{library}})",
+    "browse": {
+      "title": "Fototeca",
+      "noPositionShown": "Locul în care au fost făcute aceste fotografii nu este afișat aici. Harta este locul unde sunt așezate fotografiile unei fototeci.",
+      "search": "Caută în această fototecă",
+      "searchUnsupported": "{{library}} nu caută după cuvinte, așa că aici nu există cu ce să fie căutată.",
+      "showingOf": "Se afișează {{shown}} din {{total}} fotografii pe care le are fototeca",
+      "showingUnknownTotal": "Se afișează {{count}} fotografii. Această fototecă nu spune câte are.",
+      "pageCapped": "Această instalare cere cel mult {{count}} fotografii odată.",
+      "empty": "Această fototecă nu conține nimic care să corespundă.",
+      "silent": "Această fototecă nu a răspuns, așa că nu este nimic de arătat. Poate fi oprită sau încă pornește.",
+      "readAt": "Citit din fototecă la {{when}}",
+      "previous": "Înapoi",
+      "next": "Înainte",
+      "page": "Pagina {{page}}"
+    },
+    "detail": {
+      "title": "Fotografie",
+      "takenAt": "Făcută",
+      "camera": "Aparat foto",
+      "lens": "Obiectiv",
+      "aperture": "Diafragmă",
+      "exposure": "Timp de expunere",
+      "iso": "ISO",
+      "focalLength": "Distanță focală",
+      "library": "Fototecă",
+      "isVideo": "Acesta este un material video. Aici se vede doar un cadru din el.",
+      "gone": "Această fototecă nu mai raportează fotografia respectivă. Lista a fost citită cu puțin timp în urmă, iar fototeca s-a schimbat de atunci.",
+      "silent": "Această fototecă nu a răspuns despre fotografia respectivă."
+    },
     "source": {
       "immich": "Immich",
       "photoprism": "PhotoPrism"
