@@ -1,0 +1,53 @@
+{
+  "network": "Huttes",
+  "completeGraph": {
+    "nodeCount": 41,
+    "edgeCount": 41,
+    "componentCount": 1
+  },
+  "reducedGraph": {
+    "nodeCount": 12,
+    "edgeCount": 12,
+    "componentCount": 1,
+    "cyclomaticNumber": 1,
+    "extremityCount": 6,
+    "junctionCount": 6
+  },
+  "howard": {
+    "alpha": 0.05263157894736842,
+    "beta": 1.0,
+    "gamma": 0.4
+  },
+  "degree": {
+    "mean": 2.0,
+    "standardDeviation": 1.044465935734187,
+    "coefficientOfVariation": 0.5222329678670935,
+    "histogram": {
+      "1": 6,
+      "3": 6
+    }
+  },
+  "branches": {
+    "count": 12,
+    "loopingCount": 0,
+    "meanLengthM": 15.871860160346557,
+    "coefficientOfVariation": 1.0438102384996828,
+    "minLengthM": 5.9602771386710245,
+    "maxLengthM": 64.25428852037523
+  },
+  "metrics": {
+    "meanLengthM": 15.871860160346557,
+    "lengthCoefficientOfVariation": 1.0438102384996828,
+    "lengthEntropy": 0.6184917646170377,
+    "orientationEntropy": 0.9259356844114862,
+    "meanTortuosity": 1.2066287388401382,
+    "averageShortestPathLength": 3.015151515151515,
+    "centralPointDominance": 0.47438016528925625,
+    "meanDegree": 2.0,
+    "degreeCoefficientOfVariation": 0.5222329678670935,
+    "correlationOfVertexDegree": -0.3333333333333333
+  },
+  "graphLibraryOnly": {
+    "averageClusteringCoefficient": 0.08333333333333333
+  }
+}

@@ -67,6 +67,7 @@ vi.mock('../../components/statistics/CaveOverburdenPanel.tsx', () => ({ default:
 vi.mock('../../components/statistics/CaveOrientationPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/statistics/CaveStatisticsPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/statistics/CaveStructurePanel.tsx', () => ({ default: () => null }));
+vi.mock('../../components/statistics/CaveTopologyPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/statistics/TripStatisticsPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/shares/ShareLinksModal.tsx', () => ({ default: () => null }));
 vi.mock('../../components/qr/QrPublicationModal.tsx', () => ({ default: () => null }));

@@ -5351,6 +5351,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/topology": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The shape of one cave's passage network. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveTopologyDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{id}/hypsometry": {
         parameters: {
             query?: never;
@@ -17743,6 +17781,74 @@ export interface components {
             mainEntrance: null | components["schemas"]["CaveMainEntranceDto"];
             permissions: components["schemas"]["CavePermissionsDto"];
             headlinePicture: null | components["schemas"]["CaveHeadlinePictureDto"];
+        };
+        CaveTopologyDto: {
+            /** Format: uuid */
+            caveId: string;
+            /** Format: uuid */
+            surveyModelId: string;
+            /** Format: int32 */
+            droppedShotCount: null | number;
+            /** Format: int32 */
+            mergedStationCount: null | number;
+            /** Format: int32 */
+            nodeCount: number;
+            /** Format: int32 */
+            edgeCount: number;
+            /** Format: int32 */
+            componentCount: number;
+            /** Format: int32 */
+            reducedNodeCount: number;
+            /** Format: int32 */
+            reducedEdgeCount: number;
+            /** Format: int32 */
+            reducedComponentCount: number;
+            /** Format: int32 */
+            cyclomaticNumber: number;
+            /** Format: int32 */
+            extremityCount: number;
+            /** Format: int32 */
+            junctionCount: number;
+            /** Format: double */
+            alpha: null | number;
+            /** Format: double */
+            beta: null | number;
+            /** Format: double */
+            gamma: null | number;
+            /** Format: double */
+            meanDegree: null | number;
+            /** Format: double */
+            degreeStandardDeviation: null | number;
+            /** Format: double */
+            degreeCoefficientOfVariation: null | number;
+            /** Format: double */
+            correlationOfVertexDegree: null | number;
+            /** Format: int32 */
+            branchCount: number;
+            /** Format: int32 */
+            loopingBranchCount: number;
+            /** Format: double */
+            meanBranchLengthM: null | number;
+            /** Format: double */
+            branchLengthCoefficientOfVariation: null | number;
+            /** Format: double */
+            minBranchLengthM: null | number;
+            /** Format: double */
+            maxBranchLengthM: null | number;
+            /** Format: double */
+            lengthEntropy: null | number;
+            /** Format: double */
+            orientationEntropy: null | number;
+            /** Format: double */
+            meanTortuosity: null | number;
+            /** Format: double */
+            averageShortestPathLength: null | number;
+            /** Format: double */
+            centralPointDominance: null | number;
+            /** Format: double */
+            averageClusteringCoefficient: null | number;
+            /** Format: date-time */
+            computedAt: string;
         };
         CaveWriteRequest: {
             name: string;
