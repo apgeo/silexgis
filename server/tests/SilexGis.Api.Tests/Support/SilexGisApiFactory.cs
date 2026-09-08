@@ -39,14 +39,20 @@ public sealed class SilexGisApiFactory(
     /// <c>TaskCanceledException … the client aborted the request</c> with a duration of one
     /// millisecond, in whichever class happened to be slowest. Two full runs recorded eight such
     /// failures each with no test in common between them, which is the signature of a deadline
-    /// rather than of a defect. The work still has to finish, so let it: a test that genuinely
-    /// hangs is caught by the test runner's own timeout, which reports it as itself.
+    /// rather than of a defect.
+    /// </para>
+    /// <para>
+    /// Ten minutes rather than no deadline at all. Nothing here has a per-test timeout, so an
+    /// infinite one turns a request that genuinely never returns into a run that never ends —
+    /// a worse failure than the one being fixed, and a silent one. Ten minutes is far outside
+    /// anything a correct in-process request takes even on a saturated machine, and far inside
+    /// the patience of whoever is waiting for the suite.
     /// </para>
     /// </summary>
     protected override void ConfigureClient(HttpClient client)
     {
         base.ConfigureClient(client);
-        client.Timeout = Timeout.InfiniteTimeSpan;
+        client.Timeout = TimeSpan.FromMinutes(10);
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

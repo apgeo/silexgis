@@ -25,8 +25,8 @@ namespace SilexGis.Api.Tests.Support;
 /// </para>
 /// <para>
 /// One container still serves the whole process; it is the database inside it that is per class.
-/// The container is left to the Testcontainers reaper rather than disposed here, because which
-/// class finishes last is not knowable from inside a fixture.
+/// No fixture disposes it — which class finishes last is not knowable from inside one — so it is
+/// rooted in a static field for the process lifetime and left to the Testcontainers reaper at exit.
 /// </para>
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
@@ -35,6 +35,22 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     private static readonly SemaphoreSlim TemplateGate = new(1, 1);
     private static string? maintenanceConnectionString;
+
+    /// <summary>
+    /// Keeps the container alive for as long as the process runs, and this field is the whole
+    /// reason it does.
+    ///
+    /// <para>
+    /// Nothing else refers to it once the template has been built, so without a root here the
+    /// object becomes collectable — and <c>DockerContainer</c> stops its container when it is
+    /// finalised. The result is a database that disappears in the middle of a run: the collection
+    /// lands at whatever moment the heap happens to fill, every test still to run fails instantly
+    /// on "connection refused", and the cause is three hundred failures away from the class that
+    /// was executing when it happened. Observed once, at the ten-hour mark of a full run, as 358
+    /// socket failures behind a container that had exited cleanly with status 0.
+    /// </para>
+    /// </summary>
+    private static PostgreSqlContainer? liveContainer;
 
     private readonly string databaseName = $"silexgis_{Guid.NewGuid():N}";
 
@@ -95,6 +111,7 @@ public sealed class PostgresFixture : IAsyncLifetime
                 .WithCommand("-c", "max_connections=400")
                 .Build();
             await container.StartAsync();
+            liveContainer = container;
             var maintenance = container.GetConnectionString();
 
             await ExecuteAsync(maintenance, $"CREATE DATABASE \"{TemplateDatabase}\"");
@@ -143,4 +160,25 @@ public sealed class PostgresFixture : IAsyncLifetime
         await using var command = new NpgsqlCommand(sql, connection) { CommandTimeout = 300 };
         await command.ExecuteNonQueryAsync();
     }
+}
+
+/// <summary>
+/// Groups the classes that must not run beside anything else.
+///
+/// <para>
+/// A class asserting that an endpoint stays responsive is measuring the machine, not the code, and
+/// it cannot hold while seven other classes are seeding their own installations on the same box.
+/// Left in the general pool it fails on a busy run and passes on a quiet one, which is a test
+/// reporting the load average. Its own collection, with parallelisation off, is the only place
+/// such an assertion means anything.
+/// </para>
+/// <para>
+/// Membership is a cost: every class in here runs in turn, so it holds only classes whose subject
+/// is time. A class that merely takes a while belongs in the general pool.
+/// </para>
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class SerialCollection
+{
+    public const string Name = "serial";
 }

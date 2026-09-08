@@ -58,6 +58,12 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable, IClas
             postgres.ConnectionString,
             new Dictionary<string, string?>
             {
+                // This class runs the import handler by hand, twice, to prove a retry does not
+                // duplicate what the first run committed. The background worker claims the same
+                // queued row on its own schedule, so left running it supplies a third execution
+                // nobody asked for and the fixed batch id collides — a duplicate-key failure in
+                // a test whose subject is precisely that there is no duplicate.
+                ["Jobs:PollSeconds"] = "0",
                 ["Files:Root"] = filesRoot,
                 ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
 

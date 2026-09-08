@@ -864,9 +864,20 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
         // The queue retries a job whose handler threw. A retry of one whose transaction had
         // already committed must not create every object a second time — which is why the batch
         // id is fixed by whoever queued it rather than invented by the run.
-        for (var run = 0; run < 2; run++)
+        // The first of the two runs is the queue's own. The worker claims the row on its own
+        // schedule, so this waits for it rather than racing it: executing the handler by hand while
+        // the worker is already inside the same job is not a retry, it is two writers, and it fails
+        // on the batch's primary key for a reason that has nothing to do with what is asserted here.
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        while ((await SearchFeatureNamesAsync(editor)).Count < selection.Count)
         {
-            await using var scope = factory.Services.CreateAsyncScope();
+            DateTimeOffset.UtcNow.ShouldBeLessThan(deadline, "the queued import did not finish in time");
+            await Task.Delay(200);
+        }
+
+        // The second run: the retry, by hand, of a job the queue has already carried through.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var job = await db.ProcessingJobs.SingleAsync(j => j.Id == jobId);
             var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
