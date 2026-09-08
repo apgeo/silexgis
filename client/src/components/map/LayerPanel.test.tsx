@@ -31,6 +31,7 @@ let recheckState = {
 
 vi.mock('../../api/hooks.ts', () => ({
   useTags: () => ({ data: [] }),
+  useTripTypes: () => ({ data: [] }),
   useRecheckPhotoLibrary: () => recheckState,
 }));
 
@@ -99,6 +100,9 @@ function renderPanel(
       rasters={[]}
       visibleRasterIds={[]}
       onRasterVisibleChange={vi.fn()}
+      terrainDerivatives={[]}
+      visibleTerrainDerivativeIds={[]}
+      onTerrainDerivativeVisibleChange={vi.fn()}
       onOverlayVisibilityChanged={vi.fn()}
       photoLibraries={overrides.photoLibraries ?? [library(healthy)]}
       unconfiguredPhotoLibraries={overrides.unconfiguredPhotoLibraries ?? []}

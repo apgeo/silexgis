@@ -270,6 +270,59 @@ internal static class FilterLeaves
             Expression.AndAlso(present, body), selector.Parameters);
     }
 
+    /// <summary>
+    /// A measured quantity — a length, a depth — held as a fixed-point column that may be null.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The value arrives as a floating-point number, because that is what a browser sends and what
+    /// the stored document holds, and it is converted here on the <em>constant</em> side. Casting
+    /// the column instead would read the same and behave differently in the two ways that matter:
+    /// the comparison would stop being served by any index over the column, and it would round the
+    /// stored value to the caller's type rather than the caller's value to the stored one — so a
+    /// length recorded as 1234.5 would answer differently depending on which side was widened.
+    /// </para>
+    /// <para>
+    /// The conversion is safe because a number past what a fixed-point column can hold is refused
+    /// before it reaches here; overflowing it would turn a bad request into a server error.
+    /// </para>
+    /// <para>
+    /// Both ends of a range are included, which is what somebody picking a low and a high means by
+    /// "between", and is the same reading the timestamp leaves give it.
+    /// </para>
+    /// </remarks>
+    public static Expression<Func<T, bool>> Decimals<T>(
+        ConditionNode condition, Expression<Func<T, decimal?>> selector)
+    {
+        if (condition.Op is FilterOp.IsEmpty or FilterOp.IsNotEmpty)
+        {
+            return NullCheck(selector, condition.Op == FilterOp.IsNotEmpty);
+        }
+
+        var values = condition.Values.OfType<NumberValue>()
+            .Select(v => (decimal)v.Value)
+            .ToList();
+
+        // Unwrapping the nullable rather than casting the column: the provider reads this as the
+        // column itself, guarded by the presence test beside it, so nothing is computed per row.
+        var column = Expression.Convert(selector.Body, typeof(decimal));
+        var present = Expression.NotEqual(
+            selector.Body, Expression.Constant(null, typeof(decimal?)));
+
+        var body = condition.Op switch
+        {
+            FilterOp.LessThan => Expression.LessThan(column, Expression.Constant(values[0])),
+            FilterOp.GreaterThan => Expression.GreaterThan(column, Expression.Constant(values[0])),
+            FilterOp.Between => Expression.AndAlso(
+                Expression.GreaterThanOrEqual(column, Expression.Constant(values[0])),
+                Expression.LessThanOrEqual(column, Expression.Constant(values[1]))),
+            _ => Expression.Equal(column, Expression.Constant(values[0])),
+        };
+
+        return Expression.Lambda<Func<T, bool>>(
+            Expression.AndAlso(present, body), selector.Parameters);
+    }
+
     public static Expression<Func<T, bool>> NullCheck<T, TValue>(
         Expression<Func<T, TValue>> selector, bool wantPresent)
     {

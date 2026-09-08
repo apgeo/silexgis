@@ -142,6 +142,36 @@ Two refusals worth knowing:
 
 ---
 
+## Pictures drawn from a build
+
+A finished build's elevation can also be turned into **pictures of the ground** — shaded relief,
+steepness, facing, ruggedness, topographic position, roughness, or a colour relief. They are
+computed once by the installation, on the same worker that makes builds, and then everybody with
+permission to read terrain sees them in the map's layer list under **Ground pictures**: switch one
+on, and it draws beneath the caves.
+
+Each picture belongs to the build it was drawn from. **When you activate a different build, every
+picture drawn from the old one is marked out of date** and says so beside its name in the layer
+list. It is still there and still draws — an out-of-date shaded relief is often better than none —
+but you can see at a glance that the ground beneath it has been replaced, which is the one thing
+that would otherwise look like a fault in the cave data.
+
+Two notes on what this is and is not:
+
+- **Asking for a picture is currently done through the interface's programming interface, not from
+  a page.** The Terrain page does not yet have a form for it. Once a picture exists, everything a
+  reader does with it — switching it on, its transparency, its size, the out-of-date mark — is in
+  the layer list.
+- **Some things cannot be computed here and are not offered under a borrowed name.** Geomorphons,
+  curvature, and flow direction, flow accumulation and the wetness index are not produced by the
+  elevation library this installation uses, so they are absent rather than approximated by something
+  that resembles them.
+
+The files sit under the build itself, so **deleting a build deletes its pictures with it**, and
+their size is reported beside them in the layer list.
+
+---
+
 ## Common problems
 
 | Message | Means |

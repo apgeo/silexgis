@@ -123,6 +123,37 @@ It refuses in three cases, each named:
 
 ---
 
+## Rock overhead
+
+How much rock lies over a cave's passages, along their length. On the cave's page.
+
+The chart runs **distance along the passage** across the bottom and the **thickness of rock
+overhead** up the side, with the rock shaded between. Press a point on the curve and the
+reading is marked where it was taken — on the map and in the 3D view — and named beneath the
+chart: the distance, the thickness, and which piece of line work answered.
+
+> **Distance along is not a walk from the entrance.** A survey is a network, not a route. The
+> axis is cumulative length in the order the line work records it.
+
+**A break in the curve is a place nobody has measured the ground for**, not a place where the
+passage reaches the surface. Where elevation data does not cover the passage, there is no line
+— and the figures beneath the chart (least, greatest, average) are worked out over the covered
+readings only, with the number of them shown, so a partly covered cave is not reported as
+shallower than it is.
+
+It says so plainly rather than drawing nothing, in four different cases: the cave has no line
+work; the survey was drawn in plan with no depths, so there is nothing to subtract from; no
+elevation data has been prepared on this installation at all; or some has, and none of it
+reaches this cave. Those are different problems for different people.
+
+A long cave is sampled coarsely rather than answered slowly: readings are spread at an even
+interval, never closer than 2 m and never more than 400 of them.
+
+You need permission to read elevation data as well as permission to see exactly where the cave
+is. Ask an administrator if the panel does not appear.
+
+---
+
 ## Karst distributions
 
 Over the caves on a cave-list page: **Distributions**.

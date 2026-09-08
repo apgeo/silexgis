@@ -37,6 +37,7 @@ import {
   useMapViews,
   usePhotoLibraries,
   useRasterMaps,
+  useTerrainDerivatives,
   useSurveyModel,
   useWorkAreas,
   type SurveyModelInfo,
@@ -83,6 +84,11 @@ import {
   attachClosestApproachLine,
   createClosestApproachLayer,
 } from '../map/closestApproachLayer.ts';
+import {
+  OVERBURDEN_HIGHLIGHT_LAYER_ID,
+  attachOverburdenHighlight,
+  createOverburdenHighlightLayer,
+} from '../map/overburdenHighlightLayer.ts';
 import { ENTRANCE_HEATMAP_LAYER_ID, createEntranceHeatmapLayer } from '../map/heatmapLayer.ts';
 import { GEOFILE_LAYER_PREFIX, attachGeofileLoader, syncGeofileLayers } from '../map/geofileLayers.ts';
 import { PHOTO_LAYER_ID, attachPhotoLoader, createPhotoLayer, setPhotosEnabled } from '../map/photoLayer.ts';
@@ -118,6 +124,7 @@ import { surfaceFeaturesChanged } from '../workspace/surfaceFeatureRefresh.ts';
 import { applyViewCamera3d, setActiveViewCamera } from '../workspace/viewCamera.ts';
 import { subscribe } from '../workspace/workspaceBus.ts';
 import { RASTER_LAYER_PREFIX, syncRasterLayers } from '../map/rasterLayers.ts';
+import { syncTerrainDerivativeLayers, terrainDerivativeIdOf } from '../map/terrainDerivativeLayers.ts';
 import { setRasterSwipeActive, setRasterSwipeFraction } from '../map/rasterSwipe.ts';
 import { attachHoverTooltip } from '../map/hoverTooltip.ts';
 import { attachUrlHash, hasMapHash } from '../map/urlHash.ts';
@@ -253,6 +260,8 @@ export default function MapPage() {
   const setDeclutterLabels = useWorkspaceStore((s) => s.setDeclutterLabels);
   const visibleRasterIds = useWorkspaceStore((s) => s.visibleRasterIds);
   const setRasterVisible = useWorkspaceStore((s) => s.setRasterVisible);
+  const visibleTerrainDerivativeIds = useWorkspaceStore((s) => s.visibleTerrainDerivativeIds);
+  const setTerrainDerivativeVisible = useWorkspaceStore((s) => s.setTerrainDerivativeVisible);
   const rasterOpacity = useWorkspaceStore((s) => s.rasterOpacity);
   const setRasterOpacity = useWorkspaceStore((s) => s.setRasterOpacity);
   const overlayOpacity = useWorkspaceStore((s) => s.overlayOpacity);
@@ -265,6 +274,17 @@ export default function MapPage() {
     () => (rasterPage?.items ?? []).filter((r) => r.status === 'ready'),
     [rasterPage],
   );
+  // Every computed picture of the ground, finished or not: the panel lists the unfinished ones
+  // too, because a picture somebody asked for and cannot see anywhere reads as a lost request.
+  //
+  // Not asked for at all without the terrain right. The server refuses the same request either
+  // way, but a query that fails every eight minutes for the whole life of a session is a refusal
+  // nobody reads, arriving forever, and it fills the browser's own error trail with something no
+  // reader can act on.
+  const mayReadTerrain = useCan('terrain', 'read');
+  const { data: terrainDerivatives } = useTerrainDerivatives(mayReadTerrain);
+  const derivativeLayers = useMemo(() => terrainDerivatives ?? [], [terrainDerivatives]);
+
   // The toolbar mixes drawing new features with modifying existing ones, so either
   // domain-level right shows it; per-feature answers stay with the server.
   const mayWriteFeatures = useCan('features', 'write');
@@ -319,6 +339,9 @@ export default function MapPage() {
       // On top of the data it is drawn over: it is one short line answering a question somebody
       // asked, and it is of no use at all under the surveys it joins.
       [CLOSEST_APPROACH_LAYER_ID, createClosestApproachLayer],
+      // Topmost of all: it is a single mark saying "the reading you pressed came from here", and
+      // one that anything at all could cover is a mark that failed to answer the question.
+      [OVERBURDEN_HIGHLIGHT_LAYER_ID, createOverburdenHighlightLayer],
     ] as const) {
       if (!findOverlayLayer(id)) {
         getOverlayGroup().getLayers().push(create());
@@ -328,6 +351,10 @@ export default function MapPage() {
     // Nothing camera-driven about it: it draws what was last measured, wherever that is, and
     // stays until a different pair is measured or the panel clears it.
     const detachApproach = attachClosestApproachLine();
+    // Same arrangement, same reason: it marks whichever reading was pressed last on an overburden
+    // curve, wherever in the world that is, and stays until another is pressed or the panel clears
+    // it.
+    const detachOverburdenHighlight = attachOverburdenHighlight();
     const detachLoader = attachEntranceLoader(map);
     const detachFeatureLoader = attachSurfaceFeatureLoader(map);
     const detachCenterlineLoader = attachCenterlineLoader(map);
@@ -384,6 +411,7 @@ export default function MapPage() {
       controller.dispose();
       setEditController(null);
       detachApproach();
+      detachOverburdenHighlight();
       detachLoader();
       detachFeatureLoader();
       detachCenterlineLoader();
@@ -442,6 +470,23 @@ export default function MapPage() {
     applyPendingOverlayOrder();
   }, [readyRasters, visibleRasterIds, rasterOpacity]);
 
+  // The computed pictures of the ground, likewise. A pass of their own rather than a branch of the
+  // one above: each pass removes every layer carrying its own prefix that it does not want, so one
+  // pass over both sets would have each half delete the other's layers.
+  //
+  // Their transparency is kept in the overlay slice, keyed by the picture's own id — the same key
+  // the mirror below writes back when a composer slider is dragged. Read from one slice and
+  // written to another, a transparency somebody set by hand would be forgotten every time the
+  // listing is re-read for fresh addresses, and the layer would snap back to fully opaque.
+  useEffect(() => {
+    syncTerrainDerivativeLayers(
+      derivativeLayers,
+      new Set(visibleTerrainDerivativeIds),
+      new globalThis.Map(Object.entries(overlayOpacity)),
+    );
+    applyPendingOverlayOrder();
+  }, [derivativeLayers, visibleTerrainDerivativeIds, overlayOpacity]);
+
   // Mirrors opacity changes made on the OL layers (the composer's transparency
   // sliders write layer.setOpacity directly) back into the workspace store, which
   // owns persistence (saved views) and re-creation of geofile/raster layers.
@@ -463,7 +508,12 @@ export default function MapPage() {
           state.setRasterOpacity(rasterId, opacity);
         }
       } else {
-        const key = id.startsWith(GEOFILE_LAYER_PREFIX) ? id.slice(GEOFILE_LAYER_PREFIX.length) : id;
+        // One computed picture of the ground is several map layers, one per raster of the build,
+        // so its transparency is remembered against the picture rather than against whichever of
+        // its files the slider happened to be over.
+        const derivativeId = terrainDerivativeIdOf(id);
+        const key = derivativeId
+          ?? (id.startsWith(GEOFILE_LAYER_PREFIX) ? id.slice(GEOFILE_LAYER_PREFIX.length) : id);
         if ((state.overlayOpacity[key] ?? 1) !== opacity) {
           state.setOverlayOpacity(key, opacity);
         }
@@ -1012,6 +1062,9 @@ export default function MapPage() {
       rasters={readyRasters}
       visibleRasterIds={visibleRasterIds}
       onRasterVisibleChange={setRasterVisible}
+      terrainDerivatives={derivativeLayers}
+      visibleTerrainDerivativeIds={visibleTerrainDerivativeIds}
+      onTerrainDerivativeVisibleChange={setTerrainDerivativeVisible}
       onOverlayVisibilityChanged={onOverlayVisibilityChanged}
       photoLibraries={photoLibraries}
       unconfiguredPhotoLibraries={unconfiguredPhotoLibraries}

@@ -3,6 +3,7 @@ using MaxRev.Gdal.Core;
 using OSGeo.GDAL;
 using OSGeo.OSR;
 using Shouldly;
+using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Terrain;
 
@@ -24,6 +25,7 @@ namespace SilexGis.Api.Tests;
 /// only that the file which was committed still opens, and cannot be read to see what it claims.
 /// </para>
 /// </summary>
+[Collection(RasterScratchCollection.Name)]
 public sealed class TerrainRasterPreparationTests : IDisposable
 {
     /// <summary>The Romanian national projected grid, in metres.</summary>

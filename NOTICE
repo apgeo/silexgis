@@ -12,15 +12,18 @@ This repository redistributes the following third-party works. Their own license
 apply to those files and are reproduced alongside them.
 
 --------------------------------------------------------------------------------
-ThIDE — Therion.Blender
+ThIDE — Therion.Blender, Therion.Build, Therion.Core,
+        Therion.Processing.Abstractions
 --------------------------------------------------------------------------------
-Readers for the compiled cave-survey formats (Therion Loch .lox and Survex .3d).
-Not vendored: the source is a Git submodule at server/external/ThIDE, pinned to
-the commit below, and the built assembly is redistributed inside the server image.
+Readers for the compiled cave-survey formats (Therion Loch .lox and Survex .3d),
+and the reader for what a Therion compilation printed while it ran. Not vendored:
+the source is a Git submodule at server/external/ThIDE, pinned to the commit
+below, and the built assemblies are redistributed inside the server image.
 
   Source:    https://github.com/apgeo/ThIDE
   Commit:    25dfc7042f6eed50a3cbc67c8c96484898eb2ef2
-  License:   MPL-2.0 — see server/external/ThIDE/src/Therion.Blender/LICENSE
+  License:   MPL-2.0 — see the LICENSE file beside each module under
+             server/external/ThIDE/src/
 
 The Mozilla Public License is file-level copyleft, and these sources are
 deliberately not marked "Incompatible With Secondary Licenses", so they combine

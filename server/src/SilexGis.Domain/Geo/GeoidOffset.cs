@@ -61,6 +61,32 @@ public static class GeoidOffset
         datum == TerrainHeightDatum.Ellipsoidal ? geoidHeightM : 0;
 
     /// <summary>
+    /// Metres to add to a height read out of a terrain source so that it can be compared with a
+    /// surveyed (orthometric) altitude — the analytical counterpart of
+    /// <see cref="SurveyToSceneOffsetM"/>, and the opposite direction.
+    ///
+    /// <para>
+    /// Zero for an orthometric source, whose heights are already the kind of number a survey
+    /// carries. Minus the undulation for an ellipsoidal one: the geoid sits above the ellipsoid
+    /// across Romania, so a reading taken from the ellipsoid is that much too high to set beside a
+    /// cave altitude.
+    /// </para>
+    ///
+    /// <para>
+    /// Where the scene offset moves the survey to meet drawn ground and is applied by whatever
+    /// draws, this one moves the ground to meet the survey and is applied by whatever measures.
+    /// They are never both applied to the same number: a probe answers in the survey's own datum,
+    /// so anything reading that answer adds nothing further to it.
+    /// </para>
+    /// </summary>
+    /// <param name="datum">What the terrain source's heights are measured from.</param>
+    /// <param name="geoidHeightM">
+    /// The local geoid undulation, in metres, used only for an ellipsoidal source.
+    /// </param>
+    public static double SampleToSurveyOffsetM(TerrainHeightDatum datum, double geoidHeightM) =>
+        datum == TerrainHeightDatum.Ellipsoidal ? -geoidHeightM : 0;
+
+    /// <summary>
     /// Ellipsoidal (WGS84) height for an orthometric height, given the local geoid undulation.
     /// The geoid sits <i>above</i> the ellipsoid across Romania, so a positive offset raises the
     /// point: a 1200 m entrance with a +39.39 m undulation is at 1239.39 m ellipsoidal.

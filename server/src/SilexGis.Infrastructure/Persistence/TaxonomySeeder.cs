@@ -465,7 +465,7 @@ public static class TaxonomySeeder
             // and nothing else, so the kind accepts an outline as well as a marker: a survey that
             // has only a GPS fix still records a point, and one that has walked the rim records
             // the rim.
-            ("sinkhole", "Sinkhole / Doline", FeatureCategory.Surface, [.. point, .. area], false, snap, "sinkhole.png", sinkholeSchema),
+            (FeatureTypeSeeds.Sinkhole, "Sinkhole / Doline", FeatureCategory.Surface, [.. point, .. area], false, snap, "sinkhole.png", sinkholeSchema),
             ("pit", "Pit", FeatureCategory.Surface, point, false, snap, "pit.png", null),
             ("pitch", "Pitch", FeatureCategory.Surface, point, false, snap, "pitch.png", null),
             ("chimney", "Chimney", FeatureCategory.Surface, point, false, snap, "chimney.png", null),

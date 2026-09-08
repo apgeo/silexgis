@@ -22,9 +22,9 @@ public enum SurveySourceEvidence
 /// <para>
 /// A compiled survey is a derived artifact: it is what a source project produced on the day it was
 /// compiled, with the compiler of that day. An installation that keeps only the compiled form
-/// cannot re-compile when the toolchain moves on, so the sources are archived beside it. What is
-/// archived is stored and nothing more — none of these files is parsed here, the compiler's log
-/// included.
+/// cannot re-compile when the toolchain moves on, so the sources are archived beside it. Nothing is
+/// parsed here: what this type decides is which formats may be archived and whether a file is the
+/// format its name claims, never what any of them says.
 /// </para>
 ///
 /// <para>
@@ -53,8 +53,9 @@ public static class SurveySourceFormats
 
         (".svx", SurveySourceKind.SurvexSource),
 
-        // Kept because it is the only complete record of what the compilation actually did, and
-        // it is lost for ever if it is not captured at upload. It is stored unread.
+        // Kept because it is the only complete record of what the compilation actually did, and it
+        // is lost for ever if it is not captured at upload. It is also the only archived kind whose
+        // contents are read afterwards, for the loop-error table it carries.
         (".log", SurveySourceKind.TherionLog),
 
         // A survey app's export bundle, which is a ZIP whatever it holds inside.
@@ -128,8 +129,9 @@ public static class SurveySourceFormats
     /// <para>
     /// Survey-specific types rather than <c>text/plain</c>, because these files are survey data
     /// kept to be re-compiled, not prose kept to be read: recording them as text would enrol every
-    /// one of them in the text-extraction path, which opens and reads what this archive
-    /// deliberately stores unread.
+    /// one of them in the text-extraction path, which would index a survey's station names as
+    /// searchable prose. The compilation log is read for the figures it reports, and that reading
+    /// is a different path with a different answer to who may see the result.
     /// </para>
     /// </summary>
     public static string MediaTypeFor(SurveySourceKind kind) => kind switch

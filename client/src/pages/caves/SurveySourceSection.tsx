@@ -38,10 +38,12 @@ const KIND_LABEL_KEYS: Record<SurveySourceInfo['kind'], string> = {
  * The raw survey material a cave's compiled models were made from: the survey languages, a project
  * configuration, a survey app's export bundle, and the log a compilation wrote.
  *
- * Separate from the models list on purpose. A model is drawn and read; these are neither — they are
- * kept so the survey can be compiled again when the toolchain that produced the export has moved
- * on, and nothing here opens one. The server withholds the whole list for a location-protected cave
- * from callers without the exact-location permission, so an empty list needs no special casing.
+ * Separate from the models list on purpose. A model is drawn; these are what it was drawn from, and
+ * they are kept so the survey can be compiled again when the toolchain that produced the export has
+ * moved on. One kind is opened: archiving a compilation log queues a reading of the closure figures
+ * it reports, which the panel below this one shows. Nothing else here is opened. The server
+ * withholds the whole list for a location-protected cave from callers without the exact-location
+ * permission, so an empty list needs no special casing.
  */
 export default function SurveySourceSection({ caveId, canEdit }: { caveId: string; canEdit: boolean }) {
   const { t } = useTranslation();

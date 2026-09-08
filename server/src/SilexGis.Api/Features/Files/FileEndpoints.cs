@@ -15,6 +15,7 @@ using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.Files;
 
@@ -479,6 +480,17 @@ public static class FileEndpoints
         try
         {
             var stored = await documents.AddVersionAsync(subject.File.DocumentVersionId, content, ctx.UserId, ct);
+
+            // A corrected compilation log arrives this way — as a later revision of the archived
+            // source, not as a second one. The quality figures read out of the previous revision
+            // describe a run this document no longer holds, so the record that carries them is
+            // pointed at the new bytes and read again rather than being left to show them under a
+            // revision number that no longer matches.
+            if (await SurveyCompilationRequeue.ForNewRevisionAsync(
+                db, stored.Version.DocumentId, stored.File.Id, stored.Version.VersionNumber, ctx.UserId, ct) > 0)
+            {
+                await db.SaveChangesAsync(ct);
+            }
 
             // A new revision inherits the document's attachments, so unlike a first upload
             // this one can already be placed by something — and being allowed to change a

@@ -168,6 +168,28 @@
       "notPublished": "That build has no surface to draw. Its tiles were either never read back and found whole, or they are no longer where terrain is served from.",
       "active": "That build is the terrain the scene is drawing. Choose other terrain, or stop drawing this one, before removing it.",
       "running": "That build has not finished. Its files are being written right now, so it can be removed once it has stopped, whichever way it stops."
+    },
+    "derivatives": {
+      "title": "Ground pictures",
+      "hint": "Shaded relief, steepness and facing, computed from an elevation build.",
+      "stale": "Out of date",
+      "staleHint": "Computed from elevation this installation no longer serves. It is still drawn, but it will not agree with the heights beneath it.",
+      "totalSize": "{{size}} on disk",
+      "statuses": {
+        "queued": "Queued",
+        "computing": "Computing",
+        "ready": "Ready",
+        "failed": "Failed"
+      },
+      "kinds": {
+        "hillshade": "Shaded relief",
+        "slope": "Steepness",
+        "aspect": "Facing",
+        "ruggednessIndex": "Ruggedness",
+        "positionIndex": "Topographic position",
+        "roughness": "Roughness",
+        "colourRelief": "Coloured relief"
+      }
     }
   },
   "dashboard": {
@@ -341,6 +363,7 @@
     "features": "Features",
     "locationWithheld": "Location withheld — exact geometry is protected.",
     "closestApproach": "Closest approach",
+    "overburdenHighlight": "Overburden reading",
     "georeferencedMaps": "Georeferenced maps"
   },
   "dialog": {
@@ -3095,7 +3118,11 @@
       "tripDate": "Trip date",
       "hadIncident": "Had an incident",
       "state": "State",
-      "language": "Language"
+      "language": "Language",
+      "region": "Region",
+      "rockType": "Rock type",
+      "surveyedLength": "Surveyed length (m)",
+      "depth": "Depth (m)"
     },
     "problems": {
       "noWorlds": "Choose at least one kind of object to search.",
@@ -3386,7 +3413,7 @@
   },
   "surveySources": {
     "title": "Survey sources",
-    "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on; nothing here is read or interpreted.",
+    "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on. A compilation log is opened, for the closure figures it reports; nothing else here is read or interpreted.",
     "upload": "Archive a source",
     "uploaded": "Source archived",
     "uploadFailed": "The file could not be archived",
@@ -3413,6 +3440,58 @@
       "notFound": "This archived source no longer exists.",
       "caveNotFound": "This cave no longer exists.",
       "forbidden": "You are not allowed to change this cave's survey archive."
+    }
+  },
+  "surveyQuality": {
+    "title": "Survey closure",
+    "explanation": "How well each survey closed, exactly as the compiler that compiled it reported. Nothing here is worked out again: the columns are the compiler's own — REL-ERR, ABS-ERR, TOTAL-L, STS and the three axis errors — so a figure here and a figure in your own log are the same number.",
+    "statuses": {
+      "pending": "Queued for reading",
+      "unreadable": "Could not be read"
+    },
+    "outcomes": {
+      "succeeded": "Compiled",
+      "succeededWithWarnings": "Compiled with warnings",
+      "failed": "Compilation failed"
+    },
+    "unreadable": "This log could not be read, so nothing is known about the compilation it recorded. That is not a statement about the survey.",
+    "compilationFailed": "This compilation did not finish. What is below is what the run had got as far as reporting — not a survey with no loops.",
+    "stoppedAt": "It stopped at: {{stage}}.",
+    "compiler": "Compiler",
+    "compilerValue": "therion {{version}}",
+    "compilerReleased": "Compiler released",
+    "readAt": "Log read here",
+    "revision": "Archive revision",
+    "loopCount": "Loops the compiler found",
+    "averageLoopError": "Average loop error",
+    "medianLoopError": "Median loop error (from the table)",
+    "medianAbsoluteError": "Median closing distance (from the table)",
+    "totalLength": "Total length",
+    "totalLengthAdjusted": "Total length, adjusted",
+    "adjustment": "Adjustment moved",
+    "compilationSeconds": "Compilation time (s)",
+    "noLoops": "This run reported no loop errors: there are no closed loops in this survey to check.",
+    "noLoopTable": "This log printed no loop-error table, so how well the survey closes is not known from it. That is not the same as a survey with no closed loops.",
+    "loopsWithoutTable": "This run reported {{loops}} loops but printed no loop-error table, so how far each of them closed is not known from this log.",
+    "orderedBy": {
+      "relErr": "Ordered by REL-ERR, the ratio.",
+      "absErr": "Ordered by ABS-ERR, the closing distance.",
+      "totalLength": "Ordered by TOTAL-L, the loop's length.",
+      "table": "In the compiler's own order."
+    },
+    "orderingExplanation": "A short loop can be the worse ratio and the smaller distance at the same time, so ordering by REL-ERR and ordering by ABS-ERR are not the same list. Sort by either heading.",
+    "columns": {
+      "ordinal": "Loop",
+      "relErr": "REL-ERR",
+      "relErrHint": "Ratio: the closing error as a % of the loop's length",
+      "absErr": "ABS-ERR",
+      "absErrHint": "Distance: how far the loop failed to close, in metres",
+      "totalLength": "TOTAL-L (m)",
+      "stationCount": "STS",
+      "errorX": "X-ERROR",
+      "errorY": "Y-ERROR",
+      "errorZ": "Z-ERROR",
+      "stations": "STATIONS"
     }
   },
   "karstArea": {
@@ -3899,6 +3978,43 @@
     "structureRose": "Fracture traces ({{count}} within {{radius}} m)",
     "areaStructureRose": "Fracture traces ({{count}} in this area)",
     "dolineRose": "Depression long axes ({{count}} outlines)"
+  },
+  "overburden": {
+    "title": "Rock overhead",
+    "loading": "Measuring the rock overhead…",
+    "nothingMeasured": "This cave has no line work to measure along, so there is nowhere to ask how much rock is overhead.",
+    "noAltitudesTitle": "This cave's line work carries no altitudes.",
+    "noAltitudesReason": "How much rock lies overhead is the ground surface less the altitude of the passage, and a survey recorded as a plan has no altitude for it to be measured down to. A profile of noughts would draw the whole cave lying on the surface.",
+    "noTerrainBuilt": "No elevation data has been prepared on this installation, so the height of the ground over this cave is not known anywhere. This is not a statement about the cave.",
+    "noCoverageHere": "Elevation data has been prepared here, but none of it reaches this cave. The ground over it is unknown rather than at sea level.",
+    "axisDistance": "Distance along the passage (m)",
+    "axisThickness": "Rock overhead (m)",
+    "thinnest": "Thinnest",
+    "thickest": "Thickest",
+    "mean": "Mean",
+    "passageLength": "Passage measured along",
+    "coverage": "Readings with a ground height",
+    "coverageValue": "{{covered}} of {{total}}",
+    "unitMetres": "{{value}} m",
+    "notMeasured": "—",
+    "figuresScope": "The figures are taken over the readings that got a ground height and over no others, so a cave the elevation data covers in part is described over that part alone. A negative thickness is reported as measured: it means the elevation model puts the surface below the passage, and the two disagree.",
+    "gap": {
+      "outsideCoverage": "The curve breaks where no prepared elevation data reaches the passage. Nobody knows the height of the ground there, which is why the line stops rather than crossing the gap.",
+      "noData": "The curve breaks where the elevation data reaches the passage but records nothing — a hole in the model, not a passage at the surface.",
+      "mixed": "The curve breaks in two kinds of place: where no prepared elevation data reaches the passage, and where data reaches it but records nothing. Neither is a passage at the surface."
+    },
+    "distanceNote": "The horizontal axis is how much passage lies before each reading, in the order the line work records it. A survey is a network rather than one walk through the cave, so it is a length and not a route anybody could follow.",
+    "pressToLocate": "Press a point on the curve to mark where that reading was taken, on the map and in the 3D scene.",
+    "readout": "{{distance}} along · {{thickness}} · piece {{segment}} of the line work",
+    "readoutWhere": "{{distance}} along the passage",
+    "readoutThickness": "{{value}} of rock overhead",
+    "readoutSegment": "Piece {{index}} of the line work",
+    "readoutAbsent": {
+      "outsideCoverage": "No elevation data reaches here",
+      "noData": "The elevation data records nothing here"
+    },
+    "markLabel": "{{value}} of rock overhead",
+    "markLabelAbsent": "Rock overhead not known here"
   },
   "crossSection": {
     "title": "Passage size",

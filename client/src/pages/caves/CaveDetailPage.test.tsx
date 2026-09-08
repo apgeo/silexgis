@@ -63,6 +63,7 @@ vi.mock('../../components/reslinks/LinksSection.tsx', () => ({ default: () => nu
 vi.mock('../../components/statistics/CaveCrossSectionPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/statistics/CavePatternPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/statistics/CaveHypsometryPanel.tsx', () => ({ default: () => null }));
+vi.mock('../../components/statistics/CaveOverburdenPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/statistics/CaveOrientationPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/statistics/CaveStatisticsPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/statistics/CaveStructurePanel.tsx', () => ({ default: () => null }));
@@ -76,6 +77,7 @@ vi.mock('./CaveTripsSection.tsx', () => ({ default: () => null }));
 vi.mock('./CenterlineSection.tsx', () => ({ default: () => null }));
 vi.mock('./SurveyModelSection.tsx', () => ({ default: () => null }));
 vi.mock('./SurveySourceSection.tsx', () => ({ default: () => null }));
+vi.mock('./SurveyQualityPanel.tsx', () => ({ default: () => null }));
 
 const { default: CaveDetailPage } = await import('./CaveDetailPage.tsx');
 

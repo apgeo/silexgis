@@ -89,6 +89,40 @@ public class HistoryProtectionTests
     }
 
     [Fact]
+    public void Survey_compilation_payload_dropped_entirely_when_hidden()
+    {
+        // The closure figures are not a position, but they are only ever readable through a
+        // survey record withheld from this caller, so the timeline withholds them on the same
+        // terms rather than becoming the surface that hands them over.
+        var changes = Changes(
+            ("Outcome", null, "Succeeded"),
+            ("LoopCount", null, "26"),
+            ("AverageLoopErrorPercent", null, "1.49"),
+            ("TotalLengthM", null, "4605.77"),
+            ("Status", "Pending", "Read"));
+
+        var result = HistoryProtection.Redact(nameof(SurveyCompilation), changes, governingHidden: true, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
+
+        result.Changes.ShouldBeNull();
+        result.Redacted.ShouldContain("Outcome");
+        result.Redacted.ShouldContain("LoopCount");
+        result.Redacted.ShouldContain("AverageLoopErrorPercent");
+        result.Redacted.ShouldContain("TotalLengthM");
+    }
+
+    [Fact]
+    public void Survey_compilation_figures_kept_when_caller_can_view_exact()
+    {
+        var changes = Changes(("LoopCount", null, "26"), ("TotalLengthM", null, "4605.77"));
+
+        var result = HistoryProtection.Redact(nameof(SurveyCompilation), changes, governingHidden: false, NoLinkHidden, associationHidden: false, mayWriteSubject: false, peopleHidden: false, memberHidden: NoMemberHidden);
+
+        result.Changes!.ContainsKey("LoopCount").ShouldBeTrue();
+        result.Changes.ContainsKey("TotalLengthM").ShouldBeTrue();
+        result.Redacted.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void Generic_feature_geometry_removed_when_under_a_protected_root()
     {
         var changes = Changes(("Geom", "POINT (25 45)", "POINT (26 46)"), ("Name", "a", "b"));
