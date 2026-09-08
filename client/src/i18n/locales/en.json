@@ -265,7 +265,18 @@
     "newPassword": "New password",
     "confirmPassword": "Repeat password",
     "passwordsDiffer": "The two passwords do not match.",
-    "passwordTooShort": "Use at least 10 characters."
+    "passwordTooShort": "Use at least 10 characters.",
+    "testLogins": {
+      "title": "Test installation",
+      "hint": "Anyone may try this installation with the demo accounts below. The data here is public and is reset regularly.",
+      "about": "What this account may do",
+      "roleAdministrator": "Administrator",
+      "roleEditor": "Editor",
+      "roleViewer": "Viewer",
+      "permsAdministrator": "Full control of the installation: sees and edits everything, including exact locations of protected caves, user accounts, permission groups and settings.",
+      "permsEditor": "Creates and edits content — caves, surface features, trip logs, documents, saved views — but cannot manage users or permissions, and exact locations of protected caves stay hidden.",
+      "permsViewer": "The signed-in baseline: browses what is shared with all accounts and keeps saved views and checklists of its own, without editing shared content or seeing protected locations."
+    }
   },
   "common": {
     "loading": "Loading…",

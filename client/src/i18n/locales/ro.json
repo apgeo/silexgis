@@ -265,7 +265,18 @@
     "newPassword": "Parolă nouă",
     "confirmPassword": "Repetați parola",
     "passwordsDiffer": "Cele două parole nu coincid.",
-    "passwordTooShort": "Folosiți cel puțin 10 caractere."
+    "passwordTooShort": "Folosiți cel puțin 10 caractere.",
+    "testLogins": {
+      "title": "Instalație de test",
+      "hint": "Oricine poate încerca această instalație cu conturile demonstrative de mai jos. Datele de aici sunt publice și sunt resetate periodic.",
+      "about": "Ce poate face acest cont",
+      "roleAdministrator": "Administrator",
+      "roleEditor": "Editor",
+      "roleViewer": "Vizualizator",
+      "permsAdministrator": "Control deplin asupra instalației: vede și editează totul, inclusiv localizarea exactă a peșterilor protejate, conturile de utilizator, grupurile de permisiuni și setările.",
+      "permsEditor": "Creează și editează conținut — peșteri, elemente de suprafață, jurnale de tură, documente, vederi salvate — dar nu poate administra utilizatori sau permisiuni, iar localizarea exactă a peșterilor protejate rămâne ascunsă.",
+      "permsViewer": "Nivelul de bază al unui cont autentificat: răsfoiește ce este partajat cu toate conturile și își păstrează propriile vederi salvate și liste de verificare, fără a edita conținut comun și fără a vedea localizări protejate."
+    }
   },
   "common": {
     "loading": "Se încarcă…",

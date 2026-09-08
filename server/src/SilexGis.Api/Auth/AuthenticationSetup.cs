@@ -27,6 +27,7 @@ public static class AuthenticationSetup
     {
         services.AddOptions<AuthOptions>().BindConfiguration(AuthOptions.SectionName);
         services.AddOptions<AdminBootstrapOptions>().BindConfiguration(AdminBootstrapOptions.SectionName);
+        services.AddOptions<TestLoginOptions>().BindConfiguration(TestLoginOptions.SectionName);
 
         services.AddIdentity<SilexGisUser, SilexGisRole>(options =>
             {

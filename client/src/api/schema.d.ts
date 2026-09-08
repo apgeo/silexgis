@@ -17331,6 +17331,7 @@ export interface components {
             openRegistration: boolean;
             externalOnly: boolean;
             providers: components["schemas"]["ExternalProviderInfo"][];
+            testLogins?: null | components["schemas"]["TestLoginInfo"][];
         };
         AvatarPresetRequest: {
             preset: string;
@@ -22117,6 +22118,11 @@ export interface components {
         };
         /** @enum {unknown} */
         TerrainSurfaceFit: "horn" | "zevenbergenThorne" | null;
+        TestLoginInfo: {
+            email: string;
+            password: string;
+            role: string;
+        };
         TestMessageRequest: {
             recipient: string;
         };

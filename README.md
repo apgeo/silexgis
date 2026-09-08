@@ -11,6 +11,23 @@ Previous versions:
 - **v1** (PHP/MySQL/OpenLayers 3) — live at [speosilex.ro/silexgis](https://speosilex.ro/silexgis/en/index.php)
 - **v2** (2022, React/Laravel, partial) — archived on the [`v2-archive`](../../tree/v2-archive) branch
 
+## Try it
+
+A public test installation runs at **[silexgistest.speotopo.ro](https://silexgistest.speotopo.ro)**.
+Sign in with any of the demo accounts below — the login page lists them too, with a fill-in
+button and a note on what each may do:
+
+| Account | Password | What it may do |
+|---|---|---|
+| `admin@test.local` | `test-login-pass-1` | full administrator — everything, accounts and settings included |
+| `editor@test.local` | `test-login-pass-1` | creates and edits content; no user or permission administration, and exact locations of protected caves stay hidden |
+| `viewer@test.local` | `test-login-pass-1` | the signed-in baseline — browses what is visible to all accounts |
+
+Everything there is public and disposable — do not put anything real in it. The data returns
+to a curated baseline on a daily schedule, so feel free to create, edit and delete while
+exploring. Running a test installation of your own is described in
+[docs/INSTALL.md](docs/INSTALL.md#running-a-test-installation-public-demo-logins).
+
 **Using it?** The handbook for cavers, archivists and whoever runs the installation is
 **[docs/user-guide/](docs/user-guide/README.md)** — what the application is, the workflows,
 and a page per feature. In English and **[română](docs/user-guide/ro/README.md)**, page for page.

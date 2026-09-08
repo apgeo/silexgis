@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useState } from 'react';
-import { GithubOutlined, GoogleOutlined, LoginOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Divider, Flex, Form, Input, Segmented, Typography } from 'antd';
+import { GithubOutlined, GoogleOutlined, InfoCircleOutlined, LoginOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Divider, Flex, Form, Input, Popover, Segmented, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -18,10 +18,18 @@ interface ExternalProvider {
   displayName: string;
 }
 
+/** A demo account a test installation announces on this page, credentials included. */
+interface TestLogin {
+  email: string;
+  password: string;
+  role: string;
+}
+
 interface AuthConfig {
   openRegistration: boolean;
   externalOnly: boolean;
   providers: ExternalProvider[];
+  testLogins?: TestLogin[] | null;
 }
 
 /** The second-factor step the server asked for, as described by the 401 that started it. */
@@ -49,6 +57,7 @@ function providerIcon(name: string) {
  */
 export default function LoginPage() {
   const { t } = useTranslation();
+  const [form] = Form.useForm<LoginFormValues>();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -196,6 +205,22 @@ export default function LoginPage() {
   const providers = config?.providers ?? [];
   const showPasswordForm = !config?.externalOnly || providers.length === 0;
   const deliverable = method === 'email' || method === 'sms';
+  const testLogins = showPasswordForm ? (config?.testLogins ?? []) : [];
+
+  // Literal keys, not `t(\`…_${role}\`)`: the translation guard verifies keys it can read
+  // out of the source, and a composed key would be invisible to it.
+  const testRoleLabel = (role: string) => {
+    if (role === 'administrator') return t('auth.testLogins.roleAdministrator');
+    if (role === 'editor') return t('auth.testLogins.roleEditor');
+    if (role === 'viewer') return t('auth.testLogins.roleViewer');
+    return role;
+  };
+  const testRoleDescription = (role: string) => {
+    if (role === 'administrator') return t('auth.testLogins.permsAdministrator');
+    if (role === 'editor') return t('auth.testLogins.permsEditor');
+    if (role === 'viewer') return t('auth.testLogins.permsViewer');
+    return null;
+  };
 
   return (
     <Flex align="center" justify="center" style={{ minHeight: '100%' }}>
@@ -216,8 +241,58 @@ export default function LoginPage() {
           </Button>
         )}
 
+        {testLogins.length > 0 && (
+          <Alert
+            type="info"
+            title={t('auth.testLogins.title')}
+            style={{ marginBottom: 16 }}
+            description={
+              <Flex vertical gap={8}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('auth.testLogins.hint')}
+                </Typography.Text>
+                {testLogins.map((login) => (
+                  <Flex key={login.email} vertical gap={2}>
+                    <Flex align="center" gap={8}>
+                      <Button
+                        size="small"
+                        style={{ flex: 1 }}
+                        disabled={challenge !== null}
+                        onClick={() => form.setFieldsValue({ email: login.email, password: login.password })}
+                      >
+                        {testRoleLabel(login.role)}
+                      </Button>
+                      {testRoleDescription(login.role) && (
+                        <Popover
+                          trigger="click"
+                          title={testRoleLabel(login.role)}
+                          content={
+                            <Typography.Paragraph style={{ maxWidth: 280, marginBottom: 0 }}>
+                              {testRoleDescription(login.role)}
+                            </Typography.Paragraph>
+                          }
+                        >
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<InfoCircleOutlined />}
+                            aria-label={t('auth.testLogins.about')}
+                          />
+                        </Popover>
+                      )}
+                    </Flex>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {login.email} · {login.password}
+                    </Typography.Text>
+                  </Flex>
+                ))}
+              </Flex>
+            }
+          />
+        )}
+
         {showPasswordForm && (
-          <Form<LoginFormValues> layout="vertical" onFinish={onFinish} requiredMark={false}>
+          <Form<LoginFormValues> form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
             <Form.Item name="email" label={t('auth.email')} rules={[{ required: true }, { type: 'email' }]}>
               <Input autoComplete="username" autoFocus disabled={challenge !== null} />
             </Form.Item>
