@@ -178,11 +178,16 @@ public static class HistoryProtection
                 RemoveNamed(changes, EntranceSensitive, redacted);
             }
         }
-        else if (entityType == FeatureCenterline || entityType == nameof(SurveyModel))
+        else if (entityType == FeatureCenterline
+            || entityType == nameof(SurveyModel)
+            || entityType == nameof(SurveyCompilation))
         {
-            // Coordinate-bearing rows in a protected timeline: when hidden, drop the whole
-            // payload but keep the event. These rows only reach a caller who already failed
-            // the exact-location check.
+            // Survey-borne rows in a protected timeline: when hidden, drop the whole payload
+            // but keep the event. These rows only reach a caller who already failed the
+            // exact-location check. A compilation's figures are not themselves a position,
+            // but they are only readable through a survey record that is withheld whole from
+            // that caller, and they inherit its gate rather than getting a looser one — the
+            // timeline must not become the one surface that hands over what the others refuse.
             if (governingHidden && changes.Count > 0)
             {
                 redacted.AddRange(changes.Select(kv => kv.Key));

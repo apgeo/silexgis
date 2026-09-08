@@ -1075,6 +1075,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{caveId}/survey-compilations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loop closure as the compiler reported it; withheld without the exact-location permission. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveyCompilationDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{caveId}/centerlines": {
         parameters: {
             query?: never;
@@ -21003,6 +21041,69 @@ export interface components {
             /** Format: int32 */
             maxSelection: number;
             portalUrl: string;
+        };
+        SurveyCompilationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caveId: string;
+            /** Format: uuid */
+            surveySourceId: string;
+            sourceName: string;
+            status: components["schemas"]["SurveyCompilationStatus"];
+            readError: null | string;
+            /** Format: date-time */
+            readAt: null | string;
+            /** Format: uuid */
+            logFileId: string;
+            /** Format: int32 */
+            logVersionNumber: number;
+            outcome: null | components["schemas"]["SurveyCompilationOutcome"];
+            compilerVersion: null | string;
+            compilerReleaseDate: null | string;
+            incompleteStage: null | string;
+            /** Format: int32 */
+            compilationSeconds: null | number;
+            /** Format: int32 */
+            errorCount: null | number;
+            /** Format: int32 */
+            warningCount: null | number;
+            /** Format: int32 */
+            loopCount: null | number;
+            /** Format: double */
+            averageLoopErrorPercent: null | number;
+            /** Format: double */
+            totalLengthM: null | number;
+            /** Format: double */
+            totalLengthAdjustedM: null | number;
+            loops: components["schemas"]["SurveyLoopErrorDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        SurveyCompilationOutcome: "succeeded" | "succeededWithWarnings" | "failed" | null;
+        /** @enum {unknown} */
+        SurveyCompilationStatus: "pending" | "read" | "unreadable";
+        SurveyLoopErrorDto: {
+            /** Format: int32 */
+            ordinal: number;
+            /** Format: double */
+            relativeErrorPercent: number;
+            /** Format: double */
+            absoluteErrorM: number;
+            /** Format: double */
+            totalLengthM: number;
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: double */
+            errorXM: number;
+            /** Format: double */
+            errorYM: number;
+            /** Format: double */
+            errorZM: number;
+            stations: string;
         };
         SurveyModelDto: {
             /** Format: uuid */

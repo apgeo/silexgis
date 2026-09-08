@@ -68,6 +68,12 @@ public static class ProcessingJobKinds
     /// </summary>
     public const string SurveyGraph = "survey-graph";
 
+    /// <summary>
+    /// Read an archived compilation log into the quality figures it reports: how the run ended,
+    /// what it ran as, and how well each of the survey's loops closed.
+    /// </summary>
+    public const string SurveyCompilation = "survey-compilation";
+
     /// <summary>Backfill EXIF GPS points onto existing image files that predate geotag capture.</summary>
     public const string PhotoGeoBackfill = "photo-geo-backfill";
 

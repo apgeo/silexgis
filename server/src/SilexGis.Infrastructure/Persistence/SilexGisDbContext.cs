@@ -173,6 +173,12 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SurveySource> SurveySources => Set<SurveySource>();
 
+    /// <summary>What one archived compilation log said about the survey it was written for.</summary>
+    public DbSet<SurveyCompilation> SurveyCompilations => Set<SurveyCompilation>();
+
+    /// <summary>The loop-error table of one compilation, in the order the compiler printed it.</summary>
+    public DbSet<SurveyCompilationLoop> SurveyCompilationLoops => Set<SurveyCompilationLoop>();
+
     public DbSet<SurveyStation> SurveyStations => Set<SurveyStation>();
 
     public DbSet<SurveyShot> SurveyShots => Set<SurveyShot>();

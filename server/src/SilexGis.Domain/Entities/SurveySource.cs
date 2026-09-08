@@ -18,7 +18,10 @@ public enum SurveySourceKind : short
     /// <summary>A Therion project configuration (<c>.thconfig</c>).</summary>
     TherionConfig = 1,
 
-    /// <summary>The log a Therion compilation wrote (<c>.log</c>). Stored, never read.</summary>
+    /// <summary>
+    /// The log a Therion compilation wrote (<c>.log</c>). Archived like the rest, and the only kind
+    /// read for what it says: it carries the loop-error table, which is how well the survey closes.
+    /// </summary>
     TherionLog = 2,
 
     /// <summary>Survex survey source (<c>.svx</c>).</summary>

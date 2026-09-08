@@ -3409,7 +3409,7 @@
   },
   "surveySources": {
     "title": "Survey sources",
-    "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on; nothing here is read or interpreted.",
+    "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on. A compilation log is opened, for the closure figures it reports; nothing else here is read or interpreted.",
     "upload": "Archive a source",
     "uploaded": "Source archived",
     "uploadFailed": "The file could not be archived",
@@ -3436,6 +3436,58 @@
       "notFound": "This archived source no longer exists.",
       "caveNotFound": "This cave no longer exists.",
       "forbidden": "You are not allowed to change this cave's survey archive."
+    }
+  },
+  "surveyQuality": {
+    "title": "Survey closure",
+    "explanation": "How well each survey closed, exactly as the compiler that compiled it reported. Nothing here is worked out again: the columns are the compiler's own — REL-ERR, ABS-ERR, TOTAL-L, STS and the three axis errors — so a figure here and a figure in your own log are the same number.",
+    "statuses": {
+      "pending": "Queued for reading",
+      "unreadable": "Could not be read"
+    },
+    "outcomes": {
+      "succeeded": "Compiled",
+      "succeededWithWarnings": "Compiled with warnings",
+      "failed": "Compilation failed"
+    },
+    "unreadable": "This log could not be read, so nothing is known about the compilation it recorded. That is not a statement about the survey.",
+    "compilationFailed": "This compilation did not finish. What is below is what the run had got as far as reporting — not a survey with no loops.",
+    "stoppedAt": "It stopped at: {{stage}}.",
+    "compiler": "Compiler",
+    "compilerValue": "therion {{version}}",
+    "compilerReleased": "Compiler released",
+    "readAt": "Log read here",
+    "revision": "Archive revision",
+    "loopCount": "Loops the compiler found",
+    "averageLoopError": "Average loop error",
+    "medianLoopError": "Median loop error (from the table)",
+    "medianAbsoluteError": "Median closing distance (from the table)",
+    "totalLength": "Total length",
+    "totalLengthAdjusted": "Total length, adjusted",
+    "adjustment": "Adjustment moved",
+    "compilationSeconds": "Compilation time (s)",
+    "noLoops": "This run reported no loop errors: there are no closed loops in this survey to check.",
+    "noLoopTable": "This log printed no loop-error table, so how well the survey closes is not known from it. That is not the same as a survey with no closed loops.",
+    "loopsWithoutTable": "This run reported {{loops}} loops but printed no loop-error table, so how far each of them closed is not known from this log.",
+    "orderedBy": {
+      "relErr": "Ordered by REL-ERR, the ratio.",
+      "absErr": "Ordered by ABS-ERR, the closing distance.",
+      "totalLength": "Ordered by TOTAL-L, the loop's length.",
+      "table": "In the compiler's own order."
+    },
+    "orderingExplanation": "A short loop can be the worse ratio and the smaller distance at the same time, so ordering by REL-ERR and ordering by ABS-ERR are not the same list. Sort by either heading.",
+    "columns": {
+      "ordinal": "Loop",
+      "relErr": "REL-ERR",
+      "relErrHint": "Ratio: the closing error as a % of the loop's length",
+      "absErr": "ABS-ERR",
+      "absErrHint": "Distance: how far the loop failed to close, in metres",
+      "totalLength": "TOTAL-L (m)",
+      "stationCount": "STS",
+      "errorX": "X-ERROR",
+      "errorY": "Y-ERROR",
+      "errorZ": "Z-ERROR",
+      "stations": "STATIONS"
     }
   },
   "karstArea": {
