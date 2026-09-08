@@ -11,6 +11,16 @@
          Domain on purpose: parsing untrusted uploaded bytes is infrastructure work, and the
          architecture tests assert that placement rather than trusting it. -->
     <ProjectReference Include="..\..\external\ThIDE\src\Therion.Blender\Therion.Blender.csproj" />
+    <!-- The reader for what a Therion compilation printed while it ran: the loop-error table it
+         reports, the versions it ran at and whether it finished. Same repository, same submodule
+         pin and the same MPL-2.0 terms as the module above, so the licence argument is unchanged.
+         It is a different module, and it costs more than the first one did: it brings two further
+         projects with it (Therion.Core and Therion.Processing.Abstractions), and it shares one flat
+         namespace with code that starts an external process. Checked before taking it — none of the
+         three declares a NuGet package reference, so nothing new enters the package audit; the
+         process-starting types are named individually in the architecture test that asserts nothing
+         here reaches them, because a namespace-wide exclusion would have banned the reader too. -->
+    <ProjectReference Include="..\..\external\ThIDE\src\Therion.Build\Therion.Build.csproj" />
   </ItemGroup>
 
   <ItemGroup>

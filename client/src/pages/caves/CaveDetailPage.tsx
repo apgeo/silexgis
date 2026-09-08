@@ -69,6 +69,7 @@ import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
 import SurveyModelSection from './SurveyModelSection.tsx';
 import SurveySourceSection from './SurveySourceSection.tsx';
+import SurveyQualityPanel from './SurveyQualityPanel.tsx';
 
 export default function CaveDetailPage() {
   const { t } = useTranslation();
@@ -392,6 +393,11 @@ export default function CaveDetailPage() {
       {/* Beside the compiled models rather than inside them: what was compiled and what it was
           compiled from are two different things, and only one of them can be re-compiled. */}
       {id && <SurveySourceSection caveId={id} canEdit={canEdit} />}
+
+      {/* Directly under the archive it is read from: these are the compiler's own figures about an
+          archived log, not something this application worked out from the stored survey. Silent
+          for a cave nobody has archived a log for. */}
+      {id && <SurveyQualityPanel caveId={id} />}
 
       {id && <CenterlineSection caveId={id} canEdit={canEdit} />}
 

@@ -144,6 +144,7 @@ export const queryKeys = {
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
   surveyModel: (id: string) => ['survey-model', id] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
+  surveyCompilations: (caveId: string) => ['survey-compilations', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
@@ -910,6 +911,9 @@ const SURVEY_MODEL_URL_REFRESH_MS = 8 * 60_000;
 /** How often a model whose processing has not finished yet is asked about. */
 const SURVEY_MODEL_CONVERSION_POLL_MS = 2000;
 
+/** How often a queued log reading is re-asked about, until it is no longer queued. */
+const SURVEY_COMPILATION_POLL_MS = 2000;
+
 /**
  * A model with work still outstanding on it. Both kinds of upload have some: a wall mesh is
  * converted into what the 3D scene draws, and a line plot is read into its stations and shots.
@@ -1153,8 +1157,13 @@ export function useSurveySources(caveId: string | undefined) {
 
 function useInvalidateSurveySources() {
   const queryClient = useQueryClient();
-  return (caveId: string) =>
+  return (caveId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.surveySources(caveId) });
+    // Archiving a compilation log queues a reading of it, and removing one takes the figures read
+    // from it away again, so the closure panel is stale the moment this list changes — and it is a
+    // different query under a different key, which none of the archive's own invalidations reach.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.surveyCompilations(caveId) });
+  };
 }
 
 export function useUploadSurveySource() {
@@ -1196,6 +1205,48 @@ export function useDeleteSurveySource() {
       }
     },
     onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+export type SurveyCompilationInfo = components['schemas']['SurveyCompilationDto'];
+export type SurveyLoopError = components['schemas']['SurveyLoopErrorDto'];
+
+/**
+ * A compilation log is read in the background, so a freshly archived one arrives here queued and
+ * becomes figures a moment later with nothing the browser did to mark the change. This is the only
+ * query watching for it; without the wait a reader who archives a log sees "queued" until they
+ * reload and wonder why the reload was needed.
+ *
+ * A reading that could not be done counts as settled: the reader has been told, and asking every
+ * two seconds forever on the chance somebody re-queues it is a page that never goes quiet.
+ */
+export function surveyCompilationUnsettled(status: SurveyCompilationInfo['status']): boolean {
+  return status === 'pending';
+}
+
+/**
+ * How well a cave's surveys closed, as the compiler that compiled them reported it.
+ *
+ * Nothing here is re-derived from the stored survey: these are the numbers printed in the log the
+ * surveyor archived. A cave whose exact location is withheld from this reader answers with an empty
+ * list rather than a refusal — the same answer as a cave nobody has archived a log for, and it
+ * needs no special casing.
+ */
+export function useSurveyCompilations(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.surveyCompilations(caveId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caves/{caveId}/survey-compilations', {
+          params: { path: { caveId: caveId! } },
+        }),
+      ),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((c) => surveyCompilationUnsettled(c.status))
+        ? SURVEY_COMPILATION_POLL_MS
+        : false,
   });
 }
 

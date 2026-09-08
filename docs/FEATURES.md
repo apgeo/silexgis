@@ -98,6 +98,14 @@ feature and walkthroughs of whole jobs.
   offered pre-filled — and the installation converts it into a model the 3D view draws in place,
   under the terrain, beside that cave's centerlines. It is loaded only for the cave you select,
   and switching it off in the layer list genuinely lets go of it.
+- **Survey closure** — archive the compilation log beside the model and the cave page reports how
+  well the survey closes, in the compiler's own words: every loop it found, with both its relative
+  error and its absolute error in metres, its length, its stations and its per-axis components. The
+  two measures are always shown together and the table says which one it is ordered by, because
+  they disagree about which loop is worst. Each set of figures records which file and which revision
+  of it was read, and when; a corrected log read again replaces them rather than mixing two runs.
+  The figures follow the survey they belong to, so a reader who may not be told a cave's exact
+  position is not shown them.
 - **3D view** — the configured base layers draped on a globe, on a page that is downloaded
   only when it is opened. Needs WebGL 2; a browser without it gets an explanation rather
   than a dead canvas. No vendor terrain, imagery or geocoding service is contacted and the

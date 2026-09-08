@@ -121,6 +121,17 @@ public class DependencyRuleTests
         // This reads compiled IL, so it catches use rather than reference — the project
         // reference itself is reviewed by eye. Never write this as an exclusion of the library
         // from the two rules above: an exclusion would hide exactly the violation worth catching.
+        //
+        // The two modules have to be named differently, and that difference is the whole reason
+        // this list is worth reading carefully. In the first, the parsers and the process-starting
+        // code sit in separate namespaces, so a namespace is enough. In the second — the one
+        // holding the reader for what a compilation printed — everything shares a single flat
+        // namespace: the reader, a type that locates an executable on the host and runs it, a type
+        // that compiles by starting the compiler, and a type that hands a path to the desktop shell
+        // to open. Denying that namespace would deny the reader this application actually uses, so
+        // the dangerous types are denied one by one. The cost of that granularity is that a type
+        // added upstream is not covered until somebody adds it here; the alternative was covering
+        // nothing.
         foreach (var assembly in new[]
                  {
                      typeof(Visibility).Assembly,
@@ -132,7 +143,18 @@ public class DependencyRuleTests
                 .ShouldNot()
                 .HaveDependencyOnAny(
                     "Therion.Blender.Execution",
-                    "Therion.Blender.Sources")
+                    "Therion.Blender.Sources",
+                    "Therion.Build.TherionCompiler",
+                    "Therion.Build.ExternalToolLocator",
+                    "Therion.Build.ShellOpener",
+                    "Therion.Build.IShellOpener",
+                    "Therion.Build.CompileGate",
+                    "Therion.Build.ICompileGate",
+                    "Therion.Build.JsonOutputArtifactCache",
+                    "Therion.Build.OutputArtifactCollector",
+                    "Therion.Processing.Abstractions.ITherionCompiler",
+                    "Therion.Processing.Abstractions.IExternalToolLocator",
+                    "Therion.Processing.Abstractions.IExternalToolPathOverrides")
                 .GetResult();
 
             result.IsSuccessful.ShouldBeTrue(

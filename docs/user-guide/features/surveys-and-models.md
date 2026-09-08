@@ -122,14 +122,39 @@ The material the compiled surveys were made from. **Archive a source**, up to 10
 
 Each carries a size, a revision and a description, and can be downloaded.
 
-> **Nothing here is read or interpreted.** They are kept so the survey can be compiled again
-> when the tools that produced the export have moved on. That is the whole purpose: in ten
-> years the `.lox` may be unreadable and the `.th` will not be.
+> **Only one kind is read, and only for what it says about the compilation.** A compilation
+> log is opened for the loop errors it reports (see *Survey closure* below); everything else is
+> kept as bytes and never interpreted. That is the whole purpose: in ten years the `.lox` may be
+> unreadable and the `.th` will not be. Nothing here is ever written back to.
 
 The file's contents are checked against what its name claims — a `.svx` that is not a `.svx`
 is refused rather than archived under a lie.
 
 Removing a source from the cave's archive keeps the stored file itself.
+
+### Survey closure
+
+When a compilation log is archived, the installation reads what the compiler printed about that
+run and shows it on the cave page — under the compiler's own headings, so a figure here and a
+figure in your own log are visibly the same number.
+
+For each closed loop the compiler reported: its **relative error** (`REL-ERR`, a ratio) and its
+**absolute error** (`ABS-ERR`, a distance in metres), the loop's length, how many stations it
+runs through, the per-axis components, and the station chain itself. **Both error measures are
+shown together and neither is presented as the other** — they disagree about which loop is
+worst, and the table always says which of them its current order uses.
+
+Beside the table: the compiler and its version, the compiler's release date, when this
+installation read the log, and which revision of the archived file was read. A corrected log
+uploaded as a new revision of the same file is read again, and the previous run's figures are
+cleared rather than left standing under the new revision.
+
+The wording distinguishes cases that look alike and are not: a log nobody could open, a
+compilation that stopped part-way, a survey with no closed loops, and a log that printed no loop
+table at all.
+
+Closure figures follow the survey record they belong to: a reader who may not be told a cave's
+exact position is not shown them, on the map, in the panel or in the cave's history.
 
 ---
 
