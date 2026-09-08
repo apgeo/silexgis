@@ -169,6 +169,28 @@
       "notPublished": "That build has no surface to draw. Its tiles were either never read back and found whole, or they are no longer where terrain is served from.",
       "active": "That build is the terrain the scene is drawing. Choose other terrain, or stop drawing this one, before removing it.",
       "running": "That build has not finished. Its files are being written right now, so it can be removed once it has stopped, whichever way it stops."
+    },
+    "derivatives": {
+      "title": "Ground pictures",
+      "hint": "Shaded relief, steepness and facing, computed from an elevation build.",
+      "stale": "Out of date",
+      "staleHint": "Computed from elevation this installation no longer serves. It is still drawn, but it will not agree with the heights beneath it.",
+      "totalSize": "{{size}} on disk",
+      "statuses": {
+        "queued": "Queued",
+        "computing": "Computing",
+        "ready": "Ready",
+        "failed": "Failed"
+      },
+      "kinds": {
+        "hillshade": "Shaded relief",
+        "slope": "Steepness",
+        "aspect": "Facing",
+        "ruggednessIndex": "Ruggedness",
+        "positionIndex": "Topographic position",
+        "roughness": "Roughness",
+        "colourRelief": "Coloured relief"
+      }
     }
   },
   "dashboard": {
@@ -244,7 +266,18 @@
     "newPassword": "New password",
     "confirmPassword": "Repeat password",
     "passwordsDiffer": "The two passwords do not match.",
-    "passwordTooShort": "Use at least 10 characters."
+    "passwordTooShort": "Use at least 10 characters.",
+    "testLogins": {
+      "title": "Test installation",
+      "hint": "Anyone may try this installation with the demo accounts below. The data here is public and is reset regularly.",
+      "about": "What this account may do",
+      "roleAdministrator": "Administrator",
+      "roleEditor": "Editor",
+      "roleViewer": "Viewer",
+      "permsAdministrator": "Full control of the installation: sees and edits everything, including exact locations of protected caves, user accounts, permission groups and settings.",
+      "permsEditor": "Creates and edits content — caves, surface features, trip logs, documents, saved views — but cannot manage users or permissions, and exact locations of protected caves stay hidden.",
+      "permsViewer": "The signed-in baseline: browses what is shared with all accounts and keeps saved views and checklists of its own, without editing shared content or seeing protected locations."
+    }
   },
   "common": {
     "loading": "Loading…",
@@ -342,6 +375,7 @@
     "features": "Features",
     "locationWithheld": "Location withheld — exact geometry is protected.",
     "closestApproach": "Closest approach",
+    "overburdenHighlight": "Overburden reading",
     "georeferencedMaps": "Georeferenced maps"
   },
   "dialog": {
@@ -1489,6 +1523,74 @@
       "noAltitudes": "This line work carries no altitudes — a plan drawing of a cave is not a flat cave. Every vertical figure above is therefore left blank rather than shown as nought: nothing here says how far the cave descends, which is a statement about the drawing and not about the cave.",
       "measuredFromModel": "Measured from the survey \"{{name}}\". A cave may hold several uploaded surveys, and figures taken from two different ones are not the same measurement.",
       "basisSkeletonHeuristic": "Approximated from the stored centerline, because this cave has no compiled survey carrying per-shot flags. The shape of the line work stands in for the surveyor's flags: it keeps most of the surveyed length but drops loose shots at a station, and with them the last few metres of every dead end. These figures should not be set against a cave measured from its survey as though the two were the same measurement."
+    },
+    "topology": {
+      "title": "Passage network",
+      "sizeTitle": "The network as surveyed",
+      "nodes": "Stations in the network",
+      "nodesGloss": "Survey stations that at least one passage leg reaches.",
+      "edges": "Passage legs",
+      "edgesGloss": "Pairs of stations joined by passage. A passage surveyed twice counts once.",
+      "components": "Separate pieces",
+      "componentsGloss": "Parts of the survey that do not join up to one another underground.",
+      "junctions": "Junctions",
+      "junctionsGloss": "Places where three or more passages meet.",
+      "extremities": "Dead ends",
+      "extremitiesGloss": "Places where the survey stops — a choke, a sump, or simply where the surveyors turned back.",
+      "cyclomatic": "Independent loops",
+      "cyclomaticGloss": "How many genuinely different ways round the network there are. Nought means every place is reached one way only.",
+      "reducedTitle": "The network with its straight runs contracted",
+      "reducedNodes": "Junctions and dead ends",
+      "reducedNodesGloss": "What is left once every run of passage between two of them is treated as a single connection.",
+      "reducedEdges": "Connections between them",
+      "reducedEdgesGloss": "One per run of passage. The three ratios below are counted over these rather than over the raw legs.",
+      "reducedComponents": "Separate pieces, contracted",
+      "reducedComponentsGloss": "Parts the contracted network falls into.",
+      "alpha": "Loopiness (alpha)",
+      "alphaGloss": "Loops present against the most a network of this size could hold. Nought is a cave with no loops at all.",
+      "beta": "Connections per junction (beta)",
+      "betaGloss": "Below one is a branching cave; above one means it closes back on itself.",
+      "gamma": "Connectedness (gamma)",
+      "gammaGloss": "Connections present against the most a network of this size could hold.",
+      "degreeTitle": "How passages meet",
+      "meanDegree": "Passages at an average junction or dead end",
+      "meanDegreeGloss": "Below two is a branching cave; well above two is a maze.",
+      "degreeSpread": "Spread of that figure",
+      "degreeSpreadGloss": "How much the number of passages meeting varies from place to place.",
+      "degreeVariation": "That spread against the average",
+      "degreeVariationGloss": "The same spread as a proportion, so caves of different sizes can be set beside one another.",
+      "degreeCorrelation": "Do junctions join junctions?",
+      "degreeCorrelationGloss": "Positive means busy places connect to busy places; negative means junctions mostly hang dead ends off themselves.",
+      "branchesTitle": "Runs of passage",
+      "branches": "Branches",
+      "branchesGloss": "Runs of passage from one junction or dead end to the next.",
+      "loopingBranches": "Branches returning to where they started",
+      "loopingBranchesGloss": "These have no straight line to be measured against, so they take no part in the wandering figure below.",
+      "meanBranchLength": "Average branch length",
+      "meanBranchLengthGloss": "How far it typically is from one junction to the next.",
+      "shortestBranch": "Shortest branch",
+      "shortestBranchGloss": "The shortest run of passage between two junctions or dead ends.",
+      "longestBranch": "Longest branch",
+      "longestBranchGloss": "The longest such run.",
+      "branchLengthVariation": "Spread of branch lengths",
+      "branchLengthVariationGloss": "Against their average. A high figure means a few long passages among many short ones.",
+      "shapeTitle": "How the network runs",
+      "lengthEntropy": "Evenness of branch lengths",
+      "lengthEntropyGloss": "Nought to one. High means branches of all lengths in equal measure; low means they are mostly of one length.",
+      "orientationEntropy": "Evenness of passage bearings",
+      "orientationEntropyGloss": "Nought to one, weighted by passage length. Low means the cave follows one or two directions, commonly the joints in the rock; high means it runs every way.",
+      "tortuosity": "Wandering",
+      "tortuosityGloss": "How long a run of passage is against the straight line between its ends. One is dead straight.",
+      "averagePath": "Branches between two places",
+      "averagePathGloss": "How many runs of passage you pass along, on average, to get from one junction to another.",
+      "centralPointDominance": "Reliance on one junction",
+      "centralPointDominanceGloss": "Nought to one. High means most routes through the cave pass through a single place.",
+      "clustering": "Passages closing back on each other",
+      "clusteringGloss": "How often two passages leaving the same junction are themselves joined.",
+      "completenessWhole": "Every leg in the survey file joined the station network, and no two stations shared a position. The figures above cover the whole of it.",
+      "completenessPartial": "{{dropped}} leg(s) in the survey file could not be attached to the station network, and {{merged}} station(s) shared a position with another and became a single node. The figures above were computed over what remained.",
+      "completenessUnknown": "It is not recorded what the reading of this survey may have left out, so the figures above may cover less than the file contains.",
+      "measuredFromModel": "Measured from the survey “{{name}}”. A cave may hold several uploaded surveys, and figures taken from two different ones are not the same measurement."
     }
   },
   "permissions": {
@@ -3096,7 +3198,11 @@
       "tripDate": "Trip date",
       "hadIncident": "Had an incident",
       "state": "State",
-      "language": "Language"
+      "language": "Language",
+      "region": "Region",
+      "rockType": "Rock type",
+      "surveyedLength": "Surveyed length (m)",
+      "depth": "Depth (m)"
     },
     "problems": {
       "noWorlds": "Choose at least one kind of object to search.",
@@ -3387,7 +3493,7 @@
   },
   "surveySources": {
     "title": "Survey sources",
-    "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on; nothing here is read or interpreted.",
+    "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on. A compilation log is opened, for the closure figures it reports; nothing else here is read or interpreted.",
     "upload": "Archive a source",
     "uploaded": "Source archived",
     "uploadFailed": "The file could not be archived",
@@ -3414,6 +3520,58 @@
       "notFound": "This archived source no longer exists.",
       "caveNotFound": "This cave no longer exists.",
       "forbidden": "You are not allowed to change this cave's survey archive."
+    }
+  },
+  "surveyQuality": {
+    "title": "Survey closure",
+    "explanation": "How well each survey closed, exactly as the compiler that compiled it reported. Nothing here is worked out again: the columns are the compiler's own — REL-ERR, ABS-ERR, TOTAL-L, STS and the three axis errors — so a figure here and a figure in your own log are the same number.",
+    "statuses": {
+      "pending": "Queued for reading",
+      "unreadable": "Could not be read"
+    },
+    "outcomes": {
+      "succeeded": "Compiled",
+      "succeededWithWarnings": "Compiled with warnings",
+      "failed": "Compilation failed"
+    },
+    "unreadable": "This log could not be read, so nothing is known about the compilation it recorded. That is not a statement about the survey.",
+    "compilationFailed": "This compilation did not finish. What is below is what the run had got as far as reporting — not a survey with no loops.",
+    "stoppedAt": "It stopped at: {{stage}}.",
+    "compiler": "Compiler",
+    "compilerValue": "therion {{version}}",
+    "compilerReleased": "Compiler released",
+    "readAt": "Log read here",
+    "revision": "Archive revision",
+    "loopCount": "Loops the compiler found",
+    "averageLoopError": "Average loop error",
+    "medianLoopError": "Median loop error (from the table)",
+    "medianAbsoluteError": "Median closing distance (from the table)",
+    "totalLength": "Total length",
+    "totalLengthAdjusted": "Total length, adjusted",
+    "adjustment": "Adjustment moved",
+    "compilationSeconds": "Compilation time (s)",
+    "noLoops": "This run reported no loop errors: there are no closed loops in this survey to check.",
+    "noLoopTable": "This log printed no loop-error table, so how well the survey closes is not known from it. That is not the same as a survey with no closed loops.",
+    "loopsWithoutTable": "This run reported {{loops}} loops but printed no loop-error table, so how far each of them closed is not known from this log.",
+    "orderedBy": {
+      "relErr": "Ordered by REL-ERR, the ratio.",
+      "absErr": "Ordered by ABS-ERR, the closing distance.",
+      "totalLength": "Ordered by TOTAL-L, the loop's length.",
+      "table": "In the compiler's own order."
+    },
+    "orderingExplanation": "A short loop can be the worse ratio and the smaller distance at the same time, so ordering by REL-ERR and ordering by ABS-ERR are not the same list. Sort by either heading.",
+    "columns": {
+      "ordinal": "Loop",
+      "relErr": "REL-ERR",
+      "relErrHint": "Ratio: the closing error as a % of the loop's length",
+      "absErr": "ABS-ERR",
+      "absErrHint": "Distance: how far the loop failed to close, in metres",
+      "totalLength": "TOTAL-L (m)",
+      "stationCount": "STS",
+      "errorX": "X-ERROR",
+      "errorY": "Y-ERROR",
+      "errorZ": "Z-ERROR",
+      "stations": "STATIONS"
     }
   },
   "karstArea": {
@@ -3900,6 +4058,43 @@
     "structureRose": "Fracture traces ({{count}} within {{radius}} m)",
     "areaStructureRose": "Fracture traces ({{count}} in this area)",
     "dolineRose": "Depression long axes ({{count}} outlines)"
+  },
+  "overburden": {
+    "title": "Rock overhead",
+    "loading": "Measuring the rock overhead…",
+    "nothingMeasured": "This cave has no line work to measure along, so there is nowhere to ask how much rock is overhead.",
+    "noAltitudesTitle": "This cave's line work carries no altitudes.",
+    "noAltitudesReason": "How much rock lies overhead is the ground surface less the altitude of the passage, and a survey recorded as a plan has no altitude for it to be measured down to. A profile of noughts would draw the whole cave lying on the surface.",
+    "noTerrainBuilt": "No elevation data has been prepared on this installation, so the height of the ground over this cave is not known anywhere. This is not a statement about the cave.",
+    "noCoverageHere": "Elevation data has been prepared here, but none of it reaches this cave. The ground over it is unknown rather than at sea level.",
+    "axisDistance": "Distance along the passage (m)",
+    "axisThickness": "Rock overhead (m)",
+    "thinnest": "Thinnest",
+    "thickest": "Thickest",
+    "mean": "Mean",
+    "passageLength": "Passage measured along",
+    "coverage": "Readings with a ground height",
+    "coverageValue": "{{covered}} of {{total}}",
+    "unitMetres": "{{value}} m",
+    "notMeasured": "—",
+    "figuresScope": "The figures are taken over the readings that got a ground height and over no others, so a cave the elevation data covers in part is described over that part alone. A negative thickness is reported as measured: it means the elevation model puts the surface below the passage, and the two disagree.",
+    "gap": {
+      "outsideCoverage": "The curve breaks where no prepared elevation data reaches the passage. Nobody knows the height of the ground there, which is why the line stops rather than crossing the gap.",
+      "noData": "The curve breaks where the elevation data reaches the passage but records nothing — a hole in the model, not a passage at the surface.",
+      "mixed": "The curve breaks in two kinds of place: where no prepared elevation data reaches the passage, and where data reaches it but records nothing. Neither is a passage at the surface."
+    },
+    "distanceNote": "The horizontal axis is how much passage lies before each reading, in the order the line work records it. A survey is a network rather than one walk through the cave, so it is a length and not a route anybody could follow.",
+    "pressToLocate": "Press a point on the curve to mark where that reading was taken, on the map and in the 3D scene.",
+    "readout": "{{distance}} along · {{thickness}} · piece {{segment}} of the line work",
+    "readoutWhere": "{{distance}} along the passage",
+    "readoutThickness": "{{value}} of rock overhead",
+    "readoutSegment": "Piece {{index}} of the line work",
+    "readoutAbsent": {
+      "outsideCoverage": "No elevation data reaches here",
+      "noData": "The elevation data records nothing here"
+    },
+    "markLabel": "{{value}} of rock overhead",
+    "markLabelAbsent": "Rock overhead not known here"
   },
   "crossSection": {
     "title": "Passage size",

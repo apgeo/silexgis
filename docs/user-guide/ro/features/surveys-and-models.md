@@ -125,14 +125,41 @@ Materialul din care au fost făcute topografiile compilate. **Arhivează o surs�
 
 Fiecare poartă o mărime, o revizie și o descriere, și poate fi descărcată.
 
-> **Nimic de aici nu este citit sau interpretat.** Sunt păstrate ca topografia să poată fi
-> compilată din nou când uneltele care au produs exportul vor fi mers mai departe. Acesta este
-> tot rostul: peste zece ani `.lox`-ul poate fi ilizibil, iar `.th`-ul nu va fi.
+> **Un singur fel este citit, și doar pentru ce spune despre compilare.** Un jurnal de
+> compilare este deschis pentru erorile de buclă pe care le raportează (vezi *Închiderea
+> topografiei*, mai jos); restul este păstrat ca octeți și nu este interpretat niciodată. Acesta
+> este tot rostul: peste zece ani `.lox`-ul poate fi ilizibil, iar `.th`-ul nu va fi. Nimic de
+> aici nu este vreodată rescris.
 
 Conținutul fișierului este verificat față de ce pretinde numele lui — un `.svx` care nu este
 `.svx` este refuzat, nu arhivat sub o minciună.
 
 Scoaterea unei surse din arhiva peșterii păstrează fișierul stocat.
+
+### Închiderea topografiei
+
+Când un jurnal de compilare este arhivat, instalarea citește ce a tipărit compilatorul despre
+acea rulare și arată rezultatul pe pagina peșterii — sub titlurile compilatorului însuși, ca o
+cifră de aici și una din jurnalul tău să fie vizibil același număr.
+
+Pentru fiecare buclă închisă raportată: **eroarea relativă** (`REL-ERR`, un raport) și **eroarea
+absolută** (`ABS-ERR`, o distanță în metri), lungimea buclei, câte stații străbate, componentele
+pe axe și lanțul de stații. **Ambele măsuri sunt arătate împreună și niciuna nu este prezentată
+drept cealaltă** — ele nu sunt de acord care buclă este cea mai proastă, iar tabelul spune
+întotdeauna după care dintre ele este ordonat în acel moment.
+
+Alături de tabel: compilatorul și versiunea lui, data lui de lansare, când a citit instalarea
+jurnalul și ce revizie a fișierului arhivat a fost citită. Un jurnal corectat, încărcat ca o
+revizie nouă a aceluiași fișier, este citit din nou, iar cifrele rulării anterioare sunt șterse,
+nu lăsate sub numărul noii revizii.
+
+Formulările deosebesc cazuri care seamănă și nu sunt la fel: un jurnal care nu a putut fi
+deschis, o compilare oprită la jumătate, o topografie fără bucle închise și un jurnal care nu a
+tipărit deloc un tabel de bucle.
+
+Cifrele de închidere urmează înregistrarea topografică de care aparțin: un cititor căruia nu i se
+poate spune poziția exactă a unei peșteri nu le vede — nici pe hartă, nici în panou, nici în
+istoricul peșterii.
 
 ---
 

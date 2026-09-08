@@ -61,6 +61,7 @@ not a protection.
 | **The calendar** | A row **never names a cave**, nor a count of caves left out |
 | **Change history** | A protected value reads *"Value hidden (protected location)"* |
 | **Closest approach** | Refused unless you may place **both** caves |
+| **Rock overhead (overburden)** | Refused **whole** unless you may place the cave — not a blank curve, nothing at all. The curve is the passage's position drawn against the ground above it. It also needs permission to read elevation data |
 | **Import duplicate checking** | Only objects whose exact position you may see are measured against — a protected cave you cannot locate is not silently used as a match |
 | **A `.stl` origin** | The pre-filled origin says it is deliberately approximate and asks for the true point |
 | **QR landing pages** | No cave, no place, no position — for anybody, account or not |

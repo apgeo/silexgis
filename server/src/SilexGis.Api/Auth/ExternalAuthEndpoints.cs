@@ -36,7 +36,7 @@ public static class ExternalAuthEndpoints
         return api;
     }
 
-    private static Ok<AuthConfigDto> Config(IOptions<AuthOptions> options)
+    private static Ok<AuthConfigDto> Config(IOptions<AuthOptions> options, IOptions<TestLoginOptions> testLogins)
     {
         var value = options.Value;
         var providers = value.ExternalProviders
@@ -48,7 +48,17 @@ public static class ExternalAuthEndpoints
         // ExternalOnly hides the password form only when a provider actually exists, so an
         // installation can never lock itself out by flipping the flag with no provider set.
         var externalOnly = value.ExternalOnly && providers.Length > 0;
-        return TypedResults.Ok(new AuthConfigDto(value.OpenRegistration, externalOnly, providers));
+
+        // A test installation announces its demo accounts to whoever reaches the sign-in page.
+        // The disclosure is deliberate — the switch guarding it defaults off, and enabling it
+        // hands the administrator login to the whole internet, which is what a throwaway test
+        // instance wants and nothing else does.
+        var demo = testLogins.Value.Enabled
+            ? TestLoginSeeder.Accounts
+                .Select(a => new TestLoginInfo(a.Email, testLogins.Value.Password, a.Kind))
+                .ToArray()
+            : null;
+        return TypedResults.Ok(new AuthConfigDto(value.OpenRegistration, externalOnly, providers, demo));
     }
 
     private static async Task<IResult> StartAsync(
@@ -231,9 +241,18 @@ public static class ExternalAuthEndpoints
     }
 }
 
-public sealed record AuthConfigDto(bool OpenRegistration, bool ExternalOnly, IReadOnlyList<ExternalProviderInfo> Providers);
+public sealed record AuthConfigDto(
+    bool OpenRegistration,
+    bool ExternalOnly,
+    IReadOnlyList<ExternalProviderInfo> Providers,
+    IReadOnlyList<TestLoginInfo>? TestLogins = null);
 
 public sealed record ExternalProviderInfo(string Name, string DisplayName);
+
+/// <summary>A demo account a test installation shows on its sign-in page — credentials included,
+/// because handing them out is the point. Role is a stable lowercase kind
+/// (administrator/editor/viewer) the client translates and explains.</summary>
+public sealed record TestLoginInfo(string Email, string Password, string Role);
 
 public sealed record ExternalLoginsDto(IReadOnlyList<ExternalLoginDto> Logins, bool HasPassword);
 

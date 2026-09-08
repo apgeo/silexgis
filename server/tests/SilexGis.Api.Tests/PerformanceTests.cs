@@ -24,7 +24,7 @@ namespace SilexGis.Api.Tests;
 /// reason the map scales, and those are the durable contract.
 /// </summary>
 [Collection(PostgresCollection.Name)]
-public sealed class PerformanceTests : IDisposable
+public sealed class PerformanceTests : IAsyncLifetime, IDisposable
 {
     private const int CaveCount = 2000;
     private const int EntrancesPerCave = 50; // 100k entrance features
@@ -59,6 +59,9 @@ public sealed class PerformanceTests : IDisposable
 
     private readonly SilexGisApiFactory factory;
     private readonly ITestOutputHelper output;
+
+    /// <summary>Set once the bulk load has run, so the cleanup names only what this fixture wrote.</summary>
+    private Guid? seededOwnerId;
 
     public PerformanceTests(PostgresFixture postgres, ITestOutputHelper output)
     {
@@ -370,6 +373,7 @@ public sealed class PerformanceTests : IDisposable
     /// </summary>
     private async Task SeedSyntheticAsync(Guid ownerId)
     {
+        seededOwnerId = ownerId;
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
@@ -727,6 +731,93 @@ public sealed class PerformanceTests : IDisposable
         }
 
         return Math.Round(stopwatch.Elapsed.TotalMilliseconds / 10, 2);
+    }
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    /// <summary>
+    /// Removes the bulk-seeded rows again.
+    ///
+    /// <para>
+    /// This class shares one database with nearly every other class in the assembly, and they run
+    /// one after another rather than side by side, so whatever it leaves behind is queried by
+    /// every class ordered after it for the rest of the run. A hundred thousand extra entrances
+    /// is enough to push ordinary reads past the command timeout: it was measured producing
+    /// seventeen failures on surfaces nothing had touched, all of them timeouts wearing the
+    /// costume of a server error, and each one passing on its own the moment it was re-run
+    /// without this fixture present. Seeding at this volume is only affordable if it is undone.
+    /// </para>
+    /// <para>
+    /// Deleted oldest-dependency-last and scoped to the owner this fixture created, so it can
+    /// name nothing it did not insert. The count is checked afterwards rather than assumed,
+    /// because a cleanup that silently removes less than it wrote reintroduces the same
+    /// failure more slowly, and the next reader would have no reason to suspect it.
+    /// </para>
+    /// </summary>
+    public async Task DisposeAsync()
+    {
+        if (seededOwnerId is not { } owner) return;
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
+
+        // survey_models before files (it points at one), files before the versions and documents
+        // that own them, and every feature-shaped table before features itself.
+        await db.Database.ExecuteSqlAsync($"""
+            DELETE FROM survey_models
+            WHERE cave_feature_id IN (SELECT id FROM features WHERE owner_user_id = {owner});
+            """);
+        await db.Database.ExecuteSqlAsync($"""
+            DELETE FROM files WHERE document_version_id IN (
+                SELECT v.id FROM document_versions v
+                JOIN documents d ON d.id = v.document_id
+                WHERE d.owner_user_id = {owner});
+            """);
+        await db.Database.ExecuteSqlAsync($"""
+            DELETE FROM document_versions
+            WHERE document_id IN (SELECT id FROM documents WHERE owner_user_id = {owner});
+            """);
+        await db.Database.ExecuteSqlAsync($"DELETE FROM documents WHERE owner_user_id = {owner};");
+        await db.Database.ExecuteSqlAsync($"""
+            DELETE FROM centerlines
+            WHERE id IN (SELECT id FROM features WHERE owner_user_id = {owner});
+            """);
+        await db.Database.ExecuteSqlAsync($"""
+            DELETE FROM feature_ancestors
+            WHERE feature_id IN (SELECT id FROM features WHERE owner_user_id = {owner})
+               OR ancestor_id IN (SELECT id FROM features WHERE owner_user_id = {owner});
+            """);
+        await db.Database.ExecuteSqlAsync($"""
+            DELETE FROM feature_hierarchy_edges
+            WHERE parent_id IN (SELECT id FROM features WHERE owner_user_id = {owner})
+               OR child_id IN (SELECT id FROM features WHERE owner_user_id = {owner});
+            """);
+        await db.Database.ExecuteSqlAsync($"""
+            DELETE FROM cave_entrances
+            WHERE id IN (SELECT id FROM features WHERE owner_user_id = {owner});
+            """);
+        await db.Database.ExecuteSqlAsync($"""
+            DELETE FROM caves WHERE id IN (SELECT id FROM features WHERE owner_user_id = {owner});
+            """);
+        await db.Database.ExecuteSqlAsync($"DELETE FROM features WHERE owner_user_id = {owner};");
+
+        // The planner is left holding statistics describing a table this fixture has just emptied
+        // of its own rows; the classes that follow deserve figures that match what is there.
+        await db.Database.ExecuteSqlRawAsync(
+            "ANALYZE features; ANALYZE caves; ANALYZE cave_entrances; "
+            + "ANALYZE feature_hierarchy_edges; ANALYZE feature_ancestors; "
+            + "ANALYZE survey_models; ANALYZE centerlines;");
+
+        var left = await db.Database
+            .SqlQuery<long>($"SELECT count(*) AS \"Value\" FROM features WHERE owner_user_id = {owner}")
+            .SingleAsync();
+
+        left.ShouldBe(0,
+            $"{left} of this fixture's feature rows survived its own cleanup. Everything ordered "
+            + "after it in this collection now queries a table carrying them, which is how a run "
+            + "starts failing on surfaces nobody touched, with timeouts that read as server "
+            + "errors and pass whenever the class is run on its own.");
     }
 
     public void Dispose() => factory.Dispose();

@@ -169,6 +169,28 @@
       "notPublished": "Generarea nu are nicio suprafață de desenat. Fie dalele nu au fost niciodată recitite și găsite întregi, fie nu mai sunt acolo de unde se servește relieful.",
       "active": "Generarea aceasta este relieful pe care îl desenează scena. Alege alt relief sau oprește desenarea acestuia înainte de a-l șterge.",
       "running": "Generarea nu s-a încheiat. Fișierele ei se scriu chiar acum, așa că poate fi ștearsă după ce se oprește, oricum s-ar opri."
+    },
+    "derivatives": {
+      "title": "Imagini ale terenului",
+      "hint": "Relief umbrit, pantă și orientare, calculate dintr-o construcție de altitudini.",
+      "stale": "Depășită",
+      "staleHint": "Calculată din altitudini pe care instalarea nu le mai servește. Este în continuare desenată, dar nu se va potrivi cu înălțimile de dedesubt.",
+      "totalSize": "{{size}} pe disc",
+      "statuses": {
+        "queued": "La coadă",
+        "computing": "În calcul",
+        "ready": "Gata",
+        "failed": "Eșuată"
+      },
+      "kinds": {
+        "hillshade": "Relief umbrit",
+        "slope": "Pantă",
+        "aspect": "Orientare",
+        "ruggednessIndex": "Asperitate",
+        "positionIndex": "Poziție topografică",
+        "roughness": "Rugozitate",
+        "colourRelief": "Relief colorat"
+      }
     }
   },
   "dashboard": {
@@ -244,7 +266,18 @@
     "newPassword": "Parolă nouă",
     "confirmPassword": "Repetați parola",
     "passwordsDiffer": "Cele două parole nu coincid.",
-    "passwordTooShort": "Folosiți cel puțin 10 caractere."
+    "passwordTooShort": "Folosiți cel puțin 10 caractere.",
+    "testLogins": {
+      "title": "Instalație de test",
+      "hint": "Oricine poate încerca această instalație cu conturile demonstrative de mai jos. Datele de aici sunt publice și sunt resetate periodic.",
+      "about": "Ce poate face acest cont",
+      "roleAdministrator": "Administrator",
+      "roleEditor": "Editor",
+      "roleViewer": "Vizualizator",
+      "permsAdministrator": "Control deplin asupra instalației: vede și editează totul, inclusiv localizarea exactă a peșterilor protejate, conturile de utilizator, grupurile de permisiuni și setările.",
+      "permsEditor": "Creează și editează conținut — peșteri, elemente de suprafață, jurnale de tură, documente, vederi salvate — dar nu poate administra utilizatori sau permisiuni, iar localizarea exactă a peșterilor protejate rămâne ascunsă.",
+      "permsViewer": "Nivelul de bază al unui cont autentificat: răsfoiește ce este partajat cu toate conturile și își păstrează propriile vederi salvate și liste de verificare, fără a edita conținut comun și fără a vedea localizări protejate."
+    }
   },
   "common": {
     "loading": "Se încarcă…",
@@ -342,6 +375,7 @@
     "features": "Elemente",
     "locationWithheld": "Localizare nedivulgată — geometria exactă este protejată.",
     "closestApproach": "Cea mai mică distanță",
+    "overburdenHighlight": "Citirea rocii de deasupra",
     "georeferencedMaps": "Hărți georeferențiate"
   },
   "dialog": {
@@ -1489,6 +1523,74 @@
       "noAltitudes": "Aceste trasee nu au altitudini — planul unei peșteri nu înseamnă o peșteră orizontală. De aceea fiecare valoare verticală de mai sus este lăsată goală în loc să fie arătată ca zero: nimic de aici nu spune cât de mult coboară peștera, ceea ce este o afirmație despre desen și nu despre peșteră.",
       "measuredFromModel": "Măsurat din cartarea „{{name}}”. O peșteră poate avea mai multe cartări încărcate, iar valorile luate din două cartări diferite nu sunt aceeași măsurătoare.",
       "basisSkeletonHeuristic": "Aproximat din traseul stocat, pentru că această peșteră nu are o cartare compilată cu marcaje pe fiecare viză. Forma traseului ține locul marcajelor topografului: păstrează cea mai mare parte din lungimea cartată, dar pierde vizele razante dintr-un punct și, odată cu ele, ultimii metri ai fiecărui fund de sac. Aceste valori nu ar trebui puse alături de cele ale unei peșteri măsurate din cartarea ei ca și cum ar fi aceeași măsurătoare."
+    },
+    "topology": {
+      "title": "Rețeaua de galerii",
+      "sizeTitle": "Rețeaua așa cum a fost cartată",
+      "nodes": "Puncte topografice din rețea",
+      "nodesGloss": "Puncte topografice atinse de cel puțin o vizare de galerie.",
+      "edges": "Vizări de galerie",
+      "edgesGloss": "Perechi de puncte unite prin galerie. O galerie cartată de două ori se numără o singură dată.",
+      "components": "Bucăți separate",
+      "componentsGloss": "Părți ale cartării care nu se leagă între ele în subteran.",
+      "junctions": "Intersecții",
+      "junctionsGloss": "Locuri unde se întâlnesc trei sau mai multe galerii.",
+      "extremities": "Fundături",
+      "extremitiesGloss": "Locuri unde cartarea se oprește — un colmataj, un sifon sau pur și simplu locul de unde s-au întors cartatorii.",
+      "cyclomatic": "Bucle independente",
+      "cyclomaticGloss": "Câte trasee cu adevărat diferite există prin rețea. Zero înseamnă că fiecare loc se atinge pe un singur drum.",
+      "reducedTitle": "Rețeaua cu tronsoanele drepte contractate",
+      "reducedNodes": "Intersecții și fundături",
+      "reducedNodesGloss": "Ce rămâne după ce fiecare tronson de galerie dintre două dintre ele este tratat ca o singură legătură.",
+      "reducedEdges": "Legături între ele",
+      "reducedEdgesGloss": "Câte una pentru fiecare tronson de galerie. Cei trei indici de mai jos se calculează pe acestea, nu pe vizările brute.",
+      "reducedComponents": "Bucăți separate, contractate",
+      "reducedComponentsGloss": "Părțile în care se împarte rețeaua contractată.",
+      "alpha": "Gradul de buclare (alfa)",
+      "alphaGloss": "Buclele existente față de câte ar putea avea cel mult o rețea de această mărime. Zero este o peșteră fără nicio buclă.",
+      "beta": "Legături per intersecție (beta)",
+      "betaGloss": "Sub unu este o peșteră ramificată; peste unu înseamnă că se închide în ea însăși.",
+      "gamma": "Gradul de conectare (gama)",
+      "gammaGloss": "Legăturile existente față de câte ar putea avea cel mult o rețea de această mărime.",
+      "degreeTitle": "Cum se întâlnesc galeriile",
+      "meanDegree": "Galerii la o intersecție sau fundătură obișnuită",
+      "meanDegreeGloss": "Sub doi este o peșteră ramificată; mult peste doi este un labirint.",
+      "degreeSpread": "Împrăștierea acestei valori",
+      "degreeSpreadGloss": "Cât de mult variază numărul de galerii care se întâlnesc, de la un loc la altul.",
+      "degreeVariation": "Împrăștierea față de medie",
+      "degreeVariationGloss": "Aceeași împrăștiere ca proporție, ca să poată fi comparate peșteri de mărimi diferite.",
+      "degreeCorrelation": "Se leagă intersecțiile de intersecții?",
+      "degreeCorrelationGloss": "Pozitiv înseamnă că locurile aglomerate se leagă între ele; negativ înseamnă că intersecțiile au mai ales fundături atârnate de ele.",
+      "branchesTitle": "Tronsoane de galerie",
+      "branches": "Tronsoane",
+      "branchesGloss": "Porțiuni de galerie de la o intersecție sau fundătură până la următoarea.",
+      "loopingBranches": "Tronsoane care se întorc de unde au plecat",
+      "loopingBranchesGloss": "Acestea nu au o linie dreaptă față de care să fie măsurate, deci nu intră în valoarea de sinuozitate de mai jos.",
+      "meanBranchLength": "Lungimea medie a unui tronson",
+      "meanBranchLengthGloss": "Cât este de obicei de la o intersecție la următoarea.",
+      "shortestBranch": "Cel mai scurt tronson",
+      "shortestBranchGloss": "Cea mai scurtă porțiune de galerie dintre două intersecții sau fundături.",
+      "longestBranch": "Cel mai lung tronson",
+      "longestBranchGloss": "Cea mai lungă astfel de porțiune.",
+      "branchLengthVariation": "Împrăștierea lungimilor tronsoanelor",
+      "branchLengthVariationGloss": "Față de media lor. O valoare mare înseamnă câteva galerii lungi printre multe scurte.",
+      "shapeTitle": "Cum se desfășoară rețeaua",
+      "lengthEntropy": "Uniformitatea lungimilor tronsoanelor",
+      "lengthEntropyGloss": "De la zero la unu. Mare înseamnă tronsoane de toate lungimile în egală măsură; mic înseamnă că sunt mai toate de o singură lungime.",
+      "orientationEntropy": "Uniformitatea direcțiilor galeriilor",
+      "orientationEntropyGloss": "De la zero la unu, ponderată cu lungimea galeriilor. Mic înseamnă că peștera urmează una sau două direcții, de obicei diaclazele din rocă; mare înseamnă că merge în toate direcțiile.",
+      "tortuosity": "Sinuozitate",
+      "tortuosityGloss": "Cât de lung este un tronson de galerie față de linia dreaptă dintre capetele lui. Unu înseamnă perfect drept.",
+      "averagePath": "Tronsoane între două locuri",
+      "averagePathGloss": "Prin câte porțiuni de galerie treci, în medie, ca să ajungi de la o intersecție la alta.",
+      "centralPointDominance": "Dependența de o singură intersecție",
+      "centralPointDominanceGloss": "De la zero la unu. Mare înseamnă că mai toate traseele prin peșteră trec printr-un singur loc.",
+      "clustering": "Galerii care se închid între ele",
+      "clusteringGloss": "Cât de des două galerii care pleacă din aceeași intersecție sunt ele însele legate una de alta.",
+      "completenessWhole": "Toate vizările din fișierul de cartare s-au legat de rețeaua de puncte și nu au existat două puncte în aceeași poziție. Valorile de mai sus acoperă întregul fișier.",
+      "completenessPartial": "{{dropped}} vizări din fișierul de cartare nu au putut fi legate de rețeaua de puncte, iar {{merged}} puncte au avut aceeași poziție cu altele și au devenit un singur nod. Valorile de mai sus au fost calculate pe ce a rămas.",
+      "completenessUnknown": "Nu este consemnat ce anume ar fi putut lăsa deoparte citirea acestei cartări, deci valorile de mai sus ar putea acoperi mai puțin decât conține fișierul.",
+      "measuredFromModel": "Măsurat din cartarea „{{name}}”. O peșteră poate avea mai multe cartări încărcate, iar valorile luate din două cartări diferite nu sunt aceeași măsurătoare."
     }
   },
   "permissions": {
@@ -3096,7 +3198,11 @@
       "tripDate": "Data turei",
       "hadIncident": "A avut incident",
       "state": "Stare",
-      "language": "Limbă"
+      "language": "Limbă",
+      "region": "Regiune",
+      "rockType": "Tip de rocă",
+      "surveyedLength": "Lungime cartată (m)",
+      "depth": "Denivelare (m)"
     },
     "problems": {
       "noWorlds": "Alege cel puțin un fel de obiect de căutat.",
@@ -3387,7 +3493,7 @@
   },
   "surveySources": {
     "title": "Surse topografice",
-    "explanation": "Materialul din care au fost făcute modelele compilate de mai sus. Păstrat pentru ca topografia să poată fi compilată din nou atunci când uneltele care au produs exportul nu mai există în forma de azi; nimic de aici nu este citit sau interpretat.",
+    "explanation": "Materialul din care au fost făcute modelele compilate de mai sus. Păstrat pentru ca topografia să poată fi compilată din nou atunci când uneltele care au produs exportul nu mai există în forma de azi. Un jurnal de compilare este deschis, pentru cifrele de închidere pe care le raportează; nimic altceva de aici nu este citit sau interpretat.",
     "upload": "Arhivează o sursă",
     "uploaded": "Sursă arhivată",
     "uploadFailed": "Fișierul nu a putut fi arhivat",
@@ -3414,6 +3520,58 @@
       "notFound": "Această sursă arhivată nu mai există.",
       "caveNotFound": "Această peșteră nu mai există.",
       "forbidden": "Nu ai voie să modifici arhiva topografică a acestei peșteri."
+    }
+  },
+  "surveyQuality": {
+    "title": "Închiderea buclelor",
+    "explanation": "Cât de bine s-a închis fiecare topografie, exact așa cum a raportat programul care a compilat-o. Nimic nu este recalculat aici: coloanele sunt ale programului — REL-ERR, ABS-ERR, TOTAL-L, STS și cele trei erori pe axe — astfel încât o valoare de aici și una din propriul jurnal să fie același număr.",
+    "statuses": {
+      "pending": "În așteptare pentru citire",
+      "unreadable": "Nu a putut fi citit"
+    },
+    "outcomes": {
+      "succeeded": "Compilat",
+      "succeededWithWarnings": "Compilat cu avertismente",
+      "failed": "Compilare eșuată"
+    },
+    "unreadable": "Acest jurnal nu a putut fi citit, așa că nu se știe nimic despre compilarea pe care o consemna. Nu este o afirmație despre topografie.",
+    "compilationFailed": "Această compilare nu s-a încheiat. Ce urmează este ce a apucat rularea să raporteze — nu o topografie fără bucle.",
+    "stoppedAt": "S-a oprit la: {{stage}}.",
+    "compiler": "Program de compilare",
+    "compilerValue": "therion {{version}}",
+    "compilerReleased": "Versiune lansată la",
+    "readAt": "Jurnal citit aici",
+    "revision": "Revizia din arhivă",
+    "loopCount": "Bucle găsite de program",
+    "averageLoopError": "Eroare medie pe bucle",
+    "medianLoopError": "Eroare mediană pe bucle (din tabel)",
+    "medianAbsoluteError": "Distanță mediană de închidere (din tabel)",
+    "totalLength": "Lungime totală",
+    "totalLengthAdjusted": "Lungime totală, ajustată",
+    "adjustment": "Ajustarea a deplasat",
+    "compilationSeconds": "Durata compilării (s)",
+    "noLoops": "Această rulare nu a raportat erori de buclă: topografia nu are bucle închise de verificat.",
+    "noLoopTable": "Acest jurnal nu a tipărit un tabel al erorilor de buclă, așa că din el nu se știe cât de bine se închide topografia. Nu este același lucru cu o topografie fără bucle închise.",
+    "loopsWithoutTable": "Această rulare a raportat {{loops}} bucle, dar nu a tipărit tabelul erorilor de buclă, așa că din acest jurnal nu se știe cu cât s-a închis fiecare.",
+    "orderedBy": {
+      "relErr": "Ordonat după REL-ERR, raportul.",
+      "absErr": "Ordonat după ABS-ERR, distanța de închidere.",
+      "totalLength": "Ordonat după TOTAL-L, lungimea buclei.",
+      "table": "În ordinea programului de compilare."
+    },
+    "orderingExplanation": "O buclă scurtă poate avea în același timp raportul mai prost și distanța mai mică, așa că ordonarea după REL-ERR și cea după ABS-ERR nu dau aceeași listă. Sortați după oricare dintre titluri.",
+    "columns": {
+      "ordinal": "Bucla",
+      "relErr": "REL-ERR",
+      "relErrHint": "Raport: eroarea de închidere ca % din lungimea buclei",
+      "absErr": "ABS-ERR",
+      "absErrHint": "Distanță: cu cât nu s-a închis bucla, în metri",
+      "totalLength": "TOTAL-L (m)",
+      "stationCount": "STS",
+      "errorX": "X-ERROR",
+      "errorY": "Y-ERROR",
+      "errorZ": "Z-ERROR",
+      "stations": "STATIONS"
     }
   },
   "karstArea": {
@@ -3900,6 +4058,43 @@
     "structureRose": "Trasee de fractură ({{count}} pe o rază de {{radius}} m)",
     "areaStructureRose": "Trasee de fractură ({{count}} în această zonă)",
     "dolineRose": "Axele lungi ale depresiunilor ({{count}} contururi)"
+  },
+  "overburden": {
+    "title": "Roca de deasupra",
+    "loading": "Se măsoară roca de deasupra…",
+    "nothingMeasured": "Această peșteră nu are traseu de-a lungul căruia să se măsoare, deci nu există unde să se întrebe câtă rocă se află deasupra.",
+    "noAltitudesTitle": "Traseul acestei peșteri nu conține altitudini.",
+    "noAltitudesReason": "Câtă rocă se află deasupra înseamnă suprafața terenului minus altitudinea galeriei, iar o ridicare topografică înregistrată ca plan nu are altitudinea până la care să se măsoare. Un profil de zerouri ar desena întreaga peșteră întinsă la suprafață.",
+    "noTerrainBuilt": "Pe această instalare nu a fost pregătit niciun model de elevație, deci înălțimea terenului de deasupra acestei peșteri nu este cunoscută nicăieri. Aceasta nu este o afirmație despre peșteră.",
+    "noCoverageHere": "Există date de elevație pregătite aici, dar niciuna nu ajunge la această peșteră. Terenul de deasupra ei este necunoscut, nu la nivelul mării.",
+    "axisDistance": "Distanța de-a lungul galeriei (m)",
+    "axisThickness": "Rocă deasupra (m)",
+    "thinnest": "Cea mai subțire",
+    "thickest": "Cea mai groasă",
+    "mean": "Medie",
+    "passageLength": "Galerie măsurată",
+    "coverage": "Citiri cu înălțimea terenului",
+    "coverageValue": "{{covered}} din {{total}}",
+    "unitMetres": "{{value}} m",
+    "notMeasured": "—",
+    "figuresScope": "Cifrele sunt calculate pe citirile care au obținut o înălțime a terenului și pe niciuna alta, deci o peșteră acoperită parțial de datele de elevație este descrisă doar pe acea parte. O grosime negativă este raportată așa cum a fost măsurată: înseamnă că modelul de elevație pune suprafața sub galerie, iar cele două nu se potrivesc.",
+    "gap": {
+      "outsideCoverage": "Curba se întrerupe acolo unde niciun model de elevație pregătit nu ajunge la galerie. Nimeni nu știe înălțimea terenului acolo, de aceea linia se oprește în loc să treacă peste gol.",
+      "noData": "Curba se întrerupe acolo unde modelul de elevație ajunge la galerie, dar nu înregistrează nimic — o gaură în model, nu o galerie la suprafață.",
+      "mixed": "Curba se întrerupe în două feluri de locuri: unde niciun model de elevație pregătit nu ajunge la galerie și unde modelul ajunge, dar nu înregistrează nimic. Niciunul nu înseamnă o galerie la suprafață."
+    },
+    "distanceNote": "Axa orizontală arată câtă galerie se află înaintea fiecărei citiri, în ordinea în care o înregistrează traseul. O ridicare topografică este o rețea, nu o singură parcurgere a peșterii, deci este o lungime și nu un traseu pe care l-ar putea urma cineva.",
+    "pressToLocate": "Apăsați un punct de pe curbă pentru a marca locul unde a fost luată citirea, pe hartă și în scena 3D.",
+    "readout": "{{distance}} de-a lungul · {{thickness}} · segmentul {{segment}} al traseului",
+    "readoutWhere": "{{distance}} de-a lungul galeriei",
+    "readoutThickness": "{{value}} de rocă deasupra",
+    "readoutSegment": "Segmentul {{index}} al traseului",
+    "readoutAbsent": {
+      "outsideCoverage": "Nicio dată de elevație nu ajunge aici",
+      "noData": "Datele de elevație nu înregistrează nimic aici"
+    },
+    "markLabel": "{{value}} de rocă deasupra",
+    "markLabelAbsent": "Roca de deasupra nu se cunoaște aici"
   },
   "crossSection": {
     "title": "Dimensiunea galeriilor",

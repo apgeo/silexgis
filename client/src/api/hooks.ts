@@ -144,6 +144,7 @@ export const queryKeys = {
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
   surveyModel: (id: string) => ['survey-model', id] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
+  surveyCompilations: (caveId: string) => ['survey-compilations', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
@@ -252,6 +253,7 @@ export const queryKeys = {
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
   caveHypsometry: (id: string) => ['caves', id, 'hypsometry'] as const,
+  caveOverburden: (id: string) => ['caves', id, 'overburden'] as const,
   caveLevelBands: (id: string) => ['caves', id, 'level-bands'] as const,
   areaHypsometry: (id: string) => ['features', id, 'entrance-hypsometry'] as const,
   caveStructureComparison: (id: string, areaId: string) =>
@@ -306,6 +308,7 @@ export const queryKeys = {
   caveOrientation: (caveId: string) => ['caves', caveId, 'orientation'] as const,
   caveCrossSection: (caveId: string) => ['caves', caveId, 'cross-section'] as const,
   cavePattern: (caveId: string) => ['caves', caveId, 'pattern'] as const,
+  caveTopology: (caveId: string) => ['caves', caveId, 'topology'] as const,
   annotatedText: (documentId: string) => ['annotated-texts', documentId] as const,
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
@@ -318,6 +321,7 @@ export const queryKeys = {
   terrainBuildList: (params: TerrainBuildPageParams) => ['terrain', 'builds', 'page', params] as const,
   terrainBuild: (id: string) => ['terrain', 'builds', 'detail', id] as const,
   terrainSourceDirectories: ['terrain', 'source-directories'] as const,
+  terrainDerivatives: ['terrain', 'derivatives'] as const,
   expeditions: (params: ExpeditionListParams) => ['expeditions', 'list', params] as const,
   expedition: (id: string) => ['expeditions', 'detail', id] as const,
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
@@ -919,6 +923,9 @@ const SURVEY_MODEL_URL_REFRESH_MS = 8 * 60_000;
 /** How often a model whose processing has not finished yet is asked about. */
 const SURVEY_MODEL_CONVERSION_POLL_MS = 2000;
 
+/** How often a queued log reading is re-asked about, until it is no longer queued. */
+const SURVEY_COMPILATION_POLL_MS = 2000;
+
 /**
  * A model with work still outstanding on it. Both kinds of upload have some: a wall mesh is
  * converted into what the 3D scene draws, and a line plot is read into its stations and shots.
@@ -949,6 +956,23 @@ export function surveyModelUnsettled(status: SurveyModelInfo['status']): boolean
  */
 export function surveyModelReadableByViewer(model: { format: SurveyModelInfo['format'] }): boolean {
   return model.format === 'lox' || model.format === 'survex3d';
+}
+
+/**
+ * Whether any of a cave's uploaded surveys can have produced a measured passage network.
+ *
+ * Only a line plot whose reading finished has stations and shots behind it; a wall mesh has no
+ * network, and a reading still queued or failed left nothing stored. A cave with none of those is
+ * the ordinary case — most caves have never had a survey file uploaded at all — and asking the
+ * server about its network anyway is a request that is certain to be refused. That refusal is not
+ * free: the browser reports every failed request to its console, so a panel that asked regardless
+ * would put an error on the console of every cave page in the application, drowning the real ones
+ * in an expected one.
+ */
+export function caveHasMeasurableSurvey(
+  models: { status: SurveyModelInfo['status']; format: SurveyModelInfo['format'] }[] | undefined,
+): boolean {
+  return (models ?? []).some((model) => model.status === 'ready' && surveyModelReadableByViewer(model));
 }
 
 /**
@@ -985,6 +1009,10 @@ function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveCrossSection(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.cavePattern(caveId) });
+  // Stored beside the survey rather than recomputed per request, but changed by exactly the same
+  // events: the figures are rewritten when a file is read, and a cave whose answering upload was
+  // deleted is measured from a different one or from none at all.
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveTopology(caveId) });
 }
 
 /**
@@ -1162,8 +1190,13 @@ export function useSurveySources(caveId: string | undefined) {
 
 function useInvalidateSurveySources() {
   const queryClient = useQueryClient();
-  return (caveId: string) =>
+  return (caveId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.surveySources(caveId) });
+    // Archiving a compilation log queues a reading of it, and removing one takes the figures read
+    // from it away again, so the closure panel is stale the moment this list changes — and it is a
+    // different query under a different key, which none of the archive's own invalidations reach.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.surveyCompilations(caveId) });
+  };
 }
 
 export function useUploadSurveySource() {
@@ -1205,6 +1238,48 @@ export function useDeleteSurveySource() {
       }
     },
     onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+export type SurveyCompilationInfo = components['schemas']['SurveyCompilationDto'];
+export type SurveyLoopError = components['schemas']['SurveyLoopErrorDto'];
+
+/**
+ * A compilation log is read in the background, so a freshly archived one arrives here queued and
+ * becomes figures a moment later with nothing the browser did to mark the change. This is the only
+ * query watching for it; without the wait a reader who archives a log sees "queued" until they
+ * reload and wonder why the reload was needed.
+ *
+ * A reading that could not be done counts as settled: the reader has been told, and asking every
+ * two seconds forever on the chance somebody re-queues it is a page that never goes quiet.
+ */
+export function surveyCompilationUnsettled(status: SurveyCompilationInfo['status']): boolean {
+  return status === 'pending';
+}
+
+/**
+ * How well a cave's surveys closed, as the compiler that compiled them reported it.
+ *
+ * Nothing here is re-derived from the stored survey: these are the numbers printed in the log the
+ * surveyor archived. A cave whose exact location is withheld from this reader answers with an empty
+ * list rather than a refusal — the same answer as a cave nobody has archived a log for, and it
+ * needs no special casing.
+ */
+export function useSurveyCompilations(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.surveyCompilations(caveId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caves/{caveId}/survey-compilations', {
+          params: { path: { caveId: caveId! } },
+        }),
+      ),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((c) => surveyCompilationUnsettled(c.status))
+        ? SURVEY_COMPILATION_POLL_MS
+        : false,
   });
 }
 
@@ -6010,6 +6085,34 @@ export function useCavePattern(caveId: string | undefined) {
     queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/pattern', { params: { path: { id: caveId! } } })),
     enabled: !!caveId,
     staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * The shape of a cave's passage network, as the figures the karst literature uses.
+ *
+ * Every figure is a number that was measured or it is null, and null is never a zero: a network of
+ * two junctions has no connectivity ratio and a single branch has no spread of lengths, so
+ * anything drawing these has to keep the two apart.
+ */
+export type CaveTopology = components['schemas']['CaveTopologyDto'];
+
+export function useCaveTopology(caveId: string | undefined, hasMeasurableSurvey = true) {
+  return useQuery({
+    queryKey: queryKeys.caveTopology(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/topology', { params: { path: { id: caveId! } } })),
+    // Asked only of a cave that has a read line plot behind it. The route answers "no such cave"
+    // both to a caller who may not place the cave and to a cave whose network was never measured,
+    // and the second of those is the ordinary state of nearly every cave — so asking unconditionally
+    // would fail on almost every cave page and write an expected error to the browser console each
+    // time. The caller decides, because it already holds the list of uploads.
+    enabled: !!caveId && hasMeasurableSurvey,
+    // Measured once when the survey file is read and stored beside it, so this changes only when a
+    // file is uploaded or removed — both of which empty this key explicitly.
+    staleTime: 5 * 60_000,
+    // Two of the three answers this route gives are final: a cave the caller may not read or may
+    // not place exactly, and a cave whose network has never been measured. Neither changes by
+    // being asked again.
     retry: false,
   });
 }
@@ -6053,6 +6156,38 @@ export function useCaveHypsometry(caveId: string | undefined) {
     staleTime: 5 * 60_000,
     // A cave this caller may read but not place exactly is refused with the same answer as one
     // that does not exist. Retrying asks the same question again.
+    retry: false,
+  });
+}
+
+/**
+ * How much rock lies over a cave's passages, along their length.
+ *
+ * This is cave data rather than a terrain figure: the curve is the passage set against the surface
+ * above it, so anything holding it can work out where the passage runs. A caller who may read the
+ * cave but may not place it exactly is refused with the same "no such cave" a never-created cave
+ * gets, which is why nothing here retries and why the panel drawing it renders nothing at all on an
+ * error rather than an empty card.
+ */
+export type CaveOverburden = components['schemas']['CaveOverburdenDto'];
+
+/** One reading along the passage: where it was taken, and what the ground was found to be there. */
+export type CaveOverburdenSample = components['schemas']['CaveOverburdenSampleDto'];
+
+/** Whether a ground height could be read at one place, and if not, why not. */
+export type DemSampleOutcome = components['schemas']['DemSampleOutcome'];
+
+export function useCaveOverburden(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveOverburden(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{id}/overburden', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    // Recomputed per request from line work and from prepared elevation data, neither of which
+    // changes without somebody uploading or building something.
+    staleTime: 5 * 60_000,
+    // A cave this caller may read but not place exactly is refused with the same answer as one that
+    // does not exist. Retrying asks the same question again.
     retry: false,
   });
 }
@@ -6991,6 +7126,59 @@ export function useEditEventSeriesFollowing() {
     // Every occurrence of the series is an ordinary event on its own page and its own row of the
     // calendar, so an edit reaching a dozen of them has moved a dozen things this cache holds.
     onSuccess: (_data, variables) => invalidate(variables.id),
+  });
+}
+
+export type TerrainDerivativeLayerInfo = components['schemas']['TerrainDerivativeLayerDto'];
+export type TerrainDerivativeRasterInfo = components['schemas']['TerrainDerivativeRasterDto'];
+export type TerrainDerivativeCreate = components['schemas']['TerrainDerivativeCreateRequest'];
+
+/** How long a computed picture's addresses stay usable, less a margin to re-read them in. */
+const TERRAIN_DERIVATIVE_REFRESH_MS = 8 * 60_000;
+
+/**
+ * The computed pictures of the ground, each carrying the addresses of its rasters and whether the
+ * elevation beneath it has since been replaced.
+ *
+ * Re-read while a picture is still being computed, and re-read slowly the rest of the time: the
+ * addresses in each raster carry a signature that expires after ten minutes, so a page left open
+ * on the map would otherwise be holding layers whose next range request is refused.
+ */
+export function useTerrainDerivatives(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.terrainDerivatives,
+    queryFn: () => unwrap(api.GET('/api/v1/terrain/derivatives')),
+    enabled,
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some(
+        (layer) => layer.status === 'queued' || layer.status === 'computing',
+      )
+        ? 2000
+        : TERRAIN_DERIVATIVE_REFRESH_MS,
+  });
+}
+
+/** Asks for a picture of the ground to be computed from one elevation build. */
+export function useRequestTerrainDerivative() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: TerrainDerivativeCreate) =>
+      unwrap(api.POST('/api/v1/terrain/derivatives', { body: request })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainDerivatives });
+    },
+  });
+}
+
+/** Removes a computed picture and the rasters it left on disk. */
+export function useDeleteTerrainDerivative() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/terrain/derivatives/{id}', { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainDerivatives });
+    },
   });
 }
 

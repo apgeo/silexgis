@@ -68,6 +68,18 @@ public static class TerrainBuildFailures
     public const string PrepareFailed = "terrain_build.prepare_failed";
 
     /// <summary>
+    /// Computing a shaded or coloured picture of the ground from a prepared raster failed.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from a failed preparation because what it says about the build is different: the
+    /// elevation is fine and is already usable for everything that reads heights, and only the
+    /// picture drawn from it is missing. The raster library reports its refusals by returning
+    /// nothing and writing its reasons to a log of its own, so the words that explain this are
+    /// fetched deliberately and put in the log tail.
+    /// </remarks>
+    public const string DerivativeFailed = "terrain_build.derivative_failed";
+
+    /// <summary>
     /// This installation has nothing that can turn rasters into tiles.
     /// </summary>
     /// <remarks>

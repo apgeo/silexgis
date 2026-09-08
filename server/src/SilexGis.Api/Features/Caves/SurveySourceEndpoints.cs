@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,7 @@ using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Files;
+using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -52,9 +54,10 @@ public sealed record SurveySourceDto(
 /// </para>
 ///
 /// <para>
-/// Nothing here reads an archived file. The compiler's log in particular is stored and never
-/// parsed — what a log says about a compilation is a separate question from keeping the log, and
-/// keeping it is the half that is lost for ever if it is not done at upload.
+/// Archiving comes first and reading second, because keeping the file is the half that is lost for
+/// ever if it is not done at upload. Of the formats here only the compiler's log is read, and only
+/// for what it says about the compilation that wrote it — how well the survey closes. That reading
+/// is queued, not done in the request, and it never changes the bytes that were archived.
 /// </para>
 /// </summary>
 public static class SurveySourceEndpoints
@@ -237,6 +240,33 @@ public static class SurveySourceEndpoints
         };
 
         db.SurveySources.Add(source);
+
+        // A compilation log is the one archived format that says something about the survey rather
+        // than being the survey: how the run ended and how far each of its loops missed closing.
+        // The record and the job that fills it in are written in the same save as the source, so a
+        // reading is never queued against an archive entry that did not land — and the record names
+        // the exact revision it will be read from, because a corrected log is a later revision of
+        // this same source and its figures must not be mistaken for these.
+        if (kind == SurveySourceKind.TherionLog)
+        {
+            var compilation = new SurveyCompilation
+            {
+                CaveFeatureId = caveId,
+                SurveySourceId = source.Id,
+                LogFileId = archived.File.Id,
+                LogVersionNumber = archived.Version.VersionNumber,
+            };
+
+            db.SurveyCompilations.Add(compilation);
+            db.ProcessingJobs.Add(new ProcessingJob
+            {
+                Kind = ProcessingJobKinds.SurveyCompilation,
+                Payload = JsonSerializer.Serialize(
+                    new SurveyCompilationPayload(compilation.Id), JsonSerializerOptions.Web),
+                RequestedBy = ctx.UserId,
+            });
+        }
+
         await db.SaveChangesAsync(ct);
 
         var revision = new Revision(

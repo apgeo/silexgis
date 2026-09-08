@@ -105,6 +105,13 @@ interface WorkspaceState {
   rasterOpacity: Record<string, number>;
   setRasterOpacity: (id: string, opacity: number) => void;
   /**
+   * The computed pictures of the ground shown on the map. Kept apart from the uploaded rasters
+   * above because the two are different things: one is a file somebody put on the map, the other
+   * is drawn by the server from an elevation build and goes out of date when that build does.
+   */
+  visibleTerrainDerivativeIds: string[];
+  setTerrainDerivativeVisible: (id: string, visible: boolean) => void;
+  /**
    * Per-overlay opacity (0..1) for the built-in vector overlays (keyed by their layer id:
    * 'entrances', 'surface-features', 'centerlines') and for each geofile (keyed by geofile
    * id). A missing key means fully opaque. Rasters keep their own `rasterOpacity`.
@@ -245,6 +252,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   rasterOpacity: {},
   setRasterOpacity: (id, opacity) =>
     set((state) => ({ rasterOpacity: { ...state.rasterOpacity, [id]: opacity } })),
+  visibleTerrainDerivativeIds: [],
+  setTerrainDerivativeVisible: (id, visible) =>
+    set((state) => ({
+      visibleTerrainDerivativeIds: visible
+        ? [...new Set([...state.visibleTerrainDerivativeIds, id])]
+        : state.visibleTerrainDerivativeIds.filter((x) => x !== id),
+    })),
   overlayOpacity: {},
   setOverlayOpacity: (key, opacity) =>
     set((state) => ({ overlayOpacity: { ...state.overlayOpacity, [key]: opacity } })),

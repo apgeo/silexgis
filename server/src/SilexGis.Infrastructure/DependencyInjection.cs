@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddSingleton<Geodata.ICoordinateProjector, Geodata.ProjCoordinateProjector>();
         services.AddSingleton<Surveys.SurveyMeshConverter>();
         services.AddSingleton<Surveys.SurveyGraphExtractor>();
+        services.AddSingleton<Surveys.SurveyCompilationLogReader>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Import.TermRuleSetStore>();
@@ -292,6 +293,7 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyMeshHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyGraphHandler>();
+        services.AddScoped<IProcessingJobHandler, SurveyCompilationHandler>();
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();
         services.AddScoped<IProcessingJobHandler, FeatureIntegrityVerifyHandler>();
@@ -329,6 +331,29 @@ public static class DependencyInjection
         // a given step, so registration order is what decides which one that is.
         services.AddSingleton<Domain.Terrain.ITerrainRasterPreparer, Terrain.GdalTerrainRasterPreparer>();
         services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainPreparePhase>();
+
+        // Reading heights back out of those rasters. One instance for the application: it keeps
+        // datasets open behind a gate only one caller holds at a time, because the raster library's
+        // handles fault the whole process rather than throwing when two threads touch one, and
+        // reopening a file per point would spend a profile's whole request in header reads.
+        services.AddSingleton<Domain.Terrain.IDemSampleService, Terrain.GdalDemSampler>();
+
+        // Drawing the ground from those rasters: shaded relief, steepness, facing and the rest. One
+        // instance, because it holds nothing between calls — but note that it does not serialise
+        // them either, and the raster library's handles fault the whole process rather than throwing
+        // when two threads touch one, so whatever drives it either takes one piece of work at a time
+        // or holds a gate of its own.
+        services.AddSingleton<Domain.Terrain.ITerrainDerivativeComputer, Terrain.GdalDemDerivatives>();
+
+        // What ground each of a build's prepared rasters covers, described once and kept beside the
+        // build. Scoped because it reads and writes rows.
+        services.AddScoped<Terrain.TerrainRasterIndex>();
+
+        // The register of pictures drawn from those rasters, and the job that draws them. Both
+        // scoped because they read and write rows; the job kind runs on the terrain worker, which is
+        // what keeps a picture from being drawn from rasters a build is in the middle of rewriting.
+        services.AddScoped<Terrain.TerrainDerivativeCatalogue>();
+        services.AddScoped<IProcessingJobHandler, TerrainDerivativeHandler>();
 
         // Turning those rasters into tiles. The program that does that is a command-line tool, run
         // by a service of its own that this application never speaks to directly — the two meet on

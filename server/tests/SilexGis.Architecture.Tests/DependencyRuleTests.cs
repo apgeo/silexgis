@@ -63,6 +63,23 @@ public class DependencyRuleTests
     }
 
     [Fact]
+    public void Domain_does_not_depend_on_the_raster_library()
+    {
+        // Reading pixels out of a file is a native library's job and it belongs behind the
+        // infrastructure seam. Domain says what a height means and what may be told to whom; it
+        // must not know what a dataset handle is. The rule matters more than most here because the
+        // library's handles fault the whole process rather than throwing when they are misused, so
+        // a domain type holding one turns a rule into an abort — and because nothing else stops it:
+        // adding the package to the domain project would compile perfectly well.
+        var result = Types.InAssembly(typeof(Visibility).Assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny("OSGeo", "MaxRev")
+            .GetResult();
+
+        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
+    }
+
+    [Fact]
     public void Domain_does_not_depend_on_the_survey_format_readers()
     {
         // The readers for the compiled survey formats parse untrusted uploaded bytes, which is
@@ -104,6 +121,17 @@ public class DependencyRuleTests
         // This reads compiled IL, so it catches use rather than reference — the project
         // reference itself is reviewed by eye. Never write this as an exclusion of the library
         // from the two rules above: an exclusion would hide exactly the violation worth catching.
+        //
+        // The two modules have to be named differently, and that difference is the whole reason
+        // this list is worth reading carefully. In the first, the parsers and the process-starting
+        // code sit in separate namespaces, so a namespace is enough. In the second — the one
+        // holding the reader for what a compilation printed — everything shares a single flat
+        // namespace: the reader, a type that locates an executable on the host and runs it, a type
+        // that compiles by starting the compiler, and a type that hands a path to the desktop shell
+        // to open. Denying that namespace would deny the reader this application actually uses, so
+        // the dangerous types are denied one by one. The cost of that granularity is that a type
+        // added upstream is not covered until somebody adds it here; the alternative was covering
+        // nothing.
         foreach (var assembly in new[]
                  {
                      typeof(Visibility).Assembly,
@@ -115,7 +143,18 @@ public class DependencyRuleTests
                 .ShouldNot()
                 .HaveDependencyOnAny(
                     "Therion.Blender.Execution",
-                    "Therion.Blender.Sources")
+                    "Therion.Blender.Sources",
+                    "Therion.Build.TherionCompiler",
+                    "Therion.Build.ExternalToolLocator",
+                    "Therion.Build.ShellOpener",
+                    "Therion.Build.IShellOpener",
+                    "Therion.Build.CompileGate",
+                    "Therion.Build.ICompileGate",
+                    "Therion.Build.JsonOutputArtifactCache",
+                    "Therion.Build.OutputArtifactCollector",
+                    "Therion.Processing.Abstractions.ITherionCompiler",
+                    "Therion.Processing.Abstractions.IExternalToolLocator",
+                    "Therion.Processing.Abstractions.IExternalToolPathOverrides")
                 .GetResult();
 
             result.IsSuccessful.ShouldBeTrue(

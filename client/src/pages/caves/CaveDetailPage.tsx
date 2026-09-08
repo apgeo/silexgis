@@ -54,9 +54,11 @@ import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import CaveCrossSectionPanel from '../../components/statistics/CaveCrossSectionPanel.tsx';
 import CavePatternPanel from '../../components/statistics/CavePatternPanel.tsx';
 import CaveHypsometryPanel from '../../components/statistics/CaveHypsometryPanel.tsx';
+import CaveOverburdenPanel from '../../components/statistics/CaveOverburdenPanel.tsx';
 import CaveStructurePanel from '../../components/statistics/CaveStructurePanel.tsx';
 import CaveOrientationPanel from '../../components/statistics/CaveOrientationPanel.tsx';
 import CaveStatisticsPanel from '../../components/statistics/CaveStatisticsPanel.tsx';
+import CaveTopologyPanel from '../../components/statistics/CaveTopologyPanel.tsx';
 import TripStatisticsPanel from '../../components/statistics/TripStatisticsPanel.tsx';
 import ShareLinksModal from '../../components/shares/ShareLinksModal.tsx';
 import QrPublicationModal from '../../components/qr/QrPublicationModal.tsx';
@@ -68,6 +70,7 @@ import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
 import SurveyModelSection from './SurveyModelSection.tsx';
 import SurveySourceSection from './SurveySourceSection.tsx';
+import SurveyQualityPanel from './SurveyQualityPanel.tsx';
 
 export default function CaveDetailPage() {
   const { t } = useTranslation();
@@ -392,12 +395,21 @@ export default function CaveDetailPage() {
           compiled from are two different things, and only one of them can be re-compiled. */}
       {id && <SurveySourceSection caveId={id} canEdit={canEdit} />}
 
+      {/* Directly under the archive it is read from: these are the compiler's own figures about an
+          archived log, not something this application worked out from the stored survey. Silent
+          for a cave nobody has archived a log for. */}
+      {id && <SurveyQualityPanel caveId={id} />}
+
       {id && <CenterlineSection caveId={id} canEdit={canEdit} />}
 
       {/* Beside the line work they are measured from rather than beside the trips: these figures
           follow the survey, and a survey uploaded today changes them without any trip being
           written up. */}
       {id && <CaveStatisticsPanel caveId={id} />}
+
+      {/* After the lengths and before the bearings: how much passage there is, then how it is put
+          together, then which way it runs. All three are measured from the same line work. */}
+      {id && <CaveTopologyPanel caveId={id} />}
 
       {id && <CaveOrientationPanel caveId={id} />}
 
@@ -412,6 +424,11 @@ export default function CaveDetailPage() {
       {id && <CaveStructurePanel caveId={id} />}
 
       {id && <CaveHypsometryPanel caveId={id} canEdit={canEdit} />}
+
+      {/* After the heights it is measured against: how deep the passage lies is one reading and
+          how much rock stands between it and the daylight is the next, and the second only makes
+          sense once the first has said where the passage is. */}
+      {id && <CaveOverburdenPanel caveId={id} />}
 
       {/* Last of the survey figures, because it is the only one that proposes rather than
           measures: it reads the shape, the trend and the profile above it and suggests what kind

@@ -103,6 +103,9 @@ function renderPanel(
       rasters={[]}
       visibleRasterIds={[]}
       onRasterVisibleChange={vi.fn()}
+      terrainDerivatives={[]}
+      visibleTerrainDerivativeIds={[]}
+      onTerrainDerivativeVisibleChange={vi.fn()}
       onOverlayVisibilityChanged={vi.fn()}
       photoLibraries={overrides.photoLibraries ?? [library(healthy)]}
       unconfiguredPhotoLibraries={overrides.unconfiguredPhotoLibraries ?? []}

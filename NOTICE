@@ -12,15 +12,18 @@ This repository redistributes the following third-party works. Their own license
 apply to those files and are reproduced alongside them.
 
 --------------------------------------------------------------------------------
-ThIDE — Therion.Blender
+ThIDE — Therion.Blender, Therion.Build, Therion.Core,
+        Therion.Processing.Abstractions
 --------------------------------------------------------------------------------
-Readers for the compiled cave-survey formats (Therion Loch .lox and Survex .3d).
-Not vendored: the source is a Git submodule at server/external/ThIDE, pinned to
-the commit below, and the built assembly is redistributed inside the server image.
+Readers for the compiled cave-survey formats (Therion Loch .lox and Survex .3d),
+and the reader for what a Therion compilation printed while it ran. Not vendored:
+the source is a Git submodule at server/external/ThIDE, pinned to the commit
+below, and the built assemblies are redistributed inside the server image.
 
   Source:    https://github.com/apgeo/ThIDE
-  Commit:    25dfc7042f6eed50a3cbc67c8c96484898eb2ef2
-  License:   MPL-2.0 — see server/external/ThIDE/src/Therion.Blender/LICENSE
+  Commit:    bedfdc71aa972d39b3f6f3f0313c8c7699871534
+  License:   MPL-2.0 — see the LICENSE file beside each module under
+             server/external/ThIDE/src/
 
 The Mozilla Public License is file-level copyleft, and these sources are
 deliberately not marked "Incompatible With Secondary Licenses", so they combine
@@ -36,6 +39,20 @@ client/public/caveview/. Used on demand by the embedded 3D viewer.
   Source:    https://github.com/aardgoose/CaveView.js (release 2.9.0)
   License:   MIT — see client/public/caveview/LICENSE
   Provenance: client/public/caveview/README.md
+
+--------------------------------------------------------------------------------
+karstnet reference networks
+--------------------------------------------------------------------------------
+Two published example karst networks (the Huttes and Sakany .dat files under
+server/tests/SilexGis.Api.Tests/Fixtures/Karstnet/), redistributed unmodified as
+test fixtures. The topology metrics computed for them are committed beside them so
+the test suite can assert against the reference arithmetic without the reference
+implementation installed. Test fixtures only: nothing here is built into a shipped
+artifact.
+
+  Source:    https://github.com/karstnet/karstnet (data/)
+  License:   MIT (c) 2018-2024 Philippe Renard, Pauline Collon
+  Full text: server/tests/SilexGis.Api.Tests/Fixtures/Karstnet/NOTICE.md
 
 --------------------------------------------------------------------------------
 Feature symbol icons

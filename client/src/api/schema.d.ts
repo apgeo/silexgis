@@ -1075,6 +1075,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{caveId}/survey-compilations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loop closure as the compiler reported it; withheld without the exact-location permission. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveyCompilationDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{caveId}/centerlines": {
         parameters: {
             query?: never;
@@ -2685,6 +2723,223 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ground height at coordinates the caller supplies; requires Read on the Terrain domain and carries no cave data at all. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TerrainProbeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainProbeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/probe/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ground height under cave entrances and sinkholes; requires Read on the Terrain domain and, per feature, the right to read it and to place it exactly. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TerrainFeatureProbeRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainFeatureProbeDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/derivatives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Computed pictures of the ground, each saying whether the elevation beneath it has since been replaced; requires Read on the Terrain domain. */
+        get: {
+            parameters: {
+                query?: {
+                    buildId?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainDerivativeLayerDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Asks for a picture of the ground to be computed from an elevation build; requires Execute on the Terrain domain. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TerrainDerivativeCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TerrainDerivativeLayerDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/derivatives/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a computed picture and the rasters it left on disk; requires Delete on the Terrain domain. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/terrain/derivatives/{id}/rasters/{rasterId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One computed raster, for a tile reader; opened by the signed address the listing hands out. */
+        get: {
+            parameters: {
+                query?: {
+                    token?: string;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                    rasterId: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5096,6 +5351,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{id}/topology": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The shape of one cave's passage network. Withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveTopologyDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{id}/hypsometry": {
         parameters: {
             query?: never;
@@ -5246,6 +5539,44 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["AreaHypsometryDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{id}/overburden": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How much rock lies over one cave's passages, along their length. Requires Read on the Terrain domain, and is withheld from a caller who may not place the cave exactly. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveOverburdenDto"];
                     };
                 };
             };
@@ -14143,6 +14474,260 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/registry/distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How one measured column is distributed over the caves the caller may read. */
+        get: {
+            parameters: {
+                query?: {
+                    measure?: string;
+                    bins?: number;
+                    minimumBinCaveCount?: number;
+                    percentiles?: string;
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RegistryDistribution"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/registry/distribution/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same distribution, as a spreadsheet. */
+        get: {
+            parameters: {
+                query?: {
+                    measure?: string;
+                    bins?: number;
+                    minimumBinCaveCount?: number;
+                    percentiles?: string;
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/registry/correlation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How two measured columns move together over the caves the caller may read. */
+        get: {
+            parameters: {
+                query?: {
+                    x?: string;
+                    y?: string;
+                    logarithmic?: boolean;
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RegistryCorrelationDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/registry/correlation/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same fit, as a spreadsheet. */
+        get: {
+            parameters: {
+                query?: {
+                    x?: string;
+                    y?: string;
+                    logarithmic?: boolean;
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/registry/regions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many caves stand under each region, over those the caller may place. */
+        get: {
+            parameters: {
+                query?: {
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RegistryRegionBreakdownDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/registry/regions/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same breakdown, as a spreadsheet. */
+        get: {
+            parameters: {
+                query?: {
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/taggings": {
         parameters: {
             query?: never;
@@ -16868,6 +17453,7 @@ export interface components {
             openRegistration: boolean;
             externalOnly: boolean;
             providers: components["schemas"]["ExternalProviderInfo"][];
+            testLogins?: null | components["schemas"]["TestLoginInfo"][];
         };
         AvatarPresetRequest: {
             preset: string;
@@ -17166,6 +17752,46 @@ export interface components {
             bins: components["schemas"]["OrientationBin"][];
             dip: null | components["schemas"]["DipSummary"];
         };
+        CaveOverburdenDto: {
+            /** Format: uuid */
+            caveId: string;
+            basis: components["schemas"]["SurveySegmentBasis"];
+            isApproximation: boolean;
+            /** Format: uuid */
+            surveyModelId: null | string;
+            hasAltitudes: boolean;
+            hasTerrain: boolean;
+            /** Format: double */
+            passageLengthM: number;
+            /** Format: int32 */
+            coveredSampleCount: number;
+            /** Format: double */
+            minOverburdenM: null | number;
+            /** Format: double */
+            maxOverburdenM: null | number;
+            /** Format: double */
+            meanOverburdenM: null | number;
+            samples: components["schemas"]["CaveOverburdenSampleDto"][];
+        };
+        CaveOverburdenSampleDto: {
+            /** Format: double */
+            distanceAlongM: number;
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            /** Format: double */
+            passageAltitudeM: number;
+            outcome: components["schemas"]["DemSampleOutcome"];
+            /** Format: double */
+            groundAltitudeM: null | number;
+            /** Format: double */
+            overburdenM: null | number;
+            /** Format: int32 */
+            pathIndex: null | number;
+            /** Format: int32 */
+            segmentIndex: number;
+        };
         CaveParentDto: {
             /** Format: uuid */
             id: string;
@@ -17278,6 +17904,74 @@ export interface components {
             mainEntrance: null | components["schemas"]["CaveMainEntranceDto"];
             permissions: components["schemas"]["CavePermissionsDto"];
             headlinePicture: null | components["schemas"]["CaveHeadlinePictureDto"];
+        };
+        CaveTopologyDto: {
+            /** Format: uuid */
+            caveId: string;
+            /** Format: uuid */
+            surveyModelId: string;
+            /** Format: int32 */
+            droppedShotCount: null | number;
+            /** Format: int32 */
+            mergedStationCount: null | number;
+            /** Format: int32 */
+            nodeCount: number;
+            /** Format: int32 */
+            edgeCount: number;
+            /** Format: int32 */
+            componentCount: number;
+            /** Format: int32 */
+            reducedNodeCount: number;
+            /** Format: int32 */
+            reducedEdgeCount: number;
+            /** Format: int32 */
+            reducedComponentCount: number;
+            /** Format: int32 */
+            cyclomaticNumber: number;
+            /** Format: int32 */
+            extremityCount: number;
+            /** Format: int32 */
+            junctionCount: number;
+            /** Format: double */
+            alpha: null | number;
+            /** Format: double */
+            beta: null | number;
+            /** Format: double */
+            gamma: null | number;
+            /** Format: double */
+            meanDegree: null | number;
+            /** Format: double */
+            degreeStandardDeviation: null | number;
+            /** Format: double */
+            degreeCoefficientOfVariation: null | number;
+            /** Format: double */
+            correlationOfVertexDegree: null | number;
+            /** Format: int32 */
+            branchCount: number;
+            /** Format: int32 */
+            loopingBranchCount: number;
+            /** Format: double */
+            meanBranchLengthM: null | number;
+            /** Format: double */
+            branchLengthCoefficientOfVariation: null | number;
+            /** Format: double */
+            minBranchLengthM: null | number;
+            /** Format: double */
+            maxBranchLengthM: null | number;
+            /** Format: double */
+            lengthEntropy: null | number;
+            /** Format: double */
+            orientationEntropy: null | number;
+            /** Format: double */
+            meanTortuosity: null | number;
+            /** Format: double */
+            averageShortestPathLength: null | number;
+            /** Format: double */
+            centralPointDominance: null | number;
+            /** Format: double */
+            averageClusteringCoefficient: null | number;
+            /** Format: date-time */
+            computedAt: string;
         };
         CaveWriteRequest: {
             name: string;
@@ -17630,6 +18324,8 @@ export interface components {
             elevationColumn?: null | string;
             wktColumn?: null | string;
         };
+        /** @enum {unknown} */
+        DemSampleOutcome: "sampled" | "outsideCoverage" | "noData";
         DensityCellDto: {
             /** Format: double */
             west: number;
@@ -17695,6 +18391,15 @@ export interface components {
             /** Format: uuid */
             cabinetId: null | string;
             tagName: null | string;
+        };
+        DistributionBin: {
+            /** Format: double */
+            lowerBound: number;
+            /** Format: double */
+            upperBound: number;
+            /** Format: int32 */
+            count: number;
+            merged: boolean;
         };
         /** @enum {unknown} */
         DocumentAnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange";
@@ -19193,6 +19898,18 @@ export interface components {
             twoFactorCode?: null | string;
             twoFactorMethod?: null | components["schemas"]["TwoFactorMethod"];
         };
+        LognormalFit: {
+            /** Format: double */
+            mu: number;
+            /** Format: double */
+            sigma: number;
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            median: number;
+            /** Format: double */
+            mean: number;
+        };
         MailSettingsDto: {
             enabled: boolean;
             host: string;
@@ -19879,6 +20596,18 @@ export interface components {
             parentId: string;
             isPrimary: boolean;
         };
+        ParetoTailFit: {
+            /** Format: double */
+            alpha: number;
+            /** Format: double */
+            lowerBound: number;
+            /** Format: int32 */
+            tailCount: number;
+            /** Format: double */
+            alphaStandardError: number;
+            /** Format: double */
+            kolmogorovSmirnov: number;
+        };
         PassageNetworkFigures: {
             /** Format: int32 */
             nodeCount: number;
@@ -20413,6 +21142,57 @@ export interface components {
             password: string;
             displayName: null | string;
         };
+        RegistryCorrelationDto: {
+            x: components["schemas"]["RegistryMeasure"];
+            y: components["schemas"]["RegistryMeasure"];
+            /** Format: int32 */
+            count: number;
+            /** Format: double */
+            slope: null | number;
+            /** Format: double */
+            intercept: null | number;
+            /** Format: double */
+            rSquared: null | number;
+            /** Format: double */
+            correlation: null | number;
+            logarithmic: boolean;
+            basis: string;
+        };
+        RegistryDistribution: {
+            measure: components["schemas"]["RegistryMeasure"];
+            /** Format: int32 */
+            caveCount: number;
+            /** Format: int32 */
+            measuredCount: number;
+            /** Format: double */
+            minimum: null | number;
+            /** Format: double */
+            maximum: null | number;
+            bins: components["schemas"]["DistributionBin"][];
+            percentiles: components["schemas"]["RegistryPercentileRow"][];
+            lognormal: null | components["schemas"]["LognormalFit"];
+            paretoTail: null | components["schemas"]["ParetoTailFit"];
+            basis: string;
+        };
+        /** @enum {unknown} */
+        RegistryMeasure: "surveyedLength" | "estimatedLength" | "depth" | "positiveDepth" | "negativeDepth" | "realExtension" | "projectedExtension" | "volume" | "area" | "ramificationIndex";
+        RegistryPercentileRow: {
+            /** Format: double */
+            fraction: number;
+            /** Format: double */
+            value: null | number;
+        };
+        RegistryRegionBreakdownDto: {
+            /** Format: int32 */
+            caveCount: number;
+            regions: components["schemas"]["RegistryRegionRow"][];
+            basis: string;
+        };
+        RegistryRegionRow: {
+            region: null | string;
+            /** Format: int32 */
+            caveCount: number;
+        };
         /** @enum {unknown} */
         ReportTemplateKind: "trip" | "expedition";
         ResetPasswordRequest: {
@@ -20897,6 +21677,69 @@ export interface components {
             maxSelection: number;
             portalUrl: string;
         };
+        SurveyCompilationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caveId: string;
+            /** Format: uuid */
+            surveySourceId: string;
+            sourceName: string;
+            status: components["schemas"]["SurveyCompilationStatus"];
+            readError: null | string;
+            /** Format: date-time */
+            readAt: null | string;
+            /** Format: uuid */
+            logFileId: string;
+            /** Format: int32 */
+            logVersionNumber: number;
+            outcome: null | components["schemas"]["SurveyCompilationOutcome"];
+            compilerVersion: null | string;
+            compilerReleaseDate: null | string;
+            incompleteStage: null | string;
+            /** Format: int32 */
+            compilationSeconds: null | number;
+            /** Format: int32 */
+            errorCount: null | number;
+            /** Format: int32 */
+            warningCount: null | number;
+            /** Format: int32 */
+            loopCount: null | number;
+            /** Format: double */
+            averageLoopErrorPercent: null | number;
+            /** Format: double */
+            totalLengthM: null | number;
+            /** Format: double */
+            totalLengthAdjustedM: null | number;
+            loops: components["schemas"]["SurveyLoopErrorDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @enum {unknown} */
+        SurveyCompilationOutcome: "succeeded" | "succeededWithWarnings" | "failed" | null;
+        /** @enum {unknown} */
+        SurveyCompilationStatus: "pending" | "read" | "unreadable";
+        SurveyLoopErrorDto: {
+            /** Format: int32 */
+            ordinal: number;
+            /** Format: double */
+            relativeErrorPercent: number;
+            /** Format: double */
+            absoluteErrorM: number;
+            /** Format: double */
+            totalLengthM: number;
+            /** Format: int32 */
+            stationCount: number;
+            /** Format: double */
+            errorXM: number;
+            /** Format: double */
+            errorYM: number;
+            /** Format: double */
+            errorZM: number;
+            stations: string;
+        };
         SurveyModelDto: {
             /** Format: uuid */
             id: string;
@@ -21328,13 +22171,132 @@ export interface components {
             fetchCoverage?: null | boolean;
             sources?: null | components["schemas"]["TerrainBuildSourceRequest"][];
         };
+        TerrainColourStop: {
+            /** Format: double */
+            elevation?: number;
+            /** Format: uint8 */
+            red?: number;
+            /** Format: uint8 */
+            green?: number;
+            /** Format: uint8 */
+            blue?: number;
+            /** Format: uint8 */
+            alpha?: number;
+        };
+        /** @enum {unknown} */
+        TerrainDerivative: "hillshade" | "slope" | "aspect" | "ruggednessIndex" | "positionIndex" | "roughness" | "colourRelief";
+        TerrainDerivativeCreateRequest: {
+            /** Format: uuid */
+            terrainBuildId: string;
+            derivative: components["schemas"]["TerrainDerivative"];
+            name: string;
+            lighting: null | components["schemas"]["TerrainHillshadeLighting"];
+            /** Format: double */
+            azimuthDegrees: null | number;
+            /** Format: double */
+            altitudeDegrees: null | number;
+            /** Format: double */
+            zFactor: null | number;
+            surfaceFit: null | components["schemas"]["TerrainSurfaceFit"];
+            slopeUnit: null | components["schemas"]["TerrainSlopeUnit"];
+            ruggednessFit: null | components["schemas"]["TerrainRuggednessFit"];
+            computeEdges: null | boolean;
+            colourRamp: null | components["schemas"]["TerrainColourStop"][];
+        };
+        TerrainDerivativeLayerDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            terrainBuildId: string;
+            derivative: components["schemas"]["TerrainDerivative"];
+            name: string;
+            settings: string;
+            status: components["schemas"]["TerrainDerivativeStatus"];
+            errorCode: null | string;
+            message: null | string;
+            /** Format: int32 */
+            version: number;
+            /** Format: int64 */
+            sizeBytes: number;
+            stale: boolean;
+            /** Format: date-time */
+            computedAt: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            rasters: components["schemas"]["TerrainDerivativeRasterDto"][];
+        };
+        TerrainDerivativeRasterDto: {
+            /** Format: int64 */
+            id: number;
+            /** Format: double */
+            west: number;
+            /** Format: double */
+            south: number;
+            /** Format: double */
+            east: number;
+            /** Format: double */
+            north: number;
+            /** Format: int32 */
+            width: number;
+            /** Format: int32 */
+            height: number;
+            /** Format: double */
+            pixelSizeDegrees: number;
+            /** Format: int64 */
+            sizeBytes: number;
+            url: string;
+        };
+        /** @enum {unknown} */
+        TerrainDerivativeStatus: "queued" | "computing" | "ready" | "failed";
+        TerrainFeatureProbeDto: {
+            hasTerrain: boolean;
+            samples: components["schemas"]["TerrainFeatureProbeSampleDto"][];
+        };
+        TerrainFeatureProbeRequest: {
+            featureIds: string[];
+        };
+        TerrainFeatureProbeSampleDto: {
+            /** Format: uuid */
+            featureId: string;
+            outcome: components["schemas"]["DemSampleOutcome"];
+            /** Format: double */
+            elevationM: null | number;
+        };
         /** @enum {unknown} */
         TerrainHeightDatum: "orthometric" | "ellipsoidal";
+        /** @enum {unknown} */
+        TerrainHillshadeLighting: "single" | "multidirectional" | null;
+        TerrainProbeDto: {
+            hasTerrain: boolean;
+            samples: components["schemas"]["TerrainProbeSampleDto"][];
+        };
+        TerrainProbePointRequest: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+        };
+        TerrainProbeRequest: {
+            points: components["schemas"]["TerrainProbePointRequest"][];
+        };
+        TerrainProbeSampleDto: {
+            /** Format: double */
+            longitude: number;
+            /** Format: double */
+            latitude: number;
+            outcome: components["schemas"]["DemSampleOutcome"];
+            /** Format: double */
+            elevationM: null | number;
+        };
         TerrainRasterUploadDto: {
             reference: string;
             /** Format: int64 */
             sizeBytes: number;
         };
+        /** @enum {unknown} */
+        TerrainRuggednessFit: "riley" | "wilson" | null;
+        /** @enum {unknown} */
+        TerrainSlopeUnit: "degrees" | "percent" | null;
         TerrainSourceDirectoriesDto: {
             roots: string[];
         };
@@ -21343,6 +22305,13 @@ export interface components {
             attribution: null | string;
             /** Format: double */
             surveyHeightOffsetM: number;
+        };
+        /** @enum {unknown} */
+        TerrainSurfaceFit: "horn" | "zevenbergenThorne" | null;
+        TestLoginInfo: {
+            email: string;
+            password: string;
+            role: string;
         };
         TestMessageRequest: {
             recipient: string;

@@ -135,6 +135,7 @@ try
         .SetApplicationName("silexgis")
         .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
     builder.Services.AddSingleton<IFileAccessTokenService, FileAccessTokenService>();
+    builder.Services.AddSingleton<ITerrainRasterTokenService, TerrainRasterTokenService>();
     builder.Services.AddSingleton<IUnsubscribeTokens, UnsubscribeTokenService>();
     // Its own protection purpose, so a token minted for a picture held in a neighbouring photo
     // library can never be redeemed against this application's own stored files.
@@ -273,11 +274,14 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
     api.MapSurveySourceEndpoints();
+    api.MapSurveyCompilationEndpoints();
     api.MapCenterlineEndpoints();
     api.MapCaveSurveyStatisticsEndpoints();
     api.MapCaveCrossSectionEndpoints();
     api.MapCavePatternEndpoints();
+    api.MapCaveTopologyEndpoints();
     api.MapCaveHypsometryEndpoints();
+    api.MapCaveOverburdenEndpoints();
     api.MapCaveStructureComparisonEndpoints();
     api.MapCaveClosestApproachEndpoints();
     api.MapCrsEndpoints();
@@ -341,6 +345,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTripParticipantRoleEndpoints();
     api.MapExpeditionRosterRoleEndpoints();
     api.MapTripStatisticsEndpoints();
+    api.MapRegistryStatisticsEndpoints();
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
     api.MapAccessHistoryEndpoints();
@@ -357,6 +362,8 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapAdminSettingsEndpoints();
     api.MapAdminTemplateEndpoints();
     api.MapTerrainBuildEndpoints();
+    api.MapTerrainProbeEndpoints();
+    api.MapTerrainDerivativeEndpoints();
     api.MapSyncEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
@@ -370,6 +377,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         // Permission groups must exist before the bootstrap admin joins Full Administrators.
         await PermissionGroupSeeder.SeedAsync(db);
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
+        await TestLoginSeeder.SeedAsync(scope.ServiceProvider);
 
         // Registration joins new accounts to these groups by slug; a slug naming no
         // group would silently do nothing per signup, so it is called out once here.

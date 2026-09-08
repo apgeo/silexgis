@@ -32,6 +32,7 @@ namespace SilexGis.Infrastructure.Terrain;
 /// </remarks>
 public sealed class TerrainPreparePhase(
     ITerrainRasterPreparer preparer,
+    TerrainRasterIndex index,
     ILogger<TerrainPreparePhase> logger) : ITerrainPhase
 {
     public TerrainBuildPhase Phase => TerrainBuildPhase.Prepare;
@@ -113,6 +114,13 @@ public sealed class TerrainPreparePhase(
                 + "area this build asked for.",
                 ct);
         }
+
+        // What was just written is described once and kept, so that reading a height later does not
+        // have to open every one of these files to find out which of them holds the point. Done
+        // here rather than left to the first reader because this step already has the files open
+        // and warm, and because a build that finishes at three in the morning should not make
+        // whoever asks the first question of the day pay for the description.
+        await index.RefreshAsync(context.Build.Id, ct);
 
         await context.ReportAsync(100, null, ct);
     }
