@@ -271,6 +271,8 @@ export const queryKeys = {
     ['stats', 'registry', 'correlation', params] as const,
   registryRegions: (params: Record<string, unknown>) =>
     ['stats', 'registry', 'regions', params] as const,
+  registryClustering: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'clustering', params] as const,
   mapDensity: (bbox: string, cellMetres: number | null, bandwidthMetres: number | null, areaId?: string) =>
     ['map', 'density', bbox, cellMetres, bandwidthMetres, areaId ?? null] as const,
   mapPointPattern: (bbox: string, simulations: number, seed: number, areaId?: string) =>
@@ -7641,5 +7643,60 @@ export function useRegistryRegions(params: RegistryRegionsParams) {
     queryKey: queryKeys.registryRegions(params),
     queryFn: () => unwrap(api.GET('/api/v1/stats/registry/regions', { params: { query: params } })),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** How many caves recorded one named measure, and how many were left out for want of it alone. */
+export type RegistryClusterCoverage = components['schemas']['RegistryClusterCoverageDto'];
+
+/** Who the grouping was offered, who it could take, and who it had to leave out. */
+export type RegistryClusterPopulation = components['schemas']['RegistryClusterPopulationDto'];
+
+/** The middle and the spread one measure was standardised by before distances were taken. */
+export type RegistryClusterScaling = components['schemas']['RegistryClusterScalingDto'];
+
+/** One group: its label, how many caves fell in it, and its middle when it is large enough to publish one. */
+export type RegistryCluster = components['schemas']['RegistryClusterDto'];
+
+/** Which group one cave fell in, and how far from that group's middle it sits. */
+export type RegistryClusterAssignment = components['schemas']['RegistryClusterAssignmentDto'];
+
+/** How wide the groups are against how far apart they are — the only figure that can contradict them. */
+export type RegistryClusterSeparation = components['schemas']['RegistryClusterSeparationDto'];
+
+/** Which caves resemble each other over the measures asked for, and the account of who was left out. */
+export type RegistryClustering = components['schemas']['RegistryClusteringDto'];
+
+/** Everything a grouping can be asked, scope included, spelled as the route spells it. */
+export type RegistryClusteringParams = NonNullable<
+  paths['/api/v1/stats/registry/clustering']['get']['parameters']['query']
+>;
+
+/**
+ * Which caves resemble each other over the measures asked for.
+ *
+ * The answer is not only the groups. It carries the account of who could be grouped and who could
+ * not, and for want of which measurement — which is the half a reader has to see first, because a
+ * grouping over the best-surveyed tenth of a registry is internally consistent and reads exactly
+ * like a grouping over the registry.
+ *
+ * `enabled` is a parameter rather than an internal guess because the caller is the only one that
+ * knows whether the set it is drawing and the set it would be asking about are the same set. A
+ * grouping fetched for a wider set than the points on screen colours them with a claim about
+ * caves nobody is looking at, and nothing in the answer would reveal the mismatch.
+ */
+export function useRegistryClustering(params: RegistryClusteringParams, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.registryClustering(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/stats/registry/clustering', { params: { query: params } })),
+    // Deliberately no carrying of the previous answer across a change of scope. Keeping it is the
+    // right trade for a page of rows, where the shape barely moves and a blank table flickers; it
+    // is the wrong one here, because the previous answer is a grouping of a different set of caves
+    // and the list it would be painted over refetches faster than a grouping does. For the length
+    // of that window the colours and the population sentence would both describe caves nobody is
+    // looking at, and nothing in either would admit it. An uncoloured scatter for a moment is the
+    // honest state.
+    enabled,
   });
 }

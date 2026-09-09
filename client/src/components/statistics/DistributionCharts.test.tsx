@@ -145,6 +145,35 @@ describe('the chart layer draws real elements', () => {
     expect(labels).not.toContain('karstStats.regression');
   });
 
+  it('draws one series per group, and one for the caves no group took', async () => {
+    const pairs: Array<[number, number]> = lengths.map((l) => [l, Math.sqrt(l) * 3]);
+    const third = Math.ceil(pairs.length / 3);
+
+    renderThemed(
+      <CorrelationChart
+        pairs={pairs}
+        series={[
+          { name: 'Group 1', cluster: 0, points: pairs.slice(0, third) },
+          { name: 'Group 2', cluster: 1, points: pairs.slice(third, third * 2) },
+          { name: 'Not grouped', cluster: null, points: pairs.slice(third * 2) },
+        ]}
+        xLabel="Length (m)"
+        yLabel="Depth (m)"
+      />,
+    );
+
+    const frame = await screen.findByTestId('chart-correlation');
+    await waitFor(() => expect(frame.querySelector('svg')).not.toBeNull());
+
+    // The legend is what makes a colour mean anything: a coloured scatter with no legend is a
+    // decoration. Every group named has to appear in it, the ungrouped one included — those are
+    // the caves the reader would otherwise take for one more group.
+    const labels = Array.from(frame.querySelectorAll('text')).map((n) => n.textContent ?? '');
+    expect(labels).toContain('Group 1');
+    expect(labels).toContain('Group 2');
+    expect(labels).toContain('Not grouped');
+  });
+
   it('draws a curve inside a band', async () => {
     const x = [0, 1, 2, 3, 4];
     renderThemed(

@@ -212,7 +212,13 @@ export default function CaveListPage() {
           },
         ]}
       />
-      <CaveDistributionPanel caves={data?.items ?? []} typeName={typeName} />
+      {/* The panel is handed the same narrowing the list ran, search included, so it can tell
+          whether a registry-wide grouping may honestly be laid over these caves. */}
+      <CaveDistributionPanel
+        caves={data?.items ?? []}
+        typeName={typeName}
+        scope={{ ...params, search: search || undefined }}
+      />
       <KarstLinkExportModal
         open={karstLinkOpen}
         onClose={() => setKarstLinkOpen(false)}

@@ -3659,6 +3659,18 @@
     }
   },
   "karstStats": {
+    "clusterArbitrary": "The grouping was still moving caves when it reached its limit, so which group a borderline cave fell into is arbitrary in its details rather than wrong.",
+    "clusterCoverage": "{{measure}}: {{missing}} of the caves considered do not record it, and {{soleReason}} of those would have been grouped had this measure not been asked for.",
+    "clusterEmpty": "Nothing could be grouped: fewer than {{minimum}} caves in this set record every measure asked for. The points below are drawn uncoloured, and the counts above still hold.",
+    "clusterGroup": "Group {{group}}",
+    "clusterMeasures": "Grouped over {{measures}}, each standardised first so that neither measure counts for more than the other simply for being recorded in larger numbers.",
+    "clusterNoSeparation": "The groups' middles do not separate at all — the strongest reading available of there being no structure here. The colours divide these caves; they do not find anything in them.",
+    "clusterNoWork": "Every grouped cave records the same {{measure}}, so that measure moved no cave into any group.",
+    "clusterNotAsked": "This list is narrowed by something the registry-wide grouping cannot be asked about, so the caves are drawn uncoloured rather than coloured by a grouping of some other set of caves.",
+    "clusterPopulation": "Grouped over the {{eligible}} of {{considered}} caves you may read in the whole set this list is narrowed to — not only the page drawn below — that record every measure asked for. The other {{excluded}} record fewer, so no grouping can place them, and having no length or no depth to plot they are absent from the chart rather than drawn in it.",
+    "clusterUngrouped": "Not grouped",
+    "clusterWeak": "The groups are as wide as they are far apart, so this grouping is weak. The method returns exactly the number of groups it was asked for on any data whatever, noise included, so the colours below are a division of these caves rather than a finding about them.",
+    "clusterWithheld": "Some groups hold fewer than {{floor}} caves. Those are not summarised and their caves are drawn uncoloured, because a mean over two caves is those two caves' readings rather than anything about a group.",
     "count": "Caves",
     "depthAxis": "Depth (m)",
     "lengthAxis": "Surveyed length (m)",
