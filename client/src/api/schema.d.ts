@@ -8267,12 +8267,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One page of the photographs one neighbouring library holds, newest first. Carries no position of any kind and takes no rectangle and no words. */
+        /** One page of the photographs one neighbouring library holds, newest first — of the whole library, of the days one trip was out, or of one of the library's albums. Carries no position of any kind and takes no rectangle, no words and no dates. */
         get: {
             parameters: {
                 query?: {
                     page?: number;
                     pageSize?: number;
+                    tripId?: string;
+                    albumId?: string;
                 };
                 header?: never;
                 path: {
@@ -8328,6 +8330,44 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["LibraryPhotographDetailDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/photo-libraries/{source}/albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The albums one neighbouring library keeps, for narrowing a listing to one. Names and the library's own counts where it states them; no photographs, and no position of any kind. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LibraryAlbumsDto"];
                     };
                 };
             };
@@ -20149,6 +20189,24 @@ export interface components {
             };
             treatmentForAll?: null | string;
             defaultTreatment?: null | string;
+        };
+        LibraryAlbumDto: {
+            albumId: string;
+            title: null | string;
+            /** Format: int32 */
+            photographCount: null | number;
+            /** Format: date-time */
+            from: null | string;
+            /** Format: date-time */
+            to: null | string;
+        };
+        LibraryAlbumsDto: {
+            source: string;
+            libraryName: string;
+            items: components["schemas"]["LibraryAlbumDto"][];
+            truncated: boolean;
+            /** Format: date-time */
+            readAt: string;
         };
         LibraryPhotoFeatureCollection: {
             type: string;
