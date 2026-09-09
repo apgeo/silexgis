@@ -41,14 +41,44 @@ public sealed class TestLoginTests : IDisposable
     }
 
     [Fact]
-    public async Task Nothing_is_seeded_while_the_switch_is_off()
+    public async Task The_switch_gates_the_writes_and_not_only_the_announcement()
     {
-        // The default factory has started (constructor), so seeding has already had its chance.
-        var response = await factory.CreateClient().PostAsJsonAsync(
-            "/api/v1/auth/login",
-            new { email = "admin@test.local", password = "test-login-pass-1" });
+        // Both halves live in one test on purpose. Every class in this suite shares one
+        // database, so "no account with this address exists" is not a claim a test can make --
+        // a sibling running with the switch on has already created them. What *is* provable,
+        // and is the property that matters, is that a host started with the switch off writes
+        // nothing: it does not bring an existing account to the password it was configured
+        // with, which is the one observable write this seeder performs after creation.
+        using (var enabled = new SilexGisApiFactory(connectionString, new Dictionary<string, string?>
+               {
+                   ["TestLogins:Enabled"] = "true",
+                   ["TestLogins:Password"] = "gated-pass-aaa1",
+               }))
+        {
+            var seeded = await enabled.CreateClient().PostAsJsonAsync(
+                "/api/v1/auth/login", new { email = "editor@test.local", password = "gated-pass-aaa1" });
+            seeded.StatusCode.ShouldBe(HttpStatusCode.OK, "the enabled half must establish the baseline");
+        }
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        using var disabled = new SilexGisApiFactory(connectionString, new Dictionary<string, string?>
+        {
+            ["TestLogins:Enabled"] = "false",
+            ["TestLogins:Password"] = "gated-pass-bbb2",
+        });
+
+        // The disabled host must not have reconciled the account to its configured password...
+        var wouldHaveWritten = await disabled.CreateClient().PostAsJsonAsync(
+            "/api/v1/auth/login", new { email = "editor@test.local", password = "gated-pass-bbb2" });
+        wouldHaveWritten.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+
+        // ...and must have left the earlier one alone rather than clearing it.
+        var untouched = await disabled.CreateClient().PostAsJsonAsync(
+            "/api/v1/auth/login", new { email = "editor@test.local", password = "gated-pass-aaa1" });
+        untouched.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // And it announces nothing regardless of what sits in the database.
+        var config = await disabled.CreateClient().GetFromJsonAsync<JsonElement>("/api/v1/auth/config");
+        config.GetProperty("testLogins").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
     [Fact]

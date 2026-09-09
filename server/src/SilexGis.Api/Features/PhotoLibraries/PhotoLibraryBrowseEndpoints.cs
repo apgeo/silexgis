@@ -152,7 +152,7 @@ public static class PhotoLibraryBrowseEndpoints
         string source,
         int? page,
         int? pageSize,
-        IEnumerable<IPhotoLibrary> libraries,
+        PhotoLibraryGate gate,
         ILibraryPhotoTokenService tokens,
         IOptions<PhotoLibraryOptions> options,
         IAccessContextAccessor accessAccessor,
@@ -175,13 +175,15 @@ public static class PhotoLibraryBrowseEndpoints
             return ApiProblems.NotFound(PhotoLibraryEndpoints.NotFoundCode);
         }
 
-        var library = libraries.FirstOrDefault(l => l.Source == which);
-        if (library is null || !library.IsConfigured)
+        var library = await gate.UsableAsync(which, ct);
+        if (library is null)
         {
             // A library nobody has configured is absent rather than broken, and a caller reaching
             // this route for one is looking at a page that should not have been offered — so the
             // answer is the same one a product this installation does not run gets, and no socket
-            // is opened on the way to it.
+            // is opened on the way to it. One this installation has stopped using is answered the
+            // same way, deliberately: stopping it makes the application behave as though it had
+            // never been connected.
             return ApiProblems.NotFound(PhotoLibraryEndpoints.NotFoundCode);
         }
 
@@ -243,7 +245,7 @@ public static class PhotoLibraryBrowseEndpoints
     private static async Task<Results<Ok<LibraryPhotographDetailDto>, UnauthorizedHttpResult, ProblemHttpResult>> DetailAsync(
         string source,
         string photographId,
-        IEnumerable<IPhotoLibrary> libraries,
+        PhotoLibraryGate gate,
         ILibraryPhotoTokenService tokens,
         IOptions<PhotoLibraryOptions> options,
         IAccessContextAccessor accessAccessor,
@@ -266,8 +268,8 @@ public static class PhotoLibraryBrowseEndpoints
             return ApiProblems.NotFound(PhotoLibraryEndpoints.NotFoundCode);
         }
 
-        var library = libraries.FirstOrDefault(l => l.Source == which);
-        if (library is null || !library.IsConfigured)
+        var library = await gate.UsableAsync(which, ct);
+        if (library is null)
         {
             return ApiProblems.NotFound(PhotoLibraryEndpoints.NotFoundCode);
         }

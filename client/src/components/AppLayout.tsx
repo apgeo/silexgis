@@ -83,11 +83,15 @@ export default function AppLayout() {
     // screen — the preview included — to anyone who may not. A read check here would offer an
     // afternoon's review to somebody whose first request is turned down.
     tripLogCreate: hasAccessAction(capabilities?.domains.tripLogs, 'create'),
-    // Two facts, both from the server: whether this account may reach the neighbouring photo
-    // libraries at all, and whether this installation has been given one. Neither is a right of
-    // this application's own, and an installation that runs none of these products has nothing
-    // behind the page — so the rail offers it only when there is something there.
-    photoLibrary: (photoLibraries?.mayRead ?? false) && (photoLibraries?.providers.length ?? 0) > 0,
+    // Three facts, all from the server: whether this account may reach the neighbouring photo
+    // libraries at all, whether this installation has been given one, and whether it is currently
+    // using any of them. None is a right of this application's own, and a page that could only say
+    // "nothing to look through" is not worth a place on the rail — an installation that runs none
+    // of these products, and one that has stopped using the ones it has, both have nothing behind
+    // the page.
+    photoLibrary:
+      (photoLibraries?.mayRead ?? false)
+      && (photoLibraries?.providers.some((library) => !library.suspended) ?? false),
     isFullAdmin,
   });
 

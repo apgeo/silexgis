@@ -156,4 +156,22 @@ public interface IPhotoLibrary
     /// drive is the deletion loop with a schedule attached.
     /// </summary>
     Task RecheckOriginalsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Drops everything held about this library — positions read from it, the last thing it said
+    /// about itself, any credential minted for reading its pictures — without asking it anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Opens no socket and can be called about a library nobody configured. It is what makes
+    /// "this installation has stopped using it" mean more than "it stops asking": one of these
+    /// products can only give its located photographs whole, so their coordinates are read once and
+    /// kept for the whole installation, and a stopped library whose reading stayed resident would
+    /// re-serve every one of them the moment somebody released the brake, however long afterwards.
+    /// </para>
+    /// <para>
+    /// It changes nothing on the far side. The library goes on holding everything it holds.
+    /// </para>
+    /// </remarks>
+    void Forget();
 }

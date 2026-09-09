@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
+using SilexGis.Domain.PhotoLibraries;
 
 namespace SilexGis.Domain.Settings;
 
@@ -306,6 +307,79 @@ public sealed record AnnouncementSettings
         PaidChannelsEnabled ? NotificationChannelKinds.Paid : NotificationChannelKind.None;
 }
 
+/// <summary>
+/// Whether this installation is currently using each neighbouring photo library it has been given.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>A brake, and deliberately only a brake.</b> Configuration decides whether this installation
+/// knows about a photo library at all: the deployment supplies an address and a credential, or it
+/// does not. What is stored here can only stop the application using one it already knows about,
+/// and let it start again afterwards. There is no value in this section that brings a library into
+/// existence, and the asymmetry is the design rather than an omission — a screen that could switch
+/// a library "on" would be claiming an address nobody supplied and a container nobody started, and
+/// the state it produced ("on", pointed at nothing) is one no operator could act on. Anyone
+/// tempted to make this a symmetric toggle is changing the design, not tidying it.
+/// </para>
+/// <para>
+/// The reason it exists at all is that stopping has to be quick. A library misbehaving, a
+/// credential about to be replaced, an operator working on the machine it runs on — every one of
+/// those wants the application to stop talking to it now, and until this existed the only way was
+/// to edit the deployment's configuration and restart. It is per library, because the reason to
+/// stop one is rarely a reason to stop the other.
+/// </para>
+/// <para>
+/// Suspending changes nothing on the other side. The library goes on running, goes on indexing and
+/// goes on serving its own accounts at its own address; what stops is this application asking it
+/// anything. Stopping the library itself is the deployment's job and is not something this
+/// application is given any way to do.
+/// </para>
+/// </remarks>
+public sealed record PhotoLibrarySuspensionSettings
+{
+    /// <summary>Whether the neighbouring Immich instance is currently not to be used.</summary>
+    public bool ImmichSuspended { get; init; }
+
+    /// <summary>Whether the neighbouring PhotoPrism instance is currently not to be used.</summary>
+    public bool PhotoPrismSuspended { get; init; }
+
+    /// <summary>
+    /// Every library stopped, which is what an unreadable stored decision has to mean.
+    /// </summary>
+    /// <remarks>
+    /// A brake whose stored position cannot be read has to resolve to <em>on</em>. The values here
+    /// are never a deployment default — they exist only because somebody opened the settings and
+    /// decided something — so a row that will not deserialise is a decision that was taken and has
+    /// been lost, and the only reading of it that cannot do harm is the one that keeps the
+    /// application quiet. Resolving it the other way would resume talking to a library an operator
+    /// stopped, during the incident they stopped it for, leaving nothing but a log line. An
+    /// administrator recovers by saving the section again, which replaces the row that could not be
+    /// read.
+    /// </remarks>
+    public static PhotoLibrarySuspensionSettings EverythingStopped { get; } = new()
+    {
+        ImmichSuspended = true,
+        PhotoPrismSuspended = true,
+    };
+
+    /// <summary>Whether this installation has stopped using one library.</summary>
+    /// <remarks>
+    /// A product this record has no switch for is not stopped. Nothing has been decided about it —
+    /// the switch is added together with the product, and until it is there is nothing to read —
+    /// and the alternative of failing here would turn adding a third product into a failure of the
+    /// one surface that exists to tell "nobody connected one" from "did not answer" and from
+    /// "stopped", at exactly the moment somebody is adding one and needs it. The cost is that such
+    /// a product cannot be braked until its switch lands, which is visible and fixable; a status
+    /// route answering 500 for every library including the working ones is neither.
+    /// </remarks>
+    public bool IsSuspended(PhotoLibrarySource source) => source switch
+    {
+        PhotoLibrarySource.Immich => ImmichSuspended,
+        PhotoLibrarySource.PhotoPrism => PhotoPrismSuspended,
+        _ => false,
+    };
+}
+
 public static class AppSettingSections
 {
     public const string Mail = "mail";
@@ -324,6 +398,13 @@ public static class AppSettingSections
 
     public const string Announcements = "announcements";
 
+    /// <summary>
+    /// Which neighbouring photo libraries this installation has stopped using. Its own section
+    /// rather than a key on another, because saving a section replaces the whole stored document
+    /// and an unrelated form must not be able to release a brake somebody put on.
+    /// </summary>
+    public const string PhotoLibrarySuspension = "photoLibrarySuspension";
+
     public static IReadOnlyList<string> All { get; } =
-        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements];
+        [Mail, Sms, Security, Protection, Import, Interface, Notifications, Announcements, PhotoLibrarySuspension];
 }

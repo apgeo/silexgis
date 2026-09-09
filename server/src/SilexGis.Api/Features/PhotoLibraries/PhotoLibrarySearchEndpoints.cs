@@ -107,7 +107,7 @@ public static class PhotoLibrarySearchEndpoints
         string? q,
         int? page,
         int? pageSize,
-        IEnumerable<IPhotoLibrary> libraries,
+        PhotoLibraryGate gate,
         ILibraryPhotoTokenService tokens,
         IOptions<PhotoLibraryOptions> options,
         IAccessContextAccessor accessAccessor,
@@ -130,11 +130,12 @@ public static class PhotoLibrarySearchEndpoints
             return ApiProblems.NotFound(PhotoLibraryEndpoints.NotFoundCode);
         }
 
-        var library = libraries.FirstOrDefault(l => l.Source == which);
-        if (library is null || !library.IsConfigured)
+        var library = await gate.UsableAsync(which, ct);
+        if (library is null)
         {
             // A library nobody has configured is absent rather than broken, and no socket is opened
-            // on the way to saying so.
+            // on the way to saying so. One this installation has stopped using answers the same
+            // way: the words are not put to a library nobody is meant to be talking to.
             return ApiProblems.NotFound(PhotoLibraryEndpoints.NotFoundCode);
         }
 

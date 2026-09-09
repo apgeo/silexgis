@@ -42,6 +42,7 @@ namespace SilexGis.Infrastructure.PhotoLibraries;
 public sealed class PhotoPrismClient(
     IHttpClientFactory httpClientFactory,
     IOptions<PhotoPrismOptions> options,
+    IPhotoLibraryBrake brake,
     ILogger<PhotoPrismClient> logger) : IPhotoLibrary
 {
     /// <summary>Name of the client; registered in <c>DependencyInjection</c>.</summary>
@@ -140,8 +141,18 @@ public sealed class PhotoPrismClient(
     /// is known to be missing, never that everything is present.
     /// </para>
     /// </remarks>
-    public Task<LibraryHealth> ProbeAsync(CancellationToken ct) =>
-        IsConfigured ? health.GetAsync(ProbeOnceAsync, ct) : Task.FromResult(LibraryHealth.NotAsked);
+    public async Task<LibraryHealth> ProbeAsync(CancellationToken ct)
+    {
+        // A library this installation has stopped using is asked nothing, including this — and
+        // "nobody asked" is the honest answer for it. Saying it did not answer would invent a
+        // failure and send an operator to restart a container that is working perfectly.
+        if (!IsConfigured || await brake.IsSuspendedAsync(Source, ct))
+        {
+            return LibraryHealth.NotAsked;
+        }
+
+        return await health.GetAsync(ProbeOnceAsync, ct);
+    }
 
     private async Task<LibraryHealth> ProbeOnceAsync(CancellationToken ct)
     {
@@ -218,7 +229,7 @@ public sealed class PhotoPrismClient(
     public async Task<LibraryPhotoPage> PhotosInAsync(Envelope bounds, int limit, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(bounds);
-        EnsureConfigured();
+        await EnsureUsableAsync(ct);
 
         // Clamped here rather than trusted to the far end, which caps this at a hundred thousand
         // and would happily serve tens of thousands into a browser that cannot draw them.
@@ -370,7 +381,7 @@ public sealed class PhotoPrismClient(
         LibraryPhotoSearchQuery search, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(search);
-        EnsureConfigured();
+        await EnsureUsableAsync(ct);
 
         var words = WordsOnly(search.Text);
         if (words is null)
@@ -411,7 +422,7 @@ public sealed class PhotoPrismClient(
     private async Task<(IReadOnlyList<LibraryListedPhoto> Photos, bool HasMore)> PageAsync(
         int page, int pageSize, string? words, CancellationToken ct)
     {
-        EnsureConfigured();
+        await EnsureUsableAsync(ct);
 
         var count = Math.Clamp(pageSize, 1, ViewportCountCeiling);
 
@@ -567,7 +578,7 @@ public sealed class PhotoPrismClient(
     /// </remarks>
     public async Task<LibraryPhotoDetail?> DetailAsync(string photographId, CancellationToken ct)
     {
-        EnsureConfigured();
+        await EnsureUsableAsync(ct);
 
         if (!PhotoLibraryHttp.IsSafeReference(photographId))
         {
@@ -791,7 +802,7 @@ public sealed class PhotoPrismClient(
     public async Task<LibraryThumbnail> ThumbnailAsync(
         string reference, LibraryThumbnailSize size, string? ifNoneMatch, CancellationToken ct)
     {
-        EnsureConfigured();
+        await EnsureUsableAsync(ct);
 
         if (!PhotoLibraryHttp.IsSafeReference(reference))
         {
@@ -884,7 +895,7 @@ public sealed class PhotoPrismClient(
     /// </remarks>
     public async Task RecheckOriginalsAsync(CancellationToken ct)
     {
-        EnsureConfigured();
+        await EnsureUsableAsync(ct);
 
         try
         {
@@ -959,12 +970,56 @@ public sealed class PhotoPrismClient(
         return true;
     }
 
-    private void EnsureConfigured()
+    /// <summary>
+    /// The one question asked before anything leaves this machine: does this installation have this
+    /// library at all, and is it still using it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both answers arrive as the same refusal on purpose. A library the deployment never supplied
+    /// and one an administrator has stopped are the same thing to every surface above — absent,
+    /// rather than broken — and the whole point of the brake is that the application looks like an
+    /// installation that never had the library rather than like one whose library is failing.
+    /// </para>
+    /// <para>
+    /// It is here, in the method every outgoing call already goes through, rather than only in the
+    /// routes that call this client, because a check a caller must remember to make is one a caller
+    /// will eventually forget, and forgetting is silent: the request succeeds, the library answers,
+    /// and the only symptom is traffic at a neighbour's container that nobody is watching. Callers
+    /// still ask their own question first — a route that knows a library is stopped can answer
+    /// without constructing anything — but this is what makes "no socket is opened" true rather
+    /// than promised.
+    /// </para>
+    /// </remarks>
+    private async ValueTask EnsureUsableAsync(CancellationToken ct)
     {
         if (!IsConfigured)
         {
             throw new PhotoLibraryException(PhotoLibraryException.NotConfiguredCode);
         }
+
+        if (await brake.IsSuspendedAsync(Source, ct))
+        {
+            Forget();
+            throw new PhotoLibraryException(PhotoLibraryException.NotConfiguredCode);
+        }
+    }
+
+    /// <summary>
+    /// Drops everything this client is holding about the library, without asking it anything.
+    /// </summary>
+    /// <remarks>
+    /// The credential the pictures are served under goes with the rest. It was minted for this
+    /// installation's use of the library, it is what makes a preview address work for anyone who
+    /// holds it, and a library this installation has stopped using has no business leaving one
+    /// resident. Stopping and forgetting are deliberately the same act here. It changes nothing on
+    /// the far side: the library still holds everything it held, and still serves anyone who signs
+    /// into it directly.
+    /// </remarks>
+    public void Forget()
+    {
+        previewToken = null;
+        health.Clear();
     }
 
     /// <summary>The address, with the trailing slash a relative path needs to be appended rather than to replace.</summary>

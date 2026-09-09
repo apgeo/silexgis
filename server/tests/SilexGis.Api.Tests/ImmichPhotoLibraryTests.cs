@@ -500,6 +500,7 @@ public sealed class ImmichPhotoLibraryTests
         return new ImmichClient(
             new OneClient(stub),
             Options.Create(options),
+            new NothingStopped(),
             new NeverStopping(),
             NullLogger<ImmichClient>.Instance);
     }
@@ -547,6 +548,17 @@ public sealed class ImmichPhotoLibraryTests
     private sealed record LibraryCall(string Method, string Url, string? ApiKey, string? IfNoneMatch);
 
     /// <summary>A factory that hands out one client, over the stub a test supplied.</summary>
+    /// <summary>
+    /// A brake nobody has pulled, so these cases exercise a library this installation is using.
+    /// The client asks it before every outgoing call, which is what makes a stopped library cost no
+    /// network on any path.
+    /// </summary>
+    private sealed class NothingStopped : IPhotoLibraryBrake
+    {
+        public ValueTask<bool> IsSuspendedAsync(PhotoLibrarySource source, CancellationToken ct) =>
+            ValueTask.FromResult(false);
+    }
+
     private sealed class OneClient(HttpMessageHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);

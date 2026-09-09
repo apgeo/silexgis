@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using NetArchTest.Rules;
 using Shouldly;
+using SilexGis.Api.Features.PhotoLibraries;
 using SilexGis.Domain;
 using SilexGis.Infrastructure;
 
@@ -199,6 +200,75 @@ public class DependencyRuleTests
             .GetResult();
 
         infrastructure.IsSuccessful.ShouldBeTrue(FailureMessage(infrastructure));
+    }
+
+    /// <summary>
+    /// Every way of naming a neighbouring photo library, so that a rule about "reaching one" cannot
+    /// be walked around by naming the product instead of the contract.
+    /// </summary>
+    private static readonly string[] PhotoLibraryTypes =
+    [
+        "SilexGis.Infrastructure.PhotoLibraries.IPhotoLibrary",
+        "SilexGis.Infrastructure.PhotoLibraries.ImmichClient",
+        "SilexGis.Infrastructure.PhotoLibraries.PhotoPrismClient",
+    ];
+
+    [Fact]
+    public void Only_the_photo_library_slice_reaches_a_photo_library_at_all()
+    {
+        // Whether this installation is talking to a photo library is one decision, and it is taken
+        // in one slice. A route somewhere else that resolved a library for itself would be outside
+        // every surface that knows the decision exists, and the failure is silent: requests keep
+        // going to a library somebody stopped, which looks exactly like a library that is working,
+        // and the only symptom is traffic at a neighbour's container that nobody is watching.
+        //
+        // Both the shared contract and the two products are named, because a handler that asks for
+        // a product by name reaches a library exactly as completely as one that asks for the
+        // contract, and both are resolvable.
+        var result = Types.InAssembly(typeof(Program).Assembly)
+            .That()
+            .DoNotResideInNamespaceStartingWith("SilexGis.Api.Features.PhotoLibraries")
+            .ShouldNot()
+            .HaveDependencyOnAny(PhotoLibraryTypes)
+            .GetResult();
+
+        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
+    }
+
+    [Fact]
+    public void Nothing_reaches_a_neighbouring_photo_library_without_asking_whether_it_may()
+    {
+        // Inside the slice, a type that can reach a library must also hold the object that decides
+        // whether it may, so that a new route which forgets fails the build rather than review.
+        //
+        // What this rule can and cannot see is worth stating, because it is easy to read it as more
+        // than it is. It constrains types, not methods: it proves that a class reaching a library
+        // also names the gate, and cannot prove that every handler inside that class went through
+        // it. That gap is closed underneath rather than here — each client asks the same question
+        // for itself in the one method its outgoing calls already go through, so a handler added to
+        // an existing class and never given the gate is refused by the library client instead of
+        // quietly succeeding. This rule is the earlier and louder of the two signals, not the only
+        // one.
+        const string gate = "SilexGis.Api.Features.PhotoLibraries.PhotoLibraryGate";
+
+        var reachers = Types.InAssembly(typeof(Program).Assembly)
+            .That()
+            .ResideInNamespaceStartingWith("SilexGis.Api.Features.PhotoLibraries")
+            .And()
+            .DoNotHaveName(nameof(PhotoLibraryGate))
+            .And()
+            .HaveDependencyOnAny(PhotoLibraryTypes);
+
+        // Asserted before the rule, because a rule over an empty set passes: a renamed namespace or
+        // a slice that stopped naming the contract would otherwise turn this into a test that
+        // proves nothing while staying green.
+        reachers.GetTypes().ShouldNotBeEmpty(
+            "No type in the photo-library slice reaches a library any more — check this rule still "
+            + "describes the code before trusting it.");
+
+        var result = reachers.Should().HaveDependencyOn(gate).GetResult();
+
+        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
     }
 
     /// <summary>

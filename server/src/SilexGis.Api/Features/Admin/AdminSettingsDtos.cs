@@ -90,8 +90,43 @@ public sealed record AdminSettingsDto(
     InterfaceSettingsDto Interface,
     NotificationSettingsDto Notifications,
     AnnouncementSettingsDto Announcements,
+    PhotoLibrarySuspensionDto PhotoLibraries,
     bool MailConfigured,
     bool SmsConfigured);
+
+/// <summary>
+/// Which neighbouring photo libraries this installation has stopped using for now.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Stopping only.</b> Whether this installation has a photo library at all is settled by the
+/// deployment — an address and a credential were supplied for it, or they were not — and nothing
+/// here can supply either. What these two switches do is stop the application talking to a library
+/// it already has, and let it start again. There is deliberately no value here that turns a library
+/// on: an installation that was never given one has nothing to turn on, and a screen claiming
+/// otherwise would produce a state ("on", pointed at nothing) that nobody could act on. A later
+/// reader tempted to make this a symmetric enable/disable pair is changing the design.
+/// </para>
+/// <para>
+/// Both values are carried on every save, because saving replaces the whole stored section: a form
+/// posting one library's switch alone would release the other library's brake as a side effect.
+/// </para>
+/// <para>
+/// Suspending changes nothing on the far side. The library goes on running at its own address, goes
+/// on indexing what it holds, and goes on serving whoever can sign into it directly. Stopping the
+/// library itself is the deployment's job, and this application is deliberately given no way to
+/// start or stop the containers beside it.
+/// </para>
+/// </remarks>
+public sealed record PhotoLibrarySuspensionDto(bool ImmichSuspended, bool PhotoPrismSuspended);
+
+/// <summary>
+/// Nothing to reject: the section is two switches, and all four positions are valid installation
+/// policy — including a brake left on a library nobody has configured, which is inert rather than
+/// wrong. The validator exists so the route is validated like every other one rather than being
+/// the single exception somebody later has to explain.
+/// </summary>
+public sealed class PhotoLibrarySuspensionDtoValidator : AbstractValidator<PhotoLibrarySuspensionDto>;
 
 /// <summary>
 /// How much the installation trusts a vector file to become registry objects on its own, and

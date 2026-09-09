@@ -143,6 +143,9 @@ public static class DependencyInjection
         // has" and a further product joining is an addition rather than a rewrite. An installation
         // that configured neither still resolves both — they report themselves absent and open no
         // socket, which is what makes running one, both or none all supported installations.
+        // The brake, resolved once for the whole installation rather than per caller: whether a
+        // library is being used is a decision about this installation and not about whoever asked.
+        services.AddSingleton<PhotoLibraries.IPhotoLibraryBrake, PhotoLibraries.StoredPhotoLibraryBrake>();
         services.AddSingleton<PhotoLibraries.ImmichClient>();
         services.AddSingleton<PhotoLibraries.IPhotoLibrary>(
             sp => sp.GetRequiredService<PhotoLibraries.ImmichClient>());

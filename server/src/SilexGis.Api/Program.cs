@@ -140,6 +140,10 @@ try
     // Its own protection purpose, so a token minted for a picture held in a neighbouring photo
     // library can never be redeemed against this application's own stored files.
     builder.Services.AddSingleton<ILibraryPhotoTokenService, LibraryPhotoTokenService>();
+    // Whether a neighbouring photo library may be talked to at all, decided in one place for every
+    // route that reaches one. Scoped rather than long-lived because the answer includes a stored
+    // setting an administrator can change while the application is running.
+    builder.Services.AddScoped<PhotoLibraryGate>();
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<SilexGisDbContext>("database");
     builder.Services.AddOptions<AboutOptions>()

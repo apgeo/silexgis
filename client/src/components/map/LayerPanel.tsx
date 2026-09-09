@@ -108,6 +108,13 @@ interface LayerPanelProps {
    * is given: an ordinary account has no errand that begins with a library nobody connected.
    */
   unconfiguredPhotoLibraries: LibraryPhotoProvider[];
+  /**
+   * The libraries this installation has and has stopped using. No layer is made for them and
+   * nothing is asked of them, but they are named here: an overlay that was on the panel yesterday
+   * and is missing today is a question, and "switched off here" is a different answer from "did
+   * not answer" and from "nobody connected one".
+   */
+  suspendedPhotoLibraries: LibraryPhotoProvider[];
   /** Which of them are switched on — a status block for an overlay nobody is looking at is noise. */
   visibleLibraryPhotoSources: string[];
   /**
@@ -164,6 +171,7 @@ export default function LayerPanel({
   onOverlayVisibilityChanged,
   photoLibraries,
   unconfiguredPhotoLibraries,
+  suspendedPhotoLibraries,
   visibleLibraryPhotoSources,
   treeNonce,
   tagFilter,
@@ -774,6 +782,23 @@ export default function LayerPanel({
             </div>
           );
         })}
+      {/* Present, running, and deliberately not being used. Said in the panel because the map is
+          where somebody notices: the layer they used yesterday is simply not there, and without
+          this line the obvious conclusion is that the library broke. */}
+      {suspendedPhotoLibraries.map((library) => (
+        <div
+          key={library.source}
+          style={{ marginTop: 8 }}
+          data-testid={`library-photos-suspended-${library.source}`}
+        >
+          <Typography.Text strong style={{ fontSize: 12 }}>
+            {library.name}
+          </Typography.Text>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
+            {t('libraryPhotos.health.suspended')}
+          </Typography.Paragraph>
+        </div>
+      ))}
       {/* What an empty layer panel cannot say on its own: that there is nothing to look at because
           nothing was connected. Drawn from what the server sent, which is this list for a full
           administrator and an empty one for everybody else — the decision about who is told which

@@ -50,7 +50,18 @@ export default function PhotoLibraryPage() {
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState<string | null>(null);
 
-  const libraries = useMemo(() => status?.providers ?? [], [status]);
+  // Only the libraries this installation is actually using. One it has stopped using is left out
+  // of the chooser and out of everything downstream of it — including the search box, which is
+  // offered per library — because the routes behind them refuse, and a control that can only fail
+  // is worse than no control.
+  const libraries = useMemo(
+    () => (status?.providers ?? []).filter((library) => !library.suspended),
+    [status],
+  );
+
+  // Whether anything was stopped, which is why the page may be empty. A different fact from an
+  // installation that was never given a library, and the two send a reader to different places.
+  const anySuspended = (status?.providers ?? []).some((library) => library.suspended);
   const named = params.get('source');
   const source = libraries.find((library) => library.source === named)?.source
     ?? libraries[0]?.source;
@@ -112,12 +123,16 @@ export default function PhotoLibraryPage() {
   // one — so this says what is true rather than showing an empty grid. An answer that never
   // arrived lands here too, and deliberately: with nothing said about which libraries exist there
   // is no library to draw and nothing further down has a number it could trust.
+  //
+  // Two sentences rather than one, because there are two reasons to be standing here and they are
+  // not the same errand: nobody connected a library, or somebody stopped the one that is there.
+  // Telling a reader to connect a library they already have is the wrong advice.
   if (!status || libraries.length === 0 || !source) {
     return (
       <Alert
         type="info"
         showIcon
-        message={t('libraryPhotos.notConfigured')}
+        message={t(anySuspended ? 'libraryPhotos.health.suspended' : 'libraryPhotos.notConfigured')}
         style={{ margin: 16 }}
       />
     );

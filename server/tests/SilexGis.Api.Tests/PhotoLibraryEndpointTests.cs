@@ -120,7 +120,26 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         anonymous = factory.CreateClient();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    /// <summary>
+    /// Releases the brake, whatever a case left it at.
+    /// </summary>
+    /// <remarks>
+    /// Which photo libraries this installation is using is one stored row for the whole
+    /// installation, and every class in this suite shares one database — so a case that stopped a
+    /// library and then failed an assertion would hand the next class a host that quietly refuses
+    /// every photo-library route, with nothing in its own failure naming the cause. Done here
+    /// rather than at the end of each case for exactly that reason: it has to happen on the path
+    /// where something went wrong.
+    /// </remarks>
+    public async Task DisposeAsync()
+    {
+        if (admin is not null)
+        {
+            await admin.PutAsJsonAsync(
+                "/api/v1/admin/settings/photo-libraries",
+                new { immichSuspended = false, photoPrismSuspended = false });
+        }
+    }
 
     public void Dispose()
     {
@@ -930,6 +949,193 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
 
         created.Status.ShouldBe(HttpStatusCode.Created, created.Body);
         created.Json.GetProperty("kind").GetString().ShouldBe("generic");
+    }
+
+    // ------------------------------------------------------------- stopping and starting again
+
+    /// <summary>
+    /// The brake, driven the way an operator drives it: through the installation-settings route,
+    /// while the application is running, with no redeploy and no shell.
+    /// </summary>
+    /// <remarks>
+    /// The assertion that matters is the last line of each block — not one socket was opened to the
+    /// library after it was stopped. A route that went on asking would look identical from the
+    /// outside on every other assertion here, because a library that is up answers a suspended
+    /// installation exactly as it answers a running one.
+    /// </remarks>
+    [Fact]
+    public async Task A_stopped_library_is_asked_nothing_on_any_route()
+    {
+        library.AnswersGeo(OnePhotograph);
+
+        // Running first, so the case proves a change rather than an installation that was never
+        // working: the map answers, and the picture address is minted while it does.
+        var before = await JsonAsync(admin, $"{MapUrl}?bbox={Bbox}");
+        before.GetProperty("features").GetArrayLength().ShouldBe(1);
+        var template = before.GetProperty("pictureUrlTemplate").GetString().ShouldNotBeNull();
+        library.Calls.ShouldNotBeEmpty();
+
+        await StopAsync(photoPrism: true);
+        var asked = library.Calls.Count;
+
+        // The map: an empty collection and no template, which is the same answer this route gives
+        // for a library nobody ever connected. Not a failure — the overlay is to look like an
+        // installation without that library rather than like one whose library is broken.
+        var stopped = await JsonAsync(admin, $"{MapUrl}?bbox={Bbox}");
+        stopped.GetProperty("features").GetArrayLength().ShouldBe(0);
+        stopped.GetProperty("picturesAvailable").GetBoolean().ShouldBeFalse();
+        stopped.GetProperty("pictureUrlTemplate").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The picture path, with an address minted while the library was still in use. A token is
+        // not a decision already taken: whether this installation fetches bytes from a neighbour is
+        // asked again on every request.
+        var picture = await anonymous.GetAsync(
+            template.Replace("{reference}", "aa11bb22cc33", StringComparison.Ordinal)
+                .Replace("{size}", "large", StringComparison.Ordinal));
+        picture.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // The listing, the search, the recheck and the route that writes.
+        (await admin.GetAsync("/api/v1/photo-libraries/photoprism/photographs"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await admin.GetAsync("/api/v1/photo-libraries/photoprism/search?q=rope"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await admin.PostAsync(RecheckUrl, content: null))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var featuresBefore = await FeatureCountAsync();
+        var created = await PostAsync(admin, FeatureUrl, new
+        {
+            kind = "cave",
+            name = "Nothing should be created from a stopped library",
+        });
+        created.Status.ShouldBe(HttpStatusCode.NotFound, created.Body);
+        (await FeatureCountAsync()).ShouldBe(featuresBefore);
+
+        library.Calls.Count.ShouldBe(
+            asked, "a stopped photo library must not be asked anything by any route");
+    }
+
+    /// <summary>
+    /// The status route says why the library went quiet, and says it without asking the library
+    /// anything. "Switched off here", "did not answer" and "nobody connected one" are three
+    /// different errands and this is the only place that can tell them apart.
+    /// </summary>
+    [Fact]
+    public async Task A_stopped_library_is_reported_as_stopped_rather_than_as_silent()
+    {
+        library.AnswersGeo(OnePhotograph);
+        await StopAsync(photoPrism: true);
+        var asked = library.Calls.Count;
+
+        var status = await JsonAsync(admin, StatusUrl);
+        var provider = status.GetProperty("providers")[0];
+
+        // Still a library this installation has: it was given an address and a credential, and
+        // nothing on a settings screen took those away.
+        provider.GetProperty("configured").GetBoolean().ShouldBeTrue();
+        provider.GetProperty("suspended").GetBoolean().ShouldBeTrue();
+
+        // Nothing is claimed about whether it would have answered, because nobody asked it.
+        provider.GetProperty("health").GetProperty("reach").GetString().ShouldBe("unknown");
+        provider.GetProperty("health").GetProperty("probedAt").ValueKind.ShouldBe(JsonValueKind.Null);
+        provider.GetProperty("health").GetProperty("picturesAvailable").GetBoolean().ShouldBeFalse();
+
+        // And it is not moved into the list of products nobody connected: telling an operator to
+        // connect a library they already have is the wrong errand.
+        status.GetProperty("unconfigured").GetArrayLength().ShouldBe(1);
+        status.GetProperty("unconfigured")[0].GetProperty("source").GetString().ShouldBe("immich");
+
+        library.Calls.Count.ShouldBe(asked, "a status page must not be the path that keeps talking");
+    }
+
+    /// <summary>
+    /// It goes both ways for a library that exists: the people who stopped one can start it again,
+    /// and the map comes back without anything being redeployed.
+    /// </summary>
+    [Fact]
+    public async Task A_library_that_was_stopped_can_be_started_again()
+    {
+        library.AnswersGeo(OnePhotograph);
+        await StopAsync(photoPrism: true);
+
+        (await JsonAsync(admin, $"{MapUrl}?bbox={Bbox}")).GetProperty("features").GetArrayLength().ShouldBe(0);
+
+        await StopAsync(photoPrism: false);
+
+        var back = await JsonAsync(admin, $"{MapUrl}?bbox={Bbox}");
+        back.GetProperty("features").GetArrayLength().ShouldBe(1);
+        back.GetProperty("pictureUrlTemplate").ValueKind.ShouldNotBe(JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// What the pages cannot do. A library the deployment never supplied stays absent whichever way
+    /// the stored switch is left — there is no arrangement of settings that connects one — and the
+    /// proof is that nothing is asked of the product either way.
+    /// </summary>
+    /// <remarks>
+    /// Asserted for both positions rather than one, because the mistake this guards against is a
+    /// later reader "completing" the switch into an enable/disable pair, and a pair would pass a
+    /// case that only ever stopped things.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_library_nobody_connected_cannot_be_started_from_the_settings_page(bool suspended)
+    {
+        // This host is pointed at one library only, so the other product is one nobody connected.
+        var saved = await admin.PutAsJsonAsync(
+            "/api/v1/admin/settings/photo-libraries",
+            new { immichSuspended = suspended, photoPrismSuspended = false });
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+
+        var status = await JsonAsync(admin, StatusUrl);
+
+        // Not promoted into the list of libraries this installation has, and still reported as
+        // something nobody connected rather than as something somebody stopped.
+        status.GetProperty("providers").GetArrayLength().ShouldBe(1);
+        status.GetProperty("providers")[0].GetProperty("source").GetString().ShouldBe("photoprism");
+        var absent = status.GetProperty("unconfigured")[0];
+        absent.GetProperty("source").GetString().ShouldBe("immich");
+        absent.GetProperty("configured").GetBoolean().ShouldBeFalse();
+        absent.GetProperty("suspended").GetBoolean().ShouldBeFalse();
+
+        (await admin.GetAsync($"{OtherMapUrl}?bbox={Bbox}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await admin.GetAsync("/api/v1/photo-libraries/immich/photographs"))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// Changing the brake is a settings change and answers to the same right as every other one.
+    /// </summary>
+    [Fact]
+    public async Task Only_somebody_who_may_change_the_settings_may_stop_a_library()
+    {
+        (await viewer.PutAsJsonAsync(
+                "/api/v1/admin/settings/photo-libraries",
+                new { immichSuspended = false, photoPrismSuspended = true }))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        (await anonymous.PutAsJsonAsync(
+                "/api/v1/admin/settings/photo-libraries",
+                new { immichSuspended = false, photoPrismSuspended = true }))
+            .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    /// <summary>
+    /// Stops or starts one library through the route an administrator's screen posts to, and leaves
+    /// the other where it was — which is what the settings section has to guarantee, since saving
+    /// one replaces the whole stored document.
+    /// </summary>
+    private async Task StopAsync(bool photoPrism)
+    {
+        var saved = await admin.PutAsJsonAsync(
+            "/api/v1/admin/settings/photo-libraries",
+            new { immichSuspended = false, photoPrismSuspended = photoPrism });
+
+        saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+        (await saved.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("photoLibraries").GetProperty("photoPrismSuspended").GetBoolean()
+            .ShouldBe(photoPrism);
     }
 
     // ------------------------------------------------------------------------------------ support

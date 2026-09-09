@@ -142,7 +142,7 @@ public static class PhotoLibraryFeatureEndpoints
         string bbox,
         PhotoLibraryFeatureRequest request,
         SilexGisDbContext db,
-        IEnumerable<IPhotoLibrary> libraries,
+        PhotoLibraryGate gate,
         FeatureWriteService writer,
         VisibleProximitySearch proximity,
         IAccessService access,
@@ -178,7 +178,9 @@ public static class PhotoLibraryFeatureEndpoints
             return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
         }
 
-        var library = libraries.FirstOrDefault(l => l.Source == which && l.IsConfigured);
+        // Whether this installation is talking to that library at all, asked before any right is
+        // considered and before anything leaves the machine.
+        var library = await gate.UsableAsync(which, ct);
         if (library is null || !PhotoLibraryHttp.IsSafeReference(reference))
         {
             return ApiProblems.NotFound(PhotoLibraryEndpoints.NotFoundCode);
