@@ -1604,7 +1604,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Cave-entrance counts and densities per grid cell over a bbox, optionally normalised by a study-area outline. Cells finer than the location-protection grid are refused. */
+        /** Cave-entrance counts and densities per grid cell over a bbox, optionally normalised by a study-area outline, with the hot and cold spots among those cells and whether their arrangement departs from chance. Cells finer than the location-protection grid are refused. */
         get: {
             parameters: {
                 query?: {
@@ -14845,6 +14845,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/registry/clustering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which caves the caller may read resemble each other over the measures they named. */
+        get: {
+            parameters: {
+                query?: {
+                    measures?: string;
+                    clusters?: number;
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RegistryClusteringDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stats/registry/regions": {
         parameters: {
             query?: never;
@@ -18531,7 +18574,28 @@ export interface components {
         };
         /** @enum {unknown} */
         DemSampleOutcome: "sampled" | "outsideCoverage" | "noData";
+        DensityAutocorrelationDto: {
+            /** Format: int32 */
+            cellCount: number;
+            /** Format: int32 */
+            neighbourPairCount: number;
+            /** Format: double */
+            index: null | number;
+            /** Format: double */
+            expectedIndex: null | number;
+            /** Format: double */
+            zScore: null | number;
+            /** Format: double */
+            pValue: null | number;
+            pattern: components["schemas"]["SpatialPatternKind"];
+            /** Format: double */
+            significanceZ: number;
+        };
         DensityCellDto: {
+            /** Format: int64 */
+            cellX: number;
+            /** Format: int64 */
+            cellY: number;
             /** Format: double */
             west: number;
             /** Format: double */
@@ -18550,6 +18614,8 @@ export interface components {
             studyAreaFraction: null | number;
             /** Format: double */
             kernelDensityPerKm2: number;
+            /** Format: double */
+            hotSpotZ: null | number;
         };
         DensityGridDto: {
             /** Format: double */
@@ -18571,6 +18637,7 @@ export interface components {
             /** Format: int32 */
             cellCount: number;
             cells: components["schemas"]["DensityCellDto"][];
+            autocorrelation: components["schemas"]["DensityAutocorrelationDto"];
         };
         DipSummary: {
             /** Format: int32 */
@@ -21380,6 +21447,75 @@ export interface components {
             password: string;
             displayName: null | string;
         };
+        RegistryClusterAssignmentDto: {
+            /** Format: uuid */
+            caveId: string;
+            /** Format: int32 */
+            cluster: number;
+            /** Format: double */
+            distanceToCentre: number;
+        };
+        RegistryClusterCoverageDto: {
+            measure: components["schemas"]["RegistryMeasure"];
+            /** Format: int32 */
+            recorded: number;
+            /** Format: int32 */
+            missing: number;
+            /** Format: int32 */
+            soleReason: number;
+        };
+        RegistryClusterDto: {
+            /** Format: int32 */
+            index: number;
+            /** Format: int32 */
+            count: number;
+            centre: null | number[];
+            scaledCentre: null | number[];
+            /** Format: double */
+            meanDistanceToCentre: null | number;
+        };
+        RegistryClusteringDto: {
+            measures: components["schemas"]["RegistryMeasure"][];
+            /** Format: int32 */
+            requestedClusterCount: number;
+            population: components["schemas"]["RegistryClusterPopulationDto"];
+            scaling: components["schemas"]["RegistryClusterScalingDto"][];
+            clusters: components["schemas"]["RegistryClusterDto"][];
+            assignments: components["schemas"]["RegistryClusterAssignmentDto"][];
+            separation: null | components["schemas"]["RegistryClusterSeparationDto"];
+            /** Format: int32 */
+            minimumEligibleCount: number;
+            /** Format: int32 */
+            minimumPublishableClusterSize: number;
+            /** Format: int32 */
+            iterations: number;
+            converged: boolean;
+            basis: string;
+        };
+        RegistryClusterPopulationDto: {
+            /** Format: int32 */
+            considered: number;
+            /** Format: int32 */
+            eligible: number;
+            /** Format: int32 */
+            excluded: number;
+            measures: components["schemas"]["RegistryClusterCoverageDto"][];
+        };
+        RegistryClusterScalingDto: {
+            measure: components["schemas"]["RegistryMeasure"];
+            /** Format: double */
+            mean: number;
+            /** Format: double */
+            standardDeviation: number;
+        };
+        RegistryClusterSeparationDto: {
+            /** Format: double */
+            meanWithinDistance: number;
+            /** Format: double */
+            meanBetweenDistance: number;
+            /** Format: double */
+            ratio: null | number;
+        };
         RegistryCorrelationDto: {
             x: components["schemas"]["RegistryMeasure"];
             y: components["schemas"]["RegistryMeasure"];
@@ -21811,6 +21947,8 @@ export interface components {
         };
         /** @enum {unknown} */
         SortKey: "created" | "updated" | "title" | "owner" | "proximity" | "occurred";
+        /** @enum {unknown} */
+        SpatialPatternKind: "undetermined" | "random" | "clustered" | "dispersed";
         /** @enum {unknown} */
         SpeleogeneticPatternKind: "insufficient" | "undetermined" | "vadoseBranchwork" | "waterTable" | "looping" | "angularMaze";
         /** @enum {unknown} */

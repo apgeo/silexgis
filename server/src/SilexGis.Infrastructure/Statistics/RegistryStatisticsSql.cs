@@ -410,4 +410,67 @@ public static class RegistryStatisticsSql
 
         return (sql, parameters);
     }
+
+    /// <summary>
+    /// One row per cave in scope: its identity and its reading of every named measure, recorded or
+    /// not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Every cave in scope is returned, not only the fully-measured ones.</b> Filtering the
+    /// unmeasured out here would be the failure this whole surface exists to prevent: the grouping
+    /// would come back internally consistent, over the best-surveyed part of the registry, with
+    /// nothing left in the answer able to say so. The eligibility test belongs where the account of
+    /// it is produced, so the statement returns the gaps and the arithmetic upstairs counts them.
+    /// </para>
+    /// <para>
+    /// The readings come back as one array per row rather than as a fixed set of columns, because
+    /// the caller chooses how many measures to name; the array's element order is the order the
+    /// measures were named in, which is what lets the grouping label its own columns. Each column
+    /// name is taken from the closed enumeration and never from the request, since a column name
+    /// cannot be a parameter.
+    /// </para>
+    /// <para>
+    /// It carries a limit, and the limit is one more than the most this surface will answer over,
+    /// so the caller can tell "the registry is larger than we will group in one answer" from "this
+    /// is all of it". A grouping quietly taken over the first so many caves would be a statement
+    /// about a subset wearing the whole registry's label.
+    /// </para>
+    /// <para>
+    /// The ordering is by identity so a truncated read is at least a stable one — but nothing
+    /// downstream depends on the order, because the grouping sorts by identity itself before it
+    /// takes a single distance.
+    /// </para>
+    /// </remarks>
+    public static (string Sql, DynamicParameters Parameters) BuildMetricVectors(
+        AccessContext ctx,
+        RegistryStatisticsScope scope,
+        IReadOnlyList<RegistryMeasure> measures,
+        int limit)
+    {
+        ArgumentNullException.ThrowIfNull(measures);
+        ArgumentOutOfRangeException.ThrowIfLessThan(measures.Count, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
+
+        var (where, parameters) = BuildScope(ctx, scope, scope.IsSpatiallyScoped);
+        parameters.Add("rs_limit", limit);
+
+        var readings = string.Join(
+            ",\n                       ",
+            measures.Select(m => $"c.{ColumnOf(m)}::double precision"));
+
+        var sql = $"""
+            SELECT f.id AS "Id",
+                   ARRAY[
+                       {readings}
+                   ] AS "Values"
+            FROM features f
+            JOIN caves c ON c.id = f.id
+            WHERE {where}
+            ORDER BY f.id
+            LIMIT @rs_limit
+            """;
+
+        return (sql, parameters);
+    }
 }

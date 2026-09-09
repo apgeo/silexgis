@@ -3642,7 +3642,21 @@
     "radiusM": "Rază (m)",
     "observedL": "L",
     "alignment": "Direcții între {{pairs}} perechi de intrări, la {{min}}–{{max}} m distanță.",
-    "tooFewPlaceable": "Mai puțin de {{minimum}} intrări de aici pot fi localizate exact, prea puține pentru ca o spațiere să însemne ceva."
+    "tooFewPlaceable": "Mai puțin de {{minimum}} intrări de aici pot fi localizate exact, prea puține pentru ca o spațiere să însemne ceva.",
+    "autocorrelationTitle": "Zone calde și reci",
+    "autocorrelationBasis": "Citit peste cele {{cells}} celule de mai sus și cele {{pairs}} vecinătăți dintre ele, la celula de {{metres}} m a acestei rețele și nu mai fin — ambele cifre sunt aritmetică peste celulele deja desenate, deci niciuna nu poate arăta un detaliu pe care rețeaua nu îl are deja.",
+    "autocorrelationUndetermined": "Nu există o dispunere care să poată fi testată aici: prea puține celule, niciuna învecinată, sau fiecare celulă având aceeași densitate.",
+    "moranIndex": "Indicele I al lui Moran",
+    "moranExpected": "Așteptat din întâmplare",
+    "moranZ": "Erori standard",
+    "moranP": "p",
+    "hotSpots": "{{hot}} celule se citesc drept calde și {{cold}} drept reci, din {{scored}} care au putut fi punctate. Scorul este luat în fiecare celulă deodată și nu este corectat pentru asta, deci câteva celule izbitoare răspândite pe o fereastră mare sunt exact ce produce singură întâmplarea — citiți nuanțarea, nu celula individuală.",
+    "pattern": {
+      "undetermined": "Întrebarea nu a putut fi pusă pentru această fereastră.",
+      "random": "Dispunerea nu se deosebește de una întâmplătoare. Aceasta este o nereușită de a găsi o structură, nu o dovadă că nu există una.",
+      "clustered": "Celulele dense stau lângă cele dense, iar cele goale lângă cele goale, mai mult decât ar face-o întâmplarea.",
+      "dispersed": "Celulele dense și cele goale alternează mai mult decât ar face-o întâmplarea."
+    }
   },
   "karstStats": {
     "count": "Peșteri",

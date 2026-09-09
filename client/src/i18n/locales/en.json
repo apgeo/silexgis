@@ -3642,7 +3642,21 @@
     "radiusM": "Radius (m)",
     "observedL": "L",
     "alignment": "Bearings between {{pairs}} pairs of entrances, {{min}}–{{max}} m apart.",
-    "tooFewPlaceable": "Fewer than {{minimum}} entrances here can be placed exactly, which is too few for a spacing to mean anything."
+    "tooFewPlaceable": "Fewer than {{minimum}} entrances here can be placed exactly, which is too few for a spacing to mean anything.",
+    "autocorrelationTitle": "Hot and cold spots",
+    "autocorrelationBasis": "Read over the {{cells}} cells above and the {{pairs}} adjacencies between them, at this grid's {{metres}} m cell and no finer — both figures are arithmetic over the cells already drawn, so neither can show detail the grid does not already have.",
+    "autocorrelationUndetermined": "There is no arrangement to test here: too few cells, none of them touching, or every cell carrying the same density.",
+    "moranIndex": "Moran's I",
+    "moranExpected": "Expected by chance",
+    "moranZ": "Standard errors",
+    "moranP": "p",
+    "hotSpots": "{{hot}} cells read hot and {{cold}} read cold, of {{scored}} that could be scored. The score is taken at every cell at once and is not corrected for that, so a scattering of striking cells over a large window is what chance alone produces — read the shading, not the individual cell.",
+    "pattern": {
+      "undetermined": "The question could not be asked of this window.",
+      "random": "The arrangement is indistinguishable from a chance one. That is a failure to find structure, not a demonstration that there is none.",
+      "clustered": "Dense cells sit beside dense ones, and empty beside empty, more than chance would put them.",
+      "dispersed": "Dense and empty cells alternate more than chance would put them."
+    }
   },
   "karstStats": {
     "count": "Caves",

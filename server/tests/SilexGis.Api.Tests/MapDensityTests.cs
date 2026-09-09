@@ -294,6 +294,75 @@ public sealed class MapDensityTests : IAsyncLifetime, IDisposable
     }
 
     [Fact]
+    public async Task The_arrangement_is_read_off_the_published_cells_and_never_off_a_finer_grid()
+    {
+        // Four caves, one to a cell, in a two-by-two block: an arrangement that is clustered by
+        // construction, because every full cell touches every other one and the rest of the window
+        // is empty. The step between them is one cell exactly, so which cell each lands in follows
+        // from the lattice rather than from where the window happens to start.
+        const string bbox = "11.0,43.0,11.4,43.4";
+        var cellDegrees = LocationProtection.CellDegrees(GridMeters);
+        foreach (var (dx, dy) in new[] { (0, 0), (1, 0), (0, 1), (1, 1) })
+        {
+            await CreateCaveWithEntranceAsync(
+                owner, "Dens Hot", 11.1 + (dx * cellDegrees), 43.1 + (dy * cellDegrees));
+        }
+
+        var body = await GridAsync(owner, bbox, GridMeters);
+        var cells = body["cells"]!.AsArray();
+        var reading = body["autocorrelation"]!;
+
+        reading["pattern"]!.GetValue<string>().ShouldBe("clustered");
+        reading["zScore"]!.GetValue<double>().ShouldBeGreaterThan(1.96d);
+        reading["index"]!.GetValue<double>()
+            .ShouldBeGreaterThan(reading["expectedIndex"]!.GetValue<double>());
+
+        // The resolution claim, asserted rather than trusted: the reading is one figure per cell
+        // that was published and one for the window, so there is no surface here finer than the
+        // grid the counts were binned into.
+        reading["cellCount"]!.GetValue<int>().ShouldBe(cells.Count);
+        cells.Count(c => c!["hotSpotZ"] is not null).ShouldBe(cells.Count);
+
+        var hottest = cells.MaxBy(c => c!["hotSpotZ"]!.GetValue<double>())!;
+        hottest["count"]!.GetValue<int>().ShouldBeGreaterThan(0);
+        hottest["hotSpotZ"]!.GetValue<double>().ShouldBeGreaterThan(1.96d);
+
+        // Each cell says which cell it is on the shared lattice, so a hot spot can be identified
+        // without rounding its corner coordinates a second time.
+        var occupied = Occupied(body);
+        occupied.Count.ShouldBe(4);
+        occupied.Select(c => (c["cellX"]!.GetValue<long>(), c["cellY"]!.GetValue<long>()))
+            .Distinct().Count().ShouldBe(4);
+
+        // And the hot spots inherit the floor because they are computed from these cells: a caller
+        // who wants a finer hot-spot map is refused with the density surface's own refusal rather
+        // than served a finer one.
+        await ExpectAsync(
+            owner,
+            $"?bbox={bbox}&cellMetres={(GridMeters / 2d).ToString(Invariant)}",
+            HttpStatusCode.BadRequest,
+            "density.cell_below_protection_grid");
+    }
+
+    [Fact]
+    public async Task A_window_with_nothing_to_arrange_is_undetermined_rather_than_random()
+    {
+        // Every cell carrying the same figure is not an arrangement that was tested and came out
+        // like chance; it is a question that could not be asked. Reporting it as "random" would
+        // claim a test had been run and passed.
+        var body = await GridAsync(owner, "12.0,44.0,12.3,44.3", GridMeters);
+
+        body["featureCount"]!.GetValue<int>().ShouldBe(0);
+
+        var reading = body["autocorrelation"]!;
+        reading["pattern"]!.GetValue<string>().ShouldBe("undetermined");
+        reading["index"].ShouldBeNull();
+        reading["zScore"].ShouldBeNull();
+        reading["cellCount"]!.GetValue<int>().ShouldBe(body["cells"]!.AsArray().Count);
+        body["cells"]!.AsArray().ShouldAllBe(c => c!["hotSpotZ"] == null);
+    }
+
+    [Fact]
     public async Task A_study_area_decides_which_caves_are_counted_and_not_only_what_to_divide_by()
     {
         const string bbox = "6.0,38.0,6.6,38.6";
