@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using NetArchTest.Rules;
 using Shouldly;
+using SilexGis.Api.Features.PhotoLibraries;
 using SilexGis.Domain;
 using SilexGis.Infrastructure;
 
@@ -199,6 +200,41 @@ public class DependencyRuleTests
             .GetResult();
 
         infrastructure.IsSuccessful.ShouldBeTrue(FailureMessage(infrastructure));
+    }
+
+    [Fact]
+    public void Nothing_reaches_a_neighbouring_photo_library_without_asking_whether_it_may()
+    {
+        // Whether this installation is talking to a photo library at all is one decision, taken in
+        // one object, before any socket is opened: the address and credential came from the
+        // deployment, and an administrator may have stopped the application using it. A route that
+        // resolved a library for itself would skip that decision, and the failure is silent —
+        // requests keep going to a library somebody stopped, which looks exactly like a library
+        // that is working, and the only symptom is traffic at a neighbour's container that nobody
+        // is watching. So a type in this slice that can reach a library must also hold the object
+        // that decides whether it may, and a new route that forgets fails the build rather than
+        // review.
+        const string libraryContract = "SilexGis.Infrastructure.PhotoLibraries.IPhotoLibrary";
+        const string gate = "SilexGis.Api.Features.PhotoLibraries.PhotoLibraryGate";
+
+        var reachers = Types.InAssembly(typeof(Program).Assembly)
+            .That()
+            .ResideInNamespaceStartingWith("SilexGis.Api.Features.PhotoLibraries")
+            .And()
+            .DoNotHaveName(nameof(PhotoLibraryGate))
+            .And()
+            .HaveDependencyOn(libraryContract);
+
+        // Asserted before the rule, because a rule over an empty set passes: a renamed namespace or
+        // a slice that stopped naming the contract would otherwise turn this into a test that
+        // proves nothing while staying green.
+        reachers.GetTypes().ShouldNotBeEmpty(
+            "No type in the photo-library slice reaches a library any more — check this rule still "
+            + "describes the code before trusting it.");
+
+        var result = reachers.Should().HaveDependencyOn(gate).GetResult();
+
+        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
     }
 
     /// <summary>

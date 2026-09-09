@@ -28,6 +28,16 @@ public interface IAppSettingsService
 
     ValueTask<AnnouncementSettings> GetAnnouncementsAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Which neighbouring photo libraries this installation has stopped using for now.
+    /// </summary>
+    /// <remarks>
+    /// Read before anything is asked of a library, so a suspended one costs no network at all. It
+    /// resolves through the same short cache window as every other section, which is what keeps
+    /// that read from becoming a database query on every viewport.
+    /// </remarks>
+    ValueTask<PhotoLibrarySuspensionSettings> GetPhotoLibrarySuspensionAsync(CancellationToken ct = default);
+
     /// <summary>Replaces a section and drops the cached copy across the process.</summary>
     Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class;

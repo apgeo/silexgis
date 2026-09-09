@@ -107,6 +107,14 @@ export type ProtectionSettings = components['schemas']['ProtectionSettingsDto'];
 export type ImportSettings = components['schemas']['ImportSettingsDto'];
 export type NotificationSettings = components['schemas']['NotificationSettingsDto'];
 export type AnnouncementSettings = components['schemas']['AnnouncementSettingsDto'];
+/**
+ * Which neighbouring photo libraries this installation has stopped using.
+ *
+ * Only ever stops one it already has. Whether the installation has a photo library at all comes
+ * from the deployment that gave it an address and a credential, so there is no value here that
+ * connects one — a screen offering that would be claiming a library nobody supplied.
+ */
+export type PhotoLibrarySuspension = components['schemas']['PhotoLibrarySuspensionDto'];
 export type MessageTemplate = components['schemas']['MessageTemplateDto'];
 export type ResLink = components['schemas']['ResLinkDto'];
 export type ResLinkMember = components['schemas']['ResLinkMemberDto'];

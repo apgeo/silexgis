@@ -79,14 +79,32 @@ public sealed record PhotoLibraryStatusDto(
 /// An address and a credential are set. Whether anything answers at that address is a different
 /// question, and it is <see cref="Health"/> that answers it.
 /// </param>
+/// <param name="Suspended">
+/// This installation has stopped using the library for now — an administrator's decision, taken
+/// while the system is running and reversible by the same people.
+///
+/// <para>
+/// A third fact beside the other two, and none of them substitutes for another. "Nobody connected
+/// one", "one is connected and did not answer" and "one is connected, running, and this
+/// installation is not talking to it" send whoever reads them to three different places, and a
+/// surface that rendered the last as either of the first two would send somebody to restart a
+/// container that is working perfectly.
+/// </para>
+/// <para>
+/// It is never true for an unconfigured library. There is nothing to stop using, and a page that
+/// could set this on one would be claiming a library the deployment never supplied.
+/// </para>
+/// </param>
 /// <param name="Health">
-/// What the library said about itself when it was last asked, or that it was not asked.
+/// What the library said about itself when it was last asked, or that it was not asked — which is
+/// what a suspended library reports, because nothing was asked of it and nothing is claimed.
 /// </param>
 public sealed record PhotoLibraryProviderDto(
     string Source,
     string Name,
     string Search,
     bool Configured,
+    bool Suspended,
     PhotoLibraryHealthDto Health);
 
 /// <summary>

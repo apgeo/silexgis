@@ -63,6 +63,20 @@ public sealed class AppSettingsService(
     public ValueTask<AnnouncementSettings> GetAnnouncementsAsync(CancellationToken ct = default) =>
         GetAsync<AnnouncementSettings>(AppSettingSections.Announcements, "Announcements", ct);
 
+    /// <summary>
+    /// The brakes on the neighbouring photo libraries.
+    /// </summary>
+    /// <remarks>
+    /// The configuration section it falls back to is deliberately not the one holding each
+    /// library's address and credential: that one contains an object per product, and binding a
+    /// pair of switches onto it would either fail or silently read nothing. Keeping them apart also
+    /// keeps the two kinds of value apart — what the deployment <em>is</em>, and what an operator
+    /// has decided about it while it is running.
+    /// </remarks>
+    public ValueTask<PhotoLibrarySuspensionSettings> GetPhotoLibrarySuspensionAsync(CancellationToken ct = default) =>
+        GetAsync<PhotoLibrarySuspensionSettings>(
+            AppSettingSections.PhotoLibrarySuspension, "PhotoLibrarySuspension", ct);
+
     public async Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class
     {

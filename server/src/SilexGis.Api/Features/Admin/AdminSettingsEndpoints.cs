@@ -58,6 +58,11 @@ public static class AdminSettingsEndpoints
         admin.MapPut("/announcements", SaveAnnouncementsAsync)
             .WithValidation<AnnouncementSettingsDto>()
             .WithSummary("Saves whether an announcement to a caving group may cost money, and how much in a day.");
+        admin.MapPut("/photo-libraries", SavePhotoLibrariesAsync)
+            .WithValidation<PhotoLibrarySuspensionDto>()
+            .WithSummary(
+                "Stops or resumes this installation's use of each neighbouring photo library. "
+                + "Cannot connect one: which libraries exist is the deployment's decision.");
         // The two routes here that make the installation send something to a destination the
         // caller types in, so both carry the per-address budget the credential surfaces use.
         // "May change the settings" is not "may message any address in the world as fast as a
@@ -304,6 +309,60 @@ public static class AdminSettingsEndpoints
         return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
     }
 
+    /// <summary>
+    /// Stops or resumes this installation's use of each neighbouring photo library.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A brake and only a brake. Which photo libraries this installation has is decided by the
+    /// deployment that supplied their addresses and credentials, and nothing saved here can supply
+    /// one: a library switched "off" here is stopped and can be started again, and a library the
+    /// deployment never gave this installation cannot be conjured into existence from a settings
+    /// screen. The asymmetry is deliberate and is the whole shape of the feature — the value stored
+    /// says <em>suspended</em>, never <em>enabled</em>, so there is no state in which these pages
+    /// claim a library that is not there.
+    /// </para>
+    /// <para>
+    /// Saving it changes nothing on the far side: a suspended library goes on running at its own
+    /// address, goes on indexing, and goes on serving anyone who signs into it directly. What stops
+    /// is this application asking it anything.
+    /// </para>
+    /// <para>
+    /// Both switches are written together because saving a section replaces the whole stored
+    /// document, so a request carrying one would release the other.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SavePhotoLibrariesAsync(
+        PhotoLibrarySuspensionDto request,
+        IAccessContextAccessor accessAccessor,
+        IAppSettingsService settings,
+        IEmailDelivery emailDelivery,
+        ISmsDelivery smsDelivery,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!AccessEvaluator.Decide(ctx, AccessDomain.Settings, AccessAction.Write, null).Allowed)
+        {
+            return ApiProblems.Forbidden("access.forbidden");
+        }
+
+        await settings.SaveAsync(
+            AppSettingSections.PhotoLibrarySuspension,
+            new PhotoLibrarySuspensionSettings
+            {
+                ImmichSuspended = request.ImmichSuspended,
+                PhotoPrismSuspended = request.PhotoPrismSuspended,
+            },
+            ct);
+
+        return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
+    }
+
     private static async Task<Results<Ok<AdminSettingsDto>, UnauthorizedHttpResult, ProblemHttpResult>> SaveImportAsync(
         ImportSettingsDto request,
         IAccessContextAccessor accessAccessor,
@@ -471,6 +530,7 @@ public static class AdminSettingsEndpoints
         var ui = await settings.GetInterfaceAsync(ct);
         var notifications = await settings.GetNotificationsAsync(ct);
         var announcements = await settings.GetAnnouncementsAsync(ct);
+        var photoLibraries = await settings.GetPhotoLibrarySuspensionAsync(ct);
 
         return new AdminSettingsDto(
             new MailSettingsDto(
@@ -514,6 +574,8 @@ public static class AdminSettingsEndpoints
             new NotificationSettingsDto(notifications.EffectiveRetentionDays),
             new AnnouncementSettingsDto(
                 announcements.PaidChannelsEnabled, announcements.EffectiveDailyPaidMessageCap),
+            new PhotoLibrarySuspensionDto(
+                photoLibraries.ImmichSuspended, photoLibraries.PhotoPrismSuspended),
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
     }

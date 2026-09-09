@@ -825,8 +825,28 @@ export default function MapPage() {
   // and given an empty list, which is the same answer to this question as an installation that has
   // been given no library: either way there is nothing to offer, and neither is told which
   // products the installation runs.
+  //
+  // A library this installation has stopped using is left out, so no overlay is made for it and
+  // nothing asks it for a viewport. That is the whole of what the switch has to do here: an
+  // overlay left in place with its requests refused would draw an empty layer somebody would read
+  // as an empty library.
   const photoLibraries = useMemo(
-    () => (libraryStatus?.mayRead ? (libraryStatus.providers ?? []) : []),
+    () =>
+      libraryStatus?.mayRead
+        ? (libraryStatus.providers ?? []).filter((library) => !library.suspended)
+        : [],
+    [libraryStatus],
+  );
+
+  // The ones this installation has and is not using. No overlay and no layer row — a layer that
+  // can only ever draw nothing is not a layer — but they are named in the panel all the same,
+  // because a library that was there yesterday and is gone today is a question, and the panel is
+  // where somebody looks for the answer.
+  const suspendedPhotoLibraries = useMemo(
+    () =>
+      libraryStatus?.mayRead
+        ? (libraryStatus.providers ?? []).filter((library) => library.suspended)
+        : [],
     [libraryStatus],
   );
 
@@ -1067,6 +1087,7 @@ export default function MapPage() {
       onTerrainDerivativeVisibleChange={setTerrainDerivativeVisible}
       onOverlayVisibilityChanged={onOverlayVisibilityChanged}
       photoLibraries={photoLibraries}
+      suspendedPhotoLibraries={suspendedPhotoLibraries}
       unconfiguredPhotoLibraries={unconfiguredPhotoLibraries}
       visibleLibraryPhotoSources={libraryPhotoSources}
       treeNonce={treeNonce}

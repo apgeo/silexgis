@@ -2318,7 +2318,9 @@
       "paidChannelsEnabled": "Permite anunțuri pe canale care se taxează pentru ce trimit",
       "paidChannelsEnabledHint": "Oprit înseamnă oprit: cât timp este oprit, nimeni nu poate alege un astfel de canal, nicio preferință salvată pentru el nu are vreun efect și nu se creează nicio copie de trimis pe el.",
       "dailyPaidMessageCap": "Segmente de mesaj taxate pe zi",
-      "dailyPaidMessageCapHint": "Un operator taxează un mesaj SMS pe segmente, nu pe mesaj: 160 de caractere din alfabetul latin simplu încap într-un singur segment, dar o singură literă cu diacritice recodifică tot mesajul în segmente de 70, așa că aceeași formulare costă de două ori mai mult în română decât în engleză. Un anunț care ar depăși această limită este refuzat în întregime, nu trimis către jumătate din listă. Segmentele deja angajate azi contează, inclusiv cele care încă așteaptă să plece."
+      "dailyPaidMessageCapHint": "Un operator taxează un mesaj SMS pe segmente, nu pe mesaj: 160 de caractere din alfabetul latin simplu încap într-un singur segment, dar o singură literă cu diacritice recodifică tot mesajul în segmente de 70, așa că aceeași formulare costă de două ori mai mult în română decât în engleză. Un anunț care ar depăși această limită este refuzat în întregime, nu trimis către jumătate din listă. Segmentele deja angajate azi contează, inclusiv cele care încă așteaptă să plece.",
+      "photoLibrariesTab": "Fototeci",
+      "photoLibrariesIntro": "Aceste comutatoare opresc folosirea unei fototeci pe care instalarea o are deja și o pornesc la loc. Ele nu pot conecta una: ce fototeci are această instalare se decide prin implementarea care le-a dat adresele și credențialele."
     },
     "documentTypes": {
       "title": "Tipuri de documente",
@@ -4317,9 +4319,18 @@
       "versionChecked": "Versiunea {{version}} · verificat {{when}}",
       "checked": "Verificat {{when}}",
       "recheckFailed": "Fototeca tot nu a răspuns, așa că nimic nu s-a schimbat.",
-      "recheckRefused": "Fototeca a răspuns și nu a acceptat credențialul cu care este configurată această instalare, așa că nimic nu s-a schimbat."
+      "recheckRefused": "Fototeca a răspuns și nu a acceptat credențialul cu care este configurată această instalare, așa că nimic nu s-a schimbat.",
+      "suspended": "Această instalare nu folosește deocamdată această fototecă. Ea rulează în continuare și este accesibilă la adresa ei."
     },
     "notConnected": "{{library}} nu este conectată: această instalare nu are adresă sau credențial pentru ea.",
-    "recheck": "Verifică din nou"
+    "recheck": "Verifică din nou",
+    "admin": {
+      "suspend": "Oprește folosirea acestei fototeci",
+      "suspendHint": "Cât timp este pornit, nimic de aici nu întreabă fototeca nimic: fără strat pe hartă, fără răsfoire, fără căutare și fără fotografii.",
+      "stillHoldsEverything": "Oprirea folosirii ei de către SilexGIS nu schimbă nimic din ce conține, ce indexează sau cine se poate autentifica direct în ea.",
+      "stopCommand": "Pentru a opri fototeca însăși, folosește implementarea: {{command}}",
+      "cannotConnect": "{{library}} nu este conectată: această instalare nu are adresă sau credențial pentru ea. Conectarea ei ține de implementare și nu se poate face din această pagină.",
+      "none": "Această instalare nu a primit nicio fototecă, deci nu este nimic de oprit."
+    }
   }
 }

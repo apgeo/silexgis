@@ -2318,7 +2318,9 @@
       "paidChannelsEnabled": "Allow announcements on channels that charge for what they send",
       "paidChannelsEnabledHint": "Off means off: while it is off, nobody can choose such a channel, no saved preference for one resolves to anything, and no outbound copy on one is ever created.",
       "dailyPaidMessageCap": "Charged message segments a day",
-      "dailyPaidMessageCapHint": "A carrier bills a text message by the segment, not by the message: 160 characters of the plain Latin alphabet travel in one segment, but a single accented letter re-encodes the whole message into segments of 70, so the same wording costs twice as much in Romanian as in English. An announcement that would take the day past this is refused outright rather than sent to half the roster. Segments already committed today count, including ones still waiting to go out."
+      "dailyPaidMessageCapHint": "A carrier bills a text message by the segment, not by the message: 160 characters of the plain Latin alphabet travel in one segment, but a single accented letter re-encodes the whole message into segments of 70, so the same wording costs twice as much in Romanian as in English. An announcement that would take the day past this is refused outright rather than sent to half the roster. Segments already committed today count, including ones still waiting to go out.",
+      "photoLibrariesTab": "Photo libraries",
+      "photoLibrariesIntro": "These switches stop this installation using a photo library it already has, and start it again afterwards. They cannot connect one: which libraries this installation has is decided by the deployment that gave them their addresses and credentials."
     },
     "documentTypes": {
       "title": "Document kinds",
@@ -4317,9 +4319,18 @@
       "versionChecked": "Version {{version}} · checked {{when}}",
       "checked": "Checked {{when}}",
       "recheckFailed": "The library still did not answer, so nothing changed.",
-      "recheckRefused": "The library answered and would not accept the credential this installation is configured with, so nothing changed."
+      "recheckRefused": "The library answered and would not accept the credential this installation is configured with, so nothing changed.",
+      "suspended": "This installation is not using this photo library for now. It is still running and still reachable at its own address."
     },
     "notConnected": "{{library}} is not connected: this installation has no address or credential for it.",
-    "recheck": "Check again"
+    "recheck": "Check again",
+    "admin": {
+      "suspend": "Stop using this photo library",
+      "suspendHint": "While this is on, nothing here asks the library anything: no map layer, no browsing, no search and no pictures.",
+      "stillHoldsEverything": "Stopping SilexGIS from using it changes nothing about what it holds, what it indexes, or who can log into it directly.",
+      "stopCommand": "To stop the photo library itself, use the deployment: {{command}}",
+      "cannotConnect": "{{library}} is not connected: this installation has no address or credential for it. Connecting one is part of the deployment and cannot be done from this page.",
+      "none": "This installation has been given no photo library, so there is nothing to stop."
+    }
   }
 }

@@ -16849,6 +16849,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings/photo-libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Stops or resumes this installation's use of each neighbouring photo library. Cannot connect one: which libraries exist is the deployment's decision. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PhotoLibrarySuspensionDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminSettingsDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/settings/mail/test": {
         parameters: {
             query?: never;
@@ -17225,6 +17265,7 @@ export interface components {
             interface: components["schemas"]["InterfaceSettingsDto"];
             notifications: components["schemas"]["NotificationSettingsDto"];
             announcements: components["schemas"]["AnnouncementSettingsDto"];
+            photoLibraries: components["schemas"]["PhotoLibrarySuspensionDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
         };
@@ -20948,6 +20989,7 @@ export interface components {
             name: string;
             search: string;
             configured: boolean;
+            suspended: boolean;
             health: components["schemas"]["PhotoLibraryHealthDto"];
         };
         PhotoLibraryStatusDto: {
@@ -20956,6 +20998,10 @@ export interface components {
             maxSearchLength: number;
             providers: components["schemas"]["PhotoLibraryProviderDto"][];
             unconfigured: components["schemas"]["PhotoLibraryProviderDto"][];
+        };
+        PhotoLibrarySuspensionDto: {
+            immichSuspended: boolean;
+            photoPrismSuspended: boolean;
         };
         PhotoNearbyDto: {
             /** Format: uuid */
