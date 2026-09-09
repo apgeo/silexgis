@@ -3,7 +3,12 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
-import type { LibraryPhotographPage, LibraryPhotoStatus } from '../../api/hooks.ts';
+import type {
+  LibraryPhotographPage,
+  LibraryPhotoProvider,
+  LibraryPhotoSource,
+  LibraryPhotoStatus,
+} from '../../api/hooks.ts';
 
 /**
  * The photographs a neighbouring library holds from the days one trip was out.
@@ -58,7 +63,15 @@ function health(over: Partial<LibraryPhotoStatus['providers'][number]['health']>
   };
 }
 
-function provider(source: string, name: string, suspended = false) {
+// Typed as the thing the panel is really given rather than as a shape that happens to render.
+// Left untyped, `search` widens to a plain string and stops being one of the two kinds of search a
+// product does — which is the field this panel reads to decide what its box invites and what its
+// answer is called, so a value nothing accepts would be caught by no test here.
+function provider(
+  source: LibraryPhotoSource,
+  name: string,
+  suspended = false,
+): LibraryPhotoProvider {
   return { source, name, search: 'text', configured: true, suspended, health: health() };
 }
 
