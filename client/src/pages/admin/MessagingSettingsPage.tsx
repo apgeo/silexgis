@@ -790,7 +790,7 @@ const STOP_COMMAND: Partial<Record<string, string>> = {
  * somebody removed from the deployment.
  * </p>
  */
-function PhotoLibrariesForm({ settings, onSaved }: SectionProps) {
+export function PhotoLibrariesForm({ settings, onSaved }: SectionProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const queryClient = useQueryClient();
@@ -806,10 +806,17 @@ function PhotoLibrariesForm({ settings, onSaved }: SectionProps) {
   ) => {
     setSaving(source);
     try {
-      // Both switches travel, because saving replaces the whole stored section: a request carrying
-      // one library's value alone would release the other library's brake as a side effect of
-      // touching this one.
-      const body: PhotoLibrarySuspension = { ...settings.photoLibraries, [field]: suspended };
+      // Read the stored decisions again, immediately before changing one of them. Both switches
+      // have to travel, because saving replaces the whole stored section and a request carrying one
+      // library's value alone would release the other library's brake as a side effect of touching
+      // this one — but the copy this tab loaded may be minutes old, and posting it back would undo
+      // a brake somebody else pulled meanwhile. Re-reading does not make the write atomic; it
+      // shortens the window from "however long this tab has been open" to one round trip.
+      const { data: current } = await api.GET('/api/v1/admin/settings');
+      const body: PhotoLibrarySuspension = {
+        ...(current?.photoLibraries ?? settings.photoLibraries),
+        [field]: suspended,
+      };
       const { data, error } = await api.PUT('/api/v1/admin/settings/photo-libraries', { body });
       if (error !== undefined || !data) {
         message.error(t('common.saveFailed'));
@@ -852,7 +859,12 @@ function PhotoLibrariesForm({ settings, onSaved }: SectionProps) {
                   style={{ marginBottom: 8 }}
                 >
                   <Switch
-                    checked={library.suspended}
+                    // Shown from the same answer the save is built from, so the switch can never
+                    // render one position and post the other. The status route reports the same
+                    // decision, but through a separately cached query with a slower refresh, and a
+                    // control that displays one source and writes another eventually shows a state
+                    // it would not post.
+                    checked={settings.photoLibraries[field]}
                     loading={saving === library.source}
                     onChange={(checked) => void save(library.source, field, checked)}
                     data-testid={`photo-library-suspend-${library.source}`}

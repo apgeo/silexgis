@@ -605,7 +605,10 @@ public sealed class PhotoLibraryProbeTests
         configure?.Invoke(options);
 
         return new PhotoPrismClient(
-            new OneClient(stub), Options.Create(options), NullLogger<PhotoPrismClient>.Instance);
+            new OneClient(stub),
+            Options.Create(options),
+            new NothingStopped(),
+            NullLogger<PhotoPrismClient>.Instance);
     }
 
     private static ImmichClient Immich(LibraryStub stub, Action<ImmichOptions>? configure = null)
@@ -622,6 +625,7 @@ public sealed class PhotoLibraryProbeTests
         return new ImmichClient(
             new OneClient(stub),
             Options.Create(options),
+            new NothingStopped(),
             new NeverStopping(),
             NullLogger<ImmichClient>.Instance);
     }
@@ -649,6 +653,17 @@ public sealed class PhotoLibraryProbeTests
     private static readonly byte[] InventedJpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46];
 
     /// <summary>A factory that hands out one client, over the stub a test supplied.</summary>
+    /// <summary>
+    /// A brake nobody has pulled, so these cases exercise a library this installation is using.
+    /// The client asks it before every outgoing call, which is what makes a stopped library cost no
+    /// network on any path.
+    /// </summary>
+    private sealed class NothingStopped : IPhotoLibraryBrake
+    {
+        public ValueTask<bool> IsSuspendedAsync(PhotoLibrarySource source, CancellationToken ct) =>
+            ValueTask.FromResult(false);
+    }
+
     private sealed class OneClient(HttpMessageHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);

@@ -343,12 +343,40 @@ public sealed record PhotoLibrarySuspensionSettings
     /// <summary>Whether the neighbouring PhotoPrism instance is currently not to be used.</summary>
     public bool PhotoPrismSuspended { get; init; }
 
+    /// <summary>
+    /// Every library stopped, which is what an unreadable stored decision has to mean.
+    /// </summary>
+    /// <remarks>
+    /// A brake whose stored position cannot be read has to resolve to <em>on</em>. The values here
+    /// are never a deployment default — they exist only because somebody opened the settings and
+    /// decided something — so a row that will not deserialise is a decision that was taken and has
+    /// been lost, and the only reading of it that cannot do harm is the one that keeps the
+    /// application quiet. Resolving it the other way would resume talking to a library an operator
+    /// stopped, during the incident they stopped it for, leaving nothing but a log line. An
+    /// administrator recovers by saving the section again, which replaces the row that could not be
+    /// read.
+    /// </remarks>
+    public static PhotoLibrarySuspensionSettings EverythingStopped { get; } = new()
+    {
+        ImmichSuspended = true,
+        PhotoPrismSuspended = true,
+    };
+
     /// <summary>Whether this installation has stopped using one library.</summary>
+    /// <remarks>
+    /// A product this record has no switch for is not stopped. Nothing has been decided about it —
+    /// the switch is added together with the product, and until it is there is nothing to read —
+    /// and the alternative of failing here would turn adding a third product into a failure of the
+    /// one surface that exists to tell "nobody connected one" from "did not answer" and from
+    /// "stopped", at exactly the moment somebody is adding one and needs it. The cost is that such
+    /// a product cannot be braked until its switch lands, which is visible and fixable; a status
+    /// route answering 500 for every library including the working ones is neither.
+    /// </remarks>
     public bool IsSuspended(PhotoLibrarySource source) => source switch
     {
         PhotoLibrarySource.Immich => ImmichSuspended,
         PhotoLibrarySource.PhotoPrism => PhotoPrismSuspended,
-        _ => throw new ArgumentOutOfRangeException(nameof(source)),
+        _ => false,
     };
 }
 

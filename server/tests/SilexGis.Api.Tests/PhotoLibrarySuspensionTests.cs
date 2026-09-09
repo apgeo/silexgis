@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Api.Features.PhotoLibraries;
@@ -179,6 +182,184 @@ public sealed class PhotoLibrarySuspensionTests
         fresh.IsSuspended(PhotoLibrarySource.PhotoPrism).ShouldBeFalse();
     }
 
+    /// <summary>
+    /// Stopping a library drops what was read from it, rather than only declining to read more.
+    /// The distinction is the whole difference between "stop using it" and "forget what it said",
+    /// and it matters because one of these products can only give its located photographs whole:
+    /// a reading left resident would put every one of their positions back on the map the instant
+    /// somebody released the brake, however long afterwards.
+    /// </summary>
+    [Fact]
+    public async Task Stopping_a_library_makes_it_drop_what_it_was_holding()
+    {
+        var immich = new StubLibrary(PhotoLibrarySource.Immich, configured: true);
+        var gate = GateOver([immich], new PhotoLibrarySuspensionSettings { ImmichSuspended = true });
+
+        (await gate.UsableAsync(PhotoLibrarySource.Immich, CancellationToken.None)).ShouldBeNull();
+
+        immich.Forgotten.ShouldBe(1);
+        // Forgetting is done here, not asked of the library: no socket is opened to do it.
+        immich.Calls.ShouldBe(0);
+    }
+
+    /// <summary>
+    /// And on the path an administrator's own screen takes: saving the brake re-asks for the status
+    /// survey, so a library taken out of use drops its reading then rather than whenever something
+    /// next happens to want it.
+    /// </summary>
+    [Fact]
+    public async Task The_status_survey_tells_a_stopped_library_to_drop_what_it_was_holding()
+    {
+        var immich = new StubLibrary(PhotoLibrarySource.Immich, configured: true);
+        var prism = new StubLibrary(PhotoLibrarySource.PhotoPrism, configured: true);
+        var gate = GateOver([immich, prism], new PhotoLibrarySuspensionSettings { ImmichSuspended = true });
+
+        await gate.SurveyAsync(CancellationToken.None);
+
+        immich.Forgotten.ShouldBe(1);
+        // The one still in use keeps what it holds; forgetting is what stopping means, not what
+        // looking at a status line means.
+        prism.Forgotten.ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A product this build knows about but the stored record has no switch for. The record answers
+    /// "not stopped" rather than failing, because failing would take down the one surface that
+    /// tells "nobody connected one" apart from "did not answer" and from "stopped" — for every
+    /// library including the working ones, at exactly the moment somebody is adding a product.
+    /// </summary>
+    [Fact]
+    public void A_product_the_stored_record_has_no_switch_for_is_not_stopped()
+    {
+        const PhotoLibrarySource unknown = (PhotoLibrarySource)9999;
+
+        new PhotoLibrarySuspensionSettings().IsSuspended(unknown).ShouldBeFalse();
+        PhotoLibrarySuspensionSettings.EverythingStopped.IsSuspended(unknown).ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// What a stored decision that cannot be read has to mean. These values are never a deployment
+    /// default — they exist only because somebody opened the settings and stopped something — so an
+    /// unreadable row is a decision that was taken and lost, and the only reading of it that cannot
+    /// do harm is the one that keeps the application quiet.
+    /// </summary>
+    [Fact]
+    public void An_unreadable_stored_decision_means_everything_is_stopped()
+    {
+        var lost = PhotoLibrarySuspensionSettings.EverythingStopped;
+
+        lost.IsSuspended(PhotoLibrarySource.Immich).ShouldBeTrue();
+        lost.IsSuspended(PhotoLibrarySource.PhotoPrism).ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// Two registrations of one product is a deployment mistake, and the status route is where an
+    /// operator would go to see it. It must therefore survive one rather than answering 500.
+    /// </summary>
+    [Fact]
+    public async Task Two_registrations_of_one_product_do_not_take_the_status_survey_down()
+    {
+        var gate = GateOver(
+            [
+                new StubLibrary(PhotoLibrarySource.Immich, configured: true),
+                new StubLibrary(PhotoLibrarySource.Immich, configured: true),
+            ],
+            new PhotoLibrarySuspensionSettings());
+
+        var reports = await gate.SurveyAsync(CancellationToken.None);
+
+        reports.Count.ShouldBe(2);
+        reports.ShouldAllBe(report => report.Health.Reach == LibraryReach.Reachable);
+    }
+
+    // ------------------------------------------- what the library clients refuse for themselves
+
+    /// <summary>
+    /// The guarantee without the good manners. Every route in the slice asks the gate first, but
+    /// "asks the gate" is a thing eight handlers do and a ninth could forget — so the products
+    /// themselves ask the same question in the one method their outgoing calls all go through, and
+    /// a caller that skipped the gate entirely is refused rather than served.
+    /// </summary>
+    /// <remarks>
+    /// Proved by giving each client a way of making an HTTP call that throws if it is ever reached,
+    /// so the assertion is "no socket was opened" rather than "the answer was empty". The addresses
+    /// and credentials below are invented and point at nothing.
+    /// </remarks>
+    [Fact]
+    public async Task A_caller_that_skipped_the_gate_is_refused_by_the_immich_client_itself()
+    {
+        var transport = new UnusableTransport();
+        var client = new ImmichClient(
+            transport,
+            Options.Create(new ImmichOptions
+            {
+                Enabled = true,
+                BaseUrl = "http://immich.invented.example/",
+                ApiKey = "invented-key",
+            }),
+            new StubBrake(suspended: true),
+            new StubLifetime(),
+            NullLogger<ImmichClient>.Instance);
+
+        var refusal = await Should.ThrowAsync<PhotoLibraryException>(
+            () => client.PhotosInAsync(new Envelope(0, 1, 0, 1), 10, CancellationToken.None));
+
+        // The same refusal a library nobody configured gives, because that is what a stopped
+        // library is to every surface above: absent rather than broken.
+        refusal.Code.ShouldBe(PhotoLibraryException.NotConfiguredCode);
+        transport.Reached.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_caller_that_skipped_the_gate_is_refused_by_the_photoprism_client_itself()
+    {
+        var transport = new UnusableTransport();
+        var client = new PhotoPrismClient(
+            transport,
+            Options.Create(new PhotoPrismOptions
+            {
+                Enabled = true,
+                BaseUrl = "http://photoprism.invented.example/",
+                AccessToken = "invented-token",
+            }),
+            new StubBrake(suspended: true),
+            NullLogger<PhotoPrismClient>.Instance);
+
+        var refusal = await Should.ThrowAsync<PhotoLibraryException>(
+            () => client.PhotosInAsync(new Envelope(0, 1, 0, 1), 10, CancellationToken.None));
+
+        refusal.Code.ShouldBe(PhotoLibraryException.NotConfiguredCode);
+        transport.Reached.ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// The health probe is the one call whose contract is that it never throws, so it refuses
+    /// differently: it reports that nobody asked. Inventing a failure for a library nothing was
+    /// said to would send an operator to restart a container that is working.
+    /// </summary>
+    [Fact]
+    public async Task A_stopped_library_is_not_even_probed_by_its_own_client()
+    {
+        var transport = new UnusableTransport();
+        var client = new ImmichClient(
+            transport,
+            Options.Create(new ImmichOptions
+            {
+                Enabled = true,
+                BaseUrl = "http://immich.invented.example/",
+                ApiKey = "invented-key",
+            }),
+            new StubBrake(suspended: true),
+            new StubLifetime(),
+            NullLogger<ImmichClient>.Instance);
+
+        var health = await client.ProbeAsync(CancellationToken.None);
+
+        health.Reach.ShouldBe(LibraryReach.Unknown);
+        health.ProbedAt.ShouldBeNull();
+        transport.Reached.ShouldBeFalse();
+    }
+
     private static PhotoLibraryGate GateOver(
         IEnumerable<IPhotoLibrary> libraries, PhotoLibrarySuspensionSettings suspension) =>
         new(libraries, new StubSettings(suspension));
@@ -192,6 +373,9 @@ public sealed class PhotoLibrarySuspensionTests
     {
         /// <summary>How many questions were put to this library. The point of most cases here.</summary>
         public int Calls { get; private set; }
+
+        /// <summary>How many times this library was told to drop what it was holding.</summary>
+        public int Forgotten { get; private set; }
 
         public PhotoLibrarySource Source => source;
 
@@ -225,6 +409,48 @@ public sealed class PhotoLibrarySuspensionTests
 
         public Task RecheckOriginalsAsync(CancellationToken ct) =>
             throw new NotSupportedException("Nothing in these cases rechecks a library.");
+
+        /// <summary>
+        /// Counted rather than refused: forgetting opens no socket, and several cases here are
+        /// about whether it happened.
+        /// </summary>
+        public void Forget() => Forgotten++;
+    }
+
+    /// <summary>A brake stuck in one position, so a client's own refusal can be put under test.</summary>
+    private sealed class StubBrake(bool suspended) : IPhotoLibraryBrake
+    {
+        public ValueTask<bool> IsSuspendedAsync(PhotoLibrarySource source, CancellationToken ct) =>
+            ValueTask.FromResult(suspended);
+    }
+
+    /// <summary>
+    /// A way of making HTTP calls that cannot make one. Handing a client this is how "no socket was
+    /// opened" is asserted rather than assumed: reaching for it at all fails the case.
+    /// </summary>
+    private sealed class UnusableTransport : IHttpClientFactory
+    {
+        public bool Reached { get; private set; }
+
+        public HttpClient CreateClient(string name)
+        {
+            Reached = true;
+            throw new NotSupportedException(
+                "A library this installation has stopped using was asked something over the network.");
+        }
+    }
+
+    /// <summary>The host's own lifetime, which none of these cases ends.</summary>
+    private sealed class StubLifetime : IHostApplicationLifetime
+    {
+        public CancellationToken ApplicationStarted => CancellationToken.None;
+
+        public CancellationToken ApplicationStopping => CancellationToken.None;
+
+        public CancellationToken ApplicationStopped => CancellationToken.None;
+
+        public void StopApplication() =>
+            throw new NotSupportedException("Nothing in these cases stops the application.");
     }
 
     /// <summary>

@@ -74,8 +74,18 @@ public sealed class AppSettingsService(
     /// has decided about it while it is running.
     /// </remarks>
     public ValueTask<PhotoLibrarySuspensionSettings> GetPhotoLibrarySuspensionAsync(CancellationToken ct = default) =>
-        GetAsync<PhotoLibrarySuspensionSettings>(
-            AppSettingSections.PhotoLibrarySuspension, "PhotoLibrarySuspension", ct);
+        GetAsync(
+            AppSettingSections.PhotoLibrarySuspension,
+            "PhotoLibrarySuspension",
+            // The one section whose unreadable row does not fall back to configuration. Every other
+            // section here describes how the installation would like to work, and the configured
+            // values are a working answer for it; this one is a brake somebody pulled during an
+            // incident, and resolving "the decision cannot be read" as "carry on" would resume
+            // talking to a library an operator stopped and leave only a log line behind. So an
+            // unreadable or drifted row means everything stopped, and saving the section again is
+            // what recovers it.
+            () => PhotoLibrarySuspensionSettings.EverythingStopped,
+            ct);
 
     public async Task SaveAsync<T>(string section, T value, CancellationToken ct = default)
         where T : class
@@ -95,7 +105,13 @@ public sealed class AppSettingsService(
         cache.Remove(CacheKey(section));
     }
 
-    private async ValueTask<T> GetAsync<T>(string section, string configurationSection, CancellationToken ct)
+    /// <param name="unreadable">
+    /// What a stored row that cannot be deserialised resolves to, when that is not the configured
+    /// default. Null for every section whose configuration is a safe answer; supplied by the one
+    /// section where "the stored decision is unreadable" has a safer reading of its own.
+    /// </param>
+    private async ValueTask<T> GetAsync<T>(
+        string section, string configurationSection, Func<T>? unreadable, CancellationToken ct)
         where T : class, new()
     {
         if (cache.TryGetValue(CacheKey(section), out T? cached) && cached is not null)
@@ -103,12 +119,17 @@ public sealed class AppSettingsService(
             return cached;
         }
 
-        var resolved = await ResolveAsync<T>(section, configurationSection, ct);
+        var resolved = await ResolveAsync(section, configurationSection, unreadable, ct);
         cache.Set(CacheKey(section), resolved, CacheLifetime);
         return resolved;
     }
 
-    private async Task<T> ResolveAsync<T>(string section, string configurationSection, CancellationToken ct)
+    private ValueTask<T> GetAsync<T>(string section, string configurationSection, CancellationToken ct)
+        where T : class, new() =>
+        GetAsync<T>(section, configurationSection, unreadable: null, ct);
+
+    private async Task<T> ResolveAsync<T>(
+        string section, string configurationSection, Func<T>? unreadable, CancellationToken ct)
         where T : class, new()
     {
         // Configuration first: it is the installation's stated default and the only source before
@@ -127,15 +148,22 @@ public sealed class AppSettingsService(
 
         try
         {
-            return JsonSerializer.Deserialize<T>(stored, SerializerOptions) ?? fromConfiguration;
+            return JsonSerializer.Deserialize<T>(stored, SerializerOptions) ?? Unreadable();
         }
         catch (JsonException ex)
         {
-            // A row that cannot be read must not take the installation down with it; the
-            // configured values are a working answer and the log says which section to fix.
-            logger.LogError(ex, "Stored settings for section {Section} could not be read; using configuration", section);
-            return fromConfiguration;
+            // A row that cannot be read must not take the installation down with it. Which answer
+            // is the safe one is the section's own business and not this method's: for most of them
+            // the configured values are a working answer, and for a section that stores a decision
+            // to stop doing something the safe answer is to go on not doing it.
+            logger.LogError(
+                ex,
+                "Stored settings for section {Section} could not be read; using the section's fallback",
+                section);
+            return Unreadable();
         }
+
+        T Unreadable() => unreadable is null ? fromConfiguration : unreadable();
     }
 
     private static string CacheKey(string section) => $"app-settings:{section}";

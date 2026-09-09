@@ -1516,11 +1516,14 @@ export interface PhotoLibraryStatusUse {
  * because what it describes is the state of another container and changes without anything
  * happening in this browser.
  *
- * The timer runs only while there is a library to report on: an installation that runs none of
- * these products has nothing to poll for, and the answer for it cannot change until somebody
- * restarts the server with a new setting. It also stops of its own accord while the tab is in the
- * background, which is the default and is wanted here — a map left open in a tab nobody is
- * looking at should not keep a neighbouring container awake.
+ * The timer runs only while there is a library being used to report on: an installation that runs
+ * none of these products has nothing to poll for, and neither has one whose libraries an
+ * administrator has all stopped — the server asks a stopped library nothing, so re-asking would
+ * fetch the same stored decision over and over, and that decision changes only when somebody
+ * changes it on a settings screen, which invalidates this answer directly. Coming back to the tab
+ * still re-asks, so a brake released elsewhere is picked up as soon as anybody looks. It also stops
+ * of its own accord while the tab is in the background, which is the default and is wanted here — a
+ * map left open in a tab nobody is looking at should not keep a neighbouring container awake.
  *
  * And it runs only for a caller that is watching the health. Two things read this answer and they
  * want different halves of it: a surface showing whether a library is up is watching something
@@ -1540,7 +1543,7 @@ export function usePhotoLibraries({ watchingHealth = true }: PhotoLibraryStatusU
       unwrap(api.GET('/api/v1/photo-libraries/status')) as Promise<LibraryPhotoStatus>,
     staleTime: PHOTO_LIBRARY_HEALTH_WINDOW_MS,
     refetchInterval: (query) =>
-      watchingHealth && (query.state.data?.providers?.length ?? 0) > 0
+      watchingHealth && (query.state.data?.providers ?? []).some((library) => !library.suspended)
         ? PHOTO_LIBRARY_HEALTH_WINDOW_MS
         : false,
     refetchOnWindowFocus: watchingHealth,

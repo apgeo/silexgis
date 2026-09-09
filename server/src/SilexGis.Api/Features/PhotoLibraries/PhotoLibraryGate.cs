@@ -25,10 +25,17 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// It is one object rather than a check repeated per route because the check is easy to leave out
 /// and impossible to notice missing: a route that skips it goes on working perfectly against a
 /// library somebody thought they had stopped, and the only symptom is traffic at a neighbour's
-/// container that nobody is looking for. So every route asks here, no route reaches
-/// <see cref="IPhotoLibrary"/> any other way, and a suspended or unconfigured library is simply not
-/// handed back — there is no library object to call, which is what makes "no socket is opened"
-/// structural rather than a promise.
+/// container that nobody is looking for. So every route asks here, and a suspended or unconfigured
+/// library is simply not handed back — there is no library object to call.
+/// </para>
+/// <para>
+/// That is the first of two answers rather than the whole of it, and the difference is worth
+/// knowing before adding a route. Asking here is something a handler <em>does</em>, so it is
+/// something a handler can be written without; what makes "no socket is opened" a property rather
+/// than a promise is that each library client asks the same question for itself, in the one method
+/// its outgoing calls already go through. A handler that never came here is refused there. This
+/// gate exists so that the refusal is a shaped answer — absent, exactly as for a library the
+/// deployment never supplied — instead of an exception from underneath.
 /// </para>
 /// </remarks>
 public sealed class PhotoLibraryGate(IEnumerable<IPhotoLibrary> libraries, IAppSettingsService settings)
@@ -52,7 +59,17 @@ public sealed class PhotoLibraryGate(IEnumerable<IPhotoLibrary> libraries, IAppS
         }
 
         var suspension = await settings.GetPhotoLibrarySuspensionAsync(ct);
-        return suspension.IsSuspended(source) ? null : library;
+        if (!suspension.IsSuspended(source))
+        {
+            return library;
+        }
+
+        // Stopped means stopped using and forgetting what it said, not merely declining to ask
+        // again. Done here as well as on the status survey so that the first request to arrive
+        // after the brake goes on drops the reading, whether or not anybody is watching a status
+        // line. Nothing is asked of the library to do it.
+        library.Forget();
+        return null;
     }
 
     /// <summary>
@@ -90,10 +107,26 @@ public sealed class PhotoLibraryGate(IEnumerable<IPhotoLibrary> libraries, IAppS
         var asked = all
             .Where(library => library.IsConfigured && !suspension.IsSuspended(library.Source))
             .ToList();
+
+        // Everything stopped forgets what it was holding, and this is the path that reaches it:
+        // the settings screen re-asks for this survey the moment a brake goes on, so a library
+        // taken out of use drops its reading then rather than the next time something happens to
+        // want it. It opens no socket, and it is safe to repeat.
+        foreach (var stopped in all.Where(library => library.IsConfigured && suspension.IsSuspended(library.Source)))
+        {
+            stopped.Forget();
+        }
+
         var health = await Task.WhenAll(asked.Select(library => library.ProbeAsync(ct)));
-        var answers = asked
-            .Select((library, index) => (library.Source, Health: health[index]))
-            .ToDictionary(x => x.Source, x => x.Health);
+
+        // Built by hand rather than with ToDictionary, which throws on a repeated key. Two
+        // registrations of one product is a deployment mistake, and the status route is where an
+        // operator would go to see it; taking that route down with an exception would hide it.
+        var answers = new Dictionary<PhotoLibrarySource, LibraryHealth>();
+        for (var index = 0; index < asked.Count; index++)
+        {
+            answers[asked[index].Source] = health[index];
+        }
 
         return
         [
