@@ -145,6 +145,7 @@ export const queryKeys = {
   surveyModel: (id: string) => ['survey-model', id] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   surveyCompilations: (caveId: string) => ['survey-compilations', caveId] as const,
+  caveExternalIds: (caveId: string) => ['cave-external-ids', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
@@ -173,6 +174,10 @@ export const queryKeys = {
   // rather than a stale answer to the same one.
   tripImportPreview: (fileId: string, body: unknown) => ['trip-import-preview', fileId, body] as const,
   photoLibraryStatus: ['photo-libraries', 'status'] as const,
+  // How big the protected-position decision is for a given export request. The whole request
+  // is the key: it is a pure function of what would be exported, so changing a filter is a
+  // different question rather than a stale answer to the same one.
+  karstLinkExportPreview: (body: unknown) => ['karstlink-export-preview', body] as const,
   // The whole question is in the key — library, page and words — because every part of it changes
   // what came back. A page held under a key that did not name the words would answer the next
   // search with the previous one's pictures.
@@ -635,6 +640,81 @@ export function useUiDefaults() {
     // It changes when an administrator publishes a new one, which is rare; asking again on every
     // mount would be a request per page load for an answer that is the same all day.
     staleTime: 10 * 60_000,
+  });
+}
+
+/** What an interchange export was asked for, minus the treatments it has not been given yet. */
+export type KarstLinkExportRequest =
+  paths['/api/v1/export/caves/karstlink']['post']['requestBody']['content']['application/json'];
+
+/** How many caves an interchange export would hold, and how many need a decision. */
+export type KarstLinkExportPreview = components['schemas']['KarstLinkExportPreview'];
+
+/**
+ * How large the protected-position decision is, before it is made.
+ *
+ * Asked of the server rather than counted on the client: whether a cave's position is protected
+ * is a fact about the cave that this client is never shown, and it is the same question whoever
+ * is asking — an owner and an administrator have to decide too, because the file outlives their
+ * right to look. `enabled` is what stops it being asked before somebody opens the chooser.
+ */
+export function useKarstLinkExportPreview(request: KarstLinkExportRequest, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.karstLinkExportPreview(request),
+    queryFn: () =>
+      unwrap(api.POST('/api/v1/export/caves/karstlink/preview', { body: request })),
+    enabled,
+  });
+}
+
+/** One identifier another register knows a cave by. */
+export type CaveExternalId = components['schemas']['CaveExternalIdDto'];
+
+/** What grottocenter.org offered for a cave's name, and whether it was asked at all. */
+export type GrottocenterLookup = components['schemas']['GrottocenterLookupDto'];
+
+/** The identifiers other registers know this cave by. */
+export function useCaveExternalIds(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveExternalIds(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{caveId}/external-ids', { params: { path: { caveId: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Records one register's identifier for a cave, or clears it when the value is empty. */
+export function useSetCaveExternalId(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ system, value }: { system: string; value: string | null }) =>
+      unwrap(
+        api.PUT('/api/v1/caves/{caveId}/external-ids/{system}', {
+          params: { path: { caveId, system } },
+          body: { value },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveExternalIds(caveId) }),
+  });
+}
+
+/**
+ * Asks grottocenter.org which of its caves match this one's name.
+ *
+ * A mutation although it reads: it is an errand that leaves the installation, and it happens
+ * because somebody pressed a button rather than because a screen was opened. Cached as a query
+ * it would be repeated on a remount, sending a cave's name outward again for nobody.
+ */
+export function useGrottocenterLookup(caveId: string) {
+  return useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.POST('/api/v1/caves/{caveId}/external-ids/grottocenter/lookup', {
+          params: { path: { caveId } },
+        }),
+      ),
   });
 }
 

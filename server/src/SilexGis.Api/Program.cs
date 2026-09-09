@@ -271,6 +271,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTaxonomyEndpoints();
     api.MapMapLayerEndpoints();
     api.MapCaveEndpoints();
+    api.MapCaveExternalIdEndpoints();
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
     api.MapSurveySourceEndpoints();

@@ -4321,5 +4321,49 @@
     },
     "notConnected": "{{library}} nu este conectată: această instalare nu are adresă sau credențial pentru ea.",
     "recheck": "Verifică din nou"
+  },
+  "karstlinkExport": {
+    "menuItem": "KarstLink (JSON-LD)",
+    "changeAnswer": "KarstLink (JSON-LD) — schimbă răspunsul meu…",
+    "title": "Export de peșteri pentru schimb de date",
+    "intro": "Peșteri descrise în vocabularul publicat pentru peșteri și carst, ca fișier pe care îl puteți da altcuiva. Un fișier trăiește mai mult decât permisiunea care l-a produs, așa că ce spune despre o locație protejată se decide aici și se scrie chiar în fișier.",
+    "download": "Exportă",
+    "caveCount": "{{count}} peșteră/peșteri în acest export.",
+    "protectedCount": "Dintre acestea, {{count}} au o locație pe care această instalare o protejează. Răspunsul de mai jos li se aplică tuturor.",
+    "noneProtected": "Niciuna dintre ele nu are o locație protejată de această instalare, deci nimic de mai jos nu schimbă acest fișier.",
+    "tooMany": "Această selecție conține {{count}} peșteră/peșteri, iar un fișier poate conține {{limit}}. Restrângeți filtrele și exportați pe părți — un fișier oprit la o limită arată exact ca unul complet pentru cine îl primește.",
+    "remember": "Ține minte acest răspuns și nu mă mai întreba",
+    "askAgain": "Exportul nu a putut fi făcut cu răspunsul memorat. Alegeți din nou.",
+    "treatments": {
+      "grid_position": {
+        "label": "Așază-le pe grila de protecție",
+        "help": "Aceeași poziție aproximativă pe care harta o arată deja oricui nu are dreptul să vadă poziția exactă. Fișierul spune, lângă fiecare, cât de departe poate fi de locul real."
+      },
+      "no_position": {
+        "label": "Include-le fără coordonate",
+        "help": "Tot restul despre peșteră — numele, codul, lungimea și adâncimea — și nimic despre unde se află."
+      },
+      "omit": {
+        "label": "Lasă-le complet în afara fișierului",
+        "help": "Fișierul declară câte peșteri au fost lăsate afară, altfel numărătorile făcute pe el ar contrazice registrul, iar destinatarul nu ar avea cum să afle."
+      }
+    },
+    "errors": {
+      "tooManyCaves": "Un fișier poate conține {{count}} peșteri. Restrângeți filtrele și exportați pe părți."
+    }
+  },
+  "externalIds": {
+    "title": "Identificatori în alte registre",
+    "explanation": "Numărul sub care un alt registru cunoaște această peșteră. Este singurul mod stabil de a spune că o peșteră de aici și una de acolo sunt aceeași: numele nu sunt stabile, iar poziția este exact ceea ce nu poate fi împărtășit. Se păstrează doar numărul — nimic altceva din ce spune registrul nu este copiat aici, așa că nimic de aici nu poate rămâne în urmă părând totuși de încredere.",
+    "placeholder": "Neînregistrat",
+    "lookup": "Caută această peșteră în Grottocenter",
+    "lookupFailed": "Grottocenter nu a putut fi întrebat.",
+    "notConfigured": "Această instalare nu caută peșteri în Grottocenter. Un administrator activează integrarea înainte de a putea fi folosită; până atunci nu se trimite nimic nicăieri.",
+    "noCandidates": "Grottocenter nu a oferit nimic pentru acest nume.",
+    "accept": "Înregistrează-l pe acesta",
+    "systems": {
+      "grottocenter": "Grottocenter",
+      "national_cadastre": "Cadastru național"
+    }
   }
 }

@@ -52,4 +52,14 @@ public static class AuditActions
     /// </summary>
     public const string NotificationRetried = "notification_retried";
     public const string Login = "login";
+
+    /// <summary>
+    /// Data left the installation as a file. Its own name because it is not a change to
+    /// anything: nothing in the database is different afterwards, and yet it is the act most
+    /// worth being able to reconstruct later — a file outlives every permission check that
+    /// produced it, so "who took what, and what did they choose to do with the positions they
+    /// were not allowed to disclose" has to be answerable from the record rather than from
+    /// whoever still remembers.
+    /// </summary>
+    public const string Exported = "exported";
 }

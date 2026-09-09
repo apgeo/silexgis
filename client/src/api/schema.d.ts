@@ -2192,6 +2192,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/export/caves/karstlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Caves as JSON-LD in the published cave and karst vocabulary. The exporter chooses, per cave, what happens to a protected position: no coordinates, omitted, or the protection-grid position. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["KarstLinkExportRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/caves/karstlink/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** How many caves a KarstLink export would hold, and how many of them need a decision about a protected position. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["KarstLinkExportRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KarstLinkExportPreview"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -5193,6 +5271,125 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{caveId}/external-ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The identifiers other registers know this cave by. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveExternalIdDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{caveId}/external-ids/{system}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Records the identifier one register knows this cave by, or clears it when the value is empty (Write on the cave). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                    system: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CaveExternalIdWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveExternalIdDto"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{caveId}/external-ids/grottocenter/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Asks grottocenter.org which of its caves match this cave's name. Sends the name and nothing else, stores nothing, and answers that it is not configured when the installation has not turned the integration on (Write on the cave). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GrottocenterLookupDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -17644,6 +17841,14 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        CaveExternalIdDto: {
+            system: string;
+            value: string;
+            url: null | string;
+        };
+        CaveExternalIdWriteRequest: {
+            value?: null | string;
+        };
         CaveHeadlinePictureDto: {
             /** Format: uuid */
             attachmentId: string;
@@ -19530,6 +19735,16 @@ export interface components {
             cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
+        GrottocenterCandidateDto: {
+            externalId: string;
+            name: null | string;
+            country: null | string;
+            url: null | string;
+        };
+        GrottocenterLookupDto: {
+            configured: boolean;
+            candidates: components["schemas"]["GrottocenterCandidateDto"][];
+        };
         HistoryEventDto: {
             /** Format: int64 */
             id: number;
@@ -19803,6 +20018,29 @@ export interface components {
             score: null | number;
             class: components["schemas"]["KarstificationClass"];
             components: components["schemas"]["KarstificationComponentDto"][];
+        };
+        KarstLinkExportPreview: {
+            /** Format: int32 */
+            caveCount: number;
+            /** Format: int32 */
+            protectedCaveCount: null | number;
+            exceedsLimit: boolean;
+            /** Format: int32 */
+            maxCaveCount: number;
+        };
+        KarstLinkExportRequest: {
+            caveIds?: null | string[];
+            search?: null | string;
+            region?: null | string;
+            /** Format: int64 */
+            caveTypeId?: null | number;
+            bbox?: null | string;
+            tag?: null | string;
+            treatments?: null | {
+                [key: string]: string;
+            };
+            treatmentForAll?: null | string;
+            defaultTreatment?: null | string;
         };
         LibraryPhotoFeatureCollection: {
             type: string;
