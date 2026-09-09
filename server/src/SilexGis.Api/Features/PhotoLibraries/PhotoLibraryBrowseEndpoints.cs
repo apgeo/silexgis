@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.PhotoLibraries;
+using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.PhotoLibraries;
 
 namespace SilexGis.Api.Features.PhotoLibraries;
@@ -37,11 +39,23 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// published.
 /// </para>
 /// <para>
+/// <b>The listing takes one narrowing, and it is a trip.</b> A caller may name a trip this
+/// installation holds, and the days that trip was out become the stretch of time the library is
+/// asked about — so a trip's page can show the photographs taken while it was out without anything
+/// having been filed against it. What a caller may <em>not</em> do is name the stretch of time
+/// itself, and the difference is the feature rather than a precaution: a window somebody sent in is
+/// a date filter, and a date filter with a trip's name written over it is a claim about where those
+/// photographs came from that nothing checked. The trip is read here, its dates are read here, and
+/// whether this account may read that trip at all is decided here by the same service that decides
+/// it on the trip's own page.
+/// </para>
+/// <para>
 /// Nothing is stored and nothing is held between calls. The library is asked for one page, its
 /// answer is turned into a response, and the answer is gone when the response is written — which is
-/// why there is no table, no job and no migration behind any of this. The credential that reaches
-/// the library is the library client's own and is never read here: this route decides who may use
-/// the feature, and the client decides how to reach the far side.
+/// why there is no table, no job and no migration behind any of this. Naming a trip changes none of
+/// that: nothing is written, nothing is bound, and no photograph becomes the trip's. The credential
+/// that reaches the library is the library client's own and is never read here: this route decides
+/// who may use the feature, and the client decides how to reach the far side.
 /// </para>
 /// </summary>
 public static class PhotoLibraryBrowseEndpoints
@@ -52,6 +66,32 @@ public static class PhotoLibraryBrowseEndpoints
     /// found", which means this installation does not run the product that was named.
     /// </summary>
     public const string PhotographNotFoundCode = "photo_library.photograph_not_found";
+
+    /// <summary>
+    /// A listing was asked for a trip this account may not read, or one that is not there.
+    /// </summary>
+    /// <remarks>
+    /// One answer for both, as everywhere else a row is read by identifier: telling somebody that a
+    /// trip exists but is not theirs to read is itself a fact about the trip, and this route would
+    /// be a way of asking it about every identifier in turn. Kept apart from the slice's other two
+    /// "not founds" — a product this installation does not run, and a photograph the library no
+    /// longer reports — because all three draw an empty panel and only this one means the reader is
+    /// looking at a trip that is not there for them.
+    /// </remarks>
+    public const string TripNotFoundCode = "photo_library.trip_not_found";
+
+    /// <summary>
+    /// The trip is there, and its dates do not describe a stretch of time this installation will
+    /// ask a library about.
+    /// </summary>
+    /// <remarks>
+    /// Its end precedes its start, its start was never filled in, or the two are so far apart that
+    /// the window would be most of the library. Refused rather than answered with something
+    /// plausible: a panel that quietly picked one reading of a contradictory pair of dates would
+    /// present somebody else's photographs as this trip's, and the record that needs correcting
+    /// would go on looking ordinary.
+    /// </remarks>
+    public const string TripWindowUnusableCode = "photo_library.trip_window_unusable";
 
     /// <summary>
     /// Pictures per page when a caller asks for no particular number. The same number this
@@ -120,8 +160,9 @@ public static class PhotoLibraryBrowseEndpoints
 
         libraries.MapGet("/{source}/photographs", ListAsync)
             .WithSummary(
-                "One page of the photographs one neighbouring library holds, newest first. Carries "
-                + "no position of any kind and takes no rectangle and no words.");
+                "One page of the photographs one neighbouring library holds, newest first, either "
+                + "of the whole library or of the days one trip was out. Carries no position of any "
+                + "kind and takes no rectangle, no words and no dates.");
 
         libraries.MapGet("/{source}/photographs/{photographId}", DetailAsync)
             .WithSummary(
@@ -147,15 +188,26 @@ public static class PhotoLibraryBrowseEndpoints
     /// paging it came out of, which is how the same photograph appears on two pages and another on
     /// none.
     /// </para>
+    /// <para>
+    /// Where a trip was named, the narrowing is the library's too, for the same reason: it decided
+    /// what this page is, so a photograph dropped from it here would leave a page short of the
+    /// number beside it and a next page that skips whatever was dropped. The window put to the
+    /// library is a little wider than the trip — a day past each end — because a trip's dates and a
+    /// camera's clock are not in the same frame; the panel that draws this says so, and every
+    /// photograph carries its own date.
+    /// </para>
     /// </remarks>
     private static async Task<Results<Ok<LibraryPhotographPageDto>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         string source,
         int? page,
         int? pageSize,
+        Guid? tripId,
         PhotoLibraryGate gate,
         ILibraryPhotoTokenService tokens,
         IOptions<PhotoLibraryOptions> options,
         IAccessContextAccessor accessAccessor,
+        SilexGisDbContext db,
+        IAccessService access,
         ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
@@ -187,6 +239,34 @@ public static class PhotoLibraryBrowseEndpoints
             return ApiProblems.NotFound(PhotoLibraryEndpoints.NotFoundCode);
         }
 
+        LibraryPhotoWindow? window = null;
+        if (tripId is { } named)
+        {
+            // The trip is read here and its dates are turned into a window here, and that is the
+            // whole of what makes this panel a trip's photographs rather than a date filter with a
+            // trip's name written over it. A caller names a trip; it never names a stretch of time.
+            var trip = await db.TripLogs.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == named, ct);
+
+            // Whether this account may read the trip is asked of the one service that decides it,
+            // about the row itself, exactly as the trip's own page asks. A window taken from a trip
+            // somebody may not read would tell them which days it covered, in a panel that then
+            // shows them what was photographed on those days.
+            if (trip is null || !(await access.DecideAsync(ctx, AccessAction.Read, trip, ct)).Allowed)
+            {
+                return ApiProblems.NotFound(TripNotFoundCode);
+            }
+
+            window = TripPhotoWindow.For(trip.TripDate, trip.TripDateEnd);
+            if (window is null)
+            {
+                return ApiProblems.BadRequest(
+                    TripWindowUnusableCode,
+                    "This trip's dates do not give a stretch of time to ask a photo library about. "
+                    + "Check the day it started and the day it ended.");
+            }
+        }
+
         var wanted = pageSize ?? DefaultPageSize;
         var size = Math.Clamp(wanted, 1, MaxPageSize);
         var number = Math.Max(1, page ?? 1);
@@ -199,7 +279,7 @@ public static class PhotoLibraryBrowseEndpoints
         LibraryPhotoListPage answer;
         try
         {
-            answer = await library.ListAsync(new LibraryPhotoQuery(number, size), ct);
+            answer = await library.ListAsync(new LibraryPhotoQuery(number, size, window), ct);
         }
         catch (PhotoLibraryException e)
         {

@@ -428,6 +428,13 @@ public sealed class ImmichClient(
     /// marked by this library's own authors as carrying no promise to anybody outside the product,
     /// while this one is part of the contract, pages, and is what its own interface uses.
     /// </para>
+    /// <para>
+    /// That route also takes the two ends of a stretch of time, which is the whole of what a window
+    /// costs here: the narrowing is the library's own, it pages as any other listing does, and no
+    /// geography is involved in asking for it. Nothing is filtered out of the answer on this side —
+    /// the far end has already decided what this page is, and dropping rows from it afterwards would
+    /// leave a page short of what it says it is and a next page that skips what was dropped.
+    /// </para>
     /// </remarks>
     public async Task<LibraryPhotoListPage> ListAsync(LibraryPhotoQuery query, CancellationToken ct)
     {
@@ -438,13 +445,12 @@ public sealed class ImmichClient(
         var page = Math.Max(1, query.Page);
 
         // Written out rather than serialised from an object, so what leaves this machine is exactly
-        // these three fields and cannot silently grow a fourth: every field here is a question
-        // asked about somebody else's photographs. The order is asked for rather than assumed — a
-        // listing that quietly came back oldest-first would look like a working feature showing the
-        // wrong decade.
+        // these fields and cannot silently grow one more: every field here is a question asked about
+        // somebody else's photographs. The order is asked for rather than assumed — a listing that
+        // quietly came back oldest-first would look like a working feature showing the wrong decade.
         var body = string.Create(
             CultureInfo.InvariantCulture,
-            $$"""{"page":{{page}},"size":{{size}},"order":"desc"}""");
+            $$"""{"page":{{page}},"size":{{size}},"order":"desc"{{Taken(query.Window)}}}""");
 
         var answered = await AskAsync(
             new Uri(BaseAddress(Options.BaseUrl), SearchRoute), body, "a listing", ct);
@@ -599,6 +605,46 @@ public sealed class ImmichClient(
             return (photos, handedOver, hasMore, stated);
         }
     }
+
+    /// <summary>
+    /// The two fields that narrow a listing to a stretch of time, ready to be dropped into the body
+    /// beside the paging — or nothing at all when the whole library was asked for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Built here out of two instants rather than assembled anywhere a caller's value could reach.
+    /// The values that go out are produced entirely by <see cref="Instant"/> from a
+    /// <see cref="DateTimeOffset"/>, so they are a fixed shape of digits and separators and cannot
+    /// carry a quotation mark, a backslash or a second field into the request — which is what lets
+    /// them be written straight into the body beside the fields above rather than being serialised.
+    /// </para>
+    /// <para>
+    /// This library narrows by the moment it holds for a photograph, which it keeps in UTC, so the
+    /// instants are sent as UTC and are not re-expressed in anybody's local zone on the way. The
+    /// window handed in is already wide enough to cover the difference between a calendar day here
+    /// and a calendar day wherever a camera was.
+    /// </para>
+    /// </remarks>
+    private static string Taken(LibraryPhotoWindow? window)
+    {
+        if (window is not { } asked)
+        {
+            return string.Empty;
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $",\"takenAfter\":\"{Instant(asked.From)}\",\"takenBefore\":\"{Instant(asked.To)}\"");
+    }
+
+    /// <summary>One instant, in the shape this library reads a moment in.</summary>
+    /// <remarks>
+    /// Invariant and explicitly UTC. A moment written in the running machine's own format is a
+    /// request that means one thing on a developer's box and another on a server, and the symptom is
+    /// a window silently off by hours rather than an error anybody would see.
+    /// </remarks>
+    private static string Instant(DateTimeOffset moment) =>
+        moment.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// How many photographs <b>the library</b> holds for this request, or null when what it sent

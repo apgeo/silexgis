@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -336,6 +337,187 @@ public sealed class PhotoLibraryBrowseEndpointTests : IAsyncLifetime, IDisposabl
         CodeOf(body).ShouldBe(PhotoLibraryException.UnavailableCode);
     }
 
+    // --------------------------------------------------------- the days one trip was out
+
+    /// <summary>
+    /// Naming a trip narrows the listing to the days that trip was out, in the library's own
+    /// grammar, with a day of margin at each end.
+    /// </summary>
+    /// <remarks>
+    /// The margin is asserted rather than left implicit because it is the whole of the answer to a
+    /// question this application cannot answer exactly: a trip's dates carry no zone and a camera's
+    /// stamps are instants, so the two frames can be displaced by hours. A window without it draws a
+    /// panel that is quietly short at both edges, with a number under it and nothing saying the
+    /// number is small.
+    /// </remarks>
+    [Fact]
+    public async Task A_trip_narrows_the_listing_to_the_days_it_was_out()
+    {
+        library.AnswersListing(OnePhotograph);
+        var trip = await TripAsync("2026-03-14", "2026-03-15");
+
+        var page = await JsonAsync(admin, $"{ListUrl}?tripId={trip}");
+        page.GetProperty("items").GetArrayLength().ShouldBe(1);
+
+        // Escaped, because that is what goes on the wire: both terms travel in one parameter.
+        library.Only.Url.ShouldContain("q=after%3A2026-03-13%20before%3A2026-03-17");
+    }
+
+    /// <summary>
+    /// A trip that named no end is asked about for its own day, and not for everything since.
+    /// </summary>
+    /// <remarks>
+    /// The failure this rules out is the one that looks most like the feature working: an open
+    /// window pages, counts and fills a grid exactly as a real answer does, and would present a
+    /// club's whole library as the photographs of one weekend.
+    /// </remarks>
+    [Fact]
+    public async Task A_trip_that_named_no_end_is_not_asked_about_open_endedly()
+    {
+        library.AnswersListing(OnePhotograph);
+        var trip = await TripAsync("2026-03-14", tripDateEnd: null);
+
+        await JsonAsync(admin, $"{ListUrl}?tripId={trip}");
+
+        library.Only.Url.ShouldContain("q=after%3A2026-03-13%20before%3A2026-03-16");
+    }
+
+    /// <summary>
+    /// A trip that is not there is not found, and the library is asked nothing on its behalf.
+    /// </summary>
+    /// <remarks>
+    /// The second half is what keeps this route from being a way of asking whether a trip exists:
+    /// a request that went out to a neighbouring container and came back would take a visibly
+    /// different length of time from one that never left.
+    /// </remarks>
+    [Fact]
+    public async Task A_trip_that_is_not_there_is_not_found_and_nothing_is_asked()
+    {
+        library.AnswersListing(OnePhotograph);
+
+        var refused = await admin.GetAsync($"{ListUrl}?tripId={Guid.NewGuid()}");
+        var body = await refused.Content.ReadAsStringAsync();
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound, body);
+        CodeOf(body).ShouldBe(PhotoLibraryBrowseEndpoints.TripNotFoundCode);
+        library.Calls.ShouldBeEmpty();
+
+        // And a trip that is there answers through the very same route, so the case above is a
+        // refusal rather than a parameter that never works.
+        var trip = await TripAsync("2026-03-14", "2026-03-15");
+        (await JsonAsync(admin, $"{ListUrl}?tripId={trip}")).GetProperty("items")
+            .GetArrayLength().ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A trip this account may not read is not found either, and again nothing is asked.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same answer as a trip that does not exist, on purpose and as everywhere else a row is
+    /// read by identifier: telling somebody that a trip exists but is not theirs is itself a fact
+    /// about the trip, and this route would be a way of asking it about every identifier in turn.
+    /// </para>
+    /// <para>
+    /// The audience is opened for this one, because the point is an account refused by the
+    /// <em>trip</em>. With the shipped setting the only accounts that reach this route at all are
+    /// administrators, who can read every trip — so the case would pass while proving nothing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_trip_this_account_may_not_read_is_not_found_and_nothing_is_asked()
+    {
+        library.AnswersListing(OnePhotograph);
+
+        // Written by the administrator and kept private, so nothing else reaches it.
+        var trip = await TripAsync("2026-03-14", "2026-03-15");
+
+        using var open = Configured(library, ("PhotoLibraries:Audience", "SignedIn"));
+        var email = $"pb-tr-{Guid.NewGuid():N}"[..20] + "@t.local";
+        await AuthHelper.CreateUserAsync(open, GlobalRoles.Viewer, email);
+        using var outsider = await AuthHelper.BearerClientAsync(open, email);
+
+        var refused = await outsider.GetAsync($"{ListUrl}?tripId={trip}");
+        var body = await refused.Content.ReadAsStringAsync();
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound, body);
+        CodeOf(body).ShouldBe(PhotoLibraryBrowseEndpoints.TripNotFoundCode);
+        library.Calls.ShouldBeEmpty();
+
+        // And the same account may still look through the library itself: what was refused is this
+        // trip, not the feature, which is the difference the two codes carry.
+        (await JsonAsync(outsider, ListUrl)).GetProperty("items").GetArrayLength().ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A trip whose dates cannot make a window is refused, and the library is asked nothing.
+    /// </summary>
+    /// <remarks>
+    /// The record this is really about is one whose end date carries a mistyped year. Nothing
+    /// refuses it, it looks ordinary in a list, and the window it would produce asks a club's
+    /// library for a decade — which pages and counts perfectly and would be shown as the
+    /// photographs of one weekend.
+    /// </remarks>
+    [Fact]
+    public async Task A_trip_whose_dates_cannot_make_a_window_is_refused()
+    {
+        library.AnswersListing(OnePhotograph);
+        var trip = await TripAsync("2026-03-14", "2036-03-15");
+
+        var refused = await admin.GetAsync($"{ListUrl}?tripId={trip}");
+        var body = await refused.Content.ReadAsStringAsync();
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        CodeOf(body).ShouldBe(PhotoLibraryBrowseEndpoints.TripWindowUnusableCode);
+        library.Calls.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A listing asked for without a trip is still the whole library.
+    /// </summary>
+    /// <remarks>
+    /// Asserted beside the cases above because the narrowing is a parameter on the route the
+    /// browsing page already uses, and a window that leaked into the unnamed case would narrow that
+    /// page to a day while every count above it went on saying "the library holds".
+    /// </remarks>
+    [Fact]
+    public async Task A_listing_with_no_trip_named_asks_about_no_stretch_of_time()
+    {
+        library.AnswersListing(OnePhotograph);
+
+        await JsonAsync(admin, ListUrl);
+
+        library.Only.Url.ShouldNotContain("after");
+        library.Only.Url.ShouldNotContain("before");
+    }
+
+    /// <summary>
+    /// Naming a trip files nothing: it is a question about the library, and the answer says nothing
+    /// about the trip.
+    /// </summary>
+    /// <remarks>
+    /// Binding a photograph to a trip is a later feature and a different decision, so this pins the
+    /// absence rather than leaving it to be noticed: the answer carries no trip, and every call this
+    /// makes to the library is a reading one. What a photograph is <em>of</em> is nobody's claim
+    /// here.
+    /// </remarks>
+    [Fact]
+    public async Task Naming_a_trip_writes_nothing_and_claims_nothing_about_it()
+    {
+        library.AnswersListing(OnePhotograph);
+        var trip = await TripAsync("2026-03-14", "2026-03-15");
+
+        var raw = await RawAsync(admin, $"{ListUrl}?tripId={trip}");
+
+        raw.ShouldNotContain(trip.ToString());
+        raw.ShouldNotContain("trip");
+
+        foreach (var call in library.Calls)
+        {
+            call.Method.ShouldBe("GET");
+        }
+    }
+
     // ------------------------------------------------------------------------- one photograph
 
     /// <summary>
@@ -494,17 +676,49 @@ public sealed class PhotoLibraryBrowseEndpointTests : IAsyncLifetime, IDisposabl
     /// One product configured and the other not, which is also the state the case above about a
     /// library this installation does not run depends on.
     /// </summary>
-    private SilexGisApiFactory Configured(LibraryStub stub) =>
-        new(
+    private SilexGisApiFactory Configured(
+        LibraryStub stub, params (string Key, string Value)[] extra)
+    {
+        var settings = new Dictionary<string, string?>
+        {
+            ["PhotoLibraries:PhotoPrism:Enabled"] = "true",
+            ["PhotoLibraries:PhotoPrism:BaseUrl"] = LibraryAddress,
+            ["PhotoLibraries:PhotoPrism:AccessToken"] = FakeToken,
+        };
+
+        foreach (var (key, value) in extra)
+        {
+            settings[key] = value;
+        }
+
+        return new SilexGisApiFactory(
             connectionString,
-            new Dictionary<string, string?>
-            {
-                ["PhotoLibraries:PhotoPrism:Enabled"] = "true",
-                ["PhotoLibraries:PhotoPrism:BaseUrl"] = LibraryAddress,
-                ["PhotoLibraries:PhotoPrism:AccessToken"] = FakeToken,
-            },
+            settings,
             services => services.AddHttpClient(PhotoPrismClient.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => stub));
+    }
+
+    /// <summary>
+    /// One trip written by the administrator, private, naming no cave and nobody — the dates are the
+    /// whole of what these cases are about, and anything else on the record would only be another
+    /// way for one of them to fail.
+    /// </summary>
+    private async Task<Guid> TripAsync(string tripDate, string? tripDateEnd)
+    {
+        var response = await admin.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"An invented trip {Guid.NewGuid():N}",
+            tripDate,
+            tripDateEnd,
+            caveIds = Array.Empty<Guid>(),
+            participants = Array.Empty<object>(),
+            visibility = "private",
+        });
+
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
 
     private static async Task<JsonElement> JsonAsync(HttpClient client, string url)
     {

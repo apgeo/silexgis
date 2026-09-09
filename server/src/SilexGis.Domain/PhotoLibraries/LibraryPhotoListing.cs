@@ -86,10 +86,34 @@ public sealed record LibraryPhotoListPage(
 /// these products replies to the second with an ordering over everything it holds rather than with
 /// a narrowed listing — so they are two calls, and this is the one that has nothing to say about
 /// words.
+///
+/// <para>
+/// What it does take is a stretch of time, because that is a narrowing both products perform
+/// themselves, over a fact they already hold about every photograph, and it is the same listing
+/// either way: a page of the library, newest first, with fewer photographs in it. A search would
+/// have been the wrong home for it — on one of the two products a search is an ordering of
+/// everything rather than a narrowing of anything, so "the front of an ordering, restricted to a
+/// weekend" is not a sentence with a meaning.
+/// </para>
 /// </remarks>
 /// <param name="Page">One-based, as both products count pages and offsets from a page number here.</param>
 /// <param name="PageSize">How many at most, already clamped to what this installation will ask for.</param>
-public sealed record LibraryPhotoQuery(int Page, int PageSize);
+/// <param name="Window">
+/// The stretch of time to ask about, or null for the whole library.
+///
+/// <para>
+/// A window and not a rectangle, and the difference is the whole reason one of these is allowed
+/// here while the other is not: a moment says when a photograph was taken and not where, so
+/// narrowing by it emits nothing about anybody's position and cannot be read backwards into one.
+/// </para>
+/// <para>
+/// It is a window worked out on this side from a record this application holds, and never a pair
+/// of dates somebody sent in. That is the point of it rather than a precaution: a window a caller
+/// chooses is a date filter, and a date filter presented as the photographs of one trip is a claim
+/// about where those pictures came from that nothing checked.
+/// </para>
+/// </param>
+public sealed record LibraryPhotoQuery(int Page, int PageSize, LibraryPhotoWindow? Window = null);
 
 /// <summary>
 /// One photograph in full, as far as the library that holds it will say.

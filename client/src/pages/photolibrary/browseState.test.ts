@@ -463,3 +463,77 @@ describe('what a failure is told to the reader as', () => {
     expect(problemOf('endOfList', false, text, 200)).toBeNull();
   });
 });
+
+describe('a listing narrowed to the days one trip was out', () => {
+  /**
+   * The number beside a narrowed listing counts what the library holds *in that window*, and the
+   * sentence over it has to say so. "Of 412 photographs the library holds" written over a weekend's
+   * worth would tell a reader their club owns four hundred photographs when it owns forty thousand
+   * — and neither number describes the reader, because every account reaches a library through one
+   * credential belonging to the whole installation.
+   */
+  it('counts what the library holds from those days, not what it holds altogether', () => {
+    expect(countLine(page({ total: 12 }), true)).toEqual({
+      key: 'libraryPhotos.trip.showingOf',
+      values: { shown: 1, total: 12 },
+    });
+
+    expect(countLine(page({ total: null }), true)).toEqual({
+      key: 'libraryPhotos.trip.showingUnknownTotal',
+      values: { count: 1 },
+    });
+
+    // The control: the same page, not narrowed, keeps the sentence about the whole library.
+    expect(countLine(page({ total: 12 }))?.key).toBe('libraryPhotos.browse.showingOf');
+  });
+
+  /**
+   * The fact this panel exists to state. A library that answered, holds plenty, and holds nothing
+   * from those days is not a library holding nothing — and only the first of those is about the
+   * trip.
+   */
+  it('says nothing was taken then rather than that the library is empty', () => {
+    expect(emptyMessage('empty', page({ items: [] }), searchWording('text'), true)).toBe(
+      'libraryPhotos.trip.nothingTaken',
+    );
+
+    expect(emptyMessage('empty', page({ items: [] }), searchWording('text'))).toBe(
+      'libraryPhotos.browse.empty',
+    );
+  });
+
+  /**
+   * A page past the end of the answer is still a page past the end. The trip changes what an empty
+   * first page means and changes nothing about a step too far.
+   */
+  it('leaves a page past the end saying what it already said', () => {
+    expect(
+      emptyMessage('endOfList', page({ items: [], page: 2 }), searchWording('text'), true),
+    ).toBe('libraryPhotos.browse.pastEnd');
+  });
+
+  /**
+   * Two refusals this panel can meet that the library's own page cannot, and neither is about the
+   * library. Read as "the library did not answer", one of them sends somebody to restart a
+   * container over a trip they are not allowed to see, and the other over a mistyped date.
+   */
+  it('tells a refusal about the trip apart from a library that did not answer', () => {
+    const notFound = new ApiError(404, 'photo_library.trip_not_found');
+    const unusable = new ApiError(400, 'photo_library.trip_window_unusable');
+
+    expect(browseState({ isPending: false, error: notFound, page: undefined })).toBe('tripNotFound');
+    expect(browseState({ isPending: false, error: unusable, page: undefined })).toBe(
+      'tripWindowUnusable',
+    );
+
+    expect(problemOf('tripNotFound', false, searchWording('text'), 200)).toEqual({
+      key: 'libraryPhotos.trip.notFound',
+      kind: 'info',
+    });
+
+    expect(problemOf('tripWindowUnusable', false, searchWording('text'), 200)).toEqual({
+      key: 'libraryPhotos.trip.datesUnusable',
+      kind: 'warning',
+    });
+  });
+});

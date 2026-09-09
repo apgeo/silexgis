@@ -4249,6 +4249,15 @@
       "reduced": "This library reads a colon as naming one of its own fields, so it was asked for: {{words}}",
       "nothingLeft": "There were no words left once the field separators were taken out, so no library was asked anything."
     },
+    "trip": {
+      "title": "Photographs from the photo library",
+      "explains": "Pictures a connected photo library holds from the days this trip was out. They come from that library and nothing here has been filed against the trip. The days asked about reach one past each end of the trip, because a trip's dates carry no time zone and a camera's clock does — so pictures from the day before or the day after can appear, and each one shows its own date.",
+      "showingOf": "Showing {{shown}} of {{total}} photographs the library holds from these days",
+      "showingUnknownTotal": "Showing {{count}} photographs from these days. This library does not say how many it holds.",
+      "nothingTaken": "This library holds nothing taken while this trip was out. The library answered; it may hold plenty from other days.",
+      "notFound": "This trip could not be read, so no library was asked anything about it.",
+      "datesUnusable": "This trip's dates do not give a stretch of time to ask a photo library about, so nothing was asked. Check the day it started and the day it ended."
+    },
     "detail": {
       "title": "Photograph",
       "takenAt": "Taken",

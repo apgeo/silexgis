@@ -150,6 +150,128 @@ public sealed class PhotoLibraryBrowseTests
         immich.Only.Body.ShouldContain("\"size\":20");
     }
 
+    // --------------------------------------------------------------- a stretch of time, in two grammars
+
+    /// <summary>
+    /// A window is asked for in each product's own way of naming one, and the two ends land in the
+    /// right order.
+    /// </summary>
+    /// <remarks>
+    /// This is the assertion the trip panel rests on, and both ways of getting it wrong are silent.
+    /// Two ends transposed produce a window that no photograph is inside, which draws an empty panel
+    /// — and an empty panel is exactly what the feature looks like when a club simply took no
+    /// pictures. A term this product does not recognise is worse still: it falls through to the
+    /// free text it matches titles with, so the listing comes back as the whole library under a
+    /// heading naming one weekend.
+    /// </remarks>
+    [Fact]
+    public async Task A_window_is_asked_for_in_each_product_own_grammar()
+    {
+        var window = new LibraryPhotoWindow(
+            new DateTimeOffset(2026, 3, 13, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 3, 17, 0, 0, 0, TimeSpan.Zero));
+
+        var prism = new LibraryStub();
+        prism.Answers(_ => Json("[]"));
+        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60, window), default);
+
+        // Escaped, because that is what goes on the wire: the two terms travel in one parameter and
+        // the space between them has to survive being put in an address.
+        prism.Only.Url.ShouldContain("q=after%3A2026-03-13%20before%3A2026-03-17");
+
+        var immich = new LibraryStub();
+        immich.Answers(_ => Json(ImmichPage("[]", total: 0, nextPage: null)));
+        await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60, window), default);
+
+        immich.Only.Body.ShouldContain("\"takenAfter\":\"2026-03-13T00:00:00.000Z\"");
+        immich.Only.Body.ShouldContain("\"takenBefore\":\"2026-03-17T00:00:00.000Z\"");
+    }
+
+    /// <summary>
+    /// The instants sent are the window's own, in UTC, whatever offset they were handed over in.
+    /// </summary>
+    /// <remarks>
+    /// A moment re-expressed in the running machine's zone on the way out is a window silently
+    /// somewhere else, on one deployment and not another, with nothing in any answer saying so.
+    /// </remarks>
+    [Fact]
+    public async Task A_window_handed_over_in_another_offset_is_sent_as_the_same_moment_in_UTC()
+    {
+        // The same two instants as the case above, written with an offset: three in the morning,
+        // three hours ahead, is midnight in UTC.
+        var window = new LibraryPhotoWindow(
+            new DateTimeOffset(2026, 3, 13, 3, 0, 0, TimeSpan.FromHours(3)),
+            new DateTimeOffset(2026, 3, 17, 3, 0, 0, TimeSpan.FromHours(3)));
+
+        var immich = new LibraryStub();
+        immich.Answers(_ => Json(ImmichPage("[]", total: 0, nextPage: null)));
+        await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60, window), default);
+
+        immich.Only.Body.ShouldContain("\"takenAfter\":\"2026-03-13T00:00:00.000Z\"");
+        immich.Only.Body.ShouldContain("\"takenBefore\":\"2026-03-17T00:00:00.000Z\"");
+
+        var prism = new LibraryStub();
+        prism.Answers(_ => Json("[]"));
+        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60, window), default);
+
+        prism.Only.Url.ShouldContain("q=after%3A2026-03-13%20before%3A2026-03-17");
+    }
+
+    /// <summary>
+    /// A listing with no window asks about no stretch of time at all.
+    /// </summary>
+    /// <remarks>
+    /// The whole library is the ordinary case and it must stay one question. A window quietly
+    /// attached to it — today's, or the last one asked for — would narrow the browsing page to a
+    /// day while every count above it went on saying "the library holds".
+    /// </remarks>
+    [Fact]
+    public async Task A_listing_with_no_window_narrows_by_no_time_at_all()
+    {
+        var prism = new LibraryStub();
+        prism.Answers(_ => Json("[]"));
+        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60), default);
+
+        prism.Only.Url.ShouldNotContain("q=");
+        prism.Only.Url.ShouldNotContain("after");
+        prism.Only.Url.ShouldNotContain("before");
+
+        var immich = new LibraryStub();
+        immich.Answers(_ => Json(ImmichPage("[]", total: 0, nextPage: null)));
+        await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60), default);
+
+        immich.Only.Body.ShouldNotContain("taken");
+    }
+
+    /// <summary>
+    /// The window is the library's narrowing, and nothing is dropped from the answer afterwards.
+    /// </summary>
+    /// <remarks>
+    /// Pinned because filtering here is the obvious-looking way to make the panel exact, and it
+    /// breaks the two things underneath it: the count beside the grid stops being what the library
+    /// said, and the next page skips whatever this one dropped. The library is the only thing that
+    /// knows what its second page is.
+    /// </remarks>
+    [Fact]
+    public async Task Nothing_is_dropped_from_a_window_answer_on_this_side()
+    {
+        var window = new LibraryPhotoWindow(
+            new DateTimeOffset(2026, 3, 13, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 3, 17, 0, 0, 0, TimeSpan.Zero));
+
+        // A row the library chose to send whose stamp falls outside the window it was given. It is
+        // shown, because the far side decided this page and re-deciding it here would leave the
+        // page short of what it says it is.
+        var immich = new LibraryStub();
+        immich.Answers(_ => Json(ImmichPage(
+            $"[{ImmichRow(First, takenAt: "2001-01-01T00:00:00.000Z")}]", total: 1, nextPage: null)));
+
+        var answer = await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60, window), default);
+
+        answer.Photos.Count.ShouldBe(1);
+        answer.Total.ShouldBe(1);
+    }
+
     // -------------------------------------------------------------------- counts, and their honesty
 
     /// <summary>
@@ -595,8 +717,8 @@ public sealed class PhotoLibraryBrowseTests
         $$"""{"UID":"{{uid}}","Hash":"{{hash}}","Title":"An invented picture","TakenAt":"2024-05-06T07:08:09Z"}""";
 
     /// <summary>One invented row of a listing, in the shape the other product writes one.</summary>
-    private static string ImmichRow(string id) =>
-        $$"""{"id":"{{id}}","type":"IMAGE","fileCreatedAt":"2024-05-06T07:08:09Z"}""";
+    private static string ImmichRow(string id, string takenAt = "2024-05-06T07:08:09Z") =>
+        $$"""{"id":"{{id}}","type":"IMAGE","fileCreatedAt":"{{takenAt}}"}""";
 
     /// <summary>One invented page, in the shape the other product wraps one.</summary>
     private static string ImmichPage(string items, int total, string? nextPage) =>

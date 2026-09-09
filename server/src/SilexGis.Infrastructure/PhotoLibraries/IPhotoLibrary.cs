@@ -98,7 +98,17 @@ public interface IPhotoLibrary
     /// <para>
     /// What comes back describes the library, not the caller: this integration reaches every
     /// library through one credential belonging to the whole installation, so there is one answer
-    /// and every caller who may reach the feature at all gets that one.
+    /// and every caller who may reach the feature at all gets that one. A count on it is a count of
+    /// the library's photographs — of those inside the window when there is one — and never of the
+    /// photographs one account is allowed to see, because no account's identity reaches the far
+    /// side at all.
+    /// </para>
+    /// <para>
+    /// Where the query carries a stretch of time, the narrowing is done by the far side and by the
+    /// far side alone. Each product is asked in its own grammar, built here out of the two instants
+    /// and nothing else; nothing is filtered out of the answer afterwards. Narrowing here would
+    /// break the paging underneath it — the far side has already decided what this page is — and
+    /// would turn every count into a count of what survived rather than of what the library holds.
     /// </para>
     /// </remarks>
     Task<LibraryPhotoListPage> ListAsync(LibraryPhotoQuery query, CancellationToken ct);

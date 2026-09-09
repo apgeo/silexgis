@@ -40,6 +40,7 @@ import AttachmentSection from '../../components/attachments/AttachmentSection.ts
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
 import { applyTripRestore } from '../../components/history/historyModel.ts';
 import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
+import TripLibraryPhotoPanel from '../../components/photolibrary/TripLibraryPhotoPanel.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import { TRIP_ROLE_CODES } from '../../components/reslinks/relations.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
@@ -500,6 +501,18 @@ export default function TripLogDetailPage() {
                     the files tab, and giving the same choice a second control would leave two
                     places disagreeing about which picture the trip is known by. */}
                 <TripGallerySection tripId={trip.id} tripTitle={trip.title} />
+
+                {/* And what a neighbouring photo library holds from the days this trip was out.
+                    Below the trip's own photographs and clearly separate from them, because they
+                    are not the same thing and must not read as one: these are somebody else's
+                    archive, nothing here has been filed against the trip, and the only reason they
+                    are on this page is that the trip's dates and a camera's clock overlap. The
+                    panel draws nothing at all on an installation with no such library.
+
+                    Keyed by the trip, so moving from one trip straight to another starts the panel
+                    afresh rather than carrying the page somebody had reached in the first one into
+                    a library answer about the second. */}
+                <TripLibraryPhotoPanel key={trip.id} tripId={trip.id} />
 
                 {canEdit && (
                   <Flex justify="flex-end" style={{ marginBottom: 16 }}>

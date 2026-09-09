@@ -48,6 +48,8 @@ export type BrowseState =
   | 'notUnderstood'
   | 'searchTooLong'
   | 'pageTooDeep'
+  | 'tripNotFound'
+  | 'tripWindowUnusable'
   | 'silent'
   | 'empty'
   | 'endOfList'
@@ -76,6 +78,14 @@ const Codes = {
   searchTooLong: 'photo_library.search_too_long',
   /** A page further into the library than this installation will ask for. */
   pageTooDeep: 'photo_library.page_too_deep',
+  /**
+   * The trip whose days were asked about is not there, or is not this account's to read. One code
+   * for both, as everywhere a row is read by identifier: which of the two it is would itself be a
+   * fact about the trip.
+   */
+  tripNotFound: 'photo_library.trip_not_found',
+  /** The trip is there and its dates do not describe a stretch of time worth asking about. */
+  tripWindowUnusable: 'photo_library.trip_window_unusable',
   /** The library refused the credential this installation is configured with. */
   credentialRefused: 'photo_library.unauthorized',
   /** The library answered, and not with anything this build could read. */
@@ -128,6 +138,14 @@ export function browseState({ isPending, error, page }: BrowseStateInput): Brows
         // a time.
         case Codes.pageTooDeep:
           return 'pageTooDeep';
+        // Nor was it asked for these two. Both are about this installation's own record of a trip
+        // and neither is about the library at all, so neither may read as the library being down:
+        // one sends somebody to a trip they cannot see, the other to a trip whose dates need
+        // correcting, and "the library did not answer" sends them to a container that is fine.
+        case Codes.tripNotFound:
+          return 'tripNotFound';
+        case Codes.tripWindowUnusable:
+          return 'tripWindowUnusable';
         // It answered, and refused the credential this whole installation reaches it with. The
         // fix is a new credential, and no amount of restarting produces one.
         case Codes.credentialRefused:
@@ -262,7 +280,16 @@ export interface CountLine {
   values: Record<string, number>;
 }
 
-export function countLine(page: LibraryPage): CountLine | null {
+/**
+ * @param withinATripWindow Whether the listing was narrowed to the days one trip was out. It
+ *   changes what the total is a count of and therefore which sentence may be written over it: the
+ *   number a library states beside a narrowed listing counts what it holds <em>in that window</em>,
+ *   and "of 412 photographs the library holds" written over it would tell a reader their club owns
+ *   four hundred photographs when it owns forty thousand. Neither number describes the caller —
+ *   every account reaches a library through one credential belonging to the installation, so there
+ *   is one answer and everybody gets it.
+ */
+export function countLine(page: LibraryPage, withinATripWindow = false): CountLine | null {
   const shown = page.items.length;
   if (shown === 0) {
     return null;
@@ -286,6 +313,12 @@ export function countLine(page: LibraryPage): CountLine | null {
           : 'libraryPhotos.search.showing',
       values: { count: shown },
     };
+  }
+
+  if (withinATripWindow) {
+    return page.total === null
+      ? { key: 'libraryPhotos.trip.showingUnknownTotal', values: { count: shown } }
+      : { key: 'libraryPhotos.trip.showingOf', values: { shown, total: page.total } };
   }
 
   return page.total === null
@@ -357,6 +390,7 @@ export function emptyMessage(
   state: BrowseState,
   page: LibraryPage | undefined,
   wording: SearchWording,
+  withinATripWindow = false,
 ): string {
   if (state === 'endOfList') {
     return 'libraryPhotos.browse.pastEnd';
@@ -366,7 +400,10 @@ export function emptyMessage(
     return page.searched === '' ? 'libraryPhotos.search.nothingLeft' : wording.empty;
   }
 
-  return 'libraryPhotos.browse.empty';
+  // A fifth fact, and it is the one the trip panel is for: the library answered, it holds plenty,
+  // and none of it was taken while this trip was out. "This library holds nothing matching" said
+  // over that would be a claim about the library rather than about the days.
+  return withinATripWindow ? 'libraryPhotos.trip.nothingTaken' : 'libraryPhotos.browse.empty';
 }
 
 /**
@@ -409,6 +446,12 @@ export function problemOf(
       };
     case 'pageTooDeep':
       return { key: 'libraryPhotos.browse.pageTooDeep', kind: 'info' };
+    case 'tripNotFound':
+      // Nothing is wrong with the library, and nothing was asked of it. A reader looking at a trip
+      // they may not read is the ordinary way here, so this is stated rather than alarming.
+      return { key: 'libraryPhotos.trip.notFound', kind: 'info' };
+    case 'tripWindowUnusable':
+      return { key: 'libraryPhotos.trip.datesUnusable', kind: 'warning' };
     case 'silent':
       // A failed search of a library that ranks by meaning has a cause a listing cannot have, and
       // the sentence for it names both possibilities instead of the one that sends an operator to

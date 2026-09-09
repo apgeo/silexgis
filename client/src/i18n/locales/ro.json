@@ -4249,6 +4249,15 @@
       "reduced": "Această fototecă citește două puncte ca numind unul dintre câmpurile ei, așa că i s-a cerut: {{words}}",
       "nothingLeft": "Nu au mai rămas cuvinte după scoaterea separatorilor de câmp, așa că nu s-a cerut nimic niciunei fototeci."
     },
+    "trip": {
+      "title": "Fotografii din fototecă",
+      "explains": "Fotografii pe care o fototecă conectată le are din zilele în care a avut loc această tură. Ele provin din acea fototecă și nimic de aici nu a fost atribuit turei. Zilele despre care se întreabă depășesc cu una fiecare capăt al turei, pentru că datele unei ture nu au fus orar, iar ceasul unui aparat foto are — așa că pot apărea fotografii din ziua dinainte sau de după, fiecare cu data ei afișată.",
+      "showingOf": "Se afișează {{shown}} din {{total}} fotografii pe care le are fototeca din aceste zile",
+      "showingUnknownTotal": "Se afișează {{count}} fotografii din aceste zile. Această fototecă nu spune câte are.",
+      "nothingTaken": "Această fototecă nu are nimic făcut în timpul acestei ture. Fototeca a răspuns; poate avea multe din alte zile.",
+      "notFound": "Această tură nu a putut fi citită, așa că nu s-a cerut nimic niciunei fototeci despre ea.",
+      "datesUnusable": "Datele acestei ture nu dau un interval de timp despre care să fie întrebată o fototecă, așa că nu s-a cerut nimic. Verifică ziua în care a început și ziua în care s-a terminat."
+    },
     "detail": {
       "title": "Fotografie",
       "takenAt": "Făcută",

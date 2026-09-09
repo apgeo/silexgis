@@ -181,9 +181,9 @@ export const queryKeys = {
   // rather than a stale answer to the same one.
   tripImportPreview: (fileId: string, body: unknown) => ['trip-import-preview', fileId, body] as const,
   photoLibraryStatus: ['photo-libraries', 'status'] as const,
-  // The whole question is in the key — library, page and words — because every part of it changes
-  // what came back. A page held under a key that did not name the words would answer the next
-  // search with the previous one's pictures.
+  // The whole question is in the key — library, page, and the trip whose days it was narrowed to —
+  // because every part of it changes what came back. A page held under a key that did not name the
+  // trip would answer one trip's panel with another trip's photographs.
   libraryPhotographs: (source: string, query: LibraryPhotographQuery) =>
     ['photo-libraries', source, 'photographs', query] as const,
   libraryPhotograph: (source: string, photographId: string) =>
@@ -1674,6 +1674,15 @@ export type LibraryPhotographDetail = components['schemas']['LibraryPhotographDe
 export interface LibraryPhotographQuery {
   page: number;
   pageSize: number;
+  /**
+   * A trip whose days the listing is narrowed to, or nothing for the whole library.
+   *
+   * A trip and never a pair of dates, and that is the feature rather than a precaution: the server
+   * reads the trip's own start and end, so a panel saying "taken while this trip was out" is saying
+   * something that was checked. A window a browser chose would be a date filter with a trip's name
+   * written over it.
+   */
+  tripId?: string;
 }
 
 /** The address of one page of one library. Built here so the two hooks below cannot disagree. */
@@ -1682,6 +1691,9 @@ function photographsUrl(source: LibraryPhotoSource, query: LibraryPhotographQuer
     page: String(query.page),
     pageSize: String(query.pageSize),
   });
+  if (query.tripId !== undefined) {
+    search.set('tripId', query.tripId);
+  }
   return `/api/v1/photo-libraries/${encodeURIComponent(source)}/photographs?${search.toString()}`;
 }
 
@@ -1707,11 +1719,19 @@ export function usePhotoLibraryPhotographs(
     enabled: source !== undefined,
     // Turning a page keeps the grid on screen while the next one arrives, so the page does not
     // empty and refill — which reads as a library that briefly held nothing, and telling "nothing
-    // here" apart from "not yet" is most of what this screen owes its reader. Only within one
-    // library, though: one library's photographs drawn under another's name would be wrong in the
-    // way that matters here, because opening one would ask the wrong library about it.
-    placeholderData: (previous?: LibraryPhotographPage) =>
-      previous?.source === source ? previous : undefined,
+    // here" apart from "not yet" is most of what this screen owes its reader.
+    //
+    // Only within one library and one trip, though. One library's photographs drawn under
+    // another's name would ask the wrong library about anything opened from them; and one trip's
+    // photographs drawn under another trip's heading is the one claim this whole surface exists to
+    // make honestly, so it must not be made by a grid that has not caught up yet.
+    placeholderData: (
+      previous?: LibraryPhotographPage,
+      previousQuery?: { queryKey: readonly unknown[] },
+    ) => {
+      const asked = previousQuery?.queryKey[3] as LibraryPhotographQuery | undefined;
+      return previous?.source === source && asked?.tripId === query.tripId ? previous : undefined;
+    },
     // The far side is a separate product somebody else is filing pictures into, so a page held for
     // long enough to feel instant is also a page that stops being what the library holds. Half a
     // minute is the same window this application already holds a library's health for.

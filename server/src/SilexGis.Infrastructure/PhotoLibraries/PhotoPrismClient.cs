@@ -349,6 +349,12 @@ public sealed class PhotoPrismClient(
     /// about all of them, and that route takes no rectangle at all.
     /// </para>
     /// <para>
+    /// Where the query names a stretch of time, that route takes it in the same grammar its own
+    /// search box uses, and the narrowing is entirely the library's: it pages as any other listing
+    /// does, and nothing is dropped from the answer on this side. The terms are built from two
+    /// instants rather than from anything a caller wrote.
+    /// </para>
+    /// <para>
     /// Nothing is held between calls: one page is asked for, and it is gone when the response is
     /// written.
     /// </para>
@@ -357,7 +363,7 @@ public sealed class PhotoPrismClient(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var answered = await PageAsync(query.Page, query.PageSize, words: null, ct);
+        var answered = await PageAsync(query.Page, query.PageSize, words: null, query.Window, ct);
 
         // The total is left unknown on purpose. This product does send a count beside a page, but
         // it counts what that page holds — a number the page already is — and nothing in the answer
@@ -399,7 +405,9 @@ public sealed class PhotoPrismClient(
                 [], LibrarySearchMatching.Text, Searched: string.Empty, HasMore: false, ReadAt: null);
         }
 
-        var answered = await PageAsync(search.Page, search.PageSize, words, ct);
+        // No window. A search is what somebody typed, and this route is reached from a box with no
+        // trip behind it — a stretch of time attached to it here would be one nobody asked for.
+        var answered = await PageAsync(search.Page, search.PageSize, words, window: null, ct);
 
         // The words as they were put, which is not always the words as they were typed: the
         // reduction below takes out the separator this product reads as naming one of its own
@@ -418,9 +426,16 @@ public sealed class PhotoPrismClient(
     /// for beyond the words: the order and the quality floor are decisions of this installation, and
     /// two copies of them would eventually disagree about which photographs a library is considered
     /// to hold depending on whether somebody had typed anything.
+    ///
+    /// <para>
+    /// The window is a parameter here rather than a field on the record this reads from, so that a
+    /// call which must not carry one has to say so. Only the listing may: a search on this product
+    /// is the same route with words added, and a stretch of time silently attached to it would
+    /// narrow somebody's typed question by a range that was never on the screen.
+    /// </para>
     /// </remarks>
     private async Task<(IReadOnlyList<LibraryListedPhoto> Photos, bool HasMore)> PageAsync(
-        int page, int pageSize, string? words, CancellationToken ct)
+        int page, int pageSize, string? words, LibraryPhotoWindow? window, CancellationToken ct)
     {
         await EnsureUsableAsync(ct);
 
@@ -442,9 +457,11 @@ public sealed class PhotoPrismClient(
             // The same floor the map applies, so the two surfaces do not disagree about which
             // photographs this installation considers worth showing at all.
             + "&quality=" + Math.Clamp(Options.MinQuality, 0, 7).ToString(CultureInfo.InvariantCulture)
-            // The reader's words, reduced to words first — see below for why that reduction is the
-            // difference between a search box and a way of asking where a photograph was taken.
-            + (words is null ? string.Empty : "&q=" + Uri.EscapeDataString(words)));
+            // Everything this product reads out of its own search grammar: the stretch of time, if
+            // one was asked for, and the reader's words, reduced to words first — see below for why
+            // that reduction is the difference between a search box and a way of asking where a
+            // photograph was taken.
+            + (Question(words, window) is { } q ? "&q=" + Uri.EscapeDataString(q) : string.Empty));
 
         using var response = await SendJsonAsync(url, ct);
 
@@ -521,6 +538,62 @@ public sealed class PhotoPrismClient(
             return (photos, handedOver >= count);
         }
     }
+
+    /// <summary>
+    /// Everything that goes into this product's own search parameter for one page: the stretch of
+    /// time, the words, both, or nothing at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The two halves of this string reach it from opposite directions and that is the point of
+    /// building it here.</b> The window half is written from two instants this application worked
+    /// out, in a shape produced entirely by <see cref="Day"/> — ten digits and two hyphens, which
+    /// cannot carry a space, a colon or a second term. The words half has already had the separator
+    /// this product reads as naming one of its own fields taken out of it. So neither half can turn
+    /// into the other's kind of term, and nothing a caller sent is ever concatenated into somebody
+    /// else's grammar. A window assembled from text handed in would be a general date filter with a
+    /// second, arbitrary filter hidden behind it, and this product binds every family of field —
+    /// including the ones naming a place — out of exactly this parameter.
+    /// </para>
+    /// <para>
+    /// The window is put first so that the words, whatever they are, are the trailing free text this
+    /// product matches; and the two ends are named with the terms this product's own documented
+    /// grammar uses for them.
+    /// </para>
+    /// </remarks>
+    private static string? Question(string? words, LibraryPhotoWindow? window)
+    {
+        if (window is not { } asked)
+        {
+            return words;
+        }
+
+        var span = string.Create(
+            CultureInfo.InvariantCulture, $"after:{Day(asked.From)} before:{Day(asked.To)}");
+
+        return words is null ? span : span + " " + words;
+    }
+
+    /// <summary>One end of a window, as a day, which is the granularity this product's own grammar
+    /// states these two terms in.</summary>
+    /// <remarks>
+    /// <para>
+    /// Days rather than instants because that is what the terms take, and the window handed in is
+    /// already wide enough that rounding to a day cannot lose anything: it reaches a whole day past
+    /// each end of the trip, so whether this product reads a day as beginning it or ending it, and
+    /// whether it compares against the moment it holds or the wall-clock reading beside it, the
+    /// trip's own days are inside the answer either way. What that costs is a few photographs from
+    /// the days on either side, each carrying its own date where a reader can see it.
+    /// </para>
+    /// <para>
+    /// Invariant and UTC, so the request means the same thing wherever it is built. A day formatted
+    /// in the running machine's own culture is a term this product either misreads or rejects, and
+    /// on a machine whose calendar is not the one it expects the symptom is a window silently
+    /// somewhere else rather than an error anybody would see.
+    /// </para>
+    /// </remarks>
+    private static string Day(DateTimeOffset moment) =>
+        moment.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The reader's words, reduced to words.
