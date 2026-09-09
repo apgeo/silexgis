@@ -406,7 +406,43 @@ public sealed class PhotoLibraryAlbumTests
         immich.Answers(_ => Json(ImmichPage("[]", total: 0, nextPage: null)));
         await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60, Album: ImmichAlbum), default);
 
-        immich.Only.Body.ShouldContain($"\"albumId\":\"{ImmichAlbum}\"");
+        immich.Only.Body.ShouldContain($"\"albumIds\":[\"{ImmichAlbum}\"]");
+    }
+
+    /// <summary>
+    /// The album goes to the second product under the name that product's listing route actually
+    /// reads, and in the shape it reads it: a set of album identifiers, named in the plural, with
+    /// the one album asked for sent as a set of one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>This is a spelling test, and it is the most valuable case in the file.</b> That route
+    /// reads its request through a schema that discards a field name it does not recognise instead
+    /// of refusing the request, so a singular name — the obvious one, and the one the product's own
+    /// timeline routes really do take — leaves this machine, is dropped on arrival, and comes back
+    /// as the whole library under one album's heading. Nothing on this side can tell that answer
+    /// from an album that happens to hold everything: the page is full, the count agrees with the
+    /// page, no status code is out of the ordinary and no log line is written.
+    /// </para>
+    /// <para>
+    /// Which is why it is asserted here as an exact string rather than left to the other cases. The
+    /// case above would pass just as happily against the wrong name; only naming the field
+    /// character for character puts the product's own contract in the suite, where a rename over
+    /// there fails a test instead of quietly widening every narrowed listing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_album_is_named_to_the_second_product_as_a_set_of_identifiers()
+    {
+        var immich = new LibraryStub();
+        immich.Answers(_ => Json(ImmichPage("[]", total: 0, nextPage: null)));
+        await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60, Album: ImmichAlbum), default);
+
+        // Plural, and an array. Both halves, because either alone is silently ignored over there.
+        immich.Only.Body.ShouldContain($"\"albumIds\":[\"{ImmichAlbum}\"]");
+
+        // And not the singular the other routes take, which is the shape this defect wears.
+        immich.Only.Body.ShouldNotContain("\"albumId\":");
     }
 
     /// <summary>
@@ -461,7 +497,7 @@ public sealed class PhotoLibraryAlbumTests
         await Immich(immich).ListAsync(new LibraryPhotoQuery(1, 60, window, ImmichAlbum), default);
 
         immich.Only.Body.ShouldContain("\"takenAfter\":\"2024-05-06T00:00:00.000Z\"");
-        immich.Only.Body.ShouldContain($"\"albumId\":\"{ImmichAlbum}\"");
+        immich.Only.Body.ShouldContain($"\"albumIds\":[\"{ImmichAlbum}\"]");
     }
 
     /// <summary>

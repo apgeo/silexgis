@@ -763,6 +763,15 @@ public sealed class ImmichClient(
     /// </summary>
     /// <remarks>
     /// <para>
+    /// <b>The field is a set of album identifiers and is named in the plural, and the one album
+    /// asked for is sent as a set of one.</b> Not a stylistic choice: the listing route reads its
+    /// request through a schema that <em>drops</em> a field name it does not know instead of
+    /// refusing the request, so a singular name here would leave with the request, be discarded on
+    /// arrival, and come back as the whole library under one album's heading — a working-looking
+    /// screen, a count that agrees with itself, and no error anywhere. There is nothing on this
+    /// side that could notice, which is why the name is pinned by a test rather than trusted.
+    /// </para>
+    /// <para>
     /// Written straight into the body rather than serialised, on the same argument the window's two
     /// instants are: the value has already been checked against the shape this application is
     /// willing to put in a request to a neighbour — letters, digits, hyphens and underscores and
@@ -784,7 +793,7 @@ public sealed class ImmichClient(
     /// </para>
     /// </remarks>
     private static string InAlbum(string? album) =>
-        album is null ? string.Empty : $",\"albumId\":\"{album}\"";
+        album is null ? string.Empty : $",\"albumIds\":[\"{album}\"]";
 
     /// <summary>
     /// The two fields that narrow a listing to a stretch of time, ready to be dropped into the body
