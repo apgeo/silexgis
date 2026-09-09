@@ -125,13 +125,37 @@ export function CcdfChart({ values, xLabel, height }: { values: number[]; xLabel
   return <Frame option={option} height={height} testId="chart-ccdf" />;
 }
 
-/** Two measurements against each other on logarithmic axes, with the fitted line drawn over them. */
+/** One drawn series of points, and the group label it carries — `null` for points in no group. */
+export interface CorrelationSeries {
+  name: string;
+  /** The grouping's own label. Chooses the colour; `null` takes the quiet uncategorised one. */
+  cluster: number | null;
+  points: Array<[number, number]>;
+}
+
+/**
+ * Two measurements against each other on logarithmic axes, with the fitted line drawn over them.
+ *
+ * <p>
+ * `series`, when given, splits the same points into one drawn series per group so a grouping can
+ * be read as colour. The colours come from the theme's categorical palette and are chosen by
+ * group label alone: the labels are nominal, so nothing about the palette may suggest an order,
+ * a size or a rank. The fit is still taken over every point, because it answers a question about
+ * the whole set and would otherwise become as many different lines as there are groups.
+ * </p>
+ */
 export function CorrelationChart({
   pairs,
+  series,
   xLabel,
   yLabel,
   height,
-}: { pairs: Array<[number, number]>; xLabel: string; yLabel: string } & SizedProps) {
+}: {
+  pairs: Array<[number, number]>;
+  series?: CorrelationSeries[];
+  xLabel: string;
+  yLabel: string;
+} & SizedProps) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
 
@@ -146,17 +170,36 @@ export function CorrelationChart({
       ? [Math.min(...xs), Math.max(...xs)].map((x) => [x, Math.exp(fit.intercept + fit.slope * Math.log(x))])
       : [];
 
+    // The modulo is a guard rather than a design: the grouping cannot return more groups than the
+    // palette holds. Were that to change, wrapping gives two groups one colour, which is wrong but
+    // visible, where an index past the end silently hands the library its own palette instead.
+    const colourFor = (cluster: number | null) =>
+      cluster === null ? palette.unclassified : palette.series[cluster % palette.series.length];
+
+    const points =
+      series === undefined
+        ? [{ type: 'scatter' as const, name: yLabel, symbolSize: 7, data: usable }]
+        : series.map((group) => ({
+            type: 'scatter' as const,
+            name: group.name,
+            symbolSize: 7,
+            itemStyle: { color: colourFor(group.cluster) },
+            data: group.points,
+          }));
+
     return {
       xAxis: { type: 'log', name: xLabel, nameLocation: 'middle', nameGap: 28, ...axisStyle(token) },
       yAxis: { type: 'log', name: yLabel, ...axisStyle(token) },
       series: [
-        { type: 'scatter', name: yLabel, symbolSize: 7, data: usable },
+        ...points,
         ...(fit
           ? [{
               type: 'line' as const,
               name: t('karstStats.regression', { slope: fit.slope.toFixed(2), r2: fit.r2.toFixed(2) }),
               symbol: 'none',
-              lineStyle: { color: palette.series[1] },
+              // Not a series colour: the groups take those in order, so a fit drawn from the same
+              // range would share a colour with whichever group happened to land on it.
+              lineStyle: { color: palette.fit },
               data: line,
             }]
           : []),
@@ -164,7 +207,7 @@ export function CorrelationChart({
       legend: { bottom: 0, textStyle: { color: palette.axisLabel } },
       tooltip: { trigger: 'item' },
     };
-  }, [pairs, xLabel, yLabel, token, t]);
+  }, [pairs, series, xLabel, yLabel, token, t]);
 
   return <Frame option={option} height={height} testId="chart-correlation" />;
 }
