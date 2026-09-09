@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { userManager } from '../auth/auth.tsx';
-import type { StatisticsSubject } from './hooks.ts';
+import type {
+  RegistryCorrelationParams,
+  RegistryDistributionParams,
+  RegistryRegionsParams,
+  StatisticsSubject,
+} from './hooks.ts';
 
 /**
  * Authenticated file download. Export endpoints require a bearer token, which plain
@@ -134,6 +139,49 @@ export function tripLogExportUrl(
     params[key] = typeof value === 'boolean' ? String(value) : value;
   }
   return buildUrl('/api/v1/trip-logs/export', params);
+}
+
+/**
+ * GET /api/v1/stats/registry/distribution/export — the distribution on the screen, as a file.
+ *
+ * It takes the same parameter object the screen's query was given, unchanged, because the two
+ * routes are one answer rendered twice: the server works the figures out once and either shows
+ * them or writes them. Narrowing the set again on the way to the file, or dropping a control the
+ * screen was using, would produce a spreadsheet that disagrees with the page it was taken from
+ * while looking exactly like it.
+ */
+export function registryDistributionExportUrl(params: RegistryDistributionParams): string {
+  return buildUrl('/api/v1/stats/registry/distribution/export', { ...params });
+}
+
+/**
+ * GET /api/v1/stats/registry/correlation/export — the relationship on the screen, as a file.
+ *
+ * The same parameter object the screen's query was given, unchanged, for the same reason the
+ * distribution's export takes it: the two routes are one answer rendered twice. A file that says
+ * a different slope from the page it was taken from, because the page and the file each worked
+ * out their own question, is the failure this shape makes impossible rather than unlikely.
+ */
+export function registryCorrelationExportUrl(params: RegistryCorrelationParams): string {
+  // Only the shape changes on the way: a query string carries the words "true" and "false", and
+  // dropping the key instead would ask for the route's own default, which is not always what the
+  // screen is showing.
+  const { logarithmic, ...rest } = params;
+  return buildUrl('/api/v1/stats/registry/correlation/export', {
+    ...rest,
+    logarithmic: logarithmic === undefined ? undefined : String(logarithmic),
+  });
+}
+
+/**
+ * GET /api/v1/stats/registry/regions/export — the breakdown on the screen, as a file.
+ *
+ * The same parameter object the screen's query was given, unchanged. The file carries the same
+ * total and the same rows, including the total the rows do not add up to: a file that quietly
+ * reconciled them would be a different answer wearing the screen's name.
+ */
+export function registryRegionsExportUrl(params: RegistryRegionsParams): string {
+  return buildUrl('/api/v1/stats/registry/regions/export', { ...params });
 }
 
 /** GET /api/v1/geofiles/{id}/export — an imported geofile's rows re-exported. */
