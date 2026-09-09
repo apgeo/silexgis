@@ -216,7 +216,7 @@ public sealed class PhotoLibraryProbeTests
         health.Reach.ShouldBe(LibraryReach.Reachable);
         health.Version.ShouldBe("1.142.0");
         health.FailureCode.ShouldBeNull();
-        health.MissingPermissions.ShouldBe(["asset.view", "asset.read"]);
+        health.MissingPermissions.ShouldBe(["asset.view", "asset.read", "album.read"]);
 
         stub.Asked.Count.ShouldBe(2);
         stub.Asked[1].ShouldEndWith(ImmichKey);
@@ -236,7 +236,7 @@ public sealed class PhotoLibraryProbeTests
         var health = await Immich(stub).ProbeAsync(default);
 
         health.Reach.ShouldBe(LibraryReach.Reachable);
-        health.MissingPermissions.ShouldBe(["map.read", "asset.view", "asset.read"]);
+        health.MissingPermissions.ShouldBe(["map.read", "asset.view", "asset.read", "album.read"]);
     }
 
     /// <summary>
@@ -272,14 +272,24 @@ public sealed class PhotoLibraryProbeTests
         (await Immich(stub).ProbeAsync(default)).Version.ShouldBe("3.2.0-rc1");
     }
 
+    /// <summary>
+    /// A key carrying every right this integration uses, in some other order and with rights it
+    /// does not use besides, is missing nothing.
+    /// </summary>
+    /// <remarks>
+    /// Both halves are worth pinning. The library lists a key's rights in whatever order it stored
+    /// them, so a check that compared the two lists as sequences would tell an operator with a
+    /// perfectly good key to go and fix it; and a key minted for more than this integration is the
+    /// ordinary case, since one key belongs to a whole account rather than to this application.
+    /// </remarks>
     [Fact]
-    public async Task A_key_carrying_both_rights_and_others_besides_is_missing_nothing()
+    public async Task A_key_carrying_every_right_and_others_besides_is_missing_nothing()
     {
         var stub = new LibraryStub()
             .Answering(ImmichVersion, """{"major":1,"minor":142,"patch":0}""")
             .Answering(
                 ImmichKey,
-                """{"name":"an invented key","permissions":["asset.view","album.read","map.read","asset.read"]}""");
+                """{"name":"an invented key","permissions":["asset.view","album.read","person.read","map.read","asset.read"]}""");
 
         (await Immich(stub).ProbeAsync(default)).MissingPermissions.ShouldBeEmpty();
     }

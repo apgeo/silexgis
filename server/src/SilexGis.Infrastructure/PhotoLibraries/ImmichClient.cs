@@ -138,24 +138,26 @@ public sealed class ImmichClient(
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Two, and only two: the positions come from the map route and the pictures from the asset
-    /// route, and nothing else here asks this library for anything. Reported as a set difference
-    /// rather than as a yes or no, because "your key is missing asset.view" is a fix and "it does
-    /// not work" is a support thread.
+    /// One entry per route this integration actually calls, and the list grows when a surface here
+    /// starts calling a new one. Reported as a set difference rather than as a yes or no, because
+    /// "your key is missing asset.view" is a fix and "it does not work" is a support thread.
     /// </para>
     /// <para>
-    /// A key may also carry a single entry standing for everything, which satisfies both and is
-    /// what a key minted without narrowing looks like — read as sufficient rather than as an
-    /// unknown name, or every operator who took the default would be told to add two rights they
+    /// A key may also carry a single entry standing for everything, which satisfies all of them and
+    /// is what a key minted without narrowing looks like — read as sufficient rather than as an
+    /// unknown name, or every operator who took the default would be told to add rights they
     /// already have.
     /// </para>
     /// </remarks>
     // Every right this integration actually uses, so that a key missing one is named before a
     // screen fails on it rather than after. `map.read` reads the positions, `asset.view` fetches
-    // the pictures, and `asset.read` is what the listing and the search go through — a key
-    // carrying only the first two passes the health check and then refuses every browse and
-    // every search, which is the health check reporting on something adjacent to the question.
-    private static readonly string[] RequiredPermissions = ["map.read", "asset.view", "asset.read"];
+    // the pictures, `asset.read` is what the listing and the search go through, and `album.read` is
+    // what the album chooser reads and what the library re-checks when a listing names an album to
+    // narrow to. A key carrying only some of these passes the health check and then refuses the
+    // surfaces built on the rest, which is the health check reporting on something adjacent to the
+    // question it was asked.
+    private static readonly string[] RequiredPermissions =
+        ["map.read", "asset.view", "asset.read", "album.read"];
 
     /// <summary>The entry a key carries when it was minted with no narrowing at all.</summary>
     private const string EveryPermission = "all";
