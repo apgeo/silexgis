@@ -140,6 +140,46 @@ pagină care au o lungime cartată. **Peșterile fără una lipsesc, nu sunt num
 
 ---
 
+## Tot registrul, explorat
+
+La **Statistici** în bara laterală, trei ecrane pun întrebări registrului însuși, nu unei singure
+peșteri sau unei pagini de peșteri.
+
+| Ecran | La ce răspunde |
+|---|---|
+| **Distribuție** | Cum se repartizează o măsurătoare — intervale, domeniu, percentile și două ajustări |
+| **Corelație** | Cum se mișcă împreună două măsurători — panta, R² și corelația însăși |
+| **Pe regiuni** | Câte peșteri stau sub fiecare regiune |
+
+Toate trei acceptă aceleași restrângeri — tip de peșteră, tip de rocă, regiune — iar întrebarea
+întreagă stă în adresă, așa că un link reproduce exact ce vedeați. Fiecare ecran salvează ca foaie
+de calcul exact ce arată în acel moment; fișierul este același răspuns, nu un al doilea.
+
+Citiți frazele pe care le tipăresc aceste ecrane, pentru că fac o treabă reală:
+
+- **Un interval unit spune că este unit.** Acolo unde prea puține peșteri cad într-un interval ca
+  să fie arătat singur, el este *unit cu vecinul* în loc să fie ascuns — iar axa spune care au fost
+  unite, cu o numărătoare dedesubt. O bară lată este o bară unită, nu o trăsătură reală a
+  distribuției.
+- **O relație care lipsește este spusă, nu desenată.** Dacă sunt prea puține perechi ca să se
+  ajusteze ceva, sau nu există un domeniu peste care să se ajusteze, primiți o frază care spune
+  care dintre acestea a fost și niciun grafic. O dreaptă prin două puncte nu este o relație.
+- **Graficul de corelație desenează o ajustare și nicio peșteră.** Nicio peșteră nu este trasată
+  individual; dreapta este trasată peste domeniul măsurătorii orizontale, care poate fi mai larg
+  decât perechile folosite efectiv. Pagina o spune acolo unde se vede.
+- **Defalcarea pe regiuni nu se adună, intenționat.** Totalul numără peșterile pe care le puteți
+  citi; rândurile numără peșterile pe care le puteți și *localiza*. Când rândurile rămân în urmă,
+  o frază spune cu cât — iar sub ce regiuni stau acele peșteri este exact ceea ce se reține. Nu
+  există rând „în altă parte" și nici coloană de procente, pentru că oricare v-ar invita să
+  închideți o diferență menită să rămână deschisă.
+- **Numărătorile călătoresc cu cifrele.** O percentilă peste unsprezece peșteri și una peste o mie
+  o sută arată identic pe un grafic, așa că fiecare ecran tipărește peste ce a fost calculată.
+
+Sortarea se face doar după numele regiunii. Ordonarea tabelului după numărători ar dezvălui
+mărimile relative tocmai ale lucrului pe care răspunsul a refuzat să îl spună.
+
+---
+
 ## Statistici din ture
 
 O persoană, o peșteră și un grup de speologie își primesc fiecare totalurile:

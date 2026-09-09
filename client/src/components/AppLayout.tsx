@@ -21,6 +21,7 @@ import NotificationBell from './NotificationBell.tsx';
 import { useIsFullAdmin } from './reslinks/permissions.ts';
 import { useIsMobile } from '../hooks/useIsMobile.ts';
 import { buildNavItems, isNavGroup } from './navItems.tsx';
+import { sectionFor } from './navSections.ts';
 
 /** Application shell: slim header + collapsible icon sidebar (off-canvas on phones). */
 export default function AppLayout() {
@@ -64,30 +65,7 @@ export default function AppLayout() {
   // ever, to decide whether to draw one rail entry.
   const { data: photoLibraries } = usePhotoLibraries({ watchingHealth: false });
 
-  // "settings" and "notifications" are listed so an unmatched path does not fall through to
-  // highlighting the map; neither matches a menu item, so nothing lights up while one is open,
-  // which is deliberate — neither is a sidebar destination. Every other entry here is one,
-  // including a camp: the list is a destination and a camp's own page stays under it, so opening
-  // one keeps the camps item lit.
-  const sections = [
-    'map3d', 'dashboard', 'work-areas', 'caves', 'features', 'geodata', 'catalogue/speologie',
-    'gallery', 'albums', 'photo-library', 'cabinets',
-    'uploads', 'documents', 'calendar', 'events',
-    // Before the trip list, because the list's own prefix matches this path too and the first
-    // match is the one taken. Behind it, the reviewer reading a spreadsheet is shown the rail
-    // highlighting the trip list — a destination they are not on.
-    'trip-logs/import', 'trip-logs', 'expeditions', 'checklists',
-    'caving-groups', 'cavers',
-    'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
-    'admin/permission-groups',
-    'admin/feature-sets', 'admin/document-types', 'admin/relation-types', 'admin/term-rules',
-    'admin/terrain',
-    // The three the rail offers under configuration. Missing here, they matched nothing and
-    // fell through to the map, so opening trip purposes lit the map item instead.
-    'admin/trip-types', 'admin/participant-roles', 'admin/report-templates',
-    'settings', 'notifications',
-  ] as const;
-  const section = sections.find((s) => location.pathname.startsWith(`/${s}`)) ?? 'map';
+  const section = sectionFor(location.pathname);
   // A document's own page is not a sidebar destination of its own — documents are reached
   // through the cabinets they are filed in, so that is what stays lit while one is open.
   const selectedKey = section === 'documents' ? 'cabinets' : section;

@@ -265,6 +265,12 @@ export const queryKeys = {
     ['caves', id, 'structure-comparison', areaId] as const,
   areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
   areaKarstStatistics: (id: string) => ['features', id, 'karst-statistics'] as const,
+  registryDistribution: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'distribution', params] as const,
+  registryCorrelation: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'correlation', params] as const,
+  registryRegions: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'regions', params] as const,
   mapDensity: (bbox: string, cellMetres: number | null, bandwidthMetres: number | null, areaId?: string) =>
     ['map', 'density', bbox, cellMetres, bandwidthMetres, areaId ?? null] as const,
   mapPointPattern: (bbox: string, simulations: number, seed: number, areaId?: string) =>
@@ -7535,5 +7541,105 @@ export function useDeleteSyncSet() {
     mutationFn: (id: string) =>
       unwrapVoid(api.DELETE('/api/v1/sync/sets/{id}', { params: { path: { id } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.syncSets }),
+  });
+}
+
+/**
+ * One measured column of the registry, as the caller may read it: the intervals it falls into,
+ * the percentiles asked for, and the two fits where the sample supports them.
+ *
+ * The parameters are handed on exactly as the screen holds them, unclamped and uncorrected. A bin
+ * count outside what the registry will publish, or a word that names no measurement, comes back
+ * as a refusal saying which control is wrong — which is the answer the reader needs. Quietly
+ * substituting a legal value would draw a different distribution under the same address.
+ */
+export type RegistryMeasure = components['schemas']['RegistryMeasure'];
+
+/** One interval of a distribution, and whether it is several of them joined together. */
+export type RegistryDistributionBin = components['schemas']['DistributionBin'];
+
+/** One requested fraction, and the value at it — null when there was nothing to take it from. */
+export type RegistryPercentileRow = components['schemas']['RegistryPercentileRow'];
+
+/** A fitted lognormal, present only when the sample was large enough to mean anything. */
+export type RegistryLognormalFit = components['schemas']['LognormalFit'];
+
+/** A fitted upper tail, present only when the tail was long enough to mean anything. */
+export type RegistryParetoTailFit = components['schemas']['ParetoTailFit'];
+
+/** How one measured column is distributed over the caves the caller may read. */
+export type RegistryDistribution = components['schemas']['RegistryDistribution'];
+
+/** Everything a distribution can be asked, scope included, spelled as the route spells it. */
+export type RegistryDistributionParams = NonNullable<
+  paths['/api/v1/stats/registry/distribution']['get']['parameters']['query']
+>;
+
+/**
+ * The distribution of one measurement over the caves this caller may read.
+ *
+ * The previous answer is kept while a new one loads, because re-binning and re-filtering are
+ * things somebody is clicking: a chart that blanks out and returns under the cursor reads as
+ * breakage rather than as an answer.
+ */
+export function useRegistryDistribution(params: RegistryDistributionParams) {
+  return useQuery({
+    queryKey: queryKeys.registryDistribution(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/stats/registry/distribution', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** How two measured columns move together, over the caves recording both. */
+export type RegistryCorrelation = components['schemas']['RegistryCorrelationDto'];
+
+/** Everything a correlation can be asked, scope included, spelled as the route spells it. */
+export type RegistryCorrelationParams = NonNullable<
+  paths['/api/v1/stats/registry/correlation']['get']['parameters']['query']
+>;
+
+/**
+ * How two measurements of a cave move together, over the caves this caller may read.
+ *
+ * The answer is the relationship and not the caves behind it: a slope, an intercept, a goodness
+ * figure and the number of pairs they were taken over. Every one of those but the count is null
+ * when fewer than two caves recorded both, and they are handed on null rather than turned into
+ * zeros — a zero slope is a claim that the two measurements are unrelated, which is a different
+ * statement from having nothing to say.
+ */
+export function useRegistryCorrelation(params: RegistryCorrelationParams) {
+  return useQuery({
+    queryKey: queryKeys.registryCorrelation(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/stats/registry/correlation', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** One region and how many caves in scope stand under it; a null region is a row of its own. */
+export type RegistryRegionRow = components['schemas']['RegistryRegionRow'];
+
+/** How the caves in scope divide between regions, and the total they were taken from. */
+export type RegistryRegionBreakdown = components['schemas']['RegistryRegionBreakdownDto'];
+
+/** Everything a regional breakdown can be asked, which is the scope and nothing else. */
+export type RegistryRegionsParams = NonNullable<
+  paths['/api/v1/stats/registry/regions']['get']['parameters']['query']
+>;
+
+/**
+ * What a narrowed set of the registry adds up to per region, for the caves this caller may read.
+ *
+ * The rows and the total are counted under different rules and are not expected to reconcile: the
+ * total counts every cave in scope the caller may read, the rows only those they may also place.
+ * The difference is a fact about the answer rather than a cave that went missing, so neither
+ * figure is adjusted here to make the other look right.
+ */
+export function useRegistryRegions(params: RegistryRegionsParams) {
+  return useQuery({
+    queryKey: queryKeys.registryRegions(params),
+    queryFn: () => unwrap(api.GET('/api/v1/stats/registry/regions', { params: { query: params } })),
+    placeholderData: keepPreviousData,
   });
 }
