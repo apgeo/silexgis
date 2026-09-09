@@ -89,6 +89,18 @@ public static class DependencyInjection
         services.AddSingleton<Catalogue.SpeologieClient>();
         services.AddScoped<Catalogue.SpeologieImportService>();
 
+        // The international community cave database, which this installation asks for the number
+        // it knows a cave by — and asks nothing else. Off unless an operator turns it on: it is
+        // the one place a signed-in person's action causes a request to a service nobody here
+        // controls, and an operator who has not opted in has not sent anything anywhere.
+        //
+        // A singleton for the same reason as the client above: it holds the one gate every
+        // outbound call passes through, so a second instance would be a second allowance.
+        services.Configure<Grottocenter.GrottocenterOptions>(
+            configuration.GetSection(Grottocenter.GrottocenterOptions.SectionName));
+        services.AddHttpClient(Grottocenter.GrottocenterClient.HttpClientName);
+        services.AddSingleton<Grottocenter.GrottocenterClient>();
+
         // The neighbouring photo libraries: separate products, each with its own database, its own
         // storage and its own accounts, which this installation reads photographs' positions from
         // and proxies their pictures through. Neither is this application's archive, nothing is

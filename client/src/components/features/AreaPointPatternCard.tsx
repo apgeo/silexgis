@@ -78,6 +78,9 @@ export default function AreaPointPatternCard({
     );
   }
 
+  const autocorrelation = grid.autocorrelation;
+  const spots = countSpots(grid.cells, autocorrelation.significanceZ);
+
   const clark = pattern.data?.clarkEvans ?? null;
   const ripley = pattern.data?.ripley ?? null;
   const alignment = pattern.data?.alignment ?? null;
@@ -132,6 +135,81 @@ export default function AreaPointPatternCard({
             </span>
           </Descriptions.Item>
         </Descriptions>
+
+        {/* Whether those cells are arranged by more than chance, and which of them are the hot and
+            cold ones. Both are arithmetic over the cells already drawn above: they carry this
+            grid's cell size and no finer one, so there is nothing here to ask a smaller cell for
+            and no second control that could ask for it. */}
+        <div data-testid="karst-autocorrelation">
+          <Typography.Text strong>{t('karstDensity.autocorrelationTitle')}</Typography.Text>
+          <br />
+          <Typography.Text type="secondary">
+            {t('karstDensity.autocorrelationBasis', {
+              cells: autocorrelation.cellCount,
+              pairs: autocorrelation.neighbourPairCount,
+              metres: round(grid.cellMetres),
+            })}
+          </Typography.Text>
+
+          {/* Branching on the pattern rather than on the index: the server publishes an index only
+              for a window it could actually test, but the two are separate fields and a reader of
+              this file should not have to know that they move together. "Undetermined" is the
+              field whose whole job is to say the question was not asked. */}
+          {autocorrelation.pattern === 'undetermined' ? (
+            <div>
+              <Typography.Text data-testid="karst-moran-absent">
+                {t('karstDensity.autocorrelationUndetermined')}
+              </Typography.Text>
+            </div>
+          ) : (
+            <>
+              <Space size="large" wrap style={{ marginTop: 8 }}>
+                <Statistic
+                  title={t('karstDensity.moranIndex')}
+                  value={figure(autocorrelation.index)}
+                  precision={3}
+                />
+                {/* Published beside the index because the value chance produces is slightly below
+                    nought rather than at it, and a reader comparing a small positive index against
+                    nought reads structure into the difference between the two. */}
+                <Statistic
+                  title={t('karstDensity.moranExpected')}
+                  value={figure(autocorrelation.expectedIndex)}
+                  precision={3}
+                />
+                <Statistic
+                  title={t('karstDensity.moranZ')}
+                  value={figure(autocorrelation.zScore)}
+                  precision={2}
+                />
+                <Statistic
+                  title={t('karstDensity.moranP')}
+                  value={figure(autocorrelation.pValue)}
+                  precision={4}
+                />
+              </Space>
+              <div>
+                <Typography.Text data-testid="karst-moran-reading">
+                  {t(`karstDensity.pattern.${autocorrelation.pattern}`)}
+                </Typography.Text>
+              </div>
+            </>
+          )}
+
+          {/* A count of striking cells, not a list of them: the score is uncorrected for having
+              been taken at every cell at once, so over a large window a handful of extreme cells
+              is what chance alone produces. Saying how many out of how many is what keeps that
+              readable; naming which ones would invite each to be read as a finding of its own. */}
+          <div style={{ marginTop: 8 }}>
+            <Typography.Text type="secondary" data-testid="karst-hotspot-count">
+              {t('karstDensity.hotSpots', {
+                hot: spots.hot,
+                cold: spots.cold,
+                scored: spots.scored,
+              })}
+            </Typography.Text>
+          </div>
+        </div>
 
         {clark && (
           <Space size="large" wrap data-testid="karst-clark-evans">
@@ -236,6 +314,42 @@ function bboxOf(geometry: { type?: string; coordinates?: unknown } | null): stri
     return null;
   }
   return [west, south, east, north].map((v) => v.toFixed(6)).join(',');
+}
+
+/**
+ * How many cells read as hot and how many as cold, at the threshold the server said it read the
+ * whole window's pattern at. The threshold is taken from the response and never written here: it
+ * is one rule with one home, and a copy of it kept in this file would let the count of hot cells
+ * and the sentence printed above the count be read at two different thresholds with nothing on the
+ * screen saying so.
+ *
+ * Counted rather than listed, and reported against the number of cells that carried a score at
+ * all, because a cell whose score is null was not a cell that scored nought.
+ */
+function countSpots(
+  cells: Array<{ hotSpotZ: number | null }>,
+  significanceZ: number,
+): { hot: number; cold: number; scored: number } {
+  let hot = 0;
+  let cold = 0;
+  let scored = 0;
+  for (const cell of cells) {
+    if (cell.hotSpotZ === null) continue;
+    scored += 1;
+    if (cell.hotSpotZ >= significanceZ) hot += 1;
+    else if (cell.hotSpotZ <= -significanceZ) cold += 1;
+  }
+  return { hot, cold, scored };
+}
+
+/**
+ * A figure for a `Statistic`, or an em dash when the server published none. Substituting nought
+ * for an absent number is the one thing that must not happen here: a missing p-value rendered as
+ * `0.0000` is the strongest evidence claim this card can make, printed for a statistic that was
+ * never computed.
+ */
+function figure(value: number | null | undefined): number | string {
+  return value === null || value === undefined ? '—' : value;
 }
 
 function peakDensity(cells: Array<{ kernelDensityPerKm2: number }>): number | null {

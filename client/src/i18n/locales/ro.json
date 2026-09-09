@@ -37,6 +37,7 @@
     "checklists": "Liste de verificare",
     "groups": {
       "cadastre": "Cadastru",
+      "statistics": "Statistici",
       "library": "Bibliotecă",
       "activity": "Activitate",
       "people": "Persoane",
@@ -45,7 +46,10 @@
     },
     "workAreas": "Zone de lucru",
     "speologie": "Catalogul peșterilor",
-    "tripImport": "Importă ture"
+    "registryDistribution": "Distribuții",
+    "registryCorrelation": "Corelații",
+    "tripImport": "Importă ture",
+    "registryRegions": "Regiuni"
   },
   "terrain": {
     "title": "Relief",
@@ -3640,9 +3644,35 @@
     "radiusM": "Rază (m)",
     "observedL": "L",
     "alignment": "Direcții între {{pairs}} perechi de intrări, la {{min}}–{{max}} m distanță.",
-    "tooFewPlaceable": "Mai puțin de {{minimum}} intrări de aici pot fi localizate exact, prea puține pentru ca o spațiere să însemne ceva."
+    "tooFewPlaceable": "Mai puțin de {{minimum}} intrări de aici pot fi localizate exact, prea puține pentru ca o spațiere să însemne ceva.",
+    "autocorrelationTitle": "Zone calde și reci",
+    "autocorrelationBasis": "Citit peste cele {{cells}} celule de mai sus și cele {{pairs}} vecinătăți dintre ele, la celula de {{metres}} m a acestei rețele și nu mai fin — ambele cifre sunt aritmetică peste celulele deja desenate, deci niciuna nu poate arăta un detaliu pe care rețeaua nu îl are deja.",
+    "autocorrelationUndetermined": "Nu există o dispunere care să poată fi testată aici: prea puține celule, niciuna învecinată, sau fiecare celulă având aceeași densitate.",
+    "moranIndex": "Indicele I al lui Moran",
+    "moranExpected": "Așteptat din întâmplare",
+    "moranZ": "Erori standard",
+    "moranP": "p",
+    "hotSpots": "{{hot}} celule se citesc drept calde și {{cold}} drept reci, din {{scored}} care au putut fi punctate. Scorul este luat în fiecare celulă deodată și nu este corectat pentru asta, deci câteva celule izbitoare răspândite pe o fereastră mare sunt exact ce produce singură întâmplarea — citiți nuanțarea, nu celula individuală.",
+    "pattern": {
+      "undetermined": "Întrebarea nu a putut fi pusă pentru această fereastră.",
+      "random": "Dispunerea nu se deosebește de una întâmplătoare. Aceasta este o nereușită de a găsi o structură, nu o dovadă că nu există una.",
+      "clustered": "Celulele dense stau lângă cele dense, iar cele goale lângă cele goale, mai mult decât ar face-o întâmplarea.",
+      "dispersed": "Celulele dense și cele goale alternează mai mult decât ar face-o întâmplarea."
+    }
   },
   "karstStats": {
+    "clusterArbitrary": "Gruparea încă muta peșteri când a atins limita de pași, așa că grupul în care a căzut o peșteră aflată la limită este arbitrar în detalii, nu greșit.",
+    "clusterCoverage": "{{measure}}: {{missing}} dintre peșterile luate în considerare nu o înregistrează, iar {{soleReason}} dintre acestea ar fi fost grupate dacă această măsură nu ar fi fost cerută.",
+    "clusterEmpty": "Nimic nu a putut fi grupat: mai puțin de {{minimum}} peșteri din acest set înregistrează toate măsurile cerute. Punctele de mai jos sunt desenate necolorate, iar cifrele de mai sus rămân valabile.",
+    "clusterGroup": "Grupul {{group}}",
+    "clusterMeasures": "Grupat după {{measures}}, fiecare standardizată în prealabil, astfel încât nicio măsură să nu cântărească mai mult decât alta doar pentru că este înregistrată în valori mai mari.",
+    "clusterNoSeparation": "Centrele grupurilor nu se separă deloc — cea mai puternică formulare disponibilă a faptului că aici nu există structură. Culorile împart aceste peșteri; nu descoperă nimic despre ele.",
+    "clusterNoWork": "Toate peșterile grupate au aceeași valoare pentru {{measure}}, așa că acea măsură nu a mutat nicio peșteră în niciun grup.",
+    "clusterNotAsked": "Această listă este restrânsă după ceva ce gruparea la nivel de cadastru nu poate fi întrebată, așa că peșterile sunt desenate necolorate, nu colorate după gruparea altui set de peșteri.",
+    "clusterPopulation": "Grupat pe cele {{eligible}} din {{considered}} peșteri pe care le puteți citi din întregul set la care este restrânsă această listă — nu doar din pagina desenată mai jos — și care înregistrează toate măsurile cerute. Celelalte {{excluded}} înregistrează mai puține, așa că nicio grupare nu le poate plasa, iar neavând nici lungime, nici adâncime de reprezentat, lipsesc din grafic, nu sunt desenate în el.",
+    "clusterUngrouped": "Negrupate",
+    "clusterWeak": "Grupurile sunt la fel de late pe cât sunt de depărtate între ele, deci această grupare este slabă. Metoda returnează exact numărul de grupuri cerut, oricare ar fi datele, inclusiv zgomot, așa că mai jos culorile sunt o împărțire a acestor peșteri, nu o descoperire despre ele.",
+    "clusterWithheld": "Unele grupuri conțin mai puțin de {{floor}} peșteri. Acelea nu sunt rezumate, iar peșterile lor sunt desenate necolorate, pentru că o medie pe două peșteri sunt chiar valorile acelor două peșteri, nu ceva despre un grup.",
     "count": "Peșteri",
     "depthAxis": "Denivelare (m)",
     "lengthAxis": "Lungime carotată (m)",
@@ -3656,6 +3686,91 @@
     "viewHistogram": "Lungime",
     "viewLengthDepth": "Lungime vs denivelare",
     "viewRankSize": "Rang–mărime"
+  },
+  "registryStats": {
+    "distributionTitle": "Distribuție în cadastru",
+    "asVisibleToYou": "Calculat pe peșterile pe care le puteți citi. Cineva cu alte drepturi vede alte cifre pentru același cadastru, și amândoi au dreptate.",
+    "stale": "Acestea sunt cifrele răspunsului anterior, rămase pe ecran cât timp se calculează cel nou. Niciun fișier nu este oferit până când cele două nu coincid.",
+    "measure": "Măsurătoare",
+    "bins": "Intervale",
+    "floor": "Minimum de peșteri pe interval",
+    "caveType": "Tip de peșteră",
+    "rockType": "Tip de rocă",
+    "region": "Regiune",
+    "regionPlaceholder": "Numele exact al regiunii",
+    "anyValue": "Oricare",
+    "filterNote": "Aceste restrângeri se potrivesc exact, iar nimic de aici nu numără câte peșteri ar lăsa fiecare — acel număr este însăși întrebarea, așa că primiți răspunsul mai jos, nu pe controale.",
+    "linearCount": "Liniar",
+    "logCount": "Logaritmic",
+    "caves": "Peșteri",
+    "binCount": "{{caves}} peșteri",
+    "joinedLabel": "{{from}}–{{to}} unite",
+    "joinedNote": "Mai multe intervale unite, pentru că unul dintre ele avea prea puține peșteri ca să fie publicat separat.",
+    "joinedSummary": "{{joined}} dintre aceste intervale sunt mai multe unite între ele, marcate în grafic și mai late decât restul. Cadastrul unește un interval cu prea puține peșteri în loc să îl omită, fiindcă omiterea lui ar spune ea însăși că acolo se află ceva.",
+    "tailSpan": "Coada ajustată începe la {{from}}: descrie ultimele {{intervals}} dintre cele {{total}} intervale desenate, și nimic în stânga lor.",
+    "counts": "Calculat pe cele {{measured}} din {{total}} peșteri ale acestui set care au o valoare înregistrată. O peșteră fără valoare lipsește, nu este numărată ca zero.",
+    "noRange": "Nu există un interval de împărțit: nimic din acest set nu înregistrează această măsurătoare sau tot ce o înregistrează are aceeași valoare.",
+    "noFigure": "—",
+    "percentiles": "Percentile",
+    "fraction": "Percentilă",
+    "percentileName": "a {{percent}}-a",
+    "fits": "Ajustări",
+    "lognormal": "Lognormală",
+    "lognormalAbsent": "Fără ajustare lognormală: prea puține peșteri înregistrează această măsurătoare sau toate au aceeași valoare. Parametrii ar exista aritmetic și nu ar însemna nimic.",
+    "paretoTail": "Coadă de tip putere",
+    "paretoAbsent": "Fără coadă ajustată: coada superioară are prea puține peșteri pentru ca un exponent să însemne ceva.",
+    "alphaValue": "{{alpha}} ± {{error}}",
+    "tailFrom": "Coada începe la",
+    "median": "Mediană",
+    "mean": "Medie",
+    "goodness": "Distanța față de coada ajustată",
+    "fittedOver": "Ajustat pe",
+    "fittedOverValue": "{{caves}} peșteri",
+    "failed": "Distribuția nu a putut fi calculată.",
+    "correlationTitle": "Două măsurători una față de cealaltă",
+    "correlationFailed": "Relația nu a putut fi calculată.",
+    "horizontal": "Măsurătoarea orizontală",
+    "vertical": "Măsurătoarea verticală",
+    "logFit": "Logaritmic",
+    "linearFit": "Liniar",
+    "pair": "{{y}} față de {{x}}",
+    "fit": "Ajustarea",
+    "slope": "Panta",
+    "intercept": "Interceptul",
+    "rSquared": "Calitatea ajustării (r²)",
+    "correlationCoefficient": "Corelație",
+    "pairs": "Calculat pe",
+    "pairsValue": "{{caves}} peșteri care le înregistrează pe amândouă",
+    "form": "Ajustat",
+    "drawnNote": "Linia este relația ajustată, trasată peste intervalul acoperit de măsurătoarea orizontală în acest set. Peșterile prin care a fost ajustată nu sunt desenate: cadastrul răspunde la această întrebare cu relația, nu cu peșterile din spatele ei, iar intervalul trasat poate fi mai larg decât perechile folosite la ajustare.",
+    "positiveOnly": "Ajustat pe logaritmii ambelor, așa că o peșteră cu zero sau mai puțin la oricare dintre măsurători nu contribuie la nimic, în loc să fie împinsă în sus. Numărul de lângă ajustare spune câte au rămas.",
+    "absence": {
+      "noPairs": "Nicio peșteră din acest set nu înregistrează ambele măsurători, deci nu există relație de ajustat și nu se trasează niciuna.",
+      "notFitted": "Mai puțin de două peșteri înregistrează ambele măsurători. O linie printr-un singur punct nu este o relație, deci nu se trasează niciuna.",
+      "noRange": "Măsurătoarea orizontală nu acoperă niciun interval în acest set, deci nu există pe ce să fie trasată relația. Cifrele de alături rămân valabile.",
+      "noPositiveRange": "Ajustarea este făcută pe logaritmi, iar măsurătoarea orizontală ajunge la zero sau sub în acest set, deci nu are un capăt inferior de la care să pornească desenul. Cifrele de alături rămân valabile.",
+      "rangeUnknown": "Intervalul acoperit de această măsurătoare în acest set nu a sosit încă, deci nu există pe ce să fie trasată relația. Cifrele de alături sunt deja valabile.",
+      "rangeUnavailable": "Intervalul acoperit de această măsurătoare în acest set nu a putut fi citit, așa că relația nu este trasată. Este o cifră care nu a ajuns, nu ceva despre peșteri, iar cifrele de alături rămân valabile."
+    },
+    "measures": {
+      "surveyedLength": "Lungime carotată (m)",
+      "estimatedLength": "Lungime estimată (m)",
+      "depth": "Denivelare (m)",
+      "positiveDepth": "Înălțime peste intrare (m)",
+      "negativeDepth": "Adâncime sub intrare (m)",
+      "realExtension": "Extindere reală (m)",
+      "projectedExtension": "Extindere proiectată (m)",
+      "volume": "Volum (m³)",
+      "area": "Suprafață (m²)",
+      "ramificationIndex": "Indice de ramificație"
+    },
+    "regionsTitle": "Registrul pe regiuni",
+    "regionsCard": "Peșteri per regiune",
+    "regionsFailed": "Defalcarea nu a putut fi calculată.",
+    "noRegion": "Fără regiune înregistrată",
+    "regionsCounts": "{{placed}} peșteri se află sub o regiune mai jos, din {{total}} din acest set pe care le puteți citi.",
+    "regionsShortfall": "Rândurile de mai jos nu însumează totalul, iar acesta este răspunsul, nu o eroare a lui: {{missing}} dintre cele {{total}} peșteri pe care le puteți citi aici au o poziție pe care nu o puteți vedea, așa că sunt numărate în total și nu stau sub nicio regiune. Tocmai cărei regiuni îi aparțin este ceea ce nu vi se spune, deci nu există un rând care să le adune și niciun procent care să închidă socoteala.",
+    "regionsEmpty": "Nicio peșteră din acest set nu are o poziție pe care să o puteți vedea, deci nu este nimic de împărțit pe regiuni. Totalul de mai sus numără în continuare peșterile pe care le puteți citi."
   },
   "morphometry": {
     "title": "Formă măsurată",
@@ -4354,6 +4469,50 @@
       "stopCommand": "Pentru a opri fototeca însăși, folosește implementarea: {{command}}",
       "cannotConnect": "{{library}} nu este conectată: această instalare nu are adresă sau credențial pentru ea. Conectarea ei ține de implementare și nu se poate face din această pagină.",
       "none": "Această instalare nu a primit nicio fototecă, deci nu este nimic de oprit."
+    }
+  },
+  "karstlinkExport": {
+    "menuItem": "KarstLink (JSON-LD)",
+    "changeAnswer": "KarstLink (JSON-LD) — schimbă răspunsul meu…",
+    "title": "Export de peșteri pentru schimb de date",
+    "intro": "Peșteri descrise în vocabularul publicat pentru peșteri și carst, ca fișier pe care îl puteți da altcuiva. Un fișier trăiește mai mult decât permisiunea care l-a produs, așa că ce spune despre o locație protejată se decide aici și se scrie chiar în fișier.",
+    "download": "Exportă",
+    "caveCount": "{{count}} peșteră/peșteri în acest export.",
+    "protectedCount": "Dintre acestea, {{count}} au o locație pe care această instalare o protejează. Răspunsul de mai jos li se aplică tuturor.",
+    "noneProtected": "Niciuna dintre ele nu are o locație protejată de această instalare, deci nimic de mai jos nu schimbă acest fișier.",
+    "tooMany": "Această selecție conține {{count}} peșteră/peșteri, iar un fișier poate conține {{limit}}. Restrângeți filtrele și exportați pe părți — un fișier oprit la o limită arată exact ca unul complet pentru cine îl primește.",
+    "remember": "Ține minte acest răspuns și nu mă mai întreba",
+    "askAgain": "Exportul nu a putut fi făcut cu răspunsul memorat. Alegeți din nou.",
+    "treatments": {
+      "grid_position": {
+        "label": "Așază-le pe grila de protecție",
+        "help": "Aceeași poziție aproximativă pe care harta o arată deja oricui nu are dreptul să vadă poziția exactă. Fișierul spune, lângă fiecare, cât de departe poate fi de locul real."
+      },
+      "no_position": {
+        "label": "Include-le fără coordonate",
+        "help": "Tot restul despre peșteră — numele, codul, lungimea și adâncimea — și nimic despre unde se află."
+      },
+      "omit": {
+        "label": "Lasă-le complet în afara fișierului",
+        "help": "Fișierul declară câte peșteri au fost lăsate afară, altfel numărătorile făcute pe el ar contrazice registrul, iar destinatarul nu ar avea cum să afle."
+      }
+    },
+    "errors": {
+      "tooManyCaves": "Un fișier poate conține {{count}} peșteri. Restrângeți filtrele și exportați pe părți."
+    }
+  },
+  "externalIds": {
+    "title": "Identificatori în alte registre",
+    "explanation": "Numărul sub care un alt registru cunoaște această peșteră. Este singurul mod stabil de a spune că o peșteră de aici și una de acolo sunt aceeași: numele nu sunt stabile, iar poziția este exact ceea ce nu poate fi împărtășit. Se păstrează doar numărul — nimic altceva din ce spune registrul nu este copiat aici, așa că nimic de aici nu poate rămâne în urmă părând totuși de încredere.",
+    "placeholder": "Neînregistrat",
+    "lookup": "Caută această peșteră în Grottocenter",
+    "lookupFailed": "Grottocenter nu a putut fi întrebat.",
+    "notConfigured": "Această instalare nu caută peșteri în Grottocenter. Un administrator activează integrarea înainte de a putea fi folosită; până atunci nu se trimite nimic nicăieri.",
+    "noCandidates": "Grottocenter nu a oferit nimic pentru acest nume.",
+    "accept": "Înregistrează-l pe acesta",
+    "systems": {
+      "grottocenter": "Grottocenter",
+      "national_cadastre": "Cadastru național"
     }
   }
 }

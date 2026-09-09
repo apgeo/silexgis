@@ -153,6 +153,7 @@ export const queryKeys = {
   surveyModel: (id: string) => ['survey-model', id] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   surveyCompilations: (caveId: string) => ['survey-compilations', caveId] as const,
+  caveExternalIds: (caveId: string) => ['cave-external-ids', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
@@ -181,9 +182,13 @@ export const queryKeys = {
   // rather than a stale answer to the same one.
   tripImportPreview: (fileId: string, body: unknown) => ['trip-import-preview', fileId, body] as const,
   photoLibraryStatus: ['photo-libraries', 'status'] as const,
-  // The whole question is in the key — library, page, and the trip whose days it was narrowed to —
-  // because every part of it changes what came back. A page held under a key that did not name the
-  // trip would answer one trip's panel with another trip's photographs.
+  // How big the protected-position decision is for a given export request. The whole request
+  // is the key: it is a pure function of what would be exported, so changing a filter is a
+  // different question rather than a stale answer to the same one.
+  karstLinkExportPreview: (body: unknown) => ['karstlink-export-preview', body] as const,
+  // The whole question is in the key — library, page, words, album, and the trip whose days it was
+  // narrowed to — because every part of it changes what came back. A page held under a key that did
+  // not name all of them would answer one question with another one's photographs.
   libraryPhotographs: (source: string, query: LibraryPhotographQuery) =>
     ['photo-libraries', source, 'photographs', query] as const,
   libraryPhotograph: (source: string, photographId: string) =>
@@ -271,6 +276,14 @@ export const queryKeys = {
     ['caves', id, 'structure-comparison', areaId] as const,
   areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
   areaKarstStatistics: (id: string) => ['features', id, 'karst-statistics'] as const,
+  registryDistribution: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'distribution', params] as const,
+  registryCorrelation: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'correlation', params] as const,
+  registryRegions: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'regions', params] as const,
+  registryClustering: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'clustering', params] as const,
   mapDensity: (bbox: string, cellMetres: number | null, bandwidthMetres: number | null, areaId?: string) =>
     ['map', 'density', bbox, cellMetres, bandwidthMetres, areaId ?? null] as const,
   mapPointPattern: (bbox: string, simulations: number, seed: number, areaId?: string) =>
@@ -646,6 +659,81 @@ export function useUiDefaults() {
     // It changes when an administrator publishes a new one, which is rare; asking again on every
     // mount would be a request per page load for an answer that is the same all day.
     staleTime: 10 * 60_000,
+  });
+}
+
+/** What an interchange export was asked for, minus the treatments it has not been given yet. */
+export type KarstLinkExportRequest =
+  paths['/api/v1/export/caves/karstlink']['post']['requestBody']['content']['application/json'];
+
+/** How many caves an interchange export would hold, and how many need a decision. */
+export type KarstLinkExportPreview = components['schemas']['KarstLinkExportPreview'];
+
+/**
+ * How large the protected-position decision is, before it is made.
+ *
+ * Asked of the server rather than counted on the client: whether a cave's position is protected
+ * is a fact about the cave that this client is never shown, and it is the same question whoever
+ * is asking — an owner and an administrator have to decide too, because the file outlives their
+ * right to look. `enabled` is what stops it being asked before somebody opens the chooser.
+ */
+export function useKarstLinkExportPreview(request: KarstLinkExportRequest, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.karstLinkExportPreview(request),
+    queryFn: () =>
+      unwrap(api.POST('/api/v1/export/caves/karstlink/preview', { body: request })),
+    enabled,
+  });
+}
+
+/** One identifier another register knows a cave by. */
+export type CaveExternalId = components['schemas']['CaveExternalIdDto'];
+
+/** What grottocenter.org offered for a cave's name, and whether it was asked at all. */
+export type GrottocenterLookup = components['schemas']['GrottocenterLookupDto'];
+
+/** The identifiers other registers know this cave by. */
+export function useCaveExternalIds(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveExternalIds(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{caveId}/external-ids', { params: { path: { caveId: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Records one register's identifier for a cave, or clears it when the value is empty. */
+export function useSetCaveExternalId(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ system, value }: { system: string; value: string | null }) =>
+      unwrap(
+        api.PUT('/api/v1/caves/{caveId}/external-ids/{system}', {
+          params: { path: { caveId, system } },
+          body: { value },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveExternalIds(caveId) }),
+  });
+}
+
+/**
+ * Asks grottocenter.org which of its caves match this one's name.
+ *
+ * A mutation although it reads: it is an errand that leaves the installation, and it happens
+ * because somebody pressed a button rather than because a screen was opened. Cached as a query
+ * it would be repeated on a remount, sending a cave's name outward again for nobody.
+ */
+export function useGrottocenterLookup(caveId: string) {
+  return useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.POST('/api/v1/caves/{caveId}/external-ids/grottocenter/lookup', {
+          params: { path: { caveId } },
+        }),
+      ),
   });
 }
 
@@ -7577,5 +7665,160 @@ export function useDeleteSyncSet() {
     mutationFn: (id: string) =>
       unwrapVoid(api.DELETE('/api/v1/sync/sets/{id}', { params: { path: { id } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.syncSets }),
+  });
+}
+
+/**
+ * One measured column of the registry, as the caller may read it: the intervals it falls into,
+ * the percentiles asked for, and the two fits where the sample supports them.
+ *
+ * The parameters are handed on exactly as the screen holds them, unclamped and uncorrected. A bin
+ * count outside what the registry will publish, or a word that names no measurement, comes back
+ * as a refusal saying which control is wrong — which is the answer the reader needs. Quietly
+ * substituting a legal value would draw a different distribution under the same address.
+ */
+export type RegistryMeasure = components['schemas']['RegistryMeasure'];
+
+/** One interval of a distribution, and whether it is several of them joined together. */
+export type RegistryDistributionBin = components['schemas']['DistributionBin'];
+
+/** One requested fraction, and the value at it — null when there was nothing to take it from. */
+export type RegistryPercentileRow = components['schemas']['RegistryPercentileRow'];
+
+/** A fitted lognormal, present only when the sample was large enough to mean anything. */
+export type RegistryLognormalFit = components['schemas']['LognormalFit'];
+
+/** A fitted upper tail, present only when the tail was long enough to mean anything. */
+export type RegistryParetoTailFit = components['schemas']['ParetoTailFit'];
+
+/** How one measured column is distributed over the caves the caller may read. */
+export type RegistryDistribution = components['schemas']['RegistryDistribution'];
+
+/** Everything a distribution can be asked, scope included, spelled as the route spells it. */
+export type RegistryDistributionParams = NonNullable<
+  paths['/api/v1/stats/registry/distribution']['get']['parameters']['query']
+>;
+
+/**
+ * The distribution of one measurement over the caves this caller may read.
+ *
+ * The previous answer is kept while a new one loads, because re-binning and re-filtering are
+ * things somebody is clicking: a chart that blanks out and returns under the cursor reads as
+ * breakage rather than as an answer.
+ */
+export function useRegistryDistribution(params: RegistryDistributionParams) {
+  return useQuery({
+    queryKey: queryKeys.registryDistribution(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/stats/registry/distribution', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** How two measured columns move together, over the caves recording both. */
+export type RegistryCorrelation = components['schemas']['RegistryCorrelationDto'];
+
+/** Everything a correlation can be asked, scope included, spelled as the route spells it. */
+export type RegistryCorrelationParams = NonNullable<
+  paths['/api/v1/stats/registry/correlation']['get']['parameters']['query']
+>;
+
+/**
+ * How two measurements of a cave move together, over the caves this caller may read.
+ *
+ * The answer is the relationship and not the caves behind it: a slope, an intercept, a goodness
+ * figure and the number of pairs they were taken over. Every one of those but the count is null
+ * when fewer than two caves recorded both, and they are handed on null rather than turned into
+ * zeros — a zero slope is a claim that the two measurements are unrelated, which is a different
+ * statement from having nothing to say.
+ */
+export function useRegistryCorrelation(params: RegistryCorrelationParams) {
+  return useQuery({
+    queryKey: queryKeys.registryCorrelation(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/stats/registry/correlation', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** One region and how many caves in scope stand under it; a null region is a row of its own. */
+export type RegistryRegionRow = components['schemas']['RegistryRegionRow'];
+
+/** How the caves in scope divide between regions, and the total they were taken from. */
+export type RegistryRegionBreakdown = components['schemas']['RegistryRegionBreakdownDto'];
+
+/** Everything a regional breakdown can be asked, which is the scope and nothing else. */
+export type RegistryRegionsParams = NonNullable<
+  paths['/api/v1/stats/registry/regions']['get']['parameters']['query']
+>;
+
+/**
+ * What a narrowed set of the registry adds up to per region, for the caves this caller may read.
+ *
+ * The rows and the total are counted under different rules and are not expected to reconcile: the
+ * total counts every cave in scope the caller may read, the rows only those they may also place.
+ * The difference is a fact about the answer rather than a cave that went missing, so neither
+ * figure is adjusted here to make the other look right.
+ */
+export function useRegistryRegions(params: RegistryRegionsParams) {
+  return useQuery({
+    queryKey: queryKeys.registryRegions(params),
+    queryFn: () => unwrap(api.GET('/api/v1/stats/registry/regions', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** How many caves recorded one named measure, and how many were left out for want of it alone. */
+export type RegistryClusterCoverage = components['schemas']['RegistryClusterCoverageDto'];
+
+/** Who the grouping was offered, who it could take, and who it had to leave out. */
+export type RegistryClusterPopulation = components['schemas']['RegistryClusterPopulationDto'];
+
+/** The middle and the spread one measure was standardised by before distances were taken. */
+export type RegistryClusterScaling = components['schemas']['RegistryClusterScalingDto'];
+
+/** One group: its label, how many caves fell in it, and its middle when it is large enough to publish one. */
+export type RegistryCluster = components['schemas']['RegistryClusterDto'];
+
+/** Which group one cave fell in, and how far from that group's middle it sits. */
+export type RegistryClusterAssignment = components['schemas']['RegistryClusterAssignmentDto'];
+
+/** How wide the groups are against how far apart they are — the only figure that can contradict them. */
+export type RegistryClusterSeparation = components['schemas']['RegistryClusterSeparationDto'];
+
+/** Which caves resemble each other over the measures asked for, and the account of who was left out. */
+export type RegistryClustering = components['schemas']['RegistryClusteringDto'];
+
+/** Everything a grouping can be asked, scope included, spelled as the route spells it. */
+export type RegistryClusteringParams = NonNullable<
+  paths['/api/v1/stats/registry/clustering']['get']['parameters']['query']
+>;
+
+/**
+ * Which caves resemble each other over the measures asked for.
+ *
+ * The answer is not only the groups. It carries the account of who could be grouped and who could
+ * not, and for want of which measurement — which is the half a reader has to see first, because a
+ * grouping over the best-surveyed tenth of a registry is internally consistent and reads exactly
+ * like a grouping over the registry.
+ *
+ * `enabled` is a parameter rather than an internal guess because the caller is the only one that
+ * knows whether the set it is drawing and the set it would be asking about are the same set. A
+ * grouping fetched for a wider set than the points on screen colours them with a claim about
+ * caves nobody is looking at, and nothing in the answer would reveal the mismatch.
+ */
+export function useRegistryClustering(params: RegistryClusteringParams, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.registryClustering(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/stats/registry/clustering', { params: { query: params } })),
+    // Deliberately no carrying of the previous answer across a change of scope. Keeping it is the
+    // right trade for a page of rows, where the shape barely moves and a blank table flickers; it
+    // is the wrong one here, because the previous answer is a grouping of a different set of caves
+    // and the list it would be painted over refetches faster than a grouping does. For the length
+    // of that window the colours and the population sentence would both describe caves nobody is
+    // looking at, and nothing in either would admit it. An uncoloured scatter for a moment is the
+    // honest state.
+    enabled,
   });
 }

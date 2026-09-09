@@ -2806,6 +2806,51 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("feature_ancestors", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.FeatureExternalId", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid>("FeatureId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("feature_id");
+
+                    b.Property<short>("System")
+                        .HasColumnType("smallint")
+                        .HasColumnName("system");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_feature_external_ids");
+
+                    b.HasIndex("FeatureId", "System")
+                        .IsUnique()
+                        .HasDatabaseName("ix_feature_external_ids_feature_id_system");
+
+                    b.HasIndex("System", "Value")
+                        .HasDatabaseName("ix_feature_external_ids_system_value");
+
+                    b.ToTable("feature_external_ids", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.FeatureHierarchyEdge", b =>
                 {
                     b.Property<long>("Id")
@@ -7980,6 +8025,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_feature_ancestors_features_feature_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.FeatureExternalId", b =>
+                {
+                    b.HasOne("SilexGis.Domain.Entities.Feature", null)
+                        .WithMany()
+                        .HasForeignKey("FeatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_feature_external_ids_features_feature_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.FeatureHierarchyEdge", b =>

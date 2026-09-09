@@ -3,6 +3,7 @@ import {
   ApartmentOutlined,
   ApiOutlined,
   AppstoreOutlined,
+  BarChartOutlined,
   BorderOuterOutlined,
   CalendarOutlined,
   CameraOutlined,
@@ -28,9 +29,11 @@ import {
   HistoryOutlined,
   IdcardOutlined,
   ImportOutlined,
+  LineChartOutlined,
   MailOutlined,
   MonitorOutlined,
   PictureOutlined,
+  PieChartOutlined,
   ProfileOutlined,
   ReadOutlined,
   SafetyCertificateOutlined,
@@ -213,6 +216,14 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
       ...(gates.featureCreate
         ? [{ key: 'catalogue/speologie', icon: <ApiOutlined />, label: t('nav.speologie') }]
         : []),
+    ]),
+    // What the register adds up to rather than what is in it. Beside the cadastre because it is
+    // the same body of rows read a second way, and not gated on a right: every figure is counted
+    // over what the reader may already read, so there is no separate permission to hold.
+    ...group('statistics', <BarChartOutlined />, t('nav.groups.statistics'), [
+      { key: 'statistics/distribution', icon: <BarChartOutlined />, label: t('nav.registryDistribution') },
+      { key: 'statistics/correlation', icon: <LineChartOutlined />, label: t('nav.registryCorrelation') },
+      { key: 'statistics/regions', icon: <PieChartOutlined />, label: t('nav.registryRegions') },
     ]),
     // The filing tree is readable by anyone who may read documents at all; what
     // is on a shelf is decided per document, not by hiding the shelf.

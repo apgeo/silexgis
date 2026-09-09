@@ -55,4 +55,23 @@ public static class RegistryStatisticsLimits
     /// each end, which is what a box plot is drawn from.</summary>
     public static IReadOnlyList<double> DefaultPercentiles { get; } =
         [0.1, 0.25, 0.5, 0.75, 0.9];
+
+    /// <summary>
+    /// Most measures one grouping may be taken over. The bound is not about work: a cave is
+    /// excluded from a grouping for want of any one selected measure, so each measure added
+    /// narrows the population it describes, and past a handful the answer is reliably a statement
+    /// about the best-surveyed few caves in the registry however large the registry is.
+    /// </summary>
+    public const int MaximumClusteringMeasureCount = 6;
+
+    /// <summary>Groups a request is answered with when the caller names no number.</summary>
+    public const int DefaultClusterCount = 3;
+
+    /// <summary>
+    /// Most caves one grouping may be taken over. Reaching it is refused rather than served from
+    /// the first so many rows: a grouping silently computed over part of the registry and labelled
+    /// as the registry is the exact misreading this surface exists to make impossible, and it
+    /// would be invisible in an answer that otherwise looks complete.
+    /// </summary>
+    public const int MaximumClusteredCaveCount = 20_000;
 }
