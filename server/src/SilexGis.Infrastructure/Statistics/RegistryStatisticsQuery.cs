@@ -230,4 +230,80 @@ public static class RegistryStatisticsQuery
 
         return DistributionBins.Merge(raw, minimumBinCaveCount);
     }
+
+    /// <summary>
+    /// Which caves in scope resemble each other, over the measures the caller named.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Every cave in scope is offered to the grouping, including the ones that record nothing.</b>
+    /// The grouping cannot place a cave that is missing a selected measure and does not try — a gap
+    /// filled with a mean would put a cave in the middle of a population it was never measured
+    /// against — but the caves it could not place are counted, and counted per measure, so the
+    /// answer can say which measure cost the population what. Handing it only the complete rows
+    /// would produce the same groups with no way left to state that they describe the
+    /// best-surveyed part of a registry rather than the registry.
+    /// </para>
+    /// <para>
+    /// The statement is the non-spatial one: a cave the caller may read and may not place exactly
+    /// is grouped like any other, because nothing in the answer says where a cave is. Naming an
+    /// area still makes the question spatial and still takes such a cave out, which is the same
+    /// rule every other statistic here carries.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="RegistryScopeTooLargeException">
+    /// The scope holds more caves than one grouping is answered over.
+    /// </exception>
+    public static async Task<RegistryClustering> ClusteringAsync(
+        SilexGisDbContext db,
+        AccessContext ctx,
+        RegistryStatisticsScope scope,
+        IReadOnlyList<RegistryMeasure> measures,
+        int clusterCount,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(measures);
+
+        var basis = scope.IsSpatiallyScoped ? AreaBasis : ReadableBasis;
+        var connection = db.Database.GetDbConnection();
+
+        // One more than the cap, so a scope that is merely at the cap is answered and one past it
+        // is refused — asking for exactly the cap could not tell the two apart.
+        var limit = RegistryStatisticsLimits.MaximumClusteredCaveCount + 1;
+        var (sql, parameters) = RegistryStatisticsSql.BuildMetricVectors(ctx, scope, measures, limit);
+
+        // Read through the reader rather than by mapping onto a row type, because the readings come
+        // back as an array that may hold nulls and the element type has to be asked for by name:
+        // a gap is what a cave that does not record a measure has, so an array read as
+        // non-nullable would fail on precisely the registry this surface exists to describe.
+        var rows = new List<RegistryMetricVectorRow>();
+        await using (var reader = await connection.ExecuteReaderAsync(
+            new CommandDefinition(sql, parameters, cancellationToken: ct)))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                rows.Add(new RegistryMetricVectorRow(
+                    reader.GetFieldValue<Guid>(0), reader.GetFieldValue<double?[]>(1)));
+            }
+        }
+
+        if (rows.Count >= limit)
+        {
+            throw new RegistryScopeTooLargeException(
+                RegistryStatisticsLimits.MaximumClusteredCaveCount);
+        }
+
+        // The grouping labels its columns with whatever strings it is handed; the declared names
+        // are used because they are what the API already spells its measures with, so the model's
+        // own labels and the measures published beside them cannot come to disagree.
+        var names = measures.Select(m => m.ToString()).ToArray();
+        var subjects = rows
+            .Select(row => new MetricVector(row.Id, row.Values))
+            .ToArray();
+
+        return new RegistryClustering(
+            measures, MetricClustering.Compute(names, subjects, clusterCount), basis);
+    }
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Statistics;
 using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -56,6 +57,13 @@ public static class RegistryStatisticsEndpoints
         registry.MapGet("/correlation/export", ExportCorrelationAsync)
             .WithValidation<RegistryCorrelationRequest>()
             .WithSummary("The same fit, as a spreadsheet.");
+
+        // No export sibling: a spreadsheet of per-cave group labels is a list of caves, which is
+        // the one thing this family does not answer.
+        registry.MapGet("/clustering", ClusteringAsync)
+            .WithValidation<RegistryClusteringRequest>()
+            .WithSummary(
+                "Which caves the caller may read resemble each other over the measures they named.");
 
         registry.MapGet("/regions", RegionsAsync)
             .WithValidation<RegistryRegionsRequest>()
@@ -115,6 +123,18 @@ public static class RegistryStatisticsEndpoints
     {
         var answer = await AnswerCorrelationAsync(request, db, accessAccessor, protection, ct);
         return Saved(answer, sheets, "correlation", RegistryStatisticsWorkbook.CorrelationRows);
+    }
+
+    private static async Task<Results<Ok<RegistryClusteringDto>, UnauthorizedHttpResult, ProblemHttpResult>>
+        ClusteringAsync(
+            [AsParameters] RegistryClusteringRequest request,
+            SilexGisDbContext db,
+            IAccessContextAccessor accessAccessor,
+            FeatureProtection protection,
+            CancellationToken ct)
+    {
+        var answer = await AnswerClusteringAsync(request, db, accessAccessor, protection, ct);
+        return Seen(answer);
     }
 
     private static async Task<Results<Ok<RegistryRegionBreakdownDto>, UnauthorizedHttpResult, ProblemHttpResult>>
@@ -228,6 +248,114 @@ public static class RegistryStatisticsEndpoints
                 fit.Correlation,
                 fit.Logarithmic,
                 basis));
+    }
+
+    /// <summary>
+    /// The ladder, the one statement behind the grouping, and the rule that decides which of its
+    /// figures may be published.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A group holding fewer caves than the floor is published as a count and nothing else.</b>
+    /// Its middle is a mean over two or three caves — arithmetic thin enough that anybody who knows
+    /// one of them reads the others off it — so the measurements are withheld while the count
+    /// stands, because removing the group entirely would make the counts stop adding up to the
+    /// eligible total and invite a reader to conclude nothing had been left out. The floor itself
+    /// is published beside the groups so a reader meeting a group with no centre knows why.
+    /// </para>
+    /// <para>
+    /// The per-cave assignments carry no measurement, only which group a readable cave fell in;
+    /// the readings behind it are the cave's own and are already readable to anybody this answer
+    /// was computed for. Nothing here says where a cave is.
+    /// </para>
+    /// </remarks>
+    private static async Task<Answer<RegistryClusteringDto>> AnswerClusteringAsync(
+        RegistryClusteringRequest request,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        FeatureProtection protection,
+        CancellationToken ct)
+    {
+        var scope = request.ToScope();
+        var (ctx, refusal) = await GuardAsync(scope, db, accessAccessor, protection, ct);
+        if (ctx is null)
+        {
+            return refusal.As<RegistryClusteringDto>();
+        }
+
+        if (!RegistryMeasureList.TryParse(request.Measures, out var measures))
+        {
+            return new Answer<RegistryClusteringDto>(false, Malformed(), null);
+        }
+
+        var clusterCount = request.Clusters ?? RegistryStatisticsLimits.DefaultClusterCount;
+
+        RegistryClustering grouping;
+        try
+        {
+            grouping = await RegistryStatisticsQuery.ClusteringAsync(
+                db, ctx, scope, measures, clusterCount, ct);
+        }
+        catch (RegistryScopeTooLargeException tooLarge)
+        {
+            // Refused rather than answered over part of the scope: a grouping quietly taken from
+            // the first so many caves would wear the whole scope's label and leave no trace of it.
+            return new Answer<RegistryClusteringDto>(
+                false,
+                ApiProblems.BadRequest(
+                    "statistics.scope_too_large",
+                    $"a grouping is answered over at most {tooLarge.Limit} caves; narrow the scope."),
+                null);
+        }
+
+        var model = grouping.Model;
+        var coverage = new List<RegistryClusterCoverageDto>(measures.Count);
+        var scaling = new List<RegistryClusterScalingDto>(measures.Count);
+        for (var i = 0; i < measures.Count; i++)
+        {
+            coverage.Add(new RegistryClusterCoverageDto(
+                measures[i],
+                model.Population.Columns[i].Recorded,
+                model.Population.Columns[i].Missing,
+                model.Population.Columns[i].SoleReason));
+            scaling.Add(new RegistryClusterScalingDto(
+                measures[i], model.Scaling[i].Mean, model.Scaling[i].StandardDeviation));
+        }
+
+        var clusters = model.Clusters
+            .Select(c => c.Count >= MetricClustering.MinimumPublishableClusterSize
+                ? new RegistryClusterDto(
+                    c.Index, c.Count, c.Centre, c.ScaledCentre, c.MeanDistanceToCentre)
+                : new RegistryClusterDto(c.Index, c.Count, null, null, null))
+            .ToList();
+
+        var assignments = model.Assignments
+            .Select(a => new RegistryClusterAssignmentDto(a.SubjectId, a.Cluster, a.DistanceToCentre))
+            .ToList();
+
+        return new Answer<RegistryClusteringDto>(
+            false,
+            null,
+            new RegistryClusteringDto(
+                grouping.Measures,
+                model.RequestedClusterCount,
+                new RegistryClusterPopulationDto(
+                    model.Population.Considered,
+                    model.Population.Eligible,
+                    model.Population.Excluded,
+                    coverage),
+                scaling,
+                clusters,
+                assignments,
+                model.Separation is { } s
+                    ? new RegistryClusterSeparationDto(
+                        s.MeanWithinDistance, s.MeanBetweenDistance, s.Ratio)
+                    : null,
+                MetricClustering.MinimumEligibleCount,
+                MetricClustering.MinimumPublishableClusterSize,
+                model.Iterations,
+                model.Converged,
+                grouping.Basis));
     }
 
     /// <summary>The ladder and the two statements behind the breakdown, for both surfaces.</summary>

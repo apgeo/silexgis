@@ -22,6 +22,14 @@ namespace SilexGis.Api.Features.Map;
 /// widths this installation will publish, and what happens to a request for something finer.
 /// </para>
 /// <para>
+/// Whether those cells are arranged by more than chance is answered here too, from the cells
+/// themselves: Moran's I over the window and a Getis-Ord score per cell. It is deliberately not a
+/// route of its own and takes no cell size of its own. A hot-spot map is a density map, so the one
+/// rule that decides how fine a density may be published had to be the only rule either of them
+/// obeys — a second entry point would be a second place for that floor to be got wrong, and the
+/// mistake would not look like one.
+/// </para>
+/// <para>
 /// The karstification index next door is computed from an area-wide caves-per-square-kilometre
 /// ratio and not from this grid. The two are different summaries of the same registry and they can
 /// disagree — an area with one dense pocket and a great deal of empty ground reads low on the ratio
@@ -50,7 +58,9 @@ public static class MapDensityEndpoints
             .WithValidation<MapDensityRequest>()
             .WithSummary(
                 "Cave-entrance counts and densities per grid cell over a bbox, optionally normalised "
-                + "by a study-area outline. Cells finer than the location-protection grid are refused.");
+                + "by a study-area outline, with the hot and cold spots among those cells and "
+                + "whether their arrangement departs from chance. Cells finer than the "
+                + "location-protection grid are refused.");
         return api;
     }
 
@@ -166,7 +176,18 @@ public static class MapDensityEndpoints
             [.. rows.Select(r => ((r.West + r.East) / 2d, (r.South + r.North) / 2d, r.Count))],
             bandwidthMeters);
 
-        var cells = rows.Select((row, i) => ToDto(row, surface[i])).ToList();
+        // Read over the densities rather than over the counts, and over the cells this response
+        // already carries rather than over anything finer. Both statistics are arithmetic on the
+        // published grid and its own adjacencies, so the hot-spot surface has exactly the
+        // resolution of the surface it came from: there is no second cell size here to get wrong,
+        // and a caller asking for a finer one is refused above by the one rule that decides it.
+        var densities = rows.Select(Density).ToList();
+        var autocorrelation = SpatialAutocorrelation.Analyse(
+            [.. rows.Select((row, i) => new GridCellValue(row.CellX, row.CellY, densities[i]))]);
+
+        var cells = rows
+            .Select((row, i) => ToDto(row, densities[i], surface[i], autocorrelation.HotSpotZScores[i]))
+            .ToList();
 
         return TypedResults.Ok(new DensityGridDto(
             cellMeters,
@@ -178,27 +199,45 @@ public static class MapDensityEndpoints
             request.AreaId is null ? null : rows.Sum(r => r.StudyAreaM2 ?? 0d) / 1_000_000d,
             rows.Sum(r => r.Count),
             cells.Count,
-            cells));
+            cells,
+            new DensityAutocorrelationDto(
+                autocorrelation.Global.CellCount,
+                autocorrelation.Global.NeighbourPairCount,
+                autocorrelation.Global.Index,
+                autocorrelation.Global.ExpectedIndex,
+                autocorrelation.Global.ZScore,
+                autocorrelation.Global.PValue,
+                autocorrelation.Global.Pattern,
+                SpatialAutocorrelation.SignificanceZ)));
     }
 
-    private static DensityCellDto ToDto(DensityCellRow row, double kernelDensityPerKm2)
+    /// <summary>
+    /// The count over the ground actually being asked about: the part of the cell inside the study
+    /// area when one was named, the whole cell otherwise. A cell that only clips the outline's
+    /// corner has no meaningful density, and reporting zero rather than an enormous number is the
+    /// honest reading of "nothing here to count over".
+    /// </summary>
+    private static double Density(DensityCellRow row)
     {
-        // The denominator is the ground actually being asked about: the part of the cell inside the
-        // study area when one was named, the whole cell otherwise. A cell that only clips the
-        // outline's corner has no meaningful density, and reporting zero rather than an enormous
-        // number is the honest reading of "nothing here to count over".
         var denominatorM2 = row.StudyAreaM2 ?? row.CellAreaM2;
-        var density = denominatorM2 > 0d ? row.Count / (denominatorM2 / 1_000_000d) : 0d;
+        return denominatorM2 > 0d ? row.Count / (denominatorM2 / 1_000_000d) : 0d;
+    }
 
+    private static DensityCellDto ToDto(
+        DensityCellRow row, double densityPerKm2, double kernelDensityPerKm2, double? hotSpotZ)
+    {
         return new DensityCellDto(
+            row.CellX,
+            row.CellY,
             row.West,
             row.South,
             row.East,
             row.North,
             row.Count,
             row.CellAreaM2 / 1_000_000d,
-            density,
+            densityPerKm2,
             row.CellAreaM2 > 0d ? row.StudyAreaM2 / row.CellAreaM2 : null,
-            kernelDensityPerKm2);
+            kernelDensityPerKm2,
+            hotSpotZ);
     }
 }

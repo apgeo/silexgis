@@ -44,10 +44,34 @@ function grid(overrides: Partial<DensityGrid> = {}): DensityGrid {
     cellCount: 40,
     cells: [
       {
+        cellX: 10, cellY: 20,
         west: 25.42, south: 45.51, east: 25.43, north: 45.52,
         count: 3, areaKm2: 0.2, densityPerKm2: 15, studyAreaFraction: 1, kernelDensityPerKm2: 7.5,
+        hotSpotZ: 2.4,
+      },
+      {
+        cellX: 11, cellY: 20,
+        west: 25.43, south: 45.51, east: 25.44, north: 45.52,
+        count: 0, areaKm2: 0.2, densityPerKm2: 0, studyAreaFraction: 1, kernelDensityPerKm2: 1.5,
+        hotSpotZ: -2.1,
+      },
+      {
+        cellX: 12, cellY: 20,
+        west: 25.44, south: 45.51, east: 25.45, north: 45.52,
+        count: 1, areaKm2: 0.2, densityPerKm2: 5, studyAreaFraction: 1, kernelDensityPerKm2: 3,
+        hotSpotZ: null,
       },
     ],
+    autocorrelation: {
+      cellCount: 3,
+      neighbourPairCount: 4,
+      index: 0.42,
+      expectedIndex: -0.5,
+      zScore: 3.1,
+      pValue: 0.002,
+      pattern: 'clustered',
+      significanceZ: 1.96,
+    },
     ...overrides,
   } as DensityGrid;
 }
@@ -174,4 +198,147 @@ it('says no band was drawn when no simulation ran, rather than drawing a flat on
   // "No significance was tested" and "indistinguishable from chance" are opposite findings, and a
   // zero-width band on the curve is how the first gets mistaken for the second.
   expect(screen.getByText(/no significance was tested/i)).toBeTruthy();
+});
+
+it('counts the hot and cold cells against the cells that could be scored, not against all of them', () => {
+  // The fixture holds three cells: one hot, one cold, and one whose score is null because the
+  // statistic was not defined there. A cell without a score is not a cell that scored nought, so
+  // the denominator the reader is given has to be two.
+  densitySpy.mockReturnValue({ data: grid(), isLoading: false, isError: false });
+  patternSpy.mockReturnValue({ data: pattern(), isLoading: false, isError: false });
+
+  render(
+    <AreaPointPatternCard featureId="a1" featureTypeCode="karst_area" geometry={OUTLINE} />,
+  );
+
+  const spots = screen.getByTestId('karst-hotspot-count').textContent ?? '';
+  expect(spots).toContain('1 cells read hot');
+  expect(spots).toContain('1 read cold');
+  expect(spots).toContain('of 2 that could be scored');
+});
+
+it('says the score is uncorrected for having been taken at every cell at once', () => {
+  // Without this sentence a reader takes each striking cell for a finding, when a scattering of
+  // them over a large window is what chance alone produces.
+  densitySpy.mockReturnValue({ data: grid(), isLoading: false, isError: false });
+  patternSpy.mockReturnValue({ data: pattern(), isLoading: false, isError: false });
+
+  render(
+    <AreaPointPatternCard featureId="a1" featureTypeCode="karst_area" geometry={OUTLINE} />,
+  );
+
+  expect(screen.getByTestId('karst-hotspot-count').textContent).toContain('not corrected');
+});
+
+it('names the grid the reading was taken over, so it cannot be read as a finer surface', () => {
+  densitySpy.mockReturnValue({ data: grid(), isLoading: false, isError: false });
+  patternSpy.mockReturnValue({ data: pattern(), isLoading: false, isError: false });
+
+  render(
+    <AreaPointPatternCard featureId="a1" featureTypeCode="karst_area" geometry={OUTLINE} />,
+  );
+
+  const basis = screen.getByTestId('karst-autocorrelation').textContent ?? '';
+  expect(basis).toContain('500 m cell and no finer');
+});
+
+it('reports an undetermined window as a question that could not be asked, never as a nought', () => {
+  // Undetermined and random are different claims: the first says the window could not support the
+  // question, the second says it was asked and the arrangement looked like chance. An index of
+  // null rendered as 0.000 would silently turn the first into the second.
+  densitySpy.mockReturnValue({
+    data: grid({
+      autocorrelation: {
+        cellCount: 1,
+        neighbourPairCount: 0,
+        index: null,
+        expectedIndex: null,
+        zScore: null,
+        pValue: null,
+        pattern: 'undetermined',
+        significanceZ: 1.96,
+      },
+    } as unknown as Partial<DensityGrid>),
+    isLoading: false,
+    isError: false,
+  });
+  patternSpy.mockReturnValue({ data: pattern(), isLoading: false, isError: false });
+
+  render(
+    <AreaPointPatternCard featureId="a1" featureTypeCode="karst_area" geometry={OUTLINE} />,
+  );
+
+  expect(screen.getByTestId('karst-moran-absent')).toBeTruthy();
+  expect(screen.queryByTestId('karst-moran-reading')).toBeNull();
+  expect(screen.getByTestId('karst-autocorrelation').textContent).not.toContain('0.000');
+});
+
+it('counts hot and cold cells at the threshold the server published, not at one of its own', () => {
+  // What counts as a departure from chance is the server's rule, and the whole window's reading is
+  // printed directly above this count. A copy of the threshold kept in the client would let the two
+  // be read at different conventions with nothing on screen saying so: the sentence would call the
+  // arrangement indistinguishable from chance while the count beside it still called cells hot.
+  densitySpy.mockReturnValue({
+    data: grid({
+      autocorrelation: {
+        cellCount: 3,
+        neighbourPairCount: 4,
+        index: 0.42,
+        expectedIndex: -0.5,
+        zScore: 1.1,
+        pValue: 0.27,
+        pattern: 'random',
+        significanceZ: 2.58,
+      },
+    } as unknown as Partial<DensityGrid>),
+    isLoading: false,
+    isError: false,
+  });
+  patternSpy.mockReturnValue({ data: pattern(), isLoading: false, isError: false });
+
+  render(
+    <AreaPointPatternCard featureId="a1" featureTypeCode="karst_area" geometry={OUTLINE} />,
+  );
+
+  // The fixture's two scored cells sit at 2.4 and -2.1: hot and cold at the conventional 1.96,
+  // neither at the stricter threshold this response declared.
+  const counted = screen.getByTestId('karst-hotspot-count').textContent ?? '';
+  expect(counted).toContain('0 cells read hot and 0 read cold, of 2');
+});
+
+it('never prints a nought for a figure the server did not publish', () => {
+  // The combination that actually ships from the smallest testable window: a reading arrives with
+  // no z-score and no p-value behind it. Substituted with noughts these render as nought standard
+  // errors at p 0.0000 — the strongest evidence claim this card can make, printed for a statistic
+  // that was never computed.
+  densitySpy.mockReturnValue({
+    data: grid({
+      autocorrelation: {
+        cellCount: 4,
+        neighbourPairCount: 12,
+        index: 0.42,
+        expectedIndex: -0.3333,
+        zScore: null,
+        pValue: null,
+        pattern: 'undetermined',
+        significanceZ: 1.96,
+      },
+    } as unknown as Partial<DensityGrid>),
+    isLoading: false,
+    isError: false,
+  });
+  patternSpy.mockReturnValue({ data: pattern(), isLoading: false, isError: false });
+
+  render(
+    <AreaPointPatternCard featureId="a1" featureTypeCode="karst_area" geometry={OUTLINE} />,
+  );
+
+  // The window could not be tested, so it is reported as untested — whatever else the response
+  // happened to carry.
+  expect(screen.getByTestId('karst-moran-absent')).toBeTruthy();
+  expect(screen.queryByTestId('karst-moran-reading')).toBeNull();
+
+  const text = screen.getByTestId('karst-autocorrelation').textContent ?? '';
+  expect(text).not.toContain('0.0000');
+  expect(text).not.toContain('0.00');
 });

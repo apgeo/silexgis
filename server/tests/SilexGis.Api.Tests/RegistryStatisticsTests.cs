@@ -496,6 +496,250 @@ public sealed class RegistryStatisticsTests : IAsyncLifetime, IDisposable
         Text(await SheetAsync(viewer, $"regions?areaId={areaId}")).ShouldContain(basis);
     }
 
+    [Fact]
+    public async Task A_grouping_says_how_many_caves_it_left_out_and_which_measure_left_them_out()
+    {
+        // Twelve caves record a length; only nine of them also record a depth. That is the shape a
+        // real register has — most caves have no survey — and it is the whole reason this answer
+        // carries a population account: grouping on both measures describes nine caves, and every
+        // figure it produces is internally consistent and about a different set than "the caves in
+        // this region".
+        var region = Unique("CLPOP");
+        for (var i = 0; i < 12; i++)
+        {
+            await CreateCaveAsync(region, 100m + (i * 50m), depth: i < 9 ? 10m + (i * 3m) : null);
+        }
+
+        var onLengthAlone = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength&clusters=2&region={region}");
+        var onBoth = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength,depth&clusters=2&region={region}");
+
+        // The same scope, two column choices, two different populations — and the caller can see
+        // both before reading either grouping, which is the point of letting them choose.
+        onLengthAlone.GetProperty("population").GetProperty("considered").GetInt32().ShouldBe(12);
+        onLengthAlone.GetProperty("population").GetProperty("eligible").GetInt32().ShouldBe(12);
+        onLengthAlone.GetProperty("population").GetProperty("excluded").GetInt32().ShouldBe(0);
+
+        var population = onBoth.GetProperty("population");
+        population.GetProperty("considered").GetInt32().ShouldBe(12);
+        population.GetProperty("eligible").GetInt32().ShouldBe(9);
+
+        // Published rather than left to be subtracted: a figure a reader has to compute is one a
+        // reader skips.
+        population.GetProperty("excluded").GetInt32().ShouldBe(3);
+
+        var measures = population.GetProperty("measures").EnumerateArray().ToList();
+        measures.Count.ShouldBe(2);
+
+        var length = measures.Single(m => m.GetProperty("measure").GetString() == "surveyedLength");
+        length.GetProperty("recorded").GetInt32().ShouldBe(12);
+        length.GetProperty("missing").GetInt32().ShouldBe(0);
+        length.GetProperty("soleReason").GetInt32().ShouldBe(0);
+
+        // The figure that answers "what did asking for this column cost me". Three caves are
+        // outside this grouping and would have been inside it had depth not been named.
+        var depth = measures.Single(m => m.GetProperty("measure").GetString() == "depth");
+        depth.GetProperty("recorded").GetInt32().ShouldBe(9);
+        depth.GetProperty("missing").GetInt32().ShouldBe(3);
+        depth.GetProperty("soleReason").GetInt32().ShouldBe(3);
+
+        // And the measures the distances were actually taken over are named in the answer, in the
+        // order they were asked for, so the clusters cannot be read as being about anything else.
+        onBoth.GetProperty("measures").EnumerateArray().Select(m => m.GetString())
+            .ShouldBe(["surveyedLength", "depth"]);
+
+        // What each column was divided by, which is how a reader can see that the standardisation
+        // happened at all — without it the metre-scaled column would decide every group by itself.
+        var scaling = onBoth.GetProperty("scaling").EnumerateArray().ToList();
+        scaling.Count.ShouldBe(2);
+        foreach (var column in scaling)
+        {
+            column.GetProperty("standardDeviation").GetDouble().ShouldBeGreaterThan(0d);
+        }
+    }
+
+    [Fact]
+    public async Task A_grouping_publishes_the_spread_that_can_contradict_it()
+    {
+        // A grouping always returns the number of groups it was asked for, on any data whatever.
+        // These twelve caves lie on one even ramp with no groups in them, so the answer has to
+        // carry the figure that says so — a within-group spread of the same order as the distance
+        // between groups is the reading "there is no structure here", and it is the only thing in
+        // the answer able to contradict the fact that three groups came back.
+        var region = await SeedAsync("CLSEP", [.. Enumerable.Range(0, 12).Select(i => 100m + (i * 100m))]);
+
+        var body = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength&clusters=3&region={region}");
+
+        body.GetProperty("clusters").GetArrayLength().ShouldBe(3);
+
+        var separation = body.GetProperty("separation");
+        separation.GetProperty("meanWithinDistance").GetDouble().ShouldBeGreaterThan(0d);
+        separation.GetProperty("meanBetweenDistance").GetDouble().ShouldBeGreaterThan(0d);
+        separation.GetProperty("ratio").GetDouble().ShouldBeGreaterThan(0d);
+    }
+
+    [Fact]
+    public async Task A_group_too_small_to_describe_a_population_publishes_its_count_and_nothing_else()
+    {
+        // Ten caves of much the same length and two lone giants. Asked for three groups, the two
+        // giants each end up alone — and a mean over one cave is that cave's reading with an
+        // arithmetic step in front of it. The count stands, because a thin group is itself a
+        // finding and removing it would stop the counts adding up to the eligible total; the
+        // measurements do not.
+        var lengths = new List<decimal>();
+        for (var i = 0; i < 10; i++)
+        {
+            lengths.Add(1000m + (i * 10m));
+        }
+
+        lengths.Add(50_000m);
+        lengths.Add(100_000m);
+        var region = await SeedAsync("CLTHIN", lengths);
+
+        var body = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength&clusters=3&region={region}");
+
+        var floor = body.GetProperty("minimumPublishableClusterSize").GetInt32();
+        floor.ShouldBeGreaterThan(1);
+
+        var clusters = body.GetProperty("clusters").EnumerateArray().ToList();
+        clusters.Count.ShouldBe(3);
+        clusters.Sum(c => c.GetProperty("count").GetInt32()).ShouldBe(12);
+
+        // At least one group is under the floor here by construction; if the arrangement ever
+        // stopped producing one, this test would stop testing anything, so it is asserted.
+        clusters.Any(c => c.GetProperty("count").GetInt32() < floor).ShouldBeTrue();
+
+        foreach (var cluster in clusters)
+        {
+            var count = cluster.GetProperty("count").GetInt32();
+            var published = cluster.GetProperty("centre").ValueKind is not JsonValueKind.Null;
+            published.ShouldBe(
+                count >= floor,
+                $"a group of {count} caves published its centre against a floor of {floor}.");
+
+            // The scaled middle and the group's own width are withheld under the same rule, or
+            // a reader could recover the first from either of them.
+            (cluster.GetProperty("scaledCentre").ValueKind is not JsonValueKind.Null)
+                .ShouldBe(count >= floor);
+            (cluster.GetProperty("meanDistanceToCentre").ValueKind is not JsonValueKind.Null)
+                .ShouldBe(count >= floor);
+        }
+    }
+
+    [Fact]
+    public async Task A_cave_the_caller_may_not_read_is_not_in_the_grouping_at_all()
+    {
+        // Twelve caves; the viewer is denied Read on three of them. The grouping the viewer gets
+        // must have considered nine, not twelve with three quietly dropped afterwards: a population
+        // account computed over rows the caller may not read would state the registry's size to
+        // somebody who is not entitled to know it. Nine is also above the floor a grouping is
+        // attempted over, so the viewer really does get groups and assignments to check — over
+        // seven the answer would be empty and the assignment check below would pass on nothing.
+        var region = Unique("CLACL");
+        var denied = new List<Guid>();
+        for (var i = 0; i < 12; i++)
+        {
+            var id = await CreateCaveAsync(region, 100m + (i * 25m), depth: 5m + i);
+            if (i < 3)
+            {
+                denied.Add(id);
+            }
+        }
+
+        foreach (var id in denied)
+        {
+            await DenyReadAsync(owner, id, viewerId);
+        }
+
+        var seen = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength,depth&clusters=2&region={region}");
+        var whole = await ReadJsonAsync(
+            owner, $"clustering?measures=surveyedLength,depth&clusters=2&region={region}");
+
+        // Paired against the same fixture read by somebody entitled to it, so seven is a
+        // withholding rather than an empty seed.
+        whole.GetProperty("population").GetProperty("considered").GetInt32().ShouldBe(12);
+        seen.GetProperty("population").GetProperty("considered").GetInt32().ShouldBe(9);
+        seen.GetProperty("population").GetProperty("eligible").GetInt32().ShouldBe(9);
+
+        // And no assignment names a cave the viewer may not read — asserted against a list that is
+        // not empty, or the intersection below would be vacuous.
+        var named = seen.GetProperty("assignments").EnumerateArray()
+            .Select(a => a.GetProperty("caveId").GetGuid()).ToList();
+        named.Count.ShouldBe(9);
+        named.Intersect(denied).ShouldBeEmpty();
+
+        // Both answers say in words what they were computed over, because two callers get
+        // different groupings of one registry and both are right.
+        seen.GetProperty("basis").GetString().ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task A_population_too_small_to_group_is_answered_with_the_account_of_why()
+    {
+        // Four caves, which is under the floor a grouping is attempted over. The answer is not an
+        // error and not an empty object: it is the population account with no groups in it, so a
+        // reader can see how far short the registry fell rather than being told the request was
+        // bad.
+        var region = await SeedAsync("CLFEW", [100m, 200m, 300m, 400m]);
+
+        var body = await ReadJsonAsync(
+            viewer, $"clustering?measures=surveyedLength&clusters=3&region={region}");
+
+        body.GetProperty("clusters").GetArrayLength().ShouldBe(0);
+        body.GetProperty("assignments").GetArrayLength().ShouldBe(0);
+        body.GetProperty("separation").ValueKind.ShouldBe(JsonValueKind.Null);
+        body.GetProperty("population").GetProperty("considered").GetInt32().ShouldBe(4);
+        body.GetProperty("population").GetProperty("eligible").GetInt32().ShouldBe(4);
+        body.GetProperty("minimumEligibleCount").GetInt32().ShouldBeGreaterThan(4);
+    }
+
+    [Fact]
+    public async Task A_grouping_is_not_answered_to_a_caller_who_is_not_signed_in()
+    {
+        var region = await SeedAsync("CLANON", [100m, 200m, 300m]);
+
+        var response = await anonymous.GetAsync(
+            $"/api/v1/stats/registry/clustering?measures=surveyedLength&region={region}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Theory]
+    [InlineData("measures=altitude")]
+    [InlineData("measures=2")]
+    [InlineData("measures=surveyedLength,surveyedLength")]
+    [InlineData("measures=")]
+    [InlineData("measures=surveyedLength&clusters=1")]
+    [InlineData("measures=surveyedLength&clusters=99")]
+    public async Task A_grouping_asked_for_in_terms_the_registry_does_not_offer_is_refused(string query)
+    {
+        // Altitude is not a measure here at all — a height above sea level is a coordinate — and a
+        // measure named by its underlying number is not a name. A measure named twice would be
+        // counted twice in every distance, which is a weighting nobody asked for and which the
+        // answer could not show. One group is the population and ninety-nine of them is a list of
+        // caves.
+        var response = await viewer.GetAsync($"/api/v1/stats/registry/clustering?{query}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task A_grouping_scoped_to_an_area_the_caller_may_not_read_is_answered_as_absent()
+    {
+        var areaId = await CreateKarstAreaAsync();
+        await DenyReadAsync(owner, areaId, viewerId);
+
+        var response = await viewer.GetAsync(
+            $"/api/v1/stats/registry/clustering?measures=surveyedLength&areaId={areaId}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("feature.not_found");
+    }
+
     private static string Exported(string query)
     {
         var split = query.IndexOf('?', StringComparison.Ordinal);
