@@ -112,6 +112,18 @@ public sealed record LibraryPhotoListPage(
 /// chooses is a date filter, and a date filter presented as the photographs of one trip is a claim
 /// about where those pictures came from that nothing checked.
 /// </para>
+/// <para>
+/// <b>What that does and does not guarantee, said plainly so it is not mistaken for more.</b> It
+/// guarantees the shape of the request: no request anywhere carries a stretch of time, so no route
+/// can be handed one. It does not make the dates unforgeable, because the record they are read
+/// from is one somebody wrote — anybody who may create a trip may choose the days it says it
+/// covered, and so may reach any window inside the span cap by writing a trip and asking about it.
+/// That is worth two consequences being written down rather than rediscovered. The window is a
+/// second way past the depth at which this application stops paging into a library, since a
+/// narrower window reaches photographs that paging would have been refused for. And the day
+/// something decides who may see what, the dates a trip carries are one of the inputs to it, which
+/// is not obvious from a type that only ever sees two instants.
+/// </para>
 /// </param>
 public sealed record LibraryPhotoQuery(int Page, int PageSize, LibraryPhotoWindow? Window = null);
 

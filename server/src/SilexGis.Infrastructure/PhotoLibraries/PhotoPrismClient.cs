@@ -586,6 +586,18 @@ public sealed class PhotoPrismClient(
     /// the days on either side, each carrying its own date where a reader can see it.
     /// </para>
     /// <para>
+    /// <b>Which end that rounding lands on is chosen rather than assumed, because this product's
+    /// own documentation does not say whether its upper term stops at a day's first instant or runs
+    /// to its last.</b> The upper end handed in is already the start of the day after the last one
+    /// the window covers, and it is sent as that day. So a product stopping at the day's first
+    /// instant is asked exactly the window; one running to the day's last is asked for one day more
+    /// than the other product is; and neither is asked for less. The uncertainty is therefore spent
+    /// entirely in the direction of a few extra dated tiles rather than of a missing evening, which
+    /// is the only one of the two a reader could not see. Naming the day before instead would make
+    /// the two readings differ in the other direction, and the losing one would take the whole
+    /// trailing margin with it.
+    /// </para>
+    /// <para>
     /// Invariant and UTC, so the request means the same thing wherever it is built. A day formatted
     /// in the running machine's own culture is a term this product either misreads or rejects, and
     /// on a machine whose calendar is not the one it expects the symptom is a window silently

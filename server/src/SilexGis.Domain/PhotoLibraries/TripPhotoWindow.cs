@@ -77,9 +77,17 @@ public static class TripPhotoWindow
     public const int MarginDays = 1;
 
     /// <summary>
-    /// The longest run of days this will make a window out of, counting both ends.
+    /// The longest run of days a <em>trip</em> may cover for a window to be made of it, counting
+    /// both ends.
     /// </summary>
     /// <remarks>
+    /// A measurement of the trip and not of the window it produces, which is the wider of the two:
+    /// the check is made before the margin is added, so a trip at the cap yields a window of this
+    /// many days plus one at each end. Written that way round on purpose — the number is here to
+    /// say which records are too long to be believed, and a reader looking at a trip's dates should
+    /// be able to compare them against it directly.
+    ///
+    /// <para>
     /// A year and a day, which is longer than any expedition and far shorter than a mistyped year.
     /// The case it exists for is a trip whose end date was entered with the wrong year: that record
     /// is not refused anywhere, it looks ordinary in a list, and the window it produces asks a club's
@@ -88,6 +96,7 @@ public static class TripPhotoWindow
     /// one wrong answer this feature must not give, so a span past this is refused rather than
     /// trimmed to something plausible: trimming would answer a question nobody asked and leave the
     /// wrong date in place, and refusing says which record needs looking at.
+    /// </para>
     /// </remarks>
     public const int MaxSpanDays = 366;
 

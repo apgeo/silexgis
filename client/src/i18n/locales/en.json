@@ -4251,7 +4251,7 @@
     },
     "trip": {
       "title": "Photographs from the photo library",
-      "explains": "Pictures a connected photo library holds from the days this trip was out. They come from that library and nothing here has been filed against the trip. The days asked about reach one past each end of the trip, because a trip's dates carry no time zone and a camera's clock does — so pictures from the day before or the day after can appear, and each one shows its own date.",
+      "explains": "Pictures a connected photo library holds from the days this trip was out. They come from that library and nothing here has been filed against the trip. The days asked about reach at least a day past each end of the trip, because a trip's dates carry no time zone and a camera's clock does — so pictures from the day before or the day after can appear, and each one shows its own date.",
       "showingOf": "Showing {{shown}} of {{total}} photographs the library holds from these days",
       "showingUnknownTotal": "Showing {{count}} photographs from these days. This library does not say how many it holds.",
       "nothingTaken": "This library holds nothing taken while this trip was out. The library answered; it may hold plenty from other days.",

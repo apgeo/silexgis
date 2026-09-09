@@ -188,6 +188,47 @@ public sealed class PhotoLibraryBrowseTests
     }
 
     /// <summary>
+    /// The upper term names the day after the last one the window covers, so the two products are
+    /// asked about the same days or the one that rounds is asked about one more — never one fewer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The two products are given the same window in different granularities: one takes instants
+    /// and is asked exactly it, the other takes days. Whether that one's upper term stops at a
+    /// day's first instant or runs to its last is its own decision and is not documented, so what
+    /// is pinned here is the only thing this side controls — which day is named, and therefore
+    /// which way the two readings can differ.
+    /// </para>
+    /// <para>
+    /// The window below covers the thirteenth to the sixteenth. Naming the seventeenth means a
+    /// product stopping at that day's first instant is asked exactly that, and one running to its
+    /// last is asked for the seventeenth as well: a few extra tiles, each carrying its own date.
+    /// Naming the sixteenth would invert it, and the losing reading would drop the sixteenth
+    /// entirely — which is the day a trip ending on the fifteenth has its margin in, and nothing on
+    /// any screen would say a day had gone missing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_upper_term_names_the_day_after_the_window_so_rounding_can_only_widen()
+    {
+        var window = new LibraryPhotoWindow(
+            new DateTimeOffset(2026, 3, 13, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 3, 17, 0, 0, 0, TimeSpan.Zero));
+
+        var prism = new LibraryStub();
+        prism.Answers(_ => Json("[]"));
+        await Prism(prism).ListAsync(new LibraryPhotoQuery(1, 60, window), default);
+
+        // The day after the last one inside the window, and not the last one inside it.
+        prism.Only.Url.ShouldContain("before%3A2026-03-17");
+        prism.Only.Url.ShouldNotContain("before%3A2026-03-16");
+
+        // And the lower term is the first day inside it, so the leading margin is not rounded away
+        // from the other side.
+        prism.Only.Url.ShouldContain("after%3A2026-03-13");
+    }
+
+    /// <summary>
     /// The instants sent are the window's own, in UTC, whatever offset they were handed over in.
     /// </summary>
     /// <remarks>

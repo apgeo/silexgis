@@ -180,8 +180,17 @@ public class TripPhotoWindowTests
     [Fact]
     public void The_longest_allowed_span_is_still_answered()
     {
-        TripPhotoWindow.For(Saturday, Saturday.AddDays(TripPhotoWindow.MaxSpanDays - 1))
-            .ShouldNotBeNull();
+        var window = TripPhotoWindow.For(Saturday, Saturday.AddDays(TripPhotoWindow.MaxSpanDays - 1));
+
+        window.ShouldNotBeNull();
+
+        // What the cap measures, pinned beside the fact that it accepts. It is a length of trip,
+        // and the window made of one is longer by the margin at each end — so the two are different
+        // numbers, and describing them as one is how a cap named for the trip comes to be read as a
+        // limit on the window and is quietly wrong by two days in the direction of asking a
+        // neighbour's library about more than was meant.
+        (window.Value.To - window.Value.From).TotalDays
+            .ShouldBe(TripPhotoWindow.MaxSpanDays + (2 * TripPhotoWindow.MarginDays));
     }
 
     /// <summary>

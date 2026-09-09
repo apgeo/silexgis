@@ -4251,7 +4251,7 @@
     },
     "trip": {
       "title": "Fotografii din fototecă",
-      "explains": "Fotografii pe care o fototecă conectată le are din zilele în care a avut loc această tură. Ele provin din acea fototecă și nimic de aici nu a fost atribuit turei. Zilele despre care se întreabă depășesc cu una fiecare capăt al turei, pentru că datele unei ture nu au fus orar, iar ceasul unui aparat foto are — așa că pot apărea fotografii din ziua dinainte sau de după, fiecare cu data ei afișată.",
+      "explains": "Fotografii pe care o fototecă conectată le are din zilele în care a avut loc această tură. Ele provin din acea fototecă și nimic de aici nu a fost atribuit turei. Zilele despre care se întreabă depășesc cu cel puțin o zi fiecare capăt al turei, pentru că datele unei ture nu au fus orar, iar ceasul unui aparat foto are — așa că pot apărea fotografii din ziua dinainte sau de după, fiecare cu data ei afișată.",
       "showingOf": "Se afișează {{shown}} din {{total}} fotografii pe care le are fototeca din aceste zile",
       "showingUnknownTotal": "Se afișează {{count}} fotografii din aceste zile. Această fototecă nu spune câte are.",
       "nothingTaken": "Această fototecă nu are nimic făcut în timpul acestei ture. Fototeca a răspuns; poate avea multe din alte zile.",
