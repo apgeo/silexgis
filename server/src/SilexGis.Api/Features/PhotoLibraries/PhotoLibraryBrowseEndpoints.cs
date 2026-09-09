@@ -39,8 +39,8 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// published.
 /// </para>
 /// <para>
-/// <b>The listing takes one narrowing, and it is a trip.</b> A caller may name a trip this
-/// installation holds, and the days that trip was out become the stretch of time the library is
+/// <b>The listing takes two narrowings, and the first is a trip.</b> A caller may name a trip
+/// this installation holds, and the days that trip was out become the stretch of time the library is
 /// asked about — so a trip's page can show the photographs taken while it was out without anything
 /// having been filed against it. What a caller may <em>not</em> do is name the stretch of time
 /// itself, and the difference is the feature rather than a precaution: a window somebody sent in is
@@ -48,6 +48,20 @@ namespace SilexGis.Api.Features.PhotoLibraries;
 /// photographs came from that nothing checked. The trip is read here, its dates are read here, and
 /// whether this account may read that trip at all is decided here by the same service that decides
 /// it on the trip's own page.
+/// </para>
+/// <para>
+/// <b>The second narrowing is an album, and unlike the trip it is a value a caller sends
+/// directly.</b> An album is a set somebody over there put together and named — usually, in a club,
+/// one expedition — so asking for one emits nothing about anybody's position and cannot be read
+/// backwards into one. The difference from the trip is that an album has no second reading to
+/// protect against: the identifier names a set the library already keeps, the answer is the
+/// photographs in it, and the screen claims nothing about it beyond the name the library gave it.
+/// What it must not do is carry a second question into somebody else's grammar — one of these
+/// products parses this kind of value into the same form its own filters bind to, geographic ones
+/// included — so the shape of it is checked here, before anything leaves the machine, against
+/// exactly what this application is willing to put in a request to a neighbour. Whether it names an
+/// album the library keeps is the library's to answer, and an identifier it does not know comes
+/// back as a listing with nothing in it.
 /// </para>
 /// <para>
 /// Nothing is stored and nothing is held between calls. The library is asked for one page, its
@@ -164,9 +178,9 @@ public static class PhotoLibraryBrowseEndpoints
 
         libraries.MapGet("/{source}/photographs", ListAsync)
             .WithSummary(
-                "One page of the photographs one neighbouring library holds, newest first, either "
-                + "of the whole library or of the days one trip was out. Carries no position of any "
-                + "kind and takes no rectangle, no words and no dates.");
+                "One page of the photographs one neighbouring library holds, newest first — of the "
+                + "whole library, of the days one trip was out, or of one of the library's albums. "
+                + "Carries no position of any kind and takes no rectangle, no words and no dates.");
 
         libraries.MapGet("/{source}/photographs/{photographId}", DetailAsync)
             .WithSummary(
@@ -200,12 +214,21 @@ public static class PhotoLibraryBrowseEndpoints
     /// camera's clock are not in the same frame; the panel that draws this says so, and every
     /// photograph carries its own date.
     /// </para>
+    /// <para>
+    /// Where an album was named, the narrowing is the library's for the same reason again, and the
+    /// number beside the page is whatever the library states for the narrowed question rather than
+    /// for the whole library — so the sentence written over it has to say which of the two it is
+    /// counting. Both narrowings may be asked for at once and each product can express both, but
+    /// the screens here ask one at a time: a trip's panel offers no chooser, and the chooser has no
+    /// trip behind it.
+    /// </para>
     /// </remarks>
     private static async Task<Results<Ok<LibraryPhotographPageDto>, UnauthorizedHttpResult, ProblemHttpResult>> ListAsync(
         string source,
         int? page,
         int? pageSize,
         string? tripId,
+        string? albumId,
         PhotoLibraryGate gate,
         ILibraryPhotoTokenService tokens,
         IOptions<PhotoLibraryOptions> options,
@@ -288,6 +311,22 @@ public static class PhotoLibraryBrowseEndpoints
             }
         }
 
+        // Checked before anything leaves the machine, because this value is put into a question
+        // asked of somebody else's server: one of these products reads it as a term in its own
+        // search grammar, where a space or a colon would make it a second filter and every family
+        // of that product's fields — the ones naming a place included — is reachable that way. The
+        // other takes it in a body this application writes out itself, where a quotation mark would
+        // end the string early and turn the rest into a different request. One shape answers both,
+        // and it is the one every other foreign identifier here is already held to.
+        //
+        // An empty value is refused with the rest rather than read as "no album at all". A request
+        // that named an album and is answered with the whole library is the one wrong answer this
+        // narrowing must not give, and it would be given under the album's own heading.
+        if (albumId is not null && !PhotoLibraryHttp.IsSafeReference(albumId))
+        {
+            return ApiProblems.NotFound(PhotoLibraryAlbumEndpoints.AlbumNotFoundCode);
+        }
+
         var wanted = pageSize ?? DefaultPageSize;
         var size = Math.Clamp(wanted, 1, MaxPageSize);
         var number = Math.Max(1, page ?? 1);
@@ -300,7 +339,8 @@ public static class PhotoLibraryBrowseEndpoints
         LibraryPhotoListPage answer;
         try
         {
-            answer = await library.ListAsync(new LibraryPhotoQuery(number, size, window), ct);
+            answer = await library.ListAsync(
+                new LibraryPhotoQuery(number, size, window, albumId), ct);
         }
         catch (PhotoLibraryException e)
         {

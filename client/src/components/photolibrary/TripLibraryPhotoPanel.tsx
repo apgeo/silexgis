@@ -114,7 +114,7 @@ export default function TripLibraryPhotoPanel({ tripId }: TripLibraryPhotoPanelP
   // "Showing 12 of 12 photographs the library holds" over a listing narrowed to one weekend tells
   // a reader their club owns twelve photographs when it owns forty thousand.
   const narrowedToTheTrip = query.tripId !== undefined;
-  const counted = data ? countLine(data, narrowedToTheTrip) : null;
+  const counted = data ? countLine(data, narrowedToTheTrip ? 'trip' : 'library') : null;
 
   // The sentence a failure gets, decided by the state. The two refusals this panel can meet which
   // the library's page cannot — a trip that is not this reader's to see, and a trip whose dates
@@ -202,7 +202,7 @@ export default function TripLibraryPhotoPanel({ tripId }: TripLibraryPhotoPanelP
             onOpen={setOpen}
             // "Nothing was taken then" and "this library holds nothing" are different facts, and
             // only the first one is about the trip. Kept apart where the keeping apart is checked.
-            emptyText={t(emptyMessage(state, data, searchWording('text'), narrowedToTheTrip))}
+            emptyText={t(emptyMessage(state, data, searchWording('text'), narrowedToTheTrip ? 'trip' : 'library'))}
           />
 
           {(paging.hasPrevious || paging.hasNext) && (

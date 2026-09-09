@@ -400,6 +400,9 @@ public sealed class PhotoLibrarySuspensionTests
         public Task<LibraryPhotoSearchPage> SearchAsync(LibraryPhotoSearchQuery search, CancellationToken ct) =>
             throw new NotSupportedException("Nothing in these cases asks a library for a search.");
 
+        public Task<LibraryAlbumPage> AlbumsAsync(CancellationToken ct) =>
+            throw new NotSupportedException("Nothing in these cases asks a library for its albums.");
+
         public Task<LibraryPhotoDetail?> DetailAsync(string photographId, CancellationToken ct) =>
             throw new NotSupportedException("Nothing in these cases asks a library about a photograph.");
 

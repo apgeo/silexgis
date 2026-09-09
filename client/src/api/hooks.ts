@@ -188,6 +188,9 @@ export const queryKeys = {
     ['photo-libraries', source, 'photographs', query] as const,
   libraryPhotograph: (source: string, photographId: string) =>
     ['photo-libraries', source, 'photograph', photographId] as const,
+  // Not keyed by anything but the library. A chooser's contents are a fact about the library and
+  // not about the page it is drawn on, so one answer serves every narrowing the reader then tries.
+  libraryAlbums: (source: string) => ['photo-libraries', source, 'albums'] as const,
   // The words are part of the question, so they are part of the key. An answer held under a key
   // that did not name them would put one search's pictures under another search's words.
   librarySearch: (source: string, query: LibrarySearchQuery) =>
@@ -1683,6 +1686,14 @@ export interface LibraryPhotographQuery {
    * written over it.
    */
   tripId?: string;
+  /**
+   * An album of the library the listing is narrowed to, or nothing for the whole library.
+   *
+   * The identifier the library itself gave for one of its own albums, taken from the chooser rather
+   * than composed here. The server checks its shape before it goes anywhere near the library,
+   * because one of the two products reads a value like this as a term in its own search grammar.
+   */
+  albumId?: string;
 }
 
 /** The address of one page of one library. Built here so the two hooks below cannot disagree. */
@@ -1693,6 +1704,9 @@ function photographsUrl(source: LibraryPhotoSource, query: LibraryPhotographQuer
   });
   if (query.tripId !== undefined) {
     search.set('tripId', query.tripId);
+  }
+  if (query.albumId !== undefined) {
+    search.set('albumId', query.albumId);
   }
   return `/api/v1/photo-libraries/${encodeURIComponent(source)}/photographs?${search.toString()}`;
 }
@@ -1730,7 +1744,11 @@ export function usePhotoLibraryPhotographs(
       previousQuery?: { queryKey: readonly unknown[] },
     ) => {
       const asked = previousQuery?.queryKey[3] as LibraryPhotographQuery | undefined;
-      return previous?.source === source && asked?.tripId === query.tripId ? previous : undefined;
+      return previous?.source === source
+        && asked?.tripId === query.tripId
+        && asked?.albumId === query.albumId
+        ? previous
+        : undefined;
     },
     // The far side is a separate product somebody else is filing pictures into, so a page held for
     // long enough to feel instant is also a page that stops being what the library holds. Half a
@@ -1747,6 +1765,79 @@ export function usePhotoLibraryPhotographs(
     // through this application's own attempts at the far side, so three more rounds with a
     // second's, two seconds' and four seconds' wait between them add nothing but the seven seconds
     // a reader spends before the sentence written for exactly this case appears.
+    retry: false,
+  });
+}
+
+/**
+ * One album a neighbouring library keeps.
+ *
+ * <p>
+ * Every field but the identifier may be null, and null means <b>the library did not say</b> rather
+ * than empty: the two products describe an album differently, and what only one of them answers is
+ * marked absent instead of being filled in from somewhere adjacent. The count is the library's own
+ * number where the product publishes one — a fact about the library and not about whoever is
+ * looking, since one credential belongs to the whole installation — and zero is a number, not an
+ * absence.
+ * </p>
+ * <p>
+ * There is no coordinate here, and there is no shape of this record that has one.
+ * </p>
+ * <p>
+ * Written out here rather than read from the generated contract types, which have not been read
+ * from a running API since this route was added. It is the server's record field for field, and it
+ * becomes the generated one the next time the contract is read.
+ * </p>
+ */
+export interface LibraryAlbum {
+  albumId: string;
+  title: string | null;
+  photographCount: number | null;
+  from: string | null;
+  to: string | null;
+}
+
+/** The albums one library keeps, and the one thing a chooser needs to explain itself. */
+export interface LibraryAlbums {
+  source: string;
+  libraryName: string;
+  items: LibraryAlbum[];
+  /** True when the library keeps more albums than this installation offers, so this is a prefix. */
+  truncated: boolean;
+  readAt: string;
+}
+
+/**
+ * The albums one neighbouring library keeps, for narrowing a listing to one.
+ *
+ * <p>
+ * Asked once per library rather than once per view: a chooser's contents are a fact about the
+ * library, so paging, choosing and clearing all read the one answer instead of asking a
+ * neighbouring container again. Held a little longer than a page of photographs for the same
+ * reason — albums change far more slowly than the pictures in them.
+ * </p>
+ * <p>
+ * A library that did not answer fails rather than arriving empty, so the screen can tell "this
+ * library keeps no albums" from "nobody asked it anything successfully". Those two draw the same
+ * chooser and send a reader to entirely different places.
+ * </p>
+ */
+export function usePhotoLibraryAlbums(source: LibraryPhotoSource | undefined) {
+  return useQuery({
+    queryKey: queryKeys.libraryAlbums(source ?? ''),
+    queryFn: () =>
+      readJson<LibraryAlbums>(
+        `/api/v1/photo-libraries/${encodeURIComponent(source!)}/albums`,
+      ),
+    enabled: source !== undefined,
+    staleTime: 300_000,
+    // No picture addresses on this answer, so unlike the listing there is nothing here that a
+    // refetch would make the browser fetch again. It is still not asked for on coming back to the
+    // tab, because a chooser somebody has not touched has not become wrong.
+    refetchOnWindowFocus: false,
+    // Not retried, for the reason the listing is not: a library that did not answer has already
+    // been asked as often as this application is willing, and the seconds spent on three more
+    // rounds are seconds before the sentence written for exactly this case appears.
     retry: false,
   });
 }

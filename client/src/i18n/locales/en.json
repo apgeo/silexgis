@@ -4249,6 +4249,20 @@
       "reduced": "This library reads a colon as naming one of its own fields, so it was asked for: {{words}}",
       "nothingLeft": "There were no words left once the field separators were taken out, so no library was asked anything."
     },
+    "albums": {
+      "choose": "The whole library",
+      "loading": "Reading this library's albums…",
+      "none": "This library keeps no albums",
+      "silent": "This library did not answer about its albums",
+      "untitled": "Untitled album",
+      "withCount": "{{title}} — {{count}} photographs",
+      "truncated": "Only the first {{count}} albums this library keeps are offered here.",
+      "notWithASearch": "A search goes to the library whole and cannot be narrowed to an album, so the album chosen is not being used. Clear the search to browse the album again.",
+      "showingOf": "Showing {{shown}} of {{total}} photographs the library puts in this album",
+      "showingUnknownTotal": "Showing {{count}} photographs from this album. This library does not say how many it puts in it.",
+      "nothingIn": "This library puts nothing in this album. The library answered; it may hold plenty elsewhere.",
+      "notFound": "That is not an album this installation will ask a library about, so nothing was asked."
+    },
     "trip": {
       "title": "Photographs from the photo library",
       "explains": "Pictures a connected photo library holds from the days this trip was out. They come from that library and nothing here has been filed against the trip. The days asked about reach at least a day past each end of the trip, because a trip's dates carry no time zone and a camera's clock does — so pictures from the day before or the day after can appear, and each one shows its own date.",

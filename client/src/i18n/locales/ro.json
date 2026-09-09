@@ -4249,6 +4249,20 @@
       "reduced": "Această fototecă citește două puncte ca numind unul dintre câmpurile ei, așa că i s-a cerut: {{words}}",
       "nothingLeft": "Nu au mai rămas cuvinte după scoaterea separatorilor de câmp, așa că nu s-a cerut nimic niciunei fototeci."
     },
+    "albums": {
+      "choose": "Toată fototeca",
+      "loading": "Se citesc albumele acestei fototeci…",
+      "none": "Această fototecă nu are albume",
+      "silent": "Această fototecă nu a răspuns despre albumele ei",
+      "untitled": "Album fără titlu",
+      "withCount": "{{title}} — {{count}} fotografii",
+      "truncated": "Aici sunt oferite doar primele {{count}} albume ale acestei fototeci.",
+      "notWithASearch": "O căutare este trimisă întreagă fototecii și nu poate fi restrânsă la un album, așa că albumul ales nu este folosit. Șterge căutarea pentru a răsfoi din nou albumul.",
+      "showingOf": "Se afișează {{shown}} din {{total}} fotografii pe care fototeca le pune în acest album",
+      "showingUnknownTotal": "Se afișează {{count}} fotografii din acest album. Această fototecă nu spune câte pune în el.",
+      "nothingIn": "Această fototecă nu pune nimic în acest album. Fototeca a răspuns; poate avea multe în altă parte.",
+      "notFound": "Aceea nu este o valoare pe care această instalare o cere unei fototeci ca album, așa că nu s-a cerut nimic."
+    },
     "trip": {
       "title": "Fotografii din fototecă",
       "explains": "Fotografii pe care o fototecă conectată le are din zilele în care a avut loc această tură. Ele provin din acea fototecă și nimic de aici nu a fost atribuit turei. Zilele despre care se întreabă depășesc cu cel puțin o zi fiecare capăt al turei, pentru că datele unei ture nu au fus orar, iar ceasul unui aparat foto are — așa că pot apărea fotografii din ziua dinainte sau de după, fiecare cu data ei afișată.",

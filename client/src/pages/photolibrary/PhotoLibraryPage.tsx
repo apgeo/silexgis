@@ -6,9 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import {
   usePhotoLibraries,
+  usePhotoLibraryAlbums,
   usePhotoLibraryPhotographs,
   usePhotoLibrarySearch,
 } from '../../api/hooks.ts';
+import LibraryAlbumChooser from '../../components/photolibrary/LibraryAlbumChooser.tsx';
 import LibraryPhotoDrawer from '../../components/photolibrary/LibraryPhotoDrawer.tsx';
 import LibraryPhotoGrid from '../../components/photolibrary/LibraryPhotoGrid.tsx';
 import {
@@ -20,6 +22,7 @@ import {
   searchWording,
   stepPage,
 } from './browseState.ts';
+import type { BrowseNarrowing } from './browseState.ts';
 
 /** Pictures per page. The same number this installation's own gallery shows. */
 const PageSize = 60;
@@ -36,9 +39,9 @@ const PageSize = 60;
  * pictures is here.
  * </p>
  * <p>
- * The library and the words are read from the address, so a filtered view is a link somebody can
- * send. The page number is not: it is a position in somebody's own reading of a list whose
- * contents change on the other side of a socket, and a link promising the fourth page of a
+ * The library, the words and the album are read from the address, so a narrowed view is a link
+ * somebody can send. The page number is not: it is a position in somebody's own reading of a list
+ * whose contents change on the other side of a socket, and a link promising the fourth page of a
  * neighbouring library promises something nobody here controls.
  * </p>
  */
@@ -66,6 +69,9 @@ export default function PhotoLibraryPage() {
   const source = libraries.find((library) => library.source === named)?.source
     ?? libraries[0]?.source;
   const words = params.get('q') ?? '';
+  // The album narrowing the listing, as the library itself names its own album. Never composed
+  // here: it is a value that came out of the chooser, which came out of the library.
+  const album = params.get('album');
 
   // Two questions, two routes, and never both at once. Asking a library what it holds and asking
   // what it makes of a sentence are different questions with differently shaped answers — one of
@@ -73,7 +79,10 @@ export default function PhotoLibraryPage() {
   // a narrowed list — so the screen asks one of them and says which one it is showing.
   const searching = words.trim().length > 0;
 
-  const listing = useMemo(() => ({ page, pageSize: PageSize }), [page]);
+  const listing = useMemo(
+    () => ({ page, pageSize: PageSize, albumId: album ?? undefined }),
+    [page, album],
+  );
   const search = useMemo(() => ({ q: words.trim(), page, pageSize: PageSize }), [page, words]);
 
   // The listing is not asked for while a search is on screen, and the search is not asked for
@@ -82,8 +91,18 @@ export default function PhotoLibraryPage() {
   const found = usePhotoLibrarySearch(source, search);
   const { data, isPending, error } = searching ? found : listed;
 
+  // Asked per library rather than per view: what albums a library keeps is a fact about the
+  // library, so choosing one, paging through it and clearing it all read the one answer.
+  const albums = usePhotoLibraryAlbums(source);
+
   const state = browseState({ isPending, error, page: data });
-  const counted = data ? countLine(data) : null;
+
+  // What the listing on screen was narrowed to, which decides what its total counts and which
+  // sentence may be written over it. A search is neither: the words went to the library whole, and
+  // the album — if one is still in the address — narrowed nothing.
+  const narrowing: BrowseNarrowing = !searching && album !== null ? 'album' : 'library';
+
+  const counted = data ? countLine(data, narrowing) : null;
   // The page being asked for, not the page in hand: while one is being turned they differ, and the
   // controls follow the question rather than the answer that is still on screen.
   const paging = pagingOf(data, page);
@@ -212,6 +231,20 @@ export default function PhotoLibraryPage() {
           style={{ width: 280 }}
           data-testid="library-photo-search"
         />
+
+        {/* Beside the box rather than above the grid, because it is the same gesture: two ways of
+            asking a library for less than all of it. A club files by expedition and a foreign album
+            is usually one, so this is the narrowing that gets somebody from a whole library to the
+            pictures they came for. Choosing one narrows the listing and clearing it restores it —
+            the same grid either way, because it is the same listing. */}
+        <LibraryAlbumChooser
+          albums={albums.data}
+          isPending={albums.isPending}
+          error={albums.error}
+          albumId={album}
+          onChoose={(chosen) => setFilter('album', chosen)}
+          searching={searching}
+        />
       </Flex>
 
       {/* What kind of question was just asked, said where the answer to it is. Shown once there is
@@ -308,9 +341,10 @@ export default function PhotoLibraryPage() {
             onOpen={setOpen}
             // The ways of arriving at an empty grid, kept apart where the keeping apart can be
             // checked: a step past the end of a listing that holds plenty, a library that holds
-            // nothing at all, a search that matched nothing, an ordering that ranked nothing, and
-            // words that were reduced to nothing anybody could be asked about.
-            emptyText={t(emptyMessage(state, data, wording))}
+            // nothing at all, an album the library puts nothing in, a search that matched nothing,
+            // an ordering that ranked nothing, and words that were reduced to nothing anybody could
+            // be asked about.
+            emptyText={t(emptyMessage(state, data, wording, narrowing))}
           />
 
           <Flex justify="center" style={{ marginTop: 16 }}>

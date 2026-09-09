@@ -136,6 +136,31 @@ public interface IPhotoLibrary
     Task<LibraryPhotoSearchPage> SearchAsync(LibraryPhotoSearchQuery search, CancellationToken ct);
 
     /// <summary>
+    /// The albums this library keeps: what somebody over there grouped together and named.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Here rather than folded into the listing because it answers a different question and is
+    /// asked at a different rate: a chooser is filled once for a screen, while the listing behind
+    /// it is asked again for every page and every narrowing. Merging them would ask a neighbouring
+    /// container for its whole set of albums on every page turn.
+    /// </para>
+    /// <para>
+    /// What comes back describes the library and not the caller, on the same terms as everything
+    /// else here: one credential belongs to the whole installation, so there is one set of albums
+    /// and one count against each of them, and every caller who may reach the feature gets that
+    /// one. A count is the library's own number where the product publishes one and is absent where
+    /// it does not — never assembled here by asking for an album's photographs and counting them,
+    /// which would cost a request per album and still count only one page of it.
+    /// </para>
+    /// <para>
+    /// Nothing is held between calls, and nothing about an album's photographs is asked: this is a
+    /// list of names and numbers, carrying no position of any kind.
+    /// </para>
+    /// </remarks>
+    Task<LibraryAlbumPage> AlbumsAsync(CancellationToken ct);
+
+    /// <summary>
     /// Everything this library will say about one photograph, or null when it reports none under
     /// that identifier.
     /// </summary>

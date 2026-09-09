@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../api/client.ts';
 import type { LibraryPhotographPage, LibraryPhotographSearchPage } from '../../api/hooks.ts';
 import {
+  albumChooserMessage,
+  albumChooserState,
   browseState,
   countLine,
   emptyMessage,
@@ -473,12 +475,12 @@ describe('a listing narrowed to the days one trip was out', () => {
    * credential belonging to the whole installation.
    */
   it('counts what the library holds from those days, not what it holds altogether', () => {
-    expect(countLine(page({ total: 12 }), true)).toEqual({
+    expect(countLine(page({ total: 12 }), 'trip')).toEqual({
       key: 'libraryPhotos.trip.showingOf',
       values: { shown: 1, total: 12 },
     });
 
-    expect(countLine(page({ total: null }), true)).toEqual({
+    expect(countLine(page({ total: null }), 'trip')).toEqual({
       key: 'libraryPhotos.trip.showingUnknownTotal',
       values: { count: 1 },
     });
@@ -493,7 +495,7 @@ describe('a listing narrowed to the days one trip was out', () => {
    * trip.
    */
   it('says nothing was taken then rather than that the library is empty', () => {
-    expect(emptyMessage('empty', page({ items: [] }), searchWording('text'), true)).toBe(
+    expect(emptyMessage('empty', page({ items: [] }), searchWording('text'), 'trip')).toBe(
       'libraryPhotos.trip.nothingTaken',
     );
 
@@ -508,7 +510,7 @@ describe('a listing narrowed to the days one trip was out', () => {
    */
   it('leaves a page past the end saying what it already said', () => {
     expect(
-      emptyMessage('endOfList', page({ items: [], page: 2 }), searchWording('text'), true),
+      emptyMessage('endOfList', page({ items: [], page: 2 }), searchWording('text'), 'trip'),
     ).toBe('libraryPhotos.browse.pastEnd');
   });
 
@@ -535,5 +537,117 @@ describe('a listing narrowed to the days one trip was out', () => {
       key: 'libraryPhotos.trip.datesUnusable',
       kind: 'warning',
     });
+  });
+});
+
+describe('a listing narrowed to one of the library\'s own albums', () => {
+  /**
+   * The number beside a narrowed listing counts what the library puts *in that album*, and the
+   * sentence over it has to say so. "Of 412 photographs the library holds" written over one
+   * expedition would tell a reader their club owns four hundred photographs when it owns forty
+   * thousand — and neither number describes the reader, because every account reaches a library
+   * through one credential belonging to the whole installation, so there is one answer and
+   * everybody gets it.
+   */
+  it('counts what the library puts in the album, not what it holds altogether', () => {
+    expect(countLine(page({ total: 12 }), 'album')).toEqual({
+      key: 'libraryPhotos.albums.showingOf',
+      values: { shown: 1, total: 12 },
+    });
+
+    expect(countLine(page({ total: null }), 'album')).toEqual({
+      key: 'libraryPhotos.albums.showingUnknownTotal',
+      values: { count: 1 },
+    });
+
+    // The controls: the same page under the other two questions keeps each one's own sentence, so
+    // that a narrowing left behind cannot borrow a number that counts something else.
+    expect(countLine(page({ total: 12 }))?.key).toBe('libraryPhotos.browse.showingOf');
+    expect(countLine(page({ total: 12 }), 'trip')?.key).toBe('libraryPhotos.trip.showingOf');
+  });
+
+  /**
+   * An album with nothing in it is not a library with nothing in it. The library answered and may
+   * hold forty thousand pictures either side of this album, so "this library holds nothing
+   * matching" written over it would send a reader to look at a container that is working.
+   */
+  it('says the album is empty rather than that the library is', () => {
+    expect(emptyMessage('empty', page({ items: [] }), searchWording('text'), 'album')).toBe(
+      'libraryPhotos.albums.nothingIn',
+    );
+
+    expect(emptyMessage('empty', page({ items: [] }), searchWording('text'))).toBe(
+      'libraryPhotos.browse.empty',
+    );
+  });
+
+  /**
+   * A page past the end of the answer is still a page past the end. The album changes what an empty
+   * first page means and changes nothing about a step too far.
+   */
+  it('leaves a page past the end saying what it already said', () => {
+    expect(
+      emptyMessage('endOfList', page({ items: [], page: 2 }), searchWording('text'), 'album'),
+    ).toBe('libraryPhotos.browse.pastEnd');
+  });
+
+  /**
+   * A narrowing this application would not put in a request to a neighbour at all. Unreachable from
+   * the chooser and reachable from an address somebody typed — and read as "the library did not
+   * answer" it would send them to a container that was never asked anything.
+   */
+  it('tells a refusal about the album apart from a library that did not answer', () => {
+    const notAnAlbum = new ApiError(404, 'photo_library.album_not_found');
+
+    expect(browseState({ isPending: false, error: notAnAlbum, page: undefined })).toBe(
+      'albumNotFound',
+    );
+
+    expect(problemOf('albumNotFound', false, searchWording('text'), 200)).toEqual({
+      key: 'libraryPhotos.albums.notFound',
+      kind: 'info',
+    });
+  });
+});
+
+/**
+ * The chooser's four states, which are four different facts drawn by one control.
+ *
+ * The pair that matters is "this library keeps no albums" and "this library did not answer about
+ * them": both leave a chooser with nothing in it, and they send a reader to completely different
+ * places — one to make an album they may already have, the other to a container that is down. The
+ * server keeps them apart by failing rather than answering an empty list, and this is where that
+ * difference becomes a sentence.
+ */
+describe('what an album chooser can say', () => {
+  it('tells a chooser still filling from an empty library and from one that did not answer', () => {
+    expect(albumChooserState({ isPending: true, error: null, albums: undefined })).toBe('loading');
+
+    expect(albumChooserState({ isPending: false, error: null, albums: { items: [] } })).toBe('none');
+
+    expect(albumChooserState({ isPending: false, error: new Error('no'), albums: undefined })).toBe(
+      'silent',
+    );
+
+    expect(albumChooserState({ isPending: false, error: null, albums: { items: [{}] } })).toBe(
+      'albums',
+    );
+  });
+
+  /**
+   * A failure wins over a list already in hand, as everywhere else here: a chooser drawn from an
+   * answer that has since failed to refresh is offering albums nobody can currently be asked about.
+   */
+  it('prefers a failure to a list it is still holding', () => {
+    expect(
+      albumChooserState({ isPending: false, error: new Error('no'), albums: { items: [{}] } }),
+    ).toBe('silent');
+  });
+
+  it('gives each of the three silences its own sentence, and a list none at all', () => {
+    expect(albumChooserMessage('loading')).toBe('libraryPhotos.albums.loading');
+    expect(albumChooserMessage('none')).toBe('libraryPhotos.albums.none');
+    expect(albumChooserMessage('silent')).toBe('libraryPhotos.albums.silent');
+    expect(albumChooserMessage('albums')).toBeNull();
   });
 });

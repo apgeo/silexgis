@@ -89,6 +89,25 @@ public sealed class ImmichClient(
     private const string SmartSearchRoute = "api/search/smart";
 
     /// <summary>
+    /// The route this library's albums are read from. Part of its published contract, and the only
+    /// question this integration asks it about albums at all.
+    /// </summary>
+    /// <remarks>
+    /// What comes back describes each album and no longer carries the photographs in it: this
+    /// product removed the member listing an album's assets, along with the two naming its owner,
+    /// when it broke its contract at its third major version. So an album is a name, a number and a
+    /// span here, and the photographs in one are asked for through the listing, narrowed.
+    /// </remarks>
+    private const string AlbumsRoute = "api/albums";
+
+    /// <summary>
+    /// The most albums this build will carry into a chooser, however many the library keeps. A
+    /// list somebody picks one entry out of; a library with more albums than this has outgrown a
+    /// chooser, and what is offered says it was cut rather than quietly ending.
+    /// </summary>
+    public const int AlbumCeiling = 500;
+
+    /// <summary>
     /// The most photographs asked for in one page however this installation is configured. A page
     /// is what somebody is looking at; anything above this is a listing nobody reads and a request
     /// somebody else's container has to answer.
@@ -450,7 +469,7 @@ public sealed class ImmichClient(
         // quietly came back oldest-first would look like a working feature showing the wrong decade.
         var body = string.Create(
             CultureInfo.InvariantCulture,
-            $$"""{"page":{{page}},"size":{{size}},"order":"desc"{{Taken(query.Window)}}}""");
+            $$"""{"page":{{page}},"size":{{size}},"order":"desc"{{Taken(query.Window)}}{{InAlbum(query.Album)}}}""");
 
         var answered = await AskAsync(
             new Uri(BaseAddress(Options.BaseUrl), SearchRoute), body, "a listing", ct);
@@ -520,6 +539,138 @@ public sealed class ImmichClient(
             answered.HasMore,
             DateTimeOffset.UtcNow);
     }
+
+    /// <summary>
+    /// The albums this library keeps.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One question, answered whole: this route pages nothing and this library keeps far fewer
+    /// albums than photographs, so what comes back is the set and the only bound is this
+    /// application's own — a chooser somebody picks one entry out of, cut at a ceiling and saying
+    /// so when it was cut.
+    /// </para>
+    /// <para>
+    /// What this answer no longer carries is the photographs in each album, along with the two
+    /// fields naming an album's owner: this product removed all three when it broke its contract at
+    /// its third major version. So nothing here reaches for them, and the photographs in an album
+    /// are asked for through the listing rather than read out of an album.
+    /// </para>
+    /// </remarks>
+    public async Task<LibraryAlbumPage> AlbumsAsync(CancellationToken ct)
+    {
+        await EnsureUsableAsync(ct);
+
+        using var response = await SendJsonAsync(new Uri(BaseAddress(Options.BaseUrl), AlbumsRoute), ct);
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        }
+        catch (JsonException e)
+        {
+            throw new PhotoLibraryException(
+                PhotoLibraryException.RejectedCode,
+                "The photo library's answer was not readable as JSON.", e);
+        }
+
+        using (document)
+        {
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                // Refused rather than read as a library with no albums. An address in front of the
+                // wrong container answers markup with HTTP 200, and a chooser that rendered that as
+                // "this library has no albums" is the mistake this feature is most likely to make
+                // while looking correct.
+                throw new PhotoLibraryException(
+                    PhotoLibraryException.RejectedCode,
+                    "The photo library did not answer with a list of albums.");
+            }
+
+            var handedOver = document.RootElement.GetArrayLength();
+            var albums = new List<LibraryAlbum>(Math.Min(handedOver, AlbumCeiling));
+
+            foreach (var element in document.RootElement.EnumerateArray())
+            {
+                if (albums.Count >= AlbumCeiling)
+                {
+                    break;
+                }
+
+                if (TryReadAlbum(element, out var album))
+                {
+                    albums.Add(album);
+                }
+            }
+
+            // Cut, or short because rows could not be read — two different facts, and only the
+            // first of them is something a reader can act on. The second is said in the log rather
+            // than on the screen, because a renamed field over there empties a chooser while
+            // nothing anywhere says an assumption stopped holding.
+            var truncated = handedOver > AlbumCeiling;
+            if (albums.Count < Math.Min(handedOver, AlbumCeiling))
+            {
+                logger.LogWarning(
+                    "The {Source} photo library answered with {HandedOver} albums, of which "
+                    + "{Unreadable} named no album this build could use; they are not offered.",
+                    Source,
+                    handedOver,
+                    Math.Min(handedOver, AlbumCeiling) - albums.Count);
+            }
+
+            return new LibraryAlbumPage(albums, truncated, DateTimeOffset.UtcNow);
+        }
+    }
+
+    /// <summary>
+    /// One album as this library describes one. A row naming no album this application could ask
+    /// about later is left out rather than offered as an entry that narrows nothing.
+    /// </summary>
+    /// <remarks>
+    /// The count is the library's own number and is absent where it did not send one. Zero is a
+    /// number here and not an absence — an album somebody has just emptied holds none, and that is
+    /// a fact the library stated rather than a field it left out.
+    /// </remarks>
+    private static bool TryReadAlbum(JsonElement element, out LibraryAlbum album)
+    {
+        album = default;
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        // Checked against what this application is willing to put in a request rather than passed
+        // on as it arrived: this value goes back to the library as the narrowing on a listing.
+        var id = Text(element, "id");
+        if (!PhotoLibraryHttp.IsSafeReference(id))
+        {
+            return false;
+        }
+
+        album = new LibraryAlbum(
+            AlbumId: id!,
+            Title: Text(element, "albumName"),
+            PhotographCount: Counted(element, "assetCount"),
+            From: Moment(element, "startDate"),
+            To: Moment(element, "endDate"));
+
+        return true;
+    }
+
+    /// <summary>
+    /// A count the library states, or null where it stated none. Zero is a count and not an
+    /// absence, which is what makes this a different reader from the one used for a measurement
+    /// written into a picture — there a zero is what this product writes when it read nothing.
+    /// </summary>
+    private static int? Counted(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out var read)
+        && read >= 0
+            ? read
+            : null;
 
     /// <summary>
     /// Puts one question to this library and reads the page of photographs out of its answer.
@@ -605,6 +756,35 @@ public sealed class ImmichClient(
             return (photos, handedOver, hasMore, stated);
         }
     }
+
+    /// <summary>
+    /// The one field that narrows a listing to an album, ready to be dropped into the body beside
+    /// the paging — or nothing at all when the whole library was asked for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Written straight into the body rather than serialised, on the same argument the window's two
+    /// instants are: the value has already been checked against the shape this application is
+    /// willing to put in a request to a neighbour — letters, digits, hyphens and underscores and
+    /// nothing else — so it cannot carry a quotation mark, a backslash or a second field into the
+    /// request.
+    /// </para>
+    /// <para>
+    /// Nothing is filtered out of the answer afterwards, for the reason the window is not: the far
+    /// side has already decided what this page is, so dropping rows from it here would leave a page
+    /// short of the number beside it and a next page that skips whatever was dropped.
+    /// </para>
+    /// <para>
+    /// <b>Whether the identifier names an album this library keeps is the library's to decide, not
+    /// this application's.</b> A value naming nothing over there comes back as a listing with
+    /// nothing in it, which is the same answer an album somebody has just emptied gives, and both
+    /// are ordinary. A value this library will not even read as an identifier comes back as a
+    /// refusal, and that is reported as a refusal rather than as an empty album — the one thing
+    /// that must never happen here is a narrowed question answered with the whole library.
+    /// </para>
+    /// </remarks>
+    private static string InAlbum(string? album) =>
+        album is null ? string.Empty : $",\"albumId\":\"{album}\"";
 
     /// <summary>
     /// The two fields that narrow a listing to a stretch of time, ready to be dropped into the body

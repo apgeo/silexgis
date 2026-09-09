@@ -56,6 +56,26 @@ public sealed class PhotoPrismClient(
     public const int ViewportCountCeiling = 10_000;
 
     /// <summary>
+    /// The most albums this build will carry into a chooser, however many the library keeps. A list
+    /// somebody picks one entry out of; a library with more albums than this has outgrown a chooser,
+    /// and what is offered says it was cut rather than quietly ending.
+    /// </summary>
+    public const int AlbumCeiling = 500;
+
+    /// <summary>
+    /// Which of this product's collections count as albums here.
+    /// </summary>
+    /// <remarks>
+    /// This product files several kinds of grouping under one route — the months it works out for
+    /// itself, the folders it found on disk, the places it derived, and the albums somebody made.
+    /// Only the last is a decision a club took, which is the whole reason an album is worth
+    /// offering as a way of narrowing a library: a foreign album is usually an expedition. The
+    /// others are restatements of facts the pictures already carry, and one of them is derived from
+    /// where they were taken.
+    /// </remarks>
+    private const string AlbumKind = "album";
+
+    /// <summary>
     /// The two renderings asked for, hardcoded rather than configured, and the reason is a trap
     /// worth writing down: this product's advertised size list is not the set of sizes it actually
     /// serves, and asking for a size that was never written during indexing makes it decode a
@@ -349,10 +369,11 @@ public sealed class PhotoPrismClient(
     /// about all of them, and that route takes no rectangle at all.
     /// </para>
     /// <para>
-    /// Where the query names a stretch of time, that route takes it in the same grammar its own
-    /// search box uses, and the narrowing is entirely the library's: it pages as any other listing
-    /// does, and nothing is dropped from the answer on this side. The terms are built from two
-    /// instants rather than from anything a caller wrote.
+    /// Where the query names a stretch of time or an album, that route takes both in the same
+    /// grammar its own search box uses, and the narrowing is entirely the library's: it pages as
+    /// any other listing does, and nothing is dropped from the answer on this side. The time terms
+    /// are built from two instants rather than from anything a caller wrote, and the album term
+    /// from a value already checked against the shape this application will send.
     /// </para>
     /// <para>
     /// Nothing is held between calls: one page is asked for, and it is gone when the response is
@@ -363,7 +384,8 @@ public sealed class PhotoPrismClient(
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var answered = await PageAsync(query.Page, query.PageSize, words: null, query.Window, ct);
+        var answered = await PageAsync(
+            query.Page, query.PageSize, words: null, query.Window, query.Album, ct);
 
         // The total is left unknown on purpose. This product does send a count beside a page, but
         // it counts what that page holds — a number the page already is — and nothing in the answer
@@ -405,9 +427,12 @@ public sealed class PhotoPrismClient(
                 [], LibrarySearchMatching.Text, Searched: string.Empty, HasMore: false, ReadAt: null);
         }
 
-        // No window. A search is what somebody typed, and this route is reached from a box with no
-        // trip behind it — a stretch of time attached to it here would be one nobody asked for.
-        var answered = await PageAsync(search.Page, search.PageSize, words, window: null, ct);
+        // No window and no album. A search is what somebody typed, and this route is reached from a
+        // box with neither a trip nor a chooser behind it — a stretch of time or an album attached
+        // to it here would be a narrowing nobody asked for, applied to an answer whose count would
+        // then be a count of something the screen never said.
+        var answered = await PageAsync(
+            search.Page, search.PageSize, words, window: null, album: null, ct);
 
         // The words as they were put, which is not always the words as they were typed: the
         // reduction below takes out the separator this product reads as naming one of its own
@@ -428,14 +453,19 @@ public sealed class PhotoPrismClient(
     /// to hold depending on whether somebody had typed anything.
     ///
     /// <para>
-    /// The window is a parameter here rather than a field on the record this reads from, so that a
-    /// call which must not carry one has to say so. Only the listing may: a search on this product
-    /// is the same route with words added, and a stretch of time silently attached to it would
-    /// narrow somebody's typed question by a range that was never on the screen.
+    /// The window and the album are parameters here rather than fields on the record this reads
+    /// from, so that a call which must not carry either has to say so. Only the listing may: a
+    /// search on this product is the same route with words added, and a narrowing silently attached
+    /// to it would answer somebody's typed question with a subset that was never on the screen.
     /// </para>
     /// </remarks>
     private async Task<(IReadOnlyList<LibraryListedPhoto> Photos, bool HasMore)> PageAsync(
-        int page, int pageSize, string? words, LibraryPhotoWindow? window, CancellationToken ct)
+        int page,
+        int pageSize,
+        string? words,
+        LibraryPhotoWindow? window,
+        string? album,
+        CancellationToken ct)
     {
         await EnsureUsableAsync(ct);
 
@@ -457,11 +487,11 @@ public sealed class PhotoPrismClient(
             // The same floor the map applies, so the two surfaces do not disagree about which
             // photographs this installation considers worth showing at all.
             + "&quality=" + Math.Clamp(Options.MinQuality, 0, 7).ToString(CultureInfo.InvariantCulture)
-            // Everything this product reads out of its own search grammar: the stretch of time, if
-            // one was asked for, and the reader's words, reduced to words first — see below for why
-            // that reduction is the difference between a search box and a way of asking where a
-            // photograph was taken.
-            + (Question(words, window) is { } q ? "&q=" + Uri.EscapeDataString(q) : string.Empty));
+            // Everything this product reads out of its own search grammar: the stretch of time and
+            // the album, where either was asked for, and the reader's words, reduced to words first
+            // — see below for why that reduction is the difference between a search box and a way of
+            // asking where a photograph was taken.
+            + (Question(words, window, album) is { } q ? "&q=" + Uri.EscapeDataString(q) : string.Empty));
 
         using var response = await SendJsonAsync(url, ct);
 
@@ -540,38 +570,220 @@ public sealed class PhotoPrismClient(
     }
 
     /// <summary>
-    /// Everything that goes into this product's own search parameter for one page: the stretch of
-    /// time, the words, both, or nothing at all.
+    /// The albums this library keeps.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>The two halves of this string reach it from opposite directions and that is the point of
-    /// building it here.</b> The window half is written from two instants this application worked
-    /// out, in a shape produced entirely by <see cref="Day"/> — ten digits and two hyphens, which
-    /// cannot carry a space, a colon or a second term. The words half has already had the separator
-    /// this product reads as naming one of its own fields taken out of it. So neither half can turn
-    /// into the other's kind of term, and nothing a caller sent is ever concatenated into somebody
-    /// else's grammar. A window assembled from text handed in would be a general date filter with a
-    /// second, arbitrary filter hidden behind it, and this product binds every family of field —
-    /// including the ones naming a place — out of exactly this parameter.
+    /// Asked for the collections somebody actually made and not for the ones this product works out
+    /// for itself. Its album route answers months, folders and places under the same shape, and
+    /// only an album is a decision a club took — which is the whole reason an album is worth
+    /// offering as a way of narrowing a library, since a foreign album is usually an expedition.
+    /// One of the kinds not asked for is derived from where the pictures were taken, which is a
+    /// second reason for the narrowing.
     /// </para>
     /// <para>
-    /// The window is put first so that the words, whatever they are, are the trailing free text this
-    /// product matches; and the two ends are named with the terms this product's own documented
-    /// grammar uses for them.
+    /// Ordered by name at the far side rather than sorted here, and the difference matters because
+    /// the list may be cut: a set ordered after cutting names a different five hundred from the one
+    /// that was read, and a chooser missing somebody's album is the failure this surface is most
+    /// likely to make while looking complete.
+    /// </para>
+    /// <para>
+    /// Nothing is held between calls, and nothing about an album's photographs is asked: this is a
+    /// list of names and numbers, carrying no position of any kind.
     /// </para>
     /// </remarks>
-    private static string? Question(string? words, LibraryPhotoWindow? window)
+    public async Task<LibraryAlbumPage> AlbumsAsync(CancellationToken ct)
     {
-        if (window is not { } asked)
+        await EnsureUsableAsync(ct);
+
+        // One more than the ceiling, so that a library holding more albums than this installation
+        // will offer says so with a row rather than by arriving exactly full — a page that is
+        // exactly full is a page that may or may not have had more behind it, and this list has no
+        // next control to find out with.
+        var count = AlbumCeiling + 1;
+
+        var url = new Uri(
+            BaseAddress(Options.BaseUrl),
+            "api/v1/albums?count=" + count.ToString(CultureInfo.InvariantCulture)
+            + "&offset=0"
+            + "&type=" + AlbumKind
+            + "&order=name");
+
+        using var response = await SendJsonAsync(url, ct);
+
+        // Every answer from this product carries the picture credential, so filling a chooser
+        // refreshes it exactly as a map pan does.
+        CapturePreviewToken(response);
+
+        JsonDocument document;
+        try
         {
-            return words;
+            document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        }
+        catch (JsonException e)
+        {
+            throw new PhotoLibraryException(
+                PhotoLibraryException.RejectedCode,
+                "The photo library's answer was not readable as JSON.", e);
         }
 
-        var span = string.Create(
-            CultureInfo.InvariantCulture, $"after:{Day(asked.From)} before:{Day(asked.To)}");
+        using (document)
+        {
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                // Refused rather than read as a library with no albums. An address in front of the
+                // wrong container answers markup with HTTP 200, and a chooser rendering that as
+                // "this library has no albums" is the mistake this feature is most likely to make
+                // while looking correct.
+                throw new PhotoLibraryException(
+                    PhotoLibraryException.RejectedCode,
+                    "The photo library did not answer with a list of albums.");
+            }
 
-        return words is null ? span : span + " " + words;
+            var handedOver = document.RootElement.GetArrayLength();
+            var albums = new List<LibraryAlbum>(Math.Min(handedOver, AlbumCeiling));
+
+            foreach (var element in document.RootElement.EnumerateArray())
+            {
+                if (albums.Count >= AlbumCeiling)
+                {
+                    break;
+                }
+
+                if (TryReadAlbum(element, out var album))
+                {
+                    albums.Add(album);
+                }
+            }
+
+            // Cut, or short because rows could not be read — two different facts, and only the
+            // first is something a reader can act on. The second is said in the log instead,
+            // because a renamed field over there empties a chooser while nothing anywhere says an
+            // assumption stopped holding.
+            if (albums.Count < Math.Min(handedOver, AlbumCeiling))
+            {
+                logger.LogWarning(
+                    "The {Source} photo library answered with {HandedOver} albums, of which "
+                    + "{Unreadable} named no album this build could use; they are not offered.",
+                    Source,
+                    handedOver,
+                    Math.Min(handedOver, AlbumCeiling) - albums.Count);
+            }
+
+            return new LibraryAlbumPage(albums, handedOver > AlbumCeiling, DateTimeOffset.UtcNow);
+        }
+    }
+
+    /// <summary>
+    /// One album as this product describes one. A row naming no album this application could ask
+    /// about later is left out rather than offered as an entry that narrows nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The count is the library's own number and is absent where it sent none. Zero is a number
+    /// here and not an absence — an album somebody has just emptied holds none, and that is a fact
+    /// the library stated rather than a field it left out.
+    /// </para>
+    /// <para>
+    /// No span. This product states the year, month and day it files an album under rather than the
+    /// stretch of time the photographs in it cover, and the two are different claims: a picture
+    /// added later belongs to the album without moving the date it is filed under. The other
+    /// product publishes a span and this one does not, so the span is absent here rather than built
+    /// out of something adjacent to it.
+    /// </para>
+    /// </remarks>
+    private static bool TryReadAlbum(JsonElement element, out LibraryAlbum album)
+    {
+        album = default;
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        // Checked against what this application is willing to put in a request rather than passed
+        // on as it arrived: this value goes back to the library as a term in its own search
+        // grammar, where a space or a colon would make it a second filter.
+        var uid = Text(element, "UID");
+        if (!PhotoLibraryHttp.IsSafeReference(uid))
+        {
+            return false;
+        }
+
+        album = new LibraryAlbum(
+            AlbumId: uid!,
+            Title: Text(element, "Title"),
+            PhotographCount: Counted(element, "PhotoCount"),
+            From: null,
+            To: null);
+
+        return true;
+    }
+
+    /// <summary>
+    /// A count the library states, or null where it stated none. Zero is a count and not an
+    /// absence, which is what makes this a different reader from <see cref="Whole"/> — there a zero
+    /// is what this product writes into a measurement it read nothing for.
+    /// </summary>
+    private static int? Counted(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out var read)
+        && read >= 0
+            ? read
+            : null;
+
+    /// <summary>
+    /// Everything that goes into this product's own search parameter for one page: the stretch of
+    /// time, the album, the words, any of them or none at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The three parts of this string reach it from different directions and that is the point
+    /// of building it here.</b> The window is written from two instants this application worked
+    /// out, in a shape produced entirely by <see cref="Day"/> — ten digits and two hyphens, which
+    /// cannot carry a space, a colon or a second term. The album is a value a caller sent, and it
+    /// has been through the check on what this application will put in a request to a neighbour, so
+    /// it is letters, digits, hyphens and underscores and cannot become a term of its own. The
+    /// words have had the separator this product reads as naming one of its own fields taken out of
+    /// them. So no part can turn into another's kind of term, and nothing a caller wrote is ever
+    /// concatenated into somebody else's grammar. A window or an album assembled out of unchecked
+    /// text would be a general filter with a second, arbitrary filter hidden behind it, and this
+    /// product binds every family of field — including the ones naming a place — out of exactly
+    /// this parameter.
+    /// </para>
+    /// <para>
+    /// The words go last so that they are the trailing free text this product matches, and each of
+    /// the others is named with the term this product's own documented grammar uses for it.
+    /// </para>
+    /// </remarks>
+    private static string? Question(string? words, LibraryPhotoWindow? window, string? album)
+    {
+        var terms = new List<string>(3);
+
+        if (window is { } asked)
+        {
+            terms.Add(string.Create(
+                CultureInfo.InvariantCulture, $"after:{Day(asked.From)} before:{Day(asked.To)}"));
+        }
+
+        if (album is not null)
+        {
+            // The third direction this string is reached from, and the one that looks most like the
+            // dangerous one. It is a value a caller sent, unlike the two instants above — but it has
+            // already been checked against the shape this application will put in a request to a
+            // neighbour, which is letters, digits, hyphens and underscores and nothing else. So it
+            // cannot carry the space or the colon that would make it a second term, which is the
+            // only way anything here could reach a field naming a place.
+            terms.Add("album:" + album);
+        }
+
+        if (words is not null)
+        {
+            terms.Add(words);
+        }
+
+        return terms.Count == 0 ? null : string.Join(' ', terms);
     }
 
     /// <summary>One end of a window, as a day, which is the granularity this product's own grammar

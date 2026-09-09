@@ -125,7 +125,32 @@ public sealed record LibraryPhotoListPage(
 /// is not obvious from a type that only ever sees two instants.
 /// </para>
 /// </param>
-public sealed record LibraryPhotoQuery(int Page, int PageSize, LibraryPhotoWindow? Window = null);
+/// <param name="Album">
+/// The album to ask about, as the far side names it, or null for the whole library.
+///
+/// <para>
+/// A narrowing both products perform themselves, over a grouping they already hold: an album is a
+/// set somebody over there put together and named, so asking for one emits nothing about anybody's
+/// position and cannot be read backwards into one. It is allowed here for the same reason the
+/// window is, and refused the same things — there is no rectangle, no radius and no place name on
+/// this record, and no shape of it that has them.
+/// </para>
+/// <para>
+/// It is a value a caller sends, unlike the window, and the difference is worth being plain about
+/// rather than leaving to be noticed. The window is worked out here from a record this application
+/// holds, because a stretch of time somebody sent in and a trip's own days are indistinguishable
+/// once they are in a request. An album has no such second reading: the identifier names one set
+/// the library already keeps, the answer is the photographs in it, and nothing on the screen
+/// claims anything about it beyond the name the library gave it. What the value must not do is
+/// carry a second question into somebody else's grammar, which is why the shape of it is checked
+/// before it leaves this machine rather than after.
+/// </para>
+/// </param>
+public sealed record LibraryPhotoQuery(
+    int Page,
+    int PageSize,
+    LibraryPhotoWindow? Window = null,
+    string? Album = null);
 
 /// <summary>
 /// One photograph in full, as far as the library that holds it will say.

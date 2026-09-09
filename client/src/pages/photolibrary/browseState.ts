@@ -50,6 +50,7 @@ export type BrowseState =
   | 'pageTooDeep'
   | 'tripNotFound'
   | 'tripWindowUnusable'
+  | 'albumNotFound'
   | 'silent'
   | 'empty'
   | 'endOfList'
@@ -86,6 +87,11 @@ const Codes = {
   tripNotFound: 'photo_library.trip_not_found',
   /** The trip is there and its dates do not describe a stretch of time worth asking about. */
   tripWindowUnusable: 'photo_library.trip_window_unusable',
+  /**
+   * The listing was narrowed to something that does not name an album at all — not the same thing
+   * as an album the library no longer keeps, which the library answers with nothing in it.
+   */
+  albumNotFound: 'photo_library.album_not_found',
   /** The library refused the credential this installation is configured with. */
   credentialRefused: 'photo_library.unauthorized',
   /** The library answered, and not with anything this build could read. */
@@ -146,6 +152,11 @@ export function browseState({ isPending, error, page }: BrowseStateInput): Brows
           return 'tripNotFound';
         case Codes.tripWindowUnusable:
           return 'tripWindowUnusable';
+        // Nor was this one asked. A narrowing this application would not put in a request to a
+        // neighbour at all is about the address somebody typed rather than about the library, and
+        // "the library did not answer" sends them to a container that is fine.
+        case Codes.albumNotFound:
+          return 'albumNotFound';
         // It answered, and refused the credential this whole installation reaches it with. The
         // fix is a new credential, and no amount of restarting produces one.
         case Codes.credentialRefused:
@@ -281,15 +292,27 @@ export interface CountLine {
 }
 
 /**
- * @param withinATripWindow Whether the listing was narrowed to the days one trip was out. It
- *   changes what the total is a count of and therefore which sentence may be written over it: the
- *   number a library states beside a narrowed listing counts what it holds <em>in that window</em>,
- *   and "of 412 photographs the library holds" written over it would tell a reader their club owns
- *   four hundred photographs when it owns forty thousand. Neither number describes the caller —
- *   every account reaches a library through one credential belonging to the installation, so there
- *   is one answer and everybody gets it.
+ * What a listing was narrowed to, which decides what its total is a count of.
+ *
+ * <p>
+ * One value with three states rather than a flag per narrowing, because the sentence written over
+ * the number depends on which question was asked and there is exactly one of those. The number a
+ * library states beside a narrowed listing counts what it holds <em>for that question</em>, so
+ * "of 412 photographs the library holds" written over a trip's days or an album would tell a reader
+ * their club owns four hundred photographs when it owns forty thousand.
+ * </p>
+ * <p>
+ * None of the three describes the caller. Every account reaches a library through one credential
+ * belonging to the installation, so there is one answer and everybody gets it — and the day that
+ * stops being true, this is one of the places that has to change.
+ * </p>
  */
-export function countLine(page: LibraryPage, withinATripWindow = false): CountLine | null {
+export type BrowseNarrowing = 'library' | 'trip' | 'album';
+
+/**
+ * @param narrowing Which question the listing answered, and therefore what its total counts.
+ */
+export function countLine(page: LibraryPage, narrowing: BrowseNarrowing = 'library'): CountLine | null {
   const shown = page.items.length;
   if (shown === 0) {
     return null;
@@ -315,10 +338,16 @@ export function countLine(page: LibraryPage, withinATripWindow = false): CountLi
     };
   }
 
-  if (withinATripWindow) {
+  if (narrowing === 'trip') {
     return page.total === null
       ? { key: 'libraryPhotos.trip.showingUnknownTotal', values: { count: shown } }
       : { key: 'libraryPhotos.trip.showingOf', values: { shown, total: page.total } };
+  }
+
+  if (narrowing === 'album') {
+    return page.total === null
+      ? { key: 'libraryPhotos.albums.showingUnknownTotal', values: { count: shown } }
+      : { key: 'libraryPhotos.albums.showingOf', values: { shown, total: page.total } };
   }
 
   return page.total === null
@@ -378,19 +407,20 @@ export function searchWording(matching: LibrarySearchMatching): SearchWording {
 }
 
 /**
- * What the empty grid says it is, which is four different facts drawn the same way.
+ * What the empty grid says it is, which is six different facts drawn the same way.
  *
  * A page past the end of a listing that holds plenty; a library that holds nothing at all; a
- * search that matched nothing, which is about the words rather than about the library; and an
- * ordering with nothing in it, which is about neither and means the library ranked nothing. The
- * last one is arrived at from the words alone in the fifth case below: a search whose text was
- * reduced to nothing this product could search for was never put to any library.
+ * search that matched nothing, which is about the words rather than about the library; an ordering
+ * with nothing in it, which is about neither and means the library ranked nothing; and two
+ * narrowings that came back with nothing while the library holds plenty either side of them. The
+ * ordering case is arrived at from the words alone in the second branch below: a search whose text
+ * was reduced to nothing this product could search for was never put to any library.
  */
 export function emptyMessage(
   state: BrowseState,
   page: LibraryPage | undefined,
   wording: SearchWording,
-  withinATripWindow = false,
+  narrowing: BrowseNarrowing = 'library',
 ): string {
   if (state === 'endOfList') {
     return 'libraryPhotos.browse.pastEnd';
@@ -400,10 +430,15 @@ export function emptyMessage(
     return page.searched === '' ? 'libraryPhotos.search.nothingLeft' : wording.empty;
   }
 
-  // A fifth fact, and it is the one the trip panel is for: the library answered, it holds plenty,
-  // and none of it was taken while this trip was out. "This library holds nothing matching" said
-  // over that would be a claim about the library rather than about the days.
-  return withinATripWindow ? 'libraryPhotos.trip.nothingTaken' : 'libraryPhotos.browse.empty';
+  // The two narrowings each get their own sentence, and neither is a claim about the library. The
+  // library answered and it may hold plenty: what is empty is one trip's days, or one album.
+  // "This library holds nothing matching" written over either would send a reader to look at a
+  // container that is working perfectly.
+  if (narrowing === 'trip') {
+    return 'libraryPhotos.trip.nothingTaken';
+  }
+
+  return narrowing === 'album' ? 'libraryPhotos.albums.nothingIn' : 'libraryPhotos.browse.empty';
 }
 
 /**
@@ -452,11 +487,80 @@ export function problemOf(
       return { key: 'libraryPhotos.trip.notFound', kind: 'info' };
     case 'tripWindowUnusable':
       return { key: 'libraryPhotos.trip.datesUnusable', kind: 'warning' };
+    case 'albumNotFound':
+      // Nothing is wrong with the library and nothing was asked of it. Unreachable from the
+      // chooser, which only ever offers albums the library itself listed.
+      return { key: 'libraryPhotos.albums.notFound', kind: 'info' };
     case 'silent':
       // A failed search of a library that ranks by meaning has a cause a listing cannot have, and
       // the sentence for it names both possibilities instead of the one that sends an operator to
       // a healthy container.
       return { key: searching ? wording.silent : 'libraryPhotos.browse.silent', kind: 'warning' };
+    default:
+      return null;
+  }
+}
+
+/**
+ * What an album chooser is currently able to offer, which is four different facts and only one of
+ * them is a list.
+ *
+ * <p>
+ * <b>A library that keeps no albums and a library that did not answer draw the same empty
+ * chooser</b>, and only the server can tell them apart — which is why the route behind this fails
+ * rather than returning an empty list, and why the difference is carried all the way to a sentence
+ * here. Rendered as one, a stopped container reads as a club that never made an album, and a
+ * reader goes looking for albums they are sure exist.
+ * </p>
+ * <p>
+ * The fourth is the one that is not about albums at all: a chooser still filling. It is kept apart
+ * from the other three for the reason the grid keeps "not yet" apart from "nothing here".
+ * </p>
+ */
+export type AlbumChooserState = 'loading' | 'silent' | 'none' | 'albums';
+
+export interface AlbumChooserInput {
+  /** Nothing has arrived yet and nothing failed. */
+  isPending: boolean;
+  /** What the request failed with, or null. */
+  error: unknown;
+  /** What the library answered, or undefined while that is still unknown. */
+  albums: { items: readonly unknown[] } | undefined;
+}
+
+export function albumChooserState({
+  isPending,
+  error,
+  albums,
+}: AlbumChooserInput): AlbumChooserState {
+  // A failure wins over a list in hand, as everywhere else here: a chooser drawn from an answer
+  // that has since failed to refresh is offering albums nobody can currently be asked about.
+  if (error) {
+    return 'silent';
+  }
+
+  if (isPending || !albums) {
+    return 'loading';
+  }
+
+  return albums.items.length === 0 ? 'none' : 'albums';
+}
+
+/**
+ * The one sentence a chooser writes in place of a list, and null when it has one to show.
+ *
+ * Separate from the state so that the choosing can be checked without rendering: which of these
+ * three a reader is shown is the whole of what this control owes them, and a wrong one does not
+ * look like a defect — it looks like a working chooser describing a different library.
+ */
+export function albumChooserMessage(state: AlbumChooserState): string | null {
+  switch (state) {
+    case 'loading':
+      return 'libraryPhotos.albums.loading';
+    case 'silent':
+      return 'libraryPhotos.albums.silent';
+    case 'none':
+      return 'libraryPhotos.albums.none';
     default:
       return null;
   }
