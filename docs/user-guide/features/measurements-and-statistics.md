@@ -170,6 +170,45 @@ carry a surveyed length. **Caves without one are absent rather than counted as z
 
 ---
 
+## The whole registry, explored
+
+Under **Statistics** in the sidebar, three screens ask questions of the registry itself rather
+than of one cave or one page of caves.
+
+| Screen | What it answers |
+|---|---|
+| **Distribution** | How one measurement is spread — intervals, range, percentiles, and two fits |
+| **Correlation** | How two measurements move together — slope, R², and the correlation itself |
+| **By region** | How many caves stand under each region |
+
+All three take the same narrowings — cave type, rock type, region — and the whole question lives
+in the address, so a link reproduces exactly what you were looking at. Each screen saves what it
+is currently showing as a spreadsheet; the file is the same answer, not a second one.
+
+Read the sentences these screens print, because they are doing real work:
+
+- **A joined interval says so.** Where too few caves fall in one interval to show it on its own,
+  it is *joined to its neighbour* rather than hidden — and the axis says which ones were joined,
+  with a count underneath. A wide bar is a joined bar, not a real feature of the distribution.
+- **A missing relationship is stated, not drawn.** If there are too few pairs to fit anything, or
+  no range to fit across, you get a sentence saying which of those it was and no chart at all. A
+  line through two points is not a relationship.
+- **The correlation chart draws a fit and no caves.** No individual cave is plotted; the line is
+  drawn across the range of the horizontal measurement, which can be wider than the pairs the fit
+  actually used. The page says so where you can see it.
+- **The regional breakdown does not add up, on purpose.** The total counts caves you may read;
+  the rows count caves you may also *place*. When the rows fall short, a sentence says by how many
+  — and which regions those caves stand under is precisely what is being withheld. There is no
+  "elsewhere" row and no percentage column, because either would invite you to close a gap that
+  is meant to stay open.
+- **The counts travel with the figures.** A percentile over eleven caves and one over eleven
+  hundred look identical on a chart, so every screen prints what it was computed over.
+
+Sorting is by region name only. Ordering the table by its counts would give away the relative
+sizes of the very thing the answer declined to state.
+
+---
+
 ## Trip statistics
 
 A person, a cave and a caving group each get their totals:

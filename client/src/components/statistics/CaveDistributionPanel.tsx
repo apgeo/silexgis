@@ -3,13 +3,36 @@ import { Card, Col, Empty, Row, Segmented, Typography } from 'antd';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { CaveListItem } from '../../api/hooks.ts';
-import { CategoryBoxChart, CcdfChart, CorrelationChart, HistogramChart } from './DistributionCharts.tsx';
+import {
+  useRegistryClustering,
+  type CaveListItem,
+  type CaveListParams,
+} from '../../api/hooks.ts';
+import {
+  clusteredScatter,
+  clusteringScopeFor,
+  scatterClusteringMeasures,
+  scatterPointsFor,
+} from './caveClustering.ts';
+import ClusterPopulationNote from './ClusterPopulationNote.tsx';
+import {
+  CategoryBoxChart,
+  CcdfChart,
+  CorrelationChart,
+  HistogramChart,
+  type CorrelationSeries,
+} from './DistributionCharts.tsx';
 
 interface CaveDistributionPanelProps {
   caves: CaveListItem[];
   /** Names for cave-type ids, so the box plot can say "Limestone" rather than "3". */
   typeName: (id: number) => string;
+  /**
+   * The narrowing the list is showing, so the grouping can be asked the same question the points
+   * answer. Without it the colours would describe some other set of caves and say nothing about
+   * having done so.
+   */
+  scope: CaveListParams;
 }
 
 type View = 'histogram' | 'ccdf' | 'correlation' | 'byType';
@@ -30,23 +53,56 @@ type View = 'histogram' | 'ccdf' | 'correlation' | 'byType';
  * cave and a cave measured at nothing are different claims, and only one of them is ever true.
  * </p>
  */
-export default function CaveDistributionPanel({ caves, typeName }: CaveDistributionPanelProps) {
+export default function CaveDistributionPanel({ caves, typeName, scope }: CaveDistributionPanelProps) {
   const { t } = useTranslation();
   const [view, setView] = useState<View>('histogram');
+
+  // The grouping is asked only for a narrowing it can be asked about, and only while the chart
+  // that shows it is the one on screen. A null scope is not a failure: it says the list is
+  // narrowed by something the registry-wide grouping has no parameter for, so the honest picture
+  // is the uncoloured one.
+  const clusteringScope = clusteringScopeFor(scope);
+  const { data: answered } = useRegistryClustering(
+    clusteringScope ?? { measures: scatterClusteringMeasures },
+    clusteringScope !== null && view === 'correlation',
+  );
+
+  // Not asking is not the same as having no answer. A request that is switched off still names a
+  // cache entry, and the entry an unaskable narrowing falls back to is the one the unnarrowed
+  // grouping filled in: view the scatter with no filters, then type a search term, and the answer
+  // for the whole registry is still there to be read. Drawing it would colour these caves by a
+  // grouping of other caves while the note beside it says they are uncoloured — the exact
+  // contradiction the null scope exists to prevent. So the scope, not the cache, decides whether
+  // there is a grouping on this screen at all.
+  const clustering = clusteringScope === null ? undefined : answered;
 
   const lengths = useMemo(
     () => caves.map((c) => c.surveyedLength).filter((v): v is number => typeof v === 'number' && v > 0),
     [caves],
   );
 
-  const pairs = useMemo(
-    () =>
-      caves
-        .filter((c) => typeof c.surveyedLength === 'number' && typeof c.depth === 'number')
-        .map((c) => [c.surveyedLength as number, Math.abs(c.depth as number)] as [number, number])
-        .filter(([x, y]) => x > 0 && y > 0),
-    [caves],
-  );
+  const pairs = useMemo(() => scatterPointsFor(caves).map((p) => p.point), [caves]);
+
+  /**
+   * The same points, split by the group the server put each cave in.
+   *
+   * The label a reader sees counts from one because a group numbered zero reads as an absence.
+   * It is a renaming of a label that carries no rank either way — group two is not larger, better
+   * or more interesting than group one, which is why the colours come from a categorical palette
+   * and why nothing here sorts the groups by size.
+   */
+  const clusterSeries = useMemo<CorrelationSeries[] | undefined>(() => {
+    const groups = clusteredScatter(caves, clustering);
+    if (groups === null) return undefined;
+    return groups.map((group) => ({
+      cluster: group.cluster,
+      points: group.points,
+      name:
+        group.cluster === null
+          ? t('karstStats.clusterUngrouped')
+          : t('karstStats.clusterGroup', { group: group.cluster + 1 }),
+    }));
+  }, [caves, clustering, t]);
 
   const groups = useMemo(() => {
     const byType = new Map<number, number[]>();
@@ -71,7 +127,20 @@ export default function CaveDistributionPanel({ caves, typeName }: CaveDistribut
       case 'ccdf':
         return <CcdfChart values={lengths} xLabel={lengthLabel} />;
       case 'correlation':
-        return <CorrelationChart pairs={pairs} xLabel={lengthLabel} yLabel={t('karstStats.depthAxis')} />;
+        // The account of who could not be grouped is drawn above the picture, not beneath it.
+        // A reader who meets the colours first has already drawn a conclusion by the time they
+        // reach the sentence saying which caves the colours could say nothing about.
+        return (
+          <>
+            <ClusterPopulationNote clustering={clustering} unaskable={clusteringScope === null} />
+            <CorrelationChart
+              pairs={pairs}
+              series={clusterSeries}
+              xLabel={lengthLabel}
+              yLabel={t('karstStats.depthAxis')}
+            />
+          </>
+        );
       case 'byType':
         return <CategoryBoxChart groups={groups} yLabel={lengthLabel} logScale />;
       default:

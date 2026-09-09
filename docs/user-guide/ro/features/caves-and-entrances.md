@@ -125,6 +125,59 @@ Sub suprafață, o peșteră este un fel de [element](surface-features.md), moti
 
 ---
 
+## Partajarea peșterilor în formatul de interschimb
+
+Pe lângă formatele de hartă, meniul **Export** din lista de peșteri oferă **KarstLink (JSON-LD)** — o
+descriere a peșterilor în vocabularul speologic comun publicat de UIS, astfel încât cineva care
+folosește alt program să le poată citi. Exportă peșterile afișate în listă, cu aceleași filtre de
+căutare, tip și etichetă.
+
+**Întâi pune o întrebare, și asta contează.** Dacă vreuna dintre peșterile exportate are locația
+protejată, dialogul spune câte sunt și întreabă ce trebuie să scrie fișierul despre ele. Sunt trei
+răspunsuri:
+
+- **Include peștera fără poziție** — tot restul călătorește, fără nicio coordonată.
+- **Lasă acele peșteri complet în afara fișierului.**
+- **Include-le la poziția aproximativă** — aceeași poziție rotunjită pe care harta o arată celor care
+  nu au voie să vadă poziția exactă.
+
+**Poziția exactă nu este oferită nimănui.** Nici unui administrator, nici celui care a înregistrat
+peștera. Un fișier continuă să existe și după ce permisiunile care l-au produs s-au schimbat, așa că
+această aplicație nu scrie o poziție protejată într-unul.
+
+**Fișierul spune ce s-a decis.** Fiecare peșteră declară care dintre cele trei variante s-a aplicat
+și, unde poziția a fost rotunjită, cât de departe poate fi de adevăr; un antet spune câte peșteri
+sunt în fișier și câte au fost lăsate deoparte în mod deliberat — ca nimeni să nu confunde numărul de
+peșteri din fișier cu numărul din registru.
+
+Bifați **Ține minte răspunsul meu** și nu veți mai fi întrebat pe acest browser; un al doilea element
+de meniu vă lasă să îl schimbați, iar dacă serverul refuză o cerere, dialogul revine în loc să eșueze
+în tăcere.
+
+Fiecare export de interschimb este înregistrat în [istoric și jurnalul de
+audit](history-and-audit.md), împreună cu peșterile exportate și felul în care le-au fost tratate
+pozițiile.
+
+---
+
+## Numere din alte registre
+
+O peșteră are adesea o intrare și în altă parte — în [Grottocenter](https://grottocenter.org), baza
+de date internațională a comunității, sau într-un cadastru național. Pagina peșterii are o secțiune
+mică pentru aceste numere, astfel încât legătura să călătorească odată cu peștera și să apară într-un
+export de interschimb.
+
+Dacă administratorul dumneavoastră a activat căutarea în Grottocenter, un buton întreabă acolo dacă
+peștera este deja cunoscută. **Se trimite doar numele peșterii** — niciodată poziția — și se
+păstrează doar numărul pe care îl acceptați. Majoritatea instalărilor vor vedea „administratorul nu a
+configurat aceasta", iar în acea stare nimic nu părăsește instalarea.
+
+**O atenționare.** O intrare în Grottocenter publică coordonate. De aceea, pentru o peșteră cu
+locația protejată aici, exportul de interschimb lasă deliberat legătura externă afară: publicarea ei
+ar preda exact poziția pe care fișierul o ascunde.
+
+---
+
 ## Ștergerea
 
 **Ștergeți această peșteră?** — și, la elemente în general, *elementele conținute se șterg odată

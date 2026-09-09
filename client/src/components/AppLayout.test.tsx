@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
 import AppLayout from './AppLayout.tsx';
+import { sectionFor } from './navSections.ts';
 import { routes } from '../App.tsx';
 import type { UnreadNotificationCount } from '../api/hooks.ts';
 import i18n from '../i18n';
@@ -168,6 +169,39 @@ describe('AppLayout selected destination', () => {
     // the rail is opened — no click on the group needed.
     expandRail();
     expect(selectedItem()).toBe('Checklists');
+  });
+
+  /**
+   * The same rule as the case above, asked of the whole rail instead of one remembered path.
+   *
+   * A destination whose prefix is missing from the section list still navigates — only the
+   * highlight is wrong — so it goes unnoticed until somebody opens the page and reads the rail.
+   * A single-path assertion catches only the path it names, which is never the one that was
+   * forgotten. Every leaf the rail can offer is resolved here instead, with every gate open, so a
+   * page added to the rail without being added to the list fails on the day it is added.
+   */
+  it('recognises every destination the rail can offer, not only the ones tested by name', () => {
+    const items = buildNavItems(i18n.t, {
+      can: () => true,
+      taxonomyWrite: true,
+      featureCreate: true,
+      tripLogCreate: true,
+      photoLibrary: true,
+      isFullAdmin: true,
+    });
+    const leaves = items.flatMap((entry) =>
+      isNavGroup(entry) ? entry.children.map((child) => String(child.key)) : [String(entry.key)],
+    );
+    // The rail is not empty with every gate open, or the loop below would assert nothing.
+    expect(leaves.length).toBeGreaterThan(20);
+
+    for (const key of leaves) {
+      expect(key.startsWith(GROUP_PREFIX)).toBe(false);
+      expect(sectionFor(`/${key}`), `/${key} lights up a rail item that is not ${key}`).toBe(key);
+      // A page beneath a destination keeps that destination lit, which is what the prefix match
+      // is for — and what a too-short prefix quietly breaks.
+      expect(sectionFor(`/${key}/00000000-0000-0000-0000-000000000001`)).toBe(key);
+    }
   });
 });
 

@@ -158,7 +158,15 @@ export function useECharts(option: EChartsOption | null, handlers?: EChartsHandl
 
   useEffect(() => {
     const instance = chart.current;
-    if (!instance || !option) return;
+    if (!instance) return;
+
+    // Nothing to draw is an instruction and not the absence of one. A caller that has decided
+    // there is nothing to draw — no fit, no intervals — has to leave a blank frame behind, or the
+    // previous answer's line and axes stand there under a component that believes it drew nothing.
+    if (!option) {
+      instance.clear();
+      return;
+    }
 
     // `notMerge` because a series list that shrinks must actually shrink: merging would leave the
     // previous run's extra series drawn underneath the new ones.

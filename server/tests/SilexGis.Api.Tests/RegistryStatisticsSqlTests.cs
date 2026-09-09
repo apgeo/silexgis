@@ -173,6 +173,45 @@ public class RegistryStatisticsSqlTests
         sql.ShouldContain("GREATEST");
     }
 
+    [Fact]
+    public void The_grouping_statement_keeps_the_caves_that_record_nothing()
+    {
+        // The one statement here that must not filter on the columns it reads. Adding
+        // "AND c.surveyed_length IS NOT NULL" would leave the groups unchanged and quietly destroy
+        // the answer: the count of caves that were left out, and the count of caves each measure
+        // alone cost, are computed from the gaps this statement returns. Without them a grouping
+        // over the best-surveyed tenth of a register is indistinguishable from a grouping of the
+        // register, which is the failure the whole surface exists to prevent.
+        var (sql, _) = RegistryStatisticsSql.BuildMetricVectors(
+            Caller,
+            new RegistryStatisticsScope(),
+            [RegistryMeasure.SurveyedLength, RegistryMeasure.Depth],
+            100);
+
+        // Named column by column rather than as a blanket search for "IS NOT NULL": the access
+        // walk composed into every statement here contains that phrase for its own reasons, so a
+        // blanket assertion fails on a statement that is perfectly correct and would be "fixed" by
+        // deleting the check.
+        sql.ShouldNotContain("c.surveyed_length IS NOT NULL");
+        sql.ShouldNotContain("c.depth IS NOT NULL");
+
+        // And nothing else filters on a measure either, whatever it is spelled as.
+        foreach (var measure in Enum.GetValues<RegistryMeasure>())
+        {
+            sql.ShouldNotContain($"{RegistryStatisticsSql.ColumnOf(measure)} IS NOT NULL");
+        }
+
+        // Both measures are read, in the order they were named, so the grouping's own column labels
+        // and the readings it takes distances over cannot fall out of step.
+        sql.IndexOf("surveyed_length", StringComparison.Ordinal)
+            .ShouldBeLessThan(sql.IndexOf("c.depth", StringComparison.Ordinal));
+
+        // Bounded, because a grouping quietly taken over the first so many caves would wear the
+        // whole scope's label with nothing in the answer recording it. The caller compares what
+        // came back against the bound and refuses rather than answering.
+        sql.ShouldContain("LIMIT @rs_limit");
+    }
+
     private static IEnumerable<(string Name, string Sql)> EveryStatement(
         RegistryStatisticsScope scope)
     {
@@ -187,5 +226,7 @@ public class RegistryStatisticsSqlTests
         yield return ("regions", RegistryStatisticsSql.BuildRegionBreakdown(Caller, scope).Sql);
         yield return ("sample", RegistryStatisticsSql.BuildSample(
             Caller, scope, RegistryMeasure.SurveyedLength).Sql);
+        yield return ("metric vectors", RegistryStatisticsSql.BuildMetricVectors(
+            Caller, scope, [RegistryMeasure.SurveyedLength, RegistryMeasure.Depth], 100).Sql);
     }
 }

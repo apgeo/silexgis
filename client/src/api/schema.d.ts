@@ -1604,7 +1604,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Cave-entrance counts and densities per grid cell over a bbox, optionally normalised by a study-area outline. Cells finer than the location-protection grid are refused. */
+        /** Cave-entrance counts and densities per grid cell over a bbox, optionally normalised by a study-area outline, with the hot and cold spots among those cells and whether their arrangement departs from chance. Cells finer than the location-protection grid are refused. */
         get: {
             parameters: {
                 query?: {
@@ -2186,6 +2186,84 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/caves/karstlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Caves as JSON-LD in the published cave and karst vocabulary. The exporter chooses, per cave, what happens to a protected position: no coordinates, omitted, or the protection-grid position. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["KarstLinkExportRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/caves/karstlink/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** How many caves a KarstLink export would hold, and how many of them need a decision about a protected position. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["KarstLinkExportRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KarstLinkExportPreview"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -5193,6 +5271,125 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{caveId}/external-ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The identifiers other registers know this cave by. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveExternalIdDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{caveId}/external-ids/{system}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Records the identifier one register knows this cave by, or clears it when the value is empty (Write on the cave). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                    system: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CaveExternalIdWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveExternalIdDto"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{caveId}/external-ids/grottocenter/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Asks grottocenter.org which of its caves match this cave's name. Sends the name and nothing else, stores nothing, and answers that it is not configured when the installation has not turned the integration on (Write on the cave). */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GrottocenterLookupDto"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -14648,6 +14845,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/registry/clustering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which caves the caller may read resemble each other over the measures they named. */
+        get: {
+            parameters: {
+                query?: {
+                    measures?: string;
+                    clusters?: number;
+                    areaId?: string;
+                    caveTypeId?: number;
+                    rockTypeId?: number;
+                    region?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RegistryClusteringDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/stats/registry/regions": {
         parameters: {
             query?: never;
@@ -17685,6 +17925,14 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        CaveExternalIdDto: {
+            system: string;
+            value: string;
+            url: null | string;
+        };
+        CaveExternalIdWriteRequest: {
+            value?: null | string;
+        };
         CaveHeadlinePictureDto: {
             /** Format: uuid */
             attachmentId: string;
@@ -18367,7 +18615,28 @@ export interface components {
         };
         /** @enum {unknown} */
         DemSampleOutcome: "sampled" | "outsideCoverage" | "noData";
+        DensityAutocorrelationDto: {
+            /** Format: int32 */
+            cellCount: number;
+            /** Format: int32 */
+            neighbourPairCount: number;
+            /** Format: double */
+            index: null | number;
+            /** Format: double */
+            expectedIndex: null | number;
+            /** Format: double */
+            zScore: null | number;
+            /** Format: double */
+            pValue: null | number;
+            pattern: components["schemas"]["SpatialPatternKind"];
+            /** Format: double */
+            significanceZ: number;
+        };
         DensityCellDto: {
+            /** Format: int64 */
+            cellX: number;
+            /** Format: int64 */
+            cellY: number;
             /** Format: double */
             west: number;
             /** Format: double */
@@ -18386,6 +18655,8 @@ export interface components {
             studyAreaFraction: null | number;
             /** Format: double */
             kernelDensityPerKm2: number;
+            /** Format: double */
+            hotSpotZ: null | number;
         };
         DensityGridDto: {
             /** Format: double */
@@ -18407,6 +18678,7 @@ export interface components {
             /** Format: int32 */
             cellCount: number;
             cells: components["schemas"]["DensityCellDto"][];
+            autocorrelation: components["schemas"]["DensityAutocorrelationDto"];
         };
         DipSummary: {
             /** Format: int32 */
@@ -19571,6 +19843,16 @@ export interface components {
             cavingGroupId: null | string;
             visibility: components["schemas"]["Visibility"];
         };
+        GrottocenterCandidateDto: {
+            externalId: string;
+            name: null | string;
+            country: null | string;
+            url: null | string;
+        };
+        GrottocenterLookupDto: {
+            configured: boolean;
+            candidates: components["schemas"]["GrottocenterCandidateDto"][];
+        };
         HistoryEventDto: {
             /** Format: int64 */
             id: number;
@@ -19844,6 +20126,29 @@ export interface components {
             score: null | number;
             class: components["schemas"]["KarstificationClass"];
             components: components["schemas"]["KarstificationComponentDto"][];
+        };
+        KarstLinkExportPreview: {
+            /** Format: int32 */
+            caveCount: number;
+            /** Format: int32 */
+            protectedCaveCount: null | number;
+            exceedsLimit: boolean;
+            /** Format: int32 */
+            maxCaveCount: number;
+        };
+        KarstLinkExportRequest: {
+            caveIds?: null | string[];
+            search?: null | string;
+            region?: null | string;
+            /** Format: int64 */
+            caveTypeId?: null | number;
+            bbox?: null | string;
+            tag?: null | string;
+            treatments?: null | {
+                [key: string]: string;
+            };
+            treatmentForAll?: null | string;
+            defaultTreatment?: null | string;
         };
         LibraryPhotoFeatureCollection: {
             type: string;
@@ -21188,6 +21493,75 @@ export interface components {
             password: string;
             displayName: null | string;
         };
+        RegistryClusterAssignmentDto: {
+            /** Format: uuid */
+            caveId: string;
+            /** Format: int32 */
+            cluster: number;
+            /** Format: double */
+            distanceToCentre: number;
+        };
+        RegistryClusterCoverageDto: {
+            measure: components["schemas"]["RegistryMeasure"];
+            /** Format: int32 */
+            recorded: number;
+            /** Format: int32 */
+            missing: number;
+            /** Format: int32 */
+            soleReason: number;
+        };
+        RegistryClusterDto: {
+            /** Format: int32 */
+            index: number;
+            /** Format: int32 */
+            count: number;
+            centre: null | number[];
+            scaledCentre: null | number[];
+            /** Format: double */
+            meanDistanceToCentre: null | number;
+        };
+        RegistryClusteringDto: {
+            measures: components["schemas"]["RegistryMeasure"][];
+            /** Format: int32 */
+            requestedClusterCount: number;
+            population: components["schemas"]["RegistryClusterPopulationDto"];
+            scaling: components["schemas"]["RegistryClusterScalingDto"][];
+            clusters: components["schemas"]["RegistryClusterDto"][];
+            assignments: components["schemas"]["RegistryClusterAssignmentDto"][];
+            separation: null | components["schemas"]["RegistryClusterSeparationDto"];
+            /** Format: int32 */
+            minimumEligibleCount: number;
+            /** Format: int32 */
+            minimumPublishableClusterSize: number;
+            /** Format: int32 */
+            iterations: number;
+            converged: boolean;
+            basis: string;
+        };
+        RegistryClusterPopulationDto: {
+            /** Format: int32 */
+            considered: number;
+            /** Format: int32 */
+            eligible: number;
+            /** Format: int32 */
+            excluded: number;
+            measures: components["schemas"]["RegistryClusterCoverageDto"][];
+        };
+        RegistryClusterScalingDto: {
+            measure: components["schemas"]["RegistryMeasure"];
+            /** Format: double */
+            mean: number;
+            /** Format: double */
+            standardDeviation: number;
+        };
+        RegistryClusterSeparationDto: {
+            /** Format: double */
+            meanWithinDistance: number;
+            /** Format: double */
+            meanBetweenDistance: number;
+            /** Format: double */
+            ratio: null | number;
+        };
         RegistryCorrelationDto: {
             x: components["schemas"]["RegistryMeasure"];
             y: components["schemas"]["RegistryMeasure"];
@@ -21619,6 +21993,8 @@ export interface components {
         };
         /** @enum {unknown} */
         SortKey: "created" | "updated" | "title" | "owner" | "proximity" | "occurred";
+        /** @enum {unknown} */
+        SpatialPatternKind: "undetermined" | "random" | "clustered" | "dispersed";
         /** @enum {unknown} */
         SpeleogeneticPatternKind: "insufficient" | "undetermined" | "vadoseBranchwork" | "waterTable" | "looping" | "angularMaze";
         /** @enum {unknown} */

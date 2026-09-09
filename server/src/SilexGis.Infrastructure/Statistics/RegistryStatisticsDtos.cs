@@ -86,6 +86,41 @@ public sealed record RegistryMeasureBoundsRow(
 /// <summary>One sector of a histogram as the database counted it, before the publication rule.</summary>
 public sealed record RegistryBinRow(int Bucket, int Count);
 
+/// <summary>
+/// One cave's readings of the measures a grouping was asked over, straight off the statement.
+/// </summary>
+/// <param name="Id">The cave.</param>
+/// <param name="Values">One entry per named measure, in the order they were named. A null is a
+/// measure this cave does not record — carried rather than dropped, because how many caves lack
+/// which measure is half of the answer a grouping owes its reader.</param>
+public sealed record RegistryMetricVectorRow(Guid Id, double?[] Values);
+
+/// <summary>
+/// A grouping of the caves in scope by their measures, with the account of who it left out.
+/// </summary>
+/// <param name="Measures">The measures the distances were taken over, in the order asked.</param>
+/// <param name="Model">The grouping itself.</param>
+/// <param name="Basis">What it was computed over, in words.</param>
+public sealed record RegistryClustering(
+    IReadOnlyList<RegistryMeasure> Measures,
+    MetricClusterModel Model,
+    string Basis);
+
+/// <summary>
+/// Raised when the scope holds more caves than one grouping is answered over.
+/// </summary>
+/// <remarks>
+/// A refusal rather than a truncation on purpose. Grouping the first so many caves and labelling
+/// the answer with the whole scope would be the one misreading this surface is built to prevent,
+/// and unlike a missing measure it would leave no trace in the answer for a reader to notice.
+/// </remarks>
+public sealed class RegistryScopeTooLargeException(int limit)
+    : Exception($"A grouping is answered over at most {limit} caves.")
+{
+    /// <summary>The most caves a grouping is answered over.</summary>
+    public int Limit { get; } = limit;
+}
+
 /// <summary>A measure's quantiles, as fractions of the way through the recorded values.</summary>
 /// <param name="Fraction">Between zero and one.</param>
 /// <param name="Value">The value at that fraction, interpolated between the two observations it

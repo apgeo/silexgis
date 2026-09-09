@@ -69,6 +69,7 @@ public sealed class ApiSmokeTests : IDisposable
         document.ShouldContain("/api/v1/stats/expeditions/{id}");
         document.ShouldContain("/api/v1/stats/expeditions/{id}/export");
         document.ShouldContain("/api/v1/export/features");
+        document.ShouldContain("/api/v1/export/caves/karstlink");
         document.ShouldContain("/api/v1/shared/features/{token}");
 
         // Routes the feature supertype replaced must be gone, not merely unused.

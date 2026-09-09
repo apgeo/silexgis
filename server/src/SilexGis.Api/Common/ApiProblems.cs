@@ -22,6 +22,19 @@ public static class ApiProblems
         TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status400BadRequest,
             extensions: new Dictionary<string, object?> { ["code"] = code });
 
+    /// <summary>
+    /// A refusal carrying one machine-readable fact about what was wrong with the request.
+    /// </summary>
+    /// <remarks>
+    /// Same reasoning as the conflict overload below: the detail sentence is for a person and
+    /// only the code and the members are a contract, so a client that has to act on which
+    /// items were rejected is handed them rather than left parsing English.
+    /// </remarks>
+    public static ProblemHttpResult BadRequest(
+        string code, string? detail, string member, object? value) =>
+        TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status400BadRequest,
+            extensions: new Dictionary<string, object?> { ["code"] = code, [member] = value });
+
     public static ProblemHttpResult PreconditionFailed(string code, string? detail = null) =>
         TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status412PreconditionFailed,
             extensions: new Dictionary<string, object?> { ["code"] = code });

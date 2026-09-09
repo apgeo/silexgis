@@ -37,6 +37,7 @@
     "checklists": "Checklists",
     "groups": {
       "cadastre": "Cadastre",
+      "statistics": "Statistics",
       "library": "Library",
       "activity": "Activity",
       "people": "People",
@@ -45,7 +46,10 @@
     },
     "workAreas": "Work areas",
     "speologie": "Cave catalogue",
-    "tripImport": "Import trips"
+    "registryDistribution": "Distributions",
+    "registryCorrelation": "Correlations",
+    "tripImport": "Import trips",
+    "registryRegions": "Regions"
   },
   "terrain": {
     "title": "Terrain",
@@ -3640,9 +3644,35 @@
     "radiusM": "Radius (m)",
     "observedL": "L",
     "alignment": "Bearings between {{pairs}} pairs of entrances, {{min}}–{{max}} m apart.",
-    "tooFewPlaceable": "Fewer than {{minimum}} entrances here can be placed exactly, which is too few for a spacing to mean anything."
+    "tooFewPlaceable": "Fewer than {{minimum}} entrances here can be placed exactly, which is too few for a spacing to mean anything.",
+    "autocorrelationTitle": "Hot and cold spots",
+    "autocorrelationBasis": "Read over the {{cells}} cells above and the {{pairs}} adjacencies between them, at this grid's {{metres}} m cell and no finer — both figures are arithmetic over the cells already drawn, so neither can show detail the grid does not already have.",
+    "autocorrelationUndetermined": "There is no arrangement to test here: too few cells, none of them touching, or every cell carrying the same density.",
+    "moranIndex": "Moran's I",
+    "moranExpected": "Expected by chance",
+    "moranZ": "Standard errors",
+    "moranP": "p",
+    "hotSpots": "{{hot}} cells read hot and {{cold}} read cold, of {{scored}} that could be scored. The score is taken at every cell at once and is not corrected for that, so a scattering of striking cells over a large window is what chance alone produces — read the shading, not the individual cell.",
+    "pattern": {
+      "undetermined": "The question could not be asked of this window.",
+      "random": "The arrangement is indistinguishable from a chance one. That is a failure to find structure, not a demonstration that there is none.",
+      "clustered": "Dense cells sit beside dense ones, and empty beside empty, more than chance would put them.",
+      "dispersed": "Dense and empty cells alternate more than chance would put them."
+    }
   },
   "karstStats": {
+    "clusterArbitrary": "The grouping was still moving caves when it reached its limit, so which group a borderline cave fell into is arbitrary in its details rather than wrong.",
+    "clusterCoverage": "{{measure}}: {{missing}} of the caves considered do not record it, and {{soleReason}} of those would have been grouped had this measure not been asked for.",
+    "clusterEmpty": "Nothing could be grouped: fewer than {{minimum}} caves in this set record every measure asked for. The points below are drawn uncoloured, and the counts above still hold.",
+    "clusterGroup": "Group {{group}}",
+    "clusterMeasures": "Grouped over {{measures}}, each standardised first so that neither measure counts for more than the other simply for being recorded in larger numbers.",
+    "clusterNoSeparation": "The groups' middles do not separate at all — the strongest reading available of there being no structure here. The colours divide these caves; they do not find anything in them.",
+    "clusterNoWork": "Every grouped cave records the same {{measure}}, so that measure moved no cave into any group.",
+    "clusterNotAsked": "This list is narrowed by something the registry-wide grouping cannot be asked about, so the caves are drawn uncoloured rather than coloured by a grouping of some other set of caves.",
+    "clusterPopulation": "Grouped over the {{eligible}} of {{considered}} caves you may read in the whole set this list is narrowed to — not only the page drawn below — that record every measure asked for. The other {{excluded}} record fewer, so no grouping can place them, and having no length or no depth to plot they are absent from the chart rather than drawn in it.",
+    "clusterUngrouped": "Not grouped",
+    "clusterWeak": "The groups are as wide as they are far apart, so this grouping is weak. The method returns exactly the number of groups it was asked for on any data whatever, noise included, so the colours below are a division of these caves rather than a finding about them.",
+    "clusterWithheld": "Some groups hold fewer than {{floor}} caves. Those are not summarised and their caves are drawn uncoloured, because a mean over two caves is those two caves' readings rather than anything about a group.",
     "count": "Caves",
     "depthAxis": "Depth (m)",
     "lengthAxis": "Surveyed length (m)",
@@ -3656,6 +3686,91 @@
     "viewHistogram": "Length",
     "viewLengthDepth": "Length vs depth",
     "viewRankSize": "Rank–size"
+  },
+  "registryStats": {
+    "distributionTitle": "Distribution across the registry",
+    "asVisibleToYou": "Counted over the caves you may read. Somebody with different access sees different figures for the same registry, and both are right.",
+    "stale": "These are the previous answer's figures, still on screen while the new one is worked out. No file is offered until the two are the same.",
+    "measure": "Measurement",
+    "bins": "Intervals",
+    "floor": "Fewest caves per interval",
+    "caveType": "Cave type",
+    "rockType": "Rock type",
+    "region": "Region",
+    "regionPlaceholder": "Exact region name",
+    "anyValue": "Any",
+    "filterNote": "These narrowings are matched exactly, and nothing here counts how many caves each one would leave — that count is the question itself, so it is answered below rather than printed on the controls.",
+    "linearCount": "Linear",
+    "logCount": "Logarithmic",
+    "caves": "Caves",
+    "binCount": "{{caves}} caves",
+    "joinedLabel": "{{from}}–{{to}} joined",
+    "joinedNote": "Several intervals joined together, because one of them held too few caves to publish on its own.",
+    "joinedSummary": "{{joined}} of these intervals are several joined together, marked in the chart and wider than the rest. The registry joins an interval holding too few caves rather than leaving it out, because leaving it out would itself say something is there.",
+    "tailSpan": "The fitted tail begins at {{from}}: it describes the last {{intervals}} of the {{total}} intervals drawn, and nothing to the left of them.",
+    "counts": "Computed over the {{measured}} of {{total}} caves in this set that record a value. A cave without one is absent rather than counted as zero.",
+    "noRange": "There is no range to divide: nothing in this set records this measurement, or everything recording it records the same value.",
+    "noFigure": "—",
+    "percentiles": "Percentiles",
+    "fraction": "Percentile",
+    "percentileName": "{{percent}}th",
+    "fits": "Fits",
+    "lognormal": "Lognormal",
+    "lognormalAbsent": "No lognormal fit: too few caves record this measurement, or they all record the same value. Parameters would exist arithmetically and mean nothing.",
+    "paretoTail": "Power-law tail",
+    "paretoAbsent": "No fitted tail: the upper tail holds too few caves for an exponent to mean anything.",
+    "alphaValue": "{{alpha}} ± {{error}}",
+    "tailFrom": "Tail starts at",
+    "median": "Median",
+    "mean": "Mean",
+    "goodness": "Distance from the fitted tail",
+    "fittedOver": "Fitted over",
+    "fittedOverValue": "{{caves}} caves",
+    "failed": "The distribution could not be worked out.",
+    "correlationTitle": "Two measurements against each other",
+    "correlationFailed": "The relationship could not be worked out.",
+    "horizontal": "Horizontal measurement",
+    "vertical": "Vertical measurement",
+    "logFit": "Logarithmic",
+    "linearFit": "Linear",
+    "pair": "{{y}} against {{x}}",
+    "fit": "The fit",
+    "slope": "Slope",
+    "intercept": "Intercept",
+    "rSquared": "Goodness of fit (r²)",
+    "correlationCoefficient": "Correlation",
+    "pairs": "Taken over",
+    "pairsValue": "{{caves}} caves recording both",
+    "form": "Fitted",
+    "drawnNote": "The line is the fitted relationship, drawn across the range the horizontal measurement covers in this set. The caves it was fitted through are not drawn: the registry answers this question with the relationship rather than with the caves behind it, and the range drawn across may be wider than the pairs the fit used.",
+    "positiveOnly": "Fitted through the logarithms of both, so a cave recording zero or less on either measurement contributes to nothing rather than being nudged upwards. The count beside the fit says how many were left.",
+    "absence": {
+      "noPairs": "No cave in this set records both of these measurements, so there is no relationship to fit and none is drawn.",
+      "notFitted": "Fewer than two caves record both of these measurements. A line through one point is not a relationship, so none is drawn.",
+      "noRange": "The horizontal measurement covers no range in this set, so there is nothing to draw the relationship across. The figures beside it still stand.",
+      "noPositiveRange": "The fit is taken over logarithms and the horizontal measurement reaches zero or below in this set, so it has no lower end to draw from. The figures beside it still stand.",
+      "rangeUnknown": "The range this measurement covers in this set has not arrived yet, so there is nothing to draw the relationship across. The figures beside it already stand.",
+      "rangeUnavailable": "The range this measurement covers in this set could not be read, so the relationship is not drawn. That is one figure that failed to arrive rather than anything about the caves, and the figures beside it still stand."
+    },
+    "measures": {
+      "surveyedLength": "Surveyed length (m)",
+      "estimatedLength": "Estimated length (m)",
+      "depth": "Depth (m)",
+      "positiveDepth": "Height above entrance (m)",
+      "negativeDepth": "Depth below entrance (m)",
+      "realExtension": "Real extension (m)",
+      "projectedExtension": "Projected extension (m)",
+      "volume": "Volume (m³)",
+      "area": "Area (m²)",
+      "ramificationIndex": "Ramification index"
+    },
+    "regionsTitle": "The registry by region",
+    "regionsCard": "Caves per region",
+    "regionsFailed": "The breakdown could not be worked out.",
+    "noRegion": "No region recorded",
+    "regionsCounts": "{{placed}} caves stand under a region below, out of {{total}} in this set that you may read.",
+    "regionsShortfall": "The rows below do not add up to the total, and that is the answer rather than a fault in it: {{missing}} of the {{total}} caves you may read here have a position you may not see, so they are counted in the total and stand under no region. Which regions they belong to is exactly what is being withheld, so there is no row gathering them and no percentage that reconciles.",
+    "regionsEmpty": "No cave in this set has a position you may see, so there is nothing to divide between regions. The total above still counts the caves you may read."
   },
   "morphometry": {
     "title": "Measured shape",
@@ -4331,6 +4446,50 @@
       "stopCommand": "To stop the photo library itself, use the deployment: {{command}}",
       "cannotConnect": "{{library}} is not connected: this installation has no address or credential for it. Connecting one is part of the deployment and cannot be done from this page.",
       "none": "This installation has been given no photo library, so there is nothing to stop."
+    }
+  },
+  "karstlinkExport": {
+    "menuItem": "KarstLink (JSON-LD)",
+    "changeAnswer": "KarstLink (JSON-LD) — change my answer…",
+    "title": "Export caves for interchange",
+    "intro": "Caves described in the published cave and karst vocabulary, as a file you can hand to somebody else. A file outlives the permission that produced it, so what it says about a protected location is decided here and written into the file itself.",
+    "download": "Export",
+    "caveCount": "{{count}} cave(s) in this export.",
+    "protectedCount": "{{count}} of them have a location this installation protects. The answer below applies to all of them.",
+    "noneProtected": "None of them has a location this installation protects, so nothing below changes this file.",
+    "tooMany": "This selection holds {{count}} cave(s) and one file may hold {{limit}}. Narrow the filters and export in parts — a file that stopped at a limit looks exactly like a complete one to whoever receives it.",
+    "remember": "Remember this answer, and stop asking me",
+    "askAgain": "That export could not be made with your remembered answer. Please choose again.",
+    "treatments": {
+      "grid_position": {
+        "label": "Place them on the protection grid",
+        "help": "The same coarse position the map already shows to anyone without the right to see the exact one. The file says beside each of them how far it may be from the real place."
+      },
+      "no_position": {
+        "label": "Include them with no coordinates",
+        "help": "Everything else about the cave — its name, its code, its length and depth — and nothing about where it is."
+      },
+      "omit": {
+        "label": "Leave them out of the file",
+        "help": "The file states how many caves were left out, because counts taken from it will otherwise disagree with the registry and the recipient would have no way to know."
+      }
+    },
+    "errors": {
+      "tooManyCaves": "One file may hold {{count}} caves. Narrow the filters and export in parts."
+    }
+  },
+  "externalIds": {
+    "title": "Identifiers in other registers",
+    "explanation": "The number another register knows this cave by. It is the only stable way to say that a cave here and a cave there are the same cave: names are not stable, and a position is exactly what may not be shared. Only the number is kept — nothing else a register says about the cave is copied here, so nothing here can go stale while still looking authoritative.",
+    "placeholder": "Not recorded",
+    "lookup": "Look this cave up in Grottocenter",
+    "lookupFailed": "Grottocenter could not be asked.",
+    "notConfigured": "This installation does not look caves up in Grottocenter. An administrator turns the integration on before it can be used; until then nothing is sent anywhere.",
+    "noCandidates": "Grottocenter offered nothing for this name.",
+    "accept": "Record this one",
+    "systems": {
+      "grottocenter": "Grottocenter",
+      "national_cadastre": "National cadastre"
     }
   }
 }

@@ -318,3 +318,229 @@ public sealed record RegistryCorrelationDto(
 /// </param>
 public sealed record RegistryRegionBreakdownDto(
     int CaveCount, IReadOnlyList<RegistryRegionRow> Regions, string Basis);
+
+/// <summary>
+/// Reading a list of measure names off a request, in one place so the rule that refuses a bad list
+/// and the code that answers a good one cannot disagree about what the list said.
+/// </summary>
+public static class RegistryMeasureList
+{
+    /// <summary>
+    /// Parses a comma-separated list of measure names. Every entry must name a measure, no measure
+    /// may be named twice, and the list must be neither empty nor longer than the registry will
+    /// group over.
+    /// </summary>
+    /// <remarks>
+    /// A repeat is refused rather than collapsed. A measure named twice would be counted twice in
+    /// every distance, which is a weighting the caller did not ask for and could not see in the
+    /// answer; silently deduplicating it would answer a different question from the one asked.
+    /// </remarks>
+    public static bool TryParse(string? text, out IReadOnlyList<RegistryMeasure> measures)
+    {
+        measures = [];
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var parts = text.Split(
+            ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var parsed = new List<RegistryMeasure>(parts.Length);
+        foreach (var part in parts)
+        {
+            if (!RegistryMeasures.TryParse(part, out var measure) || parsed.Contains(measure))
+            {
+                return false;
+            }
+
+            parsed.Add(measure);
+        }
+
+        if (parsed.Count == 0
+            || parsed.Count > RegistryStatisticsLimits.MaximumClusteringMeasureCount)
+        {
+            return false;
+        }
+
+        measures = parsed;
+        return true;
+    }
+}
+
+/// <param name="Measures">
+/// The measures the grouping is taken over, by name, comma-separated. It is the caller's choice
+/// because it decides the population as much as the answer: a measure only a tenth of the registry
+/// records turns the grouping into a statement about that tenth, and the only way a reader can
+/// weigh that trade is to be able to make it and see what each choice leaves.
+/// </param>
+/// <param name="Clusters">
+/// How many groups to produce. Bounded at both ends: one group is the population, and past a
+/// handful the reader is handed a list of caves rather than a description of a set.
+/// </param>
+public sealed record RegistryClusteringRequest(
+    [property: FromQuery(Name = "measures")] string? Measures,
+    [property: FromQuery(Name = "clusters")] int? Clusters,
+    [property: FromQuery(Name = "areaId")] Guid? AreaId,
+    [property: FromQuery(Name = "caveTypeId")] long? CaveTypeId,
+    [property: FromQuery(Name = "rockTypeId")] long? RockTypeId,
+    [property: FromQuery(Name = "region")] string? Region) : IRegistryScopeRequest;
+
+public sealed class RegistryClusteringRequestValidator : AbstractValidator<RegistryClusteringRequest>
+{
+    public RegistryClusteringRequestValidator()
+    {
+        RuleFor(x => x.Measures)
+            .Must(text => RegistryMeasureList.TryParse(text, out _))
+            .WithMessage(
+                "measures must be a comma-separated list of at most "
+                + $"{RegistryStatisticsLimits.MaximumClusteringMeasureCount} distinct names from: "
+                + $"{RegistryMeasures.Accepted}.");
+
+        RuleFor(x => x.Clusters)
+            .GreaterThanOrEqualTo(MetricClustering.MinimumClusterCount)
+            .LessThanOrEqualTo(MetricClustering.MaximumClusterCount)
+            .When(x => x.Clusters is not null)
+            .WithMessage(
+                $"clusters must be between {MetricClustering.MinimumClusterCount} and "
+                + $"{MetricClustering.MaximumClusterCount}. One group is the population, and past a "
+                + "handful the grouping describes individual caves rather than a set.");
+    }
+}
+
+/// <summary>
+/// How much of the population recorded one measure, and what asking for it cost.
+/// </summary>
+/// <param name="SoleReason">
+/// Caves excluded from the grouping that would have been in it had this one measure not been
+/// asked for. It is the answer to "what does this column cost me", and it is the figure a reader
+/// has to see before the groups mean anything.
+/// </param>
+public sealed record RegistryClusterCoverageDto(
+    RegistryMeasure Measure, int Recorded, int Missing, int SoleReason);
+
+/// <summary>
+/// Who was grouped and who was not. Published above the groups rather than beside them, because a
+/// grouping over the best-surveyed tenth of a registry is internally consistent and reads exactly
+/// like a grouping over the registry.
+/// </summary>
+/// <param name="Considered">Caves in scope the caller may read.</param>
+/// <param name="Eligible">Those that recorded every named measure, and were therefore grouped.</param>
+/// <param name="Excluded">
+/// The rest. Published rather than left to be subtracted, because a figure a reader has to compute
+/// is a figure a reader skips.
+/// </param>
+public sealed record RegistryClusterPopulationDto(
+    int Considered,
+    int Eligible,
+    int Excluded,
+    IReadOnlyList<RegistryClusterCoverageDto> Measures);
+
+/// <summary>
+/// What one measure was centred and divided by before any distance was taken.
+/// </summary>
+/// <remarks>
+/// Published because the standardisation is not a detail: a length in metres and a ratio between
+/// nought and one are not comparable distances, and without it the measure with the widest raw
+/// spread would decide every group by itself. A reader who can see what each column was divided by
+/// can see that it happened.
+/// </remarks>
+/// <param name="StandardDeviation">
+/// Zero when every grouped cave recorded the same value, in which case that measure contributed
+/// nothing to any distance. Reported rather than dropped, so a caller can see that a measure they
+/// chose did no work.
+/// </param>
+public sealed record RegistryClusterScalingDto(
+    RegistryMeasure Measure, double Mean, double StandardDeviation);
+
+/// <summary>One group.</summary>
+/// <param name="Index">
+/// Its number. <b>A label, not a rank and not a score.</b> Group 2 is not larger, better or more
+/// interesting than group 1; the numbering falls out of the order the starting positions were
+/// chosen in and carries no meaning a reader may lean on.
+/// </param>
+/// <param name="Count">Caves in it.</param>
+/// <param name="Centre">
+/// Its middle, in the units the measures arrived in. <b>Null for a group holding fewer caves than
+/// <c>minimumPublishableClusterSize</c></b>: a mean over two caves is those two caves' readings
+/// with one arithmetic step in front of them, and anybody who knows one of them reads the other
+/// off it. The count is still published — a thin group is itself a finding — but its measurements
+/// are not.
+/// </param>
+/// <param name="ScaledCentre">
+/// The same middle in the standardised space the distances were actually taken in, withheld under
+/// the same rule. It is published beside the readable one because every spread figure here is
+/// measured in that space, and a reader comparing the two would otherwise be comparing different
+/// quantities.
+/// </param>
+/// <param name="MeanDistanceToCentre">
+/// The group's own width, standardised, and withheld under the same rule. <b>Read it against
+/// <c>separation.meanBetweenDistance</c></b>: a group as wide as the distance between groups is
+/// not a group.
+/// </param>
+public sealed record RegistryClusterDto(
+    int Index,
+    int Count,
+    IReadOnlyList<double>? Centre,
+    IReadOnlyList<double>? ScaledCentre,
+    double? MeanDistanceToCentre);
+
+/// <summary>Which group one cave fell in.</summary>
+/// <param name="CaveId">The cave.</param>
+/// <param name="Cluster">The group's <see cref="RegistryClusterDto.Index"/>.</param>
+/// <param name="DistanceToCentre">Its distance to that group's middle, standardised.</param>
+public sealed record RegistryClusterAssignmentDto(
+    Guid CaveId, int Cluster, double DistanceToCentre);
+
+/// <summary>
+/// How far apart the groups stand compared with how wide they are — the one figure in this answer
+/// that can say the grouping found nothing.
+/// </summary>
+/// <param name="Ratio">
+/// <paramref name="MeanWithinDistance"/> over <paramref name="MeanBetweenDistance"/>. <b>Small
+/// means the groups are real; near or above one means they are not.</b> The algorithm returns
+/// exactly the number of groups it was asked for on any data whatever, including noise, so the
+/// existence of a grouping is evidence of nothing and this ratio is the only thing here that can
+/// contradict it. Null when the middles do not separate at all, which is the strongest possible
+/// reading of "there is no structure here".
+/// </param>
+public sealed record RegistryClusterSeparationDto(
+    double MeanWithinDistance, double MeanBetweenDistance, double? Ratio);
+
+/// <summary>
+/// Which caves in scope resemble each other, over the measures the caller named — together with
+/// everything a reader needs in order to know what it is a grouping of.
+/// </summary>
+/// <param name="Clusters">
+/// The groups. <b>Empty when too few caves recorded every named measure to group at all</b>, with
+/// the population account still filled in: the answer to "nothing could be grouped" is the account
+/// of why, not an error.
+/// </param>
+/// <param name="MinimumEligibleCount">
+/// The fewest grouped caves a grouping is attempted over, served so a caller reading an empty
+/// answer can see how far short the population fell.
+/// </param>
+/// <param name="MinimumPublishableClusterSize">
+/// The fewest caves a group may hold before its measurements are published. Served rather than
+/// assumed, so a reader seeing a group with a count and no centre knows which rule withheld it.
+/// </param>
+/// <param name="Converged">
+/// False when the refinement was still moving caves when it hit its cap, which makes the grouping
+/// arbitrary in its details rather than wrong.
+/// </param>
+/// <param name="Basis">
+/// What it was computed over, in words, because two people with different access get different
+/// groupings of the same registry and both are right.
+/// </param>
+public sealed record RegistryClusteringDto(
+    IReadOnlyList<RegistryMeasure> Measures,
+    int RequestedClusterCount,
+    RegistryClusterPopulationDto Population,
+    IReadOnlyList<RegistryClusterScalingDto> Scaling,
+    IReadOnlyList<RegistryClusterDto> Clusters,
+    IReadOnlyList<RegistryClusterAssignmentDto> Assignments,
+    RegistryClusterSeparationDto? Separation,
+    int MinimumEligibleCount,
+    int MinimumPublishableClusterSize,
+    int Iterations,
+    bool Converged,
+    string Basis);
