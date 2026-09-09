@@ -105,7 +105,16 @@ export default function TripLibraryPhotoPanel({ tripId }: TripLibraryPhotoPanelP
   }
 
   const library = usable.find((entry) => entry.source === chosen);
-  const counted = data ? countLine(data, true) : null;
+
+  // Whether the answer on screen was narrowed to a trip's days, read off the request that was
+  // actually sent rather than written as a literal beside each sentence that depends on it. It is
+  // always true here — this panel has a trip or it is not drawn — and that is exactly why it is
+  // worth deriving: the two sentences below are the whole honesty of the surface, and a literal
+  // that stopped agreeing with the request would be silently wrong in the worst direction.
+  // "Showing 12 of 12 photographs the library holds" over a listing narrowed to one weekend tells
+  // a reader their club owns twelve photographs when it owns forty thousand.
+  const narrowedToTheTrip = query.tripId !== undefined;
+  const counted = data ? countLine(data, narrowedToTheTrip) : null;
 
   // The sentence a failure gets, decided by the state. The two refusals this panel can meet which
   // the library's page cannot — a trip that is not this reader's to see, and a trip whose dates
@@ -193,7 +202,7 @@ export default function TripLibraryPhotoPanel({ tripId }: TripLibraryPhotoPanelP
             onOpen={setOpen}
             // "Nothing was taken then" and "this library holds nothing" are different facts, and
             // only the first one is about the trip. Kept apart where the keeping apart is checked.
-            emptyText={t(emptyMessage(state, data, searchWording('text'), true))}
+            emptyText={t(emptyMessage(state, data, searchWording('text'), narrowedToTheTrip))}
           />
 
           {(paging.hasPrevious || paging.hasNext) && (
