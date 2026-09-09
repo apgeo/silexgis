@@ -4321,5 +4321,49 @@
     },
     "notConnected": "{{library}} is not connected: this installation has no address or credential for it.",
     "recheck": "Check again"
+  },
+  "karstlinkExport": {
+    "menuItem": "KarstLink (JSON-LD)",
+    "changeAnswer": "KarstLink (JSON-LD) — change my answer…",
+    "title": "Export caves for interchange",
+    "intro": "Caves described in the published cave and karst vocabulary, as a file you can hand to somebody else. A file outlives the permission that produced it, so what it says about a protected location is decided here and written into the file itself.",
+    "download": "Export",
+    "caveCount": "{{count}} cave(s) in this export.",
+    "protectedCount": "{{count}} of them have a location this installation protects. The answer below applies to all of them.",
+    "noneProtected": "None of them has a location this installation protects, so nothing below changes this file.",
+    "tooMany": "This selection holds {{count}} cave(s) and one file may hold {{limit}}. Narrow the filters and export in parts — a file that stopped at a limit looks exactly like a complete one to whoever receives it.",
+    "remember": "Remember this answer, and stop asking me",
+    "askAgain": "That export could not be made with your remembered answer. Please choose again.",
+    "treatments": {
+      "grid_position": {
+        "label": "Place them on the protection grid",
+        "help": "The same coarse position the map already shows to anyone without the right to see the exact one. The file says beside each of them how far it may be from the real place."
+      },
+      "no_position": {
+        "label": "Include them with no coordinates",
+        "help": "Everything else about the cave — its name, its code, its length and depth — and nothing about where it is."
+      },
+      "omit": {
+        "label": "Leave them out of the file",
+        "help": "The file states how many caves were left out, because counts taken from it will otherwise disagree with the registry and the recipient would have no way to know."
+      }
+    },
+    "errors": {
+      "tooManyCaves": "One file may hold {{count}} caves. Narrow the filters and export in parts."
+    }
+  },
+  "externalIds": {
+    "title": "Identifiers in other registers",
+    "explanation": "The number another register knows this cave by. It is the only stable way to say that a cave here and a cave there are the same cave: names are not stable, and a position is exactly what may not be shared. Only the number is kept — nothing else a register says about the cave is copied here, so nothing here can go stale while still looking authoritative.",
+    "placeholder": "Not recorded",
+    "lookup": "Look this cave up in Grottocenter",
+    "lookupFailed": "Grottocenter could not be asked.",
+    "notConfigured": "This installation does not look caves up in Grottocenter. An administrator turns the integration on before it can be used; until then nothing is sent anywhere.",
+    "noCandidates": "Grottocenter offered nothing for this name.",
+    "accept": "Record this one",
+    "systems": {
+      "grottocenter": "Grottocenter",
+      "national_cadastre": "National cadastre"
+    }
   }
 }

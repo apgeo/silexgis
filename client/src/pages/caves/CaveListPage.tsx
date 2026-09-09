@@ -6,7 +6,7 @@ import type { TablePaginationConfig } from 'antd';
 import type { SorterResult } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { downloadFile } from '../../api/download.ts';
+import { DownloadError, downloadFile } from '../../api/download.ts';
 import {
   useCan,
   useCaveTypes,
@@ -17,8 +17,21 @@ import {
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import CaveDistributionPanel from '../../components/statistics/CaveDistributionPanel.tsx';
+import KarstLinkExportModal from '../../components/caves/KarstLinkExportModal.tsx';
+import { exportKarstLinkWithStoredAnswer } from '../../components/caves/karstLinkExport.ts';
+import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
 const exportFormats = ['csv', 'geojson', 'gpx', 'kml', 'shapefile'] as const;
+
+/**
+ * The interchange format sits beside the vector ones but is not one of them: it is the only
+ * export that has a question to ask before it runs, so unless the answer is already settled it
+ * opens a dialog rather than starting a download.
+ */
+const karstLinkKey = 'karstlink';
+
+/** Reaching the question again once it has been answered once. */
+const karstLinkChangeKey = 'karstlink-change';
 
 const sortableFields: Record<string, string> = {
   name: 'name',
@@ -34,6 +47,8 @@ export default function CaveListPage() {
   const { message } = App.useApp();
   const [params, setParams] = useState<CaveListParams>({ page: 1, pageSize: 20 });
   const [searchInput, setSearchInput] = useState('');
+  const [karstLinkOpen, setKarstLinkOpen] = useState(false);
+  const karstLinkTreatment = useUiPrefsStore((s) => s.karstLinkTreatment);
   const search = useDebouncedValue(searchInput);
   const { data, isFetching } = useCaves({ ...params, search: search || undefined });
   const { data: caveTypes } = useCaveTypes();
@@ -52,6 +67,42 @@ export default function CaveListPage() {
       query.set('caveTypeId', String(params.caveTypeId));
     }
     downloadFile(`/api/v1/export/caves?${query}`).catch(() => message.error(t('common.saveFailed')));
+  };
+
+  // The same narrowing the list is showing, so the count in the dialog is about the caves on
+  // the screen and the file holds those and no others.
+  const karstLinkRequest = {
+    search: search || undefined,
+    caveTypeId: params.caveTypeId,
+    tag: params.tag,
+  };
+
+  /**
+   * The interchange export, asked for from the menu.
+   *
+   * Somebody who ticked "stop asking me" is not asked: their answer travels with the request
+   * and the file starts downloading. That is what the checkbox promised, and a dialog that
+   * reappeared with the answer pre-selected would be collecting a confirmation the person had
+   * already given.
+   *
+   * Any refusal puts the dialog back up rather than only showing an error. The two refusals
+   * this path can actually meet — a set too large for one file, and a stored answer this
+   * server no longer understands — are both things the dialog states properly and both are
+   * recovered from by choosing again.
+   */
+  const onKarstLinkExport = async () => {
+    if (karstLinkTreatment === undefined) {
+      setKarstLinkOpen(true);
+      return;
+    }
+
+    try {
+      await exportKarstLinkWithStoredAnswer(karstLinkRequest, karstLinkTreatment);
+    } catch (error) {
+      const code = error instanceof DownloadError ? error.code : undefined;
+      message.error(code === undefined ? t('common.saveFailed') : t('karstlinkExport.askAgain'));
+      setKarstLinkOpen(true);
+    }
   };
 
   const onTableChange = (
@@ -74,11 +125,28 @@ export default function CaveListPage() {
         <Flex gap={8}>
           <Dropdown
             menu={{
-              items: exportFormats.map((format) => ({
-                key: format,
-                label: format.toUpperCase(),
-                onClick: () => onExport(format),
-              })),
+              items: [
+                ...exportFormats.map((format) => ({
+                  key: format,
+                  label: format.toUpperCase(),
+                  onClick: () => onExport(format),
+                })),
+                { type: 'divider' as const, key: 'karstlink-divider' },
+                {
+                  key: karstLinkKey,
+                  label: t('karstlinkExport.menuItem'),
+                  onClick: () => void onKarstLinkExport(),
+                },
+                ...(karstLinkTreatment === undefined
+                  ? []
+                  : [
+                      {
+                        key: karstLinkChangeKey,
+                        label: t('karstlinkExport.changeAnswer'),
+                        onClick: () => setKarstLinkOpen(true),
+                      },
+                    ]),
+              ],
             }}
           >
             <Button icon={<DownloadOutlined />}>{t('common.export')}</Button>
@@ -145,6 +213,11 @@ export default function CaveListPage() {
         ]}
       />
       <CaveDistributionPanel caves={data?.items ?? []} typeName={typeName} />
+      <KarstLinkExportModal
+        open={karstLinkOpen}
+        onClose={() => setKarstLinkOpen(false)}
+        request={karstLinkRequest}
+      />
     </div>
   );
 }

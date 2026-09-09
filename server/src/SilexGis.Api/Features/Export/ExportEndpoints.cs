@@ -33,6 +33,7 @@ public static class ExportEndpoints
         api.MapGet("/geofiles/{id:guid}/export", ExportGeofileAsync)
             .WithTags("Export")
             .WithSummary("Imported geofile rows re-exported in the requested format.");
+        api.MapKarstLinkExportEndpoints();
         return api;
     }
 

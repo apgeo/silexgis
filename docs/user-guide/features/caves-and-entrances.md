@@ -124,6 +124,57 @@ Under the surface a cave is one kind of [feature](surface-features.md), which is
 
 ---
 
+## Sharing caves in the interchange format
+
+Alongside the map formats, the cave list's **Export** menu offers **KarstLink (JSON-LD)** — a
+description of the caves in the shared speleological vocabulary published by the UIS, so somebody
+using different software can read them. It exports the caves the list is currently showing, with the
+same search, type and tag filters applied.
+
+**It asks one question first, and it matters.** If any of the caves in the export has a
+protected location, the dialog says how many, and asks what the file should
+say about them. There are three answers:
+
+- **Include the cave without a position** — everything else about the cave travels, no coordinates
+  at all.
+- **Leave those caves out of the file entirely.**
+- **Include them at the approximate position** — the same rounded position the map shows to people
+  who may not see the exact one.
+
+**The exact position is not offered, to anybody.** Not to an administrator, and not to the person who
+recorded the cave. A file goes on existing after the permissions that produced it have changed, so
+this application will not write a protected position into one.
+
+**The file says what was decided.** Each cave states which of the three was applied and, where a
+position was rounded, how far it may be from the truth; a header says how many caves are in the file
+and how many were deliberately left out — so nobody counting the caves in the file mistakes it for a
+count of the register.
+
+Tick **Remember my answer** and you will not be asked again on this browser; a second menu item lets
+you change it, and if the server refuses a request the dialog comes back rather than failing quietly.
+
+Every interchange export is recorded in the [history and audit trail](history-and-audit.md), together
+with which caves were exported and how their positions were treated.
+
+---
+
+## Numbers in other registers
+
+A cave often has an entry elsewhere — in [Grottocenter](https://grottocenter.org), the international
+community cave database, or in a national cadastre. The cave page has a small section for recording
+those numbers, so the link travels with the cave and appears in an interchange export.
+
+If your administrator has turned the Grottocenter lookup on, a button there asks Grottocenter whether
+it already knows this cave. **Only the cave's name is sent** — never its position — and only the
+number you accept is kept. Most installations will see "your administrator has not set this up", and
+nothing leaves the installation in that state.
+
+**One caution.** A Grottocenter entry publishes coordinates. So for a cave whose location is
+protected here, the interchange export deliberately leaves the external link out: publishing it would
+hand over the position the file is withholding.
+
+---
+
 ## Deleting
 
 **Delete this cave?** — and note that on features generally, *contained features are deleted

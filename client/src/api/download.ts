@@ -8,12 +8,62 @@ import type { StatisticsSubject } from './hooks.ts';
  * blob download named by the server's Content-Disposition.
  */
 export async function downloadFile(url: string): Promise<void> {
+  return download(url);
+}
+
+/**
+ * The same download, for an export the caller has to say something about.
+ *
+ * A per-cave decision does not fit in a query string — a few thousand of them would not
+ * survive a URL length limit — so the request carries a body and the answer is still a file.
+ * Nothing else changes: same token, same naming, same blob.
+ *
+ * The server's refusal codes matter to the caller here, so a failure carries the parsed
+ * problem document rather than only a status: an export refused because some cave had no
+ * decision has to be able to say which caves, and a thrown status number cannot.
+ */
+export async function downloadFilePost(url: string, body: unknown): Promise<void> {
+  return download(url, body);
+}
+
+/** A refused download, carrying the server's stable code and members. */
+export class DownloadError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly problem?: Record<string, unknown>;
+
+  constructor(status: number, problem?: Record<string, unknown>) {
+    super(`Download failed (${status})`);
+    this.name = 'DownloadError';
+    this.status = status;
+    this.problem = problem;
+    this.code = typeof problem?.code === 'string' ? problem.code : undefined;
+  }
+}
+
+async function download(url: string, body?: unknown): Promise<void> {
   const user = await userManager.getUser();
+  const headers: Record<string, string> = {};
+  if (user?.access_token) {
+    headers.Authorization = `Bearer ${user.access_token}`;
+  }
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const response = await fetch(url, {
-    headers: user?.access_token ? { Authorization: `Bearer ${user.access_token}` } : undefined,
+    method: body === undefined ? 'GET' : 'POST',
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(`Download failed (${response.status})`);
+    let problem: Record<string, unknown> | undefined;
+    try {
+      problem = (await response.json()) as Record<string, unknown>;
+    } catch {
+      // A refusal with no readable body is still a refusal; the status carries it.
+    }
+    throw new DownloadError(response.status, problem);
   }
 
   const disposition = response.headers.get('content-disposition') ?? '';

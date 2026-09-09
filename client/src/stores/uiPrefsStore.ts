@@ -16,6 +16,14 @@ export type LandingPage = 'map' | 'dashboard';
 
 export type ThemePref = 'system' | 'light' | 'dark';
 
+/**
+ * What an interchange export may be asked to do with a cave position this installation
+ * protects. The same three words the server's closed vocabulary uses, and deliberately no
+ * fourth: the surveyed position is not among them, and a value stored here is only ever a
+ * suggestion the server re-checks before it writes a byte.
+ */
+export type ProtectedPositionTreatment = 'no_position' | 'omit' | 'grid_position';
+
 /** Appearance choices that must be honoured before anything is painted. */
 export interface Appearance {
   theme: ThemePref;
@@ -57,6 +65,14 @@ interface UiPrefsState {
    */
   appearance: Appearance;
   setAppearance: (patch: Partial<Appearance>) => void;
+  /**
+   * The answer this person settled on for protected positions when exporting for interchange,
+   * so somebody who has already decided is not asked the same question every time. Undefined
+   * means they have not decided and are asked. It is a remembered preference and never an
+   * authority: the server refuses an export that names nothing valid, whatever is stored here.
+   */
+  karstLinkTreatment?: ProtectedPositionTreatment;
+  setKarstLinkTreatment: (treatment: ProtectedPositionTreatment | undefined) => void;
   /**
    * How each selection panel is arranged, keyed by which panel it is. Every mount keeps its own,
    * so a pop-out somebody set up to show one thing is not rearranged by the main window.
@@ -109,6 +125,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
         set({ centerlineDetailZoom: detailZoom, centerlineMaxPaths: maxPaths }),
       appearance: DEFAULT_APPEARANCE,
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
+      karstLinkTreatment: undefined,
+      setKarstLinkTreatment: (treatment) => set({ karstLinkTreatment: treatment }),
       selectors: {},
       setSelectorPrefs: (key, patch) =>
         set((state) => ({
@@ -154,7 +172,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
     }),
     {
       name: 'silexgis.uiPrefs',
-      version: 4,
+      version: 5,
       // Without a migrate, raising the version makes zustand discard the whole stored blob —
       // wiping everyone's pinned types, landing page and centerline budgets to add one field.
       migrate: (persisted, from) => {
@@ -165,6 +183,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           panels: from < 3 ? {} : (state.panels ?? {}),
           layouts: from < 3 ? [] : (state.layouts ?? []),
           selectors: from < 4 ? {} : (state.selectors ?? {}),
+          karstLinkTreatment: from < 5 ? undefined : state.karstLinkTreatment,
         };
       },
     },

@@ -9,6 +9,7 @@ afterEach(() => {
     mapChromeHidden: false,
     landingPage: 'map',
     appearance: DEFAULT_APPEARANCE,
+    karstLinkTreatment: undefined,
   });
   localStorage.removeItem('silexgis.uiPrefs');
 });
@@ -41,7 +42,7 @@ describe('uiPrefsStore pinned types', () => {
     const raw = localStorage.getItem('silexgis.uiPrefs');
     expect(raw).not.toBeNull();
     const stored = JSON.parse(raw!) as { state: { pinnedTypeIds: number[]; mapChromeHidden: boolean }; version: number };
-    expect(stored.version).toBe(4);
+    expect(stored.version).toBe(5);
     expect(stored.state.pinnedTypeIds).toEqual([7]);
     expect(stored.state.mapChromeHidden).toBe(true);
   });
@@ -136,6 +137,29 @@ describe('uiPrefsStore appearance', () => {
     expect(useUiPrefsStore.getState().panels.main?.width).toBe(420);
     expect(useUiPrefsStore.getState().layouts).toHaveLength(1);
     expect(useUiPrefsStore.getState().selectors).toEqual({});
+  });
+
+  it('keeps a selector memory when the remembered export answer arrives beside it', () => {
+    // The same guard again, for the field that remembers what somebody decided about protected
+    // positions in an interchange export. Adding it must not cost anybody what they already had,
+    // and somebody who has not decided must come back undecided rather than with a default
+    // treatment nobody chose.
+    localStorage.setItem(
+      'silexgis.uiPrefs',
+      JSON.stringify({
+        version: 4,
+        state: {
+          pinnedTypeIds: [6],
+          selectors: { caves: { width: 300 } },
+        },
+      }),
+    );
+
+    useUiPrefsStore.persist.rehydrate();
+
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([6]);
+    expect(useUiPrefsStore.getState().selectors).toEqual({ caves: { width: 300 } });
+    expect(useUiPrefsStore.getState().karstLinkTreatment).toBeUndefined();
   });
 });
 

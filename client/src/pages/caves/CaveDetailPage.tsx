@@ -65,6 +65,7 @@ import QrPublicationModal from '../../components/qr/QrPublicationModal.tsx';
 import { printedCode } from '../../components/qr/printedCode.ts';
 import TagChips from '../../components/tags/TagChips.tsx';
 import CaveClosestApproachSection from './CaveClosestApproachSection.tsx';
+import CaveExternalIdsSection from './CaveExternalIdsSection.tsx';
 import CaveTripsSection from './CaveTripsSection.tsx';
 import CenterlineSection from './CenterlineSection.tsx';
 import EntranceEditorModal from '../../components/caves/EntranceEditorModal.tsx';
@@ -398,6 +399,8 @@ export default function CaveDetailPage() {
       {/* Directly under the archive it is read from: these are the compiler's own figures about an
           archived log, not something this application worked out from the stored survey. Silent
           for a cave nobody has archived a log for. */}
+      {id && <CaveExternalIdsSection caveId={id} canEdit={canEdit} />}
+
       {id && <SurveyQualityPanel caveId={id} />}
 
       {id && <CenterlineSection caveId={id} canEdit={canEdit} />}

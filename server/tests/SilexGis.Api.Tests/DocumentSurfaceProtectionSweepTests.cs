@@ -204,6 +204,40 @@ public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDispo
             }
         }
 
+        // The interchange export is swept here rather than from the list above because it is
+        // reached with a POST carrying a decision per cave, and a list of URLs cannot express
+        // that. It is swept under every treatment it offers, not only the one that withholds
+        // the position: the treatment that keeps the cave on the map's coarse grid is the one
+        // that could disclose a surveyed coordinate by getting the snap wrong, so it is the
+        // one worth sweeping most.
+        foreach (var treatment in new[] { "grid_position", "no_position", "omit" })
+        {
+            var response = await reader.PostAsJsonAsync(
+                "/api/v1/export/caves/karstlink",
+                new { search = caveName, treatmentForAll = treatment });
+            var body = await response.Content.ReadAsStringAsync();
+            response.IsSuccessStatusCode.ShouldBeTrue(
+                $"the interchange export answered {(int)response.StatusCode} under '{treatment}': {body}");
+
+            // Liveness: under the two treatments that keep the cave, the file has to be seen
+            // carrying it before its silence about the position counts for anything. Under
+            // "omit" the cave is correctly absent, so what proves the sweep is live there is
+            // that the file says a cave was left out.
+            body.ShouldContain(
+                treatment == "omit" ? "\"omittedCaveCount\": 1" : caveName,
+                Case.Sensitive,
+                $"the interchange export under '{treatment}' carried nothing this sweep could assert about");
+
+            foreach (var coordinate in Coordinates)
+            {
+                body.ShouldNotContain(
+                    coordinate,
+                    Case.Sensitive,
+                    $"the interchange export under '{treatment}' emitted a protected position "
+                    + "to a caller without exact location");
+            }
+        }
+
         // The attachment listing is left out of the sweep above and asserted here instead,
         // because for this caller the correct answer is nothing at all. What that listing
         // publishes is the pairing itself — which documents point at this cave — and a caller
