@@ -552,6 +552,130 @@ public sealed class PhotoLibraryAlbumTests
         immich.Only.Url.ShouldNotContain("/api/map/markers");
     }
 
+    // ------------------------------------------------------------- paging inside a chosen album
+
+    /// <summary>
+    /// The second page of an album is asked for as the second page <em>of that album</em>, in each
+    /// product's own way of counting a page.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two things could go wrong here and they fail in opposite directions. A page number that did
+    /// not travel gives page one again under a "next" control — the same photographs for as long as
+    /// somebody keeps clicking. An album that did not survive the page turn gives page two of the
+    /// <em>library</em>, which is a set with no relation at all to the one on screen: rows nobody
+    /// asked for appear and rows from the album never do, and both look like an ordinary listing.
+    /// </para>
+    /// <para>
+    /// The arithmetic is asserted rather than the request merely being non-empty, because the two
+    /// products count a page differently — one takes the number, the other takes how many rows to
+    /// skip — and an off-by-one in the second is a page of duplicates or a page of holes rather
+    /// than an error.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_second_page_of_an_album_is_asked_for_as_the_second_page_of_that_album()
+    {
+        var prism = new LibraryStub();
+        prism.Answers(_ => Json("[]"));
+        await Prism(prism).ListAsync(new LibraryPhotoQuery(2, 60, Album: PrismAlbum), default);
+
+        // Sixty asked for, sixty already seen, so the second page starts at the sixty-first.
+        prism.Only.Url.ShouldContain("count=60");
+        prism.Only.Url.ShouldContain("offset=60");
+        prism.Only.Url.ShouldContain("q=album%3A" + PrismAlbum);
+
+        var immich = new LibraryStub();
+        immich.Answers(_ => Json(ImmichPage("[]", total: 0, nextPage: null)));
+        await Immich(immich).ListAsync(new LibraryPhotoQuery(2, 60, Album: ImmichAlbum), default);
+
+        immich.Only.Body.ShouldContain("\"page\":2");
+        immich.Only.Body.ShouldContain("\"size\":60");
+        immich.Only.Body.ShouldContain($"\"albumIds\":[\"{ImmichAlbum}\"]");
+    }
+
+    /// <summary>
+    /// Whether an album has a further page is the library's answer about the album, read from what
+    /// it sent, and never worked out from a count held here.
+    /// </summary>
+    /// <remarks>
+    /// The two products answer it differently — one promises a next page by naming it, the other
+    /// only by filling the one it sent — and neither of those is a number this application could
+    /// derive, because nothing here knows how many photographs an album holds. Getting it wrong in
+    /// the withholding direction is the worse half: a "next" control that is not there puts the
+    /// rest of an album out of reach with nothing on the screen saying the listing stopped early.
+    /// </remarks>
+    [Fact]
+    public async Task Whether_an_album_has_a_further_page_is_the_librarys_answer()
+    {
+        // The product that names its next page.
+        var more = new LibraryStub();
+        more.Answers(_ => Json(ImmichPage($"[{ImmichRow(InventedGuid(1))},{ImmichRow(InventedGuid(2))}]", total: 5, nextPage: "2")));
+
+        var second = await Immich(more).ListAsync(new LibraryPhotoQuery(1, 2, Album: ImmichAlbum), default);
+
+        second.Photos.Count.ShouldBe(2);
+        second.HasMore.ShouldBeTrue();
+
+        var last = new LibraryStub();
+        last.Answers(_ => Json(ImmichPage($"[{ImmichRow(InventedGuid(3))}]", total: 5, nextPage: null)));
+
+        (await Immich(last).ListAsync(new LibraryPhotoQuery(3, 2, Album: ImmichAlbum), default))
+            .HasMore.ShouldBeFalse();
+
+        // The product that says nothing about a next page, where a full page is what stands for one.
+        var full = new LibraryStub();
+        full.Answers(_ => Json($"[{PrismRow("psinvented0000000one")},{PrismRow("psinvented0000000two")}]"));
+
+        var prismPage = await Prism(full).ListAsync(new LibraryPhotoQuery(1, 2, Album: PrismAlbum), default);
+
+        prismPage.Photos.Count.ShouldBe(2);
+        prismPage.HasMore.ShouldBeTrue();
+
+        var short_ = new LibraryStub();
+        short_.Answers(_ => Json($"[{PrismRow("psinvented000000three")}]"));
+
+        (await Prism(short_).ListAsync(new LibraryPhotoQuery(2, 2, Album: PrismAlbum), default))
+            .HasMore.ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A page past the end of an album is an empty page that offers no further one, on both
+    /// products, and is not a refusal.
+    /// </summary>
+    /// <remarks>
+    /// Somebody who has paged to the end of an album, or who followed a link that named a page
+    /// number the album no longer reaches, must land on an album that says it holds nothing more —
+    /// not on a sentence blaming the library. Neither product treats an offset past the end as an
+    /// error, and neither does this: what comes back is nothing, said as nothing.
+    /// </remarks>
+    [Fact]
+    public async Task A_page_past_the_end_of_an_album_is_empty_rather_than_a_refusal()
+    {
+        var prism = new LibraryStub();
+        prism.Answers(_ => Json("[]"));
+
+        var beyond = await Prism(prism).ListAsync(new LibraryPhotoQuery(9, 60, Album: PrismAlbum), default);
+
+        beyond.Photos.ShouldBeEmpty();
+        beyond.HasMore.ShouldBeFalse();
+        prism.Only.Url.ShouldContain("offset=480");
+
+        var immich = new LibraryStub();
+        immich.Answers(_ => Json(ImmichPage("[]", total: 12, nextPage: null)));
+
+        var immichBeyond = await Immich(immich).ListAsync(new LibraryPhotoQuery(9, 60, Album: ImmichAlbum), default);
+
+        immichBeyond.Photos.ShouldBeEmpty();
+        immichBeyond.HasMore.ShouldBeFalse();
+
+        // And no total is published beside it. The library still states twelve, but this page
+        // begins past the four hundred and eightieth photograph, so twelve cannot be a count of the
+        // album a reader has been paging through — the same guard that refuses any stated total
+        // smaller than what has already been paged past, rather than a rule about empty pages.
+        immichBeyond.Total.ShouldBeNull();
+    }
+
     // ------------------------------------------------------------------------------------- support
 
     /// <summary>One invented album, in the shape one product writes one.</summary>
@@ -561,6 +685,14 @@ public sealed class PhotoLibraryAlbumTests
     /// <summary>One invented album, in the shape the other product writes one.</summary>
     private static string ImmichAlbumRow(string id, string name, int count) =>
         $$"""{"id":"{{id}}","albumName":"{{name}}","assetCount":{{count.ToString(CultureInfo.InvariantCulture)}}}""";
+
+    /// <summary>One invented row of a listing, in the shape one product writes one.</summary>
+    private static string PrismRow(string uid) =>
+        $$"""{"UID":"{{uid}}","Hash":"aa11bb22cc33dd44ee55","Title":"An invented picture","TakenAt":"2024-05-06T07:08:09Z"}""";
+
+    /// <summary>One invented row of a listing, in the shape the other product writes one.</summary>
+    private static string ImmichRow(string id) =>
+        $$"""{"id":"{{id}}","type":"IMAGE","fileCreatedAt":"2024-05-06T07:08:09Z"}""";
 
     /// <summary>An invented identifier of the shape one product mints, distinct per index.</summary>
     private static string InventedGuid(int index) =>
