@@ -68,12 +68,16 @@ public static class PhotoLibraryBrowseEndpoints
     public const string PhotographNotFoundCode = "photo_library.photograph_not_found";
 
     /// <summary>
-    /// A listing was asked for a trip this account may not read, or one that is not there.
+    /// A listing was asked for a trip this account may not read, one that is not there, or a value
+    /// that names no trip at all.
     /// </summary>
     /// <remarks>
-    /// One answer for both, as everywhere else a row is read by identifier: telling somebody that a
-    /// trip exists but is not theirs to read is itself a fact about the trip, and this route would
-    /// be a way of asking it about every identifier in turn. Kept apart from the slice's other two
+    /// One answer for all three, as everywhere else a row is read by identifier: telling somebody
+    /// that a trip exists but is not theirs to read is itself a fact about the trip, and this route
+    /// would be a way of asking it about every identifier in turn. A value that is not an
+    /// identifier joins them because the alternative is worse than uninformative — refused by the
+    /// framework instead, it carries no code of this application's, and a screen that cannot read
+    /// one says the library did not answer. Kept apart from the slice's other two
     /// "not founds" — a product this installation does not run, and a photograph the library no
     /// longer reports — because all three draw an empty panel and only this one means the reader is
     /// looking at a trip that is not there for them.
@@ -201,7 +205,7 @@ public static class PhotoLibraryBrowseEndpoints
         string source,
         int? page,
         int? pageSize,
-        Guid? tripId,
+        string? tripId,
         PhotoLibraryGate gate,
         ILibraryPhotoTokenService tokens,
         IOptions<PhotoLibraryOptions> options,
@@ -240,8 +244,25 @@ public static class PhotoLibraryBrowseEndpoints
         }
 
         LibraryPhotoWindow? window = null;
-        if (tripId is { } named)
+        if (tripId is not null)
         {
+            // Taken as text and turned into an identifier here rather than bound as one. A value
+            // the framework cannot bind never reaches this method at all: it is refused before it,
+            // as a bare bad request carrying none of this application's own codes, and a screen
+            // with no code to read reports that as the library not having answered — which sends
+            // somebody to restart a container that was never asked anything. This is the one
+            // parameter on this route a person types or pastes by hand, so it is worth the two
+            // lines.
+            //
+            // An empty value is refused with the rest rather than read as "no trip at all". A
+            // request that named a trip and is answered with the whole library is the one wrong
+            // answer this feature must not give, and it would be given under the trip's own
+            // heading.
+            if (!Guid.TryParse(tripId, out var named))
+            {
+                return ApiProblems.NotFound(TripNotFoundCode);
+            }
+
             // The trip is read here and its dates are turned into a window here, and that is the
             // whole of what makes this panel a trip's photographs rather than a date filter with a
             // trip's name written over it. A caller names a trip; it never names a stretch of time.

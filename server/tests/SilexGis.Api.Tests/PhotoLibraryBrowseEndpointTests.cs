@@ -410,6 +410,40 @@ public sealed class PhotoLibraryBrowseEndpointTests : IAsyncLifetime, IDisposabl
     }
 
     /// <summary>
+    /// A value that names no trip at all is answered the same way, with this application's own
+    /// code, rather than being refused before the route is reached.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the one parameter on the route a person types or pastes, so a mistyped one is
+    /// ordinary. Bound as an identifier it would never arrive: the request would be refused before
+    /// the handler, as a bad request carrying none of the codes this slice publishes — and a screen
+    /// reading no code from a failure says the library did not answer, which is the one sentence
+    /// the whole surface is careful never to show for a question no library was asked. Somebody
+    /// would go and restart a container that is working perfectly.
+    /// </para>
+    /// <para>
+    /// An empty value is refused with the rest and is the case worth having separately: read as
+    /// "no trip named" it would answer a request that did name one with the whole library, under
+    /// the trip's own heading.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("notaguid")]
+    [InlineData("")]
+    public async Task A_value_that_names_no_trip_is_not_found_and_nothing_is_asked(string named)
+    {
+        library.AnswersListing(OnePhotograph);
+
+        var refused = await admin.GetAsync($"{ListUrl}?tripId={named}");
+        var body = await refused.Content.ReadAsStringAsync();
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound, body);
+        CodeOf(body).ShouldBe(PhotoLibraryBrowseEndpoints.TripNotFoundCode);
+        library.Calls.ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// A trip this account may not read is not found either, and again nothing is asked.
     /// </summary>
     /// <remarks>
