@@ -4,7 +4,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { ClosestApproach } from '../../api/hooks.ts';
-import { getClosestApproachLine } from '../../workspace/closestApproachLine.ts';
+import {
+  getClosestApproachLine,
+  setClosestApproachLine,
+} from '../../workspace/closestApproachLine.ts';
 
 const { cavesSpy, approachSpy } = vi.hoisted(() => ({
   cavesSpy: vi.fn(),
@@ -95,7 +98,7 @@ describe('CaveClosestApproachSection', () => {
     expect(screen.getByText('From Peștera A to Peștera B.')).toBeTruthy();
   });
 
-  it('hands the shortest line to the views that can draw it, and takes it back', () => {
+  it('hands the shortest line to the views that can draw it, and leaves it up for them', () => {
     // The number is half the answer; where the two caves nearly touch is the other half, and this
     // page has no map on it. Both ends come off the same answer as the figures beside them.
     const { unmount } = showPicked({ data: measured });
@@ -107,9 +110,26 @@ describe('CaveClosestApproachSection', () => {
       label: '268.2 m',
     });
 
-    // A line left drawn after its panel has gone is an answer with no question beside it, and
-    // nothing else would ever take it down.
+    // The line has to outlive the page that published it. The flat map and the 3D scene are
+    // separate routes from a cave's page, so only one of them is ever mounted: a line taken down
+    // on the way out is a line no view can ever draw, which is exactly what used to happen — the
+    // leaving page's cleanup ran before the arriving view's effects, and this feature had never
+    // once been visible in a browser.
     unmount();
+    expect(getClosestApproachLine()).not.toBeNull();
+  });
+
+  it('takes down a line left by another pair when a page is opened', () => {
+    // The other half of the same rule: what outlives the page is one line, not a pile of them,
+    // and a line belongs to the pair it was measured from.
+    setClosestApproachLine({
+      caveAId: 'stale-a',
+      caveBId: 'stale-b',
+      from: measured.from!,
+      to: measured.to!,
+      label: 'stale',
+    });
+    showPicked({ data: { ...measured, absence: 'noAltitudes', distanceM: null } });
     expect(getClosestApproachLine()).toBeNull();
   });
 
