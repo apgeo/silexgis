@@ -5,11 +5,11 @@
 [← Back to the guide](README.md) · Next: [First steps](first-steps.md)
 
 ---
-
+cece
 ## In one paragraph
 
 SilexGIS is a web application for storing, viewing and editing cave and karst data. A caving
-club, a research team or an individual installs it on a server they control, creates accounts
+club, a small exploration team or an individual installs it on a server they control, creates accounts
 for the people who should have them, and from then on it is that group's cadastre, archive,
 map and logbook in one place. It is free software (AGPL-3.0-or-later), and it comes from a
 real club — Silex Brașov — which had all of this on paper and in spreadsheets first.

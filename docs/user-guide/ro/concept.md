@@ -9,8 +9,8 @@
 ## Într-un paragraf
 
 SilexGIS este o aplicație web pentru stocarea, vizualizarea și editarea datelor despre peșteri
-și carst. Un club de speologie, o echipă de cercetare sau o persoană o instalează pe un server
-propriu, creează conturile care trebuie create, și de atunci încolo aplicația este cadastrul,
+și carst. Poate fi instalat / folosit de un grup / club de speologie, de o echipă de explorare sau de o singură persoană în mod independent. Se instalează pe un server
+propriu, se creează conturile care trebuie create, și de atunci încolo aplicația este cadastrul,
 arhiva, harta și jurnalul acelui grup, într-un singur loc. Este software liber
 (AGPL-3.0-or-later) și vine dintr-un club real — Silex Brașov — care a ținut mai întâi toate
 acestea pe hârtie și în foi de calcul.
