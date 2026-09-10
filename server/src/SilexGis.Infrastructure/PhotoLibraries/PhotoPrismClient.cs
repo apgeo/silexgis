@@ -317,12 +317,28 @@ public sealed class PhotoPrismClient(
     /// different operation proves the credential opens a door nothing in this feature walks
     /// through.
     /// </summary>
+    /// <summary>
+    /// The per-photograph public/private lever this product already gives its owner, honoured on
+    /// every surface that lists photographs.
+    /// </summary>
+    /// <remarks>
+    /// Marking a photograph private in PhotoPrism is the plainest way somebody has of saying "not
+    /// this one", and it costs nothing to respect: the state filters are part of the query grammar
+    /// on both routes. Sending neither meant a photograph its owner had marked private was drawn on
+    /// the map and listed in the grid like any other. The pairing is the product's own rule for a
+    /// restricted account — deny access to private, and force <c>public=true, private=false</c> —
+    /// so this asks for exactly what PhotoPrism would serve a reader it did not fully trust, which
+    /// is the right description of this installation.
+    /// </remarks>
+    private const string VisibilityFilter = "&public=true&private=false";
+
     private Uri GeoUrl(Envelope bounds, int count) =>
         new(
             BaseAddress(Options.BaseUrl),
             "api/v1/geo?latlng=" + Uri.EscapeDataString(LatLng(bounds))
             + "&count=" + count.ToString(CultureInfo.InvariantCulture)
-            + "&quality=" + Math.Clamp(Options.MinQuality, 0, 7).ToString(CultureInfo.InvariantCulture));
+            + "&quality=" + Math.Clamp(Options.MinQuality, 0, 7).ToString(CultureInfo.InvariantCulture)
+            + VisibilityFilter);
 
     /// <summary>
     /// The rectangle, in the order this library states one: north, east, south, west.
@@ -487,6 +503,7 @@ public sealed class PhotoPrismClient(
             // The same floor the map applies, so the two surfaces do not disagree about which
             // photographs this installation considers worth showing at all.
             + "&quality=" + Math.Clamp(Options.MinQuality, 0, 7).ToString(CultureInfo.InvariantCulture)
+            + VisibilityFilter
             // Everything this product reads out of its own search grammar: the stretch of time and
             // the album, where either was asked for, and the reader's words, reduced to words first
             // — see below for why that reduction is the difference between a search box and a way of

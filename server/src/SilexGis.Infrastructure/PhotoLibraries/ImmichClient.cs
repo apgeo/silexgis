@@ -1208,13 +1208,21 @@ public sealed class ImmichClient(
     /// </remarks>
     private async Task<MarkerSnapshot> ReadMarkersAsync(CancellationToken ct)
     {
-        // Archived pictures are left out; a partner's and a shared album's are taken in. That is
-        // this installation's only lever over which photographs it can see at all, and it is the
-        // operator's to pull: what is shared to the account whose key is configured here is what
-        // appears, and what is not shared to it never leaves the far side.
+        // Only the service account's own library. Archived pictures are left out, and so now are a
+        // partner's and a shared album's.
+        //
+        // This reverses the reasoning that stood here before, which read the two `with` flags as
+        // the operator's lever — what is shared to the configured account is what appears. The
+        // trouble with that is who does the sharing: a partner shares their library with a person,
+        // not with an installation, and nothing tells them that doing so puts their photographs and
+        // the positions written into them onto a map that other accounts read. A lever whose handle
+        // is in someone else's hand, and which they cannot see, is not the operator's lever.
+        // Reading only what this credential owns is strictly narrower, and narrower is the
+        // direction to be wrong in for an application whose reason for existing is withholding
+        // positions.
         var url = new Uri(
             BaseAddress(Options.BaseUrl),
-            "api/map/markers?isArchived=false&withPartners=true&withSharedAlbums=true");
+            "api/map/markers?isArchived=false&withPartners=false&withSharedAlbums=false");
 
         using var response = await SendJsonAsync(url, ct);
 

@@ -109,8 +109,16 @@ public sealed class ImmichPhotoLibraryTests
         var asked = stub.Only.Url;
         asked.ShouldContain("/api/map/markers");
         asked.ShouldContain("isArchived=false");
-        asked.ShouldContain("withPartners=true");
-        asked.ShouldContain("withSharedAlbums=true");
+
+        // Only what this credential owns. A partner shares their library with a person rather than
+        // with an installation, and is never told that doing so publishes the positions written
+        // into their photographs to every account that can open this map — so their pictures are
+        // not read at all. Asserted as the exact pair, because the failure this pins is a default
+        // quietly widening again rather than the parameter disappearing.
+        asked.ShouldContain("withPartners=false");
+        asked.ShouldContain("withSharedAlbums=false");
+        asked.ShouldNotContain("withPartners=true");
+        asked.ShouldNotContain("withSharedAlbums=true");
         asked.ShouldNotContain("bbox");
 
         // The credential travels as a header and never as a query parameter: this library accepts

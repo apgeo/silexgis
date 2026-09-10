@@ -305,6 +305,14 @@ public sealed class PhotoLibraryEndpointTests : IAsyncLifetime, IDisposable
         var asked = Uri.UnescapeDataString(library.Only.Url);
         asked.ShouldContain("latlng=46.75,24.25,45.125,21.5");
         asked.ShouldContain($"count={ConfiguredCount}");
+
+        // The per-photograph lever the library already gives its owner, honoured on the map as
+        // well as in the grid. Without these two a photograph marked private in the library was
+        // drawn as a pin like any other, which is the one place it most obviously must not be:
+        // a pin is a position, and a position is the thing this application exists to withhold.
+        asked.ShouldContain("public=true");
+        asked.ShouldContain("private=false");
+
         library.Only.Authorization.ShouldBe($"Bearer {FakeToken}");
     }
 

@@ -188,6 +188,12 @@ public sealed class PhotoLibrarySearchTests
         // And what this application decided remains what it decided.
         url.ShouldContain("order=newest");
         url.ShouldContain("quality=");
+
+        // Marking a photograph private in the library is the plainest way its owner has of saying
+        // "not this one", and it costs two query parameters to respect. Without them a private
+        // photograph was listed in the grid like any other.
+        url.ShouldContain("public=true");
+        url.ShouldContain("private=false");
     }
 
     /// <summary>
