@@ -100,12 +100,18 @@ function Body({ data, isError, isLoading }: BodyProps) {
 
   const unitMetres = t('closestApproach.unitMetres');
 
+  // The line belongs to a pair, and a new pair makes the old one meaningless, so arriving here
+  // takes down whatever was drawn before — including on a mount with nothing measured yet, since
+  // `drawnLine` answers null for that.
+  //
+  // Leaving the page deliberately does not take it down. The flat map and the 3D scene are
+  // separate routes from a cave's page, so only one of them is ever mounted: clearing on the way
+  // out ran the cleanup before the arriving view's effects, which meant the line this section
+  // exists to publish could never once be drawn in a browser. It stays up until the reader picks
+  // another pair, opens another cave, or turns the layer off — the same rule the overburden mark
+  // follows, and for the same reason.
   useEffect(() => {
     setClosestApproachLine(drawnLine(data, unitMetres));
-    // Cleared when this section goes away as well as when the pair changes. A line left on the
-    // map after its panel has gone is an answer with no question beside it, and nothing else
-    // would ever take it down.
-    return () => setClosestApproachLine(null);
   }, [data, unitMetres]);
 
   // A cave this reader may not place, one they may not read, and one that never existed all arrive

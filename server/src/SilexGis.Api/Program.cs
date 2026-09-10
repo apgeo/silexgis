@@ -141,10 +141,15 @@ try
         .SetApplicationName("silexgis")
         .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
     builder.Services.AddSingleton<IFileAccessTokenService, FileAccessTokenService>();
+    builder.Services.AddSingleton<ITerrainRasterTokenService, TerrainRasterTokenService>();
     builder.Services.AddSingleton<IUnsubscribeTokens, UnsubscribeTokenService>();
     // Its own protection purpose, so a token minted for a picture held in a neighbouring photo
     // library can never be redeemed against this application's own stored files.
     builder.Services.AddSingleton<ILibraryPhotoTokenService, LibraryPhotoTokenService>();
+    // Whether a neighbouring photo library may be talked to at all, decided in one place for every
+    // route that reaches one. Scoped rather than long-lived because the answer includes a stored
+    // setting an administrator can change while the application is running.
+    builder.Services.AddScoped<PhotoLibraryGate>();
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<SilexGisDbContext>("database");
     builder.Services.AddOptions<AboutOptions>()
@@ -276,14 +281,18 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTaxonomyEndpoints();
     api.MapMapLayerEndpoints();
     api.MapCaveEndpoints();
+    api.MapCaveExternalIdEndpoints();
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
     api.MapSurveySourceEndpoints();
+    api.MapSurveyCompilationEndpoints();
     api.MapCenterlineEndpoints();
     api.MapCaveSurveyStatisticsEndpoints();
     api.MapCaveCrossSectionEndpoints();
     api.MapCavePatternEndpoints();
+    api.MapCaveTopologyEndpoints();
     api.MapCaveHypsometryEndpoints();
+    api.MapCaveOverburdenEndpoints();
     api.MapCaveStructureComparisonEndpoints();
     api.MapCaveClosestApproachEndpoints();
     api.MapCrsEndpoints();
@@ -309,6 +318,9 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCatalogueEndpoints();
     api.MapTripImportEndpoints();
     api.MapPhotoLibraryEndpoints();
+    api.MapPhotoLibraryBrowseEndpoints();
+    api.MapPhotoLibraryAlbumEndpoints();
+    api.MapPhotoLibrarySearchEndpoints();
     api.MapPhotoLibraryFeatureEndpoints();
     api.MapJobEndpoints();
     api.MapExportEndpoints();
@@ -345,6 +357,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTripParticipantRoleEndpoints();
     api.MapExpeditionRosterRoleEndpoints();
     api.MapTripStatisticsEndpoints();
+    api.MapRegistryStatisticsEndpoints();
     api.MapTagEndpoints();
     api.MapAuditEndpoints();
     api.MapAccessHistoryEndpoints();
@@ -361,6 +374,8 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapAdminSettingsEndpoints();
     api.MapAdminTemplateEndpoints();
     api.MapTerrainBuildEndpoints();
+    api.MapTerrainProbeEndpoints();
+    api.MapTerrainDerivativeEndpoints();
     api.MapSyncEndpoints();
 
     if (app.Configuration.GetValue("Db:AutoMigrate", true))
@@ -374,6 +389,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         // Permission groups must exist before the bootstrap admin joins Full Administrators.
         await PermissionGroupSeeder.SeedAsync(db);
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
+        await TestLoginSeeder.SeedAsync(scope.ServiceProvider);
 
         // Registration joins new accounts to these groups by slug; a slug naming no
         // group would silently do nothing per signup, so it is called out once here.

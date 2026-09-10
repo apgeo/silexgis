@@ -69,12 +69,15 @@ public sealed record TripImportRowDto(
 /// confirmation would add, because a confirmation does not settle them. There are two kinds and
 /// both must be said. A name more than one roster entry answers to waits for somebody to say
 /// which — that is <c>ambiguousPersonCount</c>. A name nothing answers to and nobody can be
-/// created from — an initial, or a lone given name — waits for nobody: it becomes no roster row
-/// whatever the create switch says, and the person is recorded only in the trip's own words.
-/// That is <c>uncreatablePersonCount</c>, and it is counted regardless of the switch because the
-/// switch cannot change it. Leaving it out of the headline is how a sheet whose people cannot
-/// all be recorded comes to read exactly like a sheet whose people can, right up until the trips
-/// arrive with somebody missing from them.
+/// created from waits for nobody: it becomes no roster row whatever the roster switch says, and
+/// the person is recorded only in the trip's own words. That is <c>uncreatablePersonCount</c>,
+/// and it is counted without reference to the roster switch, which cannot change it. Leaving it
+/// out of the headline is how a sheet whose people cannot all be recorded comes to read exactly
+/// like a sheet whose people can, right up until the trips arrive with somebody missing from
+/// them. Which names fall in it is not fixed: ordinarily an initial or a lone given name does,
+/// and a reviewer who has said such names may become people moves them out of this count and
+/// into <c>newCaverCount</c> — the two figures move together, so the screen never says nothing
+/// needs attention while people are being dropped, nor the reverse.
 /// </para>
 /// <para>
 /// Every count is present even at zero. A number that disappears when it is nothing reads exactly
@@ -112,6 +115,13 @@ public sealed record TripImportProposalsDto(
 /// says what settled it; <c>ambiguousDateRows</c> counts the rows riding on that choice, in rows
 /// rather than cells, because a reviewer choosing the order is judging how many trips it moves.
 /// </para>
+/// <para>
+/// <c>encoding</c> is the character encoding the bytes were read under and <c>encodingSource</c>
+/// says what settled that, on the same footing and for the same reason: a sheet saved in an older
+/// code page is read by working the encoding out, and a wrong answer there is invisible in the
+/// text — it reads as the wrong accents rather than as an error — so the reviewer is told which
+/// one was used and may overrule it.
+/// </para>
 /// </summary>
 public sealed record TripImportPreviewDto(
     IReadOnlyList<TripImportRowDto> Items,
@@ -128,6 +138,8 @@ public sealed record TripImportPreviewDto(
     IReadOnlyList<string> Header,
     IReadOnlyDictionary<TripCsvField, string> ResolvedColumns,
     IReadOnlyList<string> UnmappedColumns,
+    TripCsvEncoding Encoding,
+    TripCsvEncodingSource EncodingSource,
     TripCsvDateOrder DateOrder,
     TripCsvDateOrderSource DateOrderSource,
     int AmbiguousDateRows,
@@ -138,11 +150,19 @@ public sealed record TripImportPreviewDto(
 /// The header of an uploaded sheet, and what the built-in spellings made of it. Read from the
 /// stored file rather than from a parse, so it still answers after a parse produced no rows at
 /// all — which is exactly when somebody needs to re-point a column.
+///
+/// <para>
+/// It carries the encoding too, because a sheet read under the wrong code page is one of the
+/// reasons the header comes back looking wrong, and this is the step at which somebody is already
+/// being asked to fix the reading.
+/// </para>
 /// </summary>
 public sealed record TripImportColumnsDto(
     IReadOnlyList<string> Header,
     IReadOnlyDictionary<TripCsvField, string> ResolvedColumns,
     IReadOnlyList<string> UnmappedColumns,
+    TripCsvEncoding Encoding,
+    TripCsvEncodingSource EncodingSource,
     IReadOnlyList<TripImportProblemDto> Problems);
 
 /// <summary>A review in progress, resumed where its reviewer left it.</summary>
@@ -217,6 +237,7 @@ public sealed class TripImportOptionsValidator : AbstractValidator<TripImportOpt
         RuleFor(x => x.MultiValueSeparators).NotNull().MaximumLength(8);
         RuleFor(x => x.SlashSeparatedFields).NotNull();
         RuleFor(x => x.DateOrder).IsInEnum();
+        RuleFor(x => x.Encoding).IsInEnum();
         RuleFor(x => x.Visibility).IsInEnum();
         RuleFor(x => x.Columns).NotNull();
         RuleFor(x => x.TripTypeChoices).NotNull();

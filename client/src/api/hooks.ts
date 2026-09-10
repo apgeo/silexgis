@@ -8,7 +8,7 @@ import {
   inboxPollIntervalMs,
   isInboxTransport,
 } from '../notifications/transport.ts';
-import { api, ApiError, lastReadETag } from './client.ts';
+import { api, ApiError, lastReadETag, readJson } from './client.ts';
 import type { components, paths } from './schema';
 
 export type CaveListItem = components['schemas']['CaveListItemDto'];
@@ -107,6 +107,14 @@ export type ProtectionSettings = components['schemas']['ProtectionSettingsDto'];
 export type ImportSettings = components['schemas']['ImportSettingsDto'];
 export type NotificationSettings = components['schemas']['NotificationSettingsDto'];
 export type AnnouncementSettings = components['schemas']['AnnouncementSettingsDto'];
+/**
+ * Which neighbouring photo libraries this installation has stopped using.
+ *
+ * Only ever stops one it already has. Whether the installation has a photo library at all comes
+ * from the deployment that gave it an address and a credential, so there is no value here that
+ * connects one — a screen offering that would be claiming a library nobody supplied.
+ */
+export type PhotoLibrarySuspension = components['schemas']['PhotoLibrarySuspensionDto'];
 export type MessageTemplate = components['schemas']['MessageTemplateDto'];
 export type ResLink = components['schemas']['ResLinkDto'];
 export type ResLinkMember = components['schemas']['ResLinkMemberDto'];
@@ -144,6 +152,8 @@ export const queryKeys = {
   surveyModels: (caveId: string) => ['survey-models', caveId] as const,
   surveyModel: (id: string) => ['survey-model', id] as const,
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
+  surveyCompilations: (caveId: string) => ['survey-compilations', caveId] as const,
+  caveExternalIds: (caveId: string) => ['cave-external-ids', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
@@ -172,6 +182,24 @@ export const queryKeys = {
   // rather than a stale answer to the same one.
   tripImportPreview: (fileId: string, body: unknown) => ['trip-import-preview', fileId, body] as const,
   photoLibraryStatus: ['photo-libraries', 'status'] as const,
+  // How big the protected-position decision is for a given export request. The whole request
+  // is the key: it is a pure function of what would be exported, so changing a filter is a
+  // different question rather than a stale answer to the same one.
+  karstLinkExportPreview: (body: unknown) => ['karstlink-export-preview', body] as const,
+  // The whole question is in the key — library, page, words, album, and the trip whose days it was
+  // narrowed to — because every part of it changes what came back. A page held under a key that did
+  // not name all of them would answer one question with another one's photographs.
+  libraryPhotographs: (source: string, query: LibraryPhotographQuery) =>
+    ['photo-libraries', source, 'photographs', query] as const,
+  libraryPhotograph: (source: string, photographId: string) =>
+    ['photo-libraries', source, 'photograph', photographId] as const,
+  // Not keyed by anything but the library. A chooser's contents are a fact about the library and
+  // not about the page it is drawn on, so one answer serves every narrowing the reader then tries.
+  libraryAlbums: (source: string) => ['photo-libraries', source, 'albums'] as const,
+  // The words are part of the question, so they are part of the key. An answer held under a key
+  // that did not name them would put one search's pictures under another search's words.
+  librarySearch: (source: string, query: LibrarySearchQuery) =>
+    ['photo-libraries', source, 'search', query] as const,
   speologieStatus: ['speologie', 'status'] as const,
   // The whole request is the key. A catalogue search is a pure function of the term, the county
   // and the page, so changing any of them is a different question rather than a stale answer to
@@ -241,12 +269,21 @@ export const queryKeys = {
   tripStatistics: (subject: string, id: string) => ['stats', subject, id] as const,
   featureMorphometry: (id: string) => ['features', id, 'morphometry'] as const,
   caveHypsometry: (id: string) => ['caves', id, 'hypsometry'] as const,
+  caveOverburden: (id: string) => ['caves', id, 'overburden'] as const,
   caveLevelBands: (id: string) => ['caves', id, 'level-bands'] as const,
   areaHypsometry: (id: string) => ['features', id, 'entrance-hypsometry'] as const,
   caveStructureComparison: (id: string, areaId: string) =>
     ['caves', id, 'structure-comparison', areaId] as const,
   areaStructureComparison: (id: string) => ['features', id, 'structure-comparison'] as const,
   areaKarstStatistics: (id: string) => ['features', id, 'karst-statistics'] as const,
+  registryDistribution: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'distribution', params] as const,
+  registryCorrelation: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'correlation', params] as const,
+  registryRegions: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'regions', params] as const,
+  registryClustering: (params: Record<string, unknown>) =>
+    ['stats', 'registry', 'clustering', params] as const,
   mapDensity: (bbox: string, cellMetres: number | null, bandwidthMetres: number | null, areaId?: string) =>
     ['map', 'density', bbox, cellMetres, bandwidthMetres, areaId ?? null] as const,
   mapPointPattern: (bbox: string, simulations: number, seed: number, areaId?: string) =>
@@ -295,6 +332,7 @@ export const queryKeys = {
   caveOrientation: (caveId: string) => ['caves', caveId, 'orientation'] as const,
   caveCrossSection: (caveId: string) => ['caves', caveId, 'cross-section'] as const,
   cavePattern: (caveId: string) => ['caves', caveId, 'pattern'] as const,
+  caveTopology: (caveId: string) => ['caves', caveId, 'topology'] as const,
   annotatedText: (documentId: string) => ['annotated-texts', documentId] as const,
   // One key for the whole tree: the board, the overview and the map that zooms to one area all
   // read the same answer, so they cannot disagree about which areas exist or where one of them is.
@@ -307,6 +345,7 @@ export const queryKeys = {
   terrainBuildList: (params: TerrainBuildPageParams) => ['terrain', 'builds', 'page', params] as const,
   terrainBuild: (id: string) => ['terrain', 'builds', 'detail', id] as const,
   terrainSourceDirectories: ['terrain', 'source-directories'] as const,
+  terrainDerivatives: ['terrain', 'derivatives'] as const,
   expeditions: (params: ExpeditionListParams) => ['expeditions', 'list', params] as const,
   expedition: (id: string) => ['expeditions', 'detail', id] as const,
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
@@ -623,6 +662,81 @@ export function useUiDefaults() {
   });
 }
 
+/** What an interchange export was asked for, minus the treatments it has not been given yet. */
+export type KarstLinkExportRequest =
+  paths['/api/v1/export/caves/karstlink']['post']['requestBody']['content']['application/json'];
+
+/** How many caves an interchange export would hold, and how many need a decision. */
+export type KarstLinkExportPreview = components['schemas']['KarstLinkExportPreview'];
+
+/**
+ * How large the protected-position decision is, before it is made.
+ *
+ * Asked of the server rather than counted on the client: whether a cave's position is protected
+ * is a fact about the cave that this client is never shown, and it is the same question whoever
+ * is asking — an owner and an administrator have to decide too, because the file outlives their
+ * right to look. `enabled` is what stops it being asked before somebody opens the chooser.
+ */
+export function useKarstLinkExportPreview(request: KarstLinkExportRequest, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.karstLinkExportPreview(request),
+    queryFn: () =>
+      unwrap(api.POST('/api/v1/export/caves/karstlink/preview', { body: request })),
+    enabled,
+  });
+}
+
+/** One identifier another register knows a cave by. */
+export type CaveExternalId = components['schemas']['CaveExternalIdDto'];
+
+/** What grottocenter.org offered for a cave's name, and whether it was asked at all. */
+export type GrottocenterLookup = components['schemas']['GrottocenterLookupDto'];
+
+/** The identifiers other registers know this cave by. */
+export function useCaveExternalIds(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveExternalIds(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{caveId}/external-ids', { params: { path: { caveId: caveId! } } })),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Records one register's identifier for a cave, or clears it when the value is empty. */
+export function useSetCaveExternalId(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ system, value }: { system: string; value: string | null }) =>
+      unwrap(
+        api.PUT('/api/v1/caves/{caveId}/external-ids/{system}', {
+          params: { path: { caveId, system } },
+          body: { value },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveExternalIds(caveId) }),
+  });
+}
+
+/**
+ * Asks grottocenter.org which of its caves match this one's name.
+ *
+ * A mutation although it reads: it is an errand that leaves the installation, and it happens
+ * because somebody pressed a button rather than because a screen was opened. Cached as a query
+ * it would be repeated on a remount, sending a cave's name outward again for nobody.
+ */
+export function useGrottocenterLookup(caveId: string) {
+  return useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.POST('/api/v1/caves/{caveId}/external-ids/grottocenter/lookup', {
+          params: { path: { caveId } },
+        }),
+      ),
+  });
+}
+
 export function useUiPreferences() {
   return useQuery({
     queryKey: queryKeys.uiPreferences,
@@ -908,6 +1022,9 @@ const SURVEY_MODEL_URL_REFRESH_MS = 8 * 60_000;
 /** How often a model whose processing has not finished yet is asked about. */
 const SURVEY_MODEL_CONVERSION_POLL_MS = 2000;
 
+/** How often a queued log reading is re-asked about, until it is no longer queued. */
+const SURVEY_COMPILATION_POLL_MS = 2000;
+
 /**
  * A model with work still outstanding on it. Both kinds of upload have some: a wall mesh is
  * converted into what the 3D scene draws, and a line plot is read into its stations and shots.
@@ -938,6 +1055,23 @@ export function surveyModelUnsettled(status: SurveyModelInfo['status']): boolean
  */
 export function surveyModelReadableByViewer(model: { format: SurveyModelInfo['format'] }): boolean {
   return model.format === 'lox' || model.format === 'survex3d';
+}
+
+/**
+ * Whether any of a cave's uploaded surveys can have produced a measured passage network.
+ *
+ * Only a line plot whose reading finished has stations and shots behind it; a wall mesh has no
+ * network, and a reading still queued or failed left nothing stored. A cave with none of those is
+ * the ordinary case — most caves have never had a survey file uploaded at all — and asking the
+ * server about its network anyway is a request that is certain to be refused. That refusal is not
+ * free: the browser reports every failed request to its console, so a panel that asked regardless
+ * would put an error on the console of every cave page in the application, drowning the real ones
+ * in an expected one.
+ */
+export function caveHasMeasurableSurvey(
+  models: { status: SurveyModelInfo['status']; format: SurveyModelInfo['format'] }[] | undefined,
+): boolean {
+  return (models ?? []).some((model) => model.status === 'ready' && surveyModelReadableByViewer(model));
 }
 
 /**
@@ -974,6 +1108,10 @@ function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveOrientation(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.caveCrossSection(caveId) });
   void queryClient.invalidateQueries({ queryKey: queryKeys.cavePattern(caveId) });
+  // Stored beside the survey rather than recomputed per request, but changed by exactly the same
+  // events: the figures are rewritten when a file is read, and a cave whose answering upload was
+  // deleted is measured from a different one or from none at all.
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caveTopology(caveId) });
 }
 
 /**
@@ -1151,8 +1289,13 @@ export function useSurveySources(caveId: string | undefined) {
 
 function useInvalidateSurveySources() {
   const queryClient = useQueryClient();
-  return (caveId: string) =>
+  return (caveId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.surveySources(caveId) });
+    // Archiving a compilation log queues a reading of it, and removing one takes the figures read
+    // from it away again, so the closure panel is stale the moment this list changes — and it is a
+    // different query under a different key, which none of the archive's own invalidations reach.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.surveyCompilations(caveId) });
+  };
 }
 
 export function useUploadSurveySource() {
@@ -1194,6 +1337,48 @@ export function useDeleteSurveySource() {
       }
     },
     onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
+export type SurveyCompilationInfo = components['schemas']['SurveyCompilationDto'];
+export type SurveyLoopError = components['schemas']['SurveyLoopErrorDto'];
+
+/**
+ * A compilation log is read in the background, so a freshly archived one arrives here queued and
+ * becomes figures a moment later with nothing the browser did to mark the change. This is the only
+ * query watching for it; without the wait a reader who archives a log sees "queued" until they
+ * reload and wonder why the reload was needed.
+ *
+ * A reading that could not be done counts as settled: the reader has been told, and asking every
+ * two seconds forever on the chance somebody re-queues it is a page that never goes quiet.
+ */
+export function surveyCompilationUnsettled(status: SurveyCompilationInfo['status']): boolean {
+  return status === 'pending';
+}
+
+/**
+ * How well a cave's surveys closed, as the compiler that compiled them reported it.
+ *
+ * Nothing here is re-derived from the stored survey: these are the numbers printed in the log the
+ * surveyor archived. A cave whose exact location is withheld from this reader answers with an empty
+ * list rather than a refusal — the same answer as a cave nobody has archived a log for, and it
+ * needs no special casing.
+ */
+export function useSurveyCompilations(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.surveyCompilations(caveId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caves/{caveId}/survey-compilations', {
+          params: { path: { caveId: caveId! } },
+        }),
+      ),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((c) => surveyCompilationUnsettled(c.status))
+        ? SURVEY_COMPILATION_POLL_MS
+        : false,
   });
 }
 
@@ -1346,8 +1531,35 @@ export async function fetchTripLogFeatures(
  * type-checking against a value it has never heard of, and failing only at runtime.
  */
 export type LibraryPhotoSource = LibraryPhotoProvider['source'];
-export type LibraryPhotoProvider = components['schemas']['PhotoLibraryProviderDto'];
-export type LibraryPhotoStatus = components['schemas']['PhotoLibraryStatusDto'];
+/**
+ * How a neighbouring library answers words: `text` when it matches them against what somebody wrote
+ * down about a photograph — a title, a caption, a keyword, a label its own classifier produced —
+ * and `meaning` when it turns them into a description of an image and orders what it holds by
+ * closeness to that description.
+ *
+ * Read rather than assumed, because it decides what a person is invited to type: a box reading
+ * "describe the picture" over a library that can only look up words is a promise the far side
+ * cannot keep, and the empty answer that follows reads as an empty library.
+ */
+export type LibrarySearchMatching = 'text' | 'meaning';
+
+export type LibraryPhotoProvider = components['schemas']['PhotoLibraryProviderDto'] & {
+  search: LibrarySearchMatching;
+};
+export type LibraryPhotoStatus = Omit<
+  components['schemas']['PhotoLibraryStatusDto'],
+  'providers' | 'unconfigured'
+> & {
+  providers: LibraryPhotoProvider[];
+  unconfigured: LibraryPhotoProvider[];
+  /**
+   * The longest run of words the server will put in a request to a library. Read rather than held
+   * as a second copy here: this screen both stops its box short of the limit and prints the limit
+   * in the sentence explaining a refusal, and two copies of one number is how a sentence goes on
+   * stating the old one after the server's has moved.
+   */
+  maxSearchLength: number;
+};
 export type LibraryPhotoCollection = components['schemas']['LibraryPhotoFeatureCollection'];
 
 /**
@@ -1368,6 +1580,15 @@ export type LibraryPhotoHealth = components['schemas']['PhotoLibraryHealthDto'];
  */
 const PHOTO_LIBRARY_HEALTH_WINDOW_MS = 30_000;
 
+export interface PhotoLibraryStatusUse {
+  /**
+   * Whether this caller is watching what the libraries answered when they were last asked, rather
+   * than only whether this installation has one. False asks once and lets other callers' timers
+   * refresh it.
+   */
+  watchingHealth?: boolean;
+}
+
 /**
  * The photo libraries this account may see, or none.
  *
@@ -1386,20 +1607,37 @@ const PHOTO_LIBRARY_HEALTH_WINDOW_MS = 30_000;
  * because what it describes is the state of another container and changes without anything
  * happening in this browser.
  *
- * The timer runs only while there is a library to report on: an installation that runs none of
- * these products has nothing to poll for, and the answer for it cannot change until somebody
- * restarts the server with a new setting. It also stops of its own accord while the tab is in the
- * background, which is the default and is wanted here — a map left open in a tab nobody is
- * looking at should not keep a neighbouring container awake.
+ * The timer runs only while there is a library being used to report on: an installation that runs
+ * none of these products has nothing to poll for, and neither has one whose libraries an
+ * administrator has all stopped — the server asks a stopped library nothing, so re-asking would
+ * fetch the same stored decision over and over, and that decision changes only when somebody
+ * changes it on a settings screen, which invalidates this answer directly. Coming back to the tab
+ * still re-asks, so a brake released elsewhere is picked up as soon as anybody looks. It also stops
+ * of its own accord while the tab is in the background, which is the default and is wanted here — a
+ * map left open in a tab nobody is looking at should not keep a neighbouring container awake.
+ *
+ * And it runs only for a caller that is watching the health. Two things read this answer and they
+ * want different halves of it: a surface showing whether a library is up is watching something
+ * that changes on its own, while a caller asking only whether there is a library to offer at all
+ * is asking something that cannot change without a server restart. The second kind mounts for the
+ * whole of a session, on every page — so a timer inherited from the first would turn a question
+ * asked once into a request twice a minute, for every signed-in account, forever.
  */
-export function usePhotoLibraries() {
+export function usePhotoLibraries({ watchingHealth = true }: PhotoLibraryStatusUse = {}) {
   return useQuery({
     queryKey: queryKeys.photoLibraryStatus,
-    queryFn: () => unwrap(api.GET('/api/v1/photo-libraries/status')),
+    // Named as the shape the server sends. This answer says how each library answers words, which
+    // a screen reads to word its search box, and the contract types this client is built against
+    // are read from a running API rather than from the source — so until they are read again the
+    // field is described here instead.
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/photo-libraries/status')) as Promise<LibraryPhotoStatus>,
     staleTime: PHOTO_LIBRARY_HEALTH_WINDOW_MS,
     refetchInterval: (query) =>
-      (query.state.data?.providers?.length ?? 0) > 0 ? PHOTO_LIBRARY_HEALTH_WINDOW_MS : false,
-    refetchOnWindowFocus: true,
+      watchingHealth && (query.state.data?.providers ?? []).some((library) => !library.suspended)
+        ? PHOTO_LIBRARY_HEALTH_WINDOW_MS
+        : false,
+    refetchOnWindowFocus: watchingHealth,
   });
 }
 
@@ -1501,6 +1739,292 @@ export function useCreateFeatureFromLibraryPhoto() {
           body: input.body,
         }),
       ),
+  });
+}
+
+/**
+ * One photograph a neighbouring library holds, as a list of it reports one.
+ *
+ * There is no latitude and no longitude here, and there is no shape of this record that has them.
+ * A list of a neighbouring library is a way of looking through pictures rather than a second map;
+ * where each was taken is the map's question, and the map is the surface that answers it.
+ */
+export type LibraryPhotograph = components['schemas']['LibraryPhotographDto'];
+
+/** One page of a neighbouring library, and the few things a grid needs to explain itself. */
+export type LibraryPhotographPage = components['schemas']['LibraryPhotographPageDto'];
+
+/** One photograph in full, as far as the library that holds it will say. */
+export type LibraryPhotographDetail = components['schemas']['LibraryPhotographDetailDto'];
+
+/**
+ * What a page of a library is asked for. No rectangle, by construction — and no words either:
+ * asking a library what it holds and asking what it makes of a sentence are different questions
+ * with differently shaped answers, and they are different routes.
+ */
+export interface LibraryPhotographQuery {
+  page: number;
+  pageSize: number;
+  /**
+   * A trip whose days the listing is narrowed to, or nothing for the whole library.
+   *
+   * A trip and never a pair of dates, and that is the feature rather than a precaution: the server
+   * reads the trip's own start and end, so a panel saying "taken while this trip was out" is saying
+   * something that was checked. A window a browser chose would be a date filter with a trip's name
+   * written over it.
+   */
+  tripId?: string;
+  /**
+   * An album of the library the listing is narrowed to, or nothing for the whole library.
+   *
+   * The identifier the library itself gave for one of its own albums, taken from the chooser rather
+   * than composed here. The server checks its shape before it goes anywhere near the library,
+   * because one of the two products reads a value like this as a term in its own search grammar.
+   */
+  albumId?: string;
+}
+
+/** The address of one page of one library. Built here so the two hooks below cannot disagree. */
+function photographsUrl(source: LibraryPhotoSource, query: LibraryPhotographQuery): string {
+  const search = new URLSearchParams({
+    page: String(query.page),
+    pageSize: String(query.pageSize),
+  });
+  if (query.tripId !== undefined) {
+    search.set('tripId', query.tripId);
+  }
+  if (query.albumId !== undefined) {
+    search.set('albumId', query.albumId);
+  }
+  return `/api/v1/photo-libraries/${encodeURIComponent(source)}/photographs?${search.toString()}`;
+}
+
+/**
+ * One page of a neighbouring library's photographs.
+ *
+ * A query rather than an imperative fetch, unlike the map loaders: a page is a thing somebody is
+ * looking at rather than a viewport that changes with every pan, so paging back and forth is
+ * answered from the cache instead of asking a neighbouring container again.
+ *
+ * `keepPreviousData` so turning a page keeps the grid on screen while the next one arrives. The
+ * alternative is a page that empties and refills, which reads as a library that briefly held
+ * nothing — and telling "nothing here" apart from "not yet" is most of what this screen owes its
+ * reader.
+ */
+export function usePhotoLibraryPhotographs(
+  source: LibraryPhotoSource | undefined,
+  query: LibraryPhotographQuery,
+) {
+  return useQuery({
+    queryKey: queryKeys.libraryPhotographs(source ?? '', query),
+    queryFn: () => readJson<LibraryPhotographPage>(photographsUrl(source!, query)),
+    enabled: source !== undefined,
+    // Turning a page keeps the grid on screen while the next one arrives, so the page does not
+    // empty and refill — which reads as a library that briefly held nothing, and telling "nothing
+    // here" apart from "not yet" is most of what this screen owes its reader.
+    //
+    // Only within one library and one trip, though. One library's photographs drawn under
+    // another's name would ask the wrong library about anything opened from them; and one trip's
+    // photographs drawn under another trip's heading is the one claim this whole surface exists to
+    // make honestly, so it must not be made by a grid that has not caught up yet.
+    placeholderData: (
+      previous?: LibraryPhotographPage,
+      previousQuery?: { queryKey: readonly unknown[] },
+    ) => {
+      const asked = previousQuery?.queryKey[3] as LibraryPhotographQuery | undefined;
+      return previous?.source === source
+        && asked?.tripId === query.tripId
+        && asked?.albumId === query.albumId
+        ? previous
+        : undefined;
+    },
+    // The far side is a separate product somebody else is filing pictures into, so a page held for
+    // long enough to feel instant is also a page that stops being what the library holds. Half a
+    // minute is the same window this application already holds a library's health for.
+    staleTime: 30_000,
+    // Not on coming back to the tab, unlike almost everything else here, and the reason is the
+    // picture addresses rather than the photographs. Each answer carries a freshly minted,
+    // short-lived credential in every tile's address, so an answer asked for again is sixty
+    // addresses the browser has never seen and cannot revalidate — a page of derivatives fetched
+    // afresh through this application and out of the neighbouring container, for a screen nobody
+    // has touched.
+    refetchOnWindowFocus: false,
+    // Not retried here. The refusal a library that did not answer produces has already been
+    // through this application's own attempts at the far side, so three more rounds with a
+    // second's, two seconds' and four seconds' wait between them add nothing but the seven seconds
+    // a reader spends before the sentence written for exactly this case appears.
+    retry: false,
+  });
+}
+
+/**
+ * One album a neighbouring library keeps.
+ *
+ * <p>
+ * Every field but the identifier may be null, and null means <b>the library did not say</b> rather
+ * than empty: the two products describe an album differently, and what only one of them answers is
+ * marked absent instead of being filled in from somewhere adjacent. The count is the library's own
+ * number where the product publishes one — a fact about the library and not about whoever is
+ * looking, since one credential belongs to the whole installation — and zero is a number, not an
+ * absence.
+ * </p>
+ * <p>
+ * There is no coordinate here, and there is no shape of this record that has one.
+ * </p>
+ * <p>
+ * Written out here rather than read from the generated contract types, which have not been read
+ * from a running API since this route was added. It is the server's record field for field, and it
+ * becomes the generated one the next time the contract is read.
+ * </p>
+ */
+export interface LibraryAlbum {
+  albumId: string;
+  title: string | null;
+  photographCount: number | null;
+  from: string | null;
+  to: string | null;
+}
+
+/** The albums one library keeps, and the one thing a chooser needs to explain itself. */
+export interface LibraryAlbums {
+  source: string;
+  libraryName: string;
+  items: LibraryAlbum[];
+  /** True when the library keeps more albums than this installation offers, so this is a prefix. */
+  truncated: boolean;
+  readAt: string;
+}
+
+/**
+ * The albums one neighbouring library keeps, for narrowing a listing to one.
+ *
+ * <p>
+ * Asked once per library rather than once per view: a chooser's contents are a fact about the
+ * library, so paging, choosing and clearing all read the one answer instead of asking a
+ * neighbouring container again. Held a little longer than a page of photographs for the same
+ * reason — albums change far more slowly than the pictures in them.
+ * </p>
+ * <p>
+ * A library that did not answer fails rather than arriving empty, so the screen can tell "this
+ * library keeps no albums" from "nobody asked it anything successfully". Those two draw the same
+ * chooser and send a reader to entirely different places.
+ * </p>
+ */
+export function usePhotoLibraryAlbums(source: LibraryPhotoSource | undefined) {
+  return useQuery({
+    queryKey: queryKeys.libraryAlbums(source ?? ''),
+    queryFn: () =>
+      readJson<LibraryAlbums>(
+        `/api/v1/photo-libraries/${encodeURIComponent(source!)}/albums`,
+      ),
+    enabled: source !== undefined,
+    staleTime: 300_000,
+    // No picture addresses on this answer, so unlike the listing there is nothing here that a
+    // refetch would make the browser fetch again. It is still not asked for on coming back to the
+    // tab, because a chooser somebody has not touched has not become wrong.
+    refetchOnWindowFocus: false,
+    // Not retried, for the reason the listing is not: a library that did not answer has already
+    // been asked as often as this application is willing, and the seconds spent on three more
+    // rounds are seconds before the sentence written for exactly this case appears.
+    retry: false,
+  });
+}
+
+/** What a search of a library is asked for. */
+export interface LibrarySearchQuery {
+  /** The words. Never empty: the server refuses a search with nothing to search for. */
+  q: string;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * One page of what a neighbouring library made of a set of words.
+ *
+ * <p>
+ * <b>There is no total here, and there is not meant to be one.</b> Neither of the products behind
+ * this can say how many photographs match a sentence: one ranks everything it holds by how close
+ * each picture is to what the words describe, so there is no set of matches to count, and the other
+ * counts only the page it has just sent. A number in this position would be invented, and nothing
+ * on a screen distinguishes an invented number from a counted one. What can honestly be shown is
+ * how many came back and whether the library says there are more.
+ * </p>
+ * <p>
+ * Written out here rather than read from the generated contract types. It is the server's record
+ * field for field, and it becomes the generated one the next time the contract is read from a
+ * running API.
+ * </p>
+ */
+export type LibraryPhotographSearchPage = components['schemas']['LibraryPhotographSearchPageDto'];
+
+/** The address of one page of one search. */
+function searchUrl(source: LibraryPhotoSource, query: LibrarySearchQuery): string {
+  const search = new URLSearchParams({
+    q: query.q,
+    page: String(query.page),
+    pageSize: String(query.pageSize),
+  });
+  return `/api/v1/photo-libraries/${encodeURIComponent(source)}/search?${search.toString()}`;
+}
+
+/**
+ * What one neighbouring library makes of a set of words.
+ *
+ * A separate hook from the listing because it is a separate question with a differently shaped
+ * answer, and keeping them apart is what lets a screen say which of the two it is showing. The
+ * words go to the far side untouched by anything here: what a sentence means is the library's
+ * decision, and a guess at its grammar made in a browser would be a second, wrong copy of it.
+ */
+export function usePhotoLibrarySearch(
+  source: LibraryPhotoSource | undefined,
+  query: LibrarySearchQuery,
+) {
+  return useQuery({
+    queryKey: queryKeys.librarySearch(source ?? '', query),
+    queryFn: () => readJson<LibraryPhotographSearchPage>(searchUrl(source!, query)),
+    enabled: source !== undefined && query.q.length > 0,
+    // The previous answer is kept on screen only while a page of the same search is being turned.
+    // Not across a change of words, and not across a change of library: an answer to one question
+    // drawn under another question's words is the one thing this screen must never show, and it is
+    // exactly what a grid that does not empty between searches would show.
+    placeholderData: (previous?: LibraryPhotographSearchPage, previousQuery?: { queryKey: readonly unknown[] }) => {
+      const asked = previousQuery?.queryKey[3] as LibrarySearchQuery | undefined;
+      return previous?.source === source && asked?.q === query.q ? previous : undefined;
+    },
+    staleTime: 30_000,
+    // The same two as the listing, for the same two reasons: every answer carries a freshly minted,
+    // short-lived credential in each picture's address, so asking again is a page of derivatives
+    // fetched afresh out of a neighbouring container for a screen nobody has touched — and a
+    // library that did not answer has already been asked as often as this application is willing.
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
+/**
+ * Everything one library will say about one photograph.
+ *
+ * Asked by the photograph's own identifier, which is not the string its picture is fetched with:
+ * on one of the two products that one is a hash of the picture's contents and names no photograph
+ * at all.
+ */
+export function usePhotoLibraryPhotograph(
+  source: LibraryPhotoSource | undefined,
+  photographId: string | null,
+) {
+  return useQuery({
+    queryKey: queryKeys.libraryPhotograph(source ?? '', photographId ?? ''),
+    queryFn: () =>
+      readJson<LibraryPhotographDetail>(
+        `/api/v1/photo-libraries/${encodeURIComponent(source!)}/photographs/${encodeURIComponent(photographId!)}`,
+      ),
+    enabled: source !== undefined && photographId !== null,
+    staleTime: 30_000,
+    // The same two as the listing, for the same two reasons: the picture address in this answer
+    // carries a credential that is new every time, and a library that did not answer has already
+    // been asked as often as this application is willing to ask.
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 }
 
@@ -4593,6 +5117,8 @@ export type TripImportCommitResult = components['schemas']['TripImportCommitResu
 export type TripCsvField = components['schemas']['TripCsvField'];
 export type TripCsvDateOrder = components['schemas']['TripCsvDateOrder'];
 export type TripCsvDateOrderSource = components['schemas']['TripCsvDateOrderSource'];
+export type TripCsvEncoding = components['schemas']['TripCsvEncoding'];
+export type TripCsvEncodingSource = components['schemas']['TripCsvEncodingSource'];
 export type TripCsvDiagnosticCode = components['schemas']['TripCsvDiagnosticCode'];
 
 /**
@@ -5771,6 +6297,34 @@ export function useCavePattern(caveId: string | undefined) {
     queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/pattern', { params: { path: { id: caveId! } } })),
     enabled: !!caveId,
     staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * The shape of a cave's passage network, as the figures the karst literature uses.
+ *
+ * Every figure is a number that was measured or it is null, and null is never a zero: a network of
+ * two junctions has no connectivity ratio and a single branch has no spread of lengths, so
+ * anything drawing these has to keep the two apart.
+ */
+export type CaveTopology = components['schemas']['CaveTopologyDto'];
+
+export function useCaveTopology(caveId: string | undefined, hasMeasurableSurvey = true) {
+  return useQuery({
+    queryKey: queryKeys.caveTopology(caveId ?? ''),
+    queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/topology', { params: { path: { id: caveId! } } })),
+    // Asked only of a cave that has a read line plot behind it. The route answers "no such cave"
+    // both to a caller who may not place the cave and to a cave whose network was never measured,
+    // and the second of those is the ordinary state of nearly every cave — so asking unconditionally
+    // would fail on almost every cave page and write an expected error to the browser console each
+    // time. The caller decides, because it already holds the list of uploads.
+    enabled: !!caveId && hasMeasurableSurvey,
+    // Measured once when the survey file is read and stored beside it, so this changes only when a
+    // file is uploaded or removed — both of which empty this key explicitly.
+    staleTime: 5 * 60_000,
+    // Two of the three answers this route gives are final: a cave the caller may not read or may
+    // not place exactly, and a cave whose network has never been measured. Neither changes by
+    // being asked again.
     retry: false,
   });
 }
@@ -5814,6 +6368,38 @@ export function useCaveHypsometry(caveId: string | undefined) {
     staleTime: 5 * 60_000,
     // A cave this caller may read but not place exactly is refused with the same answer as one
     // that does not exist. Retrying asks the same question again.
+    retry: false,
+  });
+}
+
+/**
+ * How much rock lies over a cave's passages, along their length.
+ *
+ * This is cave data rather than a terrain figure: the curve is the passage set against the surface
+ * above it, so anything holding it can work out where the passage runs. A caller who may read the
+ * cave but may not place it exactly is refused with the same "no such cave" a never-created cave
+ * gets, which is why nothing here retries and why the panel drawing it renders nothing at all on an
+ * error rather than an empty card.
+ */
+export type CaveOverburden = components['schemas']['CaveOverburdenDto'];
+
+/** One reading along the passage: where it was taken, and what the ground was found to be there. */
+export type CaveOverburdenSample = components['schemas']['CaveOverburdenSampleDto'];
+
+/** Whether a ground height could be read at one place, and if not, why not. */
+export type DemSampleOutcome = components['schemas']['DemSampleOutcome'];
+
+export function useCaveOverburden(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveOverburden(caveId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/caves/{id}/overburden', { params: { path: { id: caveId! } } })),
+    enabled: !!caveId,
+    // Recomputed per request from line work and from prepared elevation data, neither of which
+    // changes without somebody uploading or building something.
+    staleTime: 5 * 60_000,
+    // A cave this caller may read but not place exactly is refused with the same answer as one that
+    // does not exist. Retrying asks the same question again.
     retry: false,
   });
 }
@@ -6755,6 +7341,59 @@ export function useEditEventSeriesFollowing() {
   });
 }
 
+export type TerrainDerivativeLayerInfo = components['schemas']['TerrainDerivativeLayerDto'];
+export type TerrainDerivativeRasterInfo = components['schemas']['TerrainDerivativeRasterDto'];
+export type TerrainDerivativeCreate = components['schemas']['TerrainDerivativeCreateRequest'];
+
+/** How long a computed picture's addresses stay usable, less a margin to re-read them in. */
+const TERRAIN_DERIVATIVE_REFRESH_MS = 8 * 60_000;
+
+/**
+ * The computed pictures of the ground, each carrying the addresses of its rasters and whether the
+ * elevation beneath it has since been replaced.
+ *
+ * Re-read while a picture is still being computed, and re-read slowly the rest of the time: the
+ * addresses in each raster carry a signature that expires after ten minutes, so a page left open
+ * on the map would otherwise be holding layers whose next range request is refused.
+ */
+export function useTerrainDerivatives(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.terrainDerivatives,
+    queryFn: () => unwrap(api.GET('/api/v1/terrain/derivatives')),
+    enabled,
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some(
+        (layer) => layer.status === 'queued' || layer.status === 'computing',
+      )
+        ? 2000
+        : TERRAIN_DERIVATIVE_REFRESH_MS,
+  });
+}
+
+/** Asks for a picture of the ground to be computed from one elevation build. */
+export function useRequestTerrainDerivative() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: TerrainDerivativeCreate) =>
+      unwrap(api.POST('/api/v1/terrain/derivatives', { body: request })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainDerivatives });
+    },
+  });
+}
+
+/** Removes a computed picture and the rasters it left on disk. */
+export function useDeleteTerrainDerivative() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/terrain/derivatives/{id}', { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.terrainDerivatives });
+    },
+  });
+}
+
 /**
  * Removes a build and the disk it was keeping.
  *
@@ -7028,5 +7667,160 @@ export function useDeleteSyncSet() {
     mutationFn: (id: string) =>
       unwrapVoid(api.DELETE('/api/v1/sync/sets/{id}', { params: { path: { id } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.syncSets }),
+  });
+}
+
+/**
+ * One measured column of the registry, as the caller may read it: the intervals it falls into,
+ * the percentiles asked for, and the two fits where the sample supports them.
+ *
+ * The parameters are handed on exactly as the screen holds them, unclamped and uncorrected. A bin
+ * count outside what the registry will publish, or a word that names no measurement, comes back
+ * as a refusal saying which control is wrong — which is the answer the reader needs. Quietly
+ * substituting a legal value would draw a different distribution under the same address.
+ */
+export type RegistryMeasure = components['schemas']['RegistryMeasure'];
+
+/** One interval of a distribution, and whether it is several of them joined together. */
+export type RegistryDistributionBin = components['schemas']['DistributionBin'];
+
+/** One requested fraction, and the value at it — null when there was nothing to take it from. */
+export type RegistryPercentileRow = components['schemas']['RegistryPercentileRow'];
+
+/** A fitted lognormal, present only when the sample was large enough to mean anything. */
+export type RegistryLognormalFit = components['schemas']['LognormalFit'];
+
+/** A fitted upper tail, present only when the tail was long enough to mean anything. */
+export type RegistryParetoTailFit = components['schemas']['ParetoTailFit'];
+
+/** How one measured column is distributed over the caves the caller may read. */
+export type RegistryDistribution = components['schemas']['RegistryDistribution'];
+
+/** Everything a distribution can be asked, scope included, spelled as the route spells it. */
+export type RegistryDistributionParams = NonNullable<
+  paths['/api/v1/stats/registry/distribution']['get']['parameters']['query']
+>;
+
+/**
+ * The distribution of one measurement over the caves this caller may read.
+ *
+ * The previous answer is kept while a new one loads, because re-binning and re-filtering are
+ * things somebody is clicking: a chart that blanks out and returns under the cursor reads as
+ * breakage rather than as an answer.
+ */
+export function useRegistryDistribution(params: RegistryDistributionParams) {
+  return useQuery({
+    queryKey: queryKeys.registryDistribution(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/stats/registry/distribution', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** How two measured columns move together, over the caves recording both. */
+export type RegistryCorrelation = components['schemas']['RegistryCorrelationDto'];
+
+/** Everything a correlation can be asked, scope included, spelled as the route spells it. */
+export type RegistryCorrelationParams = NonNullable<
+  paths['/api/v1/stats/registry/correlation']['get']['parameters']['query']
+>;
+
+/**
+ * How two measurements of a cave move together, over the caves this caller may read.
+ *
+ * The answer is the relationship and not the caves behind it: a slope, an intercept, a goodness
+ * figure and the number of pairs they were taken over. Every one of those but the count is null
+ * when fewer than two caves recorded both, and they are handed on null rather than turned into
+ * zeros — a zero slope is a claim that the two measurements are unrelated, which is a different
+ * statement from having nothing to say.
+ */
+export function useRegistryCorrelation(params: RegistryCorrelationParams) {
+  return useQuery({
+    queryKey: queryKeys.registryCorrelation(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/stats/registry/correlation', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** One region and how many caves in scope stand under it; a null region is a row of its own. */
+export type RegistryRegionRow = components['schemas']['RegistryRegionRow'];
+
+/** How the caves in scope divide between regions, and the total they were taken from. */
+export type RegistryRegionBreakdown = components['schemas']['RegistryRegionBreakdownDto'];
+
+/** Everything a regional breakdown can be asked, which is the scope and nothing else. */
+export type RegistryRegionsParams = NonNullable<
+  paths['/api/v1/stats/registry/regions']['get']['parameters']['query']
+>;
+
+/**
+ * What a narrowed set of the registry adds up to per region, for the caves this caller may read.
+ *
+ * The rows and the total are counted under different rules and are not expected to reconcile: the
+ * total counts every cave in scope the caller may read, the rows only those they may also place.
+ * The difference is a fact about the answer rather than a cave that went missing, so neither
+ * figure is adjusted here to make the other look right.
+ */
+export function useRegistryRegions(params: RegistryRegionsParams) {
+  return useQuery({
+    queryKey: queryKeys.registryRegions(params),
+    queryFn: () => unwrap(api.GET('/api/v1/stats/registry/regions', { params: { query: params } })),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** How many caves recorded one named measure, and how many were left out for want of it alone. */
+export type RegistryClusterCoverage = components['schemas']['RegistryClusterCoverageDto'];
+
+/** Who the grouping was offered, who it could take, and who it had to leave out. */
+export type RegistryClusterPopulation = components['schemas']['RegistryClusterPopulationDto'];
+
+/** The middle and the spread one measure was standardised by before distances were taken. */
+export type RegistryClusterScaling = components['schemas']['RegistryClusterScalingDto'];
+
+/** One group: its label, how many caves fell in it, and its middle when it is large enough to publish one. */
+export type RegistryCluster = components['schemas']['RegistryClusterDto'];
+
+/** Which group one cave fell in, and how far from that group's middle it sits. */
+export type RegistryClusterAssignment = components['schemas']['RegistryClusterAssignmentDto'];
+
+/** How wide the groups are against how far apart they are — the only figure that can contradict them. */
+export type RegistryClusterSeparation = components['schemas']['RegistryClusterSeparationDto'];
+
+/** Which caves resemble each other over the measures asked for, and the account of who was left out. */
+export type RegistryClustering = components['schemas']['RegistryClusteringDto'];
+
+/** Everything a grouping can be asked, scope included, spelled as the route spells it. */
+export type RegistryClusteringParams = NonNullable<
+  paths['/api/v1/stats/registry/clustering']['get']['parameters']['query']
+>;
+
+/**
+ * Which caves resemble each other over the measures asked for.
+ *
+ * The answer is not only the groups. It carries the account of who could be grouped and who could
+ * not, and for want of which measurement — which is the half a reader has to see first, because a
+ * grouping over the best-surveyed tenth of a registry is internally consistent and reads exactly
+ * like a grouping over the registry.
+ *
+ * `enabled` is a parameter rather than an internal guess because the caller is the only one that
+ * knows whether the set it is drawing and the set it would be asking about are the same set. A
+ * grouping fetched for a wider set than the points on screen colours them with a claim about
+ * caves nobody is looking at, and nothing in the answer would reveal the mismatch.
+ */
+export function useRegistryClustering(params: RegistryClusteringParams, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.registryClustering(params),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/stats/registry/clustering', { params: { query: params } })),
+    // Deliberately no carrying of the previous answer across a change of scope. Keeping it is the
+    // right trade for a page of rows, where the shape barely moves and a blank table flickers; it
+    // is the wrong one here, because the previous answer is a grouping of a different set of caves
+    // and the list it would be painted over refetches faster than a grouping does. For the length
+    // of that window the colours and the population sentence would both describe caves nobody is
+    // looking at, and nothing in either would admit it. An uncoloured scatter for a moment is the
+    // honest state.
+    enabled,
   });
 }

@@ -286,3 +286,57 @@ public class TerrainBuildSource
     /// <summary>The licence the data is held under, recorded verbatim as the publisher states it.</summary>
     public string? Licence { get; set; }
 }
+
+/// <summary>
+/// One prepared elevation raster a build left on disk, described once so that reading a height does
+/// not have to open every file to find out which of them holds the point.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A cache of what is on disk, and nothing depends on it that could not be answered by opening the
+/// files again — which is exactly what fills it when it is empty. It exists because the alternative
+/// costs a dataset open per raster per request, and a profile along a cave asks for hundreds of
+/// heights: the difference is not an optimisation but the difference between a route that answers
+/// and one that does not.
+/// </para>
+/// <para>
+/// The footprint is the ground the raster's pixels actually cover, read back out of the finished
+/// file. It is deliberately not the rectangle the build was asked for: preparation keeps a margin
+/// beyond that so nothing interpolating across the edge has a void on one side, so a point can have
+/// perfectly good pixels under it and still lie outside the build's own extent.
+/// </para>
+/// </remarks>
+public class TerrainBuildRaster
+{
+    public long Id { get; set; }
+
+    public Guid TerrainBuildId { get; set; }
+
+    /// <summary>Absolute path to the prepared raster, as it was when this row was written.</summary>
+    public required string Path { get; set; }
+
+    /// <summary>Pixels across.</summary>
+    public int Width { get; set; }
+
+    /// <summary>Pixels down.</summary>
+    public int Height { get; set; }
+
+    /// <summary>The width of one pixel in degrees of longitude.</summary>
+    /// <remarks>
+    /// What decides which raster is preferred where two cover the same ground: the finer one holds
+    /// detail the coarser one cannot, and reading the coarser one there would throw it away.
+    /// </remarks>
+    public double PixelSizeDegrees { get; set; }
+
+    /// <summary>The ground the raster's pixels cover, as an axis-aligned rectangle.</summary>
+    public required Polygon Footprint { get; set; }
+
+    /// <summary>What the raster's pixels say for a hole.</summary>
+    public double VoidValue { get; set; }
+
+    /// <summary>How large the file was when it was described.</summary>
+    public long SizeBytes { get; set; }
+
+    /// <summary>When the file was last opened and described, in UTC.</summary>
+    public DateTimeOffset DescribedAt { get; set; }
+}

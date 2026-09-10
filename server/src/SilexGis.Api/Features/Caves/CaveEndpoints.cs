@@ -607,19 +607,24 @@ public static class CaveEndpoints
         return CavingGroupBindingRules.MayBind(ctx, AccessDomain.Features, cavingGroupId.Value);
     }
 
+    // Every arm carries a secondary key on the id. None of the sortable columns is unique, and
+    // PostgreSQL is free to return tied rows in any order it likes between one query and the next,
+    // so without a tiebreaker a paged caller sees some rows twice and never sees others. Region and
+    // depth are the worst of them — there ties are the norm rather than the exception — and the
+    // updatedAt fallback ties routinely after an import, which stamps many rows in one transaction.
     private static IQueryable<Feature> ApplySort(IQueryable<Feature> query, string? sort) =>
         sort switch
         {
-            "name" => query.OrderBy(f => f.Name),
-            "-name" => query.OrderByDescending(f => f.Name),
-            "surveyedLength" => query.OrderBy(f => f.Cave!.SurveyedLength),
-            "-surveyedLength" => query.OrderByDescending(f => f.Cave!.SurveyedLength),
-            "depth" => query.OrderBy(f => f.Cave!.Depth),
-            "-depth" => query.OrderByDescending(f => f.Cave!.Depth),
-            "region" => query.OrderBy(f => f.Cave!.Region),
-            "-region" => query.OrderByDescending(f => f.Cave!.Region),
-            "updatedAt" => query.OrderBy(f => f.UpdatedAt),
-            "-updatedAt" or null or "" => query.OrderByDescending(f => f.UpdatedAt),
-            _ => query.OrderByDescending(f => f.UpdatedAt),
+            "name" => query.OrderBy(f => f.Name).ThenBy(f => f.Id),
+            "-name" => query.OrderByDescending(f => f.Name).ThenByDescending(f => f.Id),
+            "surveyedLength" => query.OrderBy(f => f.Cave!.SurveyedLength).ThenBy(f => f.Id),
+            "-surveyedLength" => query.OrderByDescending(f => f.Cave!.SurveyedLength).ThenByDescending(f => f.Id),
+            "depth" => query.OrderBy(f => f.Cave!.Depth).ThenBy(f => f.Id),
+            "-depth" => query.OrderByDescending(f => f.Cave!.Depth).ThenByDescending(f => f.Id),
+            "region" => query.OrderBy(f => f.Cave!.Region).ThenBy(f => f.Id),
+            "-region" => query.OrderByDescending(f => f.Cave!.Region).ThenByDescending(f => f.Id),
+            "updatedAt" => query.OrderBy(f => f.UpdatedAt).ThenBy(f => f.Id),
+            "-updatedAt" or null or "" => query.OrderByDescending(f => f.UpdatedAt).ThenByDescending(f => f.Id),
+            _ => query.OrderByDescending(f => f.UpdatedAt).ThenByDescending(f => f.Id),
         };
 }

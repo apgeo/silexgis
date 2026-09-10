@@ -107,6 +107,16 @@ public sealed class FeatureFilterCompiler(SilexGisDbContext db)
                 FilterLeaves.Boolean<Feature>(condition, f => f.LocationProtected),
             FeatureFilterFields.CreatedAt => FilterLeaves.Instant<Feature>(condition, f => f.CreatedAt),
             FeatureFilterFields.UpdatedAt => FilterLeaves.Instant<Feature>(condition, f => f.UpdatedAt),
+            // The cave subtype, reached through the navigation the shipped cave listing already
+            // reaches it through, so the same question asked from either screen becomes the same
+            // join. A feature that is not a cave has no row on the other side, which reads as
+            // empty — the honest answer for a boulder asked how long it is.
+            FeatureFilterFields.Region => FilterLeaves.Text<Feature>(condition, f => f.Cave!.Region),
+            FeatureFilterFields.RockTypeId =>
+                FilterLeaves.Longs<Feature>(condition, f => f.Cave!.RockTypeId),
+            FeatureFilterFields.SurveyedLength =>
+                FilterLeaves.Decimals<Feature>(condition, f => f.Cave!.SurveyedLength),
+            FeatureFilterFields.Depth => FilterLeaves.Decimals<Feature>(condition, f => f.Cave!.Depth),
             _ => throw new InvalidOperationException(
                 $"No compiler arm for '{condition.Field}'. A field the vocabulary declares must have "
                 + "one here, or a validated filter would silently match everything."),

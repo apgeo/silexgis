@@ -123,6 +123,37 @@ It refuses in three cases, each named:
 
 ---
 
+## Rock overhead
+
+How much rock lies over a cave's passages, along their length. On the cave's page.
+
+The chart runs **distance along the passage** across the bottom and the **thickness of rock
+overhead** up the side, with the rock shaded between. Press a point on the curve and the
+reading is marked where it was taken — on the map and in the 3D view — and named beneath the
+chart: the distance, the thickness, and which piece of line work answered.
+
+> **Distance along is not a walk from the entrance.** A survey is a network, not a route. The
+> axis is cumulative length in the order the line work records it.
+
+**A break in the curve is a place nobody has measured the ground for**, not a place where the
+passage reaches the surface. Where elevation data does not cover the passage, there is no line
+— and the figures beneath the chart (least, greatest, average) are worked out over the covered
+readings only, with the number of them shown, so a partly covered cave is not reported as
+shallower than it is.
+
+It says so plainly rather than drawing nothing, in four different cases: the cave has no line
+work; the survey was drawn in plan with no depths, so there is nothing to subtract from; no
+elevation data has been prepared on this installation at all; or some has, and none of it
+reaches this cave. Those are different problems for different people.
+
+A long cave is sampled coarsely rather than answered slowly: readings are spread at an even
+interval, never closer than 2 m and never more than 400 of them.
+
+You need permission to read elevation data as well as permission to see exactly where the cave
+is. Ask an administrator if the panel does not appear.
+
+---
+
 ## Karst distributions
 
 Over the caves on a cave-list page: **Distributions**.
@@ -136,6 +167,45 @@ Over the caves on a cave-list page: **Distributions**.
 
 The scope note is the important part: *"Computed from the n of m caves on this page that
 carry a surveyed length. **Caves without one are absent rather than counted as zero.**"*
+
+---
+
+## The whole registry, explored
+
+Under **Statistics** in the sidebar, three screens ask questions of the registry itself rather
+than of one cave or one page of caves.
+
+| Screen | What it answers |
+|---|---|
+| **Distribution** | How one measurement is spread — intervals, range, percentiles, and two fits |
+| **Correlation** | How two measurements move together — slope, R², and the correlation itself |
+| **By region** | How many caves stand under each region |
+
+All three take the same narrowings — cave type, rock type, region — and the whole question lives
+in the address, so a link reproduces exactly what you were looking at. Each screen saves what it
+is currently showing as a spreadsheet; the file is the same answer, not a second one.
+
+Read the sentences these screens print, because they are doing real work:
+
+- **A joined interval says so.** Where too few caves fall in one interval to show it on its own,
+  it is *joined to its neighbour* rather than hidden — and the axis says which ones were joined,
+  with a count underneath. A wide bar is a joined bar, not a real feature of the distribution.
+- **A missing relationship is stated, not drawn.** If there are too few pairs to fit anything, or
+  no range to fit across, you get a sentence saying which of those it was and no chart at all. A
+  line through two points is not a relationship.
+- **The correlation chart draws a fit and no caves.** No individual cave is plotted; the line is
+  drawn across the range of the horizontal measurement, which can be wider than the pairs the fit
+  actually used. The page says so where you can see it.
+- **The regional breakdown does not add up, on purpose.** The total counts caves you may read;
+  the rows count caves you may also *place*. When the rows fall short, a sentence says by how many
+  — and which regions those caves stand under is precisely what is being withheld. There is no
+  "elsewhere" row and no percentage column, because either would invite you to close a gap that
+  is meant to stay open.
+- **The counts travel with the figures.** A percentile over eleven caves and one over eleven
+  hundred look identical on a chart, so every screen prints what it was computed over.
+
+Sorting is by region name only. Ordering the table by its counts would give away the relative
+sizes of the very thing the answer declined to state.
 
 ---
 

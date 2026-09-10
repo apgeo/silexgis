@@ -216,7 +216,7 @@ public sealed class PhotoLibraryProbeTests
         health.Reach.ShouldBe(LibraryReach.Reachable);
         health.Version.ShouldBe("1.142.0");
         health.FailureCode.ShouldBeNull();
-        health.MissingPermissions.ShouldBe(["asset.view"]);
+        health.MissingPermissions.ShouldBe(["asset.view", "asset.read", "album.read"]);
 
         stub.Asked.Count.ShouldBe(2);
         stub.Asked[1].ShouldEndWith(ImmichKey);
@@ -227,7 +227,7 @@ public sealed class PhotoLibraryProbeTests
     /// needs no permission of its own — which is exactly the key an operator most needs told about.
     /// </summary>
     [Fact]
-    public async Task A_key_that_carries_nothing_is_still_described_and_both_rights_are_named()
+    public async Task A_key_that_carries_nothing_is_still_described_and_every_right_is_named()
     {
         var stub = new LibraryStub()
             .Answering(ImmichVersion, """{"major":1,"minor":142,"patch":0}""")
@@ -236,13 +236,13 @@ public sealed class PhotoLibraryProbeTests
         var health = await Immich(stub).ProbeAsync(default);
 
         health.Reach.ShouldBe(LibraryReach.Reachable);
-        health.MissingPermissions.ShouldBe(["map.read", "asset.view"]);
+        health.MissingPermissions.ShouldBe(["map.read", "asset.view", "asset.read", "album.read"]);
     }
 
     /// <summary>
     /// The entry that stands for everything satisfies both. Read as sufficient rather than as a
     /// name this build does not recognise, or every operator who minted a key without narrowing it
-    /// — which is the default the library's own screen offers — would be told to add two rights
+    /// — which is the default the library's own screen offers — would be told to add rights
     /// they already have.
     /// </summary>
     [Fact]
@@ -272,14 +272,24 @@ public sealed class PhotoLibraryProbeTests
         (await Immich(stub).ProbeAsync(default)).Version.ShouldBe("3.2.0-rc1");
     }
 
+    /// <summary>
+    /// A key carrying every right this integration uses, in some other order and with rights it
+    /// does not use besides, is missing nothing.
+    /// </summary>
+    /// <remarks>
+    /// Both halves are worth pinning. The library lists a key's rights in whatever order it stored
+    /// them, so a check that compared the two lists as sequences would tell an operator with a
+    /// perfectly good key to go and fix it; and a key minted for more than this integration is the
+    /// ordinary case, since one key belongs to a whole account rather than to this application.
+    /// </remarks>
     [Fact]
-    public async Task A_key_carrying_both_rights_and_others_besides_is_missing_nothing()
+    public async Task A_key_carrying_every_right_and_others_besides_is_missing_nothing()
     {
         var stub = new LibraryStub()
             .Answering(ImmichVersion, """{"major":1,"minor":142,"patch":0}""")
             .Answering(
                 ImmichKey,
-                """{"name":"an invented key","permissions":["asset.view","album.read","map.read"]}""");
+                """{"name":"an invented key","permissions":["asset.view","album.read","person.read","map.read","asset.read"]}""");
 
         (await Immich(stub).ProbeAsync(default)).MissingPermissions.ShouldBeEmpty();
     }
@@ -605,7 +615,10 @@ public sealed class PhotoLibraryProbeTests
         configure?.Invoke(options);
 
         return new PhotoPrismClient(
-            new OneClient(stub), Options.Create(options), NullLogger<PhotoPrismClient>.Instance);
+            new OneClient(stub),
+            Options.Create(options),
+            new NothingStopped(),
+            NullLogger<PhotoPrismClient>.Instance);
     }
 
     private static ImmichClient Immich(LibraryStub stub, Action<ImmichOptions>? configure = null)
@@ -622,6 +635,7 @@ public sealed class PhotoLibraryProbeTests
         return new ImmichClient(
             new OneClient(stub),
             Options.Create(options),
+            new NothingStopped(),
             new NeverStopping(),
             NullLogger<ImmichClient>.Instance);
     }
@@ -649,6 +663,17 @@ public sealed class PhotoLibraryProbeTests
     private static readonly byte[] InventedJpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46];
 
     /// <summary>A factory that hands out one client, over the stub a test supplied.</summary>
+    /// <summary>
+    /// A brake nobody has pulled, so these cases exercise a library this installation is using.
+    /// The client asks it before every outgoing call, which is what makes a stopped library cost no
+    /// network on any path.
+    /// </summary>
+    private sealed class NothingStopped : IPhotoLibraryBrake
+    {
+        public ValueTask<bool> IsSuspendedAsync(PhotoLibrarySource source, CancellationToken ct) =>
+            ValueTask.FromResult(false);
+    }
+
     private sealed class OneClient(HttpMessageHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);

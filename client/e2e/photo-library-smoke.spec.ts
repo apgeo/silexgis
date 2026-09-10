@@ -49,7 +49,11 @@ test('two neighbouring libraries, their photographs, and one of them opened', as
   // eslint-disable-next-line no-console
   console.log(`counts reported by the two layers: ${counts.join(', ')}`);
   expect(counts).toHaveLength(2);
-  for (const n of counts) expect(n).toBe(FIXTURE_COUNT);
+  // At least the fixtures, not exactly them. A library is somebody's own archive and may hold
+  // photographs this project did not put there — one of the two here does. Asserting an exact total
+  // would be asserting over the operator's own collection, and would break the day they add a
+  // picture. The fixture manifest is the only population whose count this check knows.
+  for (const n of counts) expect(n).toBeGreaterThanOrEqual(FIXTURE_COUNT);
 
   await page.screenshot({ path: 'test-results/photo-library-both.png' });
 

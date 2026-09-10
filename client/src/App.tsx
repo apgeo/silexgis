@@ -38,6 +38,13 @@ const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage.tsx'));
 const TripLogListPage = lazy(() => import('./pages/trips/TripLogListPage.tsx'));
 const MyTripsPage = lazy(() => import('./pages/trips/MyTripsPage.tsx'));
 const TripStatsPage = lazy(() => import('./pages/trips/TripStatsPage.tsx'));
+const RegistryDistributionPage = lazy(
+  () => import('./pages/statistics/RegistryDistributionPage.tsx'),
+);
+const RegistryCorrelationPage = lazy(
+  () => import('./pages/statistics/RegistryCorrelationPage.tsx'),
+);
+const RegistryRegionsPage = lazy(() => import('./pages/statistics/RegistryRegionsPage.tsx'));
 const TripLogDetailPage = lazy(() => import('./pages/trips/TripLogDetailPage.tsx'));
 const TripReportPage = lazy(() => import('./pages/trips/TripReportPage.tsx'));
 const EventListPage = lazy(() => import('./pages/events/EventListPage.tsx'));
@@ -60,6 +67,7 @@ const CabinetsPage = lazy(() => import('./pages/documents/CabinetsPage.tsx'));
 const DocumentDetailPage = lazy(() => import('./pages/documents/DocumentDetailPage.tsx'));
 const UploadsPage = lazy(() => import('./pages/documents/UploadsPage.tsx'));
 const GalleryPage = lazy(() => import('./pages/gallery/GalleryPage.tsx'));
+const PhotoLibraryPage = lazy(() => import('./pages/photolibrary/PhotoLibraryPage.tsx'));
 const AlbumsPage = lazy(() => import('./pages/gallery/AlbumsPage.tsx'));
 const AlbumDetailPage = lazy(() => import('./pages/gallery/AlbumDetailPage.tsx'));
 const PublicGalleryPage = lazy(() => import('./pages/gallery/PublicGalleryPage.tsx'));
@@ -151,6 +159,9 @@ export const routes: RouteObject[] = [
           { path: '/trip-logs', element: <Loadable><TripLogListPage /></Loadable> },
           { path: '/trip-logs/mine', element: <Loadable><MyTripsPage /></Loadable> },
           { path: '/trip-logs/stats', element: <Loadable><TripStatsPage /></Loadable> },
+          { path: '/statistics/distribution', element: <Loadable><RegistryDistributionPage /></Loadable> },
+          { path: '/statistics/correlation', element: <Loadable><RegistryCorrelationPage /></Loadable> },
+          { path: '/statistics/regions', element: <Loadable><RegistryRegionsPage /></Loadable> },
           { path: '/trip-logs/import', element: <Loadable><TripImportPage /></Loadable> },
           { path: '/trip-logs/import/:fileId', element: <Loadable><TripImportPage /></Loadable> },
           { path: '/trip-logs/:id', element: <Loadable><TripLogDetailPage /></Loadable> },
@@ -174,6 +185,7 @@ export const routes: RouteObject[] = [
           { path: '/cabinets', element: <Loadable><CabinetsPage /></Loadable> },
           { path: '/uploads', element: <Loadable><UploadsPage /></Loadable> },
           { path: '/gallery', element: <Loadable><GalleryPage /></Loadable> },
+          { path: '/photo-library', element: <Loadable><PhotoLibraryPage /></Loadable> },
           { path: '/albums', element: <Loadable><AlbumsPage /></Loadable> },
           { path: '/albums/:id', element: <Loadable><AlbumDetailPage /></Loadable> },
           { path: '/documents/:id', element: <Loadable><DocumentDetailPage /></Loadable> },

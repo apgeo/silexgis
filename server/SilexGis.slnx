@@ -9,6 +9,9 @@
          binaries for a referenced project the solution itself does not list, with exit code 0
          and no warning. -->
     <Project Path="external/ThIDE/src/Therion.Blender/Therion.Blender.csproj" />
+    <Project Path="external/ThIDE/src/Therion.Build/Therion.Build.csproj" />
+    <Project Path="external/ThIDE/src/Therion.Core/Therion.Core.csproj" />
+    <Project Path="external/ThIDE/src/Therion.Processing.Abstractions/Therion.Processing.Abstractions.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SilexGis.Api.Tests/SilexGis.Api.Tests.csproj" />

@@ -51,7 +51,9 @@ public sealed class VisibleProximitySearch(SilexGisDbContext db, FeatureProtecti
     /// <summary>
     /// A ceiling on the read. A page of candidates spread over a whole massif with a
     /// five-kilometre radius could otherwise sweep in every feature an installation has; the
-    /// nearest neighbours of each candidate are still found among the rows nearest the page.
+    /// nearest neighbours of each candidate are still found among the rows nearest the page —
+    /// which holds because the read is ordered by distance before it is cut, and would not
+    /// otherwise.
     /// </summary>
     public const int MaxNearbyFeatures = 2000;
 
@@ -78,12 +80,26 @@ public sealed class VisibleProximitySearch(SilexGisDbContext db, FeatureProtecti
             envelope.ExpandToInclude(point.EnvelopeInternal);
         }
 
-        var search = new GeometryFactory(new PrecisionModel(), 4326)
-            .ToGeometry(Geodesy.ExpandedBy(envelope, radiusMeters));
+        var factory = new GeometryFactory(new PrecisionModel(), 4326);
+        var search = factory.ToGeometry(Geodesy.ExpandedBy(envelope, radiusMeters));
+
+        // The ceiling below only keeps the promise this class makes — that the nearest neighbours
+        // survive it — if the rows it cuts are the far ones. Without an order the database is free
+        // to return any rows it likes from inside the box, so on an installation holding more than
+        // the ceiling within one search the object standing closest could be the one dropped, and
+        // the answer would be "nothing is near here" while something was a metre away. Silence is
+        // this answer's failure mode, which is why the order is not an optimisation.
+        //
+        // Ordered in degrees rather than metres, deliberately: over a box this small the two agree
+        // on which rows are nearest, and the true metric distance is computed by the caller from
+        // what survives. A metric sort here would cost a projection per row to decide what to throw
+        // away.
+        var centre = factory.CreatePoint(envelope.Centre);
 
         var nearby = await db.Features.AsNoTracking()
             .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
             .Where(f => f.Geom != null && ComparableKinds.Contains(f.Kind) && f.Geom.Intersects(search))
+            .OrderBy(f => f.Geom!.Distance(centre))
             .Select(f => new { f.Id, f.Name, f.Kind, f.Geom })
             .Take(MaxNearbyFeatures)
             .ToListAsync(ct);

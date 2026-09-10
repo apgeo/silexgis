@@ -45,6 +45,9 @@ vi.mock('../../components/trips/TripCover.tsx', () => ({ default: () => <div /> 
 vi.mock('../../components/trips/TripGallerySection.tsx', () => ({
   default: () => <div>the photographs filed against the trip</div>,
 }));
+vi.mock('../../components/photolibrary/TripLibraryPhotoPanel.tsx', () => ({
+  default: () => <div>what a neighbouring library holds from those days</div>,
+}));
 vi.mock('../../components/reslinks/LinksSection.tsx', () => ({
   default: () => <div>everything else the trip is tied to</div>,
 }));
@@ -192,6 +195,11 @@ describe('the trip page', () => {
     // The gallery itself is there for any reader; putting photographs into the trip is not.
     expect(screen.getByText('the photographs filed against the trip')).toBeTruthy();
     expect(screen.queryByTestId('trip-photo-import')).toBeNull();
+
+    // And beside it, what a neighbouring library holds from the days the trip was out — a reading
+    // of somebody else's archive, so it is there for any reader for the same reason the gallery
+    // is: nothing about it writes anything.
+    expect(screen.getByText('what a neighbouring library holds from those days')).toBeTruthy();
 
     cleanup();
     canSpy.mockReturnValue(true);

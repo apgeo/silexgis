@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
+import { libraryPictureFailed } from '../photolibrary/pictureUrl.ts';
 import {
   libraryPhotoPopupNodes,
   type LibraryPhotoFeatureTarget,
@@ -98,7 +99,9 @@ describe('libraryPhotoPopupNodes', () => {
   });
 
   it('says a picture failed where the picture would have been', () => {
-    const nodes = libraryPhotoPopupNodes({ reference: 'abc123' }, library);
+    // Its own reference, because a failure is remembered for the rest of the page: a test sharing
+    // one with its neighbours would decide what those neighbours see by running before them.
+    const nodes = libraryPhotoPopupNodes({ reference: 'ff99ee88' }, library);
     const img = image(nodes)!;
     const holder = document.createElement('div');
     holder.replaceChildren(...nodes);
@@ -109,6 +112,37 @@ describe('libraryPhotoPopupNodes', () => {
     expect(holder.querySelector('.map-library-photo-popup-failed')?.textContent).toBe(
       'The photograph could not be loaded.',
     );
+  });
+
+  /**
+   * The one that matters here. Against one of the two products a request for a picture whose
+   * original cannot be resolved is itself what marks the file missing over there and drops the
+   * photograph from that library's index — and a balloon is the surface most likely to repeat the
+   * request, because the request is what a person makes by clicking, and people click twice.
+   *
+   * So the failure goes into the ledger the whole application shares, and the balloon reads it on
+   * the way in as well as writing to it on failure.
+   */
+  it('never asks again for a picture that failed, and tells every other surface about it', () => {
+    const first = libraryPhotoPopupNodes({ reference: 'dd44cc55' }, library);
+    image(first)!.dispatchEvent(new Event('error'));
+
+    // Not the balloon's own memory: the markers and the browsing grid read the same ledger, and
+    // this is the entry they will read.
+    expect(libraryPictureFailed('photoprism', 'dd44cc55')).toBe(true);
+
+    const second = libraryPhotoPopupNodes({ reference: 'dd44cc55' }, library);
+
+    expect(image(second)).toBeUndefined();
+    // Said rather than left as a gap, so the balloon does not read as a photograph nobody has a
+    // picture of.
+    expect(linesOf(second, 'map-library-photo-popup-failed')).toEqual([
+      'The photograph could not be loaded.',
+    ]);
+
+    // The control: another photograph in the same library is untouched. One picture a library
+    // could not produce says nothing about the rest of what it holds.
+    expect(image(libraryPhotoPopupNodes({ reference: 'ee55dd66' }, library))).toBeDefined();
   });
 
   it('names an untitled photograph rather than leaving the line blank', () => {

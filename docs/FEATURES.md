@@ -98,6 +98,14 @@ feature and walkthroughs of whole jobs.
   offered pre-filled — and the installation converts it into a model the 3D view draws in place,
   under the terrain, beside that cave's centerlines. It is loaded only for the cave you select,
   and switching it off in the layer list genuinely lets go of it.
+- **Survey closure** — archive the compilation log beside the model and the cave page reports how
+  well the survey closes, in the compiler's own words: every loop it found, with both its relative
+  error and its absolute error in metres, its length, its stations and its per-axis components. The
+  two measures are always shown together and the table says which one it is ordered by, because
+  they disagree about which loop is worst. Each set of figures records which file and which revision
+  of it was read, and when; a corrected log read again replaces them rather than mixing two runs.
+  The figures follow the survey they belong to, so a reader who may not be told a cave's exact
+  position is not shown them.
 - **3D view** — the configured base layers draped on a globe, on a page that is downloaded
   only when it is opened. Needs WebGL 2; a browser without it gets an explanation rather
   than a dead canvas. No vendor terrain, imagery or geocoding service is contacted and the
@@ -110,6 +118,15 @@ feature and walkthroughs of whole jobs.
   application: draw a rectangle on a map, and it obtains the data, converts it, bakes the tiles
   and checks them, saying where it has got to as it goes. That last route needs one extra service
   a plain installation does not run. Everyone who wants none of it is unaffected.
+- **Pictures drawn from that elevation** — shaded relief, steepness, facing, ruggedness,
+  topographic position, roughness or a colour relief, computed once from a finished build and shown
+  to everyone who may read terrain as ordinary map layers. Each one belongs to the build it was
+  drawn from, so **activating a different build marks every picture of the old one as out of date**,
+  where the reader sees it rather than in a log — a shaded relief that disagrees with the heights
+  beneath it otherwise looks like a fault in the cave data. They live under their build and are
+  deleted with it. Some relief measures the elevation library cannot produce — geomorphons,
+  curvature, and flow direction, accumulation and the wetness index — are simply absent rather than
+  approximated under a borrowed name.
 - **Trips** — a trip is logged over the days it actually ran, with who was there, what came of it
   and how long was spent underground, and it can be sketched on a map: a point, a line or an area
   for where it happened. That sketch is shown exactly to everyone who may read the trip, including
@@ -190,6 +207,17 @@ feature and walkthroughs of whole jobs.
   Where a trip counts into more than one bar — it went to two areas, it had four people — the page
   says so, and where there are more names than bars it says how many it is showing out of how many
   there are.
+- **Years of trips typed up in a spreadsheet become trips** — the club's centralizator is uploaded
+  and read on a review screen, not imported blind: every row says what it would create, which people
+  and caves it matched, and what it could not settle, and nothing is written until you confirm.
+  Sheets saved years ago on the machines of the day are not assumed to be modern text — where the
+  file turns out to be written in an older code page the diacritics are recovered rather than turned
+  into question marks, and the screen says which reading it used and lets you choose another if it
+  guessed wrong. Sheets that name people the way clubs really do — a given name and an initial, or a
+  given name alone — can be imported too: that stays switched off, because inventing a person you
+  cannot later be sure of is not undone easily, and while it is off such names are counted and shown
+  as ones nobody can be made from rather than dropped quietly. A name two people on your roster
+  already answer to is never guessed at either way; it waits for somebody to say which.
 - **A trip that has not happened yet asks people, and the answers keep their own order** — a trip's
   page has a list of who was asked and what each of them said: coming, not coming, or not answered
   yet, with a line of their own beside it. Whoever may read the trip answers for themselves; whoever

@@ -55,6 +55,20 @@ describe('the addresses this application hands out', () => {
     expect(matchRoutes(routes, '/calendar')).toBeTruthy();
   });
 
+  // Three addresses the sidebar offers by key, under a group that exists for them alone: a menu
+  // key with no route behind it lands whoever clicked it on the router's error screen.
+  it('include the registry statistics screens the sidebar offers', () => {
+    for (const route of [
+      '/statistics/distribution',
+      '/statistics/correlation',
+      '/statistics/regions',
+    ]) {
+      const matched = matchRoutes(routes, route);
+      expect(matched, `${route} is offered in the sidebar and answered by no page`).toBeTruthy();
+      expect(matched?.at(-1)?.route.path).toBe(route);
+    }
+  });
+
   // A button above the trip listing sends people here carrying their filter, and the address is
   // a static word standing where a trip's identifier otherwise stands — so it is exactly the kind
   // that can be swallowed by the route beside it instead of failing to be registered at all.

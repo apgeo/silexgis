@@ -28,6 +28,21 @@ export interface ChartPalette {
   tooltipText: string;
   /** The band drawn behind a curve to show a range. */
   envelope: string;
+  /**
+   * Marks that belong to no category — points a grouping could not place, and the like.
+   *
+   * Deliberately outside the categorical series, and deliberately quieter than any of them: it
+   * has to read as "no answer" rather than as one more answer, or a reader counts it as a group.
+   */
+  unclassified: string;
+  /**
+   * A line drawn over a scatter to summarise it — a fit, a trend, a reference.
+   *
+   * Outside the categorical series on purpose. A summary of every point is not one of the
+   * categories, and where the points are coloured by category a line borrowing a category's colour
+   * makes that group's marks and the line indistinguishable in the legend and on the chart.
+   */
+  fit: string;
 }
 
 /**
@@ -54,6 +69,8 @@ export function paletteFor(token: GlobalToken): ChartPalette {
     tooltipBackground: token.colorBgElevated,
     tooltipText: token.colorText,
     envelope: token.colorFillSecondary,
+    unclassified: token.colorTextQuaternary,
+    fit: token.colorText,
   };
 }
 

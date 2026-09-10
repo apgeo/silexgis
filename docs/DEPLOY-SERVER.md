@@ -216,6 +216,41 @@ Backups are written in the clear. Encrypting them is an operator step by design 
 INSTALL.md, "Encryption at rest". A backup on the same disk as the thing it backs up is not a
 backup; copy them off the host.
 
+## Test installations: a data baseline and a scheduled reset
+
+A test or demo installation — typically one running with `SILEXGIS__TestLogins__Enabled=true`,
+which prints working demo credentials on its own sign-in page (see INSTALL.md, "Running a test
+installation") — hands its data to strangers on purpose. Two commands and a timer keep that
+sustainable:
+
+```bash
+silexgis-baseline          # capture the CURRENT data as the state to return to
+silexgis-reset             # go back to it, destroying everything done since
+silexgis-reset --status    # what baseline exists, when, at which commit
+```
+
+Set the instance up the way it should greet visitors — demo dataset seeded, any curated
+content in place — then run `silexgis-baseline`. From then on `silexgis-reset` (or the timer)
+returns the database and the uploaded files to exactly that state. Capture a fresh baseline
+whenever the curated content improves, and **after any update that changes the schema** — an
+old dump is migrated forward automatically on the next start, but only as far as the running
+code still carries that migration path.
+
+For an unattended return to sanity, `install-ops.sh` also installs `silexgis-reset.timer`
+(daily at 04:30 UTC, after the nightly backup has captured what is about to be thrown away)
+but leaves it **disabled** — a scheduled restore destroys everything visitors did since the
+baseline, which is exactly right for a test installation and catastrophic anywhere else:
+
+```bash
+systemctl enable --now silexgis-reset.timer
+```
+
+Mechanics worth knowing: the baseline lives in `/var/backups/silexgis-baseline/`, outside the
+rotated backup directory, precisely so the retention sweeps never prune it (a baseline is old
+by definition). A reset takes the update lock, writes a pre-reset safety copy into the
+ordinary rotation first, stops the API while restoring, and waits for `/health/ready` before
+calling itself done. The last two baselines are kept — the one in use and the one it replaced.
+
 ## Security posture
 
 What these scripts set up:

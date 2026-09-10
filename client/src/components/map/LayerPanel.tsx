@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import LayerTree from '@terrestris/react-geo/dist/LayerTree/LayerTree';
 import LayerTransparencySlider from '@terrestris/react-geo/dist/Slider/LayerTransparencySlider/LayerTransparencySlider';
-import { Alert, Button, Checkbox, Collapse, Divider, Input, InputNumber, Radio, Select, Slider, Typography } from 'antd';
+import { Alert, Button, Checkbox, Collapse, Divider, Input, InputNumber, Radio, Select, Slider, Tag, Tooltip, Typography } from 'antd';
 import type OlLayerBase from 'ol/layer/Base';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,7 +14,9 @@ import {
   type MapConfig,
   type MapLayerInfo,
   type RasterMapInfo,
+  type TerrainDerivativeLayerInfo,
 } from '../../api/hooks.ts';
+import { formatSize } from '../attachments/fileFormat.ts';
 import { tripTypeLabelOf } from '../trips/tripTypes.ts';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
@@ -25,6 +27,7 @@ import {
   type CenterlineLoadState,
 } from '../../map/centerlineLayer.ts';
 import { CLOSEST_APPROACH_LAYER_ID } from '../../map/closestApproachLayer.ts';
+import { OVERBURDEN_HIGHLIGHT_LAYER_ID } from '../../map/overburdenHighlightLayer.ts';
 import {
   getLibraryPhotoLoadStates,
   libraryPhotoSourceOf,
@@ -91,6 +94,10 @@ interface LayerPanelProps {
   rasters: RasterMapInfo[];
   visibleRasterIds: string[];
   onRasterVisibleChange: (id: string, visible: boolean) => void;
+  /** The computed pictures of the ground this account may see, finished or otherwise. */
+  terrainDerivatives: TerrainDerivativeLayerInfo[];
+  visibleTerrainDerivativeIds: string[];
+  onTerrainDerivativeVisibleChange: (id: string, visible: boolean) => void;
   /** Fired when a layer's checkbox in the composer tree is toggled. */
   onOverlayVisibilityChanged: (layer: OlLayerBase, visible: boolean) => void;
   /** The photo libraries this installation is pointed at, as this account may see them; empty when none. */
@@ -101,6 +108,13 @@ interface LayerPanelProps {
    * is given: an ordinary account has no errand that begins with a library nobody connected.
    */
   unconfiguredPhotoLibraries: LibraryPhotoProvider[];
+  /**
+   * The libraries this installation has and has stopped using. No layer is made for them and
+   * nothing is asked of them, but they are named here: an overlay that was on the panel yesterday
+   * and is missing today is a question, and "switched off here" is a different answer from "did
+   * not answer" and from "nobody connected one".
+   */
+  suspendedPhotoLibraries: LibraryPhotoProvider[];
   /** Which of them are switched on — a status block for an overlay nobody is looking at is noise. */
   visibleLibraryPhotoSources: string[];
   /**
@@ -151,9 +165,13 @@ export default function LayerPanel({
   rasters,
   visibleRasterIds,
   onRasterVisibleChange,
+  terrainDerivatives,
+  visibleTerrainDerivativeIds,
+  onTerrainDerivativeVisibleChange,
   onOverlayVisibilityChanged,
   photoLibraries,
   unconfiguredPhotoLibraries,
+  suspendedPhotoLibraries,
   visibleLibraryPhotoSources,
   treeNonce,
   tagFilter,
@@ -313,6 +331,8 @@ export default function LayerPanel({
         return t('map.tripsLayer');
       case CLOSEST_APPROACH_LAYER_ID:
         return t('map.closestApproach');
+      case OVERBURDEN_HIGHLIGHT_LAYER_ID:
+        return t('map.overburdenHighlight');
       default:
         // Geofile/raster layers carry their catalog name on the OL layer itself.
         return (layer.get('name') as string | undefined) ?? id ?? '';
@@ -762,6 +782,23 @@ export default function LayerPanel({
             </div>
           );
         })}
+      {/* Present, running, and deliberately not being used. Said in the panel because the map is
+          where somebody notices: the layer they used yesterday is simply not there, and without
+          this line the obvious conclusion is that the library broke. */}
+      {suspendedPhotoLibraries.map((library) => (
+        <div
+          key={library.source}
+          style={{ marginTop: 8 }}
+          data-testid={`library-photos-suspended-${library.source}`}
+        >
+          <Typography.Text strong style={{ fontSize: 12 }}>
+            {library.name}
+          </Typography.Text>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '2px 0 0' }}>
+            {t('libraryPhotos.health.suspended')}
+          </Typography.Paragraph>
+        </div>
+      ))}
       {/* What an empty layer panel cannot say on its own: that there is nothing to look at because
           nothing was connected. Drawn from what the server sent, which is this list for a full
           administrator and an empty one for everybody else — the decision about who is told which
@@ -789,6 +826,77 @@ export default function LayerPanel({
               >
                 {geofile.name}
               </Checkbox>
+            ))}
+          </div>
+        </>
+      )}
+      {terrainDerivatives.length > 0 && (
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          <Typography.Text strong>{t('terrain.derivatives.title')}</Typography.Text>
+          {/* The disk these occupy is said here because it is said nowhere else: a build's own
+              recorded size is written once when the build finishes, so every picture computed from
+              it afterwards adds bytes to the terrain volume that no number anywhere reports. An
+              operator asking for several reliefs and coloured maps per build has no other way to
+              watch that volume fill. */}
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('terrain.derivatives.hint')}
+            </Typography.Text>
+          </div>
+          <div>
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 12 }}
+              data-testid="terrain-derivative-total-size"
+            >
+              {t('terrain.derivatives.totalSize', {
+                size: formatSize(terrainDerivatives.reduce((sum, d) => sum + d.sizeBytes, 0)),
+              })}
+            </Typography.Text>
+          </div>
+          <div
+            data-testid="terrain-derivative-list"
+            style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}
+          >
+            {terrainDerivatives.map((derivative) => (
+              <div
+                key={derivative.id}
+                data-testid={`terrain-derivative-${derivative.id}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <Checkbox
+                  disabled={derivative.status !== 'ready'}
+                  checked={visibleTerrainDerivativeIds.includes(derivative.id)}
+                  onChange={(e) => onTerrainDerivativeVisibleChange(derivative.id, e.target.checked)}
+                >
+                  {derivative.name}
+                </Checkbox>
+                {/* What the picture actually is, said by the application rather than left to
+                    whatever somebody typed as its name: a steepness map named "north ridge" is
+                    indistinguishable from a facing map named the same. */}
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t(`terrain.derivatives.kinds.${derivative.derivative}`)}
+                  {derivative.sizeBytes > 0 ? ` \u00b7 ${formatSize(derivative.sizeBytes)}` : ''}
+                </Typography.Text>
+                {/* The badge is the whole point of showing these here: a shaded relief computed
+                    from elevation that has since been replaced is still drawn, because withdrawing
+                    it would leave bare map over ground that has probably not moved — but a reader
+                    who is not told disagrees it with the heights beneath and reads the difference
+                    as a fault in the cave data. */}
+                {derivative.stale && (
+                  <Tooltip title={t('terrain.derivatives.staleHint')}>
+                    <Tag color="warning" data-testid="terrain-derivative-stale">
+                      {t('terrain.derivatives.stale')}
+                    </Tag>
+                  </Tooltip>
+                )}
+                {derivative.status !== 'ready' && (
+                  <Tag data-testid="terrain-derivative-status">
+                    {t(`terrain.derivatives.statuses.${derivative.status}`)}
+                  </Tag>
+                )}
+              </div>
             ))}
           </div>
         </>

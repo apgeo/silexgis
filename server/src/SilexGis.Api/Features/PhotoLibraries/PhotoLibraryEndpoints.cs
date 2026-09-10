@@ -100,7 +100,7 @@ public static class PhotoLibraryEndpoints
     /// </para>
     /// </remarks>
     private static async Task<Results<Ok<PhotoLibraryStatusDto>, UnauthorizedHttpResult>> StatusAsync(
-        IEnumerable<IPhotoLibrary> libraries,
+        PhotoLibraryGate gate,
         IOptions<PhotoLibraryOptions> options,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -113,19 +113,16 @@ public static class PhotoLibraryEndpoints
 
         if (!PhotoLibraryAudienceRule.MayRead(ctx, options.Value.Audience))
         {
-            return TypedResults.Ok(new PhotoLibraryStatusDto(false, [], []));
+            return TypedResults.Ok(new PhotoLibraryStatusDto(
+                false, PhotoLibrarySearchEndpoints.MaxSearchLength, [], []));
         }
 
-        var configured = libraries.Where(library => library.IsConfigured).ToList();
-        var health = await Task.WhenAll(configured.Select(library => library.ProbeAsync(ct)));
+        // One pass, and the decision about which libraries may be asked anything is taken inside
+        // it. A library this installation has stopped using is reported as stopped and nothing is
+        // asked of it, so a status page cannot be the one path that still opens a socket to it.
+        var reports = await gate.SurveyAsync(ct);
 
-        var providers = configured
-            .Select((library, index) => new PhotoLibraryProviderDto(
-                PhotoLibrarySlugs.Slug(library.Source),
-                PhotoLibrarySlugs.Name(library.Source),
-                Configured: true,
-                PhotoLibraryHealthDto.Of(health[index], library.PicturesAvailable)))
-            .ToList();
+        var providers = reports.Where(report => report.Configured).Select(ProviderOf).ToList();
 
         // Which products this installation could run and has not is told to a full administrator
         // and to nobody else, and the decision is taken here rather than by a panel that declines
@@ -134,17 +131,29 @@ public static class PhotoLibraryEndpoints
         var unconfigured = new List<PhotoLibraryProviderDto>();
         if (ctx.IsFullAdmin)
         {
-            unconfigured.AddRange(libraries
-                .Where(library => !library.IsConfigured)
-                .Select(library => new PhotoLibraryProviderDto(
-                    PhotoLibrarySlugs.Slug(library.Source),
-                    PhotoLibrarySlugs.Name(library.Source),
-                    Configured: false,
-                    PhotoLibraryHealthDto.Of(LibraryHealth.NotAsked, picturesAvailable: false))));
+            unconfigured.AddRange(reports.Where(report => !report.Configured).Select(ProviderOf));
         }
 
-        return TypedResults.Ok(new PhotoLibraryStatusDto(true, providers, unconfigured));
+        return TypedResults.Ok(new PhotoLibraryStatusDto(
+            true, PhotoLibrarySearchEndpoints.MaxSearchLength, providers, unconfigured));
     }
+
+    /// <summary>
+    /// One library, as the status surface names it. The same mapping for a library that is
+    /// running, one this installation has stopped using and one nobody configured, because the
+    /// three differ in what they say and not in what they are.
+    /// </summary>
+    private static PhotoLibraryProviderDto ProviderOf(PhotoLibraryReport report) =>
+        new(
+            PhotoLibrarySlugs.Slug(report.Source),
+            PhotoLibrarySlugs.Name(report.Source),
+            // Answerable for a library nobody has configured and for one nobody is using, because
+            // it is a fact about the product rather than about this installation's copy of it, and
+            // nothing is asked of anybody to know it.
+            LibraryPhotographMapping.MatchingSlug(report.Matching),
+            report.Configured,
+            report.Suspended,
+            PhotoLibraryHealthDto.Of(report.Health, report.PicturesAvailable));
 
     /// <summary>
     /// One library's photographs inside one rectangle.
@@ -157,7 +166,7 @@ public static class PhotoLibraryEndpoints
     private static async Task<Results<Ok<LibraryPhotoFeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> MapAsync(
         string source,
         string bbox,
-        IEnumerable<IPhotoLibrary> libraries,
+        PhotoLibraryGate gate,
         ILibraryPhotoTokenService tokens,
         IOptions<PhotoLibraryOptions> options,
         IOptions<MapOptions> mapOptions,
@@ -189,8 +198,7 @@ public static class PhotoLibraryEndpoints
             return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
         }
 
-        var library = libraries.FirstOrDefault(l => l.Source == which);
-        if (library is null)
+        if (!gate.Runs(which))
         {
             return ApiProblems.NotFound(NotFoundCode);
         }
@@ -198,8 +206,11 @@ public static class PhotoLibraryEndpoints
         // A library nobody has configured is absent rather than broken: an empty answer, no socket
         // opened, and no template — which is exactly what the overlay draws for a library that
         // holds nothing here. The client learns which libraries exist from the status route and
-        // does not normally ask this one at all.
-        if (!library.IsConfigured)
+        // does not normally ask this one at all. A library this installation has stopped using
+        // arrives here the same way and gets the same answer, which is the whole point of stopping
+        // it: the map behaves as though the library had never been connected.
+        var library = await gate.UsableAsync(which, ct);
+        if (library is null)
         {
             return TypedResults.Ok(LibraryPhotoFeatureCollection.Of(
                 [], which, picturesAvailable: false, pictureUrlTemplate: null,
@@ -261,7 +272,9 @@ public static class PhotoLibraryEndpoints
         // collection, and only for a caller the audience rule has just admitted. Nothing downstream
         // of it decides anything again: an address handed out is a decision already taken.
         var picturesAvailable = library.PicturesAvailable;
-        var template = picturesAvailable ? PictureTemplate(which, tokens.CreateToken(which)) : null;
+        var template = picturesAvailable
+            ? LibraryPictureAddress.Template(which, tokens.CreateToken(which))
+            : null;
 
         return TypedResults.Ok(LibraryPhotoFeatureCollection.Of(
             features, which, picturesAvailable, template, page.ReadAt, truncated, omitted));
@@ -296,7 +309,7 @@ public static class PhotoLibraryEndpoints
         string? size,
         string? token,
         HttpContext http,
-        IEnumerable<IPhotoLibrary> libraries,
+        PhotoLibraryGate gate,
         ILibraryPhotoTokenService tokens,
         CancellationToken ct)
     {
@@ -307,7 +320,10 @@ public static class PhotoLibraryEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        var library = libraries.FirstOrDefault(l => l.Source == which && l.IsConfigured);
+        // A token minted while the library was in use does not survive it being stopped: whether
+        // this installation will fetch bytes from a neighbour is asked here, now, rather than
+        // having been decided when the address was handed out.
+        var library = await gate.UsableAsync(which, ct);
         if (library is null || !PhotoLibraryHttp.IsSafeReference(reference))
         {
             return ApiProblems.NotFound(NotFoundCode);
@@ -376,7 +392,7 @@ public static class PhotoLibraryEndpoints
     /// </remarks>
     private static async Task<Results<NoContent, UnauthorizedHttpResult, ProblemHttpResult>> RecheckAsync(
         string source,
-        IEnumerable<IPhotoLibrary> libraries,
+        PhotoLibraryGate gate,
         IOptions<PhotoLibraryOptions> options,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct)
@@ -397,7 +413,9 @@ public static class PhotoLibraryEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
-        var library = libraries.FirstOrDefault(l => l.Source == which && l.IsConfigured);
+        // Refused for a library this installation has stopped using, like every other route here:
+        // a recheck is a question put to the far side, and the brake is on the questions.
+        var library = await gate.UsableAsync(which, ct);
         if (library is null)
         {
             return ApiProblems.NotFound(NotFoundCode);
@@ -414,12 +432,4 @@ public static class PhotoLibraryEndpoints
 
         return TypedResults.NoContent();
     }
-
-    /// <summary>
-    /// The address of one rendering, with the two placeholders a client substitutes and nothing
-    /// else. The origin, the path and the credential are this application's.
-    /// </summary>
-    private static string PictureTemplate(PhotoLibrarySource source, string token) =>
-        $"/api/v1/photo-libraries/{PhotoLibrarySlugs.Slug(source)}/thumbnails/{{reference}}"
-        + $"?size={{size}}&token={Uri.EscapeDataString(token)}";
 }

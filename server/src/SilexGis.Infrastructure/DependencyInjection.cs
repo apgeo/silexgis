@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddSingleton<Geodata.ICoordinateProjector, Geodata.ProjCoordinateProjector>();
         services.AddSingleton<Surveys.SurveyMeshConverter>();
         services.AddSingleton<Surveys.SurveyGraphExtractor>();
+        services.AddSingleton<Surveys.SurveyCompilationLogReader>();
         services.AddScoped<Features.FeatureWriteService>();
         services.AddScoped<Features.FeatureIntegrityVerifier>();
         services.AddScoped<Import.TermRuleSetStore>();
@@ -87,6 +88,18 @@ public static class DependencyInjection
             });
         services.AddSingleton<Catalogue.SpeologieClient>();
         services.AddScoped<Catalogue.SpeologieImportService>();
+
+        // The international community cave database, which this installation asks for the number
+        // it knows a cave by — and asks nothing else. Off unless an operator turns it on: it is
+        // the one place a signed-in person's action causes a request to a service nobody here
+        // controls, and an operator who has not opted in has not sent anything anywhere.
+        //
+        // A singleton for the same reason as the client above: it holds the one gate every
+        // outbound call passes through, so a second instance would be a second allowance.
+        services.Configure<Grottocenter.GrottocenterOptions>(
+            configuration.GetSection(Grottocenter.GrottocenterOptions.SectionName));
+        services.AddHttpClient(Grottocenter.GrottocenterClient.HttpClientName);
+        services.AddSingleton<Grottocenter.GrottocenterClient>();
 
         // The neighbouring photo libraries: separate products, each with its own database, its own
         // storage and its own accounts, which this installation reads photographs' positions from
@@ -130,6 +143,9 @@ public static class DependencyInjection
         // has" and a further product joining is an addition rather than a rewrite. An installation
         // that configured neither still resolves both — they report themselves absent and open no
         // socket, which is what makes running one, both or none all supported installations.
+        // The brake, resolved once for the whole installation rather than per caller: whether a
+        // library is being used is a decision about this installation and not about whoever asked.
+        services.AddSingleton<PhotoLibraries.IPhotoLibraryBrake, PhotoLibraries.StoredPhotoLibraryBrake>();
         services.AddSingleton<PhotoLibraries.ImmichClient>();
         services.AddSingleton<PhotoLibraries.IPhotoLibrary>(
             sp => sp.GetRequiredService<PhotoLibraries.ImmichClient>());
@@ -292,6 +308,7 @@ public static class DependencyInjection
         services.AddScoped<IProcessingJobHandler, RasterCogHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyMeshHandler>();
         services.AddScoped<IProcessingJobHandler, SurveyGraphHandler>();
+        services.AddScoped<IProcessingJobHandler, SurveyCompilationHandler>();
         services.AddScoped<IProcessingJobHandler, PhotoGeoBackfillHandler>();
         services.AddScoped<IProcessingJobHandler, AccountDataExportHandler>();
         services.AddScoped<IProcessingJobHandler, FeatureIntegrityVerifyHandler>();
@@ -329,6 +346,29 @@ public static class DependencyInjection
         // a given step, so registration order is what decides which one that is.
         services.AddSingleton<Domain.Terrain.ITerrainRasterPreparer, Terrain.GdalTerrainRasterPreparer>();
         services.AddScoped<Terrain.ITerrainPhase, Terrain.TerrainPreparePhase>();
+
+        // Reading heights back out of those rasters. One instance for the application: it keeps
+        // datasets open behind a gate only one caller holds at a time, because the raster library's
+        // handles fault the whole process rather than throwing when two threads touch one, and
+        // reopening a file per point would spend a profile's whole request in header reads.
+        services.AddSingleton<Domain.Terrain.IDemSampleService, Terrain.GdalDemSampler>();
+
+        // Drawing the ground from those rasters: shaded relief, steepness, facing and the rest. One
+        // instance, because it holds nothing between calls — but note that it does not serialise
+        // them either, and the raster library's handles fault the whole process rather than throwing
+        // when two threads touch one, so whatever drives it either takes one piece of work at a time
+        // or holds a gate of its own.
+        services.AddSingleton<Domain.Terrain.ITerrainDerivativeComputer, Terrain.GdalDemDerivatives>();
+
+        // What ground each of a build's prepared rasters covers, described once and kept beside the
+        // build. Scoped because it reads and writes rows.
+        services.AddScoped<Terrain.TerrainRasterIndex>();
+
+        // The register of pictures drawn from those rasters, and the job that draws them. Both
+        // scoped because they read and write rows; the job kind runs on the terrain worker, which is
+        // what keeps a picture from being drawn from rasters a build is in the middle of rewriting.
+        services.AddScoped<Terrain.TerrainDerivativeCatalogue>();
+        services.AddScoped<IProcessingJobHandler, TerrainDerivativeHandler>();
 
         // Turning those rasters into tiles. The program that does that is a command-line tool, run
         // by a service of its own that this application never speaks to directly — the two meet on

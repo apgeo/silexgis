@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using NetArchTest.Rules;
 using Shouldly;
+using SilexGis.Api.Features.PhotoLibraries;
 using SilexGis.Domain;
 using SilexGis.Infrastructure;
 
@@ -63,6 +64,23 @@ public class DependencyRuleTests
     }
 
     [Fact]
+    public void Domain_does_not_depend_on_the_raster_library()
+    {
+        // Reading pixels out of a file is a native library's job and it belongs behind the
+        // infrastructure seam. Domain says what a height means and what may be told to whom; it
+        // must not know what a dataset handle is. The rule matters more than most here because the
+        // library's handles fault the whole process rather than throwing when they are misused, so
+        // a domain type holding one turns a rule into an abort — and because nothing else stops it:
+        // adding the package to the domain project would compile perfectly well.
+        var result = Types.InAssembly(typeof(Visibility).Assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny("OSGeo", "MaxRev")
+            .GetResult();
+
+        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
+    }
+
+    [Fact]
     public void Domain_does_not_depend_on_the_survey_format_readers()
     {
         // The readers for the compiled survey formats parse untrusted uploaded bytes, which is
@@ -104,6 +122,17 @@ public class DependencyRuleTests
         // This reads compiled IL, so it catches use rather than reference — the project
         // reference itself is reviewed by eye. Never write this as an exclusion of the library
         // from the two rules above: an exclusion would hide exactly the violation worth catching.
+        //
+        // The two modules have to be named differently, and that difference is the whole reason
+        // this list is worth reading carefully. In the first, the parsers and the process-starting
+        // code sit in separate namespaces, so a namespace is enough. In the second — the one
+        // holding the reader for what a compilation printed — everything shares a single flat
+        // namespace: the reader, a type that locates an executable on the host and runs it, a type
+        // that compiles by starting the compiler, and a type that hands a path to the desktop shell
+        // to open. Denying that namespace would deny the reader this application actually uses, so
+        // the dangerous types are denied one by one. The cost of that granularity is that a type
+        // added upstream is not covered until somebody adds it here; the alternative was covering
+        // nothing.
         foreach (var assembly in new[]
                  {
                      typeof(Visibility).Assembly,
@@ -115,7 +144,18 @@ public class DependencyRuleTests
                 .ShouldNot()
                 .HaveDependencyOnAny(
                     "Therion.Blender.Execution",
-                    "Therion.Blender.Sources")
+                    "Therion.Blender.Sources",
+                    "Therion.Build.TherionCompiler",
+                    "Therion.Build.ExternalToolLocator",
+                    "Therion.Build.ShellOpener",
+                    "Therion.Build.IShellOpener",
+                    "Therion.Build.CompileGate",
+                    "Therion.Build.ICompileGate",
+                    "Therion.Build.JsonOutputArtifactCache",
+                    "Therion.Build.OutputArtifactCollector",
+                    "Therion.Processing.Abstractions.ITherionCompiler",
+                    "Therion.Processing.Abstractions.IExternalToolLocator",
+                    "Therion.Processing.Abstractions.IExternalToolPathOverrides")
                 .GetResult();
 
             result.IsSuccessful.ShouldBeTrue(
@@ -160,6 +200,75 @@ public class DependencyRuleTests
             .GetResult();
 
         infrastructure.IsSuccessful.ShouldBeTrue(FailureMessage(infrastructure));
+    }
+
+    /// <summary>
+    /// Every way of naming a neighbouring photo library, so that a rule about "reaching one" cannot
+    /// be walked around by naming the product instead of the contract.
+    /// </summary>
+    private static readonly string[] PhotoLibraryTypes =
+    [
+        "SilexGis.Infrastructure.PhotoLibraries.IPhotoLibrary",
+        "SilexGis.Infrastructure.PhotoLibraries.ImmichClient",
+        "SilexGis.Infrastructure.PhotoLibraries.PhotoPrismClient",
+    ];
+
+    [Fact]
+    public void Only_the_photo_library_slice_reaches_a_photo_library_at_all()
+    {
+        // Whether this installation is talking to a photo library is one decision, and it is taken
+        // in one slice. A route somewhere else that resolved a library for itself would be outside
+        // every surface that knows the decision exists, and the failure is silent: requests keep
+        // going to a library somebody stopped, which looks exactly like a library that is working,
+        // and the only symptom is traffic at a neighbour's container that nobody is watching.
+        //
+        // Both the shared contract and the two products are named, because a handler that asks for
+        // a product by name reaches a library exactly as completely as one that asks for the
+        // contract, and both are resolvable.
+        var result = Types.InAssembly(typeof(Program).Assembly)
+            .That()
+            .DoNotResideInNamespaceStartingWith("SilexGis.Api.Features.PhotoLibraries")
+            .ShouldNot()
+            .HaveDependencyOnAny(PhotoLibraryTypes)
+            .GetResult();
+
+        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
+    }
+
+    [Fact]
+    public void Nothing_reaches_a_neighbouring_photo_library_without_asking_whether_it_may()
+    {
+        // Inside the slice, a type that can reach a library must also hold the object that decides
+        // whether it may, so that a new route which forgets fails the build rather than review.
+        //
+        // What this rule can and cannot see is worth stating, because it is easy to read it as more
+        // than it is. It constrains types, not methods: it proves that a class reaching a library
+        // also names the gate, and cannot prove that every handler inside that class went through
+        // it. That gap is closed underneath rather than here — each client asks the same question
+        // for itself in the one method its outgoing calls already go through, so a handler added to
+        // an existing class and never given the gate is refused by the library client instead of
+        // quietly succeeding. This rule is the earlier and louder of the two signals, not the only
+        // one.
+        const string gate = "SilexGis.Api.Features.PhotoLibraries.PhotoLibraryGate";
+
+        var reachers = Types.InAssembly(typeof(Program).Assembly)
+            .That()
+            .ResideInNamespaceStartingWith("SilexGis.Api.Features.PhotoLibraries")
+            .And()
+            .DoNotHaveName(nameof(PhotoLibraryGate))
+            .And()
+            .HaveDependencyOnAny(PhotoLibraryTypes);
+
+        // Asserted before the rule, because a rule over an empty set passes: a renamed namespace or
+        // a slice that stopped naming the contract would otherwise turn this into a test that
+        // proves nothing while staying green.
+        reachers.GetTypes().ShouldNotBeEmpty(
+            "No type in the photo-library slice reaches a library any more — check this rule still "
+            + "describes the code before trusting it.");
+
+        var result = reachers.Should().HaveDependencyOn(gate).GetResult();
+
+        result.IsSuccessful.ShouldBeTrue(FailureMessage(result));
     }
 
     /// <summary>

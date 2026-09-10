@@ -65,3 +65,30 @@ public sealed class TerrainBuildSourceConfiguration : IEntityTypeConfiguration<T
         builder.HasIndex(x => new { x.TerrainBuildId, x.Id });
     }
 }
+
+public sealed class TerrainBuildRasterConfiguration : IEntityTypeConfiguration<TerrainBuildRaster>
+{
+    public void Configure(EntityTypeBuilder<TerrainBuildRaster> builder)
+    {
+        builder.ToTable("terrain_build_rasters");
+
+        builder.Property(x => x.Path).HasMaxLength(1000);
+        builder.Property(x => x.Footprint).HasColumnType("geometry(Polygon, 4326)");
+
+        // The rows describe files that only exist because of their build, and the build's own
+        // deletion already takes those files away.
+        builder.HasOne<TerrainBuild>().WithMany().HasForeignKey(x => x.TerrainBuildId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Which prepared rasters cover a point is the first question every height read asks, and it
+        // is asked far more often than the rows change.
+        builder.HasIndex(x => x.Footprint).HasMethod("gist");
+
+        builder.HasIndex(x => new { x.TerrainBuildId, x.Id });
+
+        // One row per file. A build described twice — because a run was resumed, or because the
+        // description was refreshed after a rebuild — must replace what it said, not say it twice:
+        // a duplicated raster would be read twice for every point under it.
+        builder.HasIndex(x => new { x.TerrainBuildId, x.Path }).IsUnique();
+    }
+}

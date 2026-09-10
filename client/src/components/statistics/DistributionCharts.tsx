@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { theme } from 'antd';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EChartsOption } from 'echarts';
 
-import { axisStyle, paletteFor } from './chartTheme.ts';
+import { axisStyle, paletteFor, themedTooltip } from './chartTheme.ts';
 import { ccdf, fiveNumberSummary, histogram, logLogFit, powerLawExponent, type FiveNumber } from './distributions.ts';
-import { useECharts } from './useECharts.ts';
+import { useECharts, type EChartsHandlers } from './useECharts.ts';
 
 /**
  * The four chart shapes this application draws, chosen as the corners of the difficulty space: if
@@ -25,8 +25,18 @@ interface SizedProps {
   height?: number;
 }
 
-function Frame({ option, height = 260, testId }: { option: EChartsOption | null; height?: number; testId: string }) {
-  const container = useECharts(option);
+function Frame({
+  option,
+  height = 260,
+  testId,
+  handlers,
+}: {
+  option: EChartsOption | null;
+  height?: number;
+  testId: string;
+  handlers?: EChartsHandlers;
+}) {
+  const container = useECharts(option, handlers);
   return <div ref={container} data-testid={testId} style={{ width: '100%', height }} />;
 }
 
@@ -115,13 +125,37 @@ export function CcdfChart({ values, xLabel, height }: { values: number[]; xLabel
   return <Frame option={option} height={height} testId="chart-ccdf" />;
 }
 
-/** Two measurements against each other on logarithmic axes, with the fitted line drawn over them. */
+/** One drawn series of points, and the group label it carries — `null` for points in no group. */
+export interface CorrelationSeries {
+  name: string;
+  /** The grouping's own label. Chooses the colour; `null` takes the quiet uncategorised one. */
+  cluster: number | null;
+  points: Array<[number, number]>;
+}
+
+/**
+ * Two measurements against each other on logarithmic axes, with the fitted line drawn over them.
+ *
+ * <p>
+ * `series`, when given, splits the same points into one drawn series per group so a grouping can
+ * be read as colour. The colours come from the theme's categorical palette and are chosen by
+ * group label alone: the labels are nominal, so nothing about the palette may suggest an order,
+ * a size or a rank. The fit is still taken over every point, because it answers a question about
+ * the whole set and would otherwise become as many different lines as there are groups.
+ * </p>
+ */
 export function CorrelationChart({
   pairs,
+  series,
   xLabel,
   yLabel,
   height,
-}: { pairs: Array<[number, number]>; xLabel: string; yLabel: string } & SizedProps) {
+}: {
+  pairs: Array<[number, number]>;
+  series?: CorrelationSeries[];
+  xLabel: string;
+  yLabel: string;
+} & SizedProps) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
 
@@ -136,17 +170,36 @@ export function CorrelationChart({
       ? [Math.min(...xs), Math.max(...xs)].map((x) => [x, Math.exp(fit.intercept + fit.slope * Math.log(x))])
       : [];
 
+    // The modulo is a guard rather than a design: the grouping cannot return more groups than the
+    // palette holds. Were that to change, wrapping gives two groups one colour, which is wrong but
+    // visible, where an index past the end silently hands the library its own palette instead.
+    const colourFor = (cluster: number | null) =>
+      cluster === null ? palette.unclassified : palette.series[cluster % palette.series.length];
+
+    const points =
+      series === undefined
+        ? [{ type: 'scatter' as const, name: yLabel, symbolSize: 7, data: usable }]
+        : series.map((group) => ({
+            type: 'scatter' as const,
+            name: group.name,
+            symbolSize: 7,
+            itemStyle: { color: colourFor(group.cluster) },
+            data: group.points,
+          }));
+
     return {
       xAxis: { type: 'log', name: xLabel, nameLocation: 'middle', nameGap: 28, ...axisStyle(token) },
       yAxis: { type: 'log', name: yLabel, ...axisStyle(token) },
       series: [
-        { type: 'scatter', name: yLabel, symbolSize: 7, data: usable },
+        ...points,
         ...(fit
           ? [{
               type: 'line' as const,
               name: t('karstStats.regression', { slope: fit.slope.toFixed(2), r2: fit.r2.toFixed(2) }),
               symbol: 'none',
-              lineStyle: { color: palette.series[1] },
+              // Not a series colour: the groups take those in order, so a fit drawn from the same
+              // range would share a colour with whichever group happened to land on it.
+              lineStyle: { color: palette.fit },
               data: line,
             }]
           : []),
@@ -154,7 +207,7 @@ export function CorrelationChart({
       legend: { bottom: 0, textStyle: { color: palette.axisLabel } },
       tooltip: { trigger: 'item' },
     };
-  }, [pairs, xLabel, yLabel, token, t]);
+  }, [pairs, series, xLabel, yLabel, token, t]);
 
   return <Frame option={option} height={height} testId="chart-correlation" />;
 }
@@ -239,7 +292,17 @@ export function SummaryBoxChart({
   return <Frame option={option} height={height} testId={testId} />;
 }
 
-/** A curve with a band behind it — what a simulation envelope and a depth profile both need. */
+/**
+ * A curve with a band behind it — what a simulation envelope and a depth profile both need.
+ *
+ * <p>
+ * Every series accepts a null in place of a number, and a null is drawn as a hole rather than
+ * joined across. That is not a convenience: a curve which is only known over part of its range —
+ * a depth to a surface no elevation model covers, a band nobody simulated — asserts a value at
+ * every distance the line crosses, so joining the two sides of a gap invents the middle. The
+ * caller decides what is missing; this decides only that missing is drawn as missing.
+ * </p>
+ */
 export function EnvelopeChart({
   x,
   curve,
@@ -248,13 +311,28 @@ export function EnvelopeChart({
   xLabel,
   yLabel,
   height,
+  testId = 'chart-envelope',
+  tooltipFormatter,
+  onPointClick,
+  onEmptyClick,
 }: {
   x: number[];
-  curve: number[];
-  lower: number[];
-  upper: number[];
+  curve: readonly (number | null)[];
+  lower: readonly (number | null)[];
+  upper: readonly (number | null)[];
   xLabel: string;
   yLabel: string;
+  testId?: string;
+  /**
+   * What to say about one reading when the pointer rests on it, composed by the caller because
+   * only the caller has a translator and knows what the numbers are. Without one the chart falls
+   * back to the library's own rendering of the raw values, which names no units and no reading.
+   */
+  tooltipFormatter?: (index: number) => string;
+  /** A reading was pressed. The index is into the arrays above. */
+  onPointClick?: (index: number) => void;
+  /** The chart was pressed away from the curve. */
+  onEmptyClick?: () => void;
 } & SizedProps) {
   const { token } = theme.useToken();
 
@@ -262,26 +340,97 @@ export function EnvelopeChart({
     if (x.length === 0) return null;
     const palette = paletteFor(token);
 
+    // The band's thickness is unknown wherever either of its edges is, and stacking a thickness
+    // onto an absent floor would draw the band from the axis instead of from the curve.
+    const thickness = (i: number) => {
+      const floor = lower[i];
+      const ceiling = upper[i];
+      return floor == null || ceiling == null ? null : ceiling - floor;
+    };
+
     return {
       xAxis: { type: 'value', name: xLabel, nameLocation: 'middle', nameGap: 28, ...axisStyle(token) },
       yAxis: { type: 'value', name: yLabel, ...axisStyle(token) },
       series: [
         // The band is drawn as its floor stacked with its thickness, both transparent apart from
         // the upper one's fill — the standard way to get a filled range out of two line series.
-        { type: 'line', stack: 'band', symbol: 'none', lineStyle: { opacity: 0 }, data: x.map((v, i) => [v, lower[i]]) },
         {
           type: 'line',
           stack: 'band',
           symbol: 'none',
+          connectNulls: false,
+          lineStyle: { opacity: 0 },
+          data: x.map((v, i) => [v, lower[i] ?? null]),
+        },
+        {
+          type: 'line',
+          stack: 'band',
+          symbol: 'none',
+          connectNulls: false,
           lineStyle: { opacity: 0 },
           areaStyle: { color: palette.envelope },
-          data: x.map((v, i) => [v, upper[i] - lower[i]]),
+          data: x.map((v, i) => [v, thickness(i)]),
         },
-        { type: 'line', symbol: 'none', lineStyle: { color: palette.series[0], width: 2 }, data: x.map((v, i) => [v, curve[i]]) },
+        {
+          type: 'line',
+          symbol: 'none',
+          connectNulls: false,
+          // The line itself is what answers a press. Drawn symbols would be the other way to make
+          // readings pressable, and a profile of several hundred of them drawn as dots is a band
+          // of ink rather than a curve. The press arrives as a position along the axis and not as
+          // a reading — a point on a line is usually between two of them — so which reading it
+          // names is worked out below rather than read off the event.
+          triggerEvent: 'line',
+          lineStyle: { color: palette.series[0], width: 2 },
+          data: x.map((v, i) => [v, curve[i] ?? null]),
+        },
       ],
-      tooltip: { trigger: 'axis' },
+      // Spread before the trigger: a top-level tooltip replaces the shared themed one rather than
+      // merging into it, and a chart that sets only a trigger loses its colours with it.
+      tooltip: {
+        ...themedTooltip(palette),
+        trigger: 'axis',
+        ...(tooltipFormatter
+          ? {
+              formatter: (params: unknown) => {
+                const first = Array.isArray(params) ? params[0] : params;
+                const index = (first as { dataIndex?: number } | undefined)?.dataIndex;
+                return typeof index === 'number' ? tooltipFormatter(index) : '';
+              },
+            }
+          : {}),
+      },
     };
-  }, [x, curve, lower, upper, xLabel, yLabel, token]);
+  }, [x, curve, lower, upper, xLabel, yLabel, token, tooltipFormatter]);
 
-  return <Frame option={option} height={height} testId="chart-envelope" />;
+  // Which reading a press on the curve names: the drawn one nearest along the axis. Readings the
+  // caller left out are skipped rather than chosen — the curve has a hole where they are, so a
+  // press cannot have landed on one, and answering with a reading that is not drawn would put a
+  // mark somewhere the reader can see nothing.
+  const pickNearest = useCallback(
+    (along: number) => {
+      if (!onPointClick) return;
+      let nearest = -1;
+      let smallest = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < x.length; i++) {
+        if (curve[i] == null) continue;
+        const gap = Math.abs(x[i] - along);
+        if (gap < smallest) {
+          smallest = gap;
+          nearest = i;
+        }
+      }
+      if (nearest >= 0) onPointClick(nearest);
+    },
+    [x, curve, onPointClick],
+  );
+
+  return (
+    <Frame
+      option={option}
+      height={height}
+      testId={testId}
+      handlers={{ onPointClick, onPlotClick: pickNearest, onEmptyClick }}
+    />
+  );
 }

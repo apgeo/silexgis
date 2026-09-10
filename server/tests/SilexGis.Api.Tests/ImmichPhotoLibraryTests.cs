@@ -109,8 +109,16 @@ public sealed class ImmichPhotoLibraryTests
         var asked = stub.Only.Url;
         asked.ShouldContain("/api/map/markers");
         asked.ShouldContain("isArchived=false");
-        asked.ShouldContain("withPartners=true");
-        asked.ShouldContain("withSharedAlbums=true");
+
+        // Only what this credential owns. A partner shares their library with a person rather than
+        // with an installation, and is never told that doing so publishes the positions written
+        // into their photographs to every account that can open this map — so their pictures are
+        // not read at all. Asserted as the exact pair, because the failure this pins is a default
+        // quietly widening again rather than the parameter disappearing.
+        asked.ShouldContain("withPartners=false");
+        asked.ShouldContain("withSharedAlbums=false");
+        asked.ShouldNotContain("withPartners=true");
+        asked.ShouldNotContain("withSharedAlbums=true");
         asked.ShouldNotContain("bbox");
 
         // The credential travels as a header and never as a query parameter: this library accepts
@@ -455,7 +463,7 @@ public sealed class ImmichPhotoLibraryTests
         // Nothing reopens it on a timer. A person does — and the recheck itself asks the library
         // about the credential rather than about a picture, so it proves the address and the key
         // without asking it to resolve a single file on disk.
-        stub.AnswersJson("""{"name":"an invented key","permissions":["map.read","asset.view"]}""");
+        stub.AnswersJson("""{"name":"an invented key","permissions":["map.read","asset.view","asset.read"]}""");
         await library.RecheckOriginalsAsync(default);
 
         library.PicturesAvailable.ShouldBeTrue();
@@ -500,6 +508,7 @@ public sealed class ImmichPhotoLibraryTests
         return new ImmichClient(
             new OneClient(stub),
             Options.Create(options),
+            new NothingStopped(),
             new NeverStopping(),
             NullLogger<ImmichClient>.Instance);
     }
@@ -547,6 +556,17 @@ public sealed class ImmichPhotoLibraryTests
     private sealed record LibraryCall(string Method, string Url, string? ApiKey, string? IfNoneMatch);
 
     /// <summary>A factory that hands out one client, over the stub a test supplied.</summary>
+    /// <summary>
+    /// A brake nobody has pulled, so these cases exercise a library this installation is using.
+    /// The client asks it before every outgoing call, which is what makes a stopped library cost no
+    /// network on any path.
+    /// </summary>
+    private sealed class NothingStopped : IPhotoLibraryBrake
+    {
+        public ValueTask<bool> IsSuspendedAsync(PhotoLibrarySource source, CancellationToken ct) =>
+            ValueTask.FromResult(false);
+    }
+
     private sealed class OneClient(HttpMessageHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);

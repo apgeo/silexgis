@@ -79,6 +79,16 @@ public sealed record TripCsvParseResult
     /// <summary>Headers nothing claimed.</summary>
     public IReadOnlyList<string> UnmappedColumns { get; init; } = [];
 
+    /// <summary>The character encoding the file's bytes were read under.</summary>
+    public TripCsvEncoding Encoding { get; init; } = TripCsvEncoding.Utf8;
+
+    /// <summary>
+    /// What settled that encoding. Carried beside the encoding itself because a wrong guess is
+    /// invisible in the text — it reads as the wrong accents — so the reviewer needs to know the
+    /// reading was guessed at before deciding whether to overrule it.
+    /// </summary>
+    public TripCsvEncodingSource EncodingSource { get; init; } = TripCsvEncodingSource.Utf8;
+
     /// <summary>The day/month order the whole file was read in.</summary>
     public TripCsvDateOrder DateOrder { get; init; }
 

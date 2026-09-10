@@ -30,7 +30,7 @@ public class TripImportNamesTests
     [InlineData("Ioana Câmpioana")]
     [InlineData("Ana Maria Popescu")]
     public void A_full_name_may_become_a_person(string name) =>
-        TripImportNames.MayCreatePerson(name).ShouldBeTrue();
+        TripImportNames.MayCreatePerson(name, allowAbbreviated: false).ShouldBeTrue();
 
     [Theory]
     // The bare initial: every import would otherwise invent a fresh person under this name,
@@ -43,14 +43,38 @@ public class TripImportNamesTests
     [InlineData("")]
     [InlineData("   ")]
     public void An_initial_or_a_lone_word_creates_nobody(string name) =>
-        TripImportNames.MayCreatePerson(name).ShouldBeFalse();
+        TripImportNames.MayCreatePerson(name, allowAbbreviated: false).ShouldBeFalse();
+
+    [Theory]
+    // The same names, read by somebody who has said their club writes people this way. Both
+    // refused shapes are covered by the one answer, because they are one question: a sheet that
+    // writes "Ion A." writes "Mihai" on the next line.
+    [InlineData("Ion A.")]
+    [InlineData("A. Ion")]
+    [InlineData("I. A.")]
+    [InlineData("Mihai")]
+    public void An_abbreviated_name_may_become_a_person_when_that_is_allowed(string name) =>
+        TripImportNames.MayCreatePerson(name, allowAbbreviated: true).ShouldBeTrue();
+
+    [Theory]
+    // What lowering the bar does not do is make a person out of nothing. An empty cell and a cell
+    // holding only punctuation carry no name at all, so there is nobody in them to create.
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(" . ")]
+    [InlineData("-")]
+    public void Nothing_written_is_still_nobody(string name)
+    {
+        TripImportNames.MayCreatePerson(name, allowAbbreviated: false).ShouldBeFalse();
+        TripImportNames.MayCreatePerson(name, allowAbbreviated: true).ShouldBeFalse();
+    }
 
     [Fact]
     public void Refusing_to_create_is_not_refusing_to_match()
     {
         // The same name that may create nobody still compares, so a person already in the
         // roster under it is found rather than duplicated.
-        TripImportNames.MayCreatePerson("Ion A.").ShouldBeFalse();
+        TripImportNames.MayCreatePerson("Ion A.", allowAbbreviated: false).ShouldBeFalse();
         TripImportNames.Key("Ion A.").ShouldBe(TripImportNames.Key("ion a."));
     }
 }

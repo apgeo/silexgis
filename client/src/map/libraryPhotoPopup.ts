@@ -4,6 +4,11 @@ import type MapBrowserEvent from 'ol/MapBrowserEvent';
 import Overlay from 'ol/Overlay';
 import type Point from 'ol/geom/Point';
 import i18n from '../i18n';
+import {
+  libraryPictureFailed,
+  libraryPictureUrl,
+  markLibraryPictureFailed,
+} from '../photolibrary/pictureUrl.ts';
 import { getLibraryPhotoLoadState, libraryPhotoSourceOf } from './libraryPhotoLayer.ts';
 
 /**
@@ -60,6 +65,14 @@ function metaLine(content: string): HTMLElement {
   return line;
 }
 
+/** What stands in for a picture that was asked for once and did not arrive. */
+function pictureFailedLine(): HTMLElement {
+  const failed = document.createElement('div');
+  failed.className = 'map-library-photo-popup-failed';
+  failed.textContent = i18n.t('libraryPhotos.thumbnailFailed');
+  return failed;
+}
+
 /** A date a library sent, or nothing when it sent none or sent something that is not a date. */
 function instant(value: unknown): Date | undefined {
   const iso = text(value);
@@ -68,37 +81,6 @@ function instant(value: unknown): Date | undefined {
   }
   const when = new Date(iso);
   return Number.isNaN(when.getTime()) ? undefined : when;
-}
-
-/**
- * The address of one rendering of a photograph, or nothing when there is to be no picture.
- *
- * One template per library rather than a finished address per feature: the address carries a
- * short-lived credential, and repeating it across every point in a viewport would add megabytes to
- * a response for a picture nobody has clicked.
- *
- * A null template means this library's pictures are stopped — it answered a picture request with
- * something that was not a picture, which can mean it has lost the disk its originals live on. No
- * template, no request. That is not an error to render as broken: the library's positions are
- * fine, and its pins stay on the map.
- *
- * The reference is escaped even though the server refuses one it would not put in a path itself.
- * This is a string from a library this installation does not own, and the browser is where it
- * becomes a URL; two guards on one value is the right number when one of them is somebody else's.
- */
-function pictureUrl(
-  template: string | null,
-  reference: string | undefined,
-  size: 'small' | 'large',
-): string | undefined {
-  if (!template || !reference) {
-    return undefined;
-  }
-  // Replaced through a function rather than with a string, because `$&` and its siblings are
-  // substitution syntax in a replacement string — a reference is foreign text and must not be
-  // able to reach into the template around it.
-  const encoded = encodeURIComponent(reference);
-  return template.replace('{reference}', () => encoded).replace('{size}', () => size);
 }
 
 /**
@@ -136,7 +118,22 @@ export function libraryPhotoPopupNodes(
   const title = text(props.title);
   const reference = text(props.reference);
 
-  const picture = pictureUrl(library.pictureUrlTemplate, reference, 'large');
+  // A picture already known to be bad is not asked for again, and a balloon is the place that
+  // rule is easiest to lose: this is the one request a person makes by clicking, so it repeats
+  // every time the same pin is clicked. Against one of the two products a request for a picture
+  // whose original cannot be resolved is itself what marks the file missing over there and drops
+  // the photograph from that library's index — so a balloon that asked again would be a way of
+  // deleting a photograph by clicking on it twice.
+  //
+  // The ledger is per photograph rather than per rendering, which is deliberate in both
+  // directions: the markers ask for the small one and this asks for the large one, and what has
+  // gone missing is the original both are made from, so either failure is worth the other knowing
+  // about.
+  const known = reference !== undefined && libraryPictureFailed(library.source, reference);
+  const picture = known
+    ? undefined
+    : libraryPictureUrl(library.pictureUrlTemplate, reference, 'large');
+
   if (picture) {
     const img = document.createElement('img');
     img.src = picture;
@@ -146,12 +143,17 @@ export function libraryPhotoPopupNodes(
     // picture that does not arrive is a state that really happens, and it has to read as itself
     // rather than as a hole in the balloon.
     img.addEventListener('error', () => {
-      const failed = document.createElement('div');
-      failed.className = 'map-library-photo-popup-failed';
-      failed.textContent = i18n.t('libraryPhotos.thumbnailFailed');
-      img.replaceWith(failed);
+      if (reference) {
+        markLibraryPictureFailed(library.source, reference);
+      }
+      img.replaceWith(pictureFailedLine());
     });
     nodes.push(img);
+  } else if (known) {
+    // Said rather than left as a gap: the balloon is not showing a picture because one was asked
+    // for once and did not arrive, which is a different thing from a library whose pictures are
+    // stopped altogether and from a photograph nobody has a rendering of.
+    nodes.push(pictureFailedLine());
   }
 
   const caption = document.createElement('div');

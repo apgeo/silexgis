@@ -31,6 +31,10 @@ let recheckState = {
 
 vi.mock('../../api/hooks.ts', () => ({
   useTags: () => ({ data: [] }),
+  // The trips overlay's own filter reads the purposes a trip can have. None configured here: the
+  // mock replaces the module wholesale, so a hook left out of it is undefined at the call site and
+  // every case in this file dies on the render rather than on what it was written to check.
+  useTripTypes: () => ({ data: [] }),
   useRecheckPhotoLibrary: () => recheckState,
 }));
 
@@ -57,7 +61,14 @@ const healthy: LibraryPhotoHealth = {
 };
 
 function library(health: LibraryPhotoHealth): LibraryPhotoProvider {
-  return { source: 'immich', name: 'Immich', configured: true, health };
+  return {
+    source: 'immich',
+    name: 'Immich',
+    search: 'meaning',
+    configured: true,
+    suspended: false,
+    health,
+  };
 }
 
 const answered: LibraryPhotoLoadState = {
@@ -77,6 +88,7 @@ function renderPanel(
   overrides: {
     photoLibraries?: LibraryPhotoProvider[];
     unconfiguredPhotoLibraries?: LibraryPhotoProvider[];
+    suspendedPhotoLibraries?: LibraryPhotoProvider[];
     visibleLibraryPhotoSources?: string[];
   } = {},
 ) {
@@ -99,9 +111,13 @@ function renderPanel(
       rasters={[]}
       visibleRasterIds={[]}
       onRasterVisibleChange={vi.fn()}
+      terrainDerivatives={[]}
+      visibleTerrainDerivativeIds={[]}
+      onTerrainDerivativeVisibleChange={vi.fn()}
       onOverlayVisibilityChanged={vi.fn()}
       photoLibraries={overrides.photoLibraries ?? [library(healthy)]}
       unconfiguredPhotoLibraries={overrides.unconfiguredPhotoLibraries ?? []}
+      suspendedPhotoLibraries={overrides.suspendedPhotoLibraries ?? []}
       visibleLibraryPhotoSources={overrides.visibleLibraryPhotoSources ?? ['immich']}
       treeNonce={0}
       tagFilter={null}
@@ -299,7 +315,9 @@ describe('the photo-library block of the layer panel', () => {
         {
           source: 'photoprism',
           name: 'PhotoPrism',
+          search: 'text',
           configured: false,
+          suspended: false,
           health: {
             reach: 'unknown',
             version: null,
@@ -315,6 +333,22 @@ describe('the photo-library block of the layer panel', () => {
     expect(screen.getByTestId('library-photos-absent-photoprism')).toHaveTextContent(
       /PhotoPrism is not connected/i,
     );
+  });
+
+  it('says a stopped library is stopped rather than letting it vanish from the panel', () => {
+    // The three empty maps this panel exists to tell apart, and this is the third: a library that
+    // is connected, running, and simply not being used. Left to itself it would be an overlay that
+    // was there yesterday and is missing today, which reads as a library that broke.
+    renderPanel({
+      photoLibraries: [],
+      visibleLibraryPhotoSources: [],
+      suspendedPhotoLibraries: [{ ...library(healthy), suspended: true }],
+    });
+
+    const block = screen.getByTestId('library-photos-suspended-immich');
+    expect(block).toHaveTextContent(/not using this photo library/i);
+    // And no layer row: an overlay that can only ever draw nothing is not an overlay.
+    expect(screen.queryByTestId('library-photos-status-immich')).toBeNull();
   });
 
   it('says nothing about unconnected products to an account the server sent none for', () => {

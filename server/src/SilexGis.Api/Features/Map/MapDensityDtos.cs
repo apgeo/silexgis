@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
+using SilexGis.Domain.Geo;
 
 namespace SilexGis.Api.Features.Map;
 
 /// <summary>One cell of a density grid.</summary>
+/// <param name="CellX">
+/// The cell's column index on the absolute lattice the whole grid is anchored to, published so a
+/// cell has an identity that does not have to be recovered by rounding its corner coordinates
+/// again. Two roundings of one coordinate are how two halves of one answer come to disagree about
+/// which cell something is in.
+/// </param>
+/// <param name="CellY">The row index on the same lattice.</param>
 /// <param name="Count">
 /// Entrances counted in the cell. Every entrance the caller may read is counted, including those
 /// whose exact position is closed to them — a count that left those out would fall by one for each
@@ -29,7 +37,24 @@ namespace SilexGis.Api.Features.Map;
 /// is what the neighbourhood holds, so a cell that happens to be empty between two full ones is
 /// nought on the first and clearly not nought on the second.
 /// </param>
+/// <param name="HotSpotZ">
+/// The Getis-Ord Gi* z-score of this cell: how far the density of this cell and the eight around
+/// it departs from the average over the whole window, in standard errors. Positive is a hot spot,
+/// negative a cold one. Null where the statistic is not defined — a window with too few cells, or
+/// one where every cell carries the same density, or a cell whose neighbourhood is the whole
+/// window and so has nothing to be compared against.
+///
+/// <para>
+/// It is one figure per cell and no finer: it is arithmetic over the cells already published here
+/// and their neighbours, so it carries this grid's resolution and no more. It is also not
+/// corrected for having been computed at every cell at once, so a scattering of individually
+/// striking cells over a large window is what chance alone produces — read it as a shading, not as
+/// a test each cell passed.
+/// </para>
+/// </param>
 public sealed record DensityCellDto(
+    long CellX,
+    long CellY,
     double West,
     double South,
     double East,
@@ -38,7 +63,58 @@ public sealed record DensityCellDto(
     double AreaKm2,
     double DensityPerKm2,
     double? StudyAreaFraction,
-    double KernelDensityPerKm2);
+    double KernelDensityPerKm2,
+    double? HotSpotZ);
+
+/// <summary>
+/// Whether the densities on this grid are arranged by more than chance — Moran's I over the whole
+/// window, computed from the cells published beside it.
+/// </summary>
+/// <param name="CellCount">The cells the reading was taken over.</param>
+/// <param name="NeighbourPairCount">
+/// How many cell-to-cell adjacencies those cells held. The other half of the sample size: a window
+/// of many cells that barely touch carries less evidence than the cell count suggests.
+/// </param>
+/// <param name="Index">
+/// Moran's I over the cells' densities. Null when the question could not be asked, never zero —
+/// zero is the reading for an arrangement that was tested and came out like chance.
+/// </param>
+/// <param name="ExpectedIndex">
+/// What the index averages to when the same densities are shuffled at random over the same cells,
+/// which is slightly below zero rather than at it. Published because a reader comparing a small
+/// positive index against zero over-reads it.
+/// </param>
+/// <param name="ZScore">How many standard errors the index sits from that expectation.</param>
+/// <param name="PValue">Two-sided probability of a departure at least this large arising by chance.</param>
+/// <param name="Pattern">
+/// The reading at the conventional five per cent threshold. <c>Undetermined</c> is not a synonym
+/// for <c>Random</c>: the first says the question could not be asked of this window, the second
+/// says it was asked and the arrangement was indistinguishable from a chance one.
+/// </param>
+/// <param name="SignificanceZ">
+/// The threshold, in standard errors, that <paramref name="Pattern"/> was read at, and the same one
+/// a reader should call an individual cell's Gi* score hot or cold at. Published rather than left
+/// as a convention each surface knows for itself: the server owns what counts as a departure from
+/// chance, and a client that re-decided it with its own literal would go on counting hot cells at
+/// one threshold while the sentence printed beside them was read at another.
+/// </param>
+/// <remarks>
+/// Computed over each cell's <see cref="DensityCellDto.DensityPerKm2"/> rather than over its raw
+/// count, because the cells of one grid do not all cover the same ground: a cell nearer the equator
+/// is wider than one further from it, and over a count a bigger cell would read as a hotter one for
+/// being bigger. What follows from that is worth stating: with a study area named, the denominator
+/// is the part of the cell inside the outline, so this reading is about density over karst rather
+/// than density over map.
+/// </remarks>
+public sealed record DensityAutocorrelationDto(
+    int CellCount,
+    int NeighbourPairCount,
+    double? Index,
+    double? ExpectedIndex,
+    double? ZScore,
+    double? PValue,
+    SpatialPatternKind Pattern,
+    double SignificanceZ);
 
 /// <summary>
 /// How thickly cave entrances sit over a window, counted into a grid.
@@ -67,6 +143,11 @@ public sealed record DensityCellDto(
 /// bandwidth is unreadable — the same data at two bandwidths is two different maps, and neither is
 /// wrong.
 /// </param>
+/// <param name="Autocorrelation">
+/// Whether the densities in <paramref name="Cells"/> are arranged by more than chance. Always
+/// answered, since it is arithmetic over the cells already in this response and adds nothing to
+/// them; its own <c>pattern</c> says when the window could not support the question.
+/// </param>
 /// <param name="MinimumBandwidthMetres">
 /// The narrowest kernel this installation will publish, which is the cell size. Smoothing cannot
 /// recover detail the binning has already removed, so a finer kernel would only draw each cell as
@@ -82,7 +163,8 @@ public sealed record DensityGridDto(
     double? StudyAreaKm2,
     int FeatureCount,
     int CellCount,
-    IReadOnlyList<DensityCellDto> Cells);
+    IReadOnlyList<DensityCellDto> Cells,
+    DensityAutocorrelationDto Autocorrelation);
 
 /// <param name="Bbox">The window, as <c>west,south,east,north</c> in degrees.</param>
 /// <param name="CellMetres">

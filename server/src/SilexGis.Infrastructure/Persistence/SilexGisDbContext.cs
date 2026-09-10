@@ -38,6 +38,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<CaveEntrance> CaveEntrances => Set<CaveEntrance>();
 
+    public DbSet<FeatureExternalId> FeatureExternalIds => Set<FeatureExternalId>();
+
     public DbSet<CaveLevelBands> CaveLevelBands => Set<CaveLevelBands>();
 
     public DbSet<Centerline> Centerlines => Set<Centerline>();
@@ -173,11 +175,19 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<SurveySource> SurveySources => Set<SurveySource>();
 
+    /// <summary>What one archived compilation log said about the survey it was written for.</summary>
+    public DbSet<SurveyCompilation> SurveyCompilations => Set<SurveyCompilation>();
+
+    /// <summary>The loop-error table of one compilation, in the order the compiler printed it.</summary>
+    public DbSet<SurveyCompilationLoop> SurveyCompilationLoops => Set<SurveyCompilationLoop>();
+
     public DbSet<SurveyStation> SurveyStations => Set<SurveyStation>();
 
     public DbSet<SurveyShot> SurveyShots => Set<SurveyShot>();
 
     public DbSet<SurveyLrud> SurveyLruds => Set<SurveyLrud>();
+
+    public DbSet<SurveyTopology> SurveyTopologies => Set<SurveyTopology>();
 
     public DbSet<UserAddress> UserAddresses => Set<UserAddress>();
 
@@ -198,6 +208,12 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     public DbSet<TerrainBuild> TerrainBuilds => Set<TerrainBuild>();
 
     public DbSet<TerrainBuildSource> TerrainBuildSources => Set<TerrainBuildSource>();
+
+    public DbSet<TerrainBuildRaster> TerrainBuildRasters => Set<TerrainBuildRaster>();
+
+    public DbSet<TerrainDerivativeLayer> TerrainDerivativeLayers => Set<TerrainDerivativeLayer>();
+
+    public DbSet<TerrainDerivativeRaster> TerrainDerivativeRasters => Set<TerrainDerivativeRaster>();
 
     public DbSet<SyncSet> SyncSets => Set<SyncSet>();
 

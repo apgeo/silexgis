@@ -2,6 +2,7 @@
 using System.Globalization;
 using OSGeo.GDAL;
 using OSGeo.OSR;
+using SilexGis.Domain.Geo;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Geodata;
 
@@ -328,16 +329,10 @@ public sealed class GdalTerrainRasterPreparer : ITerrainRasterPreparer
 
     /// <summary>Whether a grid says nothing about where the pixels are.</summary>
     /// <remarks>
-    /// A raster with no grid attached is not reported as one: reading the grid of a file that has
-    /// none answers with the identity — pixels one unit wide, starting at zero, zero — and fails
-    /// silently, so anything that reads the numbers alone sees a perfectly well-formed placement in
-    /// the Atlantic off the coast of Africa. Both that identity and a zero-width pixel are refused.
-    /// Elevation data covering exactly that square with exactly those pixels does not exist, and if
-    /// it did it would be a file nobody had placed either.
+    /// The rule itself lives in the domain, because every path that takes a raster from somebody
+    /// has to make the same call and the uploaded-raster path used to make a different one.
     /// </remarks>
-    private static bool IsUnplaced(double[] geoTransform) =>
-        (geoTransform[1] == 0 && geoTransform[2] == 0)
-        || (geoTransform is [0, 1, 0, 0, 0, 1]);
+    private static bool IsUnplaced(double[] geoTransform) => RasterPlacement.IsUnplaced(geoTransform);
 
     /// <summary>
     /// The pixel size of a raster expressed in degrees, so that rasters described in degrees and

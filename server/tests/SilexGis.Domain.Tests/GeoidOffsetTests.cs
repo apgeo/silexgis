@@ -92,4 +92,38 @@ public class GeoidOffsetTests
                 .ShouldBeLessThanOrEqualTo(3.0);
         }
     }
+
+    [Fact]
+    public void A_sample_from_a_sea_level_source_needs_no_correction_before_meeting_a_survey()
+    {
+        GeoidOffset.SampleToSurveyOffsetM(TerrainHeightDatum.Orthometric, PiatraCraiuluiUndulation)
+            .ShouldBe(0);
+    }
+
+    [Fact]
+    public void A_sample_from_an_ellipsoidal_source_drops_by_the_undulation_to_meet_a_survey()
+    {
+        const double read = 1439.39;
+        var offset = GeoidOffset.SampleToSurveyOffsetM(
+            TerrainHeightDatum.Ellipsoidal, PiatraCraiuluiUndulation);
+
+        offset.ShouldBe(-PiatraCraiuluiUndulation);
+        (read + offset)
+            .ShouldBe(GeoidOffset.OrthometricFromEllipsoidal(read, PiatraCraiuluiUndulation));
+    }
+
+    [Fact]
+    public void The_two_directions_of_the_correction_undo_each_other_rather_than_compounding()
+    {
+        // The scene offset lifts a survey to meet drawn ground; the sample offset lowers ground to
+        // meet a survey. Applying both to the same number is the mistake this asserts against: it
+        // must come back where it started, not eighty metres away.
+        foreach (var datum in new[] { TerrainHeightDatum.Orthometric, TerrainHeightDatum.Ellipsoidal })
+        {
+            var scene = GeoidOffset.SurveyToSceneOffsetM(datum, BanatUndulation);
+            var sample = GeoidOffset.SampleToSurveyOffsetM(datum, BanatUndulation);
+
+            (scene + sample).ShouldBe(0);
+        }
+    }
 }

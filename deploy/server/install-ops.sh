@@ -37,7 +37,7 @@ say() { printf '\n==> %s\n' "$*"; }
 # entry point outside the checkout means the wrapper never changes underneath a run either.
 say "Installing update logic into $OPS_DIR"
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$OPS_DIR"
-for f in update.sh set-domain.sh install-app.sh; do
+for f in update.sh set-domain.sh install-app.sh reset.sh; do
 	if [ -f "$(dirname "$0")/$f" ]; then
 		install -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$(dirname "$0")/$f" "$OPS_DIR/$f"
 	elif [ -f "$APP_DIR/deploy/server/$f" ]; then
@@ -64,6 +64,74 @@ EOF
 chmod 755 /usr/local/sbin/silexgis-update
 
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 750 "$BACKUP_DIR"
+
+# The baseline lives beside the rotation, not inside it: both retention sweeps prune
+# $BACKUP_DIR by age, and a baseline is old on purpose.
+BASELINE_DIR="${SILEXGIS_BASELINE_DIR:-/var/backups/silexgis-baseline}"
+install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 750 "$BASELINE_DIR"
+
+say "Installing /usr/local/sbin/silexgis-baseline and /usr/local/sbin/silexgis-reset"
+cat > /usr/local/sbin/silexgis-baseline <<EOF
+#!/usr/bin/env bash
+# Captures this installation's CURRENT data as the baseline that silexgis-reset restores.
+set -euo pipefail
+if [ "\$(id -un)" != "$DEPLOY_USER" ]; then
+	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups \\
+		env SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" SILEXGIS_BASELINE_DIR="$BASELINE_DIR" \\
+		bash "$OPS_DIR/reset.sh" baseline
+fi
+export SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" SILEXGIS_BASELINE_DIR="$BASELINE_DIR"
+exec bash "$OPS_DIR/reset.sh" baseline
+EOF
+chmod 755 /usr/local/sbin/silexgis-baseline
+
+cat > /usr/local/sbin/silexgis-reset <<EOF
+#!/usr/bin/env bash
+# Restores the baseline captured by silexgis-baseline, DESTROYING everything done since.
+# silexgis-reset --status reports what baseline exists and changes nothing.
+set -euo pipefail
+MODE="\${1:-reset}"
+if [ "\$(id -un)" != "$DEPLOY_USER" ]; then
+	exec setpriv --reuid="$DEPLOY_USER" --regid="$DEPLOY_USER" --init-groups \\
+		env SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" SILEXGIS_BASELINE_DIR="$BASELINE_DIR" \\
+		bash "$OPS_DIR/reset.sh" "\$MODE"
+fi
+export SILEXGIS_APP_DIR="$APP_DIR" SILEXGIS_BACKUP_DIR="$BACKUP_DIR" SILEXGIS_BASELINE_DIR="$BASELINE_DIR"
+exec bash "$OPS_DIR/reset.sh" "\$MODE"
+EOF
+chmod 755 /usr/local/sbin/silexgis-reset
+
+say "Scheduled baseline reset (installed, NOT enabled)"
+cat > /etc/systemd/system/silexgis-reset.service <<'EOF'
+[Unit]
+Description=Restore SilexGIS to its captured data baseline
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/silexgis-reset
+TimeoutStartSec=1800
+EOF
+
+cat > /etc/systemd/system/silexgis-reset.timer <<'EOF'
+[Unit]
+Description=Daily SilexGIS baseline reset
+# For test and demo installations whose credentials are public: whatever visitors did to
+# the data, the instance returns to its captured baseline. Deliberately not enabled by
+# install-ops.sh -- a scheduled restore DESTROYS everything done since the baseline, which
+# is exactly right for a test installation and catastrophic anywhere else.
+# Enable with:  systemctl enable --now silexgis-reset.timer
+# Runs after the nightly 03:20 backup, so the state being thrown away is still captured once.
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
 
 say "Nightly backup timer"
 cat > /etc/systemd/system/silexgis-backup.service <<EOF
@@ -132,5 +200,7 @@ systemctl enable --now silexgis-backup.timer >/dev/null
 say "Installed"
 echo "    silexgis-update            update now (backs up first, rolls back on failure)"
 echo "    silexgis-update --check    report available commits, change nothing"
+echo "    silexgis-baseline          capture current data as the reset baseline"
+echo "    silexgis-reset             restore that baseline (destroys later changes)"
 echo "    backups                    $BACKUP_DIR, nightly, keeping $BACKUP_KEEP"
 systemctl list-timers --no-pager silexgis-\* 2>/dev/null | sed 's/^/    /'

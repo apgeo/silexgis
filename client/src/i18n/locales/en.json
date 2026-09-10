@@ -11,6 +11,7 @@
     "geodata": "Geodata",
     "gallery": "Photographs",
     "albums": "Albums",
+    "photoLibrary": "Photo library",
     "cabinets": "Cabinets",
     "uploads": "Uploads",
     "trips": "Trip logs",
@@ -36,6 +37,7 @@
     "checklists": "Checklists",
     "groups": {
       "cadastre": "Cadastre",
+      "statistics": "Statistics",
       "library": "Library",
       "activity": "Activity",
       "people": "People",
@@ -44,7 +46,10 @@
     },
     "workAreas": "Work areas",
     "speologie": "Cave catalogue",
-    "tripImport": "Import trips"
+    "registryDistribution": "Distributions",
+    "registryCorrelation": "Correlations",
+    "tripImport": "Import trips",
+    "registryRegions": "Regions"
   },
   "terrain": {
     "title": "Terrain",
@@ -168,6 +173,28 @@
       "notPublished": "That build has no surface to draw. Its tiles were either never read back and found whole, or they are no longer where terrain is served from.",
       "active": "That build is the terrain the scene is drawing. Choose other terrain, or stop drawing this one, before removing it.",
       "running": "That build has not finished. Its files are being written right now, so it can be removed once it has stopped, whichever way it stops."
+    },
+    "derivatives": {
+      "title": "Ground pictures",
+      "hint": "Shaded relief, steepness and facing, computed from an elevation build.",
+      "stale": "Out of date",
+      "staleHint": "Computed from elevation this installation no longer serves. It is still drawn, but it will not agree with the heights beneath it.",
+      "totalSize": "{{size}} on disk",
+      "statuses": {
+        "queued": "Queued",
+        "computing": "Computing",
+        "ready": "Ready",
+        "failed": "Failed"
+      },
+      "kinds": {
+        "hillshade": "Shaded relief",
+        "slope": "Steepness",
+        "aspect": "Facing",
+        "ruggednessIndex": "Ruggedness",
+        "positionIndex": "Topographic position",
+        "roughness": "Roughness",
+        "colourRelief": "Coloured relief"
+      }
     }
   },
   "dashboard": {
@@ -243,7 +270,18 @@
     "newPassword": "New password",
     "confirmPassword": "Repeat password",
     "passwordsDiffer": "The two passwords do not match.",
-    "passwordTooShort": "Use at least 10 characters."
+    "passwordTooShort": "Use at least 10 characters.",
+    "testLogins": {
+      "title": "Test installation",
+      "hint": "Anyone may try this installation with the demo accounts below. The data here is public and is reset regularly.",
+      "about": "What this account may do",
+      "roleAdministrator": "Administrator",
+      "roleEditor": "Editor",
+      "roleViewer": "Viewer",
+      "permsAdministrator": "Full control of the installation: sees and edits everything, including exact locations of protected caves, user accounts, permission groups and settings.",
+      "permsEditor": "Creates and edits content — caves, surface features, trip logs, documents, saved views — but cannot manage users or permissions, and exact locations of protected caves stay hidden.",
+      "permsViewer": "The signed-in baseline: browses what is shared with all accounts and keeps saved views and checklists of its own, without editing shared content or seeing protected locations."
+    }
   },
   "common": {
     "loading": "Loading…",
@@ -341,6 +379,7 @@
     "features": "Features",
     "locationWithheld": "Location withheld — exact geometry is protected.",
     "closestApproach": "Closest approach",
+    "overburdenHighlight": "Overburden reading",
     "georeferencedMaps": "Georeferenced maps"
   },
   "dialog": {
@@ -1488,6 +1527,74 @@
       "noAltitudes": "This line work carries no altitudes — a plan drawing of a cave is not a flat cave. Every vertical figure above is therefore left blank rather than shown as nought: nothing here says how far the cave descends, which is a statement about the drawing and not about the cave.",
       "measuredFromModel": "Measured from the survey \"{{name}}\". A cave may hold several uploaded surveys, and figures taken from two different ones are not the same measurement.",
       "basisSkeletonHeuristic": "Approximated from the stored centerline, because this cave has no compiled survey carrying per-shot flags. The shape of the line work stands in for the surveyor's flags: it keeps most of the surveyed length but drops loose shots at a station, and with them the last few metres of every dead end. These figures should not be set against a cave measured from its survey as though the two were the same measurement."
+    },
+    "topology": {
+      "title": "Passage network",
+      "sizeTitle": "The network as surveyed",
+      "nodes": "Stations in the network",
+      "nodesGloss": "Survey stations that at least one passage leg reaches.",
+      "edges": "Passage legs",
+      "edgesGloss": "Pairs of stations joined by passage. A passage surveyed twice counts once.",
+      "components": "Separate pieces",
+      "componentsGloss": "Parts of the survey that do not join up to one another underground.",
+      "junctions": "Junctions",
+      "junctionsGloss": "Places where three or more passages meet.",
+      "extremities": "Dead ends",
+      "extremitiesGloss": "Places where the survey stops — a choke, a sump, or simply where the surveyors turned back.",
+      "cyclomatic": "Independent loops",
+      "cyclomaticGloss": "How many genuinely different ways round the network there are. Nought means every place is reached one way only.",
+      "reducedTitle": "The network with its straight runs contracted",
+      "reducedNodes": "Junctions and dead ends",
+      "reducedNodesGloss": "What is left once every run of passage between two of them is treated as a single connection.",
+      "reducedEdges": "Connections between them",
+      "reducedEdgesGloss": "One per run of passage. The three ratios below are counted over these rather than over the raw legs.",
+      "reducedComponents": "Separate pieces, contracted",
+      "reducedComponentsGloss": "Parts the contracted network falls into.",
+      "alpha": "Loopiness (alpha)",
+      "alphaGloss": "Loops present against the most a network of this size could hold. Nought is a cave with no loops at all.",
+      "beta": "Connections per junction (beta)",
+      "betaGloss": "Below one is a branching cave; above one means it closes back on itself.",
+      "gamma": "Connectedness (gamma)",
+      "gammaGloss": "Connections present against the most a network of this size could hold.",
+      "degreeTitle": "How passages meet",
+      "meanDegree": "Passages at an average junction or dead end",
+      "meanDegreeGloss": "Below two is a branching cave; well above two is a maze.",
+      "degreeSpread": "Spread of that figure",
+      "degreeSpreadGloss": "How much the number of passages meeting varies from place to place.",
+      "degreeVariation": "That spread against the average",
+      "degreeVariationGloss": "The same spread as a proportion, so caves of different sizes can be set beside one another.",
+      "degreeCorrelation": "Do junctions join junctions?",
+      "degreeCorrelationGloss": "Positive means busy places connect to busy places; negative means junctions mostly hang dead ends off themselves.",
+      "branchesTitle": "Runs of passage",
+      "branches": "Branches",
+      "branchesGloss": "Runs of passage from one junction or dead end to the next.",
+      "loopingBranches": "Branches returning to where they started",
+      "loopingBranchesGloss": "These have no straight line to be measured against, so they take no part in the wandering figure below.",
+      "meanBranchLength": "Average branch length",
+      "meanBranchLengthGloss": "How far it typically is from one junction to the next.",
+      "shortestBranch": "Shortest branch",
+      "shortestBranchGloss": "The shortest run of passage between two junctions or dead ends.",
+      "longestBranch": "Longest branch",
+      "longestBranchGloss": "The longest such run.",
+      "branchLengthVariation": "Spread of branch lengths",
+      "branchLengthVariationGloss": "Against their average. A high figure means a few long passages among many short ones.",
+      "shapeTitle": "How the network runs",
+      "lengthEntropy": "Evenness of branch lengths",
+      "lengthEntropyGloss": "Nought to one. High means branches of all lengths in equal measure; low means they are mostly of one length.",
+      "orientationEntropy": "Evenness of passage bearings",
+      "orientationEntropyGloss": "Nought to one, weighted by passage length. Low means the cave follows one or two directions, commonly the joints in the rock; high means it runs every way.",
+      "tortuosity": "Wandering",
+      "tortuosityGloss": "How long a run of passage is against the straight line between its ends. One is dead straight.",
+      "averagePath": "Branches between two places",
+      "averagePathGloss": "How many runs of passage you pass along, on average, to get from one junction to another.",
+      "centralPointDominance": "Reliance on one junction",
+      "centralPointDominanceGloss": "Nought to one. High means most routes through the cave pass through a single place.",
+      "clustering": "Passages closing back on each other",
+      "clusteringGloss": "How often two passages leaving the same junction are themselves joined.",
+      "completenessWhole": "Every leg in the survey file joined the station network, and no two stations shared a position. The figures above cover the whole of it.",
+      "completenessPartial": "{{dropped}} leg(s) in the survey file could not be attached to the station network, and {{merged}} station(s) shared a position with another and became a single node. The figures above were computed over what remained.",
+      "completenessUnknown": "It is not recorded what the reading of this survey may have left out, so the figures above may cover less than the file contains.",
+      "measuredFromModel": "Measured from the survey “{{name}}”. A cave may hold several uploaded surveys, and figures taken from two different ones are not the same measurement."
     }
   },
   "permissions": {
@@ -2215,7 +2322,9 @@
       "paidChannelsEnabled": "Allow announcements on channels that charge for what they send",
       "paidChannelsEnabledHint": "Off means off: while it is off, nobody can choose such a channel, no saved preference for one resolves to anything, and no outbound copy on one is ever created.",
       "dailyPaidMessageCap": "Charged message segments a day",
-      "dailyPaidMessageCapHint": "A carrier bills a text message by the segment, not by the message: 160 characters of the plain Latin alphabet travel in one segment, but a single accented letter re-encodes the whole message into segments of 70, so the same wording costs twice as much in Romanian as in English. An announcement that would take the day past this is refused outright rather than sent to half the roster. Segments already committed today count, including ones still waiting to go out."
+      "dailyPaidMessageCapHint": "A carrier bills a text message by the segment, not by the message: 160 characters of the plain Latin alphabet travel in one segment, but a single accented letter re-encodes the whole message into segments of 70, so the same wording costs twice as much in Romanian as in English. An announcement that would take the day past this is refused outright rather than sent to half the roster. Segments already committed today count, including ones still waiting to go out.",
+      "photoLibrariesTab": "Photo libraries",
+      "photoLibrariesIntro": "These switches stop this installation using a photo library it already has, and start it again afterwards. They cannot connect one: which libraries this installation has is decided by the deployment that gave them their addresses and credentials."
     },
     "documentTypes": {
       "title": "Document kinds",
@@ -3095,7 +3204,11 @@
       "tripDate": "Trip date",
       "hadIncident": "Had an incident",
       "state": "State",
-      "language": "Language"
+      "language": "Language",
+      "region": "Region",
+      "rockType": "Rock type",
+      "surveyedLength": "Surveyed length (m)",
+      "depth": "Depth (m)"
     },
     "problems": {
       "noWorlds": "Choose at least one kind of object to search.",
@@ -3386,7 +3499,7 @@
   },
   "surveySources": {
     "title": "Survey sources",
-    "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on; nothing here is read or interpreted.",
+    "explanation": "The material the compiled surveys above were made from. Kept so the survey can be compiled again when the tools that produced the export have moved on. A compilation log is opened, for the closure figures it reports; nothing else here is read or interpreted.",
     "upload": "Archive a source",
     "uploaded": "Source archived",
     "uploadFailed": "The file could not be archived",
@@ -3413,6 +3526,58 @@
       "notFound": "This archived source no longer exists.",
       "caveNotFound": "This cave no longer exists.",
       "forbidden": "You are not allowed to change this cave's survey archive."
+    }
+  },
+  "surveyQuality": {
+    "title": "Survey closure",
+    "explanation": "How well each survey closed, exactly as the compiler that compiled it reported. Nothing here is worked out again: the columns are the compiler's own — REL-ERR, ABS-ERR, TOTAL-L, STS and the three axis errors — so a figure here and a figure in your own log are the same number.",
+    "statuses": {
+      "pending": "Queued for reading",
+      "unreadable": "Could not be read"
+    },
+    "outcomes": {
+      "succeeded": "Compiled",
+      "succeededWithWarnings": "Compiled with warnings",
+      "failed": "Compilation failed"
+    },
+    "unreadable": "This log could not be read, so nothing is known about the compilation it recorded. That is not a statement about the survey.",
+    "compilationFailed": "This compilation did not finish. What is below is what the run had got as far as reporting — not a survey with no loops.",
+    "stoppedAt": "It stopped at: {{stage}}.",
+    "compiler": "Compiler",
+    "compilerValue": "therion {{version}}",
+    "compilerReleased": "Compiler released",
+    "readAt": "Log read here",
+    "revision": "Archive revision",
+    "loopCount": "Loops the compiler found",
+    "averageLoopError": "Average loop error",
+    "medianLoopError": "Median loop error (from the table)",
+    "medianAbsoluteError": "Median closing distance (from the table)",
+    "totalLength": "Total length",
+    "totalLengthAdjusted": "Total length, adjusted",
+    "adjustment": "Adjustment moved",
+    "compilationSeconds": "Compilation time (s)",
+    "noLoops": "This run reported no loop errors: there are no closed loops in this survey to check.",
+    "noLoopTable": "This log printed no loop-error table, so how well the survey closes is not known from it. That is not the same as a survey with no closed loops.",
+    "loopsWithoutTable": "This run reported {{loops}} loops but printed no loop-error table, so how far each of them closed is not known from this log.",
+    "orderedBy": {
+      "relErr": "Ordered by REL-ERR, the ratio.",
+      "absErr": "Ordered by ABS-ERR, the closing distance.",
+      "totalLength": "Ordered by TOTAL-L, the loop's length.",
+      "table": "In the compiler's own order."
+    },
+    "orderingExplanation": "A short loop can be the worse ratio and the smaller distance at the same time, so ordering by REL-ERR and ordering by ABS-ERR are not the same list. Sort by either heading.",
+    "columns": {
+      "ordinal": "Loop",
+      "relErr": "REL-ERR",
+      "relErrHint": "Ratio: the closing error as a % of the loop's length",
+      "absErr": "ABS-ERR",
+      "absErrHint": "Distance: how far the loop failed to close, in metres",
+      "totalLength": "TOTAL-L (m)",
+      "stationCount": "STS",
+      "errorX": "X-ERROR",
+      "errorY": "Y-ERROR",
+      "errorZ": "Z-ERROR",
+      "stations": "STATIONS"
     }
   },
   "karstArea": {
@@ -3479,9 +3644,35 @@
     "radiusM": "Radius (m)",
     "observedL": "L",
     "alignment": "Bearings between {{pairs}} pairs of entrances, {{min}}–{{max}} m apart.",
-    "tooFewPlaceable": "Fewer than {{minimum}} entrances here can be placed exactly, which is too few for a spacing to mean anything."
+    "tooFewPlaceable": "Fewer than {{minimum}} entrances here can be placed exactly, which is too few for a spacing to mean anything.",
+    "autocorrelationTitle": "Hot and cold spots",
+    "autocorrelationBasis": "Read over the {{cells}} cells above and the {{pairs}} adjacencies between them, at this grid's {{metres}} m cell and no finer — both figures are arithmetic over the cells already drawn, so neither can show detail the grid does not already have.",
+    "autocorrelationUndetermined": "There is no arrangement to test here: too few cells, none of them touching, or every cell carrying the same density.",
+    "moranIndex": "Moran's I",
+    "moranExpected": "Expected by chance",
+    "moranZ": "Standard errors",
+    "moranP": "p",
+    "hotSpots": "{{hot}} cells read hot and {{cold}} read cold, of {{scored}} that could be scored. The score is taken at every cell at once and is not corrected for that, so a scattering of striking cells over a large window is what chance alone produces — read the shading, not the individual cell.",
+    "pattern": {
+      "undetermined": "The question could not be asked of this window.",
+      "random": "The arrangement is indistinguishable from a chance one. That is a failure to find structure, not a demonstration that there is none.",
+      "clustered": "Dense cells sit beside dense ones, and empty beside empty, more than chance would put them.",
+      "dispersed": "Dense and empty cells alternate more than chance would put them."
+    }
   },
   "karstStats": {
+    "clusterArbitrary": "The grouping was still moving caves when it reached its limit, so which group a borderline cave fell into is arbitrary in its details rather than wrong.",
+    "clusterCoverage": "{{measure}}: {{missing}} of the caves considered do not record it, and {{soleReason}} of those would have been grouped had this measure not been asked for.",
+    "clusterEmpty": "Nothing could be grouped: fewer than {{minimum}} caves in this set record every measure asked for. The points below are drawn uncoloured, and the counts above still hold.",
+    "clusterGroup": "Group {{group}}",
+    "clusterMeasures": "Grouped over {{measures}}, each standardised first so that neither measure counts for more than the other simply for being recorded in larger numbers.",
+    "clusterNoSeparation": "The groups' middles do not separate at all — the strongest reading available of there being no structure here. The colours divide these caves; they do not find anything in them.",
+    "clusterNoWork": "Every grouped cave records the same {{measure}}, so that measure moved no cave into any group.",
+    "clusterNotAsked": "This list is narrowed by something the registry-wide grouping cannot be asked about, so the caves are drawn uncoloured rather than coloured by a grouping of some other set of caves.",
+    "clusterPopulation": "Grouped over the {{eligible}} of {{considered}} caves you may read in the whole set this list is narrowed to — not only the page drawn below — that record every measure asked for. The other {{excluded}} record fewer, so no grouping can place them, and having no length or no depth to plot they are absent from the chart rather than drawn in it.",
+    "clusterUngrouped": "Not grouped",
+    "clusterWeak": "The groups are as wide as they are far apart, so this grouping is weak. The method returns exactly the number of groups it was asked for on any data whatever, noise included, so the colours below are a division of these caves rather than a finding about them.",
+    "clusterWithheld": "Some groups hold fewer than {{floor}} caves. Those are not summarised and their caves are drawn uncoloured, because a mean over two caves is those two caves' readings rather than anything about a group.",
     "count": "Caves",
     "depthAxis": "Depth (m)",
     "lengthAxis": "Surveyed length (m)",
@@ -3495,6 +3686,91 @@
     "viewHistogram": "Length",
     "viewLengthDepth": "Length vs depth",
     "viewRankSize": "Rank–size"
+  },
+  "registryStats": {
+    "distributionTitle": "Distribution across the registry",
+    "asVisibleToYou": "Counted over the caves you may read. Somebody with different access sees different figures for the same registry, and both are right.",
+    "stale": "These are the previous answer's figures, still on screen while the new one is worked out. No file is offered until the two are the same.",
+    "measure": "Measurement",
+    "bins": "Intervals",
+    "floor": "Fewest caves per interval",
+    "caveType": "Cave type",
+    "rockType": "Rock type",
+    "region": "Region",
+    "regionPlaceholder": "Exact region name",
+    "anyValue": "Any",
+    "filterNote": "These narrowings are matched exactly, and nothing here counts how many caves each one would leave — that count is the question itself, so it is answered below rather than printed on the controls.",
+    "linearCount": "Linear",
+    "logCount": "Logarithmic",
+    "caves": "Caves",
+    "binCount": "{{caves}} caves",
+    "joinedLabel": "{{from}}–{{to}} joined",
+    "joinedNote": "Several intervals joined together, because one of them held too few caves to publish on its own.",
+    "joinedSummary": "{{joined}} of these intervals are several joined together, marked in the chart and wider than the rest. The registry joins an interval holding too few caves rather than leaving it out, because leaving it out would itself say something is there.",
+    "tailSpan": "The fitted tail begins at {{from}}: it describes the last {{intervals}} of the {{total}} intervals drawn, and nothing to the left of them.",
+    "counts": "Computed over the {{measured}} of {{total}} caves in this set that record a value. A cave without one is absent rather than counted as zero.",
+    "noRange": "There is no range to divide: nothing in this set records this measurement, or everything recording it records the same value.",
+    "noFigure": "—",
+    "percentiles": "Percentiles",
+    "fraction": "Percentile",
+    "percentileName": "{{percent}}th",
+    "fits": "Fits",
+    "lognormal": "Lognormal",
+    "lognormalAbsent": "No lognormal fit: too few caves record this measurement, or they all record the same value. Parameters would exist arithmetically and mean nothing.",
+    "paretoTail": "Power-law tail",
+    "paretoAbsent": "No fitted tail: the upper tail holds too few caves for an exponent to mean anything.",
+    "alphaValue": "{{alpha}} ± {{error}}",
+    "tailFrom": "Tail starts at",
+    "median": "Median",
+    "mean": "Mean",
+    "goodness": "Distance from the fitted tail",
+    "fittedOver": "Fitted over",
+    "fittedOverValue": "{{caves}} caves",
+    "failed": "The distribution could not be worked out.",
+    "correlationTitle": "Two measurements against each other",
+    "correlationFailed": "The relationship could not be worked out.",
+    "horizontal": "Horizontal measurement",
+    "vertical": "Vertical measurement",
+    "logFit": "Logarithmic",
+    "linearFit": "Linear",
+    "pair": "{{y}} against {{x}}",
+    "fit": "The fit",
+    "slope": "Slope",
+    "intercept": "Intercept",
+    "rSquared": "Goodness of fit (r²)",
+    "correlationCoefficient": "Correlation",
+    "pairs": "Taken over",
+    "pairsValue": "{{caves}} caves recording both",
+    "form": "Fitted",
+    "drawnNote": "The line is the fitted relationship, drawn across the range the horizontal measurement covers in this set. The caves it was fitted through are not drawn: the registry answers this question with the relationship rather than with the caves behind it, and the range drawn across may be wider than the pairs the fit used.",
+    "positiveOnly": "Fitted through the logarithms of both, so a cave recording zero or less on either measurement contributes to nothing rather than being nudged upwards. The count beside the fit says how many were left.",
+    "absence": {
+      "noPairs": "No cave in this set records both of these measurements, so there is no relationship to fit and none is drawn.",
+      "notFitted": "Fewer than two caves record both of these measurements. A line through one point is not a relationship, so none is drawn.",
+      "noRange": "The horizontal measurement covers no range in this set, so there is nothing to draw the relationship across. The figures beside it still stand.",
+      "noPositiveRange": "The fit is taken over logarithms and the horizontal measurement reaches zero or below in this set, so it has no lower end to draw from. The figures beside it still stand.",
+      "rangeUnknown": "The range this measurement covers in this set has not arrived yet, so there is nothing to draw the relationship across. The figures beside it already stand.",
+      "rangeUnavailable": "The range this measurement covers in this set could not be read, so the relationship is not drawn. That is one figure that failed to arrive rather than anything about the caves, and the figures beside it still stand."
+    },
+    "measures": {
+      "surveyedLength": "Surveyed length (m)",
+      "estimatedLength": "Estimated length (m)",
+      "depth": "Depth (m)",
+      "positiveDepth": "Height above entrance (m)",
+      "negativeDepth": "Depth below entrance (m)",
+      "realExtension": "Real extension (m)",
+      "projectedExtension": "Projected extension (m)",
+      "volume": "Volume (m³)",
+      "area": "Area (m²)",
+      "ramificationIndex": "Ramification index"
+    },
+    "regionsTitle": "The registry by region",
+    "regionsCard": "Caves per region",
+    "regionsFailed": "The breakdown could not be worked out.",
+    "noRegion": "No region recorded",
+    "regionsCounts": "{{placed}} caves stand under a region below, out of {{total}} in this set that you may read.",
+    "regionsShortfall": "The rows below do not add up to the total, and that is the answer rather than a fault in it: {{missing}} of the {{total}} caves you may read here have a position you may not see, so they are counted in the total and stand under no region. Which regions they belong to is exactly what is being withheld, so there is no row gathering them and no percentage that reconciles.",
+    "regionsEmpty": "No cave in this set has a position you may see, so there is nothing to divide between regions. The total above still counts the caves you may read."
   },
   "morphometry": {
     "title": "Measured shape",
@@ -3724,6 +4000,24 @@
       "file": "The file itself",
       "conflict": "The file disagrees with itself"
     },
+    "encoding": "Character encoding",
+    "encodingHint": "A sheet states nothing trustworthy about its encoding, so it is worked out from the bytes. An older code page read as UTF-8 loses every diacritic, so the answer is shown here and can be overruled.",
+    "encodingDetect": "Work it out from the file",
+    "encodingSettled": "What settled the encoding",
+    "encodings": {
+      "utf8": "UTF-8",
+      "utf16Le": "UTF-16, little-endian",
+      "utf16Be": "UTF-16, big-endian",
+      "windows1250": "Windows-1250, Central European",
+      "iso88592": "ISO-8859-2, Latin-2",
+      "windows1252": "Windows-1252, Western European"
+    },
+    "encodingSources": {
+      "stated": "Your choice",
+      "mark": "A mark at the head of the file",
+      "utf8": "The bytes are valid UTF-8",
+      "guessed": "Guessed from the accented bytes"
+    },
     "delimiter": "Column separator",
     "delimiterHint": "One character. It is pinned rather than guessed: a free-text column full of semicolons otherwise flips the whole reading.",
     "separators": "Separators inside a cell",
@@ -3752,6 +4046,8 @@
     "createCaves": "Create caves this sheet names but the register lacks",
     "createAreas": "Create massifs and sub-areas the register lacks",
     "createCavers": "Create cavers the roster lacks",
+    "createAbbreviatedCavers": "Create cavers from abbreviated names too",
+    "createAbbreviatedCaversHint": "A name like “Ion B.”, or a given name on its own, becomes a caver like any other. Turn this on for a sheet written that way throughout — otherwise almost nobody on it can be created. Expect duplicates: they are joined afterwards from the roster.",
     "createTripTypes": "Create trip types the vocabulary lacks",
     "audienceHint": "Chosen once and applied to every row. It starts at the most restrictive value: an import is a bulk act, and a bulk act that publishes by default publishes a club's whole history at once.",
     "visibility": "Who may read these trips",
@@ -3764,7 +4060,7 @@
     "peopleNeedingADecision": "People needing a decision",
     "placesNeedingADecision": "Places needing a decision",
     "peopleWarningTitle": "{{ambiguous}} names match more than one caver, and {{uncreatable}} cannot be created",
-    "peopleWarningBody": "A name matching several people is never guessed at, and a bare initial or a lone given name creates nobody — a person invented from one of those could never be confidently joined to the right caver later. Left as they are, these names are kept in the trip's own text and the people are not on the roster of the trips they went on.",
+    "peopleWarningBody": "A name matching several people is never guessed at — say which one is meant. A name too short to place, a bare initial or a lone given name, creates nobody unless you allow it under what may be created: a person invented from one of those could never be confidently joined to the right caver later. Left as they are, these names are kept in the trip’s own text and the people are not on the roster of the trips they went on.",
     "placesWarningTitle": "{{count}} place names match more than one record",
     "columns": {
       "take": "Take",
@@ -3900,6 +4196,43 @@
     "areaStructureRose": "Fracture traces ({{count}} in this area)",
     "dolineRose": "Depression long axes ({{count}} outlines)"
   },
+  "overburden": {
+    "title": "Rock overhead",
+    "loading": "Measuring the rock overhead…",
+    "nothingMeasured": "This cave has no line work to measure along, so there is nowhere to ask how much rock is overhead.",
+    "noAltitudesTitle": "This cave's line work carries no altitudes.",
+    "noAltitudesReason": "How much rock lies overhead is the ground surface less the altitude of the passage, and a survey recorded as a plan has no altitude for it to be measured down to. A profile of noughts would draw the whole cave lying on the surface.",
+    "noTerrainBuilt": "No elevation data has been prepared on this installation, so the height of the ground over this cave is not known anywhere. This is not a statement about the cave.",
+    "noCoverageHere": "Elevation data has been prepared here, but none of it reaches this cave. The ground over it is unknown rather than at sea level.",
+    "axisDistance": "Distance along the passage (m)",
+    "axisThickness": "Rock overhead (m)",
+    "thinnest": "Thinnest",
+    "thickest": "Thickest",
+    "mean": "Mean",
+    "passageLength": "Passage measured along",
+    "coverage": "Readings with a ground height",
+    "coverageValue": "{{covered}} of {{total}}",
+    "unitMetres": "{{value}} m",
+    "notMeasured": "—",
+    "figuresScope": "The figures are taken over the readings that got a ground height and over no others, so a cave the elevation data covers in part is described over that part alone. A negative thickness is reported as measured: it means the elevation model puts the surface below the passage, and the two disagree.",
+    "gap": {
+      "outsideCoverage": "The curve breaks where no prepared elevation data reaches the passage. Nobody knows the height of the ground there, which is why the line stops rather than crossing the gap.",
+      "noData": "The curve breaks where the elevation data reaches the passage but records nothing — a hole in the model, not a passage at the surface.",
+      "mixed": "The curve breaks in two kinds of place: where no prepared elevation data reaches the passage, and where data reaches it but records nothing. Neither is a passage at the surface."
+    },
+    "distanceNote": "The horizontal axis is how much passage lies before each reading, in the order the line work records it. A survey is a network rather than one walk through the cave, so it is a length and not a route anybody could follow.",
+    "pressToLocate": "Press a point on the curve to mark where that reading was taken, on the map and in the 3D scene.",
+    "readout": "{{distance}} along · {{thickness}} · piece {{segment}} of the line work",
+    "readoutWhere": "{{distance}} along the passage",
+    "readoutThickness": "{{value}} of rock overhead",
+    "readoutSegment": "Piece {{index}} of the line work",
+    "readoutAbsent": {
+      "outsideCoverage": "No elevation data reaches here",
+      "noData": "The elevation data records nothing here"
+    },
+    "markLabel": "{{value}} of rock overhead",
+    "markLabelAbsent": "Rock overhead not known here"
+  },
   "crossSection": {
     "title": "Passage size",
     "loading": "Measuring…",
@@ -4020,6 +4353,74 @@
   },
   "libraryPhotos": {
     "layerName": "Photo library ({{library}})",
+    "browse": {
+      "title": "Photo library",
+      "noPositionShown": "Where these pictures were taken is not shown here. The map is where a library's photographs are placed.",
+      "showingOf": "Showing {{shown}} of {{total}} photographs the library holds",
+      "showingUnknownTotal": "Showing {{count}} photographs. This library does not say how many it holds.",
+      "pageCapped": "This installation asks for at most {{count}} pictures at a time.",
+      "empty": "This library holds nothing matching.",
+      "pastEnd": "The listing ended before this page — the library said there might be more, and there was not.",
+      "silent": "This library did not answer, so there is nothing to show. It may be stopped, or still starting up.",
+      "readAt": "Read from the library {{when}}",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {{page}}",
+      "pageTooDeep": "That page is further into the library than this installation will ask for, so nothing was asked. Go back towards the first page."
+    },
+    "search": {
+      "placeholderText": "Search titles, captions and labels",
+      "placeholderMeaning": "Describe the picture",
+      "textOnly": "This library matches your words against titles, captions and labels somebody wrote down. It does not look at the pictures themselves, so a word nobody wrote finds nothing however well it describes what is there.",
+      "byMeaning": "This library reads your words as a description and puts everything it holds in order of how close each picture is to it. Nothing is matched and nothing is left out, so what you see is the closest it found — there is no count of what fits.",
+      "showing": "Showing {{count}} photographs",
+      "showingMore": "Showing {{count}} photographs, and the library says there are more",
+      "empty": "Nothing came back for those words. That is about the words rather than about the library, which may hold plenty.",
+      "tooLong": "A search here is at most {{count}} characters and this one was longer, so nothing was asked of the library.",
+      "showingRanked": "Showing {{count}} pictures from the front of this library's ordering",
+      "showingRankedMore": "Showing {{count}} pictures from the front of this library's ordering, which continues past them — everything the library holds is somewhere in it, so further pages are not further matches.",
+      "noRanking": "This library put nothing in order for those words. An ordering always has a front, so this is not about the words: the library ranked nothing at all, which is what happens when its picture recognition is switched off.",
+      "silentByMeaning": "This library did not answer the search. Its picture recognition may be switched off, in which case it cannot answer words by meaning at all — or the library may be stopped, or still starting up.",
+      "reduced": "This library reads a colon as naming one of its own fields, so it was asked for: {{words}}",
+      "nothingLeft": "There were no words left once the field separators were taken out, so no library was asked anything."
+    },
+    "albums": {
+      "choose": "The whole library",
+      "loading": "Reading this library's albums…",
+      "none": "This library keeps no albums",
+      "silent": "This library did not answer about its albums",
+      "untitled": "Untitled album",
+      "withCount": "{{title}} — {{count}} photographs",
+      "truncated": "Only the first {{count}} albums this library keeps are offered here.",
+      "notWithASearch": "A search goes to the library whole and cannot be narrowed to an album, so the album chosen is not being used. Clear the search to browse the album again.",
+      "showingOf": "Showing {{shown}} of {{total}} photographs the library puts in this album",
+      "showingUnknownTotal": "Showing {{count}} photographs from this album. This library does not say how many it puts in it.",
+      "nothingIn": "This library puts nothing in this album. The library answered; it may hold plenty elsewhere.",
+      "notFound": "That is not an album this installation will ask a library about, so nothing was asked."
+    },
+    "trip": {
+      "title": "Photographs from the photo library",
+      "explains": "Pictures a connected photo library holds from the days this trip was out. They come from that library and nothing here has been filed against the trip. The days asked about reach at least a day past each end of the trip, because a trip's dates carry no time zone and a camera's clock does — so pictures from the day before or the day after can appear, and each one shows its own date.",
+      "showingOf": "Showing {{shown}} of {{total}} photographs the library holds from these days",
+      "showingUnknownTotal": "Showing {{count}} photographs from these days. This library does not say how many it holds.",
+      "nothingTaken": "This library holds nothing taken while this trip was out. The library answered; it may hold plenty from other days.",
+      "notFound": "This trip could not be read, so no library was asked anything about it.",
+      "datesUnusable": "This trip's dates do not give a stretch of time to ask a photo library about, so nothing was asked. Check the day it started and the day it ended."
+    },
+    "detail": {
+      "title": "Photograph",
+      "takenAt": "Taken",
+      "camera": "Camera",
+      "lens": "Lens",
+      "aperture": "Aperture",
+      "exposure": "Exposure",
+      "iso": "ISO",
+      "focalLength": "Focal length",
+      "library": "Library",
+      "isVideo": "This is a video. Only a still of it is shown here.",
+      "gone": "This library no longer reports that photograph. The list was read a moment ago and the library has changed since.",
+      "silent": "This library did not answer about that photograph."
+    },
     "source": {
       "immich": "Immich",
       "photoprism": "PhotoPrism"
@@ -4033,6 +4434,7 @@
     "notConfigured": "No photo library is connected to this installation.",
     "takenAt": "Taken {{when}}",
     "noTitle": "Untitled",
+    "video": "Video",
     "thumbnailFailed": "The photograph could not be loaded.",
     "asPictures": "Show the photographs themselves",
     "picturesSuppressed": "Too many photographs here to show them as pictures — zoom in.",
@@ -4075,9 +4477,62 @@
       "versionChecked": "Version {{version}} · checked {{when}}",
       "checked": "Checked {{when}}",
       "recheckFailed": "The library still did not answer, so nothing changed.",
-      "recheckRefused": "The library answered and would not accept the credential this installation is configured with, so nothing changed."
+      "recheckRefused": "The library answered and would not accept the credential this installation is configured with, so nothing changed.",
+      "suspended": "This installation is not using this photo library for now. It is still running and still reachable at its own address."
     },
     "notConnected": "{{library}} is not connected: this installation has no address or credential for it.",
-    "recheck": "Check again"
+    "recheck": "Check again",
+    "admin": {
+      "suspend": "Stop using this photo library",
+      "suspendHint": "While this is on, nothing here asks the library anything: no map layer, no browsing, no search and no pictures.",
+      "stillHoldsEverything": "Stopping SilexGIS from using it changes nothing about what it holds, what it indexes, or who can log into it directly.",
+      "stopCommand": "To stop the photo library itself, use the deployment: {{command}}",
+      "cannotConnect": "{{library}} is not connected: this installation has no address or credential for it. Connecting one is part of the deployment and cannot be done from this page.",
+      "none": "This installation has been given no photo library, so there is nothing to stop."
+    }
+  },
+  "karstlinkExport": {
+    "menuItem": "KarstLink (JSON-LD)",
+    "changeAnswer": "KarstLink (JSON-LD) — change my answer…",
+    "title": "Export caves for interchange",
+    "intro": "Caves described in the published cave and karst vocabulary, as a file you can hand to somebody else. A file outlives the permission that produced it, so what it says about a protected location is decided here and written into the file itself.",
+    "download": "Export",
+    "caveCount": "{{count}} cave(s) in this export.",
+    "protectedCount": "{{count}} of them have a location this installation protects. The answer below applies to all of them.",
+    "noneProtected": "None of them has a location this installation protects, so nothing below changes this file.",
+    "tooMany": "This selection holds {{count}} cave(s) and one file may hold {{limit}}. Narrow the filters and export in parts — a file that stopped at a limit looks exactly like a complete one to whoever receives it.",
+    "remember": "Remember this answer, and stop asking me",
+    "askAgain": "That export could not be made with your remembered answer. Please choose again.",
+    "treatments": {
+      "grid_position": {
+        "label": "Place them on the protection grid",
+        "help": "The same coarse position the map already shows to anyone without the right to see the exact one. The file says beside each of them how far it may be from the real place."
+      },
+      "no_position": {
+        "label": "Include them with no coordinates",
+        "help": "Everything else about the cave — its name, its code, its length and depth — and nothing about where it is."
+      },
+      "omit": {
+        "label": "Leave them out of the file",
+        "help": "The file states how many caves were left out, because counts taken from it will otherwise disagree with the registry and the recipient would have no way to know."
+      }
+    },
+    "errors": {
+      "tooManyCaves": "One file may hold {{count}} caves. Narrow the filters and export in parts."
+    }
+  },
+  "externalIds": {
+    "title": "Identifiers in other registers",
+    "explanation": "The number another register knows this cave by. It is the only stable way to say that a cave here and a cave there are the same cave: names are not stable, and a position is exactly what may not be shared. Only the number is kept — nothing else a register says about the cave is copied here, so nothing here can go stale while still looking authoritative.",
+    "placeholder": "Not recorded",
+    "lookup": "Look this cave up in Grottocenter",
+    "lookupFailed": "Grottocenter could not be asked.",
+    "notConfigured": "This installation does not look caves up in Grottocenter. An administrator turns the integration on before it can be used; until then nothing is sent anywhere.",
+    "noCandidates": "Grottocenter offered nothing for this name.",
+    "accept": "Record this one",
+    "systems": {
+      "grottocenter": "Grottocenter",
+      "national_cadastre": "National cadastre"
+    }
   }
 }

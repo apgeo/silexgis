@@ -324,6 +324,11 @@ export default function TripImportPage() {
             dateOrderSource={data?.dateOrderSource}
             effectiveDateOrder={data?.dateOrder}
             ambiguousDateRows={data?.ambiguousDateRows ?? 0}
+            // Same fallback as the header, and for the same reason: a sheet read under the wrong
+            // code page is one of the ways a parse yields nothing, so the encoding has to be
+            // visible and changeable at exactly the point where the parse produced no preview.
+            encoding={data?.encoding ?? columns.data?.encoding ?? undefined}
+            encodingSource={data?.encodingSource ?? columns.data?.encodingSource}
             unmappedColumns={data?.unmappedColumns ?? columns.data?.unmappedColumns ?? []}
           />
 

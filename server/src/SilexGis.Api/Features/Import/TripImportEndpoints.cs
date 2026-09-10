@@ -200,6 +200,8 @@ public static class TripImportEndpoints
             parsed.Header,
             parsed.ResolvedColumns,
             parsed.UnmappedColumns,
+            parsed.Encoding,
+            parsed.EncodingSource,
             [.. parsed.FileDiagnostics.Select(ToDto)]));
     }
 
@@ -301,6 +303,8 @@ public static class TripImportEndpoints
             parsed.Header,
             parsed.ResolvedColumns,
             parsed.UnmappedColumns,
+            parsed.Encoding,
+            parsed.EncodingSource,
             parsed.DateOrder,
             parsed.DateOrderSource,
             parsed.AmbiguousDateRows,
@@ -320,28 +324,39 @@ public static class TripImportEndpoints
     /// <para>
     /// Two counts, not one, for the people a reviewer still has to deal with. The ambiguous ones
     /// are the names more than one roster entry answers to. Beside them are the names nothing
-    /// answered to that no person can be made from — an initial, or a lone given name — which are
-    /// not ambiguous at all and yet are the ones that quietly cost a trip its roster: they become
-    /// no link whatever the create switch says, so they are counted without reference to it.
+    /// answered to that no person can be made from under the choices in force, which are not
+    /// ambiguous at all and yet are the ones that quietly cost a trip its roster: they become no
+    /// link whatever the roster switch says, so they are counted without reference to it.
     /// Counting only the ambiguous ones told a reviewer that nobody needed a decision while
-    /// people were being dropped from the trips they went on.
+    /// people were being dropped from the trips they went on. Which names those are is not fixed:
+    /// a reviewer who has said that abbreviated names may become people moves them out of this
+    /// count and into what would be created, and both figures move together because one function
+    /// works out all three.
     /// </para>
     /// </summary>
-    private static TripImportProposalsDto Proposals(TripImportResolutionSet resolution) => new(
-        resolution.TripTypes,
-        resolution.People,
-        resolution.Caves,
-        resolution.Areas,
-        resolution.NewTripTypes.Count,
-        resolution.NewCavers.Count,
-        resolution.NewCaves.Count,
-        resolution.NewAreas.Count,
-        resolution.People.Count(p => p.State == TripImportMatchState.Ambiguous),
-        // Read off the match rather than worked out again here. The same fact decides this count,
-        // the warning above the table and the list of names under it, and it has one home so that
-        // the three cannot come to disagree about which people an import is unable to make.
-        resolution.People.Count(p => p.State == TripImportMatchState.Unmatched && !p.MayCreate),
-        resolution.Caves.Concat(resolution.Areas).Count(f => f.State == TripImportMatchState.Ambiguous));
+    private static TripImportProposalsDto Proposals(TripImportResolutionSet resolution)
+    {
+        // Counted off the matches the rows were resolved into rather than worked out again here,
+        // all three of them — how many people a confirmation would add included. The same facts
+        // decide these figures, the warning above the table and the list of names under it, and
+        // they have one home so the three cannot come to disagree. Taking the count of new people
+        // from the separate list the resolver accumulates agreed only for as long as the two
+        // folded names for distinctness by the same rule, with nothing saying they had to.
+        var people = TripImportPeople.Count(resolution.People);
+
+        return new TripImportProposalsDto(
+            resolution.TripTypes,
+            resolution.People,
+            resolution.Caves,
+            resolution.Areas,
+            resolution.NewTripTypes.Count,
+            people.WillCreate,
+            resolution.NewCaves.Count,
+            resolution.NewAreas.Count,
+            people.Ambiguous,
+            people.Uncreatable,
+            resolution.Caves.Concat(resolution.Areas).Count(f => f.State == TripImportMatchState.Ambiguous));
+    }
 
     // ---------- the confirmation ----------
 

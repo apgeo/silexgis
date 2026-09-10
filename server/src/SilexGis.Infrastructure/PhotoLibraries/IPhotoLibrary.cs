@@ -71,6 +71,107 @@ public interface IPhotoLibrary
     Task<LibraryPhotoPage> PhotosInAsync(Envelope bounds, int limit, CancellationToken ct);
 
     /// <summary>
+    /// What this library does with words: matches them against text somebody wrote down, or ranks
+    /// what it holds by how close the pictures are to what the words describe.
+    /// </summary>
+    /// <remarks>
+    /// Published rather than kept inside the client, because it decides what a person is invited to
+    /// type. A box reading "describe the picture" over a library that matches words literally is a
+    /// promise the far side cannot keep, and the reader who types "muddy crawl" into it concludes
+    /// the library is empty rather than that they asked the wrong kind of question. It is a
+    /// property and not a method: it is a fact about the product, known without asking anybody, and
+    /// reading it must never open a socket.
+    /// </remarks>
+    LibrarySearchMatching SearchMatching { get; }
+
+    /// <summary>
+    /// One page of this library's photographs, newest first, carrying no position of any kind.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing is held between calls. This is one question asked of the library for one page a
+    /// person is looking at, and the answer is gone when the response is written — unlike the map,
+    /// whose positions one of these products can only give whole and which are therefore kept.
+    /// Where the product offers paging of its own, this pages through it rather than reading more
+    /// than a page and cutting it up here.
+    /// </para>
+    /// <para>
+    /// What comes back describes the library, not the caller: this integration reaches every
+    /// library through one credential belonging to the whole installation, so there is one answer
+    /// and every caller who may reach the feature at all gets that one. A count on it is a count of
+    /// the library's photographs — of those inside the window when there is one — and never of the
+    /// photographs one account is allowed to see, because no account's identity reaches the far
+    /// side at all.
+    /// </para>
+    /// <para>
+    /// Where the query carries a stretch of time, the narrowing is done by the far side and by the
+    /// far side alone. Each product is asked in its own grammar, built here out of the two instants
+    /// and nothing else; nothing is filtered out of the answer afterwards. Narrowing here would
+    /// break the paging underneath it — the far side has already decided what this page is — and
+    /// would turn every count into a count of what survived rather than of what the library holds.
+    /// </para>
+    /// </remarks>
+    Task<LibraryPhotoListPage> ListAsync(LibraryPhotoQuery query, CancellationToken ct);
+
+    /// <summary>
+    /// One page of what this library makes of a set of words, in the order it puts them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A separate call from the listing rather than a parameter on it, because the two are not the
+    /// same question narrowed by different amounts. A listing is what the library holds, newest
+    /// first; a search is whatever the far side does with a sentence, and against one of these
+    /// products that is an ordering of the whole library by closeness to the words rather than a
+    /// narrowing of anything. Merging them would have put the reader's words into one route that
+    /// answers two incompatible things and reports its count the same way for both.
+    /// </para>
+    /// <para>
+    /// The words go to the far side and nothing is narrowed afterwards. That is the only order
+    /// available — neither product will accept a set of identifiers to search within, so there is
+    /// no way to ask it about a chosen subset — and it is why what comes back is described by
+    /// <see cref="LibraryPhotoSearchPage"/> as a page of an answer somebody else composed rather
+    /// than as a count of anything.
+    /// </para>
+    /// </remarks>
+    Task<LibraryPhotoSearchPage> SearchAsync(LibraryPhotoSearchQuery search, CancellationToken ct);
+
+    /// <summary>
+    /// The albums this library keeps: what somebody over there grouped together and named.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Here rather than folded into the listing because it answers a different question and is
+    /// asked at a different rate: a chooser is filled once for a screen, while the listing behind
+    /// it is asked again for every page and every narrowing. Merging them would ask a neighbouring
+    /// container for its whole set of albums on every page turn.
+    /// </para>
+    /// <para>
+    /// What comes back describes the library and not the caller, on the same terms as everything
+    /// else here: one credential belongs to the whole installation, so there is one set of albums
+    /// and one count against each of them, and every caller who may reach the feature gets that
+    /// one. A count is the library's own number where the product publishes one and is absent where
+    /// it does not — never assembled here by asking for an album's photographs and counting them,
+    /// which would cost a request per album and still count only one page of it.
+    /// </para>
+    /// <para>
+    /// Nothing is held between calls, and nothing about an album's photographs is asked: this is a
+    /// list of names and numbers, carrying no position of any kind.
+    /// </para>
+    /// </remarks>
+    Task<LibraryAlbumPage> AlbumsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Everything this library will say about one photograph, or null when it reports none under
+    /// that identifier.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than a failure, because a photograph deleted or re-identified on the far side is
+    /// an ordinary answer somebody has to be shown and not a fault of this installation. Whatever
+    /// the library does not say is absent from the result and is never inferred from anything else.
+    /// </remarks>
+    Task<LibraryPhotoDetail?> DetailAsync(string photographId, CancellationToken ct);
+
+    /// <summary>
     /// One derivative's bytes, streamed. <paramref name="reference"/> is how the far side names the
     /// derivative — which is not always how it names the photograph — and is refused unless it is a
     /// shape this application is willing to put in a request path.
@@ -90,4 +191,22 @@ public interface IPhotoLibrary
     /// drive is the deletion loop with a schedule attached.
     /// </summary>
     Task RecheckOriginalsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Drops everything held about this library — positions read from it, the last thing it said
+    /// about itself, any credential minted for reading its pictures — without asking it anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Opens no socket and can be called about a library nobody configured. It is what makes
+    /// "this installation has stopped using it" mean more than "it stops asking": one of these
+    /// products can only give its located photographs whole, so their coordinates are read once and
+    /// kept for the whole installation, and a stopped library whose reading stayed resident would
+    /// re-serve every one of them the moment somebody released the brake, however long afterwards.
+    /// </para>
+    /// <para>
+    /// It changes nothing on the far side. The library goes on holding everything it holds.
+    /// </para>
+    /// </remarks>
+    void Forget();
 }

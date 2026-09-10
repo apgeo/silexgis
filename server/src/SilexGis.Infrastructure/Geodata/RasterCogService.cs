@@ -2,6 +2,7 @@
 using NetTopologySuite.Geometries;
 using OSGeo.GDAL;
 using OSGeo.OSR;
+using SilexGis.Domain.Geo;
 
 namespace SilexGis.Infrastructure.Geodata;
 
@@ -33,7 +34,7 @@ public sealed class RasterCogService
 
         var geoTransform = new double[6];
         source.GetGeoTransform(geoTransform);
-        if (geoTransform[1] == 0 && geoTransform[2] == 0)
+        if (RasterPlacement.IsUnplaced(geoTransform))
         {
             throw new VectorIOException("The raster carries no georeferencing (geotransform missing).");
         }

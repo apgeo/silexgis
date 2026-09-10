@@ -200,7 +200,15 @@ internal static class CaveMapping
             exact ? c.LocationNotes : null,
             c.RockTypeId, c.RockAge,
             c.SurveyedLength, c.EstimatedLength, c.RealExtension, c.ProjectedExtension,
-            c.Depth, c.PositiveDepth, c.NegativeDepth, c.PotentialDepth, c.Altitude,
+            // Altitude is a position, not a dimension, and belongs with the fields above it rather
+            // than with the lengths and depths beside it. It is the elevation of the main entrance:
+            // in karst terrain, held against a snapped point and a named region, it narrows a
+            // search from a hillside to a contour. The entrance route has always withheld it from a
+            // reader who may not place the cave exactly; the cave route handed out the same number
+            // to everyone, so asking about the cave answered what asking about its entrance would
+            // not.
+            c.Depth, c.PositiveDepth, c.NegativeDepth, c.PotentialDepth,
+            exact ? c.Altitude : null,
             c.Volume, c.Area, c.RamificationIndex, c.CaveAge,
             c.ExplorationStatus, c.ProtectionClass, c.IsShowCave, c.ShowCaveLength,
             c.DiscoveryDate, c.Discoverer, f.LocationProtected, c.EntranceCount,

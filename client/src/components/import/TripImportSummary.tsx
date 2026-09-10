@@ -17,8 +17,8 @@ interface Props {
 /**
  * The names a switch cannot deal with, split the two ways they are undecided for.
  *
- * The uncreatable ones are read off `mayCreate`, which the server states per name, and never
- * off `willCreate`. The two look alike on the setting the screen opens in and mean opposite
+ * The uncreatable ones are read off `mayCreate`, which the server states per name under the
+ * options that were sent to it, and never off `willCreate`. The two look alike on the setting the screen opens in and mean opposite
  * things: with the create switch off nothing will be created, so `willCreate` is false for every
  * name that missed — including the ordinary full names a single switch would create. Deriving
  * the list from it put those names in a red list headed by a count that did not include them,
@@ -38,9 +38,10 @@ function needingADecision(people: readonly TripImportPersonMatch[]) {
  * and "no new cavers" is a different statement from "nobody looked".
  *
  * The two decision figures are the reason this block exists at all. A name matching more than
- * one caver, and a name matching none that cannot be created — a bare initial, a lone given
- * name — both end with the person left off the trip they went on, and both are silent unless
- * something says so before the button is pressed. So the warning is a standing alert above the
+ * one caver, and a name matching none that cannot be created under the options in force —
+ * ordinarily a bare initial or a lone given name, unless the reviewer has said such names may
+ * become people — both end with the person left off the trip they went on, and both are silent
+ * unless something says so before the button is pressed. So the warning is a standing alert above the
  * table rather than a tooltip or a disabled button: a reviewer must be unable to confirm a
  * sheet believing it is fine when it is not.
  *
