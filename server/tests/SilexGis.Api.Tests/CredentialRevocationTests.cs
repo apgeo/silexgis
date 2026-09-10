@@ -105,6 +105,55 @@ public sealed class CredentialRevocationTests : IDisposable, IClassFixture<Postg
         (await SubjectAuthorizationStatusesAsync(factory, caverId)).ShouldNotContain(Statuses.Valid);
     }
 
+    /// <summary>
+    /// Locking an account stops the credentials it already holds, not only the next sign-in.
+    /// </summary>
+    /// <remarks>
+    /// The grant re-checks the account with <c>CanSignInAsync</c>, which consults the
+    /// confirmed-address and account requirements and never looks at <c>LockoutEnd</c>. So a lock
+    /// used to stop new sign-ins and nothing else, and the locked account went on renewing its own
+    /// tokens for the life of its refresh window — weeks — which makes the control
+    /// indistinguishable from never having locked the account. The lock is set directly here
+    /// because that is the same state both routes to it produce: five failed passwords, and an
+    /// administrator turning the key deliberately.
+    /// </remarks>
+    [Fact]
+    public async Task A_locked_account_can_no_longer_refresh_the_tokens_it_already_holds()
+    {
+        const string Email = "revocation-lockout@test.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, Email);
+        var device = await DeviceRefreshTokenAsync(factory, Email, AuthHelper.Password);
+
+        // The positive half: the credential works before the lock, so the refusal below is the
+        // lock refusing it rather than a flow that never worked.
+        var rotated = await RefreshAsync(factory, device);
+        rotated.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var stillLive = await RefreshTokenOf(rotated);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+            var user = await users.FindByEmailAsync(Email);
+            user.ShouldNotBeNull();
+            (await users.SetLockoutEnabledAsync(user, true)).Succeeded.ShouldBeTrue();
+            (await users.SetLockoutEndDateAsync(user, DateTimeOffset.UtcNow.AddHours(1)))
+                .Succeeded.ShouldBeTrue();
+        }
+
+        (await RefreshAsync(factory, stillLive)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        // And it comes back when the lock expires, so what was refused was refused for the lock
+        // rather than because the token had been spent by the attempt above.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<SilexGisUser>>();
+            var user = await users.FindByEmailAsync(Email);
+            (await users.SetLockoutEndDateAsync(user!, null)).Succeeded.ShouldBeTrue();
+        }
+
+        (await RefreshAsync(factory, stillLive)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
     [Fact]
     public async Task Redeemed_refresh_token_is_rejected_when_replayed()
     {
