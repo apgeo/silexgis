@@ -55,15 +55,17 @@ public sealed record TripImportCandidate(Guid Id, string Name);
 /// leaving no way to make it: settling the name means picking one of exactly these.
 /// </param>
 /// <param name="MayCreate">
-/// Whether a person could be made from this name at all — that is, whether it is a name and not a
-/// bare initial or a lone given word. Stated on its own, separately from <paramref name="WillCreate"/>,
-/// because the two answer different questions and confusing them is how a screen comes to list a
-/// perfectly creatable person among the ones nothing can be done about: with the toggle off,
+/// Whether a person could be made from this name at all, under the choices in force. Ordinarily
+/// that means it is a name and not a bare initial or a lone given word; a reviewer who has said
+/// that abbreviated names may become people has lowered that bar, and this answer moves with the
+/// choice. Stated on its own, separately from <paramref name="WillCreate"/>, because the two
+/// answer different questions and confusing them is how a screen comes to list a perfectly
+/// creatable person among the ones nothing can be done about: with the roster switch off,
 /// nothing will be created, and that says nothing about what could be.
 /// </param>
 /// <param name="WillCreate">
-/// True only when nothing matched, the toggle is on, and the name is one a person can be created
-/// from. A name that is an initial or a single word creates nobody however the toggle stands.
+/// True only when nothing matched, the roster switch is on, and the name is one a person can be
+/// created from under those same choices.
 /// </param>
 public sealed record TripImportPersonMatch(
     string Source,

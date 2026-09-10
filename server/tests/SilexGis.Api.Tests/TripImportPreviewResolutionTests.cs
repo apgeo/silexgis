@@ -282,6 +282,63 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         }
     }
 
+    /// <summary>
+    /// The same sheet read by somebody who has said their club writes people that way: the two
+    /// names stop being a decision and become people, and every figure the review renders moves
+    /// with them.
+    ///
+    /// <para>
+    /// Read on the wire rather than only in the rule, because the figures are what the reviewer
+    /// acts on and they are worked out one layer above it. A screen that went on reporting people
+    /// as impossible while the import was about to create them would be the same failure as the
+    /// one this pair of counts was added for, pointing the other way.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Allowing_abbreviated_names_moves_them_out_of_the_decisions_and_into_the_creations()
+    {
+        await SeedAsync();
+
+        var fileId = await UploadAsync("people.csv", PeopleSheet);
+        var on = (await PreviewAsync(
+                fileId, Options(createEverything: true, createAbbreviatedCavers: true)))
+            .GetProperty("proposals");
+
+        // Nobody is left that no person can be made from, and the three names nothing answered to
+        // are now three people the confirmation would add.
+        on.GetProperty("uncreatablePersonCount").GetInt32().ShouldBe(0);
+        on.GetProperty("newCaverCount").GetInt32().ShouldBe(3);
+
+        // And the part the choice deliberately does not touch. Two roster entries answer to this
+        // name; which of them was underground is a question only a person can settle, and a name
+        // being short has nothing to do with it.
+        on.GetProperty("ambiguousPersonCount").GetInt32().ShouldBe(1);
+
+        var people = on.GetProperty("people").EnumerateArray().ToList();
+        people.Count.ShouldBe(5);
+        foreach (var name in new[] { Initialled, Mononym })
+        {
+            var entry = people.Single(p => p.GetProperty("source").GetString() == name);
+            entry.GetProperty("state").GetString().ShouldBe("unmatched");
+            entry.GetProperty("mayCreate").GetBoolean().ShouldBeTrue();
+            entry.GetProperty("willCreate").GetBoolean().ShouldBeTrue();
+        }
+
+        var shared = people.Single(p => p.GetProperty("source").GetString() == Shared);
+        shared.GetProperty("state").GetString().ShouldBe("ambiguous");
+        shared.GetProperty("willCreate").GetBoolean().ShouldBeFalse();
+        shared.GetProperty("candidates").GetArrayLength().ShouldBe(2);
+
+        // The choice widens what the roster switch creates; it creates nothing by itself. With
+        // the roster switch off nobody is added, and the two names are still not reported as
+        // people nobody could be made from — because now they could.
+        var withoutTheSwitch = (await PreviewAsync(fileId, Options(createAbbreviatedCavers: true)))
+            .GetProperty("proposals");
+        withoutTheSwitch.GetProperty("newCaverCount").GetInt32().ShouldBe(0);
+        withoutTheSwitch.GetProperty("uncreatablePersonCount").GetInt32().ShouldBe(0);
+        withoutTheSwitch.GetProperty("ambiguousPersonCount").GetInt32().ShouldBe(1);
+    }
+
     // ---------- a choice picks from the list, and only from the list ----------
 
     /// <summary>
@@ -320,6 +377,63 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         var guarded = row.GetProperty("caves").EnumerateArray().ToList()[1];
         guarded.GetProperty("state").GetString().ShouldBe("unmatched");
         guarded.GetProperty("featureId").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// A sheet whose bytes are a Central European code page rather than UTF-8, read end to end:
+    /// the upload, the store, the reader and the preview. This is where that path is proved,
+    /// because the reader is the one piece of it that only exists behind a stored file.
+    /// </summary>
+    [Fact]
+    public async Task A_sheet_that_is_not_utf8_is_read_and_the_preview_says_what_it_was_read_as()
+    {
+        await SeedAsync();
+
+        var fileId = await UploadBytesAsync("codepage.csv", CodePageSheet());
+
+        // Nothing states the encoding, so it is worked out — and the answer is reported as worked
+        // out, which is the whole point: a wrong guess is invisible in the text, reading as the
+        // wrong accents rather than as an error, so a guess nobody is told about cannot be fixed.
+        var guessed = await PreviewAsync(fileId, Options());
+        guessed.GetProperty("encoding").GetString().ShouldBe("windows1250");
+        guessed.GetProperty("encodingSource").GetString().ShouldBe("guessed");
+        Items(guessed)[0].GetProperty("title").GetString().ShouldBe("Peştera Urşilor");
+
+        // And the reviewer overrules it. Western European reads the same bytes as different
+        // letters, so an override that were quietly dropped would be visible here as the title
+        // coming back unchanged.
+        var stated = await PreviewAsync(fileId, Options(encoding: "windows1252"));
+        stated.GetProperty("encoding").GetString().ShouldBe("windows1252");
+        stated.GetProperty("encodingSource").GetString().ShouldBe("stated");
+        Items(stated)[0].GetProperty("title").GetString().ShouldBe("Peºtera Urºilor");
+    }
+
+    /// <summary>
+    /// A one-row invented sheet in Windows-1250. The five substitutions are the whole of what
+    /// separates it from ASCII, written out by hand so the fixture states its own bytes rather
+    /// than asking the decoder under test to produce them.
+    /// </summary>
+    private static byte[] CodePageSheet()
+    {
+        const string text =
+            "Nr crt.,Data inceput,Titlu,Tara,Masiv/zona,Participanti,Tip\r\n"
+            + "1,5/1/2024,Peştera Urşilor,România,M. Căpăţânii,\"Ion Anghel\",pestera\r\n";
+
+        var bytes = new byte[text.Length];
+        for (var i = 0; i < text.Length; i++)
+        {
+            bytes[i] = text[i] switch
+            {
+                'ş' => 0xBA, // s with cedilla
+                'ţ' => 0xFE, // t with cedilla
+                'ă' => 0xE3, // a with breve
+                'â' => 0xE2, // a with circumflex
+                'î' => 0xEE, // i with circumflex
+                var c => (byte)c,
+            };
+        }
+
+        return bytes;
     }
 
     // ---------- helpers ----------
@@ -427,6 +541,8 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
 
     private static object Options(
         bool createEverything = false,
+        bool createAbbreviatedCavers = false,
+        string? encoding = null,
         IReadOnlyDictionary<string, Guid>? caverChoices = null,
         IReadOnlyDictionary<string, Guid>? featureChoices = null) => new
         {
@@ -434,12 +550,14 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
             multiValueSeparators = ";",
             slashSeparatedFields = Array.Empty<string>(),
             dateOrder = "dayFirst",
+            encoding,
             columns = new Dictionary<string, string>(),
             visibility = "private",
             cavingGroupId = (Guid?)null,
             createMissingCaves = createEverything,
             createMissingAreas = createEverything,
             createMissingCavers = createEverything,
+            createAbbreviatedCavers,
             createMissingTripTypes = createEverything,
             caverChoices = caverChoices ?? new Dictionary<string, Guid>(),
             featureChoices = featureChoices ?? new Dictionary<string, Guid>(),
@@ -454,9 +572,12 @@ public sealed class TripImportPreviewResolutionTests : IAsyncLifetime, IDisposab
         return JsonDocument.Parse(payload).RootElement.Clone();
     }
 
-    private async Task<Guid> UploadAsync(string fileName, string text)
+    private async Task<Guid> UploadAsync(string fileName, string text) =>
+        await UploadBytesAsync(fileName, Encoding.UTF8.GetBytes(text));
+
+    private async Task<Guid> UploadBytesAsync(string fileName, byte[] bytes)
     {
-        var content = new ByteArrayContent(Encoding.UTF8.GetBytes(text));
+        var content = new ByteArrayContent(bytes);
         content.Headers.ContentType = new("text/csv");
         using var form = new MultipartFormDataContent { { content, "file", fileName } };
         var response = await editor.PostAsync("/api/v1/files/?allowDuplicate=true", form);

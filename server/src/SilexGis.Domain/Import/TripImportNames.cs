@@ -52,18 +52,29 @@ public static class TripImportNames
     /// found by their initials as readily as by their full name. Creating is the asymmetric half,
     /// because the two mistakes are not each other's mirror. A duplicate roster entry is one
     /// merge to fix; a person invented from an initial is a row that can never be confidently
-    /// merged into anybody, because nothing in it says who it was. A club sheet naming
-    /// <c>Ion A.</c> on forty trips would otherwise leave forty half-people behind, and the next
-    /// import would leave forty more.
+    /// merged into anybody, because nothing in it says who it was.
     /// </para>
     /// <para>
-    /// The bar is two words of two letters or more. That refuses an initial in either position
-    /// and refuses a lone given name, which identifies nobody in a club that has two of them.
-    /// A name below the bar is reported unresolved and carried into the trip's own words, so the
-    /// person is still recorded as having been there — just not as a roster row nobody can place.
+    /// The ordinary bar is two words of two letters or more. That refuses an initial in either
+    /// position and refuses a lone given name, which identifies nobody in a club that has two of
+    /// them. A name below the bar is reported unresolved and carried into the trip's own words,
+    /// so the person is still recorded as having been there — just not as a roster row nobody
+    /// can place.
+    /// </para>
+    /// <para>
+    /// <paramref name="allowAbbreviated"/> lowers that bar to any name at all, and exists because
+    /// whole clubs write their sheets in exactly the refused form — a given name and an initial,
+    /// or a given name alone. For those sheets the strict bar does not protect a roster, it
+    /// prevents one: nearly every person on every trip is refused, and the import records a
+    /// history with almost nobody in it. Lowering the bar is a decision about one club's sheet
+    /// and belongs to whoever is reading it, so it is a choice made per import and off unless it
+    /// is made. It lowers the bar for both refused shapes at once, because they are one question:
+    /// a club that writes <c>Given I.</c> writes <c>Given</c> on the next line. What it never
+    /// touches is a name that answers to more than one person already here — that is ambiguity
+    /// between real people, settled by saying which, and a short name is not the same thing.
     /// </para>
     /// </summary>
-    public static bool MayCreatePerson(string? value)
+    public static bool MayCreatePerson(string? value, bool allowAbbreviated)
     {
         var key = Key(value);
         if (key.Length == 0)
@@ -79,6 +90,13 @@ public static class TripImportNames
             {
                 words++;
             }
+        }
+
+        // Something was written and it is not only punctuation: below the ordinary bar, but a
+        // person the reviewer has said may be made.
+        if (allowAbbreviated)
+        {
+            return key.Any(char.IsLetterOrDigit);
         }
 
         return words >= 2;

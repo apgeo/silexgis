@@ -260,6 +260,12 @@ public sealed class TripImportResolver(SilexGisDbContext db, FeatureProtection p
         };
     }
 
+    /// <summary>
+    /// What one name the sheet wrote was taken for. The looking-up happens here, against what
+    /// this caller may be told about; what the answer means is decided in one place beside the
+    /// rule it applies, so the row, the headline count and the warning above the table cannot
+    /// come to say different things about the same person.
+    /// </summary>
     private static TripImportPersonMatch? MatchPerson(
         string? source, NameIndex<Guid> index, TripImportOptions options)
     {
@@ -269,55 +275,7 @@ public sealed class TripImportResolver(SilexGisDbContext db, FeatureProtection p
             return null;
         }
 
-        var hits = index.Lookup(text);
-        var candidates = Candidates(hits);
-        var createMissing = options.CreateMissingCavers;
-
-        // Asked once, here, and carried on the match. The screen that warns about the people an
-        // import cannot make needs the same answer this does, and a second version of the rule
-        // living in the browser is how that warning came to name people it could perfectly well
-        // have made.
-        var mayCreate = TripImportNames.MayCreatePerson(text);
-
-        // The same rule as for a place: a choice picks one of the people this name answered to,
-        // and a choice naming anybody else is no choice at all.
-        if (options.ChosenCaverId(text) is { } chosen && hits.Any(h => h.Key == chosen))
-        {
-            return new TripImportPersonMatch(
-                text,
-                TripImportMatchState.Matched,
-                chosen,
-                hits.First(h => h.Key == chosen).Name,
-                candidates,
-                mayCreate,
-                false);
-        }
-
-        if (hits.Count == 1)
-        {
-            return new TripImportPersonMatch(
-                text, TripImportMatchState.Matched, hits[0].Key, hits[0].Name, candidates, mayCreate, false);
-        }
-
-        if (hits.Count > 1)
-        {
-            // Two people share a name — the state the roster's merge exists to resolve — so the
-            // row waits for somebody to say which. The rule that resolves a typed name to the
-            // oldest of them is right at a keyboard, where the person typing knows who they
-            // mean, and wrong here, where nobody is watching and the wrong answer becomes a
-            // claim about who was underground on a day in 2014.
-            return new TripImportPersonMatch(
-                text, TripImportMatchState.Ambiguous, null, null, candidates, mayCreate, false);
-        }
-
-        return new TripImportPersonMatch(
-            text,
-            TripImportMatchState.Unmatched,
-            null,
-            null,
-            candidates,
-            mayCreate,
-            createMissing && mayCreate);
+        return TripImportPeople.Match(text, Candidates(index.Lookup(text)), options);
     }
 
     /// <summary>

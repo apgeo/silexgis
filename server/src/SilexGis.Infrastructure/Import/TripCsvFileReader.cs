@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-using System.Text;
 using Microsoft.Extensions.Options;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
@@ -44,13 +43,19 @@ public sealed class TripCsvFileReader(IFileStore files, IOptions<ImportLimitOpti
     public static long MaxBytesFor(int maxScanRows) => Math.Max(4L * 1024 * 1024, maxScanRows * 512L);
 
     /// <summary>
-    /// The file as text. UTF-8, with a byte-order mark honoured where the file carries one, which
-    /// is what a spreadsheet writes. Bytes that are not valid UTF-8 decode to the replacement
-    /// character rather than throwing: a sheet saved in an older code page still reads, its
-    /// diacritics visibly wrong to the reviewer instead of the whole import failing on the first
-    /// row — and every name in it is matched folded, which strips the diacritics anyway.
+    /// The file as text, with the encoding it was read under and what settled that.
+    ///
+    /// <para>
+    /// A spreadsheet states nothing trustworthy about its encoding, and a club archive that runs
+    /// back far enough holds sheets written on tools that saved a Central European code page. Read
+    /// as UTF-8 regardless, those do not fail loudly: every accented letter becomes a replacement
+    /// character and the reviewer reads a page of names with the diacritics eaten. So the bytes are
+    /// read, the encoding is worked out from them, and the answer is reported so it can be
+    /// overruled — which is what <see cref="TripImportOptions.Encoding"/> does when it is set.
+    /// </para>
     /// </summary>
-    public async Task<string> ReadTextAsync(StoredFile file, CancellationToken ct)
+    public async Task<TripCsvDecodedText> ReadTextAsync(
+        StoredFile file, TripImportOptions options, CancellationToken ct)
     {
         var ceiling = MaxBytesFor(limits.Value.MaxScanRows);
         if (file.SizeBytes > ceiling)
@@ -60,24 +65,58 @@ public sealed class TripCsvFileReader(IFileStore files, IOptions<ImportLimitOpti
                 $"The upload is larger than {ceiling / (1024 * 1024)} MB, which is more than one review reads.");
         }
 
+        byte[] bytes;
         try
         {
             await using var stream = await files.OpenReadAsync(file.StoragePath, ct);
-            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-            return await reader.ReadToEndAsync(ct);
+            bytes = await ReadBoundedAsync(stream, ceiling, ct);
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException or IOException)
         {
             throw new TripCsvReadException(
                 TripCsvReadException.MissingCode, "The uploaded file could not be read.");
         }
+
+        return TripCsvEncodings.Decode(bytes, options.Encoding);
     }
 
     /// <summary>The sheet, read under the choices made so far.</summary>
     public async Task<TripCsvParseResult> ParseAsync(
         StoredFile file, TripImportOptions options, CancellationToken ct)
     {
-        var text = await ReadTextAsync(file, ct);
-        return TripCsvParser.Parse(text, options.ToParserOptions(), options.ToMapping());
+        var decoded = await ReadTextAsync(file, options, ct);
+        var parsed = TripCsvParser.Parse(decoded.Text, options.ToParserOptions(), options.ToMapping());
+        return parsed with { Encoding = decoded.Encoding, EncodingSource = decoded.Source };
+    }
+
+    /// <summary>
+    /// The stream's bytes, refusing anything past the ceiling.
+    /// </summary>
+    /// <remarks>
+    /// The recorded size was already checked, but that is metadata: it is what the upload said it
+    /// was, and the read itself is what has to be bounded. One byte past the ceiling is enough to
+    /// tell that the stream is longer than it may be, so the buffer is a byte larger than the
+    /// limit and a full one is the refusal.
+    /// </remarks>
+    private static async Task<byte[]> ReadBoundedAsync(Stream stream, long ceiling, CancellationToken ct)
+    {
+        var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        long total = 0;
+        int read;
+        while ((read = await stream.ReadAsync(chunk, ct)) > 0)
+        {
+            total += read;
+            if (total > ceiling)
+            {
+                throw new TripCsvReadException(
+                    TripCsvReadException.TooLargeCode,
+                    $"The upload is larger than {ceiling / (1024 * 1024)} MB, which is more than one review reads.");
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        return buffer.ToArray();
     }
 }

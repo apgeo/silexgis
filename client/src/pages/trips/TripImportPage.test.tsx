@@ -128,6 +128,11 @@ const preview: TripImportPreview = {
   dateOrder: 'monthFirst',
   dateOrderSource: 'file',
   ambiguousDateRows: 0,
+  // The sheet's bytes were not UTF-8 and nothing in the file said so, so the encoding was
+  // guessed at. Nothing in the decoded text reveals a wrong guess — it reads as the wrong
+  // accents rather than as an error — which is why the screen has to say a guess was made.
+  encoding: 'windows1250',
+  encodingSource: 'guessed',
   problems: [],
   proposals: {
     tripTypes: [
@@ -361,6 +366,61 @@ describe('TripImportPage', () => {
     const control = await screen.findByTestId('trip-import-date-order');
     expect(control.textContent).toContain('Month first');
     expect(screen.getByTestId('trip-import-date-order-fixed')).toBeTruthy();
+  });
+
+  it('says which encoding the sheet was read under when nothing in the file settled it', async () => {
+    show();
+
+    const source = await screen.findByTestId('trip-import-encoding-source');
+    expect(source.textContent).toContain('Guessed from the accented bytes');
+    expect(source.textContent).toContain('Windows-1250');
+
+    // No override is stored, so the control shows the encoding the bytes were actually read
+    // under rather than "work it out" — otherwise the reviewer has no way to tell what to
+    // change it *from*.
+    const control = await screen.findByTestId('trip-import-encoding');
+    expect(control.textContent).toContain('Windows-1250');
+  });
+
+  it('will not let abbreviated names be widened while the roster switch is off', async () => {
+    show();
+
+    // The switches live behind their own section of the panel.
+    fireEvent.click(await screen.findByText('What may be created'));
+
+    // The widening switch creates nobody on its own — it only says which names the roster
+    // switch may create from. Usable with the roster switch off, ticking it moved the figures
+    // the reviewer reads without creating anybody: the short names stopped counting as ones
+    // nobody can be made from, nothing took their place among the people who would be created,
+    // and the standing warning went out over a sheet where all of them were still dropped.
+    const widenBox = (await screen.findByTestId(
+      'trip-import-create-abbreviated-cavers',
+    )) as HTMLInputElement;
+    expect(widenBox.disabled).toBe(true);
+
+    const roster = screen.getByTestId('trip-import-create-cavers') as HTMLInputElement;
+    fireEvent.click(roster);
+    await waitFor(() => expect(widenBox.disabled).toBe(false));
+    fireEvent.click(widenBox);
+    await waitFor(() => expect(widenBox.checked).toBe(true));
+
+    // And the state cannot be reached by the back door either: taking the roster switch off
+    // again takes the widening one with it rather than leaving it set and inert.
+    fireEvent.click(roster);
+    await waitFor(() => expect(widenBox.checked).toBe(false));
+    expect(widenBox.disabled).toBe(true);
+
+    await waitFor(
+      () => {
+        const last = saveSessionMutate.mock.calls.at(-1)?.[0].body.options;
+        expect(last.createMissingCavers).toBe(false);
+        expect(last.createAbbreviatedCavers).toBe(false);
+      },
+      // The autosave is debounced by 800ms on purpose, so this wait has to outlast it by a clear
+      // margin — the default one-second budget is close enough to the debounce that the test
+      // passes alone and fails under a loaded suite.
+      { timeout: 5000 },
+    );
   });
 
   it('will not write a second batch of the same trips after a confirmation', async () => {

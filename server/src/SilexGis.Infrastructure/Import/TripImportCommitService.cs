@@ -454,7 +454,8 @@ public sealed class TripImportCommitService(
     /// <summary>
     /// The people of one list, as the roster reconciliation wants them. A name that matched is
     /// sent as the person it matched; a name a switch says to create is sent as a name; and
-    /// everything else, ambiguous or too little of a name to make a person out of, is sent as
+    /// everything else, ambiguous or too little of a name to make a person out of under the
+    /// choices this import was reviewed under, is sent as
     /// nothing at all, because the reconciliation resolves a repeated name to the oldest person
     /// who holds it. That is the right answer at a keyboard, where somebody knows who they mean,
     /// and the wrong one here, where the guess becomes a claim about who was underground on a day

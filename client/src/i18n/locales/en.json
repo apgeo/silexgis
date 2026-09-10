@@ -4000,6 +4000,24 @@
       "file": "The file itself",
       "conflict": "The file disagrees with itself"
     },
+    "encoding": "Character encoding",
+    "encodingHint": "A sheet states nothing trustworthy about its encoding, so it is worked out from the bytes. An older code page read as UTF-8 loses every diacritic, so the answer is shown here and can be overruled.",
+    "encodingDetect": "Work it out from the file",
+    "encodingSettled": "What settled the encoding",
+    "encodings": {
+      "utf8": "UTF-8",
+      "utf16Le": "UTF-16, little-endian",
+      "utf16Be": "UTF-16, big-endian",
+      "windows1250": "Windows-1250, Central European",
+      "iso88592": "ISO-8859-2, Latin-2",
+      "windows1252": "Windows-1252, Western European"
+    },
+    "encodingSources": {
+      "stated": "Your choice",
+      "mark": "A mark at the head of the file",
+      "utf8": "The bytes are valid UTF-8",
+      "guessed": "Guessed from the accented bytes"
+    },
     "delimiter": "Column separator",
     "delimiterHint": "One character. It is pinned rather than guessed: a free-text column full of semicolons otherwise flips the whole reading.",
     "separators": "Separators inside a cell",
@@ -4028,6 +4046,8 @@
     "createCaves": "Create caves this sheet names but the register lacks",
     "createAreas": "Create massifs and sub-areas the register lacks",
     "createCavers": "Create cavers the roster lacks",
+    "createAbbreviatedCavers": "Create cavers from abbreviated names too",
+    "createAbbreviatedCaversHint": "A name like “Ion B.”, or a given name on its own, becomes a caver like any other. Turn this on for a sheet written that way throughout — otherwise almost nobody on it can be created. Expect duplicates: they are joined afterwards from the roster.",
     "createTripTypes": "Create trip types the vocabulary lacks",
     "audienceHint": "Chosen once and applied to every row. It starts at the most restrictive value: an import is a bulk act, and a bulk act that publishes by default publishes a club's whole history at once.",
     "visibility": "Who may read these trips",
@@ -4040,7 +4060,7 @@
     "peopleNeedingADecision": "People needing a decision",
     "placesNeedingADecision": "Places needing a decision",
     "peopleWarningTitle": "{{ambiguous}} names match more than one caver, and {{uncreatable}} cannot be created",
-    "peopleWarningBody": "A name matching several people is never guessed at, and a bare initial or a lone given name creates nobody — a person invented from one of those could never be confidently joined to the right caver later. Left as they are, these names are kept in the trip's own text and the people are not on the roster of the trips they went on.",
+    "peopleWarningBody": "A name matching several people is never guessed at — say which one is meant. A name too short to place, a bare initial or a lone given name, creates nobody unless you allow it under what may be created: a person invented from one of those could never be confidently joined to the right caver later. Left as they are, these names are kept in the trip’s own text and the people are not on the roster of the trips they went on.",
     "placesWarningTitle": "{{count}} place names match more than one record",
     "columns": {
       "take": "Take",

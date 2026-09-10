@@ -4000,6 +4000,24 @@
       "file": "Fișierul însuși",
       "conflict": "Fișierul se contrazice"
     },
+    "encoding": "Codificarea caracterelor",
+    "encodingHint": "Un tabel nu declară nimic de încredere despre codificarea sa, așa că este dedusă din octeți. O pagină de cod veche citită ca UTF-8 pierde toate diacriticele, așa că răspunsul este arătat aici și poate fi schimbat.",
+    "encodingDetect": "Dedu din fișier",
+    "encodingSettled": "Ce a stabilit codificarea",
+    "encodings": {
+      "utf8": "UTF-8",
+      "utf16Le": "UTF-16, little-endian",
+      "utf16Be": "UTF-16, big-endian",
+      "windows1250": "Windows-1250, Europa Centrală",
+      "iso88592": "ISO-8859-2, Latin-2",
+      "windows1252": "Windows-1252, Europa de Vest"
+    },
+    "encodingSources": {
+      "stated": "Alegerea ta",
+      "mark": "O marcă la începutul fișierului",
+      "utf8": "Octeții sunt UTF-8 valid",
+      "guessed": "Dedusă din octeții cu diacritice"
+    },
     "delimiter": "Separatorul de coloane",
     "delimiterHint": "Un singur caracter. Este fixat, nu ghicit: altfel o coloană de text plină de punct și virgulă răstoarnă toată citirea.",
     "separators": "Separatori în interiorul unei celule",
@@ -4028,6 +4046,8 @@
     "createCaves": "Creează peșterile pe care tabelul le numește, dar registrul nu le are",
     "createAreas": "Creează masivele și subzonele pe care registrul nu le are",
     "createCavers": "Creează speologii pe care lista nu îi are",
+    "createAbbreviatedCavers": "Creează speologi și din nume prescurtate",
+    "createAbbreviatedCaversHint": "Un nume ca „Ion B.” sau un prenume singur devine speolog ca oricare altul. Pornește-l pentru un tabel scris așa peste tot — altfel aproape nimeni din el nu poate fi creat. Vor apărea duplicate: se unesc apoi din lista de speologi.",
     "createTripTypes": "Creează tipurile de tură pe care vocabularul nu le are",
     "audienceHint": "Aleasă o dată și aplicată fiecărui rând. Pornește de la valoarea cea mai restrânsă: un import este un act în masă, iar un act în masă care publică implicit publică dintr-odată toată istoria unui club.",
     "visibility": "Cine poate citi aceste ture",
@@ -4040,7 +4060,7 @@
     "peopleNeedingADecision": "Persoane care cer o decizie",
     "placesNeedingADecision": "Locuri care cer o decizie",
     "peopleWarningTitle": "{{ambiguous}} nume se potrivesc cu mai mulți speologi, iar {{uncreatable}} nu pot fi create",
-    "peopleWarningBody": "Un nume care se potrivește cu mai multe persoane nu este niciodată ghicit, iar o inițială singură sau un singur prenume nu creează pe nimeni — o persoană inventată astfel nu ar mai putea fi legată cu certitudine de speologul potrivit. Lăsate așa, aceste nume rămân în textul turei, iar oamenii nu apar pe lista turelor la care au fost.",
+    "peopleWarningBody": "Un nume care se potrivește cu mai multe persoane nu este niciodată ghicit — spune care este cel potrivit. Un nume prea scurt ca să identifice pe cineva, o inițială singură sau un singur prenume, nu creează pe nimeni decât dacă îl permiți la ce poate fi creat: o persoană inventată astfel nu ar mai putea fi legată cu certitudine de speologul potrivit. Lăsate așa, aceste nume rămân în textul turei, iar oamenii nu apar pe lista turelor la care au fost.",
     "placesWarningTitle": "{{count}} nume de locuri se potrivesc cu mai multe înregistrări",
     "columns": {
       "take": "Ia",

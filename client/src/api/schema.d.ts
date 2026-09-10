@@ -22850,6 +22850,10 @@ export interface components {
         /** @enum {unknown} */
         TripCsvDiagnosticCode: "mappedColumnMissing" | "mappedColumnTaken" | "unmappedColumn" | "raggedRow" | "blankRow" | "requiredFieldEmpty" | "dateUnreadable" | "dateOutOfRange" | "dateTwoDigitYear" | "dateAmbiguous" | "dateOrderConflict" | "valueDropped" | "duplicateSourceId" | "tooManyColumns" | "noHeader" | "unterminatedQuote";
         /** @enum {unknown} */
+        TripCsvEncoding: "utf8" | "utf16Le" | "utf16Be" | "windows1250" | "iso88592" | "windows1252" | null;
+        /** @enum {unknown} */
+        TripCsvEncodingSource: "stated" | "mark" | "utf8" | "guessed";
+        /** @enum {unknown} */
         TripCsvField: "sourceId" | "startDate" | "endDate" | "title" | "country" | "massif" | "subArea" | "caves" | "proposers" | "participants" | "details" | "details2" | "tripType" | "errors";
         /** @enum {unknown} */
         TripCsvSeverity: "warning" | "error";
@@ -22887,6 +22891,8 @@ export interface components {
                 [key: string]: string;
             };
             unmappedColumns: string[];
+            encoding: components["schemas"]["TripCsvEncoding"];
+            encodingSource: components["schemas"]["TripCsvEncodingSource"];
             problems: components["schemas"]["TripImportProblemDto"][];
         };
         TripImportCommitRequest: {
@@ -22933,6 +22939,7 @@ export interface components {
             multiValueSeparators?: string;
             slashSeparatedFields?: components["schemas"]["TripCsvField"][];
             dateOrder?: components["schemas"]["TripCsvDateOrder"];
+            encoding?: null | components["schemas"]["TripCsvEncoding"];
             columns?: {
                 [key: string]: string;
             };
@@ -22942,6 +22949,7 @@ export interface components {
             createMissingCaves?: boolean;
             createMissingAreas?: boolean;
             createMissingCavers?: boolean;
+            createAbbreviatedCavers?: boolean;
             createMissingTripTypes?: boolean;
             tripTypeChoices?: {
                 [key: string]: number;
@@ -22990,6 +22998,8 @@ export interface components {
                 [key: string]: string;
             };
             unmappedColumns: string[];
+            encoding: components["schemas"]["TripCsvEncoding"];
+            encodingSource: components["schemas"]["TripCsvEncodingSource"];
             dateOrder: components["schemas"]["TripCsvDateOrder"];
             dateOrderSource: components["schemas"]["TripCsvDateOrderSource"];
             /** Format: int32 */

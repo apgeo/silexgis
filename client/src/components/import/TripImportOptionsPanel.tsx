@@ -5,6 +5,8 @@ import {
   useCavingGroups,
   type TripCsvDateOrder,
   type TripCsvDateOrderSource,
+  type TripCsvEncoding,
+  type TripCsvEncodingSource,
   type TripCsvField,
   type TripImportOptions,
 } from '../../api/hooks.ts';
@@ -27,6 +29,23 @@ const FIELDS: readonly TripCsvField[] = [
   'errors',
 ];
 
+/**
+ * The encodings a sheet may be read under, in the order somebody scanning the list would look
+ * for them: what anything current writes, then the two code pages a Central European archive is
+ * actually saved in, then the rest.
+ */
+const ENCODINGS: readonly TripCsvEncoding[] = [
+  'utf8',
+  'windows1250',
+  'iso88592',
+  'windows1252',
+  'utf16Le',
+  'utf16Be',
+];
+
+/** The list value standing for "no override" — the encoding is worked out from the bytes. */
+const DETECT = 'detect';
+
 /** Columns whose values are lists, and so the only ones a slash may usefully split. */
 const LIST_FIELDS: readonly TripCsvField[] = ['caves', 'proposers', 'participants'];
 
@@ -44,6 +63,9 @@ interface Props {
    */
   effectiveDateOrder?: TripCsvDateOrder;
   ambiguousDateRows: number;
+  /** The character encoding the bytes were actually read under, and what settled that. */
+  encoding?: TripCsvEncoding;
+  encodingSource?: TripCsvEncodingSource;
   /** Header names the mapping claims that the sheet does not carry — a mapping about to yield nothing. */
   unmappedColumns: readonly string[];
 }
@@ -66,6 +88,8 @@ export default function TripImportOptionsPanel({
   dateOrderSource,
   effectiveDateOrder,
   ambiguousDateRows,
+  encoding,
+  encodingSource,
   unmappedColumns,
 }: Props) {
   const { t } = useTranslation();
@@ -80,6 +104,12 @@ export default function TripImportOptionsPanel({
   const shownDateOrder = settledByFile
     ? (effectiveDateOrder ?? options.dateOrder ?? 'dayFirst')
     : (options.dateOrder ?? 'dayFirst');
+
+  // Same reasoning as the day/month order above: the control shows the encoding the bytes were
+  // actually read under rather than an empty box, because a reviewer about to change it needs to
+  // see what they are changing it from. It falls back to "work it out" only before the file has
+  // been read at all, which is the one moment when there is no answer yet.
+  const shownEncoding = options.encoding ?? encoding ?? DETECT;
 
   const set = <K extends keyof TripImportOptions>(key: K, value: TripImportOptions[K]) =>
     onChange({ ...options, [key]: value });
@@ -149,6 +179,50 @@ export default function TripImportOptionsPanel({
                       <Typography.Text type="secondary">
                         {t('tripImport.dateOrderRidesOn', { count: ambiguousDateRows })}
                       </Typography.Text>
+                    </div>
+                  </Form.Item>
+                </Col>
+                <Col xs={24}>
+                  {/* Said before the control for the same reason the date order's hint is: a
+                      sheet read under the wrong code page is not an error anybody sees, it is a
+                      page of names with the diacritics quietly replaced. */}
+                  <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+                    {t('tripImport.encodingHint')}
+                  </Typography.Paragraph>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label={t('tripImport.encoding')} style={{ marginBottom: 8 }}>
+                    <Select
+                      value={shownEncoding}
+                      onChange={(value) =>
+                        set('encoding', value === DETECT ? undefined : (value as TripCsvEncoding))
+                      }
+                      data-testid="trip-import-encoding"
+                      options={[
+                        { value: DETECT, label: t('tripImport.encodingDetect') },
+                        ...ENCODINGS.map((name) => ({
+                          value: name,
+                          label: t(`tripImport.encodings.${name}`),
+                        })),
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label={t('tripImport.encodingSettled')} style={{ marginBottom: 8 }}>
+                    <div data-testid="trip-import-encoding-source">
+                      {/* A guess is the one answer worth colouring: it is the case where the
+                          reading may be wrong and nothing in the text will say so. */}
+                      <Tag color={encodingSource === 'guessed' ? 'orange' : undefined}>
+                        {encodingSource
+                          ? t(`tripImport.encodingSources.${encodingSource}`)
+                          : t('tripImport.encodingSources.utf8')}
+                      </Tag>
+                      {encoding && (
+                        <Typography.Text type="secondary">
+                          {t(`tripImport.encodings.${encoding}`)}
+                        </Typography.Text>
+                      )}
                     </div>
                   </Form.Item>
                 </Col>
@@ -280,11 +354,45 @@ export default function TripImportOptionsPanel({
                 <Col xs={24} md={12}>
                   <Checkbox
                     checked={options.createMissingCavers ?? false}
-                    onChange={(e) => set('createMissingCavers', e.target.checked)}
+                    onChange={(e) =>
+                      onChange({
+                        ...options,
+                        createMissingCavers: e.target.checked,
+
+                        // Turning the roster switch off takes the widening one with it. Left
+                        // standing it would widen nothing, while still moving the figures the
+                        // reviewer reads: the short names stop counting as ones nobody can be
+                        // made from, nothing takes their place in the count of people who would
+                        // be created, and the standing warning goes out on a sheet where every
+                        // one of those people is still dropped from the trip they went on.
+                        createAbbreviatedCavers: e.target.checked
+                          ? (options.createAbbreviatedCavers ?? false)
+                          : false,
+                      })
+                    }
                     data-testid="trip-import-create-cavers"
                   >
                     {t('tripImport.createCavers')}
                   </Checkbox>
+                  {/* Under the roster switch rather than beside it, and unusable without it,
+                      because it widens what that switch creates rather than creating anything
+                      itself. */}
+                  <div style={{ marginTop: 8, marginInlineStart: 24 }}>
+                    <Checkbox
+                      checked={options.createAbbreviatedCavers ?? false}
+                      disabled={!(options.createMissingCavers ?? false)}
+                      onChange={(e) => set('createAbbreviatedCavers', e.target.checked)}
+                      data-testid="trip-import-create-abbreviated-cavers"
+                    >
+                      {t('tripImport.createAbbreviatedCavers')}
+                    </Checkbox>
+                    <Typography.Paragraph
+                      type="secondary"
+                      style={{ marginTop: 4, marginBottom: 0 }}
+                    >
+                      {t('tripImport.createAbbreviatedCaversHint')}
+                    </Typography.Paragraph>
+                  </div>
                 </Col>
                 <Col xs={24} md={12}>
                   <Checkbox

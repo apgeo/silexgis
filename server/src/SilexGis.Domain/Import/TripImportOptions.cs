@@ -35,7 +35,7 @@ public sealed record TripImportDecision
 /// be asking a thousand times for one answer.
 /// </para>
 /// <para>
-/// The three creation switches are off by default and each one covers only what did *not* match:
+/// The creation switches are off by default and each one covers only what did *not* match:
 /// matching against what the installation already holds happens either way. A switch that is off
 /// does not lose the text — the unmatched name is carried into the trip's own words instead.
 /// </para>
@@ -57,6 +57,19 @@ public sealed record TripImportOptions
 
     /// <summary>The day/month order to read numeric dates in where the file itself cannot settle it.</summary>
     public TripCsvDateOrder DateOrder { get; init; } = TripCsvDateOrder.DayFirst;
+
+    /// <summary>
+    /// The character encoding to read the file's bytes under, where the reviewer overrules the
+    /// one that was detected. Absent — the usual case — means the encoding is worked out from
+    /// the bytes, and which one was chosen is reported back alongside the rows.
+    /// </summary>
+    /// <remarks>
+    /// It has to be an option rather than a one-off answer to the preview, because the header,
+    /// the dry run and the confirmation each read the file again from scratch. An override the
+    /// confirmation did not see would commit a sheet decoded differently from the one that was
+    /// approved.
+    /// </remarks>
+    public TripCsvEncoding? Encoding { get; init; }
 
     /// <summary>
     /// Header names chosen by hand, by field. A field absent here is detected from the built-in
@@ -83,6 +96,28 @@ public sealed record TripImportOptions
 
     /// <summary>An unmatched participant becomes a roster entry rather than only text.</summary>
     public bool CreateMissingCavers { get; init; }
+
+    /// <summary>
+    /// Whether an abbreviated participant name — a given name with an initial, or a given name on
+    /// its own — is a name a person may be made from, rather than one that is only reported.
+    ///
+    /// <para>
+    /// Off, and a name below that bar creates nobody however the roster switch stands: the reason
+    /// is that a merge cannot be undone and a row invented from an initial says nothing about who
+    /// it was, so nobody can ever confidently merge it. On, such a name becomes a caver like any
+    /// other and the duplicates that follow are the roster merge's ordinary work — which is the
+    /// right trade for a club whose sheet is written that way throughout, because the strict bar
+    /// refuses nearly everybody on it and the import records a history with no people in it.
+    /// </para>
+    /// <para>
+    /// It is one switch for both shapes because they are one question. It changes nothing about a
+    /// name that answers to more than one person already here: that waits for somebody to say
+    /// which, whatever this says. And it creates nothing on its own — it widens what the roster
+    /// switch beside it creates, and with that switch off it only changes what the review reports
+    /// as impossible.
+    /// </para>
+    /// </summary>
+    public bool CreateAbbreviatedCavers { get; init; }
 
     /// <summary>An unmatched value of the type column may be offered as a new trip type.</summary>
     ///

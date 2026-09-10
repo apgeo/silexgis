@@ -25,6 +25,8 @@ import type {
   TerrainBuildStatus,
   TripCsvDateOrderSource,
   TripCsvDiagnosticCode,
+  TripCsvEncoding,
+  TripCsvEncodingSource,
   TripCsvField,
   SurveyModelInfo,
 } from '../api/hooks.ts';
@@ -783,13 +785,13 @@ describe('i18n locales', () => {
   });
 
   /**
-   * The import wizard builds three of its key names from a value the server sent, so the scan
+   * The import wizard builds five of its key names from a value the server sent, so the scan
    * that reads literal keys out of the source cannot see them. A word the server adds to any
-   * of these three vocabularies therefore fails to compile here until it has been named in
-   * both languages — which is the only thing standing between a new diagnostic code and a
-   * reviewer reading the raw enum name off the screen.
+   * of these five vocabularies therefore fails to compile here until it has been named in
+   * both languages — which is the only thing standing between a new diagnostic code, or a
+   * seventh code page, and a reviewer reading the raw enum name off the screen.
    */
-  it('names every part of a sheet, every reason a row was refused, and every way a date order was settled', () => {
+  it('names every part of a sheet, every reason a row was refused, and every way a date order or an encoding was settled', () => {
     const fields: Record<TripCsvField, true> = {
       sourceId: true,
       startDate: true,
@@ -826,11 +828,30 @@ describe('i18n locales', () => {
     };
     const sources: Record<TripCsvDateOrderSource, true> = { stated: true, file: true, conflict: true };
 
+    // The generated union carries null for "no override was stated", which is not a word
+    // anything renders, so the exhaustive map is keyed off the encodings themselves.
+    const encodings: Record<NonNullable<TripCsvEncoding>, true> = {
+      utf8: true,
+      utf16Le: true,
+      utf16Be: true,
+      windows1250: true,
+      iso88592: true,
+      windows1252: true,
+    };
+    const encodingSources: Record<TripCsvEncodingSource, true> = {
+      stated: true,
+      mark: true,
+      utf8: true,
+      guessed: true,
+    };
+
     const missing = (
       [
         ['fields', Object.keys(fields)],
         ['problems', Object.keys(problems)],
         ['dateOrderSources', Object.keys(sources)],
+        ['encodings', Object.keys(encodings)],
+        ['encodingSources', Object.keys(encodingSources)],
       ] as const
     ).flatMap(([group, names]) =>
       names.flatMap((name) =>
@@ -848,6 +869,10 @@ describe('i18n locales', () => {
     // nothing will ever show, and the only way anybody finds it is a test like this one.
     expect(Object.keys(en.tripImport.problems).sort()).toEqual(Object.keys(problems).sort());
     expect(Object.keys(en.tripImport.fields).sort()).toEqual(Object.keys(fields).sort());
+    expect(Object.keys(en.tripImport.encodings).sort()).toEqual(Object.keys(encodings).sort());
+    expect(Object.keys(en.tripImport.encodingSources).sort()).toEqual(
+      Object.keys(encodingSources).sort(),
+    );
   });
 
   it('names every numbered division a content hit can carry, and no more', () => {

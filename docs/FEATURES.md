@@ -207,6 +207,17 @@ feature and walkthroughs of whole jobs.
   Where a trip counts into more than one bar — it went to two areas, it had four people — the page
   says so, and where there are more names than bars it says how many it is showing out of how many
   there are.
+- **Years of trips typed up in a spreadsheet become trips** — the club's centralizator is uploaded
+  and read on a review screen, not imported blind: every row says what it would create, which people
+  and caves it matched, and what it could not settle, and nothing is written until you confirm.
+  Sheets saved years ago on the machines of the day are not assumed to be modern text — where the
+  file turns out to be written in an older code page the diacritics are recovered rather than turned
+  into question marks, and the screen says which reading it used and lets you choose another if it
+  guessed wrong. Sheets that name people the way clubs really do — a given name and an initial, or a
+  given name alone — can be imported too: that stays switched off, because inventing a person you
+  cannot later be sure of is not undone easily, and while it is off such names are counted and shown
+  as ones nobody can be made from rather than dropped quietly. A name two people on your roster
+  already answer to is never guessed at either way; it waits for somebody to say which.
 - **A trip that has not happened yet asks people, and the answers keep their own order** — a trip's
   page has a list of who was asked and what each of them said: coming, not coming, or not answered
   yet, with a line of their own beside it. Whoever may read the trip answers for themselves; whoever

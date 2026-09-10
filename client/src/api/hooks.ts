@@ -5117,6 +5117,8 @@ export type TripImportCommitResult = components['schemas']['TripImportCommitResu
 export type TripCsvField = components['schemas']['TripCsvField'];
 export type TripCsvDateOrder = components['schemas']['TripCsvDateOrder'];
 export type TripCsvDateOrderSource = components['schemas']['TripCsvDateOrderSource'];
+export type TripCsvEncoding = components['schemas']['TripCsvEncoding'];
+export type TripCsvEncodingSource = components['schemas']['TripCsvEncodingSource'];
 export type TripCsvDiagnosticCode = components['schemas']['TripCsvDiagnosticCode'];
 
 /**
