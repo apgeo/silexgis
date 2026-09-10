@@ -1,15 +1,11 @@
 # SilexGIS
 
 Web application for storage, viewing and editing of cave / karst topographic, geographic
-and other associated data. Built for caving clubs, researchers and individuals to self-host.
+and other associated data. Built for caving clubs, exploration groups, researchers and individuals to self-host. Independent, anonymous by design, secure, data and infrastructure are in your full control like on a desktop application (no central website / server). 
 
 **v2 (2026):** full rebuild on a modern stack —
 ASP.NET Core minimal API (.NET, LTS) · PostgreSQL/PostGIS · EF Core + NetTopologySuite ·
 React + TypeScript · Ant Design · OpenLayers · Docker-first deployment.
-
-Previous versions:
-- **v1** (PHP/MySQL/OpenLayers 3) — live at [speosilex.ro/silexgis](https://speosilex.ro/silexgis/en/index.php)
-- **v1.2** (2022, React/Laravel, partial) — archived on the [`v2-archive`](../../tree/v2-archive) branch
 
 ## Try it
 
@@ -32,6 +28,10 @@ exploring. Running a test installation of your own is described in
 **[docs/user-guide/](docs/user-guide/README.md)** — what the application is, the workflows,
 and a page per feature. In English and **[română](docs/user-guide/ro/README.md)**, page for page.
 The list below is the summary; **[docs/FEATURES.md](docs/FEATURES.md)** is the same list in full.
+
+Previous versions:
+- **v1** (PHP/MySQL/OpenLayers 3) — live at [speosilex.ro/silexgis](https://speosilex.ro/silexgis/en/index.php)
+- **v1.2** (2022, React/Laravel, partial) — archived on the [`v2-archive`](../../tree/v2-archive) branch
 
 ## Features
 
@@ -69,6 +69,7 @@ The list below is the summary; **[docs/FEATURES.md](docs/FEATURES.md)** is the s
 
 Each of these is a paragraph or several in **[docs/FEATURES.md](docs/FEATURES.md)**, and a page
 of its own in the [user guide](docs/user-guide/README.md).
+The application is in an early beta stage. Some of the above features might be still buggy or not fully tested.
 
 ## Quick start
 
