@@ -312,6 +312,69 @@ public class SurveyGraphExtractorTests
     /// carries rather than readings of their own.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// A file that is an extended elevation is refused at ingest rather than measured.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An extended elevation unrolls a cave onto one vertical plane so it can be printed side-on.
+    /// Its stations are positions in that drawing: the horizontal distance between two of them is
+    /// the distance along the unrolled path, and the bearing between them means nothing. Length,
+    /// the direction rose, hypsometry, the passage network and closest approach would all be
+    /// computed from it without complaint, and none of the answers would look wrong on a cave's
+    /// page — they would be measurements of a shape the cave does not have.
+    /// </para>
+    /// <para>
+    /// The variant is derived from the plan-view fixture rather than committed beside it, because
+    /// the two must not drift into being two different caves: the same bytes, with the one bit the
+    /// format uses to say so. In a v8 file that is bit 0x80 of the file-wide flags byte, which sits
+    /// immediately after the fourth newline — the magic, version, title and datestamp lines. The
+    /// assertions below pin that arithmetic, so a fixture regenerated in another format version
+    /// fails here rather than silently testing a plan-view file against itself.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void An_extended_elevation_is_refused_rather_than_measured()
+    {
+        var planView = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "P8_Master.3d"));
+
+        // The plan-view fixture is accepted — without this the test would pass against a rule that
+        // refused everything.
+        SurveySourceRules.EnsureIsPlanView(CaveModelReader.Read(planView));
+
+        var flagsOffset = FileWideFlagsOffset(planView);
+        (planView[flagsOffset] & 0x80).ShouldBe(0, "the fixture is supposed to be a plan view");
+
+        var extended = (byte[])planView.Clone();
+        extended[flagsOffset] |= 0x80;
+
+        var model = CaveModelReader.Read(extended);
+        model.IsExtendedElevation.ShouldBeTrue("flipping the flag bit did not produce an extended elevation");
+
+        // Everything else about the file is unchanged, so what is refused below is the kind of
+        // file and not a corrupted one.
+        model.Stations.Count.ShouldBe(CaveModelReader.Read(planView).Stations.Count);
+
+        Should.Throw<SurveySourceException>(() => SurveySourceRules.EnsureIsPlanView(model))
+            .Message.ShouldContain("extended elevation");
+    }
+
+    /// <summary>
+    /// Where a v8 file keeps the flags byte carrying the extended-elevation bit: straight after
+    /// the magic, version, title and datestamp lines.
+    /// </summary>
+    private static int FileWideFlagsOffset(byte[] file)
+    {
+        var offset = -1;
+        for (var line = 0; line < 4; line++)
+        {
+            offset = Array.IndexOf(file, (byte)'\n', offset + 1);
+            offset.ShouldBeGreaterThan(0, $"the header ended before line {line + 1}");
+        }
+
+        return offset + 1;
+    }
+
     [Fact]
     public void The_same_cave_read_through_either_format_yields_the_same_wall_measurements()
     {

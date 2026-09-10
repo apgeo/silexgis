@@ -339,9 +339,10 @@ public sealed class SurveyGraphHandler(
             bytes = buffer.ToArray();
         }
 
+        CaveModel model;
         try
         {
-            return CaveModelReader.Read(bytes, upload.OriginalName);
+            model = CaveModelReader.Read(bytes, upload.OriginalName);
         }
         catch (CaveFileFormatException e)
         {
@@ -349,5 +350,12 @@ public sealed class SurveyGraphHandler(
             // and it is more specific than anything that could be said here.
             throw new SurveySourceException(e.Message);
         }
+
+        // A drawing of a cave is not a record of where its passages are, and every figure taken
+        // from the geometry afterwards would describe the drawing. The rule and the reasoning live
+        // beside the exception it throws.
+        SurveySourceRules.EnsureIsPlanView(model);
+
+        return model;
     }
 }
