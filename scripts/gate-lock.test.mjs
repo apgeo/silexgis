@@ -90,3 +90,68 @@ describe('run', () => {
     assert.equal(existsSync(dir), false);
   });
 });
+
+// An exit code cannot tell a passing run from one that ran nothing, and both have been collected
+// here as verdicts: a targeted run whose thirty-six tests all failed to reach the database wrote
+// exitCode 0, and a filter matching no class wrote the same. The result file now carries what the
+// runner said it executed, and a verdict that cannot read as green without it.
+describe('a result file says what actually ran', () => {
+  const runWith = (name, output) => {
+    const dir = freshDir(`verdict-${name}`);
+    const result = join(scratch, `result-${name}.json`);
+    spawnSync(
+      process.execPath,
+      [script, 'run', '--result', result, '--', process.execPath, '-e', `console.log(${JSON.stringify(output)})`],
+      { env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir }, encoding: 'utf8' },
+    );
+    return JSON.parse(readFileSync(result, 'utf8'));
+  };
+
+  it('a run whose tests all failed is not green, whatever it exited', () => {
+    const r = runWith(
+      'allfailed',
+      'Failed!  - Failed:    36, Passed:     0, Skipped:     0, Total:    36, Duration: 9 s - A.dll',
+    );
+    assert.equal(r.exitCode, 0, 'the child deliberately exits 0 — this is the false-green case');
+    assert.equal(r.verdict, 'red');
+    assert.equal(r.failed, 36);
+  });
+
+  it('a filter that matched nothing is inconclusive, not green', () => {
+    const r = runWith(
+      'nothing',
+      'Passed!  - Failed:     0, Passed:     0, Skipped:     0, Total:     0, Duration: 1 ms - A.dll',
+    );
+    assert.equal(r.verdict, 'inconclusive');
+    assert.equal(r.total, 0);
+  });
+
+  it('a run with no summary at all is inconclusive and says so', () => {
+    const r = runWith('nosummary', 'build noise and nothing else');
+    assert.equal(r.verdict, 'inconclusive');
+    assert.equal(r.summarySeen, false);
+    assert.match(r.verdictReason, /no test-runner summary/);
+  });
+
+  it('a genuinely green run is green, and its counts are the runner\'s', () => {
+    const r = runWith(
+      'green',
+      'Passed!  - Failed:     0, Passed:    33, Skipped:     2, Total:    35, Duration: 1 s - A.dll',
+    );
+    assert.equal(r.verdict, 'green');
+    assert.equal(r.total, 35);
+    assert.equal(r.passed, 33);
+    assert.equal(r.skipped, 2);
+  });
+
+  it('several assemblies are summed rather than the last one winning', () => {
+    const r = runWith(
+      'multi',
+      'Passed!  - Failed:     0, Passed:    10, Skipped:     0, Total:    10, Duration: 1 s - A.dll\n'
+        + 'Passed!  - Failed:     0, Passed:     5, Skipped:     1, Total:     6, Duration: 1 s - B.dll',
+    );
+    assert.equal(r.assemblies, 2);
+    assert.equal(r.total, 16);
+    assert.equal(r.verdict, 'green');
+  });
+});

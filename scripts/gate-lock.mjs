@@ -31,6 +31,70 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import process from 'node:process';
 
+/** How much of a run's output is kept to find the summary in. */
+const OutputTailBytes = 64 * 1024;
+
+/**
+ * What a run actually executed, read off the runner's own summary line.
+ *
+ * An exit code alone cannot tell a passing run from one that ran nothing. Both of those have
+ * happened here and both were collected as verdicts: a targeted run whose thirty-six tests all
+ * failed to reach the database wrote `exitCode: 0`, and a filter that matched no class at all
+ * wrote the same. A caller reading only the exit code calls both of them green, and the whole
+ * point of writing a result file is that somebody reads it later instead of watching the run.
+ *
+ * So the counts go in beside the exit code, and a `verdict` that is only ever `green` when a
+ * summary was actually seen, it reported tests, and none of them failed. Anything else is
+ * `inconclusive` with the reason spelled out — which is a thing a reader can act on, unlike a
+ * zero.
+ *
+ * The shape parsed is the .NET test runner's, because that is what the gate runs:
+ *   `Passed!  - Failed:     0, Passed:    33, Skipped:     0, Total:    33, Duration: 1 s - X.dll`
+ * A run producing several assemblies prints one such line each, and they are summed. Output this
+ * does not recognise is reported as unrecognised rather than as zero tests, because "I could not
+ * read this" and "nothing ran" are different facts and only one of them is the runner's fault.
+ */
+export function summarise(output) {
+  const line = /^\s*(Passed|Failed|Skipped)!\s*-\s*Failed:\s*(\d+),\s*Passed:\s*(\d+),\s*Skipped:\s*(\d+),\s*Total:\s*(\d+)/gm;
+  let failed = 0;
+  let passed = 0;
+  let skipped = 0;
+  let total = 0;
+  let seen = 0;
+
+  for (const m of (output || '').matchAll(line)) {
+    seen += 1;
+    failed += Number(m[2]);
+    passed += Number(m[3]);
+    skipped += Number(m[4]);
+    total += Number(m[5]);
+  }
+
+  if (seen === 0) {
+    return {
+      summarySeen: false,
+      verdict: 'inconclusive',
+      verdictReason: 'no test-runner summary appeared in the output, so nothing here says any test ran',
+    };
+  }
+
+  const counts = { summarySeen: true, assemblies: seen, failed, passed, skipped, total };
+
+  if (total === 0) {
+    return {
+      ...counts,
+      verdict: 'inconclusive',
+      verdictReason: 'the runner reported a summary of zero tests — a filter that matched nothing',
+    };
+  }
+
+  if (failed > 0) {
+    return { ...counts, verdict: 'red', verdictReason: `${failed} of ${total} failed` };
+  }
+
+  return { ...counts, verdict: 'green' };
+}
+
 export function lockDir() {
   return process.env.SILEXGIS_GATE_LOCK_DIR || join(tmpdir(), 'silexgis-gate-lock');
 }
@@ -195,7 +259,21 @@ async function main() {
 
     await acquireWaiting(dir, label);
     const startedAt = new Date();
-    const child = spawn(command[0], command.slice(1), { stdio: 'inherit' });
+
+    // The child's output is teed rather than inherited, so this can read the runner's own summary
+    // line on the way past. Nothing about what the caller sees changes.
+    const child = spawn(command[0], command.slice(1), { stdio: ['inherit', 'pipe', 'pipe'] });
+    let tail = '';
+    const watch = (stream, out) =>
+      stream?.on('data', (chunk) => {
+        out.write(chunk);
+        // Only the tail is kept: a full API suite prints tens of megabytes and the summary is at
+        // the end, so buffering all of it would cost memory for nothing.
+        tail = (tail + chunk.toString()).slice(-OutputTailBytes);
+      });
+    watch(child.stdout, process.stdout);
+    watch(child.stderr, process.stderr);
+
     const forward = (sig) => child.kill(sig);
     process.on('SIGINT', forward);
     process.on('SIGTERM', forward);
@@ -210,6 +288,7 @@ async function main() {
 
     const endedAt = new Date();
     if (resultFile) {
+      const counts = summarise(tail);
       writeFileSync(
         resultFile,
         JSON.stringify(
@@ -217,6 +296,7 @@ async function main() {
             label: label || '',
             command: command.join(' '),
             exitCode,
+            ...counts,
             startedAt: startedAt.toISOString(),
             endedAt: endedAt.toISOString(),
             durationSeconds: Math.round((endedAt - startedAt) / 1000),
