@@ -66,7 +66,7 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
         // Protected area > protected cave > entrance — two protected roots above the entrance.
         var areaId = await CreateProtectedAreaAsync("Chain Area");
         var caveId = await CreateCaveAsync(owner, "Chain Cave", parentId: areaId,
-            locationProtected: true, closestAddress: "Precise trailhead 7");
+            locationProtected: true, closestAddress: "Precise trailhead 7", altitude: 1487m);
         await AddEntranceAsync(owner, caveId);
 
         // No grants: the chain is readable (authenticated) but fully obfuscated.
@@ -74,6 +74,17 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
         var detailBefore = await grantee.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}");
         detailBefore.GetProperty("closestAddress").ValueKind.ShouldBe(JsonValueKind.Null);
         detailBefore.GetProperty("approximateLocation").GetBoolean().ShouldBeTrue();
+
+        // Altitude is a position, not a dimension. Held against a snapped point and a named region
+        // it narrows a search from a hillside to a contour, so it is withheld with the address and
+        // the location notes rather than published with the lengths and depths. The entrance route
+        // has always withheld it; this one used to hand the same number to everybody, so asking
+        // about the cave answered what asking about its entrance would not.
+        detailBefore.GetProperty("altitude").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // The dimensions are not positions and stay readable — otherwise this assertion would pass
+        // just as well against a cave route that had stopped answering anything at all.
+        detailBefore.GetProperty("explorationStatus").ValueKind.ShouldNotBe(JsonValueKind.Null);
 
         // A ViewExactLocation grant on the OUTER root alone is insufficient — the cave
         // root still vetoes (most-restrictive wins over the whole ancestry).
@@ -93,6 +104,10 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
         var detailAfter = await grantee.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}");
         detailAfter.GetProperty("closestAddress").GetString().ShouldBe("Precise trailhead 7");
         detailAfter.GetProperty("approximateLocation").GetBoolean().ShouldBeFalse();
+
+        // And the altitude comes back with them, so what was withheld above was withheld for the
+        // want of the grant rather than never stored.
+        detailAfter.GetProperty("altitude").GetDecimal().ShouldBe(1487m);
     }
 
     [Fact]
@@ -199,7 +214,8 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
     }
 
     private async Task<Guid> CreateCaveAsync(
-        HttpClient client, string name, Guid parentId, bool locationProtected, string? closestAddress = null)
+        HttpClient client, string name, Guid parentId, bool locationProtected,
+        string? closestAddress = null, decimal? altitude = null)
     {
         var response = await client.PostAsJsonAsync("/api/v1/caves", new
         {
@@ -208,6 +224,7 @@ public sealed class ProtectionDepthTests : IAsyncLifetime, IDisposable
             visibility = "authenticated",
             locationProtected,
             closestAddress,
+            altitude,
             parentId,
             explorationStatus = "Unknown",
             isShowCave = false,
