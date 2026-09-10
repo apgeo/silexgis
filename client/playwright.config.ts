@@ -27,6 +27,20 @@ import { defineConfig, devices } from '@playwright/test';
 const devPort = process.env.SILEXGIS_DEV_PORT ?? '5173';
 const baseURL = `http://localhost:${devPort}`;
 
+/**
+ * The specs that belong to a phone project and must not also run on the desktop one.
+ *
+ * Named in one place because two things read them: the desktop project subtracts them, and the
+ * phone projects below select them. Written as anchored file names rather than as substrings —
+ * `scene3d` as a substring also matches `scene3d-mobile`, which is how a phone spec would end up
+ * running twice, once in a viewport it was never written for.
+ */
+const PHONE_ONLY_SPECS = [
+  /(^|\/)mobile\.spec\.ts$/,
+  /(^|\/)scene3d-mobile\.spec\.ts$/,
+  /(^|\/)mobile-ios\.spec\.ts$/,
+];
+
 export default defineConfig({
   testDir: './e2e',
   // Every test here signs in through the real authorization server and then waits on a real
@@ -41,11 +55,19 @@ export default defineConfig({
   },
   projects: [
     {
-      // The pre-existing run, unchanged: Playwright's default desktop chromium viewport.
-      // Each project pins its own file, so a new spec runs nowhere until it is named here.
+      // Playwright's default desktop chromium viewport, and the home of every spec that no
+      // narrower project claims.
+      //
+      // This used to name its forty-four specs in one alternation, and the comment here admitted
+      // what that costs: a new spec ran nowhere until somebody remembered to add it. That is a
+      // fail-closed list, and a fail-closed list quietly shrinks — `photo-library-smoke.spec.ts`
+      // sat on disk claimed by no project at all, passing by never running. So the rule is
+      // inverted: desktop takes every spec, and the phone projects below subtract the three that
+      // are theirs. A new spec is now covered by writing it, and `e2e-spec-coverage.test.mjs`
+      // fails the gate if any spec ends up claimed by nobody.
       name: 'desktop',
-      testMatch:
-        /(smoke|settings|permission-groups|documents|uploads|gallery|reslinks|annotated-text|trips|scene3d|terrain|vector-import|trip-import|trip-list|trip-map|trip-stats|photo-import|panel|qr-landing|consoleGuard|errorReporting|notifications|notification-health|announcements|calendar|expeditions|survey-extraction|survey-sources|survey-quality|cave-statistics|doline-morphometry|speologie-catalogue|cave-levels|cave-morphometry|karst-density|overburden-profile|photo-library-pictures|photo-library-health|terrain-derivatives|cave-topology|photo-library-browse|registry-statistics|karstlink-export|karst-autocorrelation|cave-clustering)\.spec\.ts/,
+      testMatch: /\.spec\.ts$/,
+      testIgnore: PHONE_ONLY_SPECS,
     },
     {
       // Pixel 7: 412x915 CSS px, touch enabled, coarse pointer, chromium.
