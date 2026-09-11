@@ -36,7 +36,8 @@ CaveView.js
 A 3D cave-survey viewer, vendored as a prebuilt runtime bundle under
 client/public/caveview/. Used on demand by the embedded 3D viewer.
 
-  Source:    https://github.com/aardgoose/CaveView.js (release 2.9.0)
+  Source:    https://github.com/apgeo/CaveView.js (distribution 2.9.0-slx.1, a fork of
+             https://github.com/aardgoose/CaveView.js)
   License:   MIT — see client/public/caveview/LICENSE
   Provenance: client/public/caveview/README.md
 

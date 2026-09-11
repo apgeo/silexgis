@@ -2,15 +2,20 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
-import type { Cv2Namespace } from '../../caveview/loadCaveView.ts';
+import { CAVEVIEW_HOME, type Cv2Namespace } from '../../caveview/loadCaveView.ts';
 import CaveViewPanel from './CaveViewPanel.tsx';
 
 // A fake CV2 global stands in for the vendored bundle: it records event
-// listeners so tests can replay the viewer's events against the wrapper.
+// listeners so tests can replay the viewer's events against the wrapper,
+// and the construction config so tests can pin what the panel wires up.
 type Listener = (event: unknown) => void;
 const listeners = new Map<string, Listener[]>();
+let lastViewerConfig: Record<string, unknown> | undefined;
 
 class FakeViewer {
+  constructor(_containerId: string, config: Record<string, unknown>) {
+    lastViewerConfig = config;
+  }
   addEventListener(type: string, listener: Listener) {
     listeners.set(type, [...(listeners.get(type) ?? []), listener]);
   }
@@ -30,6 +35,7 @@ function emit(type: string, event: unknown) {
 
 beforeEach(() => {
   listeners.clear();
+  lastViewerConfig = undefined;
   window.CV2 = {
     CaveViewer: FakeViewer,
     CaveViewUI: FakeUi,
@@ -44,6 +50,17 @@ afterEach(() => {
 });
 
 describe('CaveViewPanel', () => {
+  it('constructs the viewer with the versioned home and a CRS lookup function', async () => {
+    render(<CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" />);
+
+    await waitFor(() => expect(lastViewerConfig).toBeDefined());
+    // The versioned home is what makes an upgraded viewer reach the browser at all, and the
+    // crsLookup entry is the only thing keeping the bundle's built-in epsg.io fallback
+    // unreachable — dropping either would leave every other test green.
+    expect(lastViewerConfig!.home).toBe(CAVEVIEW_HOME);
+    expect(typeof lastViewerConfig!.crsLookup).toBe('function');
+  });
+
   it('reports entrance label clicks through onEntrancePick', async () => {
     const onPick = vi.fn();
     render(<CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" onEntrancePick={onPick} />);

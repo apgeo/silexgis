@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { acquireCrsRewrite, CAVEVIEW_HOME, loadCaveView, type CaveViewUi } from '../../caveview/loadCaveView.ts';
+import { CAVEVIEW_HOME, loadCaveView, makeCrsLookup, type CaveViewUi } from '../../caveview/loadCaveView.ts';
 import {
   partFromLeg,
   partFromStation,
@@ -105,10 +105,6 @@ export default function CaveViewPanel({
     let ui: CaveViewUi | null = null;
     setStatus('loading');
 
-    // Acquired synchronously, before any await, so a survey that starts parsing the moment the
-    // bundle is ready cannot get its CRS lookup out to the internet ahead of the rewrite.
-    const releaseCrsRewrite = acquireCrsRewrite();
-
     (async () => {
       const cv2 = await loadCaveView();
       const response = await fetch(fileUrl);
@@ -116,7 +112,12 @@ export default function CaveViewPanel({
       const blob = await response.blob();
       if (disposed) return;
 
-      const viewer = new cv2.CaveViewer(containerIdRef.current!, { home: CAVEVIEW_HOME });
+      // `crsLookup` points the viewer's coordinate-system resolution at this installation's
+      // own registry instead of epsg.io — see loadCaveView.ts for why that matters.
+      const viewer = new cv2.CaveViewer(containerIdRef.current!, {
+        home: CAVEVIEW_HOME,
+        crsLookup: makeCrsLookup(),
+      });
       viewer.addEventListener('newCave', () => {
         if (!disposed) setStatus('ready');
       });
@@ -162,7 +163,6 @@ export default function CaveViewPanel({
       loadedRef.current = null;
       ui?.dispose();
       ui = null;
-      releaseCrsRewrite();
     };
   }, [fileUrl, fileName]);
 

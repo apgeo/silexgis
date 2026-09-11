@@ -1128,9 +1128,9 @@
 
 			// assumes min < max, componentwise
 
-			this.x = Math.max( min.x, Math.min( max.x, this.x ) );
-			this.y = Math.max( min.y, Math.min( max.y, this.y ) );
-			this.z = Math.max( min.z, Math.min( max.z, this.z ) );
+			this.x = clamp( this.x, min.x, max.x );
+			this.y = clamp( this.y, min.y, max.y );
+			this.z = clamp( this.z, min.z, max.z );
 
 			return this;
 
@@ -1138,9 +1138,9 @@
 
 		clampScalar( minVal, maxVal ) {
 
-			this.x = Math.max( minVal, Math.min( maxVal, this.x ) );
-			this.y = Math.max( minVal, Math.min( maxVal, this.y ) );
-			this.z = Math.max( minVal, Math.min( maxVal, this.z ) );
+			this.x = clamp( this.x, minVal, maxVal );
+			this.y = clamp( this.y, minVal, maxVal );
+			this.z = clamp( this.z, minVal, maxVal );
 
 			return this;
 
@@ -1150,7 +1150,7 @@
 
 			const length = this.length();
 
-			return this.divideScalar( length || 1 ).multiplyScalar( Math.max( min, Math.min( max, length ) ) );
+			return this.divideScalar( length || 1 ).multiplyScalar( clamp( length, min, max ) );
 
 		}
 
@@ -1751,8 +1751,8 @@
 
 			// assumes min < max, componentwise
 
-			this.x = Math.max( min.x, Math.min( max.x, this.x ) );
-			this.y = Math.max( min.y, Math.min( max.y, this.y ) );
+			this.x = clamp( this.x, min.x, max.x );
+			this.y = clamp( this.y, min.y, max.y );
 
 			return this;
 
@@ -1760,8 +1760,8 @@
 
 		clampScalar( minVal, maxVal ) {
 
-			this.x = Math.max( minVal, Math.min( maxVal, this.x ) );
-			this.y = Math.max( minVal, Math.min( maxVal, this.y ) );
+			this.x = clamp( this.x, minVal, maxVal );
+			this.y = clamp( this.y, minVal, maxVal );
 
 			return this;
 
@@ -1771,7 +1771,7 @@
 
 			const length = this.length();
 
-			return this.divideScalar( length || 1 ).multiplyScalar( Math.max( min, Math.min( max, length ) ) );
+			return this.divideScalar( length || 1 ).multiplyScalar( clamp( length, min, max ) );
 
 		}
 
@@ -6246,7 +6246,9 @@
 
 			} else {
 
-				for ( let i = 0, l = positionAttribute.count; i < l; i ++ ) {
+				const l = Math.min( points.length, positionAttribute.count ); // make sure data do not exceed buffer size
+
+				for ( let i = 0; i < l; i ++ ) {
 
 					const point = points[ i ];
 					positionAttribute.setXYZ( i, point.x, point.y, point.z || 0 );

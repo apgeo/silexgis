@@ -1152,9 +1152,9 @@
 
 			// assumes min < max, componentwise
 
-			this.x = Math.max( min.x, Math.min( max.x, this.x ) );
-			this.y = Math.max( min.y, Math.min( max.y, this.y ) );
-			this.z = Math.max( min.z, Math.min( max.z, this.z ) );
+			this.x = clamp( this.x, min.x, max.x );
+			this.y = clamp( this.y, min.y, max.y );
+			this.z = clamp( this.z, min.z, max.z );
 
 			return this;
 
@@ -1162,9 +1162,9 @@
 
 		clampScalar( minVal, maxVal ) {
 
-			this.x = Math.max( minVal, Math.min( maxVal, this.x ) );
-			this.y = Math.max( minVal, Math.min( maxVal, this.y ) );
-			this.z = Math.max( minVal, Math.min( maxVal, this.z ) );
+			this.x = clamp( this.x, minVal, maxVal );
+			this.y = clamp( this.y, minVal, maxVal );
+			this.z = clamp( this.z, minVal, maxVal );
 
 			return this;
 
@@ -1174,7 +1174,7 @@
 
 			const length = this.length();
 
-			return this.divideScalar( length || 1 ).multiplyScalar( Math.max( min, Math.min( max, length ) ) );
+			return this.divideScalar( length || 1 ).multiplyScalar( clamp( length, min, max ) );
 
 		}
 
@@ -1775,8 +1775,8 @@
 
 			// assumes min < max, componentwise
 
-			this.x = Math.max( min.x, Math.min( max.x, this.x ) );
-			this.y = Math.max( min.y, Math.min( max.y, this.y ) );
+			this.x = clamp( this.x, min.x, max.x );
+			this.y = clamp( this.y, min.y, max.y );
 
 			return this;
 
@@ -1784,8 +1784,8 @@
 
 		clampScalar( minVal, maxVal ) {
 
-			this.x = Math.max( minVal, Math.min( maxVal, this.x ) );
-			this.y = Math.max( minVal, Math.min( maxVal, this.y ) );
+			this.x = clamp( this.x, minVal, maxVal );
+			this.y = clamp( this.y, minVal, maxVal );
 
 			return this;
 
@@ -1795,7 +1795,7 @@
 
 			const length = this.length();
 
-			return this.divideScalar( length || 1 ).multiplyScalar( Math.max( min, Math.min( max, length ) ) );
+			return this.divideScalar( length || 1 ).multiplyScalar( clamp( length, min, max ) );
 
 		}
 
@@ -6311,7 +6311,9 @@
 
 			} else {
 
-				for ( let i = 0, l = positionAttribute.count; i < l; i ++ ) {
+				const l = Math.min( points.length, positionAttribute.count ); // make sure data do not exceed buffer size
+
+				for ( let i = 0; i < l; i ++ ) {
 
 					const point = points[ i ];
 					positionAttribute.setXYZ( i, point.x, point.y, point.z || 0 );
@@ -7115,149 +7117,6 @@
 
 	}
 
-	const ColorManagement = {
-
-		enabled: true,
-
-		workingColorSpace: LinearSRGBColorSpace,
-
-		/**
-		 * Implementations of supported color spaces.
-		 *
-		 * Required:
-		 *	- primaries: chromaticity coordinates [ rx ry gx gy bx by ]
-		 *	- whitePoint: reference white [ x y ]
-		 *	- transfer: transfer function (pre-defined)
-		 *	- toXYZ: Matrix3 RGB to XYZ transform
-		 *	- fromXYZ: Matrix3 XYZ to RGB transform
-		 *	- luminanceCoefficients: RGB luminance coefficients
-		 *
-		 * Optional:
-		 *  - outputColorSpaceConfig: { drawingBufferColorSpace: ColorSpace }
-		 *  - workingColorSpaceConfig: { unpackColorSpace: ColorSpace }
-		 *
-		 * Reference:
-		 * - https://www.russellcottrell.com/photo/matrixCalculator.htm
-		 */
-		spaces: {},
-
-		convert: function ( color, sourceColorSpace, targetColorSpace ) {
-
-			if ( this.enabled === false || sourceColorSpace === targetColorSpace || ! sourceColorSpace || ! targetColorSpace ) {
-
-				return color;
-
-			}
-
-			if ( this.spaces[ sourceColorSpace ].transfer === SRGBTransfer ) {
-
-				color.r = SRGBToLinear( color.r );
-				color.g = SRGBToLinear( color.g );
-				color.b = SRGBToLinear( color.b );
-
-			}
-
-			if ( this.spaces[ sourceColorSpace ].primaries !== this.spaces[ targetColorSpace ].primaries ) {
-
-				color.applyMatrix3( this.spaces[ sourceColorSpace ].toXYZ );
-				color.applyMatrix3( this.spaces[ targetColorSpace ].fromXYZ );
-
-			}
-
-			if ( this.spaces[ targetColorSpace ].transfer === SRGBTransfer ) {
-
-				color.r = LinearToSRGB( color.r );
-				color.g = LinearToSRGB( color.g );
-				color.b = LinearToSRGB( color.b );
-
-			}
-
-			return color;
-
-		},
-
-		fromWorkingColorSpace: function ( color, targetColorSpace ) {
-
-			return this.convert( color, this.workingColorSpace, targetColorSpace );
-
-		},
-
-		toWorkingColorSpace: function ( color, sourceColorSpace ) {
-
-			return this.convert( color, sourceColorSpace, this.workingColorSpace );
-
-		},
-
-		getPrimaries: function ( colorSpace ) {
-
-			return this.spaces[ colorSpace ].primaries;
-
-		},
-
-		getTransfer: function ( colorSpace ) {
-
-			if ( colorSpace === NoColorSpace ) return LinearTransfer;
-
-			return this.spaces[ colorSpace ].transfer;
-
-		},
-
-		getLuminanceCoefficients: function ( target, colorSpace = this.workingColorSpace ) {
-
-			return target.fromArray( this.spaces[ colorSpace ].luminanceCoefficients );
-
-		},
-
-		define: function ( colorSpaces ) {
-
-			Object.assign( this.spaces, colorSpaces );
-
-		},
-
-		// Internal APIs
-
-		_getMatrix: function ( targetMatrix, sourceColorSpace, targetColorSpace ) {
-
-			return targetMatrix
-				.copy( this.spaces[ sourceColorSpace ].toXYZ )
-				.multiply( this.spaces[ targetColorSpace ].fromXYZ );
-
-		},
-
-		_getDrawingBufferColorSpace: function ( colorSpace ) {
-
-			return this.spaces[ colorSpace ].outputColorSpaceConfig.drawingBufferColorSpace;
-
-		},
-
-		_getUnpackColorSpace: function ( colorSpace = this.workingColorSpace ) {
-
-			return this.spaces[ colorSpace ].workingColorSpaceConfig.unpackColorSpace;
-
-		}
-
-	};
-
-	function SRGBToLinear( c ) {
-
-		return ( c < 0.04045 ) ? c * 0.0773993808 : Math.pow( c * 0.9478672986 + 0.0521327014, 2.4 );
-
-	}
-
-	function LinearToSRGB( c ) {
-
-		return ( c < 0.0031308 ) ? c * 12.92 : 1.055 * ( Math.pow( c, 0.41666 ) ) - 0.055;
-
-	}
-
-	/******************************************************************************
-	 * sRGB definitions
-	 */
-
-	const REC709_PRIMARIES = [ 0.640, 0.330, 0.300, 0.600, 0.150, 0.060 ];
-	const REC709_LUMINANCE_COEFFICIENTS = [ 0.2126, 0.7152, 0.0722 ];
-	const D65 = [ 0.3127, 0.3290 ];
-
 	const LINEAR_REC709_TO_XYZ = /*@__PURE__*/ new Matrix3().set(
 		0.4123908, 0.3575843, 0.1804808,
 		0.2126390, 0.7151687, 0.0721923,
@@ -7270,30 +7129,181 @@
 		0.0556301, - 0.2039770, 1.0569715
 	);
 
-	ColorManagement.define( {
+	function createColorManagement() {
 
-		[ LinearSRGBColorSpace ]: {
-			primaries: REC709_PRIMARIES,
-			whitePoint: D65,
-			transfer: LinearTransfer,
-			toXYZ: LINEAR_REC709_TO_XYZ,
-			fromXYZ: XYZ_TO_LINEAR_REC709,
-			luminanceCoefficients: REC709_LUMINANCE_COEFFICIENTS,
-			workingColorSpaceConfig: { unpackColorSpace: SRGBColorSpace },
-			outputColorSpaceConfig: { drawingBufferColorSpace: SRGBColorSpace }
-		},
+		const ColorManagement = {
 
-		[ SRGBColorSpace ]: {
-			primaries: REC709_PRIMARIES,
-			whitePoint: D65,
-			transfer: SRGBTransfer,
-			toXYZ: LINEAR_REC709_TO_XYZ,
-			fromXYZ: XYZ_TO_LINEAR_REC709,
-			luminanceCoefficients: REC709_LUMINANCE_COEFFICIENTS,
-			outputColorSpaceConfig: { drawingBufferColorSpace: SRGBColorSpace }
-		},
+			enabled: true,
 
-	} );
+			workingColorSpace: LinearSRGBColorSpace,
+
+			/**
+			 * Implementations of supported color spaces.
+			 *
+			 * Required:
+			 *	- primaries: chromaticity coordinates [ rx ry gx gy bx by ]
+			 *	- whitePoint: reference white [ x y ]
+			 *	- transfer: transfer function (pre-defined)
+			 *	- toXYZ: Matrix3 RGB to XYZ transform
+			 *	- fromXYZ: Matrix3 XYZ to RGB transform
+			 *	- luminanceCoefficients: RGB luminance coefficients
+			 *
+			 * Optional:
+			 *  - outputColorSpaceConfig: { drawingBufferColorSpace: ColorSpace }
+			 *  - workingColorSpaceConfig: { unpackColorSpace: ColorSpace }
+			 *
+			 * Reference:
+			 * - https://www.russellcottrell.com/photo/matrixCalculator.htm
+			 */
+			spaces: {},
+
+			convert: function ( color, sourceColorSpace, targetColorSpace ) {
+
+				if ( this.enabled === false || sourceColorSpace === targetColorSpace || ! sourceColorSpace || ! targetColorSpace ) {
+
+					return color;
+
+				}
+
+				if ( this.spaces[ sourceColorSpace ].transfer === SRGBTransfer ) {
+
+					color.r = SRGBToLinear( color.r );
+					color.g = SRGBToLinear( color.g );
+					color.b = SRGBToLinear( color.b );
+
+				}
+
+				if ( this.spaces[ sourceColorSpace ].primaries !== this.spaces[ targetColorSpace ].primaries ) {
+
+					color.applyMatrix3( this.spaces[ sourceColorSpace ].toXYZ );
+					color.applyMatrix3( this.spaces[ targetColorSpace ].fromXYZ );
+
+				}
+
+				if ( this.spaces[ targetColorSpace ].transfer === SRGBTransfer ) {
+
+					color.r = LinearToSRGB( color.r );
+					color.g = LinearToSRGB( color.g );
+					color.b = LinearToSRGB( color.b );
+
+				}
+
+				return color;
+
+			},
+
+			fromWorkingColorSpace: function ( color, targetColorSpace ) {
+
+				return this.convert( color, this.workingColorSpace, targetColorSpace );
+
+			},
+
+			toWorkingColorSpace: function ( color, sourceColorSpace ) {
+
+				return this.convert( color, sourceColorSpace, this.workingColorSpace );
+
+			},
+
+			getPrimaries: function ( colorSpace ) {
+
+				return this.spaces[ colorSpace ].primaries;
+
+			},
+
+			getTransfer: function ( colorSpace ) {
+
+				if ( colorSpace === NoColorSpace ) return LinearTransfer;
+
+				return this.spaces[ colorSpace ].transfer;
+
+			},
+
+			getLuminanceCoefficients: function ( target, colorSpace = this.workingColorSpace ) {
+
+				return target.fromArray( this.spaces[ colorSpace ].luminanceCoefficients );
+
+			},
+
+			define: function ( colorSpaces ) {
+
+				Object.assign( this.spaces, colorSpaces );
+
+			},
+
+			// Internal APIs
+
+			_getMatrix: function ( targetMatrix, sourceColorSpace, targetColorSpace ) {
+
+				return targetMatrix
+					.copy( this.spaces[ sourceColorSpace ].toXYZ )
+					.multiply( this.spaces[ targetColorSpace ].fromXYZ );
+
+			},
+
+			_getDrawingBufferColorSpace: function ( colorSpace ) {
+
+				return this.spaces[ colorSpace ].outputColorSpaceConfig.drawingBufferColorSpace;
+
+			},
+
+			_getUnpackColorSpace: function ( colorSpace = this.workingColorSpace ) {
+
+				return this.spaces[ colorSpace ].workingColorSpaceConfig.unpackColorSpace;
+
+			}
+
+		};
+
+		/******************************************************************************
+		 * sRGB definitions
+		 */
+
+		const REC709_PRIMARIES = [ 0.640, 0.330, 0.300, 0.600, 0.150, 0.060 ];
+		const REC709_LUMINANCE_COEFFICIENTS = [ 0.2126, 0.7152, 0.0722 ];
+		const D65 = [ 0.3127, 0.3290 ];
+
+		ColorManagement.define( {
+
+			[ LinearSRGBColorSpace ]: {
+				primaries: REC709_PRIMARIES,
+				whitePoint: D65,
+				transfer: LinearTransfer,
+				toXYZ: LINEAR_REC709_TO_XYZ,
+				fromXYZ: XYZ_TO_LINEAR_REC709,
+				luminanceCoefficients: REC709_LUMINANCE_COEFFICIENTS,
+				workingColorSpaceConfig: { unpackColorSpace: SRGBColorSpace },
+				outputColorSpaceConfig: { drawingBufferColorSpace: SRGBColorSpace }
+			},
+
+			[ SRGBColorSpace ]: {
+				primaries: REC709_PRIMARIES,
+				whitePoint: D65,
+				transfer: SRGBTransfer,
+				toXYZ: LINEAR_REC709_TO_XYZ,
+				fromXYZ: XYZ_TO_LINEAR_REC709,
+				luminanceCoefficients: REC709_LUMINANCE_COEFFICIENTS,
+				outputColorSpaceConfig: { drawingBufferColorSpace: SRGBColorSpace }
+			},
+
+		} );
+
+		return ColorManagement;
+
+	}
+
+	const ColorManagement = /*@__PURE__*/ createColorManagement();
+
+	function SRGBToLinear( c ) {
+
+		return ( c < 0.04045 ) ? c * 0.0773993808 : Math.pow( c * 0.9478672986 + 0.0521327014, 2.4 );
+
+	}
+
+	function LinearToSRGB( c ) {
+
+		return ( c < 0.0031308 ) ? c * 12.92 : 1.055 * ( Math.pow( c, 0.41666 ) ) - 0.055;
+
+	}
 
 	let _canvas;
 
@@ -8311,10 +8321,10 @@
 
 			// assumes min < max, componentwise
 
-			this.x = Math.max( min.x, Math.min( max.x, this.x ) );
-			this.y = Math.max( min.y, Math.min( max.y, this.y ) );
-			this.z = Math.max( min.z, Math.min( max.z, this.z ) );
-			this.w = Math.max( min.w, Math.min( max.w, this.w ) );
+			this.x = clamp( this.x, min.x, max.x );
+			this.y = clamp( this.y, min.y, max.y );
+			this.z = clamp( this.z, min.z, max.z );
+			this.w = clamp( this.w, min.w, max.w );
 
 			return this;
 
@@ -8322,10 +8332,10 @@
 
 		clampScalar( minVal, maxVal ) {
 
-			this.x = Math.max( minVal, Math.min( maxVal, this.x ) );
-			this.y = Math.max( minVal, Math.min( maxVal, this.y ) );
-			this.z = Math.max( minVal, Math.min( maxVal, this.z ) );
-			this.w = Math.max( minVal, Math.min( maxVal, this.w ) );
+			this.x = clamp( this.x, minVal, maxVal );
+			this.y = clamp( this.y, minVal, maxVal );
+			this.z = clamp( this.z, minVal, maxVal );
+			this.w = clamp( this.w, minVal, maxVal );
 
 			return this;
 
@@ -8335,7 +8345,7 @@
 
 			const length = this.length();
 
-			return this.divideScalar( length || 1 ).multiplyScalar( Math.max( min, Math.min( max, length ) ) );
+			return this.divideScalar( length || 1 ).multiplyScalar( clamp( length, min, max ) );
 
 		}
 
@@ -9135,20 +9145,6 @@
 
 	class Material extends EventDispatcher {
 
-		static get type() {
-
-			return 'Material';
-
-		}
-
-		get type() {
-
-			return this.constructor.type;
-
-		}
-
-		set type( _value ) { /* */ }
-
 		constructor() {
 
 			super();
@@ -9160,6 +9156,7 @@
 			this.uuid = generateUUID();
 
 			this.name = '';
+			this.type = 'Material';
 
 			this.blending = NormalBlending;
 			this.side = FrontSide;
@@ -10492,17 +10489,13 @@
 
 	class MeshBasicMaterial extends Material {
 
-		static get type() {
-
-			return 'MeshBasicMaterial';
-
-		}
-
 		constructor( parameters ) {
 
 			super();
 
 			this.isMeshBasicMaterial = true;
+
+			this.type = 'MeshBasicMaterial';
 
 			this.color = new Color( 0xffffff ); // emissive
 
@@ -11047,17 +11040,13 @@
 
 	class LineBasicMaterial extends Material {
 
-		static get type() {
-
-			return 'LineBasicMaterial';
-
-		}
-
 		constructor( parameters ) {
 
 			super();
 
 			this.isLineBasicMaterial = true;
+
+			this.type = 'LineBasicMaterial';
 
 			this.color = new Color( 0xffffff );
 
@@ -14762,17 +14751,13 @@
 
 	class MeshStandardMaterial extends Material {
 
-		static get type() {
-
-			return 'MeshStandardMaterial';
-
-		}
-
 		constructor( parameters ) {
 
 			super();
 
 			this.isMeshStandardMaterial = true;
+
+			this.type = 'MeshStandardMaterial';
 
 			this.defines = { 'STANDARD': '' };
 
