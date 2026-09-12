@@ -222,7 +222,7 @@ function TripCard({ selection }: { selection: TripSelection }) {
         size="small"
         icon={<ExportOutlined />}
         style={{ marginTop: 12 }}
-        onClick={() => navigate(`/trips/${selection.tripId}`)}
+        onClick={() => navigate(`/trip-logs/${selection.tripId}`)}
         data-testid="trip-selection-open"
       >
         {t('trips.openTrip')}
