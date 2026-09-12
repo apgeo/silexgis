@@ -126,6 +126,7 @@ public static class EntranceEndpoints
         SilexGisDbContext db,
         FeatureWriteService writer,
         IAccessService access,
+        FeatureProtection protection,
         IAccessContextAccessor accessAccessor,
         IOptions<AccessOptions> accessOptions,
         CancellationToken ct)
@@ -144,6 +145,24 @@ public static class EntranceEndpoints
 
         // A cave's first entrance is its representative point, so it starts out as the main one.
         var isFirst = !await db.CaveEntrances.AnyAsync(e => e.CaveFeatureId == caveId, ct);
+
+        // The main entrance is the cave's own position. Writing one is therefore a write to the
+        // cave's location, not merely an addition beside it, and a caller who may not be shown
+        // that location may not overwrite it either — otherwise a protected cave can be moved
+        // anywhere by somebody who was never allowed to know where it was.
+        //
+        // Only the main case is guarded. Adding a further entrance stays open on the reasoning
+        // recorded below: those coordinates are the caller's own and echoing them back discloses
+        // nothing. That reasoning is sound exactly while the row being written is a new one; it
+        // stops being sound the moment the write lands on the cave's existing point.
+        if ((request.IsMain || isFirst)
+            && !(await protection.ExactViewIdsAsync(ctx, [caveId], ct)).Contains(caveId))
+        {
+            return ApiProblems.Forbidden(
+                "entrance.location_forbidden",
+                "You may not place the main entrance of a cave whose exact location is withheld from you.");
+        }
+
         var altitude = AltitudeOf(request);
         var feature = new Feature
         {
@@ -179,8 +198,10 @@ public static class EntranceEndpoints
 
         await db.SaveChangesAsync(ct);
 
-        // Adding an entrance is unrestricted even for callers without exact-location access:
-        // the coordinates are theirs, so echoing them back discloses nothing.
+        // Adding a further entrance is unrestricted even for callers without exact-location
+        // access: the coordinates are theirs, so echoing them back discloses nothing. The main
+        // entrance is the exception, and it is refused above — that one is the cave's own point
+        // rather than a row beside it.
         return TypedResults.Created(
             $"/api/v1/cave-entrances/{feature.Id}",
             ToDto(feature, entrance, exact: true, accessOptions.Value.LocationGridMeters));
@@ -239,6 +260,20 @@ public static class EntranceEndpoints
 
         if (request.IsMain && !entrance.IsMain)
         {
+            // Promoting an entrance moves the cave's own point onto it, so it is a write to the
+            // cave's location and is refused for the same reason a create of the main one is.
+            // Without this the two permitted halves compose into the thing neither is allowed to
+            // be: add a further entrance at a position of your choosing — allowed, the coordinates
+            // are yours — and then promote it, and a cave you may not be shown has been moved
+            // wherever you like. The guard above this one does not catch it, because promotion
+            // writes no coordinate itself; it only changes which existing row the cave points at.
+            if (!canViewExact)
+            {
+                return ApiProblems.Forbidden(
+                    "entrance.location_forbidden",
+                    "You may not make this the main entrance of a cave whose exact location is withheld from you.");
+            }
+
             // Promotion demotes the previous main entrance and refreshes the cave's mirror.
             await writer.SetMainEntranceAsync(cave.Id, entrance.Id, ct);
         }

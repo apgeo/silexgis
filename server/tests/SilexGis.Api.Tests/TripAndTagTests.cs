@@ -1517,6 +1517,61 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable, IClassFixture
     private static Task<HttpResponseMessage> TagAsync(HttpClient client, string tagName, string entityType, Guid entityId) =>
         client.PostAsJsonAsync("/api/v1/taggings/", new { tagName, entityType, entityId });
 
+    /// <summary>
+    /// Two requests coining the same new tag at the same moment both succeed, and the tag exists
+    /// exactly once.
+    /// </summary>
+    /// <remarks>
+    /// Coining a tag is check-then-act over a unique index on the slug: the handler looks the slug
+    /// up and adds a row when it finds none. Saving a form that names two new tags at once produces
+    /// precisely that pair of requests, and the loser used to violate the index and leave the
+    /// endpoint as an unhandled 500 — reproduced on both browser sweeps of 2026-08-07 and open
+    /// since.
+    ///
+    /// The loser now adopts the winner's row instead of refusing, because a tag is identified by
+    /// its slug and carries nothing else: the caller asked for a tag by that name, and a tag by
+    /// that name exists. So the assertion is that BOTH requests are answered as created — a version
+    /// that refused the loser with a conflict would also have stopped the 500 while failing the
+    /// person who typed the tag.
+    /// </remarks>
+    [Fact]
+    public async Task Two_requests_coining_one_tag_at_once_both_succeed_and_coin_it_once()
+    {
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var caveId = await CreateCaveAsync($"Race Cave {marker}", "authenticated");
+        var tagName = $"race-{marker}";
+
+        // Fired without awaiting either, so both are inside the window between the look-up and the
+        // insert. A sequential pair would take the second branch and prove nothing.
+        var bodies = Enumerable.Range(0, 2).Select(_ => new
+        {
+            tagName,
+            entityType = "feature",
+            entityId = caveId,
+        });
+        var responses = await Task.WhenAll(
+            bodies.Select(b => owner.PostAsJsonAsync("/api/v1/taggings/", b)));
+
+        foreach (var response in responses)
+        {
+            var payload = await response.Content.ReadAsStringAsync();
+            response.StatusCode.ShouldBe(
+                HttpStatusCode.Created,
+                $"a request lost the coining race and was refused instead of adopting the tag: {payload}");
+        }
+
+        // One tag, not two, and both taggings point at it — the index did its job and the handler
+        // agreed with it.
+        var catalogue = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/tags?search={tagName}");
+        catalogue.EnumerateArray().Count(t => t.GetProperty("name").GetString() == tagName).ShouldBe(1);
+
+        var applied = await owner.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/taggings/?entityType=feature&entityId={caveId}");
+        applied.EnumerateArray()
+            .Count(t => t.GetProperty("tag").GetProperty("name").GetString() == tagName)
+            .ShouldBe(1, "applying the same tag twice is documented as idempotent");
+    }
+
     private async Task<Guid> CreateCaveAsync(string name, string visibility, bool locationProtected = false)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/caves", new

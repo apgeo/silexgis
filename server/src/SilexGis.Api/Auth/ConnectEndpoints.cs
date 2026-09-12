@@ -102,6 +102,17 @@ public static class ConnectEndpoints
             return Forbidden(Errors.InvalidGrant, "The token is no longer valid.");
         }
 
+        // Lockout has to be asked about separately: `CanSignInAsync` consults the confirmed-email,
+        // confirmed-phone and account requirements and never looks at `LockoutEnd`. Without this a
+        // lock stopped new sign-ins and nothing else — the locked account went on renewing its own
+        // tokens for as long as its refresh token lived, which is weeks. That makes the control
+        // indistinguishable from not having locked the account at all, whether the lock came from
+        // failed passwords or from an administrator turning the key on somebody.
+        if (await userManager.IsLockedOutAsync(user))
+        {
+            return Forbidden(Errors.InvalidGrant, "The account is locked.");
+        }
+
         // A refresh token outlives this check by weeks — how many depends on the client it was
         // issued to — so the same policy is re-checked here rather than trusted from whenever
         // the token was first issued.
