@@ -15,7 +15,7 @@ import { userManager } from '../auth/auth.tsx';
  * stale cached viewer across upgrades. A new vendored build lands in a new directory and
  * changes this constant in the same commit, so every asset URL changes with it.
  */
-export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.2/';
+export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.3/';
 
 const SCRIPT_URL = `${CAVEVIEW_HOME}js/CaveView2.min.js`;
 const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;

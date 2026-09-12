@@ -3,14 +3,16 @@
 Source: https://github.com/apgeo/CaveView.js — this project's fork of
 https://github.com/aardgoose/CaveView.js (MIT license, see `LICENSE` in this directory).
 
-Vendored build: distribution version **2.9.0-slx.2**, built from the fork's `silexgis`
-branch at commit `4232a579` — the upstream **2.9.0 release tag** plus the fork's changes
+Vendored build: distribution version **2.9.0-slx.3**, built from the fork's `silexgis`
+branch at commit `7409df4b` — the upstream **2.9.0 release tag** plus the fork's changes
 (each also kept on its own dev-based `feature/*` branch so upstream can take them): the
 dispose-handler typo fix, the `crsLookup` configuration option the app uses to resolve
 coordinate systems locally instead of via epsg.io, a navigation and hover API
 (`focusStation`/`focusSurvey`/`highlightStation` and a `stationHover` event), pictures
 held for a station shown over the model, a toolbar of viewer controls for a host to place
-outside the scene, and markers a host maintains over a loaded model.
+outside the scene, markers a host maintains over a loaded model, and touch parity — a tap
+reveals what a mouse reveals by hovering, both hover events carry the `pointerType` that
+caused them, and controls are sized for whichever pointer is in use.
 
 The base is deliberately the release tag, not upstream `dev` HEAD: the two are
 source-identical, but `dev` bumps three.js r171 → r183, and a bundle built on r183 fails
@@ -22,10 +24,10 @@ CaveView.js is not published on npm; it ships as a prebuilt browser bundle. This
 directory contains the runtime subset the app needs, under a directory named by the
 distribution version:
 
-- `v2.9.0-slx.2/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
-- `v2.9.0-slx.2/js/workers/` — web workers the bundle spawns at runtime (paths resolved
+- `v2.9.0-slx.3/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
+- `v2.9.0-slx.3/js/workers/` — web workers the bundle spawns at runtime (paths resolved
   against the viewer's `home` option, which the app points at this directory)
-- `v2.9.0-slx.2/css/caveview.css`, `v2.9.0-slx.2/images/logo.svg` — runtime assets
+- `v2.9.0-slx.3/css/caveview.css`, `v2.9.0-slx.3/images/logo.svg` — runtime assets
 
 The version directory exists for cache correctness: these URLs are fetched outside the
 app bundle's hashed-asset pipeline, so a new build must arrive under new URLs or
@@ -41,5 +43,5 @@ subset above from `build/CaveView/` into a new `v<version>/` directory here, and
 directory through one release** — a browser tab loaded before the upgrade still asks for
 the old paths when its user first opens the 3D viewer, and deleting them immediately
 turns that into a load failure until a full reload — then delete it in the release
-after. (`2.9.0-slx.1` was removed rather than kept: it never reached a release, so no
+after. (Earlier `2.9.0-slx.*` directories were removed rather than kept: none reached a release, so no
 browser can be holding it.) Do not edit the vendored files in place.
