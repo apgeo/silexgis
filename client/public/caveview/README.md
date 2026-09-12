@@ -3,8 +3,8 @@
 Source: https://github.com/apgeo/CaveView.js — this project's fork of
 https://github.com/aardgoose/CaveView.js (MIT license, see `LICENSE` in this directory).
 
-Vendored build: distribution version **2.9.0-slx.3**, built from the fork's `silexgis`
-branch at commit `7409df4b` — the upstream **2.9.0 release tag** plus the fork's changes
+Vendored build: distribution version **2.9.0-slx.4**, built from the fork's `silexgis`
+branch at commit `f882d03a` — the upstream **2.9.0 release tag** plus the fork's changes
 (each also kept on its own dev-based `feature/*` branch so upstream can take them): the
 dispose-handler typo fix, the `crsLookup` configuration option the app uses to resolve
 coordinate systems locally instead of via epsg.io, a navigation and hover API
@@ -12,7 +12,9 @@ coordinate systems locally instead of via epsg.io, a navigation and hover API
 held for a station shown over the model, a toolbar of viewer controls for a host to place
 outside the scene, markers a host maintains over a loaded model, and touch parity — a tap
 reveals what a mouse reveals by hovering, both hover events carry the `pointerType` that
-caused them, and controls are sized for whichever pointer is in use.
+caused them, and controls are sized for whichever pointer is in use. Markers sharing a
+station collapse into one, whose label the host chooses, so a party standing together no
+longer draws its names on top of each other.
 
 The base is deliberately the release tag, not upstream `dev` HEAD: the two are
 source-identical, but `dev` bumps three.js r171 → r183, and a bundle built on r183 fails
@@ -24,10 +26,10 @@ CaveView.js is not published on npm; it ships as a prebuilt browser bundle. This
 directory contains the runtime subset the app needs, under a directory named by the
 distribution version:
 
-- `v2.9.0-slx.3/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
-- `v2.9.0-slx.3/js/workers/` — web workers the bundle spawns at runtime (paths resolved
+- `v2.9.0-slx.4/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
+- `v2.9.0-slx.4/js/workers/` — web workers the bundle spawns at runtime (paths resolved
   against the viewer's `home` option, which the app points at this directory)
-- `v2.9.0-slx.3/css/caveview.css`, `v2.9.0-slx.3/images/logo.svg` — runtime assets
+- `v2.9.0-slx.4/css/caveview.css`, `v2.9.0-slx.4/images/logo.svg` — runtime assets
 
 The version directory exists for cache correctness: these URLs are fetched outside the
 app bundle's hashed-asset pipeline, so a new build must arrive under new URLs or
