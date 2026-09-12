@@ -8,14 +8,14 @@
 // real integration run on the same machine.
 
 import { strict as assert } from 'node:assert';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, describe, it } from 'node:test';
 
-import { tryAcquire, release, readOwner } from './gate-lock.mjs';
+import { tryAcquire, release, readOwner, cpuSecondsOfTree, holderProgress } from './gate-lock.mjs';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'gate-lock.mjs');
 const scratch = mkdtempSync(join(tmpdir(), 'gate-lock-test-'));
@@ -153,5 +153,81 @@ describe('a result file says what actually ran', () => {
     assert.equal(r.assemblies, 2);
     assert.equal(r.total, 16);
     assert.equal(r.verdict, 'green');
+  });
+});
+
+describe('telling a wedged holder from a slow one', () => {
+  // The lock already takes over from a holder that died. What it could not see is a holder still
+  // running and doing nothing, which is what wedged this machine twice — eight and twelve hours
+  // on the lock at around two per cent of a core, with other sessions queued behind it. Age does
+  // not distinguish that from a full suite legitimately running for hours; CPU does.
+
+  it('accounts for the CPU of a process and everything under it', () => {
+    const own = cpuSecondsOfTree(process.pid);
+    if (own === null) return; // no /proc: the caller treats this as "cannot tell"
+    assert.ok(own >= 0, 'a running process has consumed some non-negative amount of CPU');
+    assert.ok(Number.isFinite(own));
+  });
+
+  it('answers null for a pid that is not there, rather than zero', () => {
+    if (cpuSecondsOfTree(process.pid) === null) return; // no /proc
+    // Zero would read as "present and idle", which is the one conclusion that must not be
+    // reached about a process that does not exist.
+    assert.equal(cpuSecondsOfTree(0x7ffffff0), null);
+  });
+
+  it('sees a busy process as busy', async () => {
+    const child = spawn(process.execPath, ['-e', 'const end = Date.now() + 5000; while (Date.now() < end);']);
+    try {
+      const p = await holderProgress(child.pid, { windowMs: 1500 });
+      if (!p.known) return; // no /proc
+      assert.ok(p.cpuSeconds > 0.2, `a spinning process should burn CPU, saw ${p.cpuSeconds}`);
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+
+  it('sees an idle process as idle', async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000);']);
+    try {
+      const p = await holderProgress(child.pid, { windowMs: 1500 });
+      if (!p.known) return; // no /proc
+      assert.ok(p.cpuSeconds < 0.05, `a sleeping process should burn none, saw ${p.cpuSeconds}`);
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+
+  it('refuses to steal from a holder whose pid the caller did not name', () => {
+    const dir = freshDir('steal-unnamed');
+    assert.ok(tryAcquire(dir, 'holder'));
+    const r = spawnSync(process.execPath, [script, 'steal', '--pid', '424242'], {
+      env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir },
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 3, 'naming the wrong holder must not release anybody else\'s lock');
+    assert.ok(existsSync(dir), 'the lock is still held');
+    release(dir);
+  });
+
+  it('steals from a holder that is doing nothing, and leaves its process alone', async () => {
+    const dir = freshDir('steal-wedged');
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000);']);
+    try {
+      assert.ok(tryAcquire(dir, 'wedged'));
+      // Rewrite the owner so the recorded holder is the idle child rather than this test.
+      const owner = readOwner(dir);
+      writeFileSync(join(dir, 'owner.json'), JSON.stringify({ ...owner, pid: child.pid }));
+      const r = spawnSync(process.execPath, [script, 'steal', '--pid', String(child.pid)], {
+        env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir },
+        encoding: 'utf8',
+      });
+      if (cpuSecondsOfTree(process.pid) === null) return; // no /proc: steal cannot judge
+      assert.equal(r.status, 0, r.stderr);
+      assert.ok(!existsSync(dir), 'the lock is free');
+      assert.equal(child.killed, false, 'stealing the lock does not kill the holder');
+    } finally {
+      child.kill('SIGKILL');
+    }
   });
 });
