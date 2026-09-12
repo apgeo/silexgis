@@ -65,9 +65,18 @@ html[data-theme='dark'] .caveview-tracking-card {
 }
 
 /* A row is the tap path to everything the pointer would otherwise have to hover a marker for, so
-   it is a button in its own right rather than a line of text. */
+   it is a button in its own right rather than a line of text.
+
+   <b>`flex-shrink: 0` is what makes the rule above true.</b> The list is a flex column, and a flex
+   child gives up its height before its parent ever overflows — so five names in a box with room for
+   four did not scroll, they squeezed: measured at 36px a row on a phone in portrait and 19px on one
+   held sideways, where a shorter panel squeezes harder. That is the target shrinking exactly as the
+   list fills up, which is the opposite way round from what anybody wants, and it happens silently
+   because nothing is clipped and nothing overflows. Held at its own height, the row keeps the size
+   it was given and the list scrolls, which is what the box was already told to do. */
 .caveview-tracking-person {
   display: flex;
+  flex-shrink: 0;
   gap: 8px;
   justify-content: space-between;
   width: 100%;
@@ -87,9 +96,18 @@ html[data-theme='dark'] .caveview-tracking-card {
   opacity: 0.75;
 }
 
+/* <b>The card keeps its height and the list above it is what gives way.</b> Same failure as the
+   rows inside that list, one element out and the other way round: the overlay is a flex column
+   capped at the panel's height, so with every child free to shrink the *card* was the one that
+   collapsed — measured at 66px against a content height of 139px on a phone held sideways, which
+   is the name and the close button and not one of the four rows under them. The row it cut first
+   is `Position`, the field that says a position was withheld, so a reader on a phone was told
+   strictly less about protection than one at a desk. Held at its own height, the card shows what
+   it holds and the list scrolls, which is what the list was already told to do. */
 .caveview-tracking-card {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: 2px;
   overflow-y: auto;
 }
@@ -133,5 +151,53 @@ html[data-theme='dark'] .caveview-tracking-card {
   .caveview-tracking-card-head .ant-btn {
     width: 40px;
     height: 40px;
+  }
+
+  /* The one that opens the list at all, which was 24px tall — so on a phone the rows below were
+     already sized for a finger and the way to reach them was not. Held at its height for the same
+     reason they are: it is the first thing a short box takes room from. */
+  .caveview-tracking-box > .ant-btn {
+    flex-shrink: 0;
+    min-height: 40px;
+  }
+
+  /* A switch has no size that makes it finger-sized: its height is the track, and the handle's
+     travel is derived from it, so a height pushed in from here would move the knob off the rail.
+     The tolerance goes around it instead. `::after` is free on the switch itself — antd reserves
+     `::before` on the *handle*, one element in, and nothing on the root. */
+  .caveview-tracking-switch .ant-switch {
+    position: relative;
+  }
+
+  .caveview-tracking-switch .ant-switch::after {
+    position: absolute;
+    inset: -10px;
+    content: '';
+  }
+
+  .caveview-tracking-switch {
+    flex-shrink: 0;
+    min-height: 40px;
+  }
+}
+
+/* ---- Down: a screen with room for one of them shows the one that was asked for.
+
+   Chosen on the *height*, which is neither of the axes the rest of this file uses, and it has to
+   be: the panel this overlay stands in is `min(460px, 60dvh)` tall, so a phone held sideways gives
+   it 216px and the overlay 200px of that. What wants to go in there is a card of about 140px and a
+   box whose own floor is 104px — the button that opens the list and the switch above it, both held
+   at forty pixels because a finger presses them — and 244px does not go into 200 however the two
+   are made to share it. Above the rule below the card fits beside a scrolled list; below it one of
+   them has to go, and it is not the card: a reader who tapped a name is looking at that name's
+   card, and the list is one press of its close button away.
+
+   Read against the viewport rather than the panel because that is where the 60% comes from. A
+   container query would say it more directly and is not available here: it needs `container-type:
+   size` on the panel, which makes that element the containing block for fixed-position descendants
+   — and the viewer's fullscreen is `position: fixed` inside it. */
+@media (max-height: 560px) {
+  .caveview-tracking-carded .caveview-tracking-box {
+    display: none;
   }
 }

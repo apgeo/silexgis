@@ -1,0 +1,113 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The two tables the watch is read from.
+
+   Two kinds of rule live here and they answer different questions. What has to be big enough to
+   hit is chosen on the *pointer*, in the media query below — a phone held sideways has a desk's
+   width and no pixel precision, so width would answer it wrongly. What a row looks like when its
+   columns will not fit side by side is chosen on the *width*, and is chosen in the component: it is
+   a different set of columns rather than a different skin, so the stylesheet only has to lay out
+   what the component decided to draw. */
+
+/* <b>Choosing who a report is about is the first act on this page, and its target was 16px.</b>
+   antd draws a checkbox at `controlInteractiveSize`, which is a size for a cursor, and offers no
+   size of its own. The cell it sits in is already as tall as the row and, once the column is asked
+   for some width, wide enough as well — but none of that is clickable. Only the label is, and the
+   label is the box and nothing else.
+
+   So the label is made to be the cell. Nothing moves and nothing is drawn differently: the box
+   stays centred where it was, and what changes is that the whole cell now drives it. The header's
+   "select all" is not one of these: it is said above the table in words, for the reasons in the
+   component.
+
+   <b>An enlarged hit area around the box was tried first and does not work here, which is worth
+   recording so it is not tried again.</b> The pattern the replay slider's handle uses — an
+   absolutely-positioned `::before` reaching past the control — grows the target vertically and
+   fails horizontally in a table: the neighbouring cells are positioned and come later in the
+   document, so they paint over it, and the side towards the edge is clipped by the scroll
+   container the table now keeps its overflow in. Measured: a probe 19px above the box returned the
+   checkbox, and one 19px to either side returned the next cell or the container. */
+/* Said above the participants, tight against them: it is about that list and nothing else, and a
+   gap the size of the page's own rhythm would leave it floating between two cards. */
+.tracking-select-all {
+  margin-bottom: 8px;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .tracking-table .ant-table-selection-column {
+    position: relative;
+  }
+
+  .tracking-table .ant-table-selection-column .ant-checkbox-wrapper {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* The same again for the one control that is not in a cell. It carries its own words, so the
+     label is already a target worth the name; what it lacks is height, which a checkbox takes from
+     its text. */
+  .tracking-select-all {
+    min-height: 40px;
+    padding-block: 8px;
+  }
+}
+
+/* ---- One row per caver, its columns stacked inside it: what a phone gets instead of a table.
+
+   The header goes with them — with the fields labelled one by one, a row of headings would be a
+   second set of the same words, on the axis there is least of. */
+.tracking-table-stacked .ant-table-cell {
+  /* A note or a station name is free to wrap now that nothing stands beside it. Without this the
+     cell keeps a table cell's appetite for one line and the row grows sideways again. */
+  overflow-wrap: anywhere;
+}
+
+.tracking-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tracking-stacked-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tracking-stacked-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tracking-stacked-fact {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+/* The colour is the library's — see the component. Only the size and the refusal to be squeezed
+   are said here. */
+.tracking-stacked-label {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.tracking-stacked-value {
+  min-width: 0;
+  text-align: end;
+}
+
+/* <b>The clear crosses are deliberately left at the size they are drawn, and this is the note that
+   says so rather than an oversight waiting to be tidied.</b> They are 12px, which is under
+   everything else here — but a clear cross sits inside its own field, at the end of the text, and
+   every pixel of tolerance added to it is taken from the place a finger lands to put the cursor
+   after what is already typed. That trade is not symmetrical on this surface. Missing the cross
+   costs a second tap. Hitting it by accident on the reference station empties the datum every depth
+   already on the log was resolved against, and the card above is built around never letting that
+   happen quietly. So the cross keeps its size, and clearing a field by hand stays available. */
+

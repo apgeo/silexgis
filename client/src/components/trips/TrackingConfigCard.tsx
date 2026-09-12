@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DeleteOutlined, EditOutlined, PlayCircleOutlined, StopOutlined } from '@ant-design/icons';
 import {
   Alert,
   App,
   Button,
   Card,
+  ConfigProvider,
   Descriptions,
   Flex,
   Form,
@@ -27,6 +28,7 @@ import {
   useSurveyModelsForCaves,
   type TrackingState,
 } from '../../api/hooks.ts';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
 
 interface ConfigForm {
@@ -34,6 +36,19 @@ interface ConfigForm {
   referenceStationName: string;
   depthFilter: string[];
 }
+
+/**
+ * What an option in a dropdown is worth under a finger.
+ *
+ * The control that opens the list takes its size from the `size` it is given, but the list itself
+ * does not: antd builds an option's height from this token and from nothing else, so a chooser
+ * grown to forty pixels still opens onto thirty-two-pixel rows — the target that actually decides
+ * whether the right survey gets picked. Given as a component token rather than as a rule pushed
+ * into a stylesheet because the option's padding is derived from the same arithmetic, and because
+ * the list is drawn in a portal at the end of the document where the card's own selectors cannot
+ * reach it.
+ */
+const COARSE_SELECT = { optionHeight: 40 };
 
 interface Props {
   tripLogId: string;
@@ -73,6 +88,10 @@ export default function TrackingConfigCard({
 }: Props) {
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
+  // Every control on this card is something somebody presses, and how big it has to be depends on
+  // what is pressing it — not on how much room there is. A phone in landscape has the width of a
+  // desk and still no pixel precision, so the branch is made once, here, on the pointer.
+  const coarse = useCoarsePointer();
   const [form] = Form.useForm<ConfigForm>();
   const save = useSetTripTracking();
   const createTeam = useCreateTrackingTeam();
@@ -189,6 +208,32 @@ export default function TrackingConfigCard({
   const armed = tracking.state === 'armed';
 
   /**
+   * How big everything on this card is drawn. `large` is where the forty pixels come from — antd
+   * builds it out of `controlHeightLG`, the touch target the rest of this application uses — and
+   * asking by size rather than by height means the padding, line height and icon inside each
+   * control are built for the size the control believes it is. `middle` is what a desk has always
+   * had here and is left exactly as it was.
+   */
+  const controlSize: 'large' | 'middle' = coarse ? 'large' : 'middle';
+  /**
+   * The same forty pixels for the glyph-only buttons that live inside a chip or an alert, which
+   * are drawn small on a desk and stay that way there — sizing those up with everything else would
+   * redraw a surface that has no problem on the machine it was designed for.
+   */
+  const chipSize: 'large' | 'small' = coarse ? 'large' : 'small';
+  /** A confirmation is two more things to press, pressed by the same finger as the rest. */
+  const confirmSizes = {
+    okButtonProps: { size: controlSize },
+    cancelButtonProps: { size: controlSize },
+  };
+  // Held still across renders: a fresh object is a fresh theme, and every one of those has the
+  // whole select's styles derived again.
+  const selectTheme = useMemo(
+    () => ({ components: { Select: coarse ? COARSE_SELECT : {} } }),
+    [coarse],
+  );
+
+  /**
    * Whether this answer's configuration was kept back rather than never set.
    *
    * The survey, the reference station and the depth filter are station vocabulary of the tracked
@@ -248,7 +293,7 @@ export default function TrackingConfigCard({
               action={
                 configLocked ? (
                   <Button
-                    size="small"
+                    size={chipSize}
                     onClick={() => setReplacing(true)}
                     data-testid="trip-tracking-config-replace"
                   >
@@ -258,62 +303,69 @@ export default function TrackingConfigCard({
               }
             />
           )}
-          <Form<ConfigForm>
-            form={form}
-            layout="vertical"
-            requiredMark={false}
-            disabled={configLocked}
-            initialValues={{
-              surveyModelId: tracking.surveyModelId,
-              referenceStationName: tracking.referenceStationName ?? '',
-              depthFilter: tracking.depthFilter,
-            }}
-          >
-            <Form.Item
-              name="surveyModelId"
-              label={t('trips.tracking.surveyModel')}
-              extra={t('trips.tracking.surveyModelHelp')}
+          {/* Wrapped out here rather than around the chooser itself: a `Form.Item` hands its value
+              and its change handler to the one element it is given, so anything put between the
+              two takes them instead of the control. */}
+          <ConfigProvider theme={selectTheme}>
+            <Form<ConfigForm>
+              form={form}
+              layout="vertical"
+              requiredMark={false}
+              size={controlSize}
+              disabled={configLocked}
+              initialValues={{
+                surveyModelId: tracking.surveyModelId,
+                referenceStationName: tracking.referenceStationName ?? '',
+                depthFilter: tracking.depthFilter,
+              }}
             >
-              <Select
-                allowClear
-                showSearch
-                optionFilterProp="label"
-                loading={models.isPending}
-                placeholder={t('trips.tracking.surveyModelPlaceholder')}
-                data-testid="trip-tracking-model"
-                options={models.data.map((model) => ({
-                  value: model.id,
-                  label: caveNames.get(model.caveId)
-                    ? `${model.name} · ${caveNames.get(model.caveId)}`
-                    : model.name,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item
-              name="referenceStationName"
-              label={t('trips.tracking.referenceStation')}
-              extra={t('trips.tracking.referenceStationHelp')}
-            >
-              <Input allowClear data-testid="trip-tracking-reference" />
-            </Form.Item>
-            <Form.Item
-              name="depthFilter"
-              label={t('trips.tracking.depthFilter')}
-              extra={t('trips.tracking.depthFilterHelp')}
-            >
-              <Select
-                mode="tags"
-                allowClear
-                open={false}
-                suffixIcon={null}
-                placeholder={t('trips.tracking.depthFilterPlaceholder')}
-                data-testid="trip-tracking-depth-filter"
-              />
-            </Form.Item>
-          </Form>
+              <Form.Item
+                name="surveyModelId"
+                label={t('trips.tracking.surveyModel')}
+                extra={t('trips.tracking.surveyModelHelp')}
+              >
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  loading={models.isPending}
+                  placeholder={t('trips.tracking.surveyModelPlaceholder')}
+                  data-testid="trip-tracking-model"
+                  options={models.data.map((model) => ({
+                    value: model.id,
+                    label: caveNames.get(model.caveId)
+                      ? `${model.name} · ${caveNames.get(model.caveId)}`
+                      : model.name,
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item
+                name="referenceStationName"
+                label={t('trips.tracking.referenceStation')}
+                extra={t('trips.tracking.referenceStationHelp')}
+              >
+                <Input allowClear data-testid="trip-tracking-reference" />
+              </Form.Item>
+              <Form.Item
+                name="depthFilter"
+                label={t('trips.tracking.depthFilter')}
+                extra={t('trips.tracking.depthFilterHelp')}
+              >
+                <Select
+                  mode="tags"
+                  allowClear
+                  open={false}
+                  suffixIcon={null}
+                  placeholder={t('trips.tracking.depthFilterPlaceholder')}
+                  data-testid="trip-tracking-depth-filter"
+                />
+              </Form.Item>
+            </Form>
+          </ConfigProvider>
 
           <Flex gap="small" wrap style={{ marginBottom: 16 }}>
             <Button
+              size={controlSize}
               onClick={() => void write(tracking.state, true)}
               loading={save.isPending}
               data-testid="trip-tracking-save"
@@ -326,6 +378,7 @@ export default function TrackingConfigCard({
             {!armed && (
               <Button
                 type="primary"
+                size={controlSize}
                 icon={<PlayCircleOutlined />}
                 onClick={() => void write('armed', true)}
                 loading={save.isPending}
@@ -338,8 +391,9 @@ export default function TrackingConfigCard({
               <Popconfirm
                 title={t('trips.tracking.closeConfirm')}
                 onConfirm={() => void write('closed', false)}
+                {...confirmSizes}
               >
-                <Button icon={<StopOutlined />} data-testid="trip-tracking-close">
+                <Button size={controlSize} icon={<StopOutlined />} data-testid="trip-tracking-close">
                   {t('trips.tracking.close')}
                 </Button>
               </Popconfirm>
@@ -356,15 +410,17 @@ export default function TrackingConfigCard({
         {tracking.teams.length === 0 ? (
           <Typography.Text type="secondary">{t('trips.tracking.teamsNone')}</Typography.Text>
         ) : (
-          <Flex gap={8} wrap>
+          <Flex gap={8} wrap align="center">
+            {/* The chip grows to hold its own buttons, so a finger-sized rename and delete simply
+                make a taller chip rather than a pair of targets crammed into a 26px one. */}
             {tracking.teams.map((team) => (
-              <Tag key={team.id}>
+              <Tag key={team.id} className="tracking-team-tag">
                 {team.title}
                 {canEdit && (
                   <>
                     <Button
                       type="link"
-                      size="small"
+                      size={chipSize}
                       icon={<EditOutlined />}
                       aria-label={t('trips.tracking.teamRename')}
                       onClick={() => setRenaming({ id: team.id, title: team.title })}
@@ -373,10 +429,11 @@ export default function TrackingConfigCard({
                     <Popconfirm
                       title={t('trips.tracking.teamDeleteConfirm')}
                       onConfirm={() => void onDeleteTeam(team.id)}
+                      {...confirmSizes}
                     >
                       <Button
                         type="link"
-                        size="small"
+                        size={chipSize}
                         icon={<DeleteOutlined />}
                         aria-label={t('trips.tracking.teamDelete')}
                         data-testid={`trip-tracking-team-delete-${team.id}`}
@@ -391,7 +448,7 @@ export default function TrackingConfigCard({
       </div>
 
       {canEdit && (
-        <Space.Compact style={{ width: '100%', marginTop: 8 }}>
+        <Space.Compact style={{ width: '100%', marginTop: 8 }} size={controlSize}>
           <Input
             value={renaming ? renaming.title : newTeam}
             onChange={(event) =>

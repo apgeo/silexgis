@@ -201,7 +201,7 @@ export default function TripLogDetailPage() {
 
   return (
     <div style={{ padding: 24, maxWidth: 900 }}>
-      <Flex justify="space-between" align="center" gap={12} style={{ marginBottom: 12 }}>
+      <Flex justify="space-between" align="center" gap={12} wrap style={{ marginBottom: 12 }}>
         {/* The badge sits with the title rather than down among the details: whether this has
             gone out yet is the first thing an author needs from the page. */}
         <Flex align="center" gap={8} wrap>
@@ -210,7 +210,11 @@ export default function TripLogDetailPage() {
           </Typography.Title>
           <TripStateTag state={trip.state} />
         </Flex>
-        <Flex gap={8}>
+        {/* Wrapped, because five buttons in a row come to 641px and a phone is 412px across.
+            Unwrapped this row was the largest single reason the whole page scrolled sideways —
+            larger than the tables under it — and a page that scrolls sideways takes every other
+            control off the screen with it. Nothing moves where the row already fits. */}
+        <Flex gap={8} wrap>
           {/* The write-up as a document rather than a form, for anybody who may read the trip:
               circulating one is not an act of editing it. */}
           <Link to={`/trip-logs/${trip.id}/report`}>

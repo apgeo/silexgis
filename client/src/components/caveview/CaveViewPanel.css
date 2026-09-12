@@ -25,6 +25,65 @@
   }
 }
 
+/* <b>Below 768px the viewer's own stylesheet takes the whole screen, and this panel is not a page.</b>
+
+   `caveview.css` inverts its own fullscreen logic across that breakpoint. Above it, the container
+   sits where it was put and `body div.toggle-fullscreen` covers the screen — the class the viewer
+   adds when its fullscreen button is pressed. Below it, the pair is reversed:
+   `body div.cv-container:not(.toggle-fullscreen)` pins *every* container to
+   `position: fixed; inset: 0; z-index: 999`, so covering the screen is the default and the button
+   is what leaves. That is a reasonable default for a page whose whole job is the viewer. It is a
+   dead end for a panel that is one card in a scrolling tab: the surface paints over the button that
+   hides it, over the replay strip above it and over the panel's own list of who is where, and since
+   the viewer consumes every gesture inside itself there is nothing left to scroll and nothing left
+   to press. Measured in a 412x915 portrait context: the surface covers 412x839 at 0,0, every probe
+   into the viewport lands on the canvas, and a 200px swipe moves the page zero pixels.
+
+   The viewer cannot get itself out of that, either, and the reason is worth recording because it
+   makes the state unrecoverable rather than merely awkward. Its `fullscreen` getter is
+   `window.innerHeight === container.clientHeight && window.innerWidth === container.clientWidth` —
+   it decides whether it is fullscreen by measuring itself against the window. Under the rule above
+   that is true before anybody asks, so the toolbar button toggles it to false, removes a class that
+   was never added and exits a fullscreen that was never entered. Nothing changes, and reloading the
+   page is the only way back.
+
+   So the breakpoint's inversion is undone for this panel and the wide-screen pair is restored:
+   in the flow at the size it was given, covering the screen when — and only when — the viewer's own
+   button says so. Undone rather than sidestepped through the rule's `:not(.toggle-fullscreen)`
+   hatch, because that class is the viewer's own word for "I am in fullscreen" and setting it
+   without being in fullscreen is a lie the viewer reads back out of the DOM.
+
+   Both selectors name one class more than the vendored rule does, and they have to: the viewer's
+   stylesheet is injected into the head when the bundle loads, so it always comes after this file
+   and a tie on specificity goes to it. */
+@media (max-width: 767px) {
+  body div.caveview-panel-surface.cv-container:not(.toggle-fullscreen) {
+    position: relative !important;
+    inset: auto !important;
+    /* The panel gives the surface its size inline; these only take back what the vendored rule
+       overrode with `auto !important`, which an inline style cannot outrank. */
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: auto;
+  }
+
+  /* Asked for, and therefore given. The Fullscreen API normally puts the element in the top layer
+     on its own; this is what still covers the screen when the request is refused — which is the
+     ordinary case inside an embedded frame, and used to be indistinguishable from the button
+     doing nothing. */
+  body div.caveview-panel-surface.cv-container.toggle-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 999;
+  }
+}
+
 /* Said over the model rather than above it: the panel is given a fixed height by whoever mounts
    it, and a notice in the flow would push the viewer's own surface out of the bottom of it. */
 .caveview-panel-notice {

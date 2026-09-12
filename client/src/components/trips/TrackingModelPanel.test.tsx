@@ -28,14 +28,34 @@ vi.mock('../../api/hooks.ts', () => ({
 }));
 
 // The viewer itself is a three.js bundle holding a drawing context. What it is handed is the
-// point: which model, and who is drawn on it.
-let given: { fileName?: string; surveyModelId?: string; trackedCavers?: readonly TrackedCaver[] } | undefined;
+// point: which model, who is drawn on it, and how much of the screen it may take.
+let given:
+  | {
+      fileName?: string;
+      surveyModelId?: string;
+      trackedCavers?: readonly TrackedCaver[];
+      height?: number | string;
+    }
+  | undefined;
 vi.mock('../caveview/CaveViewPanel.tsx', () => ({
-  default: (props: { fileName: string; surveyModelId?: string; trackedCavers?: readonly TrackedCaver[] }) => {
+  default: (props: {
+    fileName: string;
+    surveyModelId?: string;
+    trackedCavers?: readonly TrackedCaver[];
+    height?: number | string;
+  }) => {
     given = props;
     return <div data-testid="viewer" />;
   },
 }));
+
+// The two axes this panel chooses on, both mocked rather than driven by media queries, as the rest
+// of this application tests its phone layouts. Both false by default: a desk screen with a mouse,
+// which is what every other test in this file is being read on.
+let narrow = false;
+let coarse = false;
+vi.mock('../../hooks/useIsMobile.ts', () => ({ useIsMobile: () => narrow }));
+vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => coarse }));
 
 const { default: TrackingModelPanel } = await import('./TrackingModelPanel.tsx');
 
@@ -114,6 +134,8 @@ beforeEach(() => {
   given = undefined;
   log = [];
   logAskedFor = undefined;
+  narrow = false;
+  coarse = false;
 });
 
 afterEach(cleanup);
@@ -219,11 +241,79 @@ describe('TrackingModelPanel', () => {
     expect(given!.trackedCavers).toEqual(live);
   });
 
+  /**
+   * The three axes this panel is laid out on, and the one that used to be missing.
+   *
+   * Width and pointer were already read. Height was not, and it is the one a phone held sideways
+   * fails on: it is wide enough to be handed the desk layout and short enough that the desk
+   * layout's model does not fit on it.
+   */
+  describe('on a screen with a shape', () => {
+    it('never lets the model take more of the screen than it can spare', () => {
+      // A desk screen keeps the size it always had. `min` is what makes that true and keeps it
+      // true on a short window: the number below is a ceiling, not a measurement.
+      show();
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      expect(given!.height).toBe('min(460px, 60dvh)');
+    });
+
+    it('asks for less of a narrow screen, and still no more than a share of it', () => {
+      narrow = true;
+      show();
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      expect(given!.height).toBe('min(320px, 60dvh)');
+    });
+
+    it('caps against the viewport on the branch a phone held sideways actually takes', () => {
+      // The case all of this is for, and the reason the cap cannot live in the narrow branch. A
+      // phone in landscape reports a desk's width, so `useIsMobile` is false and the panel takes
+      // the wide branch — on a viewport 360px tall, which cannot hold 460px of anything. So the
+      // wide branch is asserted to carry a limit that is a share of the screen rather than a
+      // number of pixels, because that is the only half of it that knows the screen is short.
+      narrow = false;
+      show();
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+      const height = String(given!.height);
+      expect(height).toMatch(/^min\(/);
+      // A fraction of the viewport's own height, not of its width and not a constant: those are
+      // the two answers that leave a short screen with a model taller than it is.
+      expect(height).toMatch(/\b\d+dvh\b/);
+      expect(height).not.toMatch(/vw/);
+    });
+  });
+
+  describe('drawn for a finger', () => {
+    it('sizes the button that opens the model for one', () => {
+      coarse = true;
+      show();
+
+      expect(screen.getByTestId('trip-tracking-model-toggle')).toHaveClass('ant-btn-lg');
+    });
+
+    it('keeps the dense chrome where there is a mouse', () => {
+      // The button sits in a card header beside a title; on a desk the room it takes is worth
+      // more than a hit tolerance nothing there needs.
+      show();
+
+      expect(screen.getByTestId('trip-tracking-model-toggle')).toHaveClass('ant-btn-sm');
+    });
+  });
+
+  it('answers to a name of its own rather than sharing the survey chooser\'s', () => {
+    // Two elements under one name is a locator that matches both and picks neither, which is a
+    // defect a phone test would meet before anybody else did.
+    show();
+
+    expect(screen.getByTestId('trip-tracking-model-panel')).toBeTruthy();
+    expect(screen.queryByTestId('trip-tracking-model')).toBeNull();
+  });
+
   it('offers nothing when the watch names no model', () => {
     show(tracking({ surveyModelId: null }));
 
     expect(askedFor).toBeUndefined();
-    expect(screen.queryByTestId('trip-tracking-model')).toBeNull();
+    expect(screen.queryByTestId('trip-tracking-model-panel')).toBeNull();
   });
 
   it('offers nothing for a model this viewer cannot read, or one that is not ready yet', () => {
@@ -231,11 +321,11 @@ describe('TrackingModelPanel', () => {
     // nothing to draw. Offering either is a button whose every press fails.
     held = model({ format: 'stl' });
     const walls = show();
-    expect(screen.queryByTestId('trip-tracking-model')).toBeNull();
+    expect(screen.queryByTestId('trip-tracking-model-panel')).toBeNull();
     walls.unmount();
 
     held = model({ status: 'processing' });
     show();
-    expect(screen.queryByTestId('trip-tracking-model')).toBeNull();
+    expect(screen.queryByTestId('trip-tracking-model-panel')).toBeNull();
   });
 });

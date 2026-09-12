@@ -24,6 +24,12 @@ vi.mock('../../api/hooks.ts', () => ({
   useCaveNames: () => new Map<string, string>(),
 }));
 
+// What decides how big every control on this card is drawn. Mocked rather than driven by a media
+// query, as the rest of this application tests its finger layouts; false by default, which is the
+// machine every other test in this file is being read on.
+let coarse = false;
+vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => coarse }));
+
 const { default: TrackingConfigCard } = await import('./TrackingConfigCard.tsx');
 
 function state(overrides: Partial<TrackingState> = {}): TrackingState {
@@ -60,6 +66,7 @@ beforeEach(() => {
   createTeam.mockReset().mockResolvedValue({ id: 'team-1', title: 'Team A' });
   renameTeam.mockReset().mockResolvedValue({ id: 'team-1', title: 'Team B' });
   deleteTeam.mockReset().mockResolvedValue(undefined);
+  coarse = false;
 });
 
 afterEach(cleanup);
@@ -231,4 +238,68 @@ describe('TrackingConfigCard', () => {
       title: 'Bottom team',
     });
   });
+
+  /**
+   * <b>Chosen on the pointer and never on the width.</b> A phone held sideways reports 863px
+   * across — a desk's worth of room — and still has nothing on it that can hit a 24px target, so
+   * a card that sized its controls by how much room it had would leave that device exactly as it
+   * was. Everything here is something somebody presses, so the branch is made once for the card
+   * rather than control by control, which is how a surface ends up with its rarest button sized
+   * for a finger and its commonest one left alone.
+   */
+  describe('drawn for a finger', () => {
+    const LARGE = 'ant-btn-lg';
+
+    it('sizes the acts that start and end a watch, and the fields they carry', () => {
+      coarse = true;
+      show();
+
+      expect(screen.getByTestId('trip-tracking-save')).toHaveClass(LARGE);
+      expect(screen.getByTestId('trip-tracking-close')).toHaveClass(LARGE);
+      // The configuration fields matter as much as the buttons: the reference station is the datum
+      // every depth on the log is resolved against, and it is typed into on a hillside.
+      expect(screen.getByTestId('trip-tracking-reference')).toHaveClass('ant-input-lg');
+      expect(screen.getByTestId('trip-tracking-model')).toHaveClass('ant-select-lg');
+      expect(screen.getByTestId('trip-tracking-depth-filter')).toHaveClass('ant-select-lg');
+    });
+
+    it('sizes the teams editor, including the two buttons buried in a chip', () => {
+      coarse = true;
+      show(state({ teams: [{ id: 'team-1', title: 'Team A' }] }));
+
+      expect(screen.getByTestId('trip-tracking-team-title')).toHaveClass('ant-input-lg');
+      expect(screen.getByTestId('trip-tracking-team-submit')).toHaveClass(LARGE);
+      // These two were the smallest controls on the card by some way, and the chip simply grows
+      // to hold them rather than the targets being crammed into it.
+      expect(screen.getByTestId('trip-tracking-team-rename-team-1')).toHaveClass(LARGE);
+      expect(screen.getByTestId('trip-tracking-team-delete-team-1')).toHaveClass(LARGE);
+    });
+
+    it('offers a watch it may not read the same target on the button that unlocks it', () => {
+      // The one act on this card that replaces a datum somebody was never shown. It is drawn small
+      // on a desk because it lives inside a warning, and small is the whole problem on a phone.
+      coarse = true;
+      show(
+        state({
+          positionsWithheld: true,
+          surveyModelId: null,
+          referenceStationName: null,
+          depthFilter: [],
+        }),
+      );
+
+      expect(screen.getByTestId('trip-tracking-config-replace')).toHaveClass(LARGE);
+    });
+
+    it('leaves the card exactly as it was where there is a mouse', () => {
+      show(state({ teams: [{ id: 'team-1', title: 'Team A' }] }));
+
+      expect(screen.getByTestId('trip-tracking-save')).not.toHaveClass(LARGE);
+      expect(screen.getByTestId('trip-tracking-reference')).not.toHaveClass('ant-input-lg');
+      // Still the small link buttons the chip was designed around.
+      expect(screen.getByTestId('trip-tracking-team-rename-team-1')).toHaveClass('ant-btn-sm');
+      expect(screen.getByTestId('trip-tracking-team-delete-team-1')).toHaveClass('ant-btn-sm');
+    });
+  });
+
 });

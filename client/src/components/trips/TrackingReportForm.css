@@ -1,0 +1,123 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The one panel on this card that is not drawn inside it: the calendar behind "when it was said",
+   which antd renders in a portal at the end of the document and sizes from its own contents.
+
+   The rules below are split on purpose, and the split is the whole point of this file. What has to
+   be big enough to hit is chosen on the *pointer*; whether there is room across for a calendar and
+   a clock side by side is chosen on the *width*; and whether the panel fits on the screen at all is
+   chosen on the *height*. A phone held sideways is wide and short and coarse all at once, which is
+   why answering any of those three with one of the others leaves it broken. */
+
+/* ---- Across: a date and a time side by side do not fit on a phone, and antd will not fold them.
+
+   The picker lays its calendar and its columns of hours out in one row, so the panel comes to more
+   than a narrow screen is wide however the popup is placed — measured at 457px on a 412px screen.
+   What a reader loses is not cosmetic and not symmetrical: the overflow is resolved by hanging the
+   panel off the *left* edge, which is where the first days of the week and both of the "go back"
+   arrows live. Sunday, Monday, the previous month and the previous year were all off the screen, on
+   the one control whose entire reason for existing is to name a moment in the past.
+
+   Stacked rather than shrunk. The calendar's own width is what a legible month costs at a cell size
+   a finger can hit, and squeezing it is how the days stop being separable; putting the clock under
+   the calendar instead spends height, which is the axis a popup can scroll. */
+@media (max-width: 767px) {
+  .tracking-report-when-popup .ant-picker-datetime-panel {
+    flex-direction: column;
+  }
+
+  /* The clock is laid out to fill the height of the calendar beside it. Below it instead, that
+     height is a column of empty rows under three visible ones, so it is asked for only what the
+     hours actually need — antd scrolls each column to the chosen value regardless, so the value in
+     force is on screen whatever the column is cut to. */
+  .tracking-report-when-popup .ant-picker-datetime-panel .ant-picker-time-panel {
+    width: 100%;
+    border-inline-start: none;
+    border-top: 1px solid var(--ant-color-split, rgba(5, 5, 5, 0.06));
+  }
+
+  /* Stacked, the clock's height is added to the calendar's instead of standing beside it, so it is
+     asked for four finger-sized rows and no more. Enough to scrub an hour in one gesture, and
+     little enough that the calendar above and the buttons below are on the same screen. */
+  .tracking-report-when-popup .ant-picker-datetime-panel .ant-picker-time-panel-column {
+    height: auto;
+    max-height: 168px;
+  }
+}
+
+/* ---- Down: the panel never stands taller than the screen it opens on.
+
+   Stated outside any width query, because it is not a question about width. A phone in landscape is
+   863px across and 360px down, so it takes the side-by-side layout above and still cannot hold a
+   panel that is 466px tall once its cells are sized for a finger — and a panel taller than the
+   viewport is placed with one end off it, which on this control is either the month it opens at or
+   the button that accepts the answer. Capped, the overflow becomes something to scroll. */
+.tracking-report-when-popup .ant-picker-panel-container {
+  max-width: calc(100vw - 16px);
+  overflow-x: auto;
+}
+
+/* Held on the panel's body rather than on the popup as a whole, so that what gives way is the
+   calendar and never the row of buttons under it. Capping the popup itself puts "OK" inside the
+   scrolled region, where on a phone held sideways it sat below the fold of a panel that was
+   otherwise entirely on screen — a control that looks complete and cannot be finished. */
+.tracking-report-when-popup .ant-picker-datetime-panel {
+  max-height: calc(100dvh - 120px);
+  overflow: auto;
+}
+
+/* On a screen short enough for that cap to bite, the clock is what gives way first: a calendar with
+   some of its weeks cut off is a calendar somebody picks the wrong day from, while a column of
+   hours is scrolled to its value by the picker itself and reads the same however much of it shows. */
+@media (max-height: 640px) {
+  .tracking-report-when-popup .ant-picker-time-panel-column {
+    height: auto;
+    max-height: 45dvh;
+  }
+}
+
+/* ---- Under a finger: the footer, which is the one place a size cannot be asked for.
+
+   "Now" is a link and "OK" is drawn small whatever the panel around it is, so on a calendar whose
+   every other cell has been sized for a finger they end up the two smallest things on it. They are
+   the only controls in this feature whose height is pushed in from a stylesheet rather than asked
+   for by `size` — there is no prop, no token and no slot that reaches them — so the padding and the
+   line height are restated with it, which is what a size would otherwise have carried. */
+@media (hover: none), (pointer: coarse) {
+  .tracking-report-when-popup .ant-picker-footer .ant-picker-ok .ant-btn,
+  .tracking-report-when-popup .ant-picker-footer .ant-picker-now-btn {
+    min-height: 40px;
+    padding-inline: 16px;
+    line-height: 40px;
+  }
+
+  .tracking-report-when-popup .ant-picker-footer .ant-picker-now-btn {
+    display: inline-block;
+  }
+
+  /* ---- And the header, which is the other place a size cannot be asked for — and the one that
+     matters most on this control.
+
+     The rule above these put the month's back-arrows back on the screen; it did not make them
+     hittable. antd sizes the header's buttons from their padding alone, which no token reaches, so
+     on a panel whose every cell had been grown to forty pixels the arrows stayed 22px wide — and
+     the two that walk backwards stand side by side, so a miss does not do nothing, it goes back a
+     whole year instead of a month. A relayed report is by definition in the past, walking back is
+     this panel's main job, and September 2025 is a date the server accepts as readily as August
+     2026 because both of them are behind us.
+
+     Given as `min-width` so only the too-small direction is touched: the month and year names in
+     the middle already size themselves to their text and keep it. The four arrows and the two
+     names come to about 230px inside a header measured at 316px, so nothing is pushed out. */
+  .tracking-report-when-popup .ant-picker-header > button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  /* The month and the year are buttons too — the way into the year and decade panels, and the only
+     way back out of a mis-tap into 2025. They are text, so they are widened by their padding
+     rather than by a width that would push the arrows off the ends. */
+  .tracking-report-when-popup .ant-picker-header-view > button {
+    min-height: 40px;
+    padding-inline: 8px;
+  }
+}

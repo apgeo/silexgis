@@ -223,4 +223,18 @@ describe('the trip page', () => {
     renderPage(`/trip-logs/${TRIP}?tab=photos`);
     expect(screen.getByTestId('trip-photo-import')).toBeTruthy();
   });
+
+  it('lets the row of page actions wrap rather than pushing the whole page sideways', () => {
+    // Five buttons in a row come to 641px and a phone is 412px across. Unwrapped, this row was the
+    // largest single reason the trip page scrolled sideways — larger than the tables under it —
+    // and a page that scrolls sideways takes every other control off the screen with it: measured
+    // on a 412px screen, sliding far enough right to read a caver's position put the tracking
+    // card's Save button 297px off the left edge. Nothing moves where the row already fits.
+    canSpy.mockReturnValue(true);
+    renderPage();
+
+    const actions = screen.getByTestId('trip-open-report').closest('.ant-flex');
+    expect(actions).toHaveStyle({ flexWrap: 'wrap' });
+  });
+
 });

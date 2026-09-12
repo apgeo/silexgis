@@ -100,11 +100,17 @@ export default function CaveViewTrackingOverlay({
     }
   };
 
+  // Said on the element rather than left to a `:has()` in the stylesheet, so what the layout
+  // branches on is a fact this component states and a test can read back: on a screen too short
+  // to hold the list and a card at once, the card is what the reader asked for.
+  const classes = [
+    'caveview-tracking',
+    raised ? 'caveview-tracking-raised' : '',
+    open !== null ? 'caveview-tracking-carded' : '',
+  ].filter(Boolean);
+
   return (
-    <div
-      className={`caveview-tracking${raised ? ' caveview-tracking-raised' : ''}`}
-      data-testid="caveview-tracking"
-    >
+    <div className={classes.join(' ')} data-testid="caveview-tracking">
       {/* Reversed in the stylesheet: the box is the anchor and the card grows up out of it. */}
       <div className="caveview-tracking-box">
         <Button

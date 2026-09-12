@@ -14,6 +14,7 @@ import CaveViewPanel from '../caveview/CaveViewPanel.tsx';
 import { trackedCaversFrom } from '../../caveview/trackedCavers.ts';
 import { trackedCaversAt } from '../../caveview/trackingReplay.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import TrackingReplayBar from './TrackingReplayBar.tsx';
 
@@ -31,6 +32,46 @@ export interface TrackingModelPanelProps {
 /** Taller than a phone can spare, shorter than a desk screen would waste. */
 const HEIGHT = 460;
 const NARROW_HEIGHT = 320;
+
+/**
+ * The share of the screen the model is allowed to take, whatever else says about its size.
+ *
+ * <b>This is the axis neither of the other two describes, and leaving it out is what made a phone
+ * in landscape unusable.</b> Width says how much room there is across, the pointer says how big a
+ * thing has to be to press — and neither of them knows that a 863x360 phone on its side is wide
+ * enough to be handed the desk layout's 460px model in a viewport 360px tall. Measured there, the
+ * model overhung the screen by a hundred pixels with the card's own edges off it too, and because
+ * the viewer takes every gesture that starts inside it there was nowhere left to put a finger: a
+ * swipe at the middle of the surface and a swipe at the bottom strip of the viewport both moved the
+ * page zero pixels.
+ *
+ * <b>The gesture cannot be handed back, which is why this is the fix.</b> The obvious repair is the
+ * one the replay bar's scrubber uses — `touch-action: pan-y`, giving the browser the axis it
+ * scrolls on. It does not work here and must not be copied here. That strip can spare the vertical
+ * axis because it only scrubs along the horizontal one; a model is turned in both, and one-finger
+ * vertical drag is how anybody looks down a pitch. Driven against the live viewer with `pan-y`
+ * forced onto the surface, the page still scrolled zero pixels while the scene still moved: the
+ * browser claims the gesture — later `touchmove`s arrive with `cancelable` false — but the viewer's
+ * container is `overflow: hidden`, so the pan it starts belongs to a box with nothing to scroll and
+ * chains no further. The result is the worst of the two, and the honest reading is that the surface
+ * is a control that owns its gestures, exactly like the slider's handle.
+ *
+ * So the model is kept from ever being the only thing under a thumb. At three fifths there is
+ * always two fifths of the screen that is ordinary page, in any orientation, and a reader who wants
+ * to get past the model never has to fight it for the gesture. `dvh` rather than `vh` because a
+ * phone's address bar collapses and `vh` keeps quoting the taller measurement — the fraction is
+ * here to guarantee what is left over, so it has to be a fraction of what is actually on screen.
+ *
+ * It also puts the viewer's own fullscreen button back in working order as a side effect, and that
+ * is not a coincidence: the viewer decides whether it is already fullscreen by comparing its height
+ * to the window's, and a height that is a fraction of the viewport can never be mistaken for the
+ * whole of it.
+ */
+const VIEWPORT_SHARE = '60dvh';
+
+/** The two numbers above, each held under what the screen can actually spare. */
+const modelHeight = (narrow: boolean) =>
+  `min(${narrow ? NARROW_HEIGHT : HEIGHT}px, ${VIEWPORT_SHARE})`;
 
 /**
  * The party on the survey: everybody the watch names, drawn where they were last reported.
@@ -63,6 +104,10 @@ export default function TrackingModelPanel({
 }: TrackingModelPanelProps) {
   const { t } = useTranslation();
   const narrow = useIsMobile();
+  // The one control this panel owns is the button that opens the model, and how big it has to be
+  // depends on what is pressing it and on nothing else — the same rule, and the same hook, as the
+  // replay strip inside it.
+  const coarse = useCoarsePointer();
   const [open, setOpen] = useState(false);
   /** Whether the panel is showing a moment of the trip rather than the watch as it stands. */
   const [replaying, setReplaying] = useState(false);
@@ -139,6 +184,7 @@ export default function TrackingModelPanel({
   }
 
   const shown = replaying && replayCavers !== null ? replayCavers : cavers;
+  const controlSize: 'large' | 'small' = coarse ? 'large' : 'small';
 
   /** Hiding the model puts the live watch back: a replay of a model nobody is looking at is state. */
   const onToggle = () => {
@@ -153,9 +199,16 @@ export default function TrackingModelPanel({
     <Card
       size="small"
       title={t('trips.tracking.modelTitle')}
-      data-testid="trip-tracking-model"
+      // Named for the panel rather than for the model it holds. The survey chooser in the setup
+      // card above is the other `trip-tracking-model`, and two elements answering one name is a
+      // locator that matches both and picks neither.
+      data-testid="trip-tracking-model-panel"
       extra={
-        <Button size="small" onClick={onToggle} data-testid="trip-tracking-model-toggle">
+        <Button
+          size={controlSize}
+          onClick={onToggle}
+          data-testid="trip-tracking-model-toggle"
+        >
           {t(open ? 'trips.tracking.modelHide' : 'trips.tracking.modelShow')}
         </Button>
       }
@@ -185,7 +238,7 @@ export default function TrackingModelPanel({
           <CaveViewPanel
             fileUrl={model.modelUrl}
             fileName={viewerFileName(model)}
-            height={narrow ? NARROW_HEIGHT : HEIGHT}
+            height={modelHeight(narrow)}
             surveyModelId={model.id}
             trackedCavers={shown}
             // The viewer's own controls: this is a model shown to be read rather than one shown

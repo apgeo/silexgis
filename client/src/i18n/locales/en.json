@@ -1305,6 +1305,7 @@
       "recordFor": "Record for {{count}} selected",
       "markOut": "Mark {{count}} out",
       "selectNobody": "Tick the people this report is about first — one report is recorded for all of them at once.",
+      "selectEverybody": "Select everybody ({{count}})",
       "recorded": "Recorded for {{count}}.",
       "notArmedTitle": "Tracking is not on for this trip",
       "notArmedBody": "Reports land only while tracking is on. Start it above, and everything reported from then on is kept on the log.",

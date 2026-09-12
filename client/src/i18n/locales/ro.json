@@ -1305,6 +1305,7 @@
       "recordFor": "Înregistrează pentru {{count}} selectați",
       "markOut": "Marchează {{count}} ca ieșiți",
       "selectNobody": "Bifează întâi oamenii despre care este raportul — se înregistrează un singur raport pentru toți deodată.",
+      "selectEverybody": "Selectează pe toți ({{count}})",
       "recorded": "Înregistrat pentru {{count}}.",
       "notArmedTitle": "Urmărirea nu este pornită pentru această tură",
       "notArmedBody": "Rapoartele se înregistrează doar cât timp urmărirea este pornită. Pornește-o mai sus, iar tot ce se raportează de atunci rămâne în jurnal.",

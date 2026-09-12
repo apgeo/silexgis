@@ -1,7 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { DeleteOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
-import { Alert, App, Popconfirm, Skeleton, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import {
+  Alert,
+  App,
+  Button,
+  Checkbox,
+  Popconfirm,
+  Skeleton,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+} from 'antd';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   useDeleteTrackingEvent,
@@ -15,6 +28,9 @@ import TrackingConfigCard from '../../components/trips/TrackingConfigCard.tsx';
 import TrackingModelPanel from '../../components/trips/TrackingModelPanel.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
 import { trackingProblemMessage } from '../../components/trips/trackingProblems.ts';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
+import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import './TripTrackingTab.css';
 
 /** How many reports the log shows without being asked for more. */
 const RECENT_EVENTS = 20;
@@ -48,6 +64,12 @@ export default function TripTrackingTab({
 }) {
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
+  // Chosen on the pointer, never on the width: a phone held in landscape has a desk's worth of
+  // room across and still nothing on it that can hit a fourteen-pixel icon.
+  const coarse = useCoarsePointer();
+  // And chosen on the width, never on the pointer: how much room there is across is what decides
+  // whether five columns can stand side by side, and a tablet with a trackpad has the room.
+  const narrow = useIsMobile();
   const { data, isPending, error, refetch } = useTripTracking(trip.id);
   const events = useTripTrackingEvents(trip.id, { pageSize: RECENT_EVENTS });
   const deleteEvent = useDeleteTrackingEvent();
@@ -136,6 +158,48 @@ export default function TripTrackingTab({
     return row.kind === 'atStation' || row.kind === 'atDepth' ? withheldTag(true) : '—';
   };
 
+  const teamOf = (teamId: string | null) =>
+    teamId && teamTitles.has(teamId) ? <Tag>{teamTitles.get(teamId)}</Tag> : '—';
+
+  const kindOf = (kind: TrackingParticipant['lastKind'], out: boolean) =>
+    kind ? <Tag color={out ? 'default' : 'blue'}>{t(`trips.tracking.kinds.${kind}`)}</Tag> : '—';
+
+  /**
+   * One field of a row, said as a label and an answer stacked under each other.
+   *
+   * <b>The column headings become these labels, and that is the whole of why this layout exists.</b>
+   * Five columns of a watch do not fit across a phone, and a table told to keep its own overflow
+   * keeps it by scrolling sideways — which is not the same as showing it. Measured at 412px with
+   * both tables at rest: the participants' "Where" began 139px past the right edge and the log's
+   * delete control 457px past it, so the answer to "where is everybody", and the only way to take a
+   * wrong report off the log, were both reachable only by a horizontal drag inside a table that
+   * gives no sign it has more to the right. Stacked, every field of every row is on screen at rest
+   * and the page scrolls the way a page scrolls.
+   */
+  const fact = (label: string, value: ReactNode) => (
+    <div className="tracking-stacked-fact" key={label}>
+      {/* Said with the library's own secondary text rather than a colour of this stylesheet's own:
+          the label has to recede from its answer in both themes, and a colour written here would
+          have to be written twice and kept in step by hand. */}
+      <Typography.Text type="secondary" className="tracking-stacked-label">
+        {label}
+      </Typography.Text>
+      <span className="tracking-stacked-value">{value}</span>
+    </div>
+  );
+
+  /**
+   * How big everything somebody presses on this surface is drawn.
+   *
+   * `small` on a desk is what these controls have always been; `large` is where the forty pixels
+   * come from, built by antd out of `controlHeightLG` — the touch target the rest of this
+   * application uses. Asked for by size rather than set as a height, so the padding, line height
+   * and icon inside each control are built for the size the control believes it is.
+   */
+  const controlSize: 'large' | 'small' = coarse ? 'large' : 'small';
+  /** A confirmation is two more things to press, and they are pressed by the same finger. */
+  const confirmSizes = { okButtonProps: { size: controlSize }, cancelButtonProps: { size: controlSize } };
+
   const onDeleteEvent = async (eventId: string) => {
     try {
       await deleteEvent.mutateAsync({ tripLogId: trip.id, eventId });
@@ -144,6 +208,26 @@ export default function TripTrackingTab({
       message.error(trackingProblemMessage(failure, t));
     }
   };
+
+  /** The one control that takes a report off a log nothing can edit — the same one in both layouts. */
+  const deleteControl = (row: TrackingEvent) => (
+    <Popconfirm
+      title={t('trips.tracking.eventDeleteConfirm')}
+      onConfirm={() => void onDeleteEvent(row.id)}
+      {...confirmSizes}
+    >
+      {/* A button rather than a bare icon. The icon on its own was 14px square — the smallest
+          thing on the page, and the only way to take a wrong report off a log that cannot be
+          edited. */}
+      <Button
+        type="text"
+        size={controlSize}
+        icon={<DeleteOutlined />}
+        aria-label={t('trips.tracking.eventDelete')}
+        data-testid={`trip-tracking-event-delete-${row.id}`}
+      />
+    </Popconfirm>
+  );
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -168,55 +252,117 @@ export default function TripTrackingTab({
         onStale={() => void refetch()}
       />
 
-      <Table<TrackingParticipant>
-        rowKey="caverId"
-        size="small"
-        pagination={false}
-        dataSource={data.participants}
-        data-testid="trip-tracking-participants"
-        locale={{ emptyText: t('trips.tracking.participantsNone') }}
-        rowSelection={
-          canEdit
-            ? {
-                selectedRowKeys: [...selected],
-                onChange: (keys) => setSelected(new Set(keys as string[])),
-              }
-            : undefined
-        }
-        columns={[
-          {
-            title: t('trips.tracking.columnCaver'),
-            dataIndex: 'caverId',
-            render: (caverId: string) => named(caverId),
-          },
-          {
-            title: t('trips.tracking.columnTeam'),
-            dataIndex: 'teamId',
-            render: (teamId: string | null) =>
-              teamId && teamTitles.has(teamId) ? <Tag>{teamTitles.get(teamId)}</Tag> : '—',
-          },
-          {
-            title: t('trips.tracking.columnLastKind'),
-            dataIndex: 'lastKind',
-            render: (kind: TrackingParticipant['lastKind'], row) =>
-              kind ? (
-                <Tag color={row.out ? 'default' : 'blue'}>{t(`trips.tracking.kinds.${kind}`)}</Tag>
-              ) : (
-                '—'
-              ),
-          },
-          {
-            title: t('trips.tracking.columnLastRecordedAt'),
-            dataIndex: 'lastRecordedAt',
-            render: (value: string | null) => when(value),
-          },
-          {
-            title: t('trips.tracking.columnPosition'),
-            key: 'position',
-            render: (_value, row) => positionOf(row),
-          },
-        ]}
-      />
+      <div>
+        {/* <b>Selecting everybody is a control of this page's own, and not the checkbox antd puts
+            in the table's header.</b> Two reasons, and either would be enough on its own.
+
+            The first is that on a phone there is no header to put it in: the rows are stacked, so
+            the one act this page starts with would have had nowhere to live. The second is that
+            antd's header checkbox cannot be asked to appear only once. A table told to keep its own
+            overflow gets a measure row, and the measure row *clones every column's title* into a
+            hidden cell — so the header's live "Select all" checkbox was minted a second time inside
+            a `height: 0` box marked `aria-hidden`. Measured on a desk at 1600x1000: two checkboxes
+            named "Select all", the second reachable by Tab, with no visible focus anywhere on the
+            page, and Space on it silently selected the whole party on the surface that decides who
+            a report is about. Said here instead, it is one control, it carries its own words, and
+            it is large enough to press. */}
+        {canEdit && data.participants.length > 0 && (
+          <Checkbox
+            className="tracking-select-all"
+            checked={selected.size === data.participants.length}
+            indeterminate={selected.size > 0 && selected.size < data.participants.length}
+            onChange={(event) =>
+              setSelected(
+                event.target.checked
+                  ? new Set(data.participants.map((person) => person.caverId))
+                  : new Set(),
+              )
+            }
+            data-testid="trip-tracking-select-all"
+          >
+            {t('trips.tracking.selectEverybody', { count: data.participants.length })}
+          </Checkbox>
+        )}
+
+        {/* <b>Where there is room across, five columns; where there is not, one row per caver with
+            its columns stacked inside it.</b> Wide, the table is told to keep its own overflow:
+            without that the inner table simply bursts out of its card — measured at 538px inside a
+            364px container — and because nothing clips it the whole page gains that width, so
+            reading where somebody is and pressing Save became two views of the page 334px apart.
+            Narrow, there is no sideways overflow to keep, because nothing stands side by side. */}
+        <Table<TrackingParticipant>
+          rowKey="caverId"
+          size="small"
+          pagination={false}
+          showHeader={!narrow}
+          scroll={narrow ? undefined : { x: 'max-content' }}
+          className={`tracking-table${narrow ? ' tracking-table-stacked' : ''}`}
+          dataSource={data.participants}
+          data-testid="trip-tracking-participants"
+          locale={{ emptyText: t('trips.tracking.participantsNone') }}
+          rowSelection={
+            canEdit
+              ? {
+                  selectedRowKeys: [...selected],
+                  onChange: (keys) => setSelected(new Set(keys as string[])),
+                  // Said above the table instead — see the note on that control.
+                  hideSelectAll: true,
+                  // The column is what the tap target is made of — see the stylesheet, which gives
+                  // the label the whole cell. antd's own 32px would make that cell narrower than the
+                  // finger it is for.
+                  columnWidth: coarse ? 48 : undefined,
+                }
+              : undefined
+          }
+          columns={
+            narrow
+              ? [
+                  {
+                    title: t('trips.tracking.columnCaver'),
+                    key: 'caver',
+                    render: (_value, row) => (
+                      <div className="tracking-stacked">
+                        <Typography.Text strong>{named(row.caverId)}</Typography.Text>
+                        <div className="tracking-stacked-facts">
+                          {fact(t('trips.tracking.columnTeam'), teamOf(row.teamId))}
+                          {fact(t('trips.tracking.columnLastKind'), kindOf(row.lastKind, row.out))}
+                          {fact(t('trips.tracking.columnLastRecordedAt'), when(row.lastRecordedAt))}
+                          {fact(t('trips.tracking.columnPosition'), positionOf(row))}
+                        </div>
+                      </div>
+                    ),
+                  },
+                ]
+              : [
+                  {
+                    title: t('trips.tracking.columnCaver'),
+                    dataIndex: 'caverId',
+                    render: (caverId: string) => named(caverId),
+                  },
+                  {
+                    title: t('trips.tracking.columnTeam'),
+                    dataIndex: 'teamId',
+                    render: (teamId: string | null) => teamOf(teamId),
+                  },
+                  {
+                    title: t('trips.tracking.columnLastKind'),
+                    dataIndex: 'lastKind',
+                    render: (kind: TrackingParticipant['lastKind'], row) => kindOf(kind, row.out),
+                  },
+                  {
+                    title: t('trips.tracking.columnLastRecordedAt'),
+                    dataIndex: 'lastRecordedAt',
+                    render: (value: string | null) => when(value),
+                  },
+                  {
+                    title: t('trips.tracking.columnPosition'),
+                    key: 'position',
+                    render: (_value, row) => positionOf(row),
+                  },
+                ]
+          }
+        />
+      </div>
 
       {/* The same watch on the survey it is resolved against, for whoever knows the cave well
           enough for a place to mean more than its name. Drawn under the table rather than over it:
@@ -263,6 +409,9 @@ export default function TripTrackingTab({
           size="small"
           loading={events.isPending}
           pagination={false}
+          showHeader={!narrow}
+          scroll={narrow ? undefined : { x: 'max-content' }}
+          className={`tracking-table${narrow ? ' tracking-table-stacked' : ''}`}
           dataSource={events.data?.items ?? []}
           data-testid="trip-tracking-events"
           locale={{
@@ -271,55 +420,74 @@ export default function TripTrackingTab({
                 ? t('trips.tracking.eventsUnavailable')
                 : t('trips.tracking.eventsNone'),
           }}
-          columns={[
-            {
-              title: t('trips.tracking.columnLastRecordedAt'),
-              dataIndex: 'recordedAt',
-              render: (value: string) => when(value),
-            },
-            {
-              title: t('trips.tracking.columnCaver'),
-              dataIndex: 'caverId',
-              render: (caverId: string) => named(caverId),
-            },
-            {
-              title: t('trips.tracking.columnLastKind'),
-              dataIndex: 'kind',
-              render: (kind: TrackingEvent['kind']) => (
-                <Tag>{t(`trips.tracking.kinds.${kind}`)}</Tag>
-              ),
-            },
-            {
-              title: t('trips.tracking.columnPosition'),
-              key: 'position',
-              render: (_value, row) => eventPlace(row),
-            },
-            {
-              title: t('trips.tracking.columnNote'),
-              dataIndex: 'note',
-              render: (note: string | null) => note ?? '—',
-            },
-            ...(canEdit
+          columns={
+            narrow
               ? [
                   {
-                    title: '',
-                    key: 'actions',
-                    render: (_value: unknown, row: TrackingEvent) => (
-                      <Popconfirm
-                        title={t('trips.tracking.eventDeleteConfirm')}
-                        onConfirm={() => void onDeleteEvent(row.id)}
-                      >
-                        <DeleteOutlined
-                          role="button"
-                          aria-label={t('trips.tracking.eventDelete')}
-                          data-testid={`trip-tracking-event-delete-${row.id}`}
-                        />
-                      </Popconfirm>
+                    title: t('trips.tracking.columnLastRecordedAt'),
+                    key: 'report',
+                    render: (_value, row) => (
+                      <div className="tracking-stacked">
+                        <div className="tracking-stacked-head">
+                          <Typography.Text strong>{when(row.recordedAt)}</Typography.Text>
+                          {/* On the row it corrects rather than in a column of its own. That
+                              column was the last of six, so on a phone it began 457px past the
+                              right edge of a scroller 364px wide — the only way to take a wrong
+                              report off a log nothing can edit, three screens sideways. */}
+                          {canEdit && deleteControl(row)}
+                        </div>
+                        <div className="tracking-stacked-facts">
+                          {fact(t('trips.tracking.columnCaver'), named(row.caverId))}
+                          {fact(
+                            t('trips.tracking.columnLastKind'),
+                            <Tag>{t(`trips.tracking.kinds.${row.kind}`)}</Tag>,
+                          )}
+                          {fact(t('trips.tracking.columnPosition'), eventPlace(row))}
+                          {fact(t('trips.tracking.columnNote'), row.note ?? '—')}
+                        </div>
+                      </div>
                     ),
                   },
                 ]
-              : []),
-          ]}
+              : [
+                  {
+                    title: t('trips.tracking.columnLastRecordedAt'),
+                    dataIndex: 'recordedAt',
+                    render: (value: string) => when(value),
+                  },
+                  {
+                    title: t('trips.tracking.columnCaver'),
+                    dataIndex: 'caverId',
+                    render: (caverId: string) => named(caverId),
+                  },
+                  {
+                    title: t('trips.tracking.columnLastKind'),
+                    dataIndex: 'kind',
+                    render: (kind: TrackingEvent['kind']) => (
+                      <Tag>{t(`trips.tracking.kinds.${kind}`)}</Tag>
+                    ),
+                  },
+                  {
+                    title: t('trips.tracking.columnPosition'),
+                    key: 'position',
+                    render: (_value, row) => eventPlace(row),
+                  },
+                  {
+                    title: t('trips.tracking.columnNote'),
+                    dataIndex: 'note',
+                    render: (note: string | null) => note ?? '—',
+                  },
+                  ...(canEdit
+                    ? [
+                        {
+                          title: '',
+                          key: 'actions',
+                          render: (_value: unknown, row: TrackingEvent) => deleteControl(row),
+                        },
+                      ]
+                    : []),
+                ]
+          }
         />
       </div>
     </Space>

@@ -85,6 +85,32 @@ describe('CaveViewTrackingOverlay', () => {
     expect(screen.getByTestId('caveview-caver-out')).toBeInTheDocument();
   });
 
+  /**
+   * The card is what the reader asked for, and on a short screen it is what they get.
+   *
+   * The panel this overlay stands in is a share of the viewport, so a phone held sideways gives it
+   * 216px and the overlay 200px of that. The list and a card do not both go in there: measured
+   * live in landscape, the card was squeezed to 66px against a content height of 139px — the name
+   * and the close button, and not one of the four rows under them. The first of those to go was
+   * `Position`, the row that says a position was withheld, so a reader on a phone was told less
+   * about protection than one at a desk. The overlay now says outright when a card is open, and
+   * the stylesheet folds the list away on a screen with room for only one of them.
+   *
+   * Said as a class this component sets rather than as a `:has()` in the stylesheet, so that what
+   * the layout branches on is a fact a test can read back.
+   */
+  it('says when a card is open, so a screen with room for one of them can show that one', () => {
+    render(<Harness cavers={[caver()]} />);
+    const overlay = screen.getByTestId('caveview-tracking');
+    expect(overlay.className).not.toContain('caveview-tracking-carded');
+
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+    expect(overlay.className).toContain('caveview-tracking-carded');
+
+    fireEvent.click(screen.getByTestId('caveview-caver-card-close'));
+    expect(overlay.className).not.toContain('caveview-tracking-carded');
+  });
+
   it('hands the last-update switch straight to whoever owns the markers', () => {
     const onChange = vi.fn();
     render(

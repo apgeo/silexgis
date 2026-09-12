@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AimOutlined, LogoutOutlined } from '@ant-design/icons';
 import {
   Alert,
   App,
   Button,
   Card,
+  ConfigProvider,
   DatePicker,
   Flex,
   Form,
@@ -25,8 +26,69 @@ import {
   type TrackingTeam,
   type TripPositionEventKind,
 } from '../../api/hooks.ts';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import List from '../List.tsx';
 import { trackingProblemMessage } from './trackingProblems.ts';
+import './TrackingReportForm.css';
+
+/**
+ * What the two lists a finger has to land in are worth under one.
+ *
+ * Both are drawn in a portal at the end of the document, out of reach of any selector this card
+ * could write, and both size themselves from tokens rather than from the `size` given to the
+ * control that opens them — so a chooser grown to forty pixels still opens onto a calendar of
+ * twenty-four-pixel days and a list of thirty-two-pixel options. Given as tokens rather than as
+ * heights pushed into a stylesheet because every other measurement of those panels is derived from
+ * these by antd: where a cell's text sits in it, how wide a month comes out, how tall the column
+ * of hours has to be to hold twenty-four of them.
+ *
+ * `timeColumnWidth` is the one that is *not* grown. The hours, minutes and seconds stand side by
+ * side, and widening them is what pushes the panel off a phone; their height is what a finger
+ * misses, and that is `timeCellHeight`.
+ */
+const COARSE_SELECT = { optionHeight: 40 };
+const COARSE_DATE_PICKER = {
+  cellHeight: 40,
+  cellWidth: 40,
+  withoutTimeCellHeight: 48,
+  timeCellHeight: 40,
+};
+
+/**
+ * Puts the field somewhere the enlarged calendar has room to open.
+ *
+ * <b>Sizing the calendar for a finger is what stops it fitting, so the same branch that enlarges it
+ * has to make room for it.</b> Six weeks of forty-pixel days, a column of hours and a footer come to
+ * a panel around 730px tall. antd anchors it to the field and puts it above or below — whichever
+ * side has more room — and takes neither side's *size* into account beyond that, so a field halfway
+ * down a phone screen has about four hundred pixels either way and the panel is placed with three
+ * hundred of it off the top of the screen. Measured on a 412x839 phone with the field at y=432: the
+ * panel was drawn at y=-300, which is the month, the year and every arrow that walks backwards
+ * through time gone off the top edge. The stylesheet's cap keeps the panel inside the screen's
+ * height; this is what keeps it inside the screen at all.
+ *
+ * Only ever on a coarse pointer, and that is a statement about cause rather than a guess about the
+ * device: on a mouse the calendar is antd's own size, fits beside the field wherever the field is,
+ * and a page that jumped when a date picker opened would be a defect.
+ *
+ * The element scrolled is whatever has the keyboard, which at this moment is the picker's own input
+ * — the panel opens because that input was focused. Nothing is looked up, and nothing here knows
+ * which scroll container the page is built from: this tab scrolls inside the layout's content area
+ * rather than in the window, and `scrollIntoView` is the one way to say "put this at the top" that
+ * does not have to know that.
+ */
+function makeRoomForPanel(): void {
+  const focused = document.activeElement;
+  if (!(focused instanceof HTMLElement)) {
+    return;
+  }
+  // Anything already near the top has room below it and is left where it is — a page that scrolls
+  // when it did not need to is the same surprise as one that does not scroll when it did.
+  if (focused.getBoundingClientRect().bottom <= 160) {
+    return;
+  }
+  focused.scrollIntoView({ block: 'start' });
+}
 
 interface ReportForm {
   kind: TripPositionEventKind;
@@ -75,11 +137,24 @@ export default function TrackingReportForm({
 }: Props) {
   const { t } = useTranslation();
   const { message } = App.useApp();
+  // Every control here is pressed, and how big it has to be follows the pointer and not the width:
+  // a phone in landscape has a desk's room across and still no pixel precision.
+  const coarse = useCoarsePointer();
   const [form] = Form.useForm<ReportForm>();
   const kind = Form.useWatch('kind', form) ?? 'entered';
   const record = useRecordTrackingEvents();
   const resolve = useResolveTrackingDepth();
   const [candidates, setCandidates] = useState<TrackingDepthCandidate[] | null>(null);
+  // Held still across renders: a fresh object is a fresh theme, and each one has the whole
+  // calendar's and the whole list's styles derived again.
+  const panelTheme = useMemo(
+    () => ({
+      components: coarse
+        ? { Select: COARSE_SELECT, DatePicker: COARSE_DATE_PICKER }
+        : { Select: {}, DatePicker: {} },
+    }),
+    [coarse],
+  );
 
   if (!armed) {
     return (
@@ -159,120 +234,152 @@ export default function TrackingReportForm({
   };
 
   const nobody = caverIds.length === 0;
+  /**
+   * How big everything on this card is drawn. `large` is where the forty pixels come from — antd
+   * builds it out of `controlHeightLG`, the touch target the rest of this application uses — and
+   * asking by size rather than by height means the padding, line height and icon inside each
+   * control are built for the size the control believes it is.
+   */
+  const controlSize: 'large' | 'middle' = coarse ? 'large' : 'middle';
 
   return (
     <Card size="small" title={t('trips.tracking.report')} style={{ marginBottom: 16 }}>
-      <Form<ReportForm>
-        form={form}
-        layout="vertical"
-        requiredMark={false}
-        initialValues={{ kind: 'entered' as TripPositionEventKind }}
-      >
-        <Form.Item name="kind" label={t('trips.tracking.reportKind')}>
-          <Select
-            data-testid="trip-tracking-kind"
-            onChange={() => setCandidates(null)}
-            options={TRACKING_EVENT_KINDS.map((value) => ({
-              value,
-              label: t(`trips.tracking.kinds.${value}`),
-            }))}
-          />
-        </Form.Item>
-
-        {kind === 'atStation' && (
-          <Form.Item
-            name="stationName"
-            label={t('trips.tracking.reportStation')}
-            extra={t('trips.tracking.reportStationHelp')}
-            rules={[{ required: true, message: t('trips.tracking.reportStationRequired') }]}
-          >
-            <Input data-testid="trip-tracking-station" />
-          </Form.Item>
-        )}
-
-        {kind === 'atDepth' && (
-          <>
-            <Form.Item
-              name="depthM"
-              label={t('trips.tracking.reportDepth')}
-              extra={t('trips.tracking.reportDepthHelp')}
-              rules={[{ required: true, message: t('trips.tracking.reportDepthRequired') }]}
-            >
-              <InputNumber
-                style={{ width: '100%' }}
-                onChange={() => setCandidates(null)}
-                data-testid="trip-tracking-depth"
-              />
-            </Form.Item>
-            <Flex gap="small" wrap style={{ marginBottom: 12 }}>
-              <Button
-                icon={<AimOutlined />}
-                onClick={() => void onPreviewDepth()}
-                loading={resolve.isPending}
-                data-testid="trip-tracking-depth-preview"
-              >
-                {t('trips.tracking.depthPreview')}
-              </Button>
-            </Flex>
-            {candidates !== null && (
-              <div style={{ marginBottom: 12 }} data-testid="trip-tracking-depth-candidates">
-                {candidates.length === 0 ? (
-                  <Typography.Text type="secondary">
-                    {t('trips.tracking.depthCandidatesNone')}
-                  </Typography.Text>
-                ) : (
-                  <>
-                    <Typography.Text type="secondary">
-                      {t('trips.tracking.depthCandidates')}
-                    </Typography.Text>
-                    <List
-                      size="small"
-                      dataSource={candidates}
-                      renderItem={(candidate) => (
-                        <List.Item>
-                          <List.Item.Meta
-                            title={candidate.stationName}
-                            description={`${t('trips.tracking.depthCandidate', {
-                              depth: candidate.depthM,
-                              delta: candidate.deltaM,
-                            })}${candidate.surveyName ? ` · ${candidate.surveyName}` : ''}`}
-                          />
-                        </List.Item>
-                      )}
-                    />
-                  </>
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {teams.length > 0 && (
-          <Form.Item name="teamId" label={t('trips.tracking.reportTeam')}>
+      {/* Around the form rather than around each chooser: a `Form.Item` hands its value and its
+          change handler to the single element it is given, so anything put between the two takes
+          them instead of the control. */}
+      <ConfigProvider theme={panelTheme}>
+        <Form<ReportForm>
+          form={form}
+          layout="vertical"
+          requiredMark={false}
+          size={controlSize}
+          initialValues={{ kind: 'entered' as TripPositionEventKind }}
+        >
+          <Form.Item name="kind" label={t('trips.tracking.reportKind')}>
             <Select
-              allowClear
-              placeholder={t('trips.tracking.reportTeamNone')}
-              data-testid="trip-tracking-team"
-              options={teams.map((team) => ({ value: team.id, label: team.title }))}
+              data-testid="trip-tracking-kind"
+              onChange={() => setCandidates(null)}
+              options={TRACKING_EVENT_KINDS.map((value) => ({
+                value,
+                label: t(`trips.tracking.kinds.${value}`),
+              }))}
             />
           </Form.Item>
-        )}
 
-        <Form.Item name="note" label={t('trips.tracking.reportNote')}>
-          <Input.TextArea rows={2} data-testid="trip-tracking-note" />
-        </Form.Item>
+          {kind === 'atStation' && (
+            <Form.Item
+              name="stationName"
+              label={t('trips.tracking.reportStation')}
+              extra={t('trips.tracking.reportStationHelp')}
+              rules={[{ required: true, message: t('trips.tracking.reportStationRequired') }]}
+            >
+              <Input data-testid="trip-tracking-station" />
+            </Form.Item>
+          )}
 
-        {/* Left empty the server stamps the report with its own clock, which is what a report made
-            as it happens wants. It is filled in for the other case — word relayed out of the cave
-            some time after it was said — and a time in the future is refused rather than stored. */}
-        <Form.Item
-          name="recordedAt"
-          label={t('trips.tracking.reportAt')}
-          extra={t('trips.tracking.reportAtHelp')}
-        >
-          <DatePicker showTime style={{ width: '100%' }} data-testid="trip-tracking-recorded-at" />
-        </Form.Item>
-      </Form>
+          {kind === 'atDepth' && (
+            <>
+              <Form.Item
+                name="depthM"
+                label={t('trips.tracking.reportDepth')}
+                extra={t('trips.tracking.reportDepthHelp')}
+                rules={[{ required: true, message: t('trips.tracking.reportDepthRequired') }]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  onChange={() => setCandidates(null)}
+                  data-testid="trip-tracking-depth"
+                />
+              </Form.Item>
+              <Flex gap="small" wrap style={{ marginBottom: 12 }}>
+                <Button
+                  size={controlSize}
+                  icon={<AimOutlined />}
+                  onClick={() => void onPreviewDepth()}
+                  loading={resolve.isPending}
+                  data-testid="trip-tracking-depth-preview"
+                >
+                  {t('trips.tracking.depthPreview')}
+                </Button>
+              </Flex>
+              {candidates !== null && (
+                <div style={{ marginBottom: 12 }} data-testid="trip-tracking-depth-candidates">
+                  {candidates.length === 0 ? (
+                    <Typography.Text type="secondary">
+                      {t('trips.tracking.depthCandidatesNone')}
+                    </Typography.Text>
+                  ) : (
+                    <>
+                      <Typography.Text type="secondary">
+                        {t('trips.tracking.depthCandidates')}
+                      </Typography.Text>
+                      <List
+                        size="small"
+                        dataSource={candidates}
+                        renderItem={(candidate) => (
+                          <List.Item>
+                            <List.Item.Meta
+                              title={candidate.stationName}
+                              description={`${t('trips.tracking.depthCandidate', {
+                                depth: candidate.depthM,
+                                delta: candidate.deltaM,
+                              })}${candidate.surveyName ? ` · ${candidate.surveyName}` : ''}`}
+                            />
+                          </List.Item>
+                        )}
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {teams.length > 0 && (
+            <Form.Item name="teamId" label={t('trips.tracking.reportTeam')}>
+              <Select
+                allowClear
+                placeholder={t('trips.tracking.reportTeamNone')}
+                data-testid="trip-tracking-team"
+                options={teams.map((team) => ({ value: team.id, label: team.title }))}
+              />
+            </Form.Item>
+          )}
+
+          <Form.Item name="note" label={t('trips.tracking.reportNote')}>
+            <Input.TextArea rows={2} data-testid="trip-tracking-note" />
+          </Form.Item>
+
+          {/* Left empty the server stamps the report with its own clock, which is what a report made
+              as it happens wants. It is filled in for the other case — word relayed out of the cave
+              some time after it was said — and a time in the future is refused rather than stored. */}
+          <Form.Item
+            name="recordedAt"
+            label={t('trips.tracking.reportAt')}
+            extra={t('trips.tracking.reportAtHelp')}
+          >
+            {/* <b>Named so the panel can be made to fit a phone.</b> It is drawn in a portal at the
+                end of the document, so the only way to reach it is a class it carries; what the
+                class does is in this card's stylesheet, where the geometry is. Left alone, the
+                calendar and the columns of hours stand side by side and come to more than a phone is
+                wide — measured at 457px on a 412px screen, hanging 82px off the left edge with
+                Sunday, Monday and both "previous month" arrows off it. A relayed report is by
+                definition in the past, so a picker that cannot go back a month is a picker that
+                cannot do the one job it is here for. */}
+            <DatePicker
+              showTime
+              style={{ width: '100%' }}
+              classNames={{ popup: { root: 'tracking-report-when-popup' } }}
+              onOpenChange={(open) => {
+                if (open && coarse) {
+                  makeRoomForPanel();
+                }
+              }}
+              data-testid="trip-tracking-recorded-at"
+            />
+          </Form.Item>
+        </Form>
+      </ConfigProvider>
 
       {nobody && (
         <Alert
@@ -287,6 +394,7 @@ export default function TrackingReportForm({
       <Flex gap="small" wrap>
         <Button
           type="primary"
+          size={controlSize}
           disabled={nobody}
           loading={record.isPending}
           onClick={() => void onRecord()}
@@ -295,6 +403,7 @@ export default function TrackingReportForm({
           {t('trips.tracking.recordFor', { count: caverIds.length })}
         </Button>
         <Button
+          size={controlSize}
           icon={<LogoutOutlined />}
           disabled={nobody}
           loading={record.isPending}
