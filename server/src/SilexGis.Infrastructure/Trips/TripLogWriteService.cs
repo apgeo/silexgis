@@ -535,6 +535,22 @@ public sealed class TripLogWriteService(
                 denied: true);
         }
 
+        // The organizing group is bound by the same rule as the owning one, and used to be bound
+        // by nothing. It was a descriptive field when it was added — who ran the trip — and became
+        // load-bearing when the calendar started keying "the club's calendar" on it: naming another
+        // club there now puts a row on that club's calendar. It discloses nothing, because the
+        // filter only ever narrows what a reader was already allowed to read, so this is an
+        // integrity rule rather than a protection one — but a row somebody else's members see on
+        // their own calendar, which none of them can account for, is theirs to refuse.
+        if (input.OrganizingCavingGroupId is not null
+            && !CavingGroupBindingRules.MayBind(ctx, AccessDomain.TripLogs, input.OrganizingCavingGroupId.Value))
+        {
+            throw new TripWriteException(
+                CavingGroupBindingRules.ForbiddenCode,
+                "That trip may not name that caving group as its organizer.",
+                denied: true);
+        }
+
         // A cave is a feature row, so existence and readability are one filtered count; an id
         // the caller cannot read is reported exactly like a nonexistent one, so linking cannot
         // be used to probe for caves. Nobody is ever forced to send one: the list a caller was
