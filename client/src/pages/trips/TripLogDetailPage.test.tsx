@@ -39,6 +39,12 @@ vi.mock('./TripRoleFields.tsx', () => ({
 vi.mock('./TripInvitationsTab.tsx', () => ({
   default: () => <div>who was asked and what each said</div>,
 }));
+vi.mock('./TripChecklistTab.tsx', () => ({
+  default: () => <div>what the party settles before it sets off</div>,
+}));
+vi.mock('./TripTrackingTab.tsx', () => ({
+  default: () => <div>where the party is</div>,
+}));
 vi.mock('./TripFormModal.tsx', () => ({ default: () => <div /> }));
 vi.mock('./TripStateControl.tsx', () => ({ default: () => <div /> }));
 vi.mock('../../components/trips/TripCover.tsx', () => ({ default: () => <div /> }));
@@ -149,6 +155,17 @@ describe('the trip page', () => {
     cleanup();
     renderPage(`/trip-logs/${TRIP}?tab=files`);
     expect(screen.getByText('what is filed against the trip')).toBeTruthy();
+
+    // Both of these panes were drawn but unreachable by address: the key was in the strip and not
+    // in the list the page reads the address against, so a link to either one landed on the
+    // report instead — with the right tab visibly selected in the strip above it.
+    cleanup();
+    renderPage(`/trip-logs/${TRIP}?tab=checklist`);
+    expect(screen.getByText('what the party settles before it sets off')).toBeTruthy();
+
+    cleanup();
+    renderPage(`/trip-logs/${TRIP}?tab=tracking`);
+    expect(screen.getByText('where the party is')).toBeTruthy();
   });
 
   it('falls back to its own tab when the address names one it does not have', () => {

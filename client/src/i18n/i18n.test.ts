@@ -28,6 +28,8 @@ import type {
   TripCsvEncoding,
   TripCsvEncodingSource,
   TripCsvField,
+  TripPositionEventKind,
+  TripTrackingState,
   SurveyModelInfo,
 } from '../api/hooks.ts';
 import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
@@ -45,6 +47,7 @@ import {
 import { SEEDED_CONTINUATION_STATE_CODES } from '../components/expeditions/continuationStates.ts';
 import { SEEDED_EXPEDITION_ROSTER_ROLE_CODES } from '../components/expeditions/rosterRoles.ts';
 import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRoles.ts';
+import { TRACKING_PROBLEM_MESSAGE_KEYS } from '../components/trips/trackingProblems.ts';
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
 import { TERRAIN_PROBLEM_MESSAGE_KEYS } from '../pages/admin/terrain/terrainProblems.ts';
 import { SURVEY_MODEL_PROBLEM_MESSAGE_KEYS } from '../pages/caves/surveyModelProblems.ts';
@@ -260,6 +263,28 @@ const surveyModelFormats: Record<SurveyModelInfo['format'], true> = {
   stl: true,
 };
 
+/**
+ * How a trip's live tracking can stand, and what one report about somebody can say. Both are
+ * looked up by building the key from the value — the badge on the panel, the picker the report is
+ * recorded through, the column that says what each person last said — so a value added on the
+ * server ships as its own lookup key on a surface people read to learn where a party is. The types
+ * close both in both directions: a new one fails to compile here until it is named, and a name
+ * that is no longer one of them fails too.
+ */
+const trackingStates: Record<TripTrackingState, true> = {
+  off: true,
+  armed: true,
+  closed: true,
+};
+
+const trackingKinds: Record<TripPositionEventKind, true> = {
+  entered: true,
+  atStation: true,
+  atDepth: true,
+  note: true,
+  exited: true,
+};
+
 const terrainBuildPhases: Record<TerrainBuildPhase, true> = {
   pending: true,
   fetch: true,
@@ -420,6 +445,40 @@ describe('i18n locales', () => {
     const named = keys.map((key) => key.replace('surveyModels.problems.', '')).sort();
     expect(Object.keys(en.surveyModels.problems).sort()).toEqual(named);
     expect(Object.keys(ro.surveyModels.problems).sort()).toEqual(named);
+  });
+
+  it('every tracking state and report kind is named in both locales, and none is left over', () => {
+    const cases: [string[], Record<string, string>, Record<string, string>][] = [
+      [Object.keys(trackingStates), en.trips.tracking.stateValues, ro.trips.tracking.stateValues],
+      [Object.keys(trackingKinds), en.trips.tracking.kinds, ro.trips.tracking.kinds],
+    ];
+    for (const [names, enNames, roNames] of cases) {
+      expect(names.filter((name) => !enNames[name])).toEqual([]);
+      expect(names.filter((name) => !roNames[name])).toEqual([]);
+      expect(Object.keys(enNames).sort()).toEqual(names.sort());
+      expect(Object.keys(roNames).sort()).toEqual(names.sort());
+    }
+  });
+
+  /**
+   * The refusals the tracking routes answer with are worded through a lookup table rather than
+   * written out at each call, so the scan below cannot see any of them. Without this, somebody
+   * refused while trying to record where a party is would be shown a lookup key — on the one
+   * surface where the sentence is the whole point of showing anything.
+   */
+  it('every tracking refusal has wording in both locales, and none is left over', () => {
+    const keys = Object.values(TRACKING_PROBLEM_MESSAGE_KEYS);
+    expect(keys.length).toBeGreaterThan(10);
+    for (const locale of [en, ro]) {
+      expect(keys.filter((key) => typeof lookup(locale, key) !== 'string')).toEqual([]);
+    }
+    // And the reverse: wording kept for a code the server no longer answers with would sit here
+    // unread, with nothing else ever saying so. One code, one sentence — a shared one would make
+    // two different refusals indistinguishable to whoever has to act on them.
+    const named = keys.map((key) => key.replace('trips.tracking.problems.', '')).sort();
+    expect(named).toEqual([...new Set(named)]);
+    expect(Object.keys(en.trips.tracking.problems).sort()).toEqual(named);
+    expect(Object.keys(ro.trips.tracking.problems).sort()).toEqual(named);
   });
 
   it('every terrain build status, phase, source kind and depth band is named in both locales', () => {

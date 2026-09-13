@@ -255,6 +255,11 @@ export const queryKeys = {
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
   tripChecklist: (id: string) => ['trip-logs', 'checklist', id] as const,
+  tripTracking: (id: string) => ['trip-logs', 'tracking', id] as const,
+  // The narrowing is part of the key, as everywhere else a paged read is held: a page of one
+  // caver's reports is a different question from a page of everybody's, not a stale answer to it.
+  tripTrackingEvents: (id: string, params: TrackingEventListParams) =>
+    ['trip-logs', 'tracking-events', id, params] as const,
   checklists: ['checklists'] as const,
   checklist: (id: string) => ['checklists', 'detail', id] as const,
   tripReportTemplates: ['trip-report-templates'] as const,
@@ -1171,6 +1176,33 @@ export function useSurveyModels(caveId: string | undefined) {
   }, [outstanding, caveId, queryClient]);
 
   return query;
+}
+
+/**
+ * The survey models of several caves at once, as one list.
+ *
+ * For the surfaces that belong to something naming more than one cave — a trip is the one that
+ * needs it — where a chooser has to offer every model the thing could mean. Asked cave by cave
+ * because that is the read the server publishes, and each answer is held under that cave's own key,
+ * so a page that already listed one cave's models pays for nothing twice.
+ *
+ * A cave whose exact location is withheld from this reader answers with an empty list rather than
+ * a refusal, and that shape is carried straight through: fewer models offered is what "there is
+ * nothing here for you" looks like, and it is never an error worth reporting.
+ */
+export function useSurveyModelsForCaves(caveIds: readonly string[]) {
+  return useQueries({
+    queries: caveIds.map((caveId) => ({
+      queryKey: queryKeys.surveyModels(caveId),
+      queryFn: () =>
+        unwrap(api.GET('/api/v1/caves/{caveId}/survey-models', { params: { path: { caveId } } })),
+      staleTime: 5 * 60_000,
+    })),
+    combine: (results) => ({
+      data: results.flatMap((result) => result.data ?? []),
+      isPending: results.some((result) => result.isPending),
+    }),
+  });
 }
 
 /**
@@ -7033,6 +7065,343 @@ export function useSetTripChecklistItem() {
       await unwrap(api.PUT('/api/v1/trip-logs/{tripLogId}/checklist/items/{itemId}', { params }));
     },
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+export type TripTrackingState = components['schemas']['TripTrackingState'];
+export type TripPositionEventKind = components['schemas']['TripPositionEventKind'];
+export type TrackingState = components['schemas']['TrackingStateDto'];
+export type TrackingParticipant = components['schemas']['TrackingParticipantDto'];
+export type TrackingTeam = components['schemas']['TrackingTeamDto'];
+export type TrackingEvent = components['schemas']['TrackingEventDto'];
+export type TrackingEventWrite = components['schemas']['TrackingEventRequest'];
+export type TrackingConfigWrite = components['schemas']['TrackingConfigRequest'];
+export type TrackingDepthCandidate = components['schemas']['TrackingDepthCandidateDto'];
+
+/**
+ * What a report can say, in the order somebody underground would say it: in, then where, then
+ * anything else, then out. The order is this application's; the set is the server's.
+ */
+export const TRACKING_EVENT_KINDS: readonly TripPositionEventKind[] = [
+  'entered',
+  'atStation',
+  'atDepth',
+  'note',
+  'exited',
+];
+
+export interface TrackingEventListParams {
+  caverId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** How often a live watch is re-read while a party is underground. */
+const TRACKING_POLL_MS = 30_000;
+
+/**
+ * The one condition every tracking read is kept fresh on.
+ *
+ * Shared rather than repeated because the folded state and the log are two views of the same
+ * arriving reports, drawn one above the other. Polling one and not the other puts two tables on
+ * one screen disagreeing about the same events — the upper one advancing as word comes in, the
+ * lower one stopped at whatever it held when the tab was opened — and the log is also the only
+ * surface a correction acts on, so it would be a list somebody deletes from while it no longer
+ * matches the server.
+ */
+function trackingPollInterval(state: TripTrackingState | undefined) {
+  return state === 'armed' ? TRACKING_POLL_MS : (false as const);
+}
+
+/**
+ * How this trip is being watched: whether tracking is armed, what it resolves positions against,
+ * its teams, and where each person on the roster was last reported.
+ *
+ * Two things on the answer are the server's conclusions and must be drawn as they arrive. Each
+ * participant's *position* is their latest report that claimed a place, while their *last kind* is
+ * their latest report of any kind — a note or an exit says something happened, not where, so the
+ * two deliberately disagree. And `positionsWithheld` says at least one position was kept from this
+ * reader: the position fields then arrive null, exactly as they do for somebody nobody has
+ * reported yet, and telling those two apart is not something a client may attempt.
+ *
+ * Kept fresh while a party is underground. The rows change because somebody radios a position in,
+ * not because this browser did anything, so a panel that only re-read on a write would show a
+ * watch that has stopped moving — which on this surface reads as a party that has stopped moving.
+ * Nothing is asked for once tracking is closed or was never armed.
+ */
+export function useTripTracking(tripLogId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripTracking(tripLogId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/tracking', {
+          params: { path: { tripLogId: tripLogId! } },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+    refetchInterval: (query) => trackingPollInterval(query.state.data?.state),
+  });
+}
+
+/**
+ * The trip's reports, newest first.
+ *
+ * The log is append-only and a correction is a deletion followed by a fresh report, so this is
+ * both the history and the only way a wrong report is taken back. Position fields are withheld
+ * here under exactly the same rule as on the state read.
+ *
+ * Kept fresh on the same condition as the folded state, and deliberately from the same cache entry
+ * rather than from a flag this caller passes: two coordinators with the tab open is the designed
+ * case, and one of them recording what the radio said has to reach the other's log as well as
+ * their table. Reading the watch out of the cache is what makes the two impossible to drift apart
+ * — nothing else on this screen knows whether a watch is armed.
+ */
+export function useTripTrackingEvents(
+  tripLogId: string | undefined,
+  params: TrackingEventListParams = {},
+  enabled = true,
+) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: queryKeys.tripTrackingEvents(tripLogId ?? '', params),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/tracking/events', {
+          params: { path: { tripLogId: tripLogId! }, query: params },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+    refetchInterval: () =>
+      trackingPollInterval(
+        queryClient.getQueryData<TrackingState>(queryKeys.tripTracking(tripLogId ?? ''))?.state,
+      ),
+    // Paging keeps the rows on screen while the next answer arrives, rather than emptying the
+    // list under whoever is reading it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Every held answer about one trip's tracking, whatever narrowing it was asked under.
+ *
+ * A write to a report changes the folded state as well as the log — recording a position moves
+ * where somebody is — so the two are always invalidated together, and the event list is reached
+ * by its prefix because it is held once per narrowing.
+ */
+function useInvalidateTripTracking() {
+  const queryClient = useQueryClient();
+  return (tripLogId: string) => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tripTracking(tripLogId) });
+    void queryClient.invalidateQueries({ queryKey: ['trip-logs', 'tracking-events', tripLogId] });
+  };
+}
+
+/**
+ * Arms, closes or reconfigures the watch.
+ *
+ * **Merge semantics, and they matter.** A field left out keeps what is stored, so closing a watch
+ * cannot silently rewrite the configuration the reports already on the log were resolved under.
+ * Clearing is therefore explicit and is not the same as leaving something out: an empty string
+ * clears the reference station, an empty list clears the depth filter. The state is always stated.
+ *
+ * The write is checked against the trip's own version, which the tracking read is what emits — two
+ * coordinators can both have this panel open, and arming against a configuration somebody else has
+ * already changed is exactly the lost update the precondition exists to catch. The version is
+ * looked for under the tracking path first and the trip's own path second, so a panel opened
+ * without the trip page ever having been read still carries one; a write with no version at all is
+ * refused by the server rather than quietly overwriting.
+ */
+export function useSetTripTracking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      state,
+      surveyModelId = null,
+      referenceStationName = null,
+      depthFilter = null,
+    }: {
+      tripLogId: string;
+      state: TripTrackingState;
+      /** Null keeps the stored model; a model id changes it and resets the reference and filter. */
+      surveyModelId?: string | null;
+      /** Null keeps the stored reference station; an empty string clears it. */
+      referenceStationName?: string | null;
+      /** Null keeps the stored filter; an empty list clears it. */
+      depthFilter?: string[] | null;
+    }) => {
+      const etag =
+        lastReadETag(`/api/v1/trip-logs/${tripLogId}/tracking`) ??
+        lastReadETag(`/api/v1/trip-logs/${tripLogId}`);
+      return unwrap(
+        api.PUT('/api/v1/trip-logs/{tripLogId}/tracking', {
+          params: { path: { tripLogId } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body: { state, surveyModelId, referenceStationName, depthFilter },
+        }),
+      );
+    },
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: ['trip-logs', 'tracking-events', variables.tripLogId],
+      });
+      // Handed back rather than started and forgotten, as on the trip's own writes: the next
+      // configuration change is checked against the version this one produced, and only a read
+      // records a version. Without the wait, a second save a moment later is refused as a
+      // conflict the person saving has no way to understand.
+      return queryClient.invalidateQueries({
+        queryKey: queryKeys.tripTracking(variables.tripLogId),
+      });
+    },
+  });
+}
+
+/** Adds a titled team to the trip. Teams label reports; they are never a second roster. */
+export function useCreateTrackingTeam() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({ tripLogId, title }: { tripLogId: string; title: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/teams', {
+          params: { path: { tripLogId } },
+          body: { title },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+export function useRenameTrackingTeam() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      teamId,
+      title,
+    }: {
+      tripLogId: string;
+      teamId: string;
+      title: string;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-logs/{tripLogId}/tracking/teams/{teamId}', {
+          params: { path: { tripLogId, teamId } },
+          body: { title },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/** Removes a team. The reports it labelled keep their caver and lose only the label. */
+export function useDeleteTrackingTeam() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({ tripLogId, teamId }: { tripLogId: string; teamId: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/trip-logs/{tripLogId}/tracking/teams/{teamId}', {
+          params: { path: { tripLogId, teamId } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * Records one report about one or many cavers at once.
+ *
+ * One request, whatever the number of people it is about: a party that came to a station together
+ * was at that station at one moment, and a report per person would put the same moment on the log
+ * several times with nothing tying the rows together. The answer is the rows that were created,
+ * one per caver.
+ *
+ * Reports land on an armed watch only — that is the server's rule, and the form is gated on the
+ * same state rather than trusting the refusal to be readable.
+ */
+export function useRecordTrackingEvents() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      caverIds,
+      kind,
+      stationName = null,
+      depthM = null,
+      teamId = null,
+      note = null,
+      recordedAt = null,
+    }: {
+      tripLogId: string;
+      caverIds: string[];
+      kind: TripPositionEventKind;
+      stationName?: string | null;
+      depthM?: number | null;
+      teamId?: string | null;
+      note?: string | null;
+      /** Null means now, on the server's clock — the ordinary case of a report made as it happens. */
+      recordedAt?: string | null;
+    }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/events', {
+          params: { path: { tripLogId } },
+          body: { caverIds, kind, stationName, depthM, teamId, note, recordedAt },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * Takes a wrong report off the log.
+ *
+ * The only correction there is: a report is never edited, because the thing it records is what
+ * somebody said at a moment, and rewriting that in place would leave a log which cannot be told
+ * apart from one nobody corrected.
+ */
+export function useDeleteTrackingEvent() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({ tripLogId, eventId }: { tripLogId: string; eventId: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}', {
+          params: { path: { tripLogId, eventId } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * Which stations a depth could mean, best match first, under the trip's own filter and datum.
+ *
+ * A read in everything but its method: it writes nothing and is asked as a question with a body,
+ * so it is a mutation here rather than a query — the person filling the form asks it when they
+ * have a number worth asking about, and holding an answer under a key would only mean a stale
+ * preview after the configuration moved.
+ *
+ * Worth showing before recording rather than after: a depth resolves to whichever station is
+ * nearest, and "nearest" over a filter somebody set a week ago is exactly the decision a person
+ * wants to see made before it becomes the position on the log.
+ */
+export function useResolveTrackingDepth() {
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      depthM,
+      take,
+    }: {
+      tripLogId: string;
+      depthM: number;
+      take?: number;
+    }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/resolve-depth', {
+          params: { path: { tripLogId } },
+          body: { depthM, take: take ?? null },
+        }),
+      ),
   });
 }
 

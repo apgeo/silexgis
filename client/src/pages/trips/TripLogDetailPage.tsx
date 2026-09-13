@@ -55,6 +55,7 @@ import TripFormModal from './TripFormModal.tsx';
 import TripGeometryField from './TripGeometryField.tsx';
 import TripChecklistTab from './TripChecklistTab.tsx';
 import TripInvitationsTab from './TripInvitationsTab.tsx';
+import TripTrackingTab from './TripTrackingTab.tsx';
 import TripStateControl from './TripStateControl.tsx';
 import TripCalloutPanel from '../../components/trips/TripCalloutPanel.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
@@ -119,7 +120,16 @@ function PersonTag({
  * rather than becoming a tab of its own: it is what a reader came for, and it is what every tab
  * below is about.
  */
-const TAB_KEYS = ['report', 'invitations', 'links', 'photos', 'files', 'history'] as const;
+const TAB_KEYS = [
+  'report',
+  'invitations',
+  'checklist',
+  'tracking',
+  'links',
+  'photos',
+  'files',
+  'history',
+] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 const DEFAULT_TAB: TabKey = 'report';
 
@@ -468,6 +478,14 @@ export default function TripLogDetailPage() {
             // figure is advisory: it gates nothing, it is not a state the trip is in, and it is
             // never consulted when working out who may read this page.
             children: <TripChecklistTab trip={trip} canEdit={canEdit} />,
+          },
+          {
+            key: 'tracking',
+            label: t('trips.tabTracking'),
+            // Where the party is while it is underground, and the log of what was reported. Its
+            // own section rather than part of the callout above it: the callout is one arrangement
+            // about one moment, and this is a running account that goes on being written.
+            children: <TripTrackingTab trip={trip} canEdit={canEdit} />,
           },
           {
             key: 'links',
