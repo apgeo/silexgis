@@ -128,7 +128,8 @@ public sealed record MetricClusterModel(
     IReadOnlyList<MetricAssignment> Assignments,
     MetricSeparation? Separation,
     int Iterations,
-    bool Converged);
+    bool Converged,
+    PrincipalProjection? Projection = null);
 
 /// <summary>
 /// k-means over per-subject metric vectors: which subjects resemble each other, computed as
@@ -329,6 +330,17 @@ public static class MetricClustering
                 names, clusterCount, population, scaling, [], [], null, 0, true);
         }
 
+        // Derived from the very matrix the grouping uses, not recomputed beside it, so the
+        // picture and the grouping cannot come to disagree about which subjects were in the
+        // population or how their columns were scaled.
+        //
+        // It sits after the refusal above on purpose: there is no projection where there is no
+        // grouping. The same reason applies to both — over a handful of subjects the axes are
+        // arithmetic rather than description — and a scatter with no groups to colour would
+        // invite a reader to find structure in the few points that are left.
+        var projection = PrincipalComponents.Project(
+            names, eligibleRows.Select(i => ordered[i].SubjectId).ToArray(), scaled);
+
         var (labels, centres, iterations, converged) = Fit(scaled, clusterCount);
 
         var assignments = new MetricAssignment[scaled.Length];
@@ -380,7 +392,7 @@ public static class MetricClustering
 
         return new MetricClusterModel(
             names, clusterCount, population, scaling, clusters, assignments, separation,
-            iterations, converged);
+            iterations, converged, projection);
     }
 
     /// <summary>

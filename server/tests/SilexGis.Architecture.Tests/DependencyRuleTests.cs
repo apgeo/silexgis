@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using NetArchTest.Rules;
 using Shouldly;
 using SilexGis.Api.Features.PhotoLibraries;
@@ -123,16 +126,24 @@ public class DependencyRuleTests
         // reference itself is reviewed by eye. Never write this as an exclusion of the library
         // from the two rules above: an exclusion would hide exactly the violation worth catching.
         //
-        // The two modules have to be named differently, and that difference is the whole reason
-        // this list is worth reading carefully. In the first, the parsers and the process-starting
-        // code sit in separate namespaces, so a namespace is enough. In the second — the one
-        // holding the reader for what a compilation printed — everything shares a single flat
-        // namespace: the reader, a type that locates an executable on the host and runs it, a type
-        // that compiles by starting the compiler, and a type that hands a path to the desktop shell
-        // to open. Denying that namespace would deny the reader this application actually uses, so
-        // the dangerous types are denied one by one. The cost of that granularity is that a type
-        // added upstream is not covered until somebody adds it here; the alternative was covering
-        // nothing.
+        // The rule is stated the other way round — an allow-list — and that inversion is the
+        // point. Naming the dangerous types one by one was the obvious way to write it, and it
+        // covered only what somebody had thought of: the module holding the reader for what a
+        // compilation printed keeps the reader, a type that locates an executable and runs it, a
+        // type that compiles by starting the compiler, and a type that hands a path to the desktop
+        // shell to open, all in one flat namespace. A deny-list can exclude those four. It cannot
+        // exclude the fifth that arrives in the next upstream release, so a submodule bump could
+        // re-open this seam with every test still green — and the seam is what keeps an uploaded
+        // survey file from starting a process on the server.
+        //
+        // So instead: every Therion type any SilexGIS assembly reaches for must appear below.
+        // A new one fails this test until somebody looks at it and says what it is. That turns a
+        // silent widening into a deliberate one, which is the only version of this rule that
+        // survives an upstream release nobody read.
+        //
+        // Read from the compiled IL's type-reference table rather than through the rule library,
+        // because the question here is "what does this assembly name?" rather than "does it name
+        // this?", and only the former can be checked against a closed set.
         foreach (var assembly in new[]
                  {
                      typeof(Visibility).Assembly,
@@ -140,27 +151,95 @@ public class DependencyRuleTests
                      typeof(Program).Assembly,
                  })
         {
-            var result = Types.InAssembly(assembly)
-                .ShouldNot()
-                .HaveDependencyOnAny(
-                    "Therion.Blender.Execution",
-                    "Therion.Blender.Sources",
-                    "Therion.Build.TherionCompiler",
-                    "Therion.Build.ExternalToolLocator",
-                    "Therion.Build.ShellOpener",
-                    "Therion.Build.IShellOpener",
-                    "Therion.Build.CompileGate",
-                    "Therion.Build.ICompileGate",
-                    "Therion.Build.JsonOutputArtifactCache",
-                    "Therion.Build.OutputArtifactCollector",
-                    "Therion.Processing.Abstractions.ITherionCompiler",
-                    "Therion.Processing.Abstractions.IExternalToolLocator",
-                    "Therion.Processing.Abstractions.IExternalToolPathOverrides")
-                .GetResult();
+            var reached = TherionTypesReferencedBy(assembly);
+            var unexpected = reached.Except(AllowedTherionTypes, StringComparer.Ordinal)
+                .OrderBy(n => n, StringComparer.Ordinal).ToArray();
 
-            result.IsSuccessful.ShouldBeTrue(
-                $"{assembly.GetName().Name}: {FailureMessage(result)}");
+            unexpected.ShouldBeEmpty(
+                $"{assembly.GetName().Name} reaches Therion types that no rule here has passed: "
+                + string.Join(", ", unexpected)
+                + ". If one of them reads or models survey data, add it to the allow-list. If it "
+                + "locates an executable, starts a process or opens a shell, it does not belong in "
+                + "a web application and the call is the thing to remove.");
         }
+    }
+
+    /// <summary>
+    /// Every Therion type SilexGIS is allowed to name: the survey readers, the shapes they hand
+    /// back, and the parser for what a compilation printed.
+    /// </summary>
+    /// <remarks>
+    /// Nothing here starts anything. They are file readers, immutable records describing a cave,
+    /// the centreline graph types derived from them, and a log parser that reads text. The list is
+    /// expected to grow when the application reads more of the survey format, and each addition is
+    /// somebody deciding that the type is a reader — which is exactly the review this rule exists
+    /// to force.
+    /// </remarks>
+    private static readonly HashSet<string> AllowedTherionTypes = new(StringComparer.Ordinal)
+    {
+        // The parsed cave model and the shapes hanging off it.
+        "Therion.Blender.CaveLrud",
+        "Therion.Blender.CaveModel",
+        "Therion.Blender.CavePassage",
+        "Therion.Blender.CavePassageStation",
+        "Therion.Blender.CaveShot",
+        "Therion.Blender.CaveShotFlags",
+        "Therion.Blender.CaveShotSection",
+        "Therion.Blender.CaveStation",
+        "Therion.Blender.CaveStationFlags",
+        "Therion.Blender.CaveSurvey",
+        "Therion.Blender.CaveVector3",
+
+        // The centreline graph derived from a model.
+        "Therion.Blender.Geometry.CenterlineBranch",
+        "Therion.Blender.Geometry.CenterlineComponent",
+        "Therion.Blender.Geometry.CenterlineEdgeGeometry",
+        "Therion.Blender.Geometry.CenterlineGraph",
+        "Therion.Blender.Geometry.CenterlineReducedGraph",
+
+        // Reading a survey file, and the refusal when it is not one.
+        "Therion.Blender.Parsing.CaveFileFormatException",
+        "Therion.Blender.Parsing.CaveModelReader",
+
+        // Reading what a compilation printed. Text in, records out — this starts no compiler.
+        "Therion.Build.TherionLogDiagnostic",
+        "Therion.Build.TherionLogLoopError",
+        "Therion.Build.TherionLogOutcome",
+        "Therion.Build.TherionLogParser",
+        "Therion.Build.TherionLogSummary",
+    };
+
+    /// <summary>
+    /// The Therion types an assembly names, read out of its type-reference table.
+    /// </summary>
+    /// <remarks>
+    /// This reads the compiled file rather than loading types reflectively: a type reference is
+    /// recorded whether or not the referencing code ever runs, and resolving it through reflection
+    /// would need the referenced assembly to load, which is the thing being kept at arm's length.
+    /// </remarks>
+    private static HashSet<string> TherionTypesReferencedBy(Assembly assembly)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        using var stream = File.OpenRead(assembly.Location);
+        using var pe = new PEReader(stream);
+        var metadata = pe.GetMetadataReader();
+
+        foreach (var handle in metadata.TypeReferences)
+        {
+            var reference = metadata.GetTypeReference(handle);
+            var space = metadata.GetString(reference.Namespace);
+            var name = metadata.GetString(reference.Name);
+            var full = string.IsNullOrEmpty(space) ? name : $"{space}.{name}";
+
+            // "Therion" alone would also match a hypothetical "TherionSomething" assembly of our
+            // own, so the boundary is the dot.
+            if (full is "Therion" || full.StartsWith("Therion.", StringComparison.Ordinal))
+            {
+                names.Add(full);
+            }
+        }
+
+        return names;
     }
 
     [Fact]

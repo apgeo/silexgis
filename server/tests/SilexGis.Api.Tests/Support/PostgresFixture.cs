@@ -113,6 +113,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             await container.StartAsync();
             liveContainer = container;
             var maintenance = container.GetConnectionString();
+            await WaitUntilAcceptingConnectionsAsync(maintenance);
 
             await ExecuteAsync(maintenance, $"CREATE DATABASE \"{TemplateDatabase}\"");
 
@@ -147,6 +148,44 @@ public sealed class PostgresFixture : IAsyncLifetime
         finally
         {
             TemplateGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Waits for a server that will still be there a moment later.
+    ///
+    /// <para>
+    /// The image runs <c>initdb</c>, announces that the database system is ready, and then bounces
+    /// the server before serving properly — so the readiness the container reports can be the first
+    /// of those two, and a connection opened against it is closed underneath whatever is using it.
+    /// It surfaces as <c>Npgsql … Exception while reading from stream</c> out of
+    /// <c>MigrateAsync</c>, in the first class to reach the template, and because the template is
+    /// built once per process a single unlucky moment fails the entire run rather than one test.
+    /// Observed: six of six in a class, all in migration, fourteen seconds in; the same command
+    /// passed twice immediately afterwards.
+    /// </para>
+    /// <para>
+    /// Opening and closing a connection is not enough to tell the two apart, so this asks a
+    /// question and requires the answer to arrive.
+    /// </para>
+    /// </summary>
+    private static async Task WaitUntilAcceptingConnectionsAsync(string connectionString)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (true)
+        {
+            try
+            {
+                await using var connection = new NpgsqlConnection(connectionString);
+                await connection.OpenAsync();
+                await using var command = new NpgsqlCommand("SELECT 1", connection);
+                _ = await command.ExecuteScalarAsync();
+                return;
+            }
+            catch (Exception) when (DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(250);
+            }
         }
     }
 

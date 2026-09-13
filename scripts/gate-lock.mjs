@@ -24,7 +24,7 @@
 // SILEXGIS_GATE_LOCK_DIR — it must name the same place for every worktree that shares the
 // machine, which the default already does.
 
-import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, rmSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -122,6 +122,75 @@ function pidAlive(pid) {
 }
 
 /**
+ * CPU seconds burned by a process and everything under it, or null where that cannot be read.
+ *
+ * Reads /proc directly rather than shelling out, and answers null on any platform without it —
+ * the caller treats null as "cannot tell" and never as "not progressing", because a wrong
+ * accusation here costs somebody their run.
+ */
+export function cpuSecondsOfTree(pid) {
+  if (!existsSync('/proc')) return null;
+  let total = 0;
+  let found = false;
+  const children = new Map();
+  let entries;
+  try {
+    entries = readdirSync('/proc').filter((n) => /^\d+$/.test(n));
+  } catch {
+    return null;
+  }
+  const stats = new Map();
+  for (const entry of entries) {
+    let raw;
+    try {
+      raw = readFileSync(`/proc/${entry}/stat`, 'utf8');
+    } catch {
+      continue; // the process ended between listing and reading; nothing to account for
+    }
+    // The command field can itself contain spaces and brackets, so fields are counted from the
+    // closing bracket rather than from the start of the line.
+    const close = raw.lastIndexOf(')');
+    if (close === -1) continue;
+    const fields = raw.slice(close + 2).split(' ');
+    const ppid = Number(fields[1]);
+    const utime = Number(fields[11]);
+    const stime = Number(fields[12]);
+    if (!Number.isFinite(ppid) || !Number.isFinite(utime) || !Number.isFinite(stime)) continue;
+    stats.set(Number(entry), { ppid, cpu: (utime + stime) / 100 });
+    if (!children.has(ppid)) children.set(ppid, []);
+    children.get(ppid).push(Number(entry));
+  }
+  const walk = (p) => {
+    const self = stats.get(p);
+    if (self) {
+      total += self.cpu;
+      found = true;
+    }
+    for (const child of children.get(p) || []) walk(child);
+  };
+  walk(pid);
+  return found ? total : null;
+}
+
+/**
+ * Whether the holder is doing anything, sampled over a window.
+ *
+ * A holder that is merely old is not a problem — a full suite legitimately runs for hours. A
+ * holder burning no CPU at all is a different thing, and it is what wedges this machine: twice
+ * observed sitting on the lock for eight and twelve hours at around two per cent of a core with a
+ * hundred megabytes resident, while several other sessions queued behind it and the box idled.
+ * Neither age nor the process still existing distinguishes the two, which is why this samples.
+ */
+export async function holderProgress(pid, { windowMs = 4000 } = {}) {
+  const before = cpuSecondsOfTree(pid);
+  if (before === null) return { known: false };
+  await new Promise((r) => setTimeout(r, windowMs));
+  const after = cpuSecondsOfTree(pid);
+  if (after === null) return { known: false };
+  return { known: true, cpuSeconds: after - before, windowMs, total: after };
+}
+
+/**
  * Try once to take the lock. Returns true when taken, false when genuinely held.
  * A directory whose recorded holder is no longer running is stale and is taken over;
  * a directory with no readable owner yet is a holder mid-write and counts as held.
@@ -176,11 +245,23 @@ async function acquireWaiting(dir, label) {
     const now = Date.now();
     if (now - lastReport > 60_000) {
       const o = readOwner(dir);
-      console.error(
-        o
-          ? `waiting for the gate lock, held by pid ${o.pid} (${o.label || 'unlabelled'}) since ${o.since}`
-          : 'waiting for the gate lock',
-      );
+      if (!o) {
+        console.error('waiting for the gate lock');
+      } else {
+        // Whether the holder is working decides whether waiting is worth anything, so say which
+        // it is rather than repeating the same line for hours against a process doing nothing.
+        const p = await holderProgress(o.pid);
+        const how = !p.known
+          ? ''
+          : p.cpuSeconds < 0.05
+            ? ' — HOLDER IS BURNING NO CPU; if it is wedged, clear it with'
+              + ` \`gate-lock.mjs steal --pid ${o.pid}\` after checking`
+            : ` — holder is working (${p.cpuSeconds.toFixed(1)}s CPU in ${p.windowMs / 1000}s)`;
+        console.error(
+          `waiting for the gate lock, held by pid ${o.pid} (${o.label || 'unlabelled'})`
+            + ` since ${o.since}${how}`,
+        );
+      }
       lastReport = now;
     }
     await new Promise((r) => setTimeout(r, 5000));
@@ -211,9 +292,18 @@ async function main() {
     if (!o) {
       console.log('free');
     } else {
+      const gone = !pidAlive(o.pid);
+      let note = gone ? '  [STALE — holder is gone]' : '';
+      if (!gone && has('--probe')) {
+        const p = await holderProgress(o.pid);
+        if (p.known) {
+          note = p.cpuSeconds < 0.05
+            ? `  [WEDGED — no CPU in ${p.windowMs / 1000}s; ${p.total.toFixed(0)}s used in total]`
+            : `  [working — ${p.cpuSeconds.toFixed(1)}s CPU in ${p.windowMs / 1000}s]`;
+        }
+      }
       console.log(
-        `held by pid ${o.pid} (${o.label || 'unlabelled'}) on ${o.host} since ${o.since}` +
-          (pidAlive(o.pid) ? '' : '  [STALE — holder is gone]'),
+        `held by pid ${o.pid} (${o.label || 'unlabelled'}) on ${o.host} since ${o.since}` + note,
       );
     }
     return;
@@ -231,6 +321,35 @@ async function main() {
       await acquireWaiting(dir, label);
     }
     console.log('acquired');
+    return;
+  }
+
+  if (cmd === 'steal') {
+    const pid = Number(take('--pid'));
+    const o = existsSync(dir) ? readOwner(dir) : null;
+    if (!o) {
+      console.log('free');
+      return;
+    }
+    if (!Number.isFinite(pid) || pid !== o.pid) {
+      console.error(
+        `refusing: name the holder you checked. The lock is held by pid ${o.pid}`
+          + ` (${o.label || 'unlabelled'}) since ${o.since}.`,
+      );
+      process.exit(3);
+    }
+    const p = await holderProgress(o.pid, { windowMs: 10_000 });
+    if (p.known && p.cpuSeconds >= 0.05 && !has('--force')) {
+      console.error(
+        `refusing: pid ${o.pid} is working (${p.cpuSeconds.toFixed(1)}s CPU in`
+          + ` ${p.windowMs / 1000}s). Use --force only if you mean to discard its run.`,
+      );
+      process.exit(3);
+    }
+    rmSync(dir, { recursive: true, force: true });
+    console.log(
+      `stolen from pid ${o.pid} (${o.label || 'unlabelled'}); its process is left alone`,
+    );
     return;
   }
 
@@ -311,7 +430,7 @@ async function main() {
     process.exit(exitCode);
   }
 
-  console.error('usage: gate-lock.mjs status | acquire [--no-wait] [--label X] | release | run [--label X] [--result F] -- cmd...');
+  console.error('usage: gate-lock.mjs status [--probe] | acquire [--no-wait] [--label X] | release | steal --pid N [--force] | run [--label X] [--result F] -- cmd...');
   process.exit(1);
 }
 
