@@ -1322,6 +1322,10 @@
       "positionsWithheldTitle": "Unele poziții nu îți sunt arătate",
       "positionsWithheldBody": "Această tură este urmărită într-o peșteră a cărei poziție exactă nu îți poate fi comunicată, așa că numele stațiilor și adâncimile nu apar pe această pagină. Cine este înăuntru și cine a ieșit se vede așa cum stau lucrurile.",
       "unknownCaver": "Cineva care nu este pe listă",
+      "modelTitle": "Echipa pe ridicarea topografică",
+      "modelShow": "Arată modelul",
+      "modelHide": "Ascunde modelul",
+      "modelHint": "Deschide {{name}} și marchează fiecare speolog acolo unde a fost raportat ultima dată. Cine nu are o poziție cunoscută sau nu îți este arătată apare totuși pe listă, nu este omis.",
       "events": "Rapoarte",
       "eventsCorrection": "Un raport nu se modifică niciodată. Unul greșit se șterge și se spune din nou — în jurnal rămâne ce a spus cineva la un moment dat.",
       "eventsNone": "Nu s-a raportat nimic încă.",
@@ -2036,10 +2040,28 @@
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat",
     "linkThisPart": "Leagă asta…",
+    "notInThisModel": "Acel punct nu se află în acest model",
     "picked": {
       "modelStation": "Stația {{name}}",
       "modelStationRange": "Galeria de la {{name}}",
       "modelSurvey": "Ridicarea {{name}}"
+    },
+    "tracking": {
+      "people": "Speologi ({{count}})",
+      "showTimes": "Arată ultima actualizare",
+      "markerSublabel": "Ultima actualizare {{when}}",
+      "close": "Închide",
+      "out": "Ieșit",
+      "noTeam": "Fără echipă",
+      "cardTeam": "Echipă",
+      "cardEntered": "A intrat",
+      "cardLastUpdate": "Ultima actualizare",
+      "cardPosition": "Unde",
+      "positionWithheld": "Nu îți este arătată",
+      "positionWithheldDetail": "Această poziție există și nu îți poate fi comunicată — peștera aceasta are o poziție exactă care nu îți poate fi dată. Este marcată, nu lăsată goală, pentru că un gol s-ar citi ca și cum nimeni nu ar ști unde se află acest om.",
+      "positionMaybeWithheld": "Nu este arătată sau nu a fost raportată",
+      "positionMaybeWithheldDetail": "Ultimul raport al acestui om nu a purtat niciun loc — intrarea, ieșirea și o notă nu poartă niciodată unul. Deci ori nimeni nu a raportat unde se află, ori a fost raportată o poziție care nu îți poate fi comunicată.",
+      "positionUnreported": "Nicio poziție raportată"
     }
   },
   "surveyModels": {

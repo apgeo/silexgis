@@ -1,0 +1,39 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The surface the vendored viewer draws on, and the chrome this application puts over it.
+
+   The viewer's own stylesheet is injected into the head when the bundle is loaded, so its rules
+   and these have the same specificity and the winner is whichever was added last — which is why
+   the size of the drawing surface is still an inline style on the element and only what the
+   viewer's stylesheet does not set is stated here. */
+
+.caveview-panel {
+  position: relative;
+}
+
+/* A toolbar button is 28px and a media thumbnail 64px by default, both of which are sizes for a
+   cursor. Under a finger the toolbar gets the forty pixels the rest of this application gives a
+   touch target, and the thumbnails grow with it — a strip is scrolled and tapped, and 64px is
+   below what a finger hits reliably.
+
+   Set on the viewer's own container rather than on the panel because only that element goes
+   fullscreen, and the toolbar is moved inside it for as long as that lasts: a custom property set
+   further out still inherits, but this is the element both are always within. */
+@media (hover: none), (pointer: coarse) {
+  .caveview-panel-surface {
+    --cv-toolbar-button-size: 40px;
+    --cv-media-thumbnail-size: 80px;
+  }
+}
+
+/* Said over the model rather than above it: the panel is given a fixed height by whoever mounts
+   it, and a notice in the flow would push the viewer's own surface out of the bottom of it. */
+.caveview-panel-notice {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  left: 8px;
+  /* Over everything the viewer draws, including its side panel. It is the one thing a reader has
+     to be able to read and dismiss, and it is only there because something they asked for did
+     not happen. */
+  z-index: 11;
+}

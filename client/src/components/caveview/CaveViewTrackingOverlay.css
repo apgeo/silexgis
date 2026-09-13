@@ -1,0 +1,137 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The watch, drawn over the model as ordinary elements rather than into the scene — the same
+   arrangement as the 3D scene's own chrome, and for the same reasons: text layout, theming,
+   translation and focus all already exist out here and none of them exists inside a renderer. */
+
+.caveview-tracking {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  /* Above the viewer's canvas and its toolbar (8) but below its media strip (9), which is drawn
+     for the station under the pointer and has to stay readable over everything. */
+  z-index: 8;
+  display: flex;
+  /* The card grows upwards out of the box rather than downwards off the bottom edge. */
+  flex-direction: column-reverse;
+  gap: 8px;
+  /* Never wider than the phone it is on, and never taller than the panel it stands in. */
+  width: min(260px, calc(100% - 16px));
+  max-height: calc(100% - 16px);
+}
+
+/* A toolbar placed against the bottom edge stands exactly where this does. Lifted over it rather
+   than moved to another corner, so the one thing a reader is looking for — who is where — stays
+   in the place it is in every other panel. */
+.caveview-tracking-raised {
+  bottom: 52px;
+}
+
+.caveview-tracking-box,
+.caveview-tracking-card {
+  padding: 8px;
+  color: rgba(0, 0, 0, 0.88);
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme='dark'] .caveview-tracking-box,
+html[data-theme='dark'] .caveview-tracking-card {
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.caveview-tracking-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+
+.caveview-tracking-switch {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.caveview-tracking-people {
+  display: flex;
+  flex-direction: column;
+  /* Seven cavers at a finger-sized row is taller than a phone held sideways, so the list gives
+     way rather than the target size. */
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* A row is the tap path to everything the pointer would otherwise have to hover a marker for, so
+   it is a button in its own right rather than a line of text. */
+.caveview-tracking-person {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  width: 100%;
+  padding-inline: 4px;
+  text-align: start;
+}
+
+.caveview-tracking-person-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.caveview-tracking-person-place {
+  flex-shrink: 0;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.caveview-tracking-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.caveview-tracking-card:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+.caveview-tracking-card-head {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.caveview-tracking-card-row {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.caveview-tracking-card-label {
+  flex-shrink: 0;
+  opacity: 0.65;
+}
+
+.caveview-tracking-card-value {
+  text-align: end;
+  word-break: break-word;
+}
+
+/* What a finger has to hit gets the forty pixels the rest of this application gives a touch
+   target: the rows that open a caver's card, and the button that closes it. */
+@media (hover: none), (pointer: coarse) {
+  .caveview-tracking-person {
+    height: 40px;
+  }
+
+  .caveview-tracking-card-head .ant-btn {
+    width: 40px;
+    height: 40px;
+  }
+}

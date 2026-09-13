@@ -27,10 +27,16 @@ export interface PickedModelPart {
 }
 
 /**
- * The viewer's survey-tree node, as far as this needs it. A vendored bundle's object, so every
- * field is a question: a node that cannot say what it is called cannot be anchored to.
+ * Something of the model that can name itself, as far as this needs it. A vendored bundle's
+ * object, so every field is a question: a thing that cannot say what it is called cannot be
+ * anchored to.
+ *
+ * Two shapes arrive here and both are the viewer's. Its survey-tree nodes carry `getPath()`, and
+ * the station objects its click and hover events carry name themselves with `name()` — a method
+ * despite the word, which is why the string form is checked last and separately. Missing the
+ * second is silent: every pick simply produces nothing.
  */
-interface TreeNodeLike {
+interface NamedPartLike {
   getPath?: () => unknown;
   name?: unknown;
 }
@@ -53,11 +59,21 @@ export function pathOf(node: unknown): string | null {
     return null;
   }
 
-  const candidate = node as TreeNodeLike;
+  const candidate = node as NamedPartLike;
   if (typeof candidate.getPath === 'function') {
     const path = candidate.getPath();
     if (typeof path === 'string' && path.length > 0) {
       return path;
+    }
+  }
+
+  // The station objects handed over with a click carry their full path from `name()`, which is
+  // the same dotted string the tree node's `getPath()` gives and the same string the viewer
+  // resolves a reference against.
+  if (typeof candidate.name === 'function') {
+    const named = (candidate.name as () => unknown)();
+    if (typeof named === 'string' && named.length > 0) {
+      return named;
     }
   }
 
@@ -129,35 +145,59 @@ export function partFromLeg(leg: unknown): PickedModelPart | null {
   };
 }
 
+/** What the viewer is asked to do to show a linked part: which move, and what to name it. */
+export interface ModelFocus {
+  /** Which of the viewer's two moves answers this anchor. */
+  call: 'station' | 'survey';
+  /**
+   * The reference to give it — the path exactly as the anchor stores it, which is the viewer's
+   * own spelling of it.
+   *
+   * Passed through unsplit deliberately. The viewer also takes a reference as an array of path
+   * components, which is the unambiguous form for a name containing a dot of its own; but what is
+   * stored is one dotted string, so splitting it here would invent component boundaries nobody
+   * ever observed. The viewer retries a path that matches nothing with its last two components
+   * rejoined, which covers the case that can arise from a stored string.
+   */
+  ref: string;
+}
+
 /**
- * The part of the survey a link asks the viewer to show, or null when this viewer cannot answer
- * it — either because the link names another cave's model, or because its anchor names something
- * a single section cannot stand for.
+ * How the viewer should answer a link, or null when this viewer cannot answer it — either because
+ * the link names another cave's model, or because its anchor names something the viewer has no
+ * single move for.
  *
- * <b>A run of stations resolves to the station it starts from.</b> The viewer shows one section,
- * so a run has to be reduced to one end of itself; the end it starts from is where somebody
- * following "the passage from 6 to 7" wants to be standing, and putting them there beats
- * refusing to move, which a reader experiences as a link that does nothing.
+ * <b>A survey is framed, not reduced to a station.</b> Showing a named part of a cave is a move of
+ * its own, so a link to one moves the camera to frame the whole of it. Nothing is reduced and
+ * nothing is reloaded: both of those were consequences of the viewer once having a single way in.
+ *
+ * <b>A run of stations resolves to the station it starts from.</b> A run is two places, and the
+ * camera can only be at one of them; the end it starts from is where somebody following "the
+ * passage from 6 to 7" wants to be standing, and putting them there beats refusing to move, which
+ * a reader experiences as a link that does nothing.
  *
  * <b>A run of surveys is refused.</b> Two named parts of a cave have no start in the sense that a
- * pair of stations does, so choosing one of them would be arbitrary rather than merely partial.
+ * pair of stations does, so choosing one of them would be arbitrary rather than merely partial —
+ * and framing both would frame everything between them, which is most of the cave.
  */
-export function sectionForRef(
+export function focusForRef(
   ref: { targetType: string; targetId: string; anchorKind?: string; anchor?: unknown },
   surveyModelId: string | undefined,
-): string | null {
+): ModelFocus | null {
   if (surveyModelId === undefined || ref.targetType !== 'surveyModel' || ref.targetId !== surveyModelId) {
     return null;
   }
 
   const anchor = (typeof ref.anchor === 'object' && ref.anchor !== null ? ref.anchor : {}) as Record<string, unknown>;
-  const key = ref.anchorKind === 'modelStation'
-    ? 'station'
+  const plan = ref.anchorKind === 'modelStation'
+    ? { call: 'station' as const, key: 'station' }
     : ref.anchorKind === 'modelSurvey'
-      ? 'survey'
+      ? { call: 'survey' as const, key: 'survey' }
       : ref.anchorKind === 'modelStationRange'
-        ? 'fromStation'
+        ? { call: 'station' as const, key: 'fromStation' }
         : null;
-  const value = key === null ? undefined : anchor[key];
-  return typeof value === 'string' && value.length > 0 ? value : null;
+  const value = plan === null ? undefined : anchor[plan.key];
+  return plan !== null && typeof value === 'string' && value.length > 0
+    ? { call: plan.call, ref: value }
+    : null;
 }

@@ -2,15 +2,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { CAVEVIEW_HOME, loadCaveView, makeCrsLookup, type CaveViewUi } from '../../caveview/loadCaveView.ts';
 import {
+  CAVEVIEW_HOME,
+  focusNamedNothing,
+  loadCaveView,
+  makeCrsLookup,
+  type CaveViewStationMediaSource,
+  type CaveViewToolbar,
+  type CaveViewToolbarOptions,
+  type CaveViewUi,
+  type CaveViewer,
+} from '../../caveview/loadCaveView.ts';
+import {
+  focusForRef,
   partFromLeg,
   partFromStation,
-  sectionForRef,
   type PickedModelPart,
 } from '../../caveview/modelParts.ts';
+import { mediaForStation } from '../../caveview/stationMedia.ts';
+import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
+import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
+import CaveViewTrackingOverlay from './CaveViewTrackingOverlay.tsx';
+import './CaveViewPanel.css';
 
 export interface CaveViewPanelProps {
   /** Delivery URL of the survey file (carries its own access token, no auth header). */
@@ -43,11 +59,121 @@ export interface CaveViewPanelProps {
    * whatever cave it has open.
    */
   surveyModelId?: string;
+  /**
+   * Who is underground and where they were last reported, already resolved against this model.
+   *
+   * Resolved by the caller rather than read here: the watch carries caver ids and nothing on it
+   * knows what anybody is called — the trip's roster does — and the panel is mounted by three
+   * pages, only one of which has a trip at all. Absent means no markers and no chrome for them.
+   */
+  trackedCavers?: readonly TrackedCaver[];
+  /**
+   * Opts into the viewer's own row of controls, placed over the model.
+   *
+   * `true` takes the default buttons, which are chosen by the width available: the full set does
+   * not fit across a phone, and a toolbar whose last buttons are off the edge of the screen is a
+   * toolbar with buttons nobody can press.
+   */
+  toolbar?: boolean | CaveViewToolbarOptions;
+  /**
+   * Pictures to show over the model for the station the pointer rests on — and, where there is no
+   * pointer that can rest on anything, for the station a finger taps.
+   *
+   * May arrive late: the setting that makes the viewer follow the pointer over stations is applied
+   * to the loaded viewer rather than asked for when it is built, so a caller still fetching its
+   * pictures may pass nothing and pass them when they arrive.
+   */
+  stationMedia?: CaveViewStationMediaSource;
 }
 
 // CaveView addresses its container by element id; keep ids unique across remounts and
 // multiple simultaneous panels (main window + pop-outs).
 let panelSequence = 0;
+
+/**
+ * The viewer controls a full-width panel offers. Everything the toolbar can hold except the four
+ * elevations and the two camera projections: a compass of four buttons and a pair of projection
+ * buttons is most of a toolbar spent on two settings, and both are already in the side panel.
+ */
+const TOOLBAR_BUTTONS = [
+  'stations',
+  'stationLabels',
+  'splays',
+  'walls',
+  'scraps',
+  'entrances',
+  'viewPlan',
+  'shadingMode',
+  'fullscreen',
+] as const;
+
+/**
+ * What is left on a phone. Nine buttons at the size a finger needs come to more than a narrow
+ * screen is wide, so the ones that survive are the ones that change what is drawn of the cave.
+ */
+const NARROW_TOOLBAR_BUTTONS = [
+  'stations',
+  'stationLabels',
+  'splays',
+  'shadingMode',
+  'fullscreen',
+] as const;
+
+/**
+ * A station's pictures, opened by the tap that picked it.
+ *
+ * <b>A finger cannot hover, and the strip is a hover.</b> The viewer follows the pointer to decide
+ * which station's pictures to show, and a stationary tap moves no pointer — so on a touch screen
+ * that strip is unreachable, and would stay unreachable however large its thumbnails were made.
+ * What a tap does produce is the pick this panel already listens for, and focusing a station is the
+ * documented way to show its strip without a pointer: it centres the station, which is also what
+ * keeps the strip on screen, since the strip is only drawn while its station is in view.
+ *
+ * Three things are deliberate. <b>Only a pointer that cannot hover takes this path</b>, so a mouse
+ * click keeps meaning exactly what it meant. <b>A station with no pictures is left alone</b> rather
+ * than focused for nothing, because the camera move is the cost of asking. And <b>tapping the same
+ * station again takes the strip off</b>, which is the only way to dismiss one where no pointer will
+ * ever leave the station: clearing the source and setting it again is what removes the strip
+ * itself, and the source is put straight back so the next tap still has pictures to find.
+ */
+function showPicturesForTap(
+  viewer: CaveViewer,
+  source: CaveViewStationMediaSource | undefined,
+  shown: { current: string | null },
+  station: { node: unknown; path: string; pointerType: string | undefined },
+): void {
+  const byFinger = station.pointerType === 'touch' || station.pointerType === 'pen';
+  if (source === undefined || !byFinger) {
+    return;
+  }
+  if (mediaForStation(source, station.path, station.node).length === 0) {
+    return;
+  }
+  if (shown.current === station.path) {
+    shown.current = null;
+    viewer.clearStationMedia();
+    viewer.setStationMedia(source);
+    return;
+  }
+
+  shown.current = station.path;
+  void viewer.focusStation(station.path, { popup: true }).catch(() => {
+    // Nothing was shown, so the next tap on this station has to ask again rather than try to take
+    // away a strip that is not there. Silent by design: the station came from a click on the model
+    // in front of the reader, so a rejection here is an abandoned camera move, not a lost place.
+    if (shown.current === station.path) {
+      shown.current = null;
+    }
+  });
+}
+
+/** What one marker is currently drawn as, so the next answer can be turned into the moves it needs. */
+interface DrawnMarker {
+  station: string;
+  label: string;
+  sublabel: string | undefined;
+  color: string;
+}
 
 /**
  * Isolated wrapper around the vendored CaveView.js viewer: fetches the survey file,
@@ -61,34 +187,60 @@ export default function CaveViewPanel({
   onEntrancePick,
   onPartPick,
   surveyModelId,
+  trackedCavers,
+  toolbar = false,
+  stationMedia,
 }: CaveViewPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const narrow = useIsMobile();
   const containerIdRef = useRef<string>(null);
   containerIdRef.current ??= `caveview-panel-${panelSequence++}`;
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [errorDetail, setErrorDetail] = useState<string>();
+  /** Set when a link named a part of the survey this model turned out not to hold. */
+  const [missingPart, setMissingPart] = useState(false);
+  const [showMarkerTimes, setShowMarkerTimes] = useState(false);
+  const [openCaverId, setOpenCaverId] = useState<string | null>(null);
 
-  // The loaded survey and the viewer that holds it, kept so a link can be answered after the
-  // load. The file is kept as well because showing a named part of the survey is done by loading
-  // it again with that part named — the vendored viewer's one way in — and fetching the bytes a
-  // second time to do it would be a download per click.
-  const loadedRef = useRef<{ ui: CaveViewUi; file: File } | null>(null);
+  // The viewer that holds the loaded survey, kept so links, markers, pictures and the toolbar can
+  // reach it after the load. The survey file itself is no longer kept: showing a named part of it
+  // is a camera move now, not a second parse of the same bytes.
+  const viewerRef = useRef<{ viewer: CaveViewer; ui: CaveViewUi } | null>(null);
+  /** What is drawn for each caver right now — the thing the next answer is compared against. */
+  const drawnMarkersRef = useRef(new Map<string, DrawnMarker>());
+  /** The station whose pictures a tap put on screen, so a second tap on it takes them off again. */
+  const strippedStationRef = useRef<string | null>(null);
 
-  const sectionOf = (ref: ResourceRef): string | null => sectionForRef(ref, surveyModelId);
+  const focusOf = (ref: ResourceRef) => focusForRef(ref, surveyModelId);
 
   useViewControl({
     id: `caveview-${containerIdRef.current}`,
     kind: 'caveview',
     labelKey: 'viewLinks.controls.caveview',
     enabled: status === 'ready' && surveyModelId !== undefined,
-    canReveal: (ref) => sectionOf(ref) !== null,
+    canReveal: (ref) => focusOf(ref) !== null,
     reveal: (ref) => {
-      const section = sectionOf(ref);
-      const loaded = loadedRef.current;
-      if (section !== null && loaded !== null) {
-        loaded.ui.loadCave(loaded.file, section);
+      const focus = focusOf(ref);
+      const viewer = viewerRef.current?.viewer;
+      if (focus === null || viewer === undefined) {
+        return;
       }
+      setMissingPart(false);
+      const moved =
+        focus.call === 'survey' ? viewer.focusSurvey(focus.ref) : viewer.focusStation(focus.ref);
+      void moved.catch((error: unknown) => {
+        // Only the model not holding what the link named is said — a move abandoned because a
+        // second link was followed, or because somebody selected something while the camera flew,
+        // is ordinary use and passes in silence. Which is which is decided in one place, next to
+        // the rest of what is known about the viewer's own words.
+        //
+        // Said rather than thrown: a reader who followed a link is owed an answer, and the control
+        // that delivered it cannot carry one back.
+        if (focusNamedNothing(error)) {
+          setMissingPart(true);
+        }
+      });
     },
   });
 
@@ -99,11 +251,21 @@ export default function CaveViewPanel({
   onEntrancePickRef.current = onEntrancePick;
   const onPartPickRef = useRef(onPartPick);
   onPartPickRef.current = onPartPick;
+  // The listener that answers a tap is attached once with the viewer, and what it has to show can
+  // arrive long afterwards.
+  const stationMediaRef = useRef(stationMedia);
+  stationMediaRef.current = stationMedia;
 
   useEffect(() => {
     let disposed = false;
     let ui: CaveViewUi | null = null;
     setStatus('loading');
+    setMissingPart(false);
+    setOpenCaverId(null);
+    // A new viewer draws none of the old one's markers, so nothing is drawn until they are added
+    // again — which the marker effect does as soon as this one reports the model loaded.
+    drawnMarkersRef.current = new Map();
+    strippedStationRef.current = null;
 
     (async () => {
       const cv2 = await loadCaveView();
@@ -137,10 +299,16 @@ export default function CaveViewPanel({
       // selecting and highlighting what was clicked — so offering to link a station would take
       // away the ability to simply look at one.
       viewer.addEventListener('station', (event) => {
-        const part = partFromStation((event as { node?: unknown }).node);
-        if (!disposed && part !== null) {
-          onPartPickRef.current?.(part);
-        }
+        if (disposed) return;
+        const picked = event as { node?: unknown; mouseEvent?: { pointerType?: string } };
+        const part = partFromStation(picked.node);
+        if (part === null) return;
+        onPartPickRef.current?.(part);
+        showPicturesForTap(viewer, stationMediaRef.current, strippedStationRef, {
+          node: picked.node,
+          path: part.anchor.station,
+          pointerType: picked.mouseEvent?.pointerType,
+        });
       });
       viewer.addEventListener('leg', (event) => {
         const part = partFromLeg((event as { leg?: unknown }).leg);
@@ -148,10 +316,20 @@ export default function CaveViewPanel({
           onPartPickRef.current?.(part);
         }
       });
+      // Resting on a caver's marker opens that caver's card. `handled` is left alone here too,
+      // for a different reason: on this event it suppresses only the marker's own second line,
+      // which is the last-report time somebody asked for with the switch. Claiming the event
+      // would quietly turn that switch off.
+      viewer.addEventListener('liveMarkerHover', (event) => {
+        const id = (event as { id?: unknown }).id;
+        if (!disposed && typeof id === 'string') {
+          setOpenCaverId(id);
+        }
+      });
+
       ui = new cv2.CaveViewUI(viewer);
-      const file = new File([blob], fileName);
-      loadedRef.current = { ui, file };
-      ui.loadCave(file);
+      viewerRef.current = { viewer, ui };
+      ui.loadCave(new File([blob], fileName));
     })().catch((error: unknown) => {
       if (disposed) return;
       setStatus('error');
@@ -160,25 +338,188 @@ export default function CaveViewPanel({
 
     return () => {
       disposed = true;
-      loadedRef.current = null;
+      viewerRef.current = null;
       ui?.dispose();
       ui = null;
     };
   }, [fileUrl, fileName]);
 
+  // ---- Live markers ----
+  //
+  // Added, slid and taken off the loaded model as the watch is re-read, which happens every half
+  // minute while a party is underground. Reloading the survey to redraw them would re-parse the
+  // whole model on every one of those, and would take whoever is watching back to the view the
+  // model opens at each time.
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (viewer === undefined || status !== 'ready') {
+      return;
+    }
+
+    const drawn = drawnMarkersRef.current;
+    const wanted = new Map<string, DrawnMarker>();
+    for (const caver of trackedCavers ?? []) {
+      if (caver.position.kind !== 'station') {
+        // No marker is invented for a position nobody reported or one that was withheld: there
+        // is no station to put it at, and a marker placed anyway would be this application
+        // claiming to know something it was deliberately not told. Those cavers are listed.
+        continue;
+      }
+      wanted.set(caver.caverId, {
+        station: caver.position.station,
+        label: caver.name,
+        sublabel:
+          showMarkerTimes && caver.lastRecordedAt !== null
+            ? t('caveview.tracking.markerSublabel', {
+                when: new Date(caver.lastRecordedAt).toLocaleTimeString(i18n.language),
+              })
+            : undefined,
+        // Somebody reported out is drawn in the muted colour: their marker is where they were
+        // last seen, not where they are, and a party half of which is above ground has to read
+        // as that rather than as everybody still being underground.
+        //
+        // Both colours are stated rather than taken from the interface theme, for two reasons the
+        // palette spells out: the scene behind them is the viewer's own, not the page's, and a
+        // theme token carrying its muting in an alpha channel arrives at the viewer as solid
+        // black or solid white — which would draw whoever is out louder than whoever is not.
+        color: caver.out ? trackedCaverPalette.out : trackedCaverPalette.underground,
+      });
+    }
+
+    for (const [id, marker] of wanted) {
+      const before = drawn.get(id);
+      const options = { label: marker.label, sublabel: marker.sublabel, color: marker.color };
+      // A move only replaces the options it is given, so an option that has gone away cannot be
+      // taken off a marker by moving it — turning the time off would leave every marker showing
+      // the time it had when it was turned off. Adding replaces the marker whole, which is what
+      // that case needs; it costs the slide, and nothing there is sliding anyway.
+      const clearsSublabel = before !== undefined && before.sublabel !== undefined && marker.sublabel === undefined;
+      if (before === undefined || clearsSublabel) {
+        viewer.addLiveMarker(id, marker.station, options);
+      } else if (
+        before.station !== marker.station
+        || before.label !== marker.label
+        || before.sublabel !== marker.sublabel
+        || before.color !== marker.color
+      ) {
+        viewer.moveLiveMarker(id, marker.station, options);
+      }
+    }
+    for (const id of drawn.keys()) {
+      if (!wanted.has(id)) {
+        viewer.removeLiveMarker(id);
+      }
+    }
+
+    drawnMarkersRef.current = wanted;
+  }, [trackedCavers, showMarkerTimes, status, t, i18n.language]);
+
+  // ---- The viewer's own toolbar ----
+  const toolbarOptions = toolbar === true ? {} : toolbar === false ? null : toolbar;
+  const toolbarWanted = toolbarOptions !== null;
+  const toolbarPlacement = toolbarOptions?.placement ?? 'top';
+  const toolbarButtons =
+    toolbarOptions?.buttons ?? (narrow ? NARROW_TOOLBAR_BUTTONS : TOOLBAR_BUTTONS);
+  // The list is a new array on every render, so what the toolbar is rebuilt for is its contents;
+  // the list itself is read off a ref at the moment one is built.
+  const toolbarButtonKey = toolbarButtons.join(',');
+  const toolbarButtonsRef = useRef(toolbarButtons);
+  toolbarButtonsRef.current = toolbarButtons;
+
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (!toolbarWanted || viewer === undefined || status !== 'ready') {
+      return;
+    }
+    let disposed = false;
+    let bar: CaveViewToolbar | null = null;
+    // The bundle is already loaded — this viewer came out of it — so this resolves immediately;
+    // it is awaited rather than read off the global so there is one way to reach the namespace.
+    void loadCaveView().then((cv2) => {
+      if (disposed || viewerRef.current?.viewer !== viewer) {
+        return;
+      }
+      // The container is the viewer's own element, which is positioned — so the toolbar is drawn
+      // over the model, and goes fullscreen with it.
+      bar = new cv2.CaveViewToolbar(viewer, containerIdRef.current!, {
+        placement: toolbarPlacement,
+        buttons: [...toolbarButtonsRef.current],
+      });
+    });
+    return () => {
+      disposed = true;
+      // Removed unconditionally, including where the viewer has already gone and taken the
+      // toolbar with it — the bundle's own teardown is written to be run twice, and the cleanup
+      // of the effect that owns the viewer runs before this one, so a check for a live viewer
+      // here would simply never remove a toolbar the panel is keeping.
+      bar?.dispose();
+      bar = null;
+    };
+  }, [status, toolbarWanted, toolbarPlacement, toolbarButtonKey]);
+
+  // ---- Station pictures ----
+  //
+  // The strip is drawn for the station the viewer is tracking, and it only tracks one while it is
+  // labelling it — so a panel showing pictures has to ask for that label. It is asked for *here*,
+  // on the loaded viewer, rather than in the construction config: the viewer assembles its view
+  // settings as its own defaults, then the config, then whatever its "save as default" button last
+  // stored in this browser, and re-applies that assembly on every load. One press of that button
+  // with the label off would otherwise turn the station pictures off for every cave and every panel
+  // in this browser, for good, with nothing anywhere to say why.
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (stationMedia === undefined || viewer === undefined || status !== 'ready') {
+      return;
+    }
+    viewer.setStationMedia(stationMedia);
+    viewer.stationLabelOver = true;
+    strippedStationRef.current = null;
+    return () => {
+      if (viewerRef.current?.viewer === viewer) {
+        viewer.clearStationMedia();
+        // The panel asked for the label and takes it back with the pictures it was for. Where the
+        // pictures are merely being replaced, the run that follows this one asks again.
+        viewer.stationLabelOver = false;
+        strippedStationRef.current = null;
+      }
+    };
+  }, [stationMedia, status]);
+
   return (
-    <div style={{ position: 'relative', height }}>
+    <div className="caveview-panel" style={{ height }}>
       {status === 'loading' && (
         <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="caveview-loading" />
       )}
       {status === 'error' && (
-        <Alert type="error" showIcon title={t('caveview.loadError')} description={errorDetail} />
+        <Alert type="error" showIcon message={t('caveview.loadError')} description={errorDetail} />
+      )}
+      {missingPart && (
+        <Alert
+          className="caveview-panel-notice"
+          type="warning"
+          showIcon
+          closable
+          onClose={() => setMissingPart(false)}
+          message={t('caveview.notInThisModel')}
+          data-testid="caveview-missing-part"
+        />
       )}
       <div
         id={containerIdRef.current}
+        className="caveview-panel-surface"
         data-testid="caveview-container"
         style={{ width: '100%', height: '100%', display: status === 'error' ? 'none' : undefined }}
       />
+      {trackedCavers !== undefined && trackedCavers.length > 0 && status !== 'error' && (
+        <CaveViewTrackingOverlay
+          cavers={trackedCavers}
+          showTimes={showMarkerTimes}
+          onShowTimesChange={setShowMarkerTimes}
+          openCaverId={openCaverId}
+          onOpenCaver={setOpenCaverId}
+          raised={toolbarWanted && toolbarPlacement === 'bottom'}
+        />
+      )}
     </div>
   );
 }

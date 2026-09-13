@@ -29,6 +29,10 @@ vi.mock('../../api/hooks.ts', () => ({
   useDeleteTrackingTeam: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSurveyModelsForCaves: () => ({ data: [], isPending: false }),
   useCaveNames: () => new Map<string, string>(),
+  // The watch on the survey model it is resolved against. These tests set no model on the watch,
+  // so nothing is asked for and nothing is offered; that surface has its own tests.
+  useSurveyModel: () => ({ data: undefined, isPending: false }),
+  surveyModelReadableByViewer: (m: { format: string }) => m.format === 'lox' || m.format === 'survex3d',
 }));
 
 const { default: TripTrackingTab } = await import('./TripTrackingTab.tsx');

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import {
+  focusForRef,
   partFromLeg,
   partFromStation,
   partFromSurvey,
   pathOf,
-  sectionForRef,
   shortNameOf,
 } from './modelParts.ts';
 
@@ -26,6 +26,15 @@ describe('pathOf', () => {
 
   it('falls back to the name when there is no path to have', () => {
     expect(pathOf(node(null, 'entrance'))).toBe('entrance');
+  });
+
+  it('names the station object a click hands over, which says its path with name()', () => {
+    // The shape the viewer's own click and hover events carry — not a survey-tree node. Missing
+    // it is silent in exactly the way that matters: every station pick simply produces nothing,
+    // so nothing can be linked and no tap can find a station's pictures.
+    expect(pathOf({ name: () => 'pestera.sala-mare.1' })).toBe('pestera.sala-mare.1');
+    expect(pathOf({ name: () => '' })).toBeNull();
+    expect(pathOf({ name: () => 42 })).toBeNull();
   });
 
   it('will not name a node that says nothing', () => {
@@ -94,7 +103,7 @@ describe('partFromLeg', () => {
   });
 });
 
-describe('sectionForRef', () => {
+describe('focusForRef', () => {
   const MODEL = 'model-1';
   const ref = (anchorKind: string, anchor: unknown, targetId = MODEL) => ({
     targetType: 'surveyModel',
@@ -103,39 +112,57 @@ describe('sectionForRef', () => {
     anchor,
   });
 
-  it('answers a station and a survey by the field that names one', () => {
-    expect(sectionForRef(ref('modelStation', { station: 'p.g.7' }), MODEL)).toBe('p.g.7');
-    expect(sectionForRef(ref('modelSurvey', { survey: 'p.g' }), MODEL)).toBe('p.g');
+  it('sends a station to the station move and a survey to the survey move', () => {
+    // The two are different moves, not one move given different arguments: a station is flown to
+    // and a survey is framed. While there was only one way in, a link to a survey moved nothing.
+    expect(focusForRef(ref('modelStation', { station: 'p.g.7' }), MODEL)).toEqual({
+      call: 'station',
+      ref: 'p.g.7',
+    });
+    expect(focusForRef(ref('modelSurvey', { survey: 'p.g' }), MODEL)).toEqual({
+      call: 'survey',
+      ref: 'p.g',
+    });
   });
 
   it('answers a run of stations with the station it starts from', () => {
-    // Reduced rather than refused: the viewer shows one section, and the start is where somebody
+    // Reduced rather than refused: the camera can be at one end, and the start is where somebody
     // following "the passage from 6 to 7" wants to be standing. Refusing reads as a dead link.
     expect(
-      sectionForRef(ref('modelStationRange', { fromStation: 'p.g.6', toStation: 'p.g.7' }), MODEL),
-    ).toBe('p.g.6');
+      focusForRef(ref('modelStationRange', { fromStation: 'p.g.6', toStation: 'p.g.7' }), MODEL),
+    ).toEqual({ call: 'station', ref: 'p.g.6' });
+  });
+
+  it('hands the stored path over unsplit, dots and all', () => {
+    // The anchor holds one dotted string and nothing says where its components divide. Splitting
+    // it here would invent boundaries inside a survey name that contains a dot of its own; the
+    // viewer is the one that knows, and it retries such a path on its own terms.
+    expect(focusForRef(ref('modelStation', { station: 'p.sala 1.2.7' }), MODEL)).toEqual({
+      call: 'station',
+      ref: 'p.sala 1.2.7',
+    });
   });
 
   it('refuses a run of surveys, which has no start to reduce to', () => {
     expect(
-      sectionForRef(ref('modelSurveyRange', { fromSurvey: 'p.a', toSurvey: 'p.b' }), MODEL),
+      focusForRef(ref('modelSurveyRange', { fromSurvey: 'p.a', toSurvey: 'p.b' }), MODEL),
     ).toBeNull();
   });
 
   it('refuses another cave’s model, and anything but a model', () => {
     // The rule that stops a viewer jumping to a station name that happens to exist in whatever
     // cave it has open.
-    expect(sectionForRef(ref('modelStation', { station: 'p.g.7' }, 'model-2'), MODEL)).toBeNull();
+    expect(focusForRef(ref('modelStation', { station: 'p.g.7' }, 'model-2'), MODEL)).toBeNull();
     expect(
-      sectionForRef({ targetType: 'document', targetId: MODEL, anchorKind: 'modelStation', anchor: { station: 'x' } }, MODEL),
+      focusForRef({ targetType: 'document', targetId: MODEL, anchorKind: 'modelStation', anchor: { station: 'x' } }, MODEL),
     ).toBeNull();
-    expect(sectionForRef(ref('modelStation', { station: 'p.g.7' }), undefined)).toBeNull();
+    expect(focusForRef(ref('modelStation', { station: 'p.g.7' }), undefined)).toBeNull();
   });
 
   it('refuses a payload that does not carry the field its kind needs', () => {
-    expect(sectionForRef(ref('modelStation', {}), MODEL)).toBeNull();
-    expect(sectionForRef(ref('modelStation', { station: '' }), MODEL)).toBeNull();
-    expect(sectionForRef(ref('modelStation', null), MODEL)).toBeNull();
-    expect(sectionForRef(ref('whole', null), MODEL)).toBeNull();
+    expect(focusForRef(ref('modelStation', {}), MODEL)).toBeNull();
+    expect(focusForRef(ref('modelStation', { station: '' }), MODEL)).toBeNull();
+    expect(focusForRef(ref('modelStation', null), MODEL)).toBeNull();
+    expect(focusForRef(ref('whole', null), MODEL)).toBeNull();
   });
 });

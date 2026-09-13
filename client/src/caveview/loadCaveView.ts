@@ -15,7 +15,7 @@ import { userManager } from '../auth/auth.tsx';
  * stale cached viewer across upgrades. A new vendored build lands in a new directory and
  * changes this constant in the same commit, so every asset URL changes with it.
  */
-export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.1/';
+export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.2/';
 
 const SCRIPT_URL = `${CAVEVIEW_HOME}js/CaveView2.min.js`;
 const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;
@@ -31,11 +31,118 @@ const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;
 // back after dispatching: leaving it false lets the viewer do its own thing with the click as
 // well, which is what keeps selecting a station for a link from also breaking selecting one to
 // look at it.
-export type CaveViewerEvent = 'newCave' | 'progress' | 'entrance' | 'station' | 'leg';
+//
+// 'liveMarkerHover' fires when the pointer comes to rest on a marker the application placed; its
+// event carries the marker's own id under `id`. It too carries `handled`, which suppresses the
+// marker's second line of label — see the panel for why that line is left to the viewer.
+export type CaveViewerEvent =
+  | 'newCave'
+  | 'progress'
+  | 'entrance'
+  | 'station'
+  | 'leg'
+  | 'liveMarkerHover';
+
+/**
+ * How a station or a named part of a survey is addressed: the dotted path the viewer itself
+ * uses, or the path already split into its components.
+ *
+ * The split form is the reliable one, because a dotted path is ambiguous when a name inside it
+ * contains a dot of its own. Anchors written by this application store the dotted string the
+ * viewer handed over and nothing else, so that is what is passed back — splitting one here would
+ * invent component boundaries that were never observed.
+ */
+export type CaveViewRef = string | readonly string[];
+
+/** One picture held for a station, as the viewer's media strip takes it. */
+export interface CaveViewMediaEntry {
+  /** Full size, shown when the thumbnail is clicked. An entry without one is ignored. */
+  url: string;
+  thumbnailUrl?: string;
+  caption?: string;
+}
+
+/**
+ * Where the viewer reads a station's pictures from: a map keyed by the dotted path of a station,
+ * or a function asked about each station as the pointer reaches it.
+ */
+export type CaveViewStationMediaSource =
+  | ReadonlyMap<string, readonly CaveViewMediaEntry[]>
+  | ((station: unknown) => readonly CaveViewMediaEntry[] | null);
+
+/**
+ * What a marker is drawn with. Options left out of a move are left as they were — which is why
+ * taking a sublabel away means adding the marker again rather than moving it.
+ */
+export interface CaveViewLiveMarkerOptions {
+  label?: string;
+  sublabel?: string;
+  color?: string;
+}
+
+/** What a focus does besides moving the camera. */
+export interface CaveViewFocusOptions {
+  /** Marks the station as the selected one. On by default. */
+  highlight?: boolean;
+  /**
+   * Shows the station's own popup, and with it the strip of pictures a pointer resting on the
+   * station would have opened. The one way to that strip that does not need a pointer that hovers.
+   */
+  popup?: boolean;
+}
 
 export interface CaveViewer {
   addEventListener(type: CaveViewerEvent, listener: (event: unknown) => void): void;
   removeEventListener(type: CaveViewerEvent, listener: (event: unknown) => void): void;
+  /**
+   * Whether the viewer labels the station under the pointer — and, with it, whether it tracks that
+   * station at all, which is what the pictures of a station are shown from.
+   *
+   * <b>Assigned after a model is loaded, never asked for in the construction config.</b> The
+   * viewer builds its view settings as its own defaults, then the config, then whatever was last
+   * stored by its "save as default" button — so the stored value wins over the config, and it is
+   * re-applied on every load. One press of that button by anybody, while the label was off, would
+   * otherwise pin this off for that browser for good and take the station pictures with it.
+   */
+  stationLabelOver: boolean;
+  /**
+   * Selects a station, highlights it and flies the camera to it. Rejects when no model is loaded,
+   * when the reference names no station of the loaded one, and when the move is abandoned —
+   * superseded by a later focus, or cancelled by a selection made elsewhere.
+   */
+  focusStation(ref: CaveViewRef, options?: CaveViewFocusOptions): Promise<unknown>;
+  /** Selects a named part of the survey and frames it. Rejects on the same conditions. */
+  focusSurvey(ref: CaveViewRef): Promise<void>;
+  /** Places a marker over the model. A reference the loaded model does not hold is held
+   *  unresolved and placed when a model containing it is loaded. */
+  addLiveMarker(id: string, ref: CaveViewRef, options?: CaveViewLiveMarkerOptions): unknown;
+  /** Slides a marker to another station. Null when no marker of that id was added. */
+  moveLiveMarker(id: string, ref: CaveViewRef, options?: CaveViewLiveMarkerOptions): unknown;
+  removeLiveMarker(id: string): boolean;
+  /** Pictures shown over the model for the station under the pointer. */
+  setStationMedia(source: CaveViewStationMediaSource): void;
+  clearStationMedia(): void;
+}
+
+/**
+ * Whether a rejected focus means this model does not hold what was asked for.
+ *
+ * A focus rejects for two quite different reasons. The reference names nothing in the loaded model
+ * — which is a real state a reader who followed a link is owed an answer about, and what a survey
+ * re-exported with renamed sections leaves behind. Or the move was abandoned: superseded by a later
+ * focus, which is what following two links in quick succession *is*, or cancelled by a selection
+ * made in the viewer while the camera flew. Both of those leave the camera where whoever was
+ * driving it wanted it and must pass in silence.
+ *
+ * Both arrive as an `Error` and only the message tells them apart, so <b>the failures are what is
+ * matched, not the abandonments</b>. That decides which way an unrecognised message falls: anything
+ * this does not recognise is treated as an abandonment and says nothing, so a reworded or wrapped
+ * message in a later vendored build costs a notice that was not shown — rather than a notice
+ * telling a reader that a link which worked perfectly points at nothing.
+ */
+export function focusNamedNothing(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : '';
+  return /^No (station|survey section) \[/.test(message) || message === 'No survey loaded';
 }
 
 export interface CaveViewUi {
@@ -45,9 +152,25 @@ export interface CaveViewUi {
   dispose(): void;
 }
 
+/** Which of the viewer's own controls a toolbar offers, and which edge it sits against. */
+export interface CaveViewToolbarOptions {
+  placement?: 'top' | 'bottom';
+  buttons?: readonly string[];
+}
+
+export interface CaveViewToolbar {
+  /** Takes the toolbar off its container. Also removed when the viewer is disposed. */
+  dispose(): void;
+}
+
 export interface Cv2Namespace {
   CaveViewer: new (containerId: string, config: Record<string, unknown>) => CaveViewer;
   CaveViewUI: new (viewer: CaveViewer) => CaveViewUi;
+  CaveViewToolbar: new (
+    viewer: CaveViewer,
+    container: string | HTMLElement,
+    options?: CaveViewToolbarOptions,
+  ) => CaveViewToolbar;
 }
 
 declare global {

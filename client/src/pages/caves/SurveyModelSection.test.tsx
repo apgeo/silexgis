@@ -80,6 +80,10 @@ vi.mock('../../api/hooks.ts', async () => {
     useCaveSummary: () => ({ data: summary }),
     useUploadSurveyModel: () => ({ mutateAsync: uploadMutate, isPending: false }),
     useDeleteSurveyModel: () => ({ mutateAsync: deleteMutate, isPending: false }),
+    // The viewer opened from this section reads the model's links, to show over the model the
+    // photographs somebody has hung on its stations. Nothing here is about those, so there are
+    // none — but the mock lists what it answers, so a hook left out of it is a crash.
+    useResLinksForTarget: () => ({ data: undefined }),
   };
 });
 

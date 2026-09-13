@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Modal, Space } from 'antd';
 import { LinkOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import type { SurveyModelInfo } from '../../api/hooks.ts';
+import { useResLinksForTarget, type SurveyModelInfo } from '../../api/hooks.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import type { PickedModelPart } from '../../caveview/modelParts.ts';
+import { stationMediaFromLinks } from '../../caveview/stationMedia.ts';
 import AddMemberModal from '../reslinks/AddMemberModal.tsx';
 import CaveViewPanel from './CaveViewPanel.tsx';
+
+/** How many of the model's links are read for pictures. The same bound the links panel uses. */
+const MAX_LINKS = 200;
 
 interface SurveyModelViewerModalProps {
   /** The model to show, or null for a closed modal. */
@@ -47,6 +51,23 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
     setLinking(false);
   }, [model?.id]);
 
+  // The photographs somebody has already linked to stations of this model, shown over the model
+  // where they were taken. Asked for only while the viewer is open, because that is the only time
+  // anything is drawn from them.
+  const { data: links } = useResLinksForTarget(
+    'surveyModel',
+    model?.id ?? '',
+    { pageSize: MAX_LINKS },
+    model !== null,
+  );
+  // Always a map, never undefined. The panel would take them late — the setting that shows them is
+  // applied to the loaded viewer — but the prop's presence is also what says this surface shows
+  // pictures at all, and an empty map says that before any have arrived.
+  const stationMedia = useMemo(
+    () => stationMediaFromLinks(links?.items ?? [], model?.id ?? ''),
+    [links, model?.id],
+  );
+
   return (
     <Modal
       title={model?.name}
@@ -78,6 +99,10 @@ export default function SurveyModelViewerModal({ model, onClose }: SurveyModelVi
             height="70vh"
             surveyModelId={model.id}
             onPartPick={setPicked}
+            // The window given over to the model is where the viewer's own controls belong; the
+            // docked panels elsewhere have chrome of their own competing for the same corner.
+            toolbar
+            stationMedia={stationMedia}
           />
         </Space>
       )}

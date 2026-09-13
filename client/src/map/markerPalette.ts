@@ -91,6 +91,29 @@ export const tripPalette = {
 } as const;
 
 /**
+ * Where the people of a watch are drawn on a survey model.
+ *
+ * <b>Both are opaque, and that is a correctness requirement rather than a preference.</b> The
+ * survey viewer hands a marker's colour straight to a point material, whose parser accepts an
+ * `rgba()` string, discards the alpha with a console warning and keeps the three channels — so a
+ * 25%-black "muted" colour arrives as solid black and a 25%-white one as solid white, the second of
+ * which is the most prominent thing on a dark scene. On this surface the distinction between who is
+ * still underground and who has come out is the one that matters, so it may not be expressed in an
+ * alpha that never survives.
+ *
+ * <b>Chosen against the viewer's background, not the application's.</b> The scene behind these is
+ * the viewer's own dark grey whatever theme the page is in, and the colours already on it are the
+ * viewer's: red default stations, yellow junctions, white entrances, cyan linked stations. A caver
+ * is neither a station nor a passage, and carries their name beside them.
+ */
+export const trackedCaverPalette = {
+  /** Still underground: the application's teal, lifted to read on the viewer's dark scene. */
+  underground: '#3ab5b5',
+  /** Reported out — their marker is where they were, not where they are. Quiet, but not invisible. */
+  out: '#9a9a9a',
+} as const;
+
+/**
  * Photographs held by a photo library this installation does not own — one hue per library.
  *
  * Deliberately clear of every hue already on this map: the entrance teal, the approximate-entrance

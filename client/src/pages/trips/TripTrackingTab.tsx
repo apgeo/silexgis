@@ -12,6 +12,7 @@ import {
   type TripLogInfo,
 } from '../../api/hooks.ts';
 import TrackingConfigCard from '../../components/trips/TrackingConfigCard.tsx';
+import TrackingModelPanel from '../../components/trips/TrackingModelPanel.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
 import { trackingProblemMessage } from '../../components/trips/trackingProblems.ts';
 
@@ -215,6 +216,16 @@ export default function TripTrackingTab({
             render: (_value, row) => positionOf(row),
           },
         ]}
+      />
+
+      {/* The same watch on the survey it is resolved against, for whoever knows the cave well
+          enough for a place to mean more than its name. Drawn under the table rather than over it:
+          a position that was withheld has no point to put on a model, so the reading that can say
+          so in words comes first. */}
+      <TrackingModelPanel
+        tracking={data}
+        participants={trip.participants}
+        events={events.data?.items}
       />
 
       {canEdit && (
