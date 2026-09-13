@@ -86,6 +86,19 @@ public static class HistoryProtection
         [nameof(ResLinkMember.ResLinkId), nameof(ResLinkMember.Note), nameof(ResLinkMember.AddedBy),
          nameof(ResLinkMember.Anchor), nameof(ResLinkMember.AnchorFileId)];
 
+    // A tracking report's station name, depth and model — and the tracking config's
+    // reference station and filter prefixes — are station vocabulary of a cave the timeline
+    // cannot resolve protection for (the row's cave snapshot is data, not ancestry this
+    // reader walks). The live tracking reads answer positions to whoever holds exact view;
+    // the timeline keeps the event — a report landed, a config changed — and names no
+    // station for anyone, the StoredFile.Geom defence-in-depth stance.
+    private static readonly string[] TripPositionEventNoise =
+        [nameof(TripPositionEvent.StationName), nameof(TripPositionEvent.DepthEnteredM),
+         nameof(TripPositionEvent.SurveyModelId), nameof(TripPositionEvent.CaveFeatureId)];
+    private static readonly string[] TripTrackingNoise =
+        [nameof(Entities.TripTracking.ReferenceStationName), nameof(Entities.TripTracking.DepthFilter),
+         nameof(Entities.TripTracking.SurveyModelId), nameof(Entities.TripTracking.CaveFeatureId)];
+
     private static readonly string FeatureCave = FeatureAudit.TypeName(FeatureKind.Cave);
     private static readonly string FeatureEntrance = FeatureAudit.TypeName(FeatureKind.CaveEntrance);
     private static readonly string FeatureCenterline = FeatureAudit.TypeName(FeatureKind.Centerline);
@@ -95,6 +108,8 @@ public static class HistoryProtection
     public static IReadOnlyList<string> NoiseFor(string entityType) =>
         entityType == FeatureCave ? [.. AlwaysNoise, .. CaveNoise]
         : entityType == nameof(StoredFile) ? [.. AlwaysNoise, .. FileNoise]
+        : entityType == nameof(TripPositionEvent) ? [.. AlwaysNoise, .. TripPositionEventNoise]
+        : entityType == nameof(Entities.TripTracking) ? [.. AlwaysNoise, .. TripTrackingNoise]
         : AlwaysNoise;
 
     /// <summary>

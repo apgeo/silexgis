@@ -286,6 +286,16 @@ public static class CaverEndpoints
                 "This person is on a camp's roster. Merge their duplicate entry instead of deleting it.");
         }
 
+        // Tracking history outlives the roster — a trip edit can drop somebody from the
+        // participant list while their position reports stay — so it blocks the delete on
+        // its own, not only through the roster check above.
+        if (await db.TripPositionEvents.AnyAsync(e => e.CaverId == id, ct))
+        {
+            return ApiProblems.BadRequest(
+                "caver.referenced_by_trips",
+                "This person has trip tracking history. Merge their duplicate entry instead of deleting it.");
+        }
+
         // Deleting the person cascades their memberships, which can sever an account's
         // only path into Full Administrators.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
@@ -530,6 +540,16 @@ public static class CaverEndpoints
         foreach (var stay in sourceStays)
         {
             stay.CaverId = target.Id;
+        }
+
+        // Tracking history follows the fold whole, like the camp roster: every report is a
+        // dated fact about where the person was, two entries' reports interleave into one
+        // timeline, and there is no uniqueness to collide with. Dropping any of them would
+        // erase the safety record the log exists to keep.
+        var sourceReports = await db.TripPositionEvents.Where(e => e.CaverId == source.Id).ToListAsync(ct);
+        foreach (var report in sourceReports)
+        {
+            report.CaverId = target.Id;
         }
 
         var sourceMemberships = await db.CavingGroupMemberships.Where(m => m.CaverId == source.Id).ToListAsync(ct);

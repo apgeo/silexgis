@@ -23,7 +23,7 @@ export const groups = {
     'TripPlanNotificationTests', 'TripPromotionTests', 'TripReportDocumentTests',
     'TripListGroupingTests', 'TripReportTemplateTests', 'TripRoleLinkUnitOfWorkTests',
     'TripSectionSchemaTests', 'TripSilentWriteTests', 'TripStatisticsTests',
-    'TripTypeVocabularyTests', 'TripsOfTheCallerTests',
+    'TripTypeVocabularyTests', 'TripTrackingTests', 'TripsOfTheCallerTests',
   ],
   events: [
     'EventAccessDomainTests', 'EventAuthoringTests', 'EventInvitationTests',
@@ -230,6 +230,7 @@ export const areas = {
   'server/src/SilexGis.Api/Features/Tags/': 'tags',
   'server/src/SilexGis.Api/Features/Taxonomies/': 'taxonomies',
   'server/src/SilexGis.Api/Features/TripLogs/': 'trips',
+  'server/src/SilexGis.Api/Features/TripTracking/': 'trips',
   'server/src/SilexGis.Api/Features/Uploads/': 'uploads',
   'server/src/SilexGis.Api/Features/Users/': 'users',
   'server/src/SilexGis.Api/Features/WorkAreas/': 'workAreas',
@@ -347,6 +348,7 @@ export const crossCutting = {
  'TripParticipantRoleVocabularyTests', 'TripPromotionTests', 'TripReportDocumentTests',
  'TripReportTemplateTests', 'TripStatisticsTests', 'TripTypeVocabularyTests', 'UiDefaultsTests',
  'UploadDestinationTests',
+    'TripTrackingTests',
   ],
   locationClasses: [
  'AccessHistoryTests', 'AclAndCavingGroupTests', 'AreaKarstStatisticsTests',
@@ -371,6 +373,7 @@ export const crossCutting = {
  'TripImportResolutionTests', 'TripListFacetTests', 'TripMapDerivedPositionTests',
  'TripMeetingPointTests', 'TripPlanNotificationTests', 'TripReportDocumentTests',
  'TripRoleLinkUnitOfWorkTests', 'TripStatisticsTests', 'TripStatsTests', 'WorkAreaTests',
+    'TripTrackingTests',
   ],
 };
 

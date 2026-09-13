@@ -153,6 +153,7 @@ public sealed class AuditInterceptor(ICurrentUser currentUser) : SaveChangesInte
         NetTopologySuite.Geometries.Geometry geometry => geometry.AsText(),
         Enum e => JsonNamingPolicy.CamelCase.ConvertName(e.ToString()),
         Guid[] ids => string.Join(',', ids),
+        string[] values => string.Join(',', values),
         string or bool or Guid or DateTimeOffset or DateOnly => value,
         _ when value.GetType().IsPrimitive || value is decimal => value,
         _ => value.ToString(),

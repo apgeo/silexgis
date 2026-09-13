@@ -12533,6 +12533,325 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{tripLogId}/tracking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The trip's tracking state: config, teams, and each participant's latest position — positions withheld without exact-location rights on the model's cave. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingStateDto"];
+                    };
+                };
+            };
+        };
+        /** Arm, close or reconfigure tracking (trip write access). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingConfigRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingStateDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a titled team on the trip. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingTeamRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingTeamDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/teams/{teamId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rename a team. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    teamId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingTeamRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingTeamDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Delete a team; events keep their caver and lose only the label. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    teamId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The trip's tracking events, newest first; position fields follow the same withholding as the state read. */
+        get: {
+            parameters: {
+                query?: {
+                    caverId?: string;
+                    from?: string;
+                    to?: string;
+                    page?: number;
+                    pageSize?: number;
+                };
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PagedResultOfTrackingEventDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Record one report for one or many cavers at once — never a roster edit. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingEventRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingEventDto"][];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a wrong report; corrections are delete-and-re-enter, never edits. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    eventId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/resolve-depth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview which stations a depth could mean, under the trip's depth filter. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingResolveDepthRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingDepthCandidateDto"][];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{tripLogId}/checklist": {
         parameters: {
             query?: never;
@@ -20945,6 +21264,15 @@ export interface components {
             /** Format: int32 */
             totalItems: number;
         };
+        PagedResultOfTrackingEventDto: {
+            items: components["schemas"]["TrackingEventDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+        };
         PagedResultOfTripLogDto: {
             items: components["schemas"]["TripLogDto"][];
             /** Format: int32 */
@@ -22802,6 +23130,91 @@ export interface components {
         };
         /** @enum {unknown} */
         TextExtractionState: "notApplicable" | "pending" | "extracted" | "noText" | "failed" | "unsupported";
+        TrackingConfigRequest: {
+            state: null | components["schemas"]["TripTrackingState"];
+            /** Format: uuid */
+            surveyModelId: null | string;
+            referenceStationName: null | string;
+            depthFilter: null | string[];
+        };
+        TrackingDepthCandidateDto: {
+            stationName: string;
+            surveyName: null | string;
+            /** Format: double */
+            depthM: number;
+            /** Format: double */
+            deltaM: number;
+        };
+        TrackingEventDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            caverId: string;
+            /** Format: uuid */
+            teamId: null | string;
+            kind: components["schemas"]["TripPositionEventKind"];
+            /** Format: uuid */
+            surveyModelId: null | string;
+            stationName: null | string;
+            /** Format: double */
+            depthEnteredM: null | number;
+            note: null | string;
+            /** Format: date-time */
+            recordedAt: string;
+        };
+        TrackingEventRequest: {
+            caverIds: null | string[];
+            kind: null | components["schemas"]["TripPositionEventKind"];
+            stationName: null | string;
+            /** Format: double */
+            depthM: null | number;
+            /** Format: uuid */
+            teamId: null | string;
+            note: null | string;
+            /** Format: date-time */
+            recordedAt: null | string;
+        };
+        TrackingParticipantDto: {
+            /** Format: uuid */
+            caverId: string;
+            /** Format: uuid */
+            teamId: null | string;
+            lastKind: null | components["schemas"]["TripPositionEventKind"];
+            /** Format: date-time */
+            lastRecordedAt: null | string;
+            stationName: null | string;
+            /** Format: double */
+            depthM: null | number;
+            out: boolean;
+        };
+        TrackingResolveDepthRequest: {
+            /** Format: double */
+            depthM: null | number;
+            /** Format: int32 */
+            take: null | number;
+        };
+        TrackingStateDto: {
+            state: components["schemas"]["TripTrackingState"];
+            /** Format: uuid */
+            surveyModelId: null | string;
+            referenceStationName: null | string;
+            depthFilter: string[];
+            /** Format: date-time */
+            armedAt: null | string;
+            /** Format: date-time */
+            closedAt: null | string;
+            positionsWithheld: boolean;
+            teams: components["schemas"]["TrackingTeamDto"][];
+            participants: components["schemas"]["TrackingParticipantDto"][];
+        };
+        TrackingTeamDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+        };
+        TrackingTeamRequest: {
+            title: null | string;
+        };
         TripCalloutRequest: {
             /** Format: date-time */
             expectedReturnAt?: null | string;
@@ -23355,6 +23768,8 @@ export interface components {
             cavingGroupId: null | string;
             cavingGroupName: null | string;
         };
+        /** @enum {unknown} */
+        TripPositionEventKind: "entered" | "atStation" | "atDepth" | "note" | "exited" | null;
         TripPromotionDto: {
             /** Format: uuid */
             tripLogId: string;
@@ -23446,6 +23861,8 @@ export interface components {
             /** Format: int32 */
             areasSoFar: number;
         };
+        /** @enum {unknown} */
+        TripTrackingState: "off" | "armed" | "closed";
         TripTypeDto: {
             /** Format: int64 */
             id: number;
