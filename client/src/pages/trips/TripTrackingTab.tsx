@@ -223,6 +223,7 @@ export default function TripTrackingTab({
           a position that was withheld has no point to put on a model, so the reading that can say
           so in words comes first. */}
       <TrackingModelPanel
+        tripLogId={trip.id}
         tracking={data}
         participants={trip.participants}
         events={events.data?.items}

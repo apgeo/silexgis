@@ -30,8 +30,10 @@ vi.mock('../../api/hooks.ts', () => ({
   useSurveyModelsForCaves: () => ({ data: [], isPending: false }),
   useCaveNames: () => new Map<string, string>(),
   // The watch on the survey model it is resolved against. These tests set no model on the watch,
-  // so nothing is asked for and nothing is offered; that surface has its own tests.
+  // so nothing is asked for and nothing is offered; that surface has its own tests. The whole log
+  // the replay reads is asked for on the same surface and is not asked for here either.
   useSurveyModel: () => ({ data: undefined, isPending: false }),
+  useTripTrackingEventLog: () => ({ data: undefined, isPending: true, error: null }),
   surveyModelReadableByViewer: (m: { format: string }) => m.format === 'lox' || m.format === 'survex3d',
 }));
 

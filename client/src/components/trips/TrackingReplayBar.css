@@ -1,0 +1,90 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The replay strip that stands over the survey panel: a clock, a scrubber and the notes it can be
+   landed on. Everything here is either layout or the handful of rules that make a horizontal drag
+   control usable on a page somebody is scrolling with the same finger. */
+
+.tracking-replay {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tracking-replay-scrub {
+  /* The slider's own margins already inset it from the card; this only keeps the handle's enlarged
+     grab area from being clipped where the card is exactly as wide as the phone. */
+  padding-inline: 4px;
+}
+
+/* <b>The one rule the mobile behaviour hangs on.</b> antd gives every slider `touch-action: none`,
+   which tells the browser that the element handles every gesture — so on a phone a finger that
+   lands anywhere on this scrubber can no longer scroll the page, and the replay becomes a band
+   across a long tab that swallows the scroll. `pan-y` hands the browser back the axis it scrolls on
+   and keeps the axis this one scrubs on: a vertical drag scrolls the tab, a horizontal drag moves
+   the moment, and neither has to guess. The handle itself is held back out of this — see below. */
+.tracking-replay-scrub .ant-slider {
+  touch-action: pan-y;
+}
+
+/* <b>The handle is the exception, and keeps antd's `none`.</b> `touch-action` combines down the
+   tree by intersection, so this wins over the `pan-y` above for a gesture that starts here and
+   leaves it in force everywhere else.
+
+   It has to. The handle is the only part of a slider that starts a drag from a finger — the rail's
+   own "jump to here" is bound to `mousedown` alone — and the drag it starts is torn down on
+   `touchend` and on nothing else: there is no `touchcancel` handler anywhere in the slider. Under
+   `pan-y` a finger that lands on the handle's enlarged grab area and then moves vertically hands
+   the gesture to the browser, which scrolls the page and fires `touchcancel`. That teardown never
+   runs, so the handle stays in its dragging state, the change is never finished, and the
+   `mousemove`/`mouseup` pair the drag put on the *document* stays there for the life of the page —
+   one more pair every time somebody scrolls past this strip and happens to touch the handle. On a
+   machine with both a touchscreen and a mouse those leftovers are live: a later mouse movement
+   with no button held drags the moment. `none` here means the browser never takes a gesture that
+   started on the handle, which is the contract the slider's drag code was written against.
+
+   What it costs is that a finger landing exactly on the handle cannot scroll the page — which is
+   what a drag handle is for, and is a couple of square centimetres of a strip whose whole width
+   still scrolls. */
+.tracking-replay-scrub .ant-slider .ant-slider-handle {
+  touch-action: none;
+}
+
+/* Marks are drawn as dots on the rail and carry no text, so the band antd reserves under a marked
+   slider for labels would be empty space between the scrubber and the note beneath it. */
+.tracking-replay-scrub .ant-slider-horizontal.ant-slider-with-marks {
+  margin-bottom: 0;
+}
+
+.tracking-replay-mark {
+  display: block;
+}
+
+.tracking-replay-note-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (hover: none), (pointer: coarse) {
+  /* The handle is a drag target, and a drag target that is the size of the dot drawn for it is one
+     a finger covers completely and misses anyway. antd draws that dot with `::after` and reserves
+     `::before` for the grab area around it, so the area grows to something a thumb can find while
+     the control still looks like every other slider in the application. Stated for the resting,
+     hovered, held and focused handle alike: antd resizes this pseudo-element in those states, and
+     overriding only the resting one would shrink the grab area at the moment it is being used. */
+  .tracking-replay .tracking-replay-scrub .ant-slider .ant-slider-handle::before,
+  .tracking-replay .tracking-replay-scrub .ant-slider .ant-slider-handle:hover::before,
+  .tracking-replay .tracking-replay-scrub .ant-slider .ant-slider-handle:active::before,
+  .tracking-replay .tracking-replay-scrub .ant-slider .ant-slider-handle:focus::before {
+    inset: -12px;
+    width: auto;
+    height: auto;
+  }
+}
+
+/* Everything else on the strip is a whole control rather than a pseudo-element, so its finger size
+   comes from the component's own `size` — see the pointer branch in `TrackingReplayBar.tsx`, which
+   picks the size that antd builds out of `controlHeightLG`, the forty pixels the rest of this
+   application gives a touch target. Sized there and not here on purpose: a height pushed onto an
+   antd control from a stylesheet moves the box without moving the padding, line height and font
+   the component derived from the size it thinks it is. */

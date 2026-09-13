@@ -260,6 +260,9 @@ export const queryKeys = {
   // caver's reports is a different question from a page of everybody's, not a stale answer to it.
   tripTrackingEvents: (id: string, params: TrackingEventListParams) =>
     ['trip-logs', 'tracking-events', id, params] as const,
+  // The whole log, under the same prefix so a recorded or deleted report reaches it too. Its own
+  // last segment is a word rather than a narrowing, which no narrowing can collide with.
+  tripTrackingEventLog: (id: string) => ['trip-logs', 'tracking-events', id, 'log'] as const,
   checklists: ['checklists'] as const,
   checklist: (id: string) => ['checklists', 'detail', id] as const,
   tripReportTemplates: ['trip-report-templates'] as const,
@@ -7180,6 +7183,58 @@ export function useTripTrackingEvents(
     // Paging keeps the rows on screen while the next answer arrives, rather than emptying the
     // list under whoever is reading it.
     placeholderData: keepPreviousData,
+  });
+}
+
+/** Asked for in few large pages: this is one read of a whole log, not a list somebody scrolls. */
+const TRACKING_LOG_PAGE_SIZE = 200;
+
+/**
+ * How many pages are followed before the read is called off. A trip's log runs to tens of reports
+ * and a long expedition day to hundreds; ten thousand is far past anything a party can radio out,
+ * and a log that somehow exceeds it is refused rather than truncated.
+ */
+const TRACKING_LOG_MAX_PAGES = 50;
+
+/**
+ * One trip's whole log, newest first — every page of it, followed until there are no more.
+ *
+ * <b>Partial is worse than absent here.</b> This exists for the replay, which reconstructs where
+ * everybody was at a moment by reading the reports up to it; the pages are ordered newest first, so
+ * a first page alone is the *recent* reports, and a replay built on one would show a party
+ * materialising out of nowhere part-way through the trip and would say so with a moving marker. So
+ * the pages are followed to the end, and a read that cannot reach the end fails loudly instead of
+ * answering with what it got.
+ *
+ * Deliberately not polled. The surfaces that have to keep up with the radio — the folded watch and
+ * the recent reports — are polled where they are declared; this is a read of history, taken when
+ * somebody asks to replay it. A report recorded or deleted in this browser still refreshes it: it
+ * is held under the same key prefix everything about a trip's reports is invalidated by.
+ */
+export function useTripTrackingEventLog(tripLogId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripTrackingEventLog(tripLogId ?? ''),
+    queryFn: async () => {
+      const items: TrackingEvent[] = [];
+      for (let page = 1; page <= TRACKING_LOG_MAX_PAGES; page++) {
+        const answer = await unwrap(
+          api.GET('/api/v1/trip-logs/{tripLogId}/tracking/events', {
+            params: {
+              path: { tripLogId: tripLogId! },
+              query: { page, pageSize: TRACKING_LOG_PAGE_SIZE },
+            },
+          }),
+        );
+        items.push(...answer.items);
+        // An empty page ends the log whatever the count says: a total that disagrees with the pages
+        // would otherwise spin this until the page limit stopped it.
+        if (answer.items.length === 0 || items.length >= answer.totalItems) {
+          return items;
+        }
+      }
+      throw new Error('the tracking log has more pages than one read follows');
+    },
+    enabled: !!tripLogId && enabled,
   });
 }
 
