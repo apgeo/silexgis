@@ -40,6 +40,24 @@
     <PackageReference Include="MaxRev.Gdal.LinuxRuntime.Minimal" Version="3.13.1.534" />
     <PackageReference Include="MaxRev.Gdal.WindowsRuntime.Minimal" Version="3.13.1.534" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
+    <!-- Reads the SQLite database inside a phone's export archive. The capability this project
+         already carried was GDAL's OGR SQLite driver, and it was measured rather than assumed:
+         it opens such a file and runs arbitrary SQL over it, but it types every result column
+         from SQLite's *declared* affinity, which SQLite itself does not enforce. Measured on an
+         invented fixture: an epoch-millisecond column declared INTEGER came back clamped to
+         2147483647 — every timestamp in an archive turned into January 2038, with only a warning
+         on stderr — and a depth declared NUMERIC(7,2) came back as -87 instead of -87.4, with no
+         warning at all. Both can be laundered by wrapping every single column in CAST(... AS TEXT)
+         and re-parsing, which makes the reader a hand-written marshalling layer whose correctness
+         depends on nobody ever forgetting one wrapper, where forgetting is silent and the value it
+         corrupts is the depth a station is chosen by. So the reading is done by a SQLite client
+         rather than by a format-translation library. MIT, from the same stack as the ORM here, and
+         it ships the native engine for every platform this application is built for. NOT an ORM
+         and NOT a second database provider: nothing here maps an entity or opens a connection that
+         is not read-only. The version is ahead of the other Microsoft packages deliberately —
+         10.0.9 resolves SQLitePCLRaw 2.1.11, which carries a known high-severity advisory that
+         the audit turns into a build error here; 10.0.12 resolves 2.1.12 and audits clean. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

@@ -318,6 +318,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapImportBatchEndpoints();
     api.MapCatalogueEndpoints();
     api.MapTripImportEndpoints();
+    api.MapSpeleolocImportEndpoints();
     api.MapPhotoLibraryEndpoints();
     api.MapPhotoLibraryBrowseEndpoints();
     api.MapPhotoLibraryAlbumEndpoints();

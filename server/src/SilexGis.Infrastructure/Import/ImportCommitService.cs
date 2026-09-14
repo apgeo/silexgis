@@ -240,16 +240,42 @@ public sealed class ImportCommitService(
     /// added stay: a person is not something an undo may quietly remove from a club's roster,
     /// where by then they may be named on trips this batch never touched.
     /// </para>
+    /// <para>
+    /// A device recording creates positions on a trip's timeline, and those go too — removed, the
+    /// way the tracking log's own correction removes them, rather than stamped. The trip they were
+    /// recorded onto goes only when this same confirmation created it: a line naming a trip it did
+    /// not create names it as the place the positions went, and deleting somebody's trip because
+    /// an import wrote onto it would be a far larger act than the one they asked for.
+    /// </para>
     /// </summary>
     public async Task RevertAsync(ImportBatch batch, Guid userId, CancellationToken ct = default)
     {
+        // Read, never written — and read untracked deliberately. A line is deleted by statement
+        // when the position it names goes, which the change tracker cannot see; a tracked copy of
+        // such a line is then still sitting there when the trip is removed, and the relationship
+        // fix-up dutifully writes "set trip_log_id = null" against a row the database no longer
+        // has. That update matches nothing and the whole undo fails as a concurrency conflict.
+        // Untracked, the null-out is left to the foreign key that already declares it, which is
+        // where it belonged.
         var allItems = await db.ImportBatchItems
+            .AsNoTracking()
             .Where(i => i.ImportBatchId == batch.Id)
             .ToListAsync(ct);
         var items = allItems.Where(i => i.FeatureId != null).ToList();
 
         var createdIds = items.Select(i => i.FeatureId!.Value).ToHashSet();
-        var tripIds = allItems.Where(i => i.TripLogId != null).Select(i => i.TripLogId!.Value).ToHashSet();
+        // A line naming a trip is a line that *created* one. The lines of a device-recording
+        // import all name the trip they were recorded onto, which is usually a trip that already
+        // existed and must survive the undo — so the trips to remove are the ones a line named and
+        // nothing else on that line did.
+        var tripIds = allItems
+            .Where(i => i.TripLogId != null && i.TripPositionEventId is null && i.FeatureId is null)
+            .Select(i => i.TripLogId!.Value)
+            .ToHashSet();
+        var eventIds = allItems
+            .Where(i => i.TripPositionEventId != null)
+            .Select(i => i.TripPositionEventId!.Value)
+            .ToHashSet();
         var caves = await db.CaveEntrances.AsNoTracking()
             .Where(e => createdIds.Contains(e.Id))
             .Select(e => e.CaveFeatureId)
@@ -258,7 +284,17 @@ public sealed class ImportCommitService(
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        // Trips first, and features after: a trip names the caves it reached through links, and
+        // Positions first, and they are removed rather than stamped: the tracking log is
+        // append-only and a wrong report is corrected by deleting it, so an undo speaks the same
+        // language the surface does. Removed even when the trip is about to go with them — the
+        // trip usually is not going, because a recording is normally imported onto a trip that
+        // already existed and has its own history to keep.
+        if (eventIds.Count > 0)
+        {
+            await db.TripPositionEvents.Where(e => eventIds.Contains(e.Id)).ExecuteDeleteAsync(ct);
+        }
+
+        // Trips next, and features after: a trip names the caves it reached through links, and
         // the delete that takes a trip apart is the one place that knows which of those links
         // cannot survive it. Doing it the other way round would leave a link naming a cave that
         // no longer exists.

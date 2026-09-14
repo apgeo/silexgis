@@ -128,6 +128,52 @@ public class TripImportSession : ITimestamped
     public DateTimeOffset UpdatedAt { get; set; }
 }
 
+/// <summary>
+/// A device-recording review in progress: what one person has decided so far about one uploaded
+/// archive, before any position exists on any timeline.
+///
+/// <para>
+/// Nothing read out of the archive is copied here, for the reason the trip sheet copies nothing:
+/// every choice the reviewer makes changes what the rows <em>are</em>. Which recording out of the
+/// device's whole database, which survey model the scans are placed in, which person a device
+/// account stands for — each of those re-reads the archive into a different set of proposals, and
+/// a staged copy would be wrong the moment one of them moved. So the archive is opened again on
+/// every preview and again at the confirmation, and what is kept here is only what would otherwise
+/// be lost.
+/// </para>
+/// <para>
+/// One review per person per archive. Two people going through the same upload keep their own
+/// decisions rather than overwriting each other, and neither has written anything.
+/// </para>
+/// </summary>
+public class SpeleolocImportSession : ITimestamped
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+
+    /// <summary>The uploaded archive being reviewed.</summary>
+    public Guid StoredFileId { get; set; }
+
+    /// <summary>Whose review this is.</summary>
+    public Guid UserId { get; set; }
+
+    /// <summary>The whole-recording choices (jsonb), in the shape of <c>SpeleolocImportOptions</c>.</summary>
+    public string Options { get; set; } = "{}";
+
+    /// <summary>
+    /// Decisions keyed by the scanned point's own identifier (jsonb):
+    /// <c>{"0199…-…": {"stationName": "cave.upper.2"}}</c>. The point's own identifier rather than
+    /// its position in a listing, because the listing is rebuilt from the archive on every preview
+    /// and changing which recording is being read renumbers all of it — a key that moves silently
+    /// makes one scan's decision another's. Untouched points are absent, so agreeing with what is
+    /// proposed costs nothing to store.
+    /// </summary>
+    public string Decisions { get; set; } = "{}";
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>What a batch was made from.</summary>
 public enum ImportSource : short
 {
@@ -158,6 +204,15 @@ public enum ImportSource : short
     /// whole import back.
     /// </summary>
     TripCsv = 4,
+
+    /// <summary>
+    /// A recording made on a phone underground and brought out as an export archive: the scans a
+    /// party made at marked places, read back and confirmed one by one as positions on a tracked
+    /// trip. The objects are position events rather than features or trips, which is why a line of
+    /// such a batch points at an event; a trip the confirmation created to hold them is a line of
+    /// the same batch, so one undo takes the whole import back.
+    /// </summary>
+    SpeleolocArchive = 5,
 }
 
 /// <summary>How the objects in a batch came to exist.</summary>
@@ -312,6 +367,20 @@ public class ImportBatchItem
     /// </para>
     /// </summary>
     public Guid? TripLogId { get; set; }
+
+    /// <summary>
+    /// The tracking position this line recorded. A line points at an event, a trip or a feature,
+    /// never at more than one: one scan of a marked place becomes one position on the timeline,
+    /// and a trip the same confirmation created to hold those positions is a line of its own so
+    /// that undo can take each of them back by the same rule.
+    ///
+    /// <para>
+    /// Unlike the pointers around it this one does <em>not</em> survive its object: a position
+    /// event is removed rather than stamped when it is corrected, and a line still claiming to
+    /// have created one would make an undo look for a row nobody can find. It goes with the event.
+    /// </para>
+    /// </summary>
+    public Guid? TripPositionEventId { get; set; }
 
     /// <summary>The geofile row this came from. Kept even after a re-import replaces those rows.</summary>
     public long? SourceFeatureId { get; set; }

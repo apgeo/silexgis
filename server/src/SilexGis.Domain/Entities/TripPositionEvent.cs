@@ -26,6 +26,28 @@ public enum TripPositionEventKind : short
 }
 
 /// <summary>
+/// Where a position row came from. Values are stored — append only, never renumber.
+/// </summary>
+/// <remarks>
+/// It says who <em>put the row here</em>, not what the row claims, and it is deliberately outside
+/// everything that decides who may read a position. A relayed report and an imported scan are the
+/// same kind of statement about where somebody was, guarded by the same anchor and withheld by the
+/// same rule; a reader who may not learn a station must not be able to learn which of the two it
+/// was either, because "this one came out of a phone" is a fact about the party's movements.
+/// </remarks>
+public enum TripPositionEventSource : short
+{
+    /// <summary>Somebody typed it in: word relayed out of the cave and entered by a coordinator.</summary>
+    Reported = 0,
+
+    /// <summary>
+    /// Read out of a device export archive and confirmed point by point by a reviewer. The scan
+    /// itself was made underground at a marked place; which station that place is was settled here.
+    /// </summary>
+    SpeleolocArchive = 1,
+}
+
+/// <summary>
 /// One report about one caver during a tracked trip, at the moment <see cref="RecordedAt"/>
 /// refers to. The log is append-only: a wrong report is deleted and re-entered, never edited,
 /// so both directions land on the trip's audit timeline.
@@ -47,6 +69,12 @@ public class TripPositionEvent : ITimestamped, IAuditable, IAuditChild
     public Guid? TeamId { get; set; }
 
     public TripPositionEventKind Kind { get; set; }
+
+    /// <summary>
+    /// How this row came to exist. Provenance only: it never enters the decision about who may
+    /// read the position, and it is never emitted beside a withheld one.
+    /// </summary>
+    public TripPositionEventSource Source { get; set; } = TripPositionEventSource.Reported;
 
     /// <summary>Survey model the station reference belongs to; null for placeless kinds.</summary>
     public Guid? SurveyModelId { get; set; }

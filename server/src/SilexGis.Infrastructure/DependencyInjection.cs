@@ -71,6 +71,9 @@ public static class DependencyInjection
         services.AddScoped<Import.TripCsvFileReader>();
         services.AddScoped<Import.TripImportResolver>();
         services.AddScoped<Import.TripImportCommitService>();
+        services.AddScoped<Import.SpeleolocArchiveReader>();
+        services.AddScoped<Import.SpeleolocTripImportResolver>();
+        services.AddScoped<Import.SpeleolocTripImportCommitService>();
 
         // The Romanian community cave catalogue, which this installation reads and imports from.
         // Off unless an operator supplies a key, and absent rather than broken when they have not.

@@ -54,6 +54,12 @@ public sealed class ImportLimitOptions
     /// list reads exactly like a complete one.
     /// </para>
     /// <para>
+    /// The device-archive reader takes the same figure and answers it differently: there is no
+    /// "imported whole" half there — a recording either becomes a reviewed set of positions or does
+    /// not — so past this it refuses the recording by name instead of truncating it. Same reasoning,
+    /// opposite conclusion, because the two have different second halves.
+    /// </para>
+    /// <para>
     /// The scan is a bounded read of rows already stored, and the review it feeds is paged to the
     /// client, so the figure buys reviewable rows rather than rows on a screen: what it costs is
     /// the one scan that ranks and de-duplicates them, not the drawing of them. Raised because a
@@ -62,4 +68,31 @@ public sealed class ImportLimitOptions
     /// </para>
     /// </remarks>
     public int MaxScanRows { get; set; } = 150000;
+
+    /// <summary>
+    /// The largest device database one review will unpack out of an export archive, in bytes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It bounds the <em>unpacked</em> size rather than the upload, and that is the point: a zip
+    /// entry states its own uncompressed length and a hostile one states it wrongly, so the copy
+    /// is stopped by counting bytes as they arrive rather than by believing the directory.
+    /// </para>
+    /// <para>
+    /// Sized against what a phone's database actually is — a cave register with its places and a
+    /// few seasons of scans is single-digit megabytes — rather than against what a disk would
+    /// tolerate, because this figure is not a disk limit. Nothing is staged between the upload and
+    /// the import, so the database is unpacked again on every listing, every preview and the
+    /// confirmation, and concurrent requests are not serialised: whatever this permits is what one
+    /// uploaded file can cause to be written to the scratch filesystem, repeatedly, on demand. A
+    /// generous figure here was an amplifier with a ceiling, not a ceiling. The cheap half of the
+    /// defence is in the reader, which refuses an entry whose first sixteen bytes do not say
+    /// "SQLite" before it writes a page of it anywhere.
+    /// </para>
+    /// <para>
+    /// Media and map tiles in the same archive are never unpacked at all, whatever this says: the
+    /// import reads the database and nothing else.
+    /// </para>
+    /// </remarks>
+    public long MaxArchiveDatabaseBytes { get; set; } = 64L * 1024 * 1024;
 }

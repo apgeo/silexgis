@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260914085201_SpeleolocTripImport")]
+    partial class SpeleolocTripImport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -6928,95 +6931,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("trip_tracking", (string)null);
                 });
 
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripTrackingParticipant", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CaverId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("caver_id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("DisplayLabel")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("display_label");
-
-                    b.Property<Guid>("TripLogId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_log_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_trip_tracking_participants");
-
-                    b.HasIndex("CaverId")
-                        .HasDatabaseName("ix_trip_tracking_participants_caver_id");
-
-                    b.HasIndex("TripLogId", "CaverId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_trip_tracking_participants_trip_log_id_caver_id");
-
-                    b.ToTable("trip_tracking_participants", (string)null);
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripTrackingShare", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid>("CreatedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by");
-
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("revoked_at");
-
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("token_hash");
-
-                    b.Property<Guid>("TripLogId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_log_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_trip_tracking_shares");
-
-                    b.HasIndex("CreatedBy")
-                        .HasDatabaseName("ix_trip_tracking_shares_created_by");
-
-                    b.HasIndex("TokenHash")
-                        .IsUnique()
-                        .HasDatabaseName("ix_trip_tracking_shares_token_hash");
-
-                    b.HasIndex("TripLogId")
-                        .HasDatabaseName("ix_trip_tracking_shares_trip_log_id");
-
-                    b.ToTable("trip_tracking_shares", (string)null);
-                });
-
             modelBuilder.Entity("SilexGis.Domain.Entities.TripType", b =>
                 {
                     b.Property<long>("Id")
@@ -9192,40 +9106,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_trip_tracking_trip_logs_trip_log_id");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripTrackingParticipant", b =>
-                {
-                    b.HasOne("SilexGis.Domain.Entities.Caver", null)
-                        .WithMany()
-                        .HasForeignKey("CaverId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_tracking_participants_cavers_caver_id");
-
-                    b.HasOne("SilexGis.Domain.Entities.TripLog", null)
-                        .WithMany()
-                        .HasForeignKey("TripLogId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_tracking_participants_trip_logs_trip_log_id");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripTrackingShare", b =>
-                {
-                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_tracking_shares_users_created_by");
-
-                    b.HasOne("SilexGis.Domain.Entities.TripLog", null)
-                        .WithMany()
-                        .HasForeignKey("TripLogId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_trip_tracking_shares_trip_logs_trip_log_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripType", b =>

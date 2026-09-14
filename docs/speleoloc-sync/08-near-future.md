@@ -104,8 +104,21 @@ never become coordinates** — a pin is a position in an image, and unless the i
 there is nothing to turn it into. That makes them safe to carry, and it also makes them useless as a
 way to move a position, which is why they are not a protection concern.
 
-**Trips.** Waits on server work that has not merged. Syncing trips before that lands would mean
-writing this contract against a shape that is still moving.
+**Trips — archive import exists; live sync does not.** The server side has landed: a SpeleoLoc
+export archive can be imported, recording by recording, so that a trip's scanned points become a
+tracked trip's position history on the server (`/speleoloc-imports/{fileId}/…`). It reads
+`speleo_loc.sqlite` straight out of the zip — nothing else in the archive is opened — and it is a
+reviewed import rather than a sync: each point is offered with the survey stations its place's depth
+could mean and a person confirms which, because a place is a physical marker and a position here is a
+station reference, and because the device accounts on a recording are not identities and are mapped to
+cavers by hand.
+
+What still waits is **live sync of trips through this protocol** — `cave_trips` and
+`cave_trip_points` as pullable and pushable rows, with a cursor and a batch contract of their own.
+Two of the three reasons that shape was still moving are now settled by the import (what a point
+becomes on the server, and who decides it), and the third is not: a sync would have to answer what
+happens when the same recording arrives twice, once through an archive and once through the wire,
+and that is a question about identity across two paths rather than about trips.
 
 **Wider selection rules for a sync set.** A set names root features today, and everything contained
 in a named root is carried. Selecting by caving group, by area, or by a saved filter are all
