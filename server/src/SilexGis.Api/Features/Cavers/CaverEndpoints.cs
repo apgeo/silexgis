@@ -552,6 +552,30 @@ public static class CaverEndpoints
             report.CaverId = target.Id;
         }
 
+        // What a published trip page called the duplicate follows them, unless the survivor is
+        // already called something on that trip — then the survivor's own name stands, because
+        // one person on one page has one caption and the surviving entry is the one being kept.
+        // Moved rather than left to the foreign key: the row would otherwise go with the
+        // duplicate, and silently un-naming somebody a page has been showing by name for two
+        // days is a worse answer than either choice above.
+        var sourceLabels = await db.TripTrackingParticipants.Where(p => p.CaverId == source.Id).ToListAsync(ct);
+        var targetLabelTrips = await db.TripTrackingParticipants
+            .Where(p => p.CaverId == target.Id)
+            .Select(p => p.TripLogId)
+            .ToListAsync(ct);
+
+        foreach (var label in sourceLabels)
+        {
+            if (targetLabelTrips.Contains(label.TripLogId))
+            {
+                db.TripTrackingParticipants.Remove(label);
+            }
+            else
+            {
+                label.CaverId = target.Id;
+            }
+        }
+
         var sourceMemberships = await db.CavingGroupMemberships.Where(m => m.CaverId == source.Id).ToListAsync(ct);
         var targetGroups = await db.CavingGroupMemberships
             .Where(m => m.CaverId == target.Id)

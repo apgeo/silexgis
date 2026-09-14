@@ -57,3 +57,45 @@ public sealed class TripTrackingConfiguration : IEntityTypeConfiguration<TripTra
         builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.SetNull);
     }
 }
+
+public sealed class TripTrackingShareConfiguration : IEntityTypeConfiguration<TripTrackingShare>
+{
+    public void Configure(EntityTypeBuilder<TripTrackingShare> builder)
+    {
+        builder.ToTable("trip_tracking_shares");
+        builder.Property(x => x.Id).ValueGeneratedNever();
+        // SHA-256, base64url: 43 characters. This column is the only form the token exists in
+        // once the mint response is gone, and the unique index is how the published read
+        // resolves one.
+        builder.Property(x => x.TokenHash).HasMaxLength(64);
+        builder.HasIndex(x => x.TokenHash).IsUnique();
+        builder.HasIndex(x => x.TripLogId);
+
+        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // Who published the trip is part of what the link is, and cannot be removed out from
+        // under the record — the same stance every other share link takes.
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public sealed class TripTrackingParticipantConfiguration : IEntityTypeConfiguration<TripTrackingParticipant>
+{
+    public void Configure(EntityTypeBuilder<TripTrackingParticipant> builder)
+    {
+        builder.ToTable("trip_tracking_participants");
+
+        builder.Property(x => x.Id).ValueGeneratedNever();
+        // One label per person per trip: a second row would make "what are they called here" a
+        // question with two answers.
+        builder.HasIndex(x => new { x.TripLogId, x.CaverId }).IsUnique();
+        builder.Property(x => x.DisplayLabel).HasMaxLength(200);
+
+        builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
+        // Cascade, where the roster and the position log both restrict, and the difference is
+        // what the row holds. Those record that a person was somewhere — a fact worth blocking a
+        // delete for. This records how one page captioned them, which means nothing once the
+        // person's entry is gone; and a merge moves the caption to the survivor before the
+        // duplicate is removed, so the ordinary path does not lose the choice either.
+        builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

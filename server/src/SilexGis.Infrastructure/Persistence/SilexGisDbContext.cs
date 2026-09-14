@@ -136,6 +136,12 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<TripTracking> TripTrackings => Set<TripTracking>();
 
+    /// <summary>Publication links for a tracked trip; the token itself is stored nowhere.</summary>
+    public DbSet<TripTrackingShare> TripTrackingShares => Set<TripTrackingShare>();
+
+    /// <summary>What a published page calls each participant, where an admin chose a name.</summary>
+    public DbSet<TripTrackingParticipant> TripTrackingParticipants => Set<TripTrackingParticipant>();
+
     public DbSet<Expedition> Expeditions => Set<Expedition>();
 
     public DbSet<ExpeditionTrip> ExpeditionTrips => Set<ExpeditionTrip>();

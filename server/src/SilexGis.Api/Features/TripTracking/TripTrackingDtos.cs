@@ -22,7 +22,12 @@ public sealed record TrackingParticipantDto(
     DateTimeOffset? LastRecordedAt,
     string? StationName,
     decimal? DepthM,
-    bool Out);
+    bool Out,
+    /// <summary>
+    /// What the trip's published page calls this person, where somebody chose a name. Null is
+    /// the ordinary state and means the page names them by their place in the party instead.
+    /// </summary>
+    string? Label);
 
 public sealed record TrackingStateDto(
     TripTrackingState State,
@@ -80,6 +85,24 @@ public sealed class TrackingConfigRequestValidator : AbstractValidator<TrackingC
             .When(x => x.DepthFilter is not null);
     }
 }
+
+/// <summary>
+/// The name a published page gives one participant. An absent, empty or blank label clears the
+/// choice and returns them to the non-identifying default — there is no separate route for
+/// that, because "call them nothing in particular" is a value this field can hold.
+/// </summary>
+public sealed record TrackingParticipantLabelRequest(string? Label);
+
+public sealed class TrackingParticipantLabelRequestValidator : AbstractValidator<TrackingParticipantLabelRequest>
+{
+    public TrackingParticipantLabelRequestValidator()
+    {
+        RuleFor(x => x.Label).MaximumLength(TripTrackingRules.MaxLabelLength);
+    }
+}
+
+/// <summary>The label as stored after the write; null when the choice was cleared.</summary>
+public sealed record TrackingParticipantLabelDto(Guid CaverId, string? Label);
 
 public sealed record TrackingTeamRequest(string? Title);
 

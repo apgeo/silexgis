@@ -16,6 +16,16 @@ public static class TripTrackingRules
     public const decimal MaxDepthAbsM = 5000m;
     public const int MaxCaversPerWrite = 100;
 
+    /// <summary>How long a published participant's display label may be — a caption, not a bio.</summary>
+    public const int MaxLabelLength = 200;
+
+    /// <summary>
+    /// Longest publication token this application will even hash. One it mints is 43 characters;
+    /// the bound keeps an unbounded string out of the lookup, and a token over it is answered
+    /// exactly as an unknown one is.
+    /// </summary>
+    public const int MaxShareTokenLength = 100;
+
     /// <summary>How far ahead of the server clock a report may claim to be — clock skew, not planning.</summary>
     public static readonly TimeSpan RecordedAtSkew = TimeSpan.FromMinutes(2);
 

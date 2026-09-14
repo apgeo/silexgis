@@ -38,6 +38,9 @@ public static class TripTrackingEndpoints
             .WithSummary("Rename a team.");
         tracking.MapDelete("/teams/{teamId:guid}", DeleteTeamAsync)
             .WithSummary("Delete a team; events keep their caver and lose only the label.");
+        tracking.MapPut("/participants/{caverId:guid}", SetParticipantLabelAsync)
+            .WithValidation<TrackingParticipantLabelRequest>()
+            .WithSummary("Name one participant as a follower of the published page sees them; an empty label returns them to the non-identifying default.");
         tracking.MapPost("/events", CreateEventsAsync).WithValidation<TrackingEventRequest>()
             .WithSummary("Record one report for one or many cavers at once — never a roster edit.");
         tracking.MapGet("/events", ListEventsAsync)
@@ -53,7 +56,7 @@ public static class TripTrackingEndpoints
     // ---- shared guards -------------------------------------------------------------------
 
     /// <summary>The trip when the caller may read it; null for missing and unreadable alike.</summary>
-    private static async Task<TripLog?> ReadableTripAsync(
+    internal static async Task<TripLog?> ReadableTripAsync(
         SilexGisDbContext db, IAccessService access, AccessContext ctx, Guid tripLogId, CancellationToken ct)
     {
         var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
@@ -65,7 +68,7 @@ public static class TripTrackingEndpoints
     /// 404 for a trip the caller was never shown, 403 for one they may read but not run —
     /// the same masking every trip write route uses.
     /// </summary>
-    private static async Task<ProblemHttpResult?> WriteGuardAsync(
+    internal static async Task<ProblemHttpResult?> WriteGuardAsync(
         IAccessService access, AccessContext ctx, TripLog? trip, CancellationToken ct)
     {
         if (trip is null) return ApiProblems.NotFound("trip_log.not_found");
@@ -103,37 +106,9 @@ public static class TripTrackingEndpoints
             r.Name, r.SurveyName, r.Position.Coordinate.Z, (r.Flags & SurveyStationFlags.Entrance) != 0))];
     }
 
-    /// <summary>
-    /// Which of the given cave snapshots this caller may see positions in. Per cave, because
-    /// history can span models and every position row carries its own anchor.
-    /// </summary>
-    private static async Task<HashSet<Guid>> OpenCaveIdsAsync(
-        SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext ctx,
-        IReadOnlyCollection<Guid> caveIds, CancellationToken ct)
-    {
-        var open = new HashSet<Guid>();
-        if (caveIds.Count == 0) return open;
-        var caves = await db.Features.AsNoTracking()
-            .Where(f => caveIds.Contains(f.Id) && f.Kind == FeatureKind.Cave)
-            .ToListAsync(ct);
-        foreach (var cave in caves)
-        {
-            if (await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct)) open.Add(cave.Id);
-        }
-        return open;
-    }
-
-    /// <summary>A row that claims a place, however partially — anything here is location data.</summary>
-    private static bool HasPosition(TripPositionEvent e) =>
-        e.StationName is not null || e.DepthEnteredM is not null || e.SurveyModelId is not null;
-
-    /// <summary>
-    /// Whether this caller may see the row's position. A position row whose cave snapshot is
-    /// gone answers false for everyone: with nothing left to evaluate protection against,
-    /// the only safe answer is no answer.
-    /// </summary>
-    private static bool PositionOpen(TripPositionEvent e, HashSet<Guid> openCaves) =>
-        !HasPosition(e) || (e.CaveFeatureId is not null && openCaves.Contains(e.CaveFeatureId.Value));
+    // Which caves are open to this caller, whether a row claims a place, and whether that place
+    // may be told to them, all live in TrackingWithholding — the published page asks the same
+    // three questions on different terms, and one home is what keeps the two answers the same.
 
     // ---- reads ---------------------------------------------------------------------------
 
@@ -151,6 +126,12 @@ public static class TripTrackingEndpoints
             .Where(t => t.TripLogId == tripLogId).OrderBy(t => t.Title).ToListAsync(ct);
         var rosterCavers = await db.TripLogParticipants.AsNoTracking()
             .Where(p => p.TripLogId == tripLogId).Select(p => p.CaverId).Distinct().ToListAsync(ct);
+        // What a published page calls each of them, where somebody chose. Shown here so the
+        // panel that sets the labels can show what it set; nothing about the choice is
+        // location data, so it follows the trip's own readability and nothing else.
+        var labels = await db.TripTrackingParticipants.AsNoTracking()
+            .Where(p => p.TripLogId == tripLogId)
+            .ToDictionaryAsync(p => p.CaverId, p => p.DisplayLabel, ct);
 
         // A tracked trip's whole event log is small (reports arrive by relayed word, minutes
         // apart) — fold the latest-per-caver in memory rather than in SQL.
@@ -162,7 +143,7 @@ public static class TripTrackingEndpoints
         var caveIds = events.Where(e => e.CaveFeatureId is not null).Select(e => e.CaveFeatureId!.Value)
             .Concat(tracking?.CaveFeatureId is { } configCave ? [configCave] : Array.Empty<Guid>())
             .Distinct().ToList();
-        var openCaves = await OpenCaveIdsAsync(db, access, protection, ctx, caveIds, ct);
+        var openCaves = await TrackingWithholding.OpenCaveIdsAsync(db, access, protection, ctx, caveIds, ct);
 
         // The config's reference station and depth filter are station vocabulary of the
         // config's cave — withheld under exactly the rule the event positions follow.
@@ -180,9 +161,9 @@ public static class TripTrackingEndpoints
             var last = own?.Count > 0 ? own[^1] : null;
             // A note or an exit says something happened, not where — the displayed position
             // stays the latest report that actually claimed a place.
-            var lastPositioned = own?.LastOrDefault(HasPosition);
+            var lastPositioned = own?.LastOrDefault(TrackingWithholding.HasPosition);
             var lastTeamed = own?.LastOrDefault(e => e.TeamId is not null);
-            var positionOpen = lastPositioned is null || PositionOpen(lastPositioned, openCaves);
+            var positionOpen = lastPositioned is null || TrackingWithholding.PositionOpen(lastPositioned, openCaves);
             if (!positionOpen) withheldAny = true;
             participants.Add(new TrackingParticipantDto(
                 caverId,
@@ -191,7 +172,8 @@ public static class TripTrackingEndpoints
                 last?.RecordedAt,
                 positionOpen ? lastPositioned?.StationName : null,
                 positionOpen ? lastPositioned?.DepthEnteredM : null,
-                last?.Kind == TripPositionEventKind.Exited));
+                last?.Kind == TripPositionEventKind.Exited,
+                labels.GetValueOrDefault(caverId)));
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
@@ -232,11 +214,11 @@ public static class TripTrackingEndpoints
 
         var caveIds = result.Items.Where(e => e.CaveFeatureId is not null)
             .Select(e => e.CaveFeatureId!.Value).Distinct().ToList();
-        var openCaves = await OpenCaveIdsAsync(db, access, protection, ctx, caveIds, ct);
+        var openCaves = await TrackingWithholding.OpenCaveIdsAsync(db, access, protection, ctx, caveIds, ct);
 
         var dtos = result.Items.Select(e =>
         {
-            var open = PositionOpen(e, openCaves);
+            var open = TrackingWithholding.PositionOpen(e, openCaves);
             return new TrackingEventDto(
                 e.Id, e.CaverId, e.TeamId, e.Kind,
                 open ? e.SurveyModelId : null,
@@ -409,6 +391,62 @@ public static class TripTrackingEndpoints
         db.TripTeams.Remove(team);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// Names one participant for the trip's published page, or takes the name back off.
+    /// </summary>
+    /// <remarks>
+    /// A row exists only where somebody typed a label, so clearing one deletes it rather than
+    /// storing an empty string: the published read's fallback is the ordinary state, not a
+    /// repair for a missing value, and an empty label that lived in the table would be a third
+    /// state to reason about with nothing to say.
+    /// </remarks>
+    private static async Task<Results<Ok<TrackingParticipantLabelDto>, ProblemHttpResult>> SetParticipantLabelAsync(
+        Guid tripLogId, Guid caverId, TrackingParticipantLabelRequest request, SilexGisDbContext db,
+        IAccessService access, IAccessContextAccessor accessAccessor, CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
+        var refusal = ctx is null
+            ? ApiProblems.NotFound("trip_log.not_found")
+            : await WriteGuardAsync(access, ctx, trip, ct);
+        if (refusal is not null) return refusal;
+
+        // Only somebody the trip names can be named: a label for anybody else would be a
+        // person the published page invents.
+        var onRoster = await db.TripLogParticipants.AsNoTracking()
+            .AnyAsync(p => p.TripLogId == tripLogId && p.CaverId == caverId, ct);
+        if (!onRoster)
+        {
+            return ApiProblems.BadRequest("tracking.caver_not_participant",
+                "Only somebody on the trip's roster can be named on its published page.");
+        }
+
+        var row = await db.TripTrackingParticipants
+            .FirstOrDefaultAsync(p => p.TripLogId == tripLogId && p.CaverId == caverId, ct);
+        var label = request.Label?.Trim();
+        if (string.IsNullOrEmpty(label))
+        {
+            if (row is not null) db.TripTrackingParticipants.Remove(row);
+            label = null;
+        }
+        else if (row is null)
+        {
+            db.TripTrackingParticipants.Add(new TripTrackingParticipant
+            {
+                TripLogId = tripLogId,
+                CaverId = caverId,
+                DisplayLabel = label,
+            });
+        }
+        else
+        {
+            row.DisplayLabel = label;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Ok(new TrackingParticipantLabelDto(caverId, label));
     }
 
     private static async Task<Results<Ok<IReadOnlyList<TrackingEventDto>>, ProblemHttpResult>> CreateEventsAsync(

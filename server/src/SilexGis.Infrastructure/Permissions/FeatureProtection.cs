@@ -80,6 +80,54 @@ public sealed class FeatureProtection(SilexGisDbContext db, IAccessService acces
     }
 
     /// <summary>
+    /// Of the given features, the ones with no protection root anywhere above them — self
+    /// included — resolved from the rows' own <c>location_protected</c> and their ancestor
+    /// arrays, deliberately WITHOUT consulting the derived <c>is_protected_effective</c>
+    /// column. No caller: this is the structural question about the feature alone.
+    /// </summary>
+    /// <remarks>
+    /// For the surfaces that must not lean on the derived column by itself.
+    /// <see cref="ExactViewIdsAsync"/> answers a caller's question and takes a fast path off
+    /// that column whenever nothing in the candidate set is marked protected — the right trade
+    /// for a map read, and the wrong one for a decision whose entire purpose is to hold when
+    /// the column has gone stale, because there the fast path would agree with the column by
+    /// construction rather than check it. Soft-deleted rows are read here (filters ignored) so
+    /// a deleted protected root still refuses; protection is most-restrictive until purge.
+    /// </remarks>
+    public async Task<HashSet<Guid>> UnprotectedByAncestryIdsAsync(
+        IReadOnlyCollection<Guid> featureIds, CancellationToken ct = default)
+    {
+        var ids = featureIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await db.Features.AsNoTracking().IgnoreQueryFilters()
+            .Where(f => ids.Contains(f.Id))
+            .Select(f => new { f.Id, f.LocationProtected, f.AncestorIds })
+            .ToListAsync(ct);
+
+        var involvedAncestors = rows.SelectMany(r => r.AncestorIds).ToHashSet();
+        var protectedRootIds = involvedAncestors.Count == 0
+            ? []
+            : (await db.Features.AsNoTracking().IgnoreQueryFilters()
+                .Where(f => involvedAncestors.Contains(f.Id) && f.LocationProtected)
+                .Select(f => f.Id)
+                .ToListAsync(ct)).ToHashSet();
+
+        // The row's own flag as well as the walk: ancestor_ids carries self, but it is itself
+        // derived, and a rule that has to survive one derived column being wrong must not be
+        // written so that another one silently carries it.
+        return
+        [
+            .. rows
+                .Where(r => !r.LocationProtected && !r.AncestorIds.Any(protectedRootIds.Contains))
+                .Select(r => r.Id),
+        ];
+    }
+
+    /// <summary>
     /// Of the given LINK TARGET ids, the ones whose reference must be hidden from the
     /// caller: a locating link on a record with exact coordinates discloses a protected
     /// target's position by proximity. A target is redacted when the caller lacks exact
