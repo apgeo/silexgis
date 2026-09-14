@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useMemo, useState } from 'react';
-import { Button, Card, Typography } from 'antd';
+import { CompressOutlined, ExpandOutlined, PushpinOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Flex, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   surveyModelReadableByViewer,
@@ -11,12 +12,15 @@ import {
   type TripParticipant,
 } from '../../api/hooks.ts';
 import CaveViewPanel from '../caveview/CaveViewPanel.tsx';
+import type { PickedModelPart } from '../../caveview/modelParts.ts';
 import { trackedCaversFrom } from '../../caveview/trackedCavers.ts';
+import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
 import { trackedCaversAt } from '../../caveview/trackingReplay.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import TrackingReplayBar from './TrackingReplayBar.tsx';
+import TrackingReportDialog from './TrackingReportDialog.tsx';
 
 export interface TrackingModelPanelProps {
   /** Whose watch this is — the replay reads the trip's whole log for itself. */
@@ -27,11 +31,32 @@ export interface TrackingModelPanelProps {
   participants: readonly TripParticipant[];
   /** The reports on screen, newest first — where the moment somebody went in is read from. */
   events: readonly TrackingEvent[] | undefined;
+  /** Whether this reader may write to the log at all. */
+  canEdit: boolean;
+  /**
+   * Who is ticked on the table above. Offered as the answer when a station is pressed, never
+   * imposed: the dialog asks, because requiring the ticks first would put back the scrolling the
+   * whole press-a-station path exists to remove.
+   */
+  selectedCaverIds: readonly string[];
+  /** Called once a report has landed, so the selection that produced it can be let go. */
+  onRecorded: () => void;
 }
 
 /** Taller than a phone can spare, shorter than a desk screen would waste. */
 const HEIGHT = 460;
 const NARROW_HEIGHT = 320;
+
+/**
+ * The same two numbers for a reader who has asked for more of the screen.
+ *
+ * <b>Asked for rather than shipped, because the model is not what this tab is for.</b> The tab is
+ * opened to record that a party went in, and it is read as a table; the model is the second reading
+ * of the same watch. So it opens at the size that leaves the rest of the tab usable, and somebody
+ * tracing a route through a two-hundred-station survey says when they want the screen.
+ */
+const LARGE_HEIGHT = 760;
+const NARROW_LARGE_HEIGHT = 560;
 
 /**
  * The share of the screen the model is allowed to take, whatever else says about its size.
@@ -69,9 +94,52 @@ const NARROW_HEIGHT = 320;
  */
 const VIEWPORT_SHARE = '60dvh';
 
-/** The two numbers above, each held under what the screen can actually spare. */
-const modelHeight = (narrow: boolean) =>
-  `min(${narrow ? NARROW_HEIGHT : HEIGHT}px, ${VIEWPORT_SHARE})`;
+/**
+ * And the share a reader who asked for a bigger model gets.
+ *
+ * <b>Still a share, and that is the whole of what makes the larger size safe.</b> Everything the
+ * comment above says about the gesture is unchanged by somebody asking for more room: the viewer
+ * still owns every touch that begins inside it, and a model as tall as the viewport would still
+ * leave nowhere to put a finger to get past it. So what the control changes is how much of the
+ * screen the model takes, never whether a strip of ordinary page is left — at four fifths there is
+ * still a fifth, which on the shortest screen this is designed at is 72px of page, well above what
+ * a thumb needs to land on. A hundred is the number that must never be written here.
+ *
+ * <b>This is the whole of the size answer on this panel</b>, and the viewer's own fullscreen button
+ * is deliberately not the other half of it — see below for what pressing it costs here.
+ */
+const LARGE_VIEWPORT_SHARE = '80dvh';
+
+/**
+ * The one control of the viewer's own that this panel does not offer, and why it is this one.
+ *
+ * <b>Everything this panel draws over the model is outside the element that goes fullscreen.</b>
+ * The viewer's fullscreen button puts its own container — the drawing surface — into the browser's
+ * top layer, and the top layer paints over the whole document. The list of who is where, the notice
+ * that a link named a station this model does not hold, and the offer a station press raises are
+ * all siblings of that surface rather than children of it, so all three stop existing the moment
+ * the button is pressed.
+ *
+ * Measured on the live instance at 1440x900: with the surface fullscreen, `document.fullscreenElement`
+ * is `.caveview-panel-surface`, a press on a station still fires and still raises the offer at
+ * 117,541 — and `document.elementFromPoint` at the centre of its "Record here" button answers
+ * `CANVAS`. The same probe at the centre of the party list answers nothing at all. So the press
+ * records a station, draws a button, and the button cannot be reached: a path that looks like it is
+ * working and is not.
+ *
+ * <b>Taken out here rather than repaired, because this panel has a better answer already.</b> The
+ * size control beside the title gives the model four fifths of the screen, which is the size answer
+ * this panel needs, and keeps the fifth of the page a thumb has to be able to land on. The other
+ * surfaces that draw a model keep the button: a page whose whole job is the viewer loses nothing by
+ * covering itself with it.
+ */
+const PANEL_TOOLBAR_OMITS = 'fullscreen';
+
+/** The numbers above, each held under what the screen can actually spare. */
+const modelHeight = (narrow: boolean, large: boolean) =>
+  large
+    ? `min(${narrow ? NARROW_LARGE_HEIGHT : LARGE_HEIGHT}px, ${LARGE_VIEWPORT_SHARE})`
+    : `min(${narrow ? NARROW_HEIGHT : HEIGHT}px, ${VIEWPORT_SHARE})`;
 
 /**
  * The party on the survey: everybody the watch names, drawn where they were last reported.
@@ -101,19 +169,36 @@ export default function TrackingModelPanel({
   tracking,
   participants,
   events,
+  canEdit,
+  selectedCaverIds,
+  onRecorded,
 }: TrackingModelPanelProps) {
   const { t } = useTranslation();
   const narrow = useIsMobile();
-  // The one control this panel owns is the button that opens the model, and how big it has to be
-  // depends on what is pressing it and on nothing else — the same rule, and the same hook, as the
-  // replay strip inside it.
+  // The controls this panel owns are pressed, and how big they have to be depends on what is
+  // pressing them and on nothing else — the same rule, and the same hook, as the replay strip
+  // inside it.
   const coarse = useCoarsePointer();
   const [open, setOpen] = useState(false);
+  /** Whether the reader has asked the model for more of the screen than it opens with. */
+  const [large, setLarge] = useState(false);
+  /** The station last pressed in the model, while the offer to record there is still standing. */
+  const [picked, setPicked] = useState<PickedModelPart | null>(null);
+  /** The station the dialog is recording at, or null while it is closed. */
+  const [recording, setRecording] = useState<string | null>(null);
   /** Whether the panel is showing a moment of the trip rather than the watch as it stands. */
   const [replaying, setReplaying] = useState(false);
   /** The moment being replayed, or null while there is no replay or none has been settled on. */
   const [replayAt, setReplayAt] = useState<number | null>(null);
   const { data: model } = useSurveyModel(tracking.surveyModelId ?? undefined);
+
+  // The set the panel would have been given, less the one control that would hide the rest of the
+  // panel. Subtracted from what the viewer wrapper chooses rather than listed here, so which
+  // controls fit a screen stays decided in the one place that has the measurements for it.
+  const toolbarButtons = useMemo(
+    () => caveViewToolbarButtons({ narrow, coarse }).filter((id) => id !== PANEL_TOOLBAR_OMITS),
+    [narrow, coarse],
+  );
 
   // Asked for only once somebody wants a replay, and only while the model is on screen: it is
   // several requests on a long trip, and this tab is opened routinely by somebody who wants to
@@ -179,18 +264,43 @@ export default function TrackingModelPanel({
     [tracking, log.data, replayAt, nameOf, model?.id],
   );
 
+  /** The party as a chooser takes it — the watch says who is on it, the roster says their names. */
+  const dialogCavers = useMemo(
+    () =>
+      tracking.participants.map((participant) => ({
+        caverId: participant.caverId,
+        name: nameOf(participant.caverId),
+      })),
+    [tracking.participants, nameOf],
+  );
+
   if (model === undefined || model.status !== 'ready' || !surveyModelReadableByViewer(model)) {
     return null;
   }
 
   const shown = replaying && replayCavers !== null ? replayCavers : cavers;
   const controlSize: 'large' | 'small' = coarse ? 'large' : 'small';
+  /**
+   * Whether pressing a station is worth offering at all.
+   *
+   * Both halves are the same rule the card under the watch is drawn by: reports land on an armed
+   * watch and on no other, and a reader who cannot write to the log is not shown an offer that
+   * would be refused. Nothing is gated on the refusal itself — a press that produced an offer that
+   * produced a refusal is three acts spent learning something the page already knew.
+   */
+  const canRecord = canEdit && tracking.state === 'armed';
 
   /** Hiding the model puts the live watch back: a replay of a model nobody is looking at is state. */
   const onToggle = () => {
     if (open) {
       setReplaying(false);
       setReplayAt(null);
+      // The size and the standing offer belong to a model on screen. Kept, they would decide how
+      // much of the screen the next opening takes and put a station name over a model that has not
+      // been drawn yet.
+      setLarge(false);
+      setPicked(null);
+      setRecording(null);
     }
     setOpen(!open);
   };
@@ -204,13 +314,29 @@ export default function TrackingModelPanel({
       // locator that matches both and picks neither.
       data-testid="trip-tracking-model-panel"
       extra={
-        <Button
-          size={controlSize}
-          onClick={onToggle}
-          data-testid="trip-tracking-model-toggle"
-        >
-          {t(open ? 'trips.tracking.modelHide' : 'trips.tracking.modelShow')}
-        </Button>
+        <Flex gap="small" wrap>
+          {open && (
+            <Button
+              size={controlSize}
+              icon={large ? <CompressOutlined /> : <ExpandOutlined />}
+              onClick={() => setLarge(!large)}
+              // Whether the word is there is a question about room, so it is answered by the
+              // width; how big the button is is a question about the finger, so it is answered by
+              // the pointer. Narrow, the label moves to the accessible name rather than to a
+              // tooltip — a device with no hovering pointer never opens one, and a glyph explained
+              // by a tooltip is, there, an unlabelled button.
+              aria-label={t(large ? 'trips.tracking.modelSmaller' : 'trips.tracking.modelLarger')}
+              data-testid="trip-tracking-model-size"
+            >
+              {narrow
+                ? undefined
+                : t(large ? 'trips.tracking.modelSmaller' : 'trips.tracking.modelLarger')}
+            </Button>
+          )}
+          <Button size={controlSize} onClick={onToggle} data-testid="trip-tracking-model-toggle">
+            {t(open ? 'trips.tracking.modelHide' : 'trips.tracking.modelShow')}
+          </Button>
+        </Flex>
       }
     >
       {open ? (
@@ -235,16 +361,64 @@ export default function TrackingModelPanel({
             onAtChange={setReplayAt}
             nameOf={nameOf}
           />
+          {/* <b>The press names a station and offers to record there; it does not open a dialog by
+              itself.</b> Looking around a model means pressing things, and a form that appeared on
+              every press would make the model unusable as a model — which is the same reasoning the
+              survey viewer's own "link this part" offer is built on, and the same shape. */}
+          {picked !== null && (
+            <Alert
+              type="info"
+              showIcon
+              closable
+              onClose={() => setPicked(null)}
+              title={t('caveview.picked.modelStation', { name: picked.label })}
+              action={
+                <Button
+                  size={controlSize}
+                  type="primary"
+                  icon={<PushpinOutlined />}
+                  onClick={() => setRecording(picked.anchor.station)}
+                  data-testid="trip-tracking-record-here-open"
+                >
+                  {t('trips.tracking.recordHere')}
+                </Button>
+              }
+              style={{ marginBottom: 8 }}
+              data-testid="trip-tracking-picked-station"
+            />
+          )}
           <CaveViewPanel
             fileUrl={model.modelUrl}
             fileName={viewerFileName(model)}
-            height={modelHeight(narrow)}
+            height={modelHeight(narrow, large)}
             surveyModelId={model.id}
             trackedCavers={shown}
+            // A leg or a splay names no single place to report from, so it clears the offer rather
+            // than leaving the last station standing under a press that meant something else.
+            onPartPick={
+              canRecord
+                ? (part) => setPicked(part.anchorKind === 'modelStation' ? part : null)
+                : undefined
+            }
             // The viewer's own controls: this is a model shown to be read rather than one shown
-            // beside chrome competing for the same corner.
-            toolbar
+            // beside chrome competing for the same corner. All but one of them — see above.
+            toolbar={{ buttons: toolbarButtons }}
           />
+          {canRecord && (
+            <TrackingReportDialog
+              open={recording !== null}
+              tripLogId={tripLogId}
+              station={recording}
+              cavers={dialogCavers}
+              teams={tracking.teams}
+              defaultCaverIds={selectedCaverIds}
+              onClose={() => setRecording(null)}
+              onRecorded={() => {
+                setPicked(null);
+                onRecorded();
+              }}
+            />
+          )}
         </>
       ) : (
         <Typography.Text type="secondary">

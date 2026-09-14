@@ -55,6 +55,8 @@ export interface ReplayNote {
 /** What one caver's reports up to the moment add up to. */
 interface CaverHistory {
   position: TrackedCaverPosition | null;
+  /** The instant of the report `position` came from — which is rarely the latest one. */
+  positionAt: string | null;
   lastRecordedAt: string;
   enteredAt: string | null;
   teamId: string | null;
@@ -225,6 +227,7 @@ export function trackedCaversAt(
     }
     const history = histories.get(event.caverId) ?? {
       position: null,
+      positionAt: null,
       lastRecordedAt: event.recordedAt,
       enteredAt: null,
       teamId: null,
@@ -244,6 +247,9 @@ export function trackedCaversAt(
     const place = placeReported(event, surveyModelId);
     if (place !== null) {
       history.position = place;
+      // The replay reads the very report that placed somebody, so unlike the folded watch it always
+      // knows how old a position is — which is what anything comparing two people's positions needs.
+      history.positionAt = event.recordedAt;
     }
     histories.set(event.caverId, history);
   }
@@ -263,9 +269,11 @@ export function trackedCaversAt(
     return {
       caverId: participant.caverId,
       name: nameOf(participant.caverId),
+      teamId,
       teamTitle: teamId === null ? null : (teamTitles.get(teamId) ?? null),
       position: history?.position ?? unplaced(history !== undefined, tracking.positionsWithheld),
       lastRecordedAt: history?.lastRecordedAt ?? null,
+      positionAt: history?.positionAt ?? null,
       enteredAt: history?.enteredAt ?? null,
       out: history?.out ?? false,
     };

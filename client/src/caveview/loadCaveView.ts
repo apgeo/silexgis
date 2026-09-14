@@ -35,11 +35,17 @@ const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;
 // 'liveMarkerHover' fires when the pointer comes to rest on a marker the application placed; its
 // event carries the marker's own id under `id`. It too carries `handled`, which suppresses the
 // marker's second line of label — see the panel for why that line is left to the viewer.
+//
+// 'stationHover' fires when the pointer comes to rest over a station — and, on a pointer that
+// cannot hover, when one is tapped. It too carries `handled`, which suppresses the viewer's own
+// station-name label. Only dispatched while the viewer is tracking the station under the pointer,
+// which is the `stationLabelOver` setting below.
 export type CaveViewerEvent =
   | 'newCave'
   | 'progress'
   | 'entrance'
   | 'station'
+  | 'stationHover'
   | 'leg'
   | 'liveMarkerHover';
 
@@ -113,6 +119,14 @@ export interface CaveViewer {
   focusStation(ref: CaveViewRef, options?: CaveViewFocusOptions): Promise<unknown>;
   /** Selects a named part of the survey and frames it. Rejects on the same conditions. */
   focusSurvey(ref: CaveViewRef): Promise<void>;
+  /**
+   * Marks a station as the selected one without moving the camera. Answers the station, or null
+   * when no model is loaded or the reference names none of its stations — so unlike a focus this
+   * never rejects, and a caller that only wants a mark has nothing to catch.
+   */
+  highlightStation(ref: CaveViewRef): unknown;
+  /** Takes off the mark either of the two above put on. Safe with nothing marked. */
+  clearHighlight(): void;
   /** Places a marker over the model. A reference the loaded model does not hold is held
    *  unresolved and placed when a model containing it is loaded. */
   addLiveMarker(id: string, ref: CaveViewRef, options?: CaveViewLiveMarkerOptions): unknown;

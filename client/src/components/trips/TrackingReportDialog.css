@@ -1,0 +1,44 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The dialog a station press opens. Everything here is about the two screen shapes it has to
+   survive: a 412x839 phone held upright, and the same phone sideways at 863x360. */
+
+/* Never wider than the screen it opens on, and no wider than a form of five fields needs. The
+   library's own default is a flat 520px, which on a 412px phone is a dialog with its edges off the
+   screen — and the buttons that accept it live in the right-hand corner.
+
+   The headroom above it is cut from the library's own 100px, for the same reason: a hundred pixels
+   is spent on nothing, and on a phone it is a hundred pixels the fields do not get. Measured at
+   100px on a 412x839 phone, the dialog came to 767px tall starting at y=100, which put its footer
+   — the button that records the report — 28px below the bottom of the screen on a panel that
+   otherwise looked complete. */
+.tracking-report-dialog {
+  top: 24px;
+  max-width: calc(100vw - 32px);
+}
+
+/* <b>The fields scroll and the buttons never do.</b> The footer is what finishes the report, and a
+   dialog whose "Record" is below the fold of a panel that otherwise looks complete is a dialog
+   nobody can finish — the same failure the relayed-time calendar had, one surface out. So the cap
+   is on the body alone: what gives way is the list of fields, which is a list and scrolls like one.
+
+   The number subtracted is everything that is not the body — the headroom above, the title bar, the
+   footer, and a margin below — measured at about 190px with the controls at the size a finger
+   needs. `dvh` rather than `vh` because a phone's address bar collapses and `vh` keeps quoting the
+   taller measurement, which would put the footer back off the screen exactly when the bar is
+   showing. */
+.tracking-report-dialog .ant-modal-body {
+  max-height: calc(100dvh - 190px);
+  overflow-y: auto;
+}
+
+/* The corner X, which is the one control in here the library sizes for itself — measured at 32px
+   on a panel whose every other target had been built to forty-four. It is a second way out rather
+   than the only one, since Cancel is in the footer at full size, but a dismissal that is harder to
+   hit than everything around it is the one somebody misses and records a report they meant to
+   abandon. */
+@media (hover: none), (pointer: coarse) {
+  .tracking-report-dialog .ant-modal-close {
+    width: 44px;
+    height: 44px;
+  }
+}

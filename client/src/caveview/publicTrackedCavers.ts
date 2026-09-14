@@ -43,9 +43,14 @@ export function publicTrackedCavers(
   return envelope.participants.map((participant) => ({
     caverId: String(participant.ordinal),
     name: participant.label ?? unnamed(participant.ordinal),
+    teamId: participant.teamId,
     teamTitle: participant.teamId === null ? null : (teamTitles.get(participant.teamId) ?? null),
     position: positionOf(participant, envelope.positionsWithheld),
     lastRecordedAt: participant.lastRecordedAt,
+    // Never known here, for the same reason a withholding can only be said as the weaker claim: the
+    // envelope carries no report kinds, so there is nothing to say whether the time beside somebody
+    // is the time their station was reported or the time of a later word that named no place.
+    positionAt: null,
     // Not on the envelope, and not invented from the trip's own start: the moment somebody went
     // in survives only on the report log, which a follower is not sent. The card says "—" rather
     // than a time that would be a guess presented as a record.

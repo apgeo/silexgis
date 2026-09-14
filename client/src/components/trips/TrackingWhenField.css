@@ -1,4 +1,12 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+/* The quick answers, drawn as the field's own help so nothing can separate them from the question
+   they answer. Spaced off the control above them because they follow a picker rather than a label,
+   and left free to wrap because five of them at a finger's size are wider than a phone. */
+.tracking-report-when-quick {
+  margin-block: 8px 6px;
+}
+
 /* The one panel on this card that is not drawn inside it: the calendar behind "when it was said",
    which antd renders in a portal at the end of the document and sizes from its own contents.
 
@@ -72,6 +80,37 @@
   .tracking-report-when-popup .ant-picker-time-panel-column {
     height: auto;
     max-height: 45dvh;
+  }
+}
+
+/* ---- Anchored to the screen rather than to the field, where the field cannot be scrolled clear.
+
+   Everything above assumes the panel can be given room by moving the field it hangs from, which is
+   what the card under the watch does. Inside the dialog a station press opens, it cannot: the fields
+   scroll in the modal's body, that body is capped so the buttons which finish the report never leave
+   the screen, and the whole of its scroll range is 197px. Measured on a 412x839 phone with the body
+   scrolled as far as it goes, the field stops at y=353, the panel opens at y=391 and its footer —
+   which holds "Now" and the "OK" that is the only way to commit a time — sits at 1086–1133, 291px
+   below the bottom of the screen, with nothing left anywhere on the page to scroll. That is exactly
+   the failure the rest of this file exists to prevent: a control that looks complete and cannot be
+   finished, this time on the surface built for speed.
+
+   So on that surface the panel is taken off the field and put at the top of the screen. `position:
+   fixed` rather than a smaller panel because the panel is already as small as a legible month at a
+   finger's cell size can be, and because the placement is then true wherever the field happens to
+   have scrolled to — the library re-anchors the popup to the field on every scroll, and this simply
+   stops being a function of where the field is. Measured pinned: portrait, the panel runs 8–750 of
+   839 with OK at 703; landscape, 8–295 of 360.
+
+   `!important` because the library writes the placement as inline styles on this element, which a
+   stylesheet cannot otherwise outrank; the horizontal placement it computes is left alone, because
+   across is the axis that was never the problem. The panel keeps its own height caps above, so what
+   is pinned is the top edge and never the footer. */
+@media (hover: none), (pointer: coarse) {
+  .tracking-report-when-popup-pinned {
+    position: fixed !important;
+    top: 8px !important;
+    bottom: auto !important;
   }
 }
 

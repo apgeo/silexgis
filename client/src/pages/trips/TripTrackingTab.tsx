@@ -231,7 +231,7 @@ export default function TripTrackingTab({
   );
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       {/* Said once, at the top, as well as marked on every row it applies to: a reader who is
           being shown fewer positions than exist has to learn that from the page rather than from
           the shape of what is missing. */}
@@ -379,6 +379,12 @@ export default function TripTrackingTab({
         tracking={data}
         participants={trip.participants}
         events={events.data?.items}
+        canEdit={canEdit}
+        // The same selection the card below records for. Handed down as an offer rather than as a
+        // requirement: pressing a station on the model opens a dialog that asks who it is about,
+        // with these already chosen, so the fast path never depends on having ticked anybody.
+        selectedCaverIds={[...selected]}
+        onRecorded={() => setSelected(new Set())}
       />
 
       {canEdit && (

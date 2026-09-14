@@ -22,7 +22,50 @@
   .caveview-panel-surface {
     --cv-toolbar-button-size: 40px;
     --cv-media-thumbnail-size: 80px;
+    /* The shading chooser, which the viewer reserves 160px for on a coarse pointer.
+
+       That reservation is room the toolbar has none of. The bar wraps rather than overflowing, so
+       what a wide chooser costs is not a cut-off control but a whole second row of them — 44px off
+       a model that a phone only gives 320px to. Measured on a 412px phone, whose model surface is
+       338px wide: at 160px the bar came to 331px and fitted only because a control had been left
+       out of the set entirely; at 96px the same five controls come to 266px, which leaves the set
+       whole and still fits at 360px, the narrowest width this is designed at.
+
+       The cost is paid by the chooser's longest options, which now truncate — "by leg inclination"
+       reads as "by leg incl…". That is the right thing to spend: the value in force is still
+       legible and distinguishable, whereas a second row is 14% of the model gone for everybody,
+       whatever shading they are using. Narrowed rather than dropped, because this chooser decides
+       what the colours on the model mean and there is nowhere else to read that.
+
+       It carries the wide coarse set too, and by a smaller margin than the phone's. The twelve
+       controls a tablet or a phone held sideways is given come to 594px, and the narrowest surface
+       that set is ever drawn on measures 614px — at the chooser's unnarrowed 160px they would come
+       to 658px and wrap. So this number is what keeps both coarse sets on one row, not just the
+       five. */
+    --cv-toolbar-select-width: 96px;
   }
+}
+
+/* <b>The toolbar can otherwise only ever use half the model it sits over.</b>
+
+   The bar is centred the way an absolutely positioned element is centred — `left: 50%` and a
+   translate back by half its own width — and is given `width: auto`, which for an absolutely
+   positioned box means shrink-to-fit *within the space left of its containing block*. From 50% to
+   the right edge is half the model, so a bar over an 826px-wide model was laid out into 413px and
+   wrapped onto a second row while 413px of model sat empty beside it. Measured at exactly that:
+   bar 413x66 over a surface of 826x460, two rows, with the whole row of view controls on the
+   second one and 34px of extra chrome drawn over the cave.
+
+   `max-content` is the width it should have had: it is not bounded by the space beside the anchor,
+   the `max-width: 100%` the bar already carries still holds it inside the model, and the translate
+   then centres it correctly because it is centring a real width. A bar with more controls than the
+   model is wide still wraps, which is the right thing for it to do.
+
+   `!important` because the bar's own geometry is written as inline styles by the viewer, and an
+   inline style is what a stylesheet cannot otherwise outrank. Scoped to this application's own
+   surface so nothing decides the shape of a toolbar somebody else placed. */
+.caveview-panel-surface .cv-toolbar {
+  width: max-content !important;
 }
 
 /* <b>Below 768px the viewer's own stylesheet takes the whole screen, and this panel is not a page.</b>

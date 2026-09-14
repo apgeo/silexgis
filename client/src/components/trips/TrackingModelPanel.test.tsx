@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { App } from 'antd';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { SurveyModelInfo, TrackingEvent, TrackingState, TripParticipant } from '../../api/hooks.ts';
+import type { PickedModelPart } from '../../caveview/modelParts.ts';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
 
 const ANA = 'caver-ana';
@@ -15,7 +17,12 @@ let askedFor: string | undefined;
 let log: TrackingEvent[] = [];
 let logAskedFor: { tripLogId: string | undefined; enabled: boolean } | undefined;
 
+/** The one call that writes a report, whichever surface filled it in. */
+const recordEvents = vi.fn();
+
 vi.mock('../../api/hooks.ts', () => ({
+  TRACKING_EVENT_KINDS: ['entered', 'atStation', 'atDepth', 'note', 'exited'],
+  useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
   surveyModelReadableByViewer: (m: { format: string }) => m.format === 'lox' || m.format === 'survex3d',
   useSurveyModel: (id: string | undefined) => {
     askedFor = id;
@@ -29,21 +36,18 @@ vi.mock('../../api/hooks.ts', () => ({
 
 // The viewer itself is a three.js bundle holding a drawing context. What it is handed is the
 // point: which model, who is drawn on it, and how much of the screen it may take.
-let given:
-  | {
-      fileName?: string;
-      surveyModelId?: string;
-      trackedCavers?: readonly TrackedCaver[];
-      height?: number | string;
-    }
-  | undefined;
+interface GivenProps {
+  fileName?: string;
+  surveyModelId?: string;
+  trackedCavers?: readonly TrackedCaver[];
+  height?: number | string;
+  onPartPick?: (part: PickedModelPart) => void;
+  /** Which of the viewer's own controls this panel asks for — see the test that reads it. */
+  toolbar?: boolean | { buttons?: readonly string[] };
+}
+let given: GivenProps | undefined;
 vi.mock('../caveview/CaveViewPanel.tsx', () => ({
-  default: (props: {
-    fileName: string;
-    surveyModelId?: string;
-    trackedCavers?: readonly TrackedCaver[];
-    height?: number | string;
-  }) => {
+  default: (props: GivenProps) => {
     given = props;
     return <div data-testid="viewer" />;
   },
@@ -117,14 +121,40 @@ const atStation = (caverId: string, recordedAt: string, stationName: string): Tr
     recordedAt,
   }) as unknown as TrackingEvent;
 
-function show(state = tracking(), events: TrackingEvent[] = []) {
+/** Told when a report has landed, so the table's selection can be let go. */
+const onRecorded = vi.fn();
+
+function show(
+  state = tracking(),
+  events: TrackingEvent[] = [],
+  props: { canEdit?: boolean; selectedCaverIds?: string[] } = {},
+) {
   return render(
-    <TrackingModelPanel
-      tripLogId="trip-1"
-      tracking={state}
-      participants={roster}
-      events={events}
-    />,
+    // The dialog inside this panel words its own answers, and that needs the library's message
+    // context — the same wrapper every other surface here is drawn inside.
+    <App>
+      <TrackingModelPanel
+        tripLogId="trip-1"
+        tracking={state}
+        participants={roster}
+        events={events}
+        canEdit={props.canEdit ?? true}
+        selectedCaverIds={props.selectedCaverIds ?? [ANA]}
+        onRecorded={onRecorded}
+      />
+    </App>,
+  );
+}
+
+/** Opens the model and presses a station in it, the way the viewer reports one. */
+function pressStation(station = 'p.g.7') {
+  fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+  act(() =>
+    given!.onPartPick?.({
+      anchorKind: 'modelStation',
+      anchor: { station },
+      label: station,
+    } as PickedModelPart),
   );
 }
 
@@ -136,6 +166,8 @@ beforeEach(() => {
   logAskedFor = undefined;
   narrow = false;
   coarse = false;
+  onRecorded.mockReset();
+  recordEvents.mockReset().mockResolvedValue([{}]);
 });
 
 afterEach(cleanup);
@@ -160,9 +192,14 @@ describe('TrackingModelPanel', () => {
       {
         caverId: ANA,
         name: 'Ana Popescu',
+        teamId: 'team-1',
         teamTitle: 'Team A',
         position: { kind: 'station', station: 'p.g.7' },
         lastRecordedAt: '2026-09-12T07:00:00Z',
+        // The same instant here because the latest report is itself the station report. The two
+        // part company after a note or a "come out", which is what the watch's fold makes possible
+        // and what anything comparing two people's positions has to know about.
+        positionAt: '2026-09-12T07:00:00Z',
         enteredAt: '2026-09-12T06:10:00Z',
         out: false,
       },
@@ -280,6 +317,183 @@ describe('TrackingModelPanel', () => {
       // the two answers that leave a short screen with a model taller than it is.
       expect(height).toMatch(/\b\d+dvh\b/);
       expect(height).not.toMatch(/vw/);
+    });
+
+    /**
+     * Asking the model for more of the screen, without giving it all of it.
+     *
+     * The defect the share exists to prevent is not about a number of pixels: the viewer owns
+     * every touch that begins inside it, so a model as tall as the viewport leaves nowhere at all
+     * to put a finger to get past it — measured at zero pixels of page movement from a swipe
+     * anywhere on the screen. So the larger size is still a share, and the assertions below are
+     * about the *shape* of the answer rather than about the numbers in it: a fraction of the
+     * viewport's own height, and one that leaves a real strip of ordinary page behind.
+     */
+    it('gives a bigger model more of the screen and still never all of it', () => {
+      show();
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      expect(given!.height).toBe('min(460px, 60dvh)');
+
+      fireEvent.click(screen.getByTestId('trip-tracking-model-size'));
+      const height = String(given!.height);
+      expect(height).toMatch(/^min\(/);
+      const share = Number(/(\d+)dvh/.exec(height)?.[1]);
+      expect(share).toBeGreaterThan(60);
+      // The number that must never be written here: at a full viewport the model is the only
+      // thing under a thumb, which is exactly the state the fraction was introduced to end.
+      expect(share).toBeLessThanOrEqual(80);
+    });
+
+    it('asks a narrow screen for less, on both sizes', () => {
+      narrow = true;
+      show();
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      expect(given!.height).toBe('min(320px, 60dvh)');
+
+      fireEvent.click(screen.getByTestId('trip-tracking-model-size'));
+      expect(String(given!.height)).toMatch(/^min\(5\d\dpx, \d+dvh\)$/);
+    });
+
+    it('opens the next model at the size a model opens at', () => {
+      // The size belongs to a model on screen. Kept, it would decide how much of the screen a
+      // model somebody opened to glance at takes, without their having asked for that one.
+      show();
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      fireEvent.click(screen.getByTestId('trip-tracking-model-size'));
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+      expect(given!.height).toBe('min(460px, 60dvh)');
+    });
+
+    /**
+     * The one viewer control this panel does not offer.
+     *
+     * <b>The viewer's fullscreen button puts its drawing surface in the browser's top layer, and
+     * the top layer paints over the whole document.</b> Everything this panel draws over the model
+     * is a sibling of that surface rather than a child of it — the list of who is where, the notice
+     * that a link named a station this model does not hold, and the offer a station press raises.
+     * Measured on the live instance at 1440x900 with the surface fullscreen: the press still fires
+     * and still raises the offer at 117,541, and `document.elementFromPoint` at the centre of its
+     * "Record here" button answers `CANVAS`; the same probe at the centre of the party list answers
+     * nothing at all. So the whole click-to-record path looks like it is working and is not.
+     *
+     * Asserted on every shape of screen, because the button is in every set — and because on a
+     * phone it is one of only five controls, which is where a reader is most likely to press it.
+     */
+    it('leaves the viewer’s own fullscreen out, on every shape of screen', () => {
+      for (const shape of [
+        { narrow: false, coarse: false },
+        { narrow: false, coarse: true },
+        { narrow: true, coarse: true },
+      ]) {
+        cleanup();
+        narrow = shape.narrow;
+        coarse = shape.coarse;
+        show();
+        fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+        const buttons = (given!.toolbar as { buttons: readonly string[] }).buttons;
+        expect(buttons, JSON.stringify(shape)).not.toContain('fullscreen');
+        // Subtracted from the set the viewer wrapper chooses rather than listed here, so this panel
+        // never becomes a second opinion about what fits a screen. Everything else survives.
+        expect(buttons.length, JSON.stringify(shape)).toBeGreaterThan(3);
+        expect(buttons, JSON.stringify(shape)).toContain('shadingMode');
+      }
+    });
+
+    it('spells the size control out where there is room and names it where there is not', () => {
+      // Whether the word fits is a question about room, so it is answered by the width; the
+      // answer is moved to the accessible name rather than to a tooltip, because a device with
+      // no hovering pointer never opens one.
+      show();
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      expect(screen.getByTestId('trip-tracking-model-size')).toHaveTextContent('Bigger model');
+
+      cleanup();
+      narrow = true;
+      show();
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      const control = screen.getByTestId('trip-tracking-model-size');
+      expect(control).toHaveTextContent('');
+      expect(control).toHaveAttribute('aria-label', 'Bigger model');
+    });
+  });
+
+  /**
+   * Recording a position by pressing the place on the model.
+   *
+   * The act being tested is not the dialog: it is that the dialog reaches the same call the card
+   * under the watch reaches, with the same body. Two ways to one act, and the moment they become
+   * two calls is the moment a report recorded one way stops meaning what a report recorded the
+   * other way means.
+   */
+  describe('pressing a station', () => {
+    it('offers to record there rather than opening a form on every press', () => {
+      // Looking around a model means pressing things. A form that appeared on every press would
+      // make the model unusable as a model.
+      show();
+      pressStation();
+
+      expect(screen.getByTestId('trip-tracking-picked-station')).toHaveTextContent('p.g.7');
+      expect(screen.queryByTestId('trip-tracking-dialog-station')).toBeNull();
+    });
+
+    it('sends the report through the same call the card under the watch sends', async () => {
+      show(tracking(), [], { selectedCaverIds: [ANA] });
+      pressStation('p.g.42');
+
+      fireEvent.click(screen.getByTestId('trip-tracking-record-here-open'));
+      // The station arrives filled in from the press — that is the whole of what the press buys.
+      expect(screen.getByTestId('trip-tracking-dialog-station')).toHaveValue('p.g.42');
+
+      fireEvent.click(screen.getByRole('button', { name: /Record for/ }));
+
+      await waitFor(() => expect(recordEvents).toHaveBeenCalledTimes(1));
+      expect(recordEvents).toHaveBeenCalledWith({
+        tripLogId: 'trip-1',
+        caverIds: [ANA],
+        kind: 'atStation',
+        stationName: 'p.g.42',
+        depthM: null,
+        teamId: null,
+        note: null,
+        recordedAt: null,
+      });
+      // And the selection that produced it is let go, exactly as the card's own report does.
+      await waitFor(() => expect(onRecorded).toHaveBeenCalled());
+    });
+
+    it('offers nothing to a reader who cannot write to the log', () => {
+      // A press that produced an offer that produced a refusal is three acts spent learning
+      // something the page already knew.
+      show(tracking(), [], { canEdit: false });
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+      expect(given!.onPartPick).toBeUndefined();
+    });
+
+    it('offers nothing while the watch is not armed', () => {
+      show(tracking({ state: 'closed' }));
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+      expect(given!.onPartPick).toBeUndefined();
+    });
+
+    it('takes the offer down when the press names no single place', () => {
+      // A leg or a splay is two places or none. Leaving the last station standing under it would
+      // put a station name on screen that the reader's last press did not mean.
+      show();
+      pressStation();
+      act(() =>
+        given!.onPartPick?.({
+          anchorKind: 'modelStationRange',
+          anchor: { fromStation: 'p.g.7', toStation: 'p.g.8' },
+          label: '7 → 8',
+        } as PickedModelPart),
+      );
+
+      expect(screen.queryByTestId('trip-tracking-picked-station')).toBeNull();
     });
   });
 

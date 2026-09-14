@@ -99,9 +99,13 @@ describe('trackedCaversAt', () => {
       {
         caverId: ANA,
         name: 'Ana',
+        // The team a report carried at the moment being replayed, and nothing else — so before
+        // any report has named one there is no team, which is what was known then.
+        teamId: null,
         teamTitle: null,
         position: { kind: 'unreported' },
         lastRecordedAt: null,
+        positionAt: null,
         enteredAt: null,
         out: false,
       },
@@ -111,6 +115,7 @@ describe('trackedCaversAt', () => {
     expect(early[0].position).toEqual({ kind: 'station', station: 'p.g.3' });
     expect(early[0].enteredAt).toBe('2026-09-12T08:10:00Z');
     expect(early[0].lastRecordedAt).toBe('2026-09-12T08:40:00Z');
+    expect(early[0].positionAt).toBe('2026-09-12T08:40:00Z');
 
     // The moment the later report was made counts as being at or before it.
     const later = trackedCaversAt(state(), log, at('2026-09-12T09:20:00Z'), nameOf, MODEL);
@@ -226,6 +231,11 @@ describe('trackedCaversAt', () => {
     // word was a radio check.
     expect(caver.position).toEqual({ kind: 'station', station: 'p.g.3' });
     expect(caver.lastRecordedAt).toBe('2026-09-12T09:10:00Z');
+    // And the position keeps the age of the report that placed it, which is the half the folded
+    // watch cannot carry: a replay reads the very report, so it always knows how old a station is,
+    // and anything comparing two people's positions — where a team is standing, say — needs that
+    // rather than the moment somebody last said anything.
+    expect(caver.positionAt).toBe('2026-09-12T08:40:00Z');
   });
 
   it('draws nobody from a report measured in another survey', () => {

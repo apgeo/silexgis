@@ -84,6 +84,36 @@ html[data-theme='dark'] .caveview-tracking-card {
   text-align: start;
 }
 
+/* A team and the people in it, so the heading cannot be scrolled away from its members. Not a
+   flex child of the list itself in any other sense: `display: contents` would lose the grouping
+   to the accessibility tree along with the box. */
+.caveview-tracking-group {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+/* The heading is the team's own row — same press, same place in the list — so it carries the same
+   `flex-shrink: 0` for the same reason the rows do, and is set apart by weight rather than by a
+   size that would make the list a third taller. */
+.caveview-tracking-team {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  justify-content: space-between;
+  width: 100%;
+  padding-inline: 4px;
+  font-weight: 600;
+  text-align: start;
+}
+
+/* Which row the model is currently showing. A left edge rather than a fill: the box behind this is
+   translucent over a 3D scene, so a filled row reads as differently as the scene behind it happens
+   to be lit, while an edge against the box's own padding reads the same over anything. */
+.caveview-tracking-marked {
+  box-shadow: inset 2px 0 0 #1677ff;
+}
+
 .caveview-tracking-person-name {
   overflow: hidden;
   white-space: nowrap;
@@ -144,7 +174,10 @@ html[data-theme='dark'] .caveview-tracking-card {
 /* What a finger has to hit gets the forty pixels the rest of this application gives a touch
    target: the rows that open a caver's card, and the button that closes it. */
 @media (hover: none), (pointer: coarse) {
-  .caveview-tracking-person {
+  .caveview-tracking-person,
+  /* The heading is pressed exactly as a name is — it is the way to where a whole team is — so it
+     is the same target and not a label that happens to sit above one. */
+  .caveview-tracking-team {
     height: 40px;
   }
 

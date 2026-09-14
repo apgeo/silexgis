@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { AimOutlined, LogoutOutlined } from '@ant-design/icons';
 import {
   Alert,
@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   ConfigProvider,
-  DatePicker,
   Flex,
   Form,
   Input,
@@ -15,12 +14,9 @@ import {
   Select,
   Typography,
 } from 'antd';
-import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { isConcurrencyConflict } from '../../api/client.ts';
 import {
   TRACKING_EVENT_KINDS,
-  useRecordTrackingEvents,
   useResolveTrackingDepth,
   type TrackingDepthCandidate,
   type TrackingTeam,
@@ -28,75 +24,17 @@ import {
 } from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import List from '../List.tsx';
+import TrackingWhenField from './TrackingWhenField.tsx';
+import { useTrackingPanelTheme } from './trackingControlSizes.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
-import './TrackingReportForm.css';
+import {
+  trackingStationRules,
+  useTrackingReport,
+  type TrackingReportValues,
+} from './trackingReport.ts';
 
-/**
- * What the two lists a finger has to land in are worth under one.
- *
- * Both are drawn in a portal at the end of the document, out of reach of any selector this card
- * could write, and both size themselves from tokens rather than from the `size` given to the
- * control that opens them — so a chooser grown to forty pixels still opens onto a calendar of
- * twenty-four-pixel days and a list of thirty-two-pixel options. Given as tokens rather than as
- * heights pushed into a stylesheet because every other measurement of those panels is derived from
- * these by antd: where a cell's text sits in it, how wide a month comes out, how tall the column
- * of hours has to be to hold twenty-four of them.
- *
- * `timeColumnWidth` is the one that is *not* grown. The hours, minutes and seconds stand side by
- * side, and widening them is what pushes the panel off a phone; their height is what a finger
- * misses, and that is `timeCellHeight`.
- */
-const COARSE_SELECT = { optionHeight: 40 };
-const COARSE_DATE_PICKER = {
-  cellHeight: 40,
-  cellWidth: 40,
-  withoutTimeCellHeight: 48,
-  timeCellHeight: 40,
-};
-
-/**
- * Puts the field somewhere the enlarged calendar has room to open.
- *
- * <b>Sizing the calendar for a finger is what stops it fitting, so the same branch that enlarges it
- * has to make room for it.</b> Six weeks of forty-pixel days, a column of hours and a footer come to
- * a panel around 730px tall. antd anchors it to the field and puts it above or below — whichever
- * side has more room — and takes neither side's *size* into account beyond that, so a field halfway
- * down a phone screen has about four hundred pixels either way and the panel is placed with three
- * hundred of it off the top of the screen. Measured on a 412x839 phone with the field at y=432: the
- * panel was drawn at y=-300, which is the month, the year and every arrow that walks backwards
- * through time gone off the top edge. The stylesheet's cap keeps the panel inside the screen's
- * height; this is what keeps it inside the screen at all.
- *
- * Only ever on a coarse pointer, and that is a statement about cause rather than a guess about the
- * device: on a mouse the calendar is antd's own size, fits beside the field wherever the field is,
- * and a page that jumped when a date picker opened would be a defect.
- *
- * The element scrolled is whatever has the keyboard, which at this moment is the picker's own input
- * — the panel opens because that input was focused. Nothing is looked up, and nothing here knows
- * which scroll container the page is built from: this tab scrolls inside the layout's content area
- * rather than in the window, and `scrollIntoView` is the one way to say "put this at the top" that
- * does not have to know that.
- */
-function makeRoomForPanel(): void {
-  const focused = document.activeElement;
-  if (!(focused instanceof HTMLElement)) {
-    return;
-  }
-  // Anything already near the top has room below it and is left where it is — a page that scrolls
-  // when it did not need to is the same surprise as one that does not scroll when it did.
-  if (focused.getBoundingClientRect().bottom <= 160) {
-    return;
-  }
-  focused.scrollIntoView({ block: 'start' });
-}
-
-interface ReportForm {
+interface ReportForm extends TrackingReportValues {
   kind: TripPositionEventKind;
-  stationName?: string;
-  depthM?: number | null;
-  teamId?: string | null;
-  note?: string;
-  recordedAt?: Dayjs | null;
 }
 
 interface Props {
@@ -122,11 +60,17 @@ interface Props {
  * station under the trip's filter and datum, and "nearest" is a decision somebody should watch
  * being made — a filter set a week ago, a datum on a station somebody renamed, and the position
  * that lands on the log is a place the party is not. The preview costs one call and makes that
- * visible while it can still be changed.
+ * visible while it can still be changed. Each station it offers can then be taken as the answer,
+ * which is the difference between a preview and a lookup: the whole reason to ask which station a
+ * depth means is that you may want to report that station rather than the depth.
  *
  * The form is drawn only while the watch is armed. The server refuses reports otherwise, and
  * relying on that refusal would mean offering somebody a form that cannot work at the moment they
  * most need one — the wording here says which act is missing instead.
+ *
+ * What a report actually *is* — which fields travel, how a moment is written, which refusal is a
+ * warning — is not decided here. This card and the dialog opened by pressing a station on the model
+ * are two ways to the same act, and that act has one home.
  */
 export default function TrackingReportForm({
   tripLogId,
@@ -136,32 +80,24 @@ export default function TrackingReportForm({
   onRecorded,
 }: Props) {
   const { t } = useTranslation();
+  // The depth preview's own refusal. A report's refusals are worded where a report is sent.
   const { message } = App.useApp();
   // Every control here is pressed, and how big it has to be follows the pointer and not the width:
   // a phone in landscape has a desk's room across and still no pixel precision.
   const coarse = useCoarsePointer();
   const [form] = Form.useForm<ReportForm>();
   const kind = Form.useWatch('kind', form) ?? 'entered';
-  const record = useRecordTrackingEvents();
+  const report = useTrackingReport();
   const resolve = useResolveTrackingDepth();
   const [candidates, setCandidates] = useState<TrackingDepthCandidate[] | null>(null);
-  // Held still across renders: a fresh object is a fresh theme, and each one has the whole
-  // calendar's and the whole list's styles derived again.
-  const panelTheme = useMemo(
-    () => ({
-      components: coarse
-        ? { Select: COARSE_SELECT, DatePicker: COARSE_DATE_PICKER }
-        : { Select: {}, DatePicker: {} },
-    }),
-    [coarse],
-  );
+  const panelTheme = useTrackingPanelTheme(coarse);
 
   if (!armed) {
     return (
       <Alert
         type="info"
         showIcon
-        message={t('trips.tracking.notArmedTitle')}
+        title={t('trips.tracking.notArmedTitle')}
         description={t('trips.tracking.notArmedBody')}
         style={{ marginBottom: 16 }}
         data-testid="trip-tracking-not-armed"
@@ -169,23 +105,11 @@ export default function TrackingReportForm({
     );
   }
 
-  const failed = (error: unknown) => {
-    if (isConcurrencyConflict(error)) {
-      message.warning(trackingProblemMessage(error, t));
-      return;
-    }
-    message.error(trackingProblemMessage(error, t));
-  };
-
-  const send = async (body: Parameters<typeof record.mutateAsync>[0]) => {
-    try {
-      const created = await record.mutateAsync(body);
-      message.success(t('trips.tracking.recorded', { count: created.length }));
+  const send = async (values: TrackingReportValues) => {
+    if (await report.send(tripLogId, caverIds, values)) {
       form.resetFields(['stationName', 'depthM', 'note', 'recordedAt']);
       setCandidates(null);
       onRecorded();
-    } catch (error) {
-      failed(error);
     }
   };
 
@@ -198,27 +122,14 @@ export default function TrackingReportForm({
       // does not surface as an unhandled rejection in the browser, which is watched for.
       return;
     }
-
-    const note = values.note?.trim();
-    await send({
-      tripLogId,
-      caverIds: [...caverIds],
-      kind: values.kind,
-      // A station name belongs to a station report and a depth to a depth report; the server
-      // refuses a request carrying the other one rather than quietly ignoring it.
-      stationName: values.kind === 'atStation' ? (values.stationName ?? '').trim() : null,
-      depthM: values.kind === 'atDepth' ? (values.depthM ?? null) : null,
-      teamId: values.teamId ?? null,
-      note: note ? note : null,
-      recordedAt: values.recordedAt ? values.recordedAt.toISOString() : null,
-    });
+    await send(values);
   };
 
   // Saying somebody is out is the one report that is worth its own control: it is the commonest
   // thing anybody records, it carries no position, and asking for it through the picker is three
   // actions at the moment a party is walking out.
   const onMarkOut = () =>
-    send({ tripLogId, caverIds: [...caverIds], kind: 'exited', teamId: form.getFieldValue('teamId') ?? null });
+    send({ kind: 'exited', teamId: form.getFieldValue('teamId') ?? null });
 
   const onPreviewDepth = async () => {
     const depthM = form.getFieldValue('depthM') as number | null | undefined;
@@ -229,16 +140,31 @@ export default function TrackingReportForm({
       setCandidates(await resolve.mutateAsync({ tripLogId, depthM }));
     } catch (error) {
       setCandidates(null);
-      failed(error);
+      message.error(trackingProblemMessage(error, t));
     }
+  };
+
+  /**
+   * Taking one of the offered stations as the answer.
+   *
+   * The report changes kind as well as value, and it has to: the candidates only exist under a
+   * depth report, and what is being said once a station has been chosen is "they are at this
+   * station", which is a different claim about the world from "they are this far down". Recording
+   * the depth instead would leave the server to resolve it a second time, against a filter that
+   * could have moved in between — so the station somebody looked at and the station that lands on
+   * the log would be two answers to one question.
+   */
+  const onChooseCandidate = (candidate: TrackingDepthCandidate) => {
+    form.setFieldsValue({ kind: 'atStation', stationName: candidate.stationName });
+    setCandidates(null);
   };
 
   const nobody = caverIds.length === 0;
   /**
-   * How big everything on this card is drawn. `large` is where the forty pixels come from — antd
-   * builds it out of `controlHeightLG`, the touch target the rest of this application uses — and
-   * asking by size rather than by height means the padding, line height and icon inside each
-   * control are built for the size the control believes it is.
+   * How big everything on this card is drawn. `large` is where the forty pixels come from — the
+   * component library builds it out of `controlHeightLG`, the touch target the rest of this
+   * application uses — and asking by size rather than by height means the padding, line height
+   * and icon inside each control are built for the size the control believes it is.
    */
   const controlSize: 'large' | 'middle' = coarse ? 'large' : 'middle';
 
@@ -271,7 +197,7 @@ export default function TrackingReportForm({
               name="stationName"
               label={t('trips.tracking.reportStation')}
               extra={t('trips.tracking.reportStationHelp')}
-              rules={[{ required: true, message: t('trips.tracking.reportStationRequired') }]}
+              rules={trackingStationRules(t)}
             >
               <Input data-testid="trip-tracking-station" />
             </Form.Item>
@@ -317,7 +243,18 @@ export default function TrackingReportForm({
                         size="small"
                         dataSource={candidates}
                         renderItem={(candidate) => (
-                          <List.Item>
+                          <List.Item
+                            actions={[
+                              <Button
+                                key="choose"
+                                size={controlSize}
+                                onClick={() => onChooseCandidate(candidate)}
+                                data-testid={`trip-tracking-depth-choose-${candidate.stationName}`}
+                              >
+                                {t('trips.tracking.depthCandidateChoose')}
+                              </Button>,
+                            ]}
+                          >
                             <List.Item.Meta
                               title={candidate.stationName}
                               description={`${t('trips.tracking.depthCandidate', {
@@ -353,31 +290,7 @@ export default function TrackingReportForm({
           {/* Left empty the server stamps the report with its own clock, which is what a report made
               as it happens wants. It is filled in for the other case — word relayed out of the cave
               some time after it was said — and a time in the future is refused rather than stored. */}
-          <Form.Item
-            name="recordedAt"
-            label={t('trips.tracking.reportAt')}
-            extra={t('trips.tracking.reportAtHelp')}
-          >
-            {/* <b>Named so the panel can be made to fit a phone.</b> It is drawn in a portal at the
-                end of the document, so the only way to reach it is a class it carries; what the
-                class does is in this card's stylesheet, where the geometry is. Left alone, the
-                calendar and the columns of hours stand side by side and come to more than a phone is
-                wide — measured at 457px on a 412px screen, hanging 82px off the left edge with
-                Sunday, Monday and both "previous month" arrows off it. A relayed report is by
-                definition in the past, so a picker that cannot go back a month is a picker that
-                cannot do the one job it is here for. */}
-            <DatePicker
-              showTime
-              style={{ width: '100%' }}
-              classNames={{ popup: { root: 'tracking-report-when-popup' } }}
-              onOpenChange={(open) => {
-                if (open && coarse) {
-                  makeRoomForPanel();
-                }
-              }}
-              data-testid="trip-tracking-recorded-at"
-            />
-          </Form.Item>
+          <TrackingWhenField size={controlSize} coarse={coarse} idPrefix="trip-tracking" />
         </Form>
       </ConfigProvider>
 
@@ -385,7 +298,7 @@ export default function TrackingReportForm({
         <Alert
           type="warning"
           showIcon
-          message={t('trips.tracking.selectNobody')}
+          title={t('trips.tracking.selectNobody')}
           style={{ marginBottom: 12 }}
           data-testid="trip-tracking-nobody"
         />
@@ -396,7 +309,7 @@ export default function TrackingReportForm({
           type="primary"
           size={controlSize}
           disabled={nobody}
-          loading={record.isPending}
+          loading={report.isPending}
           onClick={() => void onRecord()}
           data-testid="trip-tracking-record"
         >
@@ -406,7 +319,7 @@ export default function TrackingReportForm({
           size={controlSize}
           icon={<LogoutOutlined />}
           disabled={nobody}
-          loading={record.isPending}
+          loading={report.isPending}
           onClick={() => void onMarkOut()}
           data-testid="trip-tracking-mark-out"
         >

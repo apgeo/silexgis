@@ -1,12 +1,38 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { CloseOutlined, EyeInvisibleOutlined, TeamOutlined } from '@ant-design/icons';
 import { Button, Switch, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { shortNameOf } from '../../caveview/modelParts.ts';
-import type { TrackedCaver, TrackedCaverPosition } from '../../caveview/trackedCavers.ts';
+import {
+  teamStation,
+  trackedCaverTeams,
+  type TrackedCaver,
+  type TrackedCaverPosition,
+} from '../../caveview/trackedCavers.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import './CaveViewTrackingOverlay.css';
+
+/**
+ * A place in the model the list is pointing at, so whoever owns the viewer can show it.
+ *
+ * <b>The kind is part of the identity, not decoration.</b> A team of one and its only member name
+ * the same station, and without the kind the list could not tell which of the two rows a reader
+ * pressed — so pressing the heading again would fail to take the mark off, and the other row would
+ * light up instead.
+ */
+export interface TrackedPlace {
+  kind: 'caver' | 'team';
+  /** A caver id, or a team id — null for the group of everybody on no team. */
+  id: string | null;
+  /** The station to fly to, as the watch spells it. */
+  station: string;
+}
+
+/** Whether two answers from the list are the same one. */
+function samePlace(left: TrackedPlace | null, right: TrackedPlace | null): boolean {
+  return left !== null && right !== null && left.kind === right.kind && left.id === right.id;
+}
 
 export interface CaveViewTrackingOverlayProps {
   /** Everybody on the watch — including those no marker could be drawn for. */
@@ -17,6 +43,12 @@ export interface CaveViewTrackingOverlayProps {
   /** Whose card is open, or null when none is. Owned by the panel, which the viewer talks to. */
   openCaverId: string | null;
   onOpenCaver(caverId: string | null): void;
+  /**
+   * Which row the camera was last sent to, or null. Owned by the panel for the same reason the
+   * open card is: the move itself is a call on the viewer, which only the panel holds.
+   */
+  shown: TrackedPlace | null;
+  onShow(place: TrackedPlace | null): void;
   /** Lifted clear of a toolbar placed against the same edge. */
   raised?: boolean;
 }
@@ -33,6 +65,17 @@ export interface CaveViewTrackingOverlayProps {
  * <b>A position that was withheld is listed as withheld.</b> Somebody whose position this reader
  * may not be told has no marker — there is nowhere to put one — and leaving them out of the list
  * as well would turn a withholding into an absence, which reads as nobody knowing where they are.
+ *
+ * <b>A row is also the way to the place itself.</b> Reading a station name tells somebody who knows
+ * the cave where a caver is; on a model of two hundred stations it tells nobody else anything. So
+ * pressing a row sends the camera there and marks the station, and pressing it again takes the mark
+ * off — which is the only dismissal there is, since nothing else in the scene knows the list made
+ * it. A row for somebody with no station to fly to clears the mark rather than leaving it standing
+ * on the person pressed before, because a mark left on the wrong person is worse than no mark.
+ *
+ * <b>The team heading is a row of the same kind.</b> A party is organised in teams and moves in
+ * them, so "where is the second team" is the question asked at least as often as "where is Ana" —
+ * and the heading is where somebody already looks for it.
  */
 export default function CaveViewTrackingOverlay({
   cavers,
@@ -40,6 +83,8 @@ export default function CaveViewTrackingOverlay({
   onShowTimesChange,
   openCaverId,
   onOpenCaver,
+  shown,
+  onShow,
   raised = false,
 }: CaveViewTrackingOverlayProps) {
   const { t, i18n } = useTranslation();
@@ -52,6 +97,12 @@ export default function CaveViewTrackingOverlay({
   const open = cavers.find((caver) => caver.caverId === openCaverId) ?? null;
   const when = (value: string | null) =>
     value === null ? '—' : new Date(value).toLocaleString(i18n.language);
+
+  const groups = useMemo(() => trackedCaverTeams(cavers), [cavers]);
+  // Headings are drawn only where they say something. A trip whose party was never divided into
+  // teams would otherwise gain one heading reading "No team" above the whole list, which is a line
+  // of the phone's screen spent restating that there is nothing to say.
+  const grouped = groups.some((group) => group.teamId !== null);
 
   /** The short form for a list row: enough to recognise, never wide enough to push the name out. */
   const shortPlace = (position: TrackedCaverPosition) => {
@@ -100,6 +151,42 @@ export default function CaveViewTrackingOverlay({
     }
   };
 
+  /** Pressing a person: their card, and the place the camera is sent to. */
+  const onPressCaver = (caver: TrackedCaver) => {
+    const wasOpen = caver.caverId === openCaverId;
+    onOpenCaver(wasOpen ? null : caver.caverId);
+    const place: TrackedPlace | null =
+      caver.position.kind === 'station'
+        ? { kind: 'caver', id: caver.caverId, station: caver.position.station }
+        : null;
+    onShow(wasOpen || place === null || samePlace(shown, place) ? null : place);
+  };
+
+  const caverRow = (caver: TrackedCaver) => {
+    const here: TrackedPlace | null =
+      caver.position.kind === 'station'
+        ? { kind: 'caver', id: caver.caverId, station: caver.position.station }
+        : null;
+    const marked = samePlace(shown, here);
+    return (
+      <Button
+        key={caver.caverId}
+        type="text"
+        size="small"
+        className={`caveview-tracking-person${marked ? ' caveview-tracking-marked' : ''}`}
+        aria-pressed={caver.caverId === openCaverId}
+        // Said as well as drawn: the mark is a colour, and a colour is not an answer to "which one
+        // is the model showing me" for a reader who cannot see it.
+        aria-current={marked ? 'true' : undefined}
+        onClick={() => onPressCaver(caver)}
+        data-testid={`caveview-caver-${caver.caverId}`}
+      >
+        <span className="caveview-tracking-person-name">{caver.name}</span>
+        <span className="caveview-tracking-person-place">{shortPlace(caver.position)}</span>
+      </Button>
+    );
+  };
+
   // Said on the element rather than left to a `:has()` in the stylesheet, so what the layout
   // branches on is a fact this component states and a test can read back: on a screen too short
   // to hold the list and a card at once, the card is what the reader asked for.
@@ -137,24 +224,39 @@ export default function CaveViewTrackingOverlay({
               />
             </label>
             <div className="caveview-tracking-people">
-              {cavers.map((caver) => (
-                <Button
-                  key={caver.caverId}
-                  type="text"
-                  size="small"
-                  className="caveview-tracking-person"
-                  aria-pressed={caver.caverId === openCaverId}
-                  onClick={() =>
-                    onOpenCaver(caver.caverId === openCaverId ? null : caver.caverId)
-                  }
-                  data-testid={`caveview-caver-${caver.caverId}`}
-                >
-                  <span className="caveview-tracking-person-name">{caver.name}</span>
-                  <span className="caveview-tracking-person-place">
-                    {shortPlace(caver.position)}
-                  </span>
-                </Button>
-              ))}
+              {grouped
+                ? groups.map((group) => {
+                    const station = teamStation(group.members);
+                    const here: TrackedPlace | null =
+                      station === null ? null : { kind: 'team', id: group.teamId, station };
+                    const marked = samePlace(shown, here);
+                    return (
+                      <div className="caveview-tracking-group" key={group.teamId ?? 'no-team'}>
+                        <Button
+                          type="text"
+                          size="small"
+                          className={`caveview-tracking-team${marked ? ' caveview-tracking-marked' : ''}`}
+                          // A heading for a team none of whose members has been placed is drawn and
+                          // is not pressable: there is no station to fly to, and a heading that
+                          // answered a press with nothing would read as a viewer that had stopped
+                          // working rather than as a party nobody has reported yet.
+                          disabled={here === null}
+                          aria-current={marked ? 'true' : undefined}
+                          onClick={() => onShow(marked || here === null ? null : here)}
+                          data-testid={`caveview-team-${group.teamId ?? 'none'}`}
+                        >
+                          <span className="caveview-tracking-person-name">
+                            {group.title ?? t('caveview.tracking.noTeam')}
+                          </span>
+                          <span className="caveview-tracking-person-place">
+                            {station === null ? '—' : shortNameOf(station)}
+                          </span>
+                        </Button>
+                        {group.members.map(caverRow)}
+                      </div>
+                    );
+                  })
+                : cavers.map(caverRow)}
             </div>
           </>
         )}

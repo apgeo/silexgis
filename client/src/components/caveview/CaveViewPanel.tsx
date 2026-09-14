@@ -20,12 +20,14 @@ import {
   type PickedModelPart,
 } from '../../caveview/modelParts.ts';
 import { mediaForStation } from '../../caveview/stationMedia.ts';
+import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
-import CaveViewTrackingOverlay from './CaveViewTrackingOverlay.tsx';
+import CaveViewTrackingOverlay, { type TrackedPlace } from './CaveViewTrackingOverlay.tsx';
 import './CaveViewPanel.css';
 
 /**
@@ -92,9 +94,12 @@ export interface CaveViewPanelProps {
   /**
    * Opts into the viewer's own row of controls, placed over the model.
    *
-   * `true` takes the default buttons, which are chosen by the width available: the full set does
-   * not fit across a phone, and a toolbar whose last buttons are off the edge of the screen is a
-   * toolbar with buttons nobody can press.
+   * `true` takes the default buttons, which are chosen by how much room there is across *and* by
+   * what is pointing at them: the full set does not fit on a phone at all, and it does not fit on
+   * any screen once every control in it has been grown to the size a finger can land on. A set that
+   * does not fit is not a row with its end off the screen — the bar wraps — it is a second row of
+   * controls over the model. A caller that has to take one control out asks
+   * {@link caveViewToolbarButtons} for the same set and subtracts from it.
    */
   toolbar?: boolean | CaveViewToolbarOptions;
   /**
@@ -129,35 +134,6 @@ export interface CaveViewPanelProps {
 // CaveView addresses its container by element id; keep ids unique across remounts and
 // multiple simultaneous panels (main window + pop-outs).
 let panelSequence = 0;
-
-/**
- * The viewer controls a full-width panel offers. Everything the toolbar can hold except the four
- * elevations and the two camera projections: a compass of four buttons and a pair of projection
- * buttons is most of a toolbar spent on two settings, and both are already in the side panel.
- */
-const TOOLBAR_BUTTONS = [
-  'stations',
-  'stationLabels',
-  'splays',
-  'walls',
-  'scraps',
-  'entrances',
-  'viewPlan',
-  'shadingMode',
-  'fullscreen',
-] as const;
-
-/**
- * What is left on a phone. Nine buttons at the size a finger needs come to more than a narrow
- * screen is wide, so the ones that survive are the ones that change what is drawn of the cave.
- */
-const NARROW_TOOLBAR_BUTTONS = [
-  'stations',
-  'stationLabels',
-  'splays',
-  'shadingMode',
-  'fullscreen',
-] as const;
 
 /**
  * A station's pictures, opened by the tap that picked it.
@@ -235,6 +211,9 @@ export default function CaveViewPanel({
 }: CaveViewPanelProps) {
   const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
+  // The other axis the toolbar's set is chosen on. Every control in the bar is grown for a finger
+  // by this panel's stylesheet, so how many of them fit depends on this as much as on the width.
+  const coarse = useCoarsePointer();
   const containerIdRef = useRef<string>(null);
   containerIdRef.current ??= `caveview-panel-${panelSequence++}`;
 
@@ -244,6 +223,8 @@ export default function CaveViewPanel({
   const [missingPart, setMissingPart] = useState(false);
   const [showMarkerTimes, setShowMarkerTimes] = useState(false);
   const [openCaverId, setOpenCaverId] = useState<string | null>(null);
+  /** Which row of the watch the camera was last sent to, and whose station carries the mark. */
+  const [shownPlace, setShownPlace] = useState<TrackedPlace | null>(null);
 
   // The viewer that holds the loaded survey, kept so links, markers, pictures and the toolbar can
   // reach it after the load. The survey file itself is no longer kept: showing a named part of it
@@ -309,6 +290,9 @@ export default function CaveViewPanel({
     setStatus('loading');
     setMissingPart(false);
     setOpenCaverId(null);
+    // A mark belongs to the model it was put on, and a new model has none. Left standing it would
+    // also be a list row lit up against a cave whose stations are not the ones it names.
+    setShownPlace(null);
     // A new viewer draws none of the old one's markers, so nothing is drawn until they are added
     // again — which the marker effect does as soon as this one reports the model loaded.
     drawnMarkersRef.current = new Map();
@@ -496,12 +480,82 @@ export default function CaveViewPanel({
     };
   }, [focusRequest, status]);
 
+  // ---- A place asked for from the list of who is where ----
+  //
+  // The same move a link makes, with the mark left on: a reader who pressed a name in the list is
+  // asking "which of these is that", and a camera that arrives somewhere with nothing marked has
+  // answered "somewhere around here". The mark is the viewer's own selection highlight, so it
+  // survives being turned and zoomed and is taken off by exactly one call.
+  //
+  // Rejections are triaged the way every other move here is, and for the same reason: pressing a
+  // second name while the camera is still flying to the first is ordinary use, rejects, and must
+  // pass in silence — while a station the model does not hold is a real thing to say, and here it
+  // means a watch resolved against a survey that has since been re-exported under other names.
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (viewer === undefined || status !== 'ready') {
+      return;
+    }
+    if (shownPlace === null) {
+      viewer.clearHighlight();
+      return;
+    }
+    let abandoned = false;
+    setMissingPart(false);
+    void viewer.focusStation(shownPlace.station, { highlight: true }).catch((error: unknown) => {
+      if (!abandoned && focusNamedNothing(error)) {
+        setMissingPart(true);
+      }
+    });
+    return () => {
+      abandoned = true;
+    };
+  }, [shownPlace, status]);
+
+  // ---- Telling the viewer its container changed size ----
+  //
+  // <b>The viewer watches the window and nothing else.</b> It installs exactly one size listener,
+  // on `window`, whose handler reads its container's width and height and resizes the drawing
+  // surface to match; it has no observer of the container itself. That is enough for a page whose
+  // viewer fills the window, and wrong for every panel here, because a panel's height is decided by
+  // the card around it and can change while the window does not.
+  //
+  // What that looks like is measured: growing the tracking panel from 320px to 560px on a phone
+  // left the canvas at 338x320 with a drawing buffer of 887x840 — the scene drawn at the old size
+  // inside a box 240px taller, so the model sat in the top half with an empty band under it, and
+  // the viewer went on hit-testing against a rectangle that was no longer the one on screen.
+  //
+  // A window `resize` event is the one way in, because it is the only thing the viewer listens for
+  // — and it is honest rather than a trick: the layout really did change, and this is the event a
+  // reader dragging their window would have produced. It is sent only when the surface's own size
+  // actually changed, so nothing here can start a loop with anything else that answers the event.
+  const dispatchedSizeRef = useRef('');
+  useEffect(() => {
+    const surface = document.getElementById(containerIdRef.current!);
+    if (surface === null || status !== 'ready' || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      if (box === undefined) {
+        return;
+      }
+      const size = `${Math.round(box.width)}x${Math.round(box.height)}`;
+      if (size === dispatchedSizeRef.current) {
+        return;
+      }
+      dispatchedSizeRef.current = size;
+      window.dispatchEvent(new Event('resize'));
+    });
+    observer.observe(surface);
+    return () => observer.disconnect();
+  }, [status]);
+
   // ---- The viewer's own toolbar ----
   const toolbarOptions = toolbar === true ? {} : toolbar === false ? null : toolbar;
   const toolbarWanted = toolbarOptions !== null;
   const toolbarPlacement = toolbarOptions?.placement ?? 'top';
-  const toolbarButtons =
-    toolbarOptions?.buttons ?? (narrow ? NARROW_TOOLBAR_BUTTONS : TOOLBAR_BUTTONS);
+  const toolbarButtons = toolbarOptions?.buttons ?? caveViewToolbarButtons({ narrow, coarse });
   // The list is a new array on every render, so what the toolbar is rebuilt for is its contents;
   // the list itself is read off a ref at the moment one is built.
   const toolbarButtonKey = toolbarButtons.join(',');
@@ -599,6 +653,8 @@ export default function CaveViewPanel({
           onShowTimesChange={setShowMarkerTimes}
           openCaverId={openCaverId}
           onOpenCaver={setOpenCaverId}
+          shown={shownPlace}
+          onShow={setShownPlace}
           raised={toolbarWanted && toolbarPlacement === 'bottom'}
         />
       )}
