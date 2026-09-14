@@ -84,6 +84,28 @@ public class DependencyRuleTests
     }
 
     [Fact]
+    public void Only_infrastructure_reaches_the_client_that_opens_a_device_archive()
+    {
+        // A phone's export archive is somebody else's database file, opened with somebody else's
+        // engine, and reading one is infrastructure work of exactly the kind the raster rule above
+        // describes. Two layers are named rather than one: Domain must not know what a connection
+        // is, and the API must not open an archive behind the import service's back — the service
+        // is where the read-only mode, the query-only session and the size ceiling live, and a
+        // second caller opening its own connection would have none of them.
+        var domain = Types.InAssembly(typeof(Visibility).Assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny("Microsoft.Data.Sqlite", "SQLitePCLRaw")
+            .GetResult();
+        domain.IsSuccessful.ShouldBeTrue(FailureMessage(domain));
+
+        var api = Types.InAssembly(typeof(PhotoLibraryEndpoints).Assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny("Microsoft.Data.Sqlite", "SQLitePCLRaw")
+            .GetResult();
+        api.IsSuccessful.ShouldBeTrue(FailureMessage(api));
+    }
+
+    [Fact]
     public void Domain_does_not_depend_on_the_survey_format_readers()
     {
         // The readers for the compiled survey formats parse untrusted uploaded bytes, which is

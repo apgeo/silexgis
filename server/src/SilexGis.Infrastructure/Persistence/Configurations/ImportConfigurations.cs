@@ -111,6 +111,29 @@ public sealed class TripImportSessionConfiguration : IEntityTypeConfiguration<Tr
     }
 }
 
+public sealed class SpeleolocImportSessionConfiguration : IEntityTypeConfiguration<SpeleolocImportSession>
+{
+    public void Configure(EntityTypeBuilder<SpeleolocImportSession> builder)
+    {
+        builder.ToTable("speleoloc_import_sessions");
+        builder.Property(x => x.Id).ValueGeneratedNever();
+
+        builder.Property(x => x.Options).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+        builder.Property(x => x.Decisions).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
+
+        // A review of an archive that is gone is not a review; deleting the upload takes it.
+        builder.HasOne<StoredFile>().WithMany().HasForeignKey(x => x.StoredFileId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // One review per person per archive: two people going through the same upload keep their
+        // own decisions instead of overwriting each other. The unique index is what makes that
+        // true of the database rather than of the handler.
+        builder.HasIndex(x => new { x.StoredFileId, x.UserId }).IsUnique();
+    }
+}
+
 public sealed class ImportBatchConfiguration : IEntityTypeConfiguration<ImportBatch>
 {
     public void Configure(EntityTypeBuilder<ImportBatch> builder)
@@ -178,6 +201,12 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // way a deleted upload does. Taking the line with it would erase the record of an import
         // one of whose rows somebody later removed, which is exactly the import worth finding.
         builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.SetNull);
+        // The one pointer here that goes with its object rather than outliving it. A position
+        // event is removed when it is corrected — the log is append-only, so a wrong report is
+        // deleted and re-entered — and a line still naming a row that has gone would send an undo
+        // looking for something nobody can find. Cascade, so the line goes too.
+        builder.HasOne<TripPositionEvent>().WithMany().HasForeignKey(x => x.TripPositionEventId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(x => x.ImportBatchId);
         // "Where did this cave come from?" is a lookup by feature, and it is the question the
@@ -189,5 +218,8 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // "Which import produced this trip?" — the same question the feature index answers, asked
         // of the objects a spreadsheet becomes.
         builder.HasIndex(x => x.TripLogId).HasFilter("trip_log_id is not null");
+        // "Which import produced this position?" — and, the way an undo asks it, "which positions
+        // did this import produce?", which the batch index above already answers.
+        builder.HasIndex(x => x.TripPositionEventId).HasFilter("trip_position_event_id is not null");
     }
 }

@@ -92,6 +92,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<TripImportSession> TripImportSessions => Set<TripImportSession>();
 
+    public DbSet<SpeleolocImportSession> SpeleolocImportSessions => Set<SpeleolocImportSession>();
+
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
 
     public DbSet<ImportBatchItem> ImportBatchItems => Set<ImportBatchItem>();
