@@ -109,6 +109,18 @@ services:
 
   web:
     build: ../client
+    environment:
+      # Which websites may put a published trip inside a frame on their own pages. Nothing else in
+      # this application is framable by anybody at all, and this list is the only exception to that.
+      #
+      # Space-separated origins, scheme included. Empty — the default — leaves the embed working
+      # from this installation's own pages and from nowhere else, so an operator who has not decided
+      # has published nothing. An origin is scheme + host + port, so a site served on both
+      # `example.org` and `www.example.org` has to name both.
+      #
+      # Read into the web server's configuration when the container starts, so changing it is
+      # `docker compose up -d web` rather than a rebuild.
+      SILEXGIS__Web__FrameAncestors: ${SILEXGIS_FRAME_ANCESTORS:-}
     ports:
       - "${SILEXGIS_HTTP_PORT:-8080}:80"
     volumes:

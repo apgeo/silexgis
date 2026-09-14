@@ -27,6 +27,7 @@ import {
 import TrackingConfigCard from '../../components/trips/TrackingConfigCard.tsx';
 import TrackingModelPanel from '../../components/trips/TrackingModelPanel.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
+import TrackingSharePanel from '../../components/trips/TrackingSharePanel.tsx';
 import { trackingProblemMessage } from '../../components/trips/trackingProblems.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
@@ -251,6 +252,11 @@ export default function TripTrackingTab({
         canEdit={canEdit}
         onStale={() => void refetch()}
       />
+
+      {/* Under the setup rather than at the foot of the tab: publishing is a decision about the
+          watch as it is configured — which cave, which survey — and the card above it is where
+          that configuration is read. A link handed out before a model is chosen is refused. */}
+      <TrackingSharePanel tripLogId={trip.id} tripTitle={trip.title} canEdit={canEdit} />
 
       <div>
         {/* <b>Selecting everybody is a control of this page's own, and not the checkbox antd puts

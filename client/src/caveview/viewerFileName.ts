@@ -15,3 +15,15 @@ import type { SurveyModelInfo } from '../api/hooks.ts';
 export function viewerFileName(model: Pick<SurveyModelInfo, 'name' | 'format'>): string {
   return `${model.name}.${model.format === 'lox' ? 'lox' : '3d'}`;
 }
+
+/**
+ * The same name for a model that arrives without one.
+ *
+ * A published trip's envelope carries the format and no name: a model's name is the installation's
+ * own vocabulary and is not part of what a follower is handed. So the page invents one, and only
+ * the extension was ever load-bearing — which is exactly why this sits here beside the rule it is
+ * an instance of, rather than being spelled inline at the one mount that needs it.
+ */
+export function unnamedViewerFileName(format: SurveyModelInfo['format']): string {
+  return `trip.${format === 'lox' ? 'lox' : '3d'}`;
+}

@@ -1286,4 +1286,34 @@ the reasoning beside each one.
 | `SILEXGIS__TripCallout__SweepInterval` | `00:15:00` | how often a background pass checks whether a party that said when it would be back is overdue, and tells the people the trip names. This interval is also how late that message can arrive, which is why it is minutes rather than hours. `00:00:00` turns the check off entirely and nobody is told, whatever a trip has recorded. Values above `00:30:00` are treated as `00:30:00`: a trip showing an armed check reports a check that has not run for an hour as *unchecked* and tells the reader to reach the party another way, and a warning every armed trip carries permanently is one nobody reads |
 | `SILEXGIS__TripCallout__ReminderLead` | `2.00:00:00` | how far ahead of a trip, or of a club event, the people it concerns are reminded that it is coming up. The same pass sends both, so something put back or called off stops reminding anybody. One setting for the whole installation, not one per reader. `00:00:00` sends no reminders and leaves the overdue check running |
 
+### Letting a website embed a live trip
+
+By default **nothing this application serves may be put inside a frame on another site**. That is
+what stops a page elsewhere from loading yours invisibly over its own controls and collecting a
+signed-in member's clicks — a failure that appears in no log and on no screen.
+
+A published trip is the one exception. When somebody publishes a trip for following, the link they
+are handed comes with a paste-in block for a website, and that block shows a blank frame until you
+have named the site it will sit on:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SILEXGIS_FRAME_ANCESTORS` | *(empty)* | space-separated **origins** allowed to embed a published trip's survey viewer, e.g. `https://club.example.org https://www.club.example.org`. Empty leaves the embed working from this installation's own pages and nowhere else |
+
+Three things about it are worth knowing before you set it.
+
+**An origin is scheme + host + port.** `https://club.example.org` does **not** cover
+`https://www.club.example.org`, and neither covers `http://`. Name every address the site is
+actually served on, or half its pages will show an empty box with nothing anywhere to say why.
+
+**It is read by the web front, not by the application.** In the Docker stack put it in `.env` and
+run `docker compose up -d web` — no rebuild, and nothing else restarts. In a **non-Docker install
+there is no variable at all**: nothing expands one in a configuration file you edit by hand, so
+type the origins straight into the `location ~ ^/shared/trips/` block of
+`deploy/nginx/silexgis.conf`, which carries an example at the line, then `nginx -s reload`.
+
+**It affects only the two published-trip addresses.** Everything else — the workspace, the sign-in
+pages, every other kind of share — goes on refusing to be framed by anybody, and this setting
+cannot change that.
+
 Secrets belong only in the environment / `.env`, never in the repository.

@@ -261,6 +261,7 @@ describe('trackedCaversAt', () => {
           stationName: null,
           depthM: null,
           out: false,
+          label: null,
         },
       ],
     });

@@ -2270,6 +2270,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/trips/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Follow a published trip: the party, where each of them was last reported, and the survey model to draw it in. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicTripTrackingEnvelopeDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -12563,7 +12601,7 @@ export interface paths {
                 };
             };
         };
-        /** Arm, close or reconfigure tracking (trip write access). */
+        /** Arm, close or reconfigure tracking (trip write access, If-Match against the trip). */
         put: {
             parameters: {
                 query?: never;
@@ -12698,6 +12736,49 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/participants/{caverId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Name one participant as a follower of the published page sees them; an empty label returns them to the non-identifying default. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    caverId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingParticipantLabelRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingParticipantLabelDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -12847,6 +12928,103 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The trip's follow links — metadata only, never tokens (trip write access). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripTrackingShareDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Publish the tracked trip: mints a follow link (trip write access, plus the right to share the trip's cave). The token is returned once and never stored; a trip whose cave is position-protected is refused. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripTrackingShareCreatedDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/shares/{shareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a follow link (trip write access); idempotent. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    shareId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -21864,6 +22042,55 @@ export interface components {
         PublicQrDto: {
             instanceName: string;
         };
+        PublicTripParticipantDto: {
+            /** Format: int32 */
+            ordinal: number;
+            label: null | string;
+            /** Format: uuid */
+            teamId: null | string;
+            stationName: null | string;
+            /** Format: double */
+            depthM: null | number;
+            /** Format: date-time */
+            lastRecordedAt: null | string;
+            in: boolean;
+            out: boolean;
+        };
+        PublicTripSurveyModelDto: {
+            format: components["schemas"]["SurveyModelFormat"];
+            modelUrl: string;
+            meshUrl: null | string;
+            /** Format: double */
+            anchorLongitude: null | number;
+            /** Format: double */
+            anchorLatitude: null | number;
+            /** Format: double */
+            anchorHeightM: null | number;
+            /** Format: int32 */
+            sourceEpsg: null | number;
+            proj4: null | string;
+        };
+        PublicTripTeamDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+        };
+        PublicTripTrackingEnvelopeDto: {
+            title: string;
+            /** Format: date */
+            tripDate: string;
+            /** Format: date */
+            tripDateEnd: null | string;
+            state: components["schemas"]["TripTrackingState"];
+            /** Format: date-time */
+            armedAt: null | string;
+            /** Format: date-time */
+            closedAt: null | string;
+            positionsWithheld: boolean;
+            model: null | components["schemas"]["PublicTripSurveyModelDto"];
+            teams: components["schemas"]["PublicTripTeamDto"][];
+            participants: components["schemas"]["PublicTripParticipantDto"][];
+        };
         /** @enum {unknown} */
         RasterStatus: "uploaded" | "processing" | "ready" | "failed";
         ReanchorReportDto: {
@@ -23186,6 +23413,15 @@ export interface components {
             /** Format: double */
             depthM: null | number;
             out: boolean;
+            label: null | string;
+        };
+        TrackingParticipantLabelDto: {
+            /** Format: uuid */
+            caverId: string;
+            label: null | string;
+        };
+        TrackingParticipantLabelRequest: {
+            label: null | string;
         };
         TrackingResolveDepthRequest: {
             /** Format: double */
@@ -23860,6 +24096,23 @@ export interface components {
             newAreas: number;
             /** Format: int32 */
             areasSoFar: number;
+        };
+        TripTrackingShareCreatedDto: {
+            /** Format: uuid */
+            id: string;
+            token: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TripTrackingShareDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt: null | string;
         };
         /** @enum {unknown} */
         TripTrackingState: "off" | "armed" | "closed";

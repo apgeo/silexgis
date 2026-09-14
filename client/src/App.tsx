@@ -79,6 +79,8 @@ const CavingGroupsPage = lazy(() => import('./pages/cavingGroups/CavingGroupsPag
 const CaversPage = lazy(() => import('./pages/cavers/CaversPage.tsx'));
 const NotificationsPage = lazy(() => import('./pages/notifications/NotificationsPage.tsx'));
 const SharedViewPage = lazy(() => import('./pages/SharedViewPage.tsx'));
+const PublicTripPage = lazy(() => import('./pages/public/PublicTripPage.tsx'));
+const PublicTripEmbedPage = lazy(() => import('./pages/public/PublicTripEmbedPage.tsx'));
 const PanelPage = lazy(() => import('./pages/panel/PanelPage.tsx'));
 const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout.tsx'));
 const ProfileSettingsPage = lazy(() => import('./pages/settings/ProfileSettingsPage.tsx'));
@@ -121,6 +123,12 @@ export const routes: RouteObject[] = [
   // installation's curated gallery. Both show renderings and nothing else.
   { path: '/shared/albums/:token', element: <Loadable><SharedAlbumPage /></Loadable> },
   { path: '/gallery/public', element: <Loadable><PublicGalleryPage /></Loadable> },
+  // A party underground, followed by somebody who was handed the link and holds no account — a
+  // family, a callout contact, a club's own website. The second address is the same trip as a
+  // viewer with no chrome around it, for an iframe; it is the only address in this application
+  // meant to be framed, and the web server's `frame-ancestors` rule is what says by whom.
+  { path: '/shared/trips/:token', element: <Loadable><PublicTripPage /></Loadable> },
+  { path: '/shared/trips/:token/embed', element: <Loadable><PublicTripEmbedPage /></Loadable> },
   // The address in a QR square bolted to a cave wall. Anonymous, because the person reading it
   // is standing in a field with a camera app and no account. A path route rather than a hash
   // one on purpose: the scanner that produces these addresses searches the path and query for

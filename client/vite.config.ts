@@ -262,9 +262,60 @@ function publishedTerrain(): Plugin {
   };
 }
 
+/**
+ * The addresses a published trip has, as a rule this file can apply.
+ *
+ * Written out here rather than imported from the application, because the answer has to be given
+ * before any application code runs and by a server that knows nothing but a request path. The web
+ * server configurations that ship say the same thing in their own language, and `deploy/framing.
+ * test.mjs` reads all three as text and fails when they stop agreeing — which is the only way three
+ * files in three languages can be held to one rule.
+ */
+const PUBLIC_TRIP_PATH = /^\/shared\/trips\//;
+
+/**
+ * Who may put this application inside a frame, in development.
+ *
+ * <b>The development server is where the rule is easiest to have and easiest to forget.</b> Vite
+ * sets no headers of its own, so without this the browser suite would drive an application that is
+ * framable by everybody, prove nothing about the policy, and stay green while a deployment behaved
+ * differently — the shape of green signal this project has been caught by before.
+ *
+ * The same two answers the packaged configuration gives: nobody, except a published trip, which is
+ * framable by this installation and by whatever origins an operator named. The variable is the same
+ * one the container reads, so there is one name for the setting and not a development spelling of
+ * it.
+ */
+function framingPolicy(): Plugin {
+  const allowed = (process.env.SILEXGIS__Web__FrameAncestors ?? '').trim();
+  const embeddable = `frame-ancestors 'self'${allowed === '' ? '' : ` ${allowed}`}`;
+
+  return {
+    name: 'silexgis:framing-policy',
+    apply: 'serve',
+    configureServer(server) {
+      // Before everything else Vite serves, so a module, an asset and the application's own shell
+      // are all answered under the policy rather than only whatever happens to reach the end.
+      server.middlewares.use((request, response, next) => {
+        const path = (request.url ?? '/').split('?')[0];
+        if (PUBLIC_TRIP_PATH.test(path)) {
+          response.setHeader('Content-Security-Policy', embeddable);
+        } else {
+          response.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+          // Only where the answer is "nobody": this header cannot name an origin, so beside an
+          // allow-list it would be one header refusing what the other permits.
+          response.setHeader('X-Frame-Options', 'DENY');
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
+    framingPolicy(),
     clientErrorSink(),
     publishedTerrain(),
     viteStaticCopy({

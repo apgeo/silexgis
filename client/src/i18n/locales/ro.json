@@ -1366,7 +1366,32 @@
         "concurrentWrite": "Altcineva a scris în această urmărire în același moment. Pagina a fost citită din nou; mai încearcă o dată.",
         "tripNotFound": "Această tură nu mai există sau nu mai poate fi citită de tine.",
         "ifMatchRequired": "Pagina a pierdut versiunea pe care o modifica. A fost citită din nou; mai încearcă o dată.",
-        "versionMismatch": "Altcineva a schimbat această urmărire în timp ce lucrai la ea. Pagina a fost citită din nou; uită-te la ea înainte să salvezi."
+        "versionMismatch": "Altcineva a schimbat această urmărire în timp ce lucrai la ea. Pagina a fost citită din nou; uită-te la ea înainte să salvezi.",
+        "shareNotFound": "Acel link de urmărire nu mai există — s-ar putea să îl fi retras deja cineva.",
+        "publicationRefusedCave": "Publicarea acestei ture predă ridicarea topografică a peșterii, iar asta cere dreptul de a partaja peștera. Cere-l celui care se ocupă de ea.",
+        "publicationRefusedProtected": "Peștera acestei ture are coordonate protejate, așa că tura nu poate fi publicată deloc. O pagină publicată spune unde se află echipa în peșteră, iar o variantă care ascunde poziția nu există."
+      },
+      "publish": {
+        "title": "Publică această tură",
+        "explain": "Un link de urmărire lasă pe cineva fără cont să vadă echipa ieșind: numele turei, cine este în ea așa cum i-ai numit tu, unde a fost raportat ultima dată fiecare și ridicarea topografică cu toți pe ea. O peșteră cu coordonate protejate nu poate fi publicată deloc.",
+        "mint": "Creează un link de urmărire",
+        "mintedTitle": "Linkul de urmărire este gata",
+        "tokenOnce": "Copiază-l acum — este singurul moment în care este arătat.",
+        "linkLabel": "Adresa de dat mai departe",
+        "linkCopied": "Link de urmărire copiat.",
+        "copy": "Copiază",
+        "embedLabel": "Pentru un site",
+        "embedHelp": "Lipește asta într-o pagină de pe site-ul tău ca să arăți acolo ridicarea topografică. Se redimensionează singură după coloana în care stă. Legăturile din textul din jur o pot comanda — blocul explică cum. Site-ul tău trebuie să fie trecut și în setarea de încadrare a acestei instalări, altfel browserul refuză să afișeze cadrul.",
+        "copyEmbed": "Copiază blocul pentru site",
+        "embedCopied": "Bloc pentru site copiat.",
+        "copyFailed": "Browserul nu a lăsat pagina să scrie în clipboard. Textul este selectat — copiază-l manual.",
+        "none": "Această tură nu este publicată. Nimeni nu o poate urmări fără cont.",
+        "statusActive": "Activ",
+        "createdAt": "Creat la {{when}}",
+        "revoke": "Retrage-l",
+        "revokeConfirm": "Retragi acest link de urmărire? Oricine îl are nu va mai putea deschide pagina.",
+        "revoked": "Linkul de urmărire a fost retras.",
+        "listUnavailable": "Linkurile de urmărire ale acestei ture nu au putut fi citite."
       }
     },
     "checklistNone": "Această tură nu parcurge nicio listă pe care o poți vedea.",
@@ -2726,6 +2751,33 @@
     "sharedNotFound": "Acest link partajat nu există sau a fost revocat.",
     "loginRequired": "Autentifică-te pentru a vedea această înregistrare partajată.",
     "signIn": "Autentificare"
+  },
+  "publicTrip": {
+    "notFoundTitle": "Nimic de arătat pentru acest link",
+    "notFoundBody": "Acest link nu deschide nicio tură. Se poate să nu fi existat niciodată, să fi fost retras sau tura să nu mai fie publicată.",
+    "caverOrdinal": "Speolog {{ordinal}}",
+    "noTeam": "Fără echipă",
+    "state": {
+      "off": "Neurmărită",
+      "armed": "În peșteră acum",
+      "closed": "Încheiată"
+    },
+    "standing": {
+      "underground": "În peșteră",
+      "out": "Ieșit",
+      "unheard": "Încă neraportat"
+    },
+    "columnPosition": "Ultima poziție raportată",
+    "columnLastHeard": "Ultima veste",
+    "positionMaybeWithheld": "Nearătată sau neraportată",
+    "positionUnreported": "Nicio poziție raportată",
+    "closedTitle": "Această tură s-a încheiat",
+    "closedBody": "Urmărirea a fost închisă, așa că pagina nu se mai schimbă. Ce arată este ultimul cuvânt despre fiecare.",
+    "withheldTitle": "Unele poziții nu sunt arătate aici",
+    "withheldBody": "Cel puțin o poziție din această tură a fost raportată într-o peșteră care nu este publicată. Acei oameni sunt pe listă, dar nu sunt plasați.",
+    "staleTitle": "Pagina nu se mai împrospătează",
+    "staleBody": "Tura nu a putut fi citită acum — se poate să fi căzut conexiunea. Mai jos este ultima veste primită de pagină, iar aceasta începe să se împrospăteze singură din nou de îndată ce poate.",
+    "embedNoModel": "Nu există nicio ridicare topografică de arătat pentru această tură."
   },
   "qr": {
     "button": "Coduri tipărite",

@@ -263,6 +263,11 @@ export const queryKeys = {
   // The whole log, under the same prefix so a recorded or deleted report reaches it too. Its own
   // last segment is a word rather than a narrowing, which no narrowing can collide with.
   tripTrackingEventLog: (id: string) => ['trip-logs', 'tracking-events', id, 'log'] as const,
+  tripTrackingShares: (id: string) => ['trip-logs', 'tracking-shares', id] as const,
+  // A published trip is held under its token and not under the trip, because the page that reads
+  // it has no trip id and must never be given one: the token is the whole of a follower's claim,
+  // and a key naming the trip would be this browser holding an identifier the page was not sent.
+  publicTrip: (token: string) => ['public-trips', token] as const,
   checklists: ['checklists'] as const,
   checklist: (id: string) => ['checklists', 'detail', id] as const,
   tripReportTemplates: ['trip-report-templates'] as const,
@@ -7457,6 +7462,126 @@ export function useResolveTrackingDepth() {
           body: { depthM, take: take ?? null },
         }),
       ),
+  });
+}
+
+// ---- publishing a tracked trip, and following one ----
+
+export type TripTrackingShare = components['schemas']['TripTrackingShareDto'];
+export type TripTrackingShareCreated = components['schemas']['TripTrackingShareCreatedDto'];
+export type PublicTripEnvelope = components['schemas']['PublicTripTrackingEnvelopeDto'];
+export type PublicTripParticipant = components['schemas']['PublicTripParticipantDto'];
+export type PublicTripTeam = components['schemas']['PublicTripTeamDto'];
+export type PublicTripModel = components['schemas']['PublicTripSurveyModelDto'];
+
+/**
+ * The trip's follow links — when each was minted, by whom, and whether it has been taken back.
+ *
+ * Deliberately carries no token. A token exists in one response, the one that minted it, and is
+ * stored only as a hash; a list that could hand one back would be a list somebody could read a
+ * live capability out of long after the person who minted it had gone.
+ */
+export function useTripTrackingShares(tripLogId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripTrackingShares(tripLogId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/tracking/shares', {
+          params: { path: { tripLogId: tripLogId! } },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+    // Requires write on the trip; a 403 is a settled answer, not worth three attempts.
+    retry: false,
+  });
+}
+
+function useInvalidateTripTrackingShares() {
+  const queryClient = useQueryClient();
+  return (tripLogId: string) =>
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tripTrackingShares(tripLogId) });
+}
+
+/**
+ * Publishes the trip: mints a link somebody without an account can follow the party on.
+ *
+ * <b>The answer carries the only copy of the token there will ever be.</b> The server keeps its
+ * hash and nothing else, so whatever the caller does with this answer is the whole of what the
+ * token is ever used for — which is why the surface that calls this shows the address, and the
+ * embed snippet built from it, in the same breath rather than offering them from the list
+ * afterwards.
+ */
+export function useMintTripTrackingShare() {
+  const invalidate = useInvalidateTripTrackingShares();
+  return useMutation({
+    mutationFn: ({ tripLogId }: { tripLogId: string }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/shares', {
+          params: { path: { tripLogId } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/** Takes a link back. Revoking one already revoked is the state asked for, not an error. */
+export function useRevokeTripTrackingShare() {
+  const invalidate = useInvalidateTripTrackingShares();
+  return useMutation({
+    mutationFn: ({ tripLogId, shareId }: { tripLogId: string; shareId: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/trip-logs/{tripLogId}/tracking/shares/{shareId}', {
+          params: { path: { tripLogId, shareId } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * How often a published trip is re-read while the party is underground.
+ *
+ * Gentler than the signed-in watch on purpose. That one is read by a co-ordinator with the tab
+ * open and a session behind every request; this one is read by however many families, friends and
+ * club pages somebody handed the link to, by callers the server knows nothing about and can lean
+ * on nothing about. A minute is still well inside the rhythm reports actually arrive at — they
+ * come by relayed word, minutes apart — so what the slower interval costs a follower is at most
+ * half a minute of a position that was already several minutes old.
+ */
+const PUBLIC_TRACKING_POLL_MS = 60_000;
+
+/**
+ * The one condition a published read is kept fresh on — the same condition the signed-in reads
+ * use, said again here rather than shared, because the two answers carry different shapes of state
+ * and the interval is deliberately not the same number.
+ *
+ * Exported so the condition can be checked directly. It is the whole of what stops a link handed
+ * round a club from being a hundred tabs asking a server about a finished trip forever, and that
+ * is worth a test which does not have to stand a query client up to state it.
+ */
+export function publicTripPollInterval(state: TripTrackingState | undefined) {
+  return state === 'armed' ? PUBLIC_TRACKING_POLL_MS : (false as const);
+}
+
+/**
+ * A published trip as somebody holding its link sees it.
+ *
+ * Every unusable token — malformed, unknown, revoked, a cave that has since been protected, a
+ * trip that is gone — answers one identical 404, so there is exactly one failure to render and no
+ * second reading of it to attempt. `retryQuery` already declines to retry a 4xx, so that answer
+ * settles at once instead of holding a stranger on a spinner for seven seconds.
+ *
+ * Kept fresh only while the watch is armed. A closed watch is a finished trip: the page goes on
+ * saying what it said and stops asking, which matters more here than on the signed-in surface —
+ * a link handed round a club can be open in a hundred tabs nobody is looking at.
+ */
+export function usePublicTrip(token: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicTrip(token ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/public/trips/{token}', { params: { path: { token: token! } } })),
+    enabled: !!token,
+    refetchInterval: (query) => publicTripPollInterval(query.state.data?.state),
   });
 }
 

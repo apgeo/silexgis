@@ -1,0 +1,189 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+/*
+ * A followed trip, designed at 360px and widened from there.
+ *
+ * This page is opened on a phone far more often than on anything else — it is a link somebody
+ * sends to a family — so the narrow layout is the one written here and the wide one is the
+ * exception at the bottom. Doing it the other way round is how a page ends up with a desk layout
+ * and a set of patches.
+ *
+ * Nothing here uses a colour of its own. Every surface takes an antd theme token, so the page
+ * follows whatever theme the installation set and reads correctly in both.
+ */
+
+/*
+ * <b>This project has no global box-sizing reset, and every element here has padding.</b>
+ * Left to the default, `width: 100%` plus `padding: 12px` is 24px wider than the screen, which at
+ * 360px is a page that scrolls sideways — measured, and exactly what the phone spec caught. Said
+ * for this page's own elements rather than for everything inside it, so nothing an antd component
+ * decides about its own layout is changed from out here.
+ */
+.public-trip,
+.public-trip-head,
+.public-trip-body,
+.public-trip-standing-cell,
+.public-trip-person,
+.public-trip-foot,
+.public-trip-embed {
+  box-sizing: border-box;
+}
+
+.public-trip {
+  display: flex;
+  flex-direction: column;
+  /* dvh rather than vh: a phone's address bar collapses and vh keeps quoting the taller
+     measurement, which leaves the footer a bar's height below the bottom of the screen. */
+  min-height: 100dvh;
+  background: var(--silexgis-public-bg);
+}
+
+.public-trip-head {
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid var(--silexgis-public-border);
+}
+
+.public-trip-title {
+  margin: 0;
+  /* Clamped rather than switched at a breakpoint: a long cave name at 360px and a short one at
+     1200px want different sizes, and the widths in between are not two cases. */
+  font-size: clamp(1.15rem, 4.5vw, 1.6rem);
+  line-height: 1.25;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.public-trip-subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.public-trip-body {
+  flex: 1;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The three counts, side by side even at 360px: they are short, and stacking them would push
+   everything else off the first screen. */
+.public-trip-standing {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.public-trip-standing-cell {
+  padding: 8px 6px;
+  border: 1px solid var(--silexgis-public-border);
+  border-radius: 8px;
+  text-align: center;
+  min-width: 0;
+}
+
+.public-trip-standing-count {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.public-trip-standing-label {
+  display: block;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.public-trip-team-title {
+  margin: 4px 0 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.public-trip-people {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.public-trip-person {
+  padding: 10px 12px;
+  border: 1px solid var(--silexgis-public-border);
+  border-radius: 8px;
+}
+
+.public-trip-person-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.public-trip-person-name {
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Label above answer, because a two-column row of label and answer at 360px leaves a station name
+   four characters wide. */
+.public-trip-person-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 6px 12px;
+  margin: 8px 0 0;
+}
+
+.public-trip-fact-label {
+  display: block;
+  font-size: 0.72rem;
+}
+
+.public-trip-fact-value {
+  display: block;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.public-trip-foot {
+  padding: 12px;
+  text-align: center;
+  border-top: 1px solid var(--silexgis-public-border);
+  font-size: 0.78rem;
+}
+
+/* The frame around the drawing. The viewer owns every gesture that starts inside it, so its height
+   is capped as a share of the screen and never as a number alone — see the tracking model panel,
+   where the same rule is spelled out at length. */
+.public-trip-model {
+  position: relative;
+  border: 1px solid var(--silexgis-public-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* One viewer filling its iframe, with nothing else on the page. The share of the screen the trip
+   page reserves does not apply here: the frame IS the whole document, its size was chosen by
+   whoever pasted the snippet, and the page around it is theirs to scroll. */
+.public-trip-embed {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--silexgis-public-bg);
+}
+
+.public-trip-embed-failure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 16px;
+  text-align: center;
+}

@@ -14,6 +14,9 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     stationName: 'p.g.7',
     depthM: null,
     out: false,
+    // What a published page would caption this person with. Nothing on a signed-in surface reads
+    // it — those show the roster's own name — so null here, which is also its ordinary value.
+    label: null,
     ...overrides,
   };
 }

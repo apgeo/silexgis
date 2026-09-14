@@ -1366,7 +1366,32 @@
         "concurrentWrite": "Somebody else wrote to this tracking at the same moment. The page has been read again; try once more.",
         "tripNotFound": "This trip is no longer there, or is no longer yours to read.",
         "ifMatchRequired": "This page lost track of which version it was changing. It has been read again; try once more.",
-        "versionMismatch": "Somebody else changed this tracking while you were working on it. The page has been read again; look at it before saving."
+        "versionMismatch": "Somebody else changed this tracking while you were working on it. The page has been read again; look at it before saving.",
+        "shareNotFound": "That follow link is no longer there — somebody may have taken it back already.",
+        "publicationRefusedCave": "Publishing this trip hands over its cave's survey drawing, and that takes the right to share the cave. Ask whoever looks after it.",
+        "publicationRefusedProtected": "This trip's cave has protected coordinates, so the trip cannot be published at all. A published page says where the party is inside the cave, and there is no version of that which withholds the position."
+      },
+      "publish": {
+        "title": "Publish this trip",
+        "explain": "A follow link lets somebody with no account watch the party come out: the trip's name, who is on it as you have named them, where each was last reported, and the survey drawing with everybody on it. A cave whose coordinates are protected cannot be published at all.",
+        "mint": "Create a follow link",
+        "mintedTitle": "The follow link is ready",
+        "tokenOnce": "Copy it now — this is the only time it is shown.",
+        "linkLabel": "The address to hand out",
+        "linkCopied": "Follow link copied.",
+        "copy": "Copy",
+        "embedLabel": "For a website",
+        "embedHelp": "Paste this into a page on your own site to show the survey drawing there. It resizes itself to whatever column it is in. Links in the surrounding text can drive it — the block explains how. Your site must also be named in this installation's embedding setting, or a browser will refuse to show the frame.",
+        "copyEmbed": "Copy the website block",
+        "embedCopied": "Website block copied.",
+        "copyFailed": "This browser would not let the page write to the clipboard. The text is selected — copy it by hand.",
+        "none": "This trip is not published. Nobody can follow it without an account.",
+        "statusActive": "Live",
+        "createdAt": "Created {{when}}",
+        "revoke": "Take it back",
+        "revokeConfirm": "Take this follow link back? Anybody holding it stops being able to open the page.",
+        "revoked": "The follow link has been taken back.",
+        "listUnavailable": "This trip's follow links could not be read."
       }
     },
     "checklistNone": "This trip works through no checklist you can see.",
@@ -2726,6 +2751,33 @@
     "sharedNotFound": "This shared link does not exist or was revoked.",
     "loginRequired": "Sign in to view this shared record.",
     "signIn": "Sign in"
+  },
+  "publicTrip": {
+    "notFoundTitle": "Nothing to show for this link",
+    "notFoundBody": "This link does not open a trip. It may never have existed, it may have been taken back, or the trip may no longer be published.",
+    "caverOrdinal": "Caver {{ordinal}}",
+    "noTeam": "Not in a team",
+    "state": {
+      "off": "Not being followed",
+      "armed": "Underground now",
+      "closed": "Finished"
+    },
+    "standing": {
+      "underground": "Underground",
+      "out": "Out",
+      "unheard": "Not reported yet"
+    },
+    "columnPosition": "Last reported at",
+    "columnLastHeard": "Last heard",
+    "positionMaybeWithheld": "Not shown, or not reported",
+    "positionUnreported": "No position reported",
+    "closedTitle": "This trip is over",
+    "closedBody": "The watch has been closed, so this page no longer changes. What it shows is the last word about each person.",
+    "withheldTitle": "Some positions are not shown here",
+    "withheldBody": "At least one position on this trip was reported against a cave that is not published. Those people are listed, but not placed.",
+    "staleTitle": "This page has stopped refreshing",
+    "staleBody": "The trip could not be read just now — the connection may have dropped. What is below is the last word this page was given, and it starts refreshing again by itself as soon as it can.",
+    "embedNoModel": "There is no survey drawing to show for this trip."
   },
   "qr": {
     "button": "Printed codes",

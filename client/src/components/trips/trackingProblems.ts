@@ -29,6 +29,12 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'tracking.team_not_found': 'trips.tracking.problems.teamNotFound',
   'tracking.event_not_found': 'trips.tracking.problems.eventNotFound',
   'tracking.concurrent_write': 'trips.tracking.problems.concurrentWrite',
+  // Publishing. The two refusals are deliberately different things — one is about this caller's
+  // rights over the cave, the other about the cave itself — and are worded as two, because the
+  // first is fixed by asking somebody and the second by nobody at all.
+  'tracking.share_not_found': 'trips.tracking.problems.shareNotFound',
+  'tracking.publication_refused_cave': 'trips.tracking.problems.publicationRefusedCave',
+  'tracking.publication_refused_protected': 'trips.tracking.problems.publicationRefusedProtected',
   'trip_log.not_found': 'trips.tracking.problems.tripNotFound',
   'concurrency.if_match_required': 'trips.tracking.problems.ifMatchRequired',
   'concurrency.version_mismatch': 'trips.tracking.problems.versionMismatch',

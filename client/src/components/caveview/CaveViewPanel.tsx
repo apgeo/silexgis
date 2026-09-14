@@ -28,6 +28,28 @@ import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import CaveViewTrackingOverlay from './CaveViewTrackingOverlay.tsx';
 import './CaveViewPanel.css';
 
+/**
+ * A part of the model to fly to, asked for by whoever mounted the panel.
+ *
+ * Separate from the link bus this panel already answers, and needed because that bus is a
+ * workspace: it is joined by every view in the window, it addresses controls by a roster somebody
+ * chooses from, and none of that exists on a page with no workspace around it. The published
+ * embed is one viewer in an iframe being driven by the article it sits in, so it hands the panel
+ * the place directly.
+ *
+ * <b>A new object is what asks.</b> The effect that answers watches this by identity, so a caller
+ * that wants the camera moved to where it already is — a reader pressing the same link twice —
+ * passes a fresh object; one that re-renders for its own reasons passes the same one and the
+ * camera stays where the reader left it.
+ */
+export interface CaveViewFocusRequest {
+  kind: 'station' | 'survey';
+  /** The dotted path the viewer itself uses, as authored. */
+  ref: string;
+  /** Told whether the loaded model turned out to hold it. */
+  onSettled?: (found: boolean) => void;
+}
+
 export interface CaveViewPanelProps {
   /** Delivery URL of the survey file (carries its own access token, no auth header). */
   fileUrl: string;
@@ -84,6 +106,24 @@ export interface CaveViewPanelProps {
    * pictures may pass nothing and pass them when they arrive.
    */
   stationMedia?: CaveViewStationMediaSource;
+  /**
+   * Where the viewer resolves a survey's coordinate system, when the default will not do.
+   *
+   * A Survex file names its coordinate system by code and the viewer resolves that code by asking
+   * for a definition; left alone, this panel points it at this installation's own registry, which
+   * is an authenticated route. That is right for every signed-in mount and wrong for exactly one:
+   * a page somebody without an account is reading, where the route answers 401 and the survey
+   * loads unreferenced. Such a page is handed the definition in its own response and supplies a
+   * lookup that answers from it — which is why the option exists on the viewer at all.
+   *
+   * Read once, when the viewer is built. A caller that changes it afterwards changes nothing until
+   * the model is loaded again, which is the same contract the `home` option has.
+   */
+  crsLookup?: (code: string) => Promise<string | null>;
+  /**
+   * A place to fly the camera to, asked for from outside. See {@link CaveViewFocusRequest}.
+   */
+  focusRequest?: CaveViewFocusRequest;
 }
 
 // CaveView addresses its container by element id; keep ids unique across remounts and
@@ -190,6 +230,8 @@ export default function CaveViewPanel({
   trackedCavers,
   toolbar = false,
   stationMedia,
+  crsLookup,
+  focusRequest,
 }: CaveViewPanelProps) {
   const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
@@ -255,6 +297,11 @@ export default function CaveViewPanel({
   // arrive long afterwards.
   const stationMediaRef = useRef(stationMedia);
   stationMediaRef.current = stationMedia;
+  // Read when a viewer is built, never as a reason to build one: naming it in the effect's
+  // dependencies would re-download and re-parse the survey every time a caller re-rendered with a
+  // fresh closure, which is what the callbacks above already ride a ref to avoid.
+  const crsLookupRef = useRef(crsLookup);
+  crsLookupRef.current = crsLookup;
 
   useEffect(() => {
     let disposed = false;
@@ -275,10 +322,11 @@ export default function CaveViewPanel({
       if (disposed) return;
 
       // `crsLookup` points the viewer's coordinate-system resolution at this installation's
-      // own registry instead of epsg.io — see loadCaveView.ts for why that matters.
+      // own registry instead of epsg.io — see loadCaveView.ts for why that matters. A caller with
+      // no account cannot reach that registry and supplies its own; see the prop.
       const viewer = new cv2.CaveViewer(containerIdRef.current!, {
         home: CAVEVIEW_HOME,
-        crsLookup: makeCrsLookup(),
+        crsLookup: crsLookupRef.current ?? makeCrsLookup(),
       });
       viewer.addEventListener('newCave', () => {
         if (!disposed) setStatus('ready');
@@ -413,6 +461,40 @@ export default function CaveViewPanel({
 
     drawnMarkersRef.current = wanted;
   }, [trackedCavers, showMarkerTimes, status, t, i18n.language]);
+
+  // ---- A place asked for from outside ----
+  //
+  // The same move the link bus makes, and deliberately the same failure handling: only the model
+  // not holding what was named is said, because an abandoned move — superseded by a second link
+  // followed a moment later, or cancelled by somebody selecting something while the camera flew —
+  // leaves the camera exactly where whoever was driving it wanted it.
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (focusRequest === undefined || viewer === undefined || status !== 'ready') {
+      return;
+    }
+    let abandoned = false;
+    setMissingPart(false);
+    const moved =
+      focusRequest.kind === 'survey'
+        ? viewer.focusSurvey(focusRequest.ref)
+        : viewer.focusStation(focusRequest.ref);
+    void moved.then(
+      () => {
+        if (!abandoned) focusRequest.onSettled?.(true);
+      },
+      (error: unknown) => {
+        if (abandoned) return;
+        if (focusNamedNothing(error)) {
+          setMissingPart(true);
+          focusRequest.onSettled?.(false);
+        }
+      },
+    );
+    return () => {
+      abandoned = true;
+    };
+  }, [focusRequest, status]);
 
   // ---- The viewer's own toolbar ----
   const toolbarOptions = toolbar === true ? {} : toolbar === false ? null : toolbar;

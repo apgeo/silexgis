@@ -39,6 +39,10 @@ const PHONE_ONLY_SPECS = [
   /(^|\/)mobile\.spec\.ts$/,
   /(^|\/)scene3d-mobile\.spec\.ts$/,
   /(^|\/)mobile-ios\.spec\.ts$/,
+  // The link somebody sends a family while a party is underground. Phone-only rather than
+  // desktop-too because the phone IS the case: this is the one surface of this application whose
+  // reader holds no account and is not a caver, and its layout is designed at 360px.
+  /(^|\/)public-trip-mobile\.spec\.ts$/,
 ];
 
 export default defineConfig({

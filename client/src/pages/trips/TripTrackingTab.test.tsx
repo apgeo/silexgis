@@ -35,6 +35,12 @@ vi.mock('../../api/hooks.ts', () => ({
   useSurveyModel: () => ({ data: undefined, isPending: false }),
   useTripTrackingEventLog: () => ({ data: undefined, isPending: true, error: null }),
   surveyModelReadableByViewer: (m: { format: string }) => m.format === 'lox' || m.format === 'survex3d',
+  // Publishing the trip: this tab mounts the card that offers it, and what the card does has its
+  // own tests. Nothing here has published anything, so the list is empty and neither write is
+  // reached.
+  useTripTrackingShares: () => ({ data: [], error: null }),
+  useMintTripTrackingShare: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRevokeTripTrackingShare: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 // What decides how big every target on this surface is drawn, and how much room the selection
@@ -70,6 +76,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         stationName: 'P12',
         depthM: 84,
         out: false,
+        label: null,
       },
       {
         caverId: BOGDAN,
@@ -79,6 +86,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         stationName: null,
         depthM: null,
         out: false,
+        label: null,
       },
     ],
     ...overrides,
@@ -158,6 +166,7 @@ describe('TripTrackingTab', () => {
             stationName: null,
             depthM: null,
             out: false,
+            label: null,
           },
         ],
       }),
@@ -193,6 +202,7 @@ describe('TripTrackingTab', () => {
             stationName: null,
             depthM: null,
             out: false,
+            label: null,
           },
           {
             caverId: CARMEN,
@@ -202,6 +212,7 @@ describe('TripTrackingTab', () => {
             stationName: null,
             depthM: null,
             out: false,
+            label: null,
           },
         ],
       }),
@@ -236,6 +247,7 @@ describe('TripTrackingTab', () => {
             stationName: null,
             depthM: null,
             out: false,
+            label: null,
           },
           {
             caverId: BOGDAN,
@@ -247,6 +259,7 @@ describe('TripTrackingTab', () => {
             stationName: null,
             depthM: null,
             out: false,
+            label: null,
           },
         ],
       }),
@@ -517,6 +530,7 @@ describe('TripTrackingTab', () => {
               stationName: null,
               depthM: null,
               out: false,
+              label: null,
             },
           ],
         }),
