@@ -172,6 +172,23 @@ public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDispo
         // could carry a position. That is exactly what the tests over those routes assert,
         // against real bytes.
         //
+        // A camp, and a way on inside it standing at the very point this sweep searches for.
+        //
+        // The camp surfaces were outside this net until now, and the leads board is the one that
+        // most obviously should not have been: it is a ranked list of undefended ways into caves,
+        // which is the single most sensitive thing this application assembles. What kept it out was
+        // its liveness rule — a board with nothing on it is silent about positions for the
+        // uninteresting reason, and nothing in the installation seeds a way on. So the sweep seeds
+        // its own, protected and placed on this test's own point, which also means the camp
+        // surfaces are swept against a position that belongs to this test rather than to the cave
+        // they are beside.
+        var campName = $"sweepcamp{Guid.NewGuid():N}"[..20];
+        var campId = await CreateCampAsync(campName);
+        var campTripId = await CreateTripAsync($"Push {campName}", caveId);
+        await AddTripToCampAsync(campId, campTripId);
+        await GrantAsync(AccessDomain.TripLogs, campTripId, AccessAction.Read);
+        await GrantAsync(AccessDomain.Expeditions, campId, AccessAction.Read);
+
         // The marker beside each URL is what that surface must be seen carrying before its
         // silence about the position means anything: the id or the name this test put there.
         (string Url, string Marker)[] surfaces =
@@ -189,6 +206,23 @@ public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDispo
             // An exported row carries the cave's name rather than its id, so that is what
             // proves this cave is in the file being swept.
             ("/api/v1/export/caves?format=geojson", caveName),
+            // The camp surfaces. A camp is a set of trips, and what it says about them is built
+            // from what those trips touched — so the position that must not escape one is the
+            // cave's, and the camp here has a trip on this sweep's protected cave.
+            //
+            // Only two of the four are here, and which two were left out is worth recording,
+            // because their absence looks like the oversight this sweep exists to prevent. Both
+            // the leads board and the camp map hand a reader without exact view nothing at all
+            // rather than something coarse: measured while adding this, against a camp and a trip
+            // the reader held Read on, the board gave the owner one lead and the reader none, and
+            // the map answered the reader an empty feature collection. That is the right answer —
+            // a way on is itself a position — but it means neither can be swept from here, because
+            // "no coordinates in an empty body" is exactly the uninteresting pass the liveness rule
+            // above refuses to accept. They are covered by their own tests, which assert that
+            // emptiness deliberately. If either ever starts drawing for such a reader, it belongs
+            // in this list on the same day.
+            ($"/api/v1/expeditions/{campId}", campName),
+            ("/api/v1/expeditions/", campName),
         ];
 
         foreach (var (surface, marker) in surfaces)
@@ -396,6 +430,71 @@ public sealed class DocumentSurfaceProtectionSweepTests : IAsyncLifetime, IDispo
     /// <summary>
     /// Gives the reader an entry over this one document, and over nothing else.
     /// </summary>
+    private async Task<Guid> CreateCampAsync(string name)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/expeditions/", new
+        {
+            name,
+            description = (string?)null,
+            startDate = "2026-07-01",
+            endDate = "2026-07-14",
+            geom = (object?)null,
+            cavingGroupId = (Guid?)null,
+            visibility = "authenticated",
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    private async Task<Guid> CreateTripAsync(string title, Guid caveId)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title,
+            tripDate = "2026-07-02",
+            participants = Array.Empty<object>(),
+            caveIds = new[] { caveId },
+            geom = (object?)null,
+            visibility = "authenticated",
+            hadIncident = false,
+        });
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
+        return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
+    }
+
+    private async Task AddTripToCampAsync(Guid campId, Guid tripId)
+    {
+        var response = await owner.PostAsJsonAsync(
+            $"/api/v1/expeditions/{campId}/trips", new { tripLogId = tripId });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// An object-scoped grant. The feature world anchors on its own column and every other world
+    /// on the generic one — a database check constraint enforces that, so getting it wrong fails
+    /// on save rather than quietly granting nothing.
+    /// </summary>
+    private async Task GrantAsync(AccessDomain domain, Guid scopeId, AccessAction actions)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var forFeature = domain == AccessDomain.Features;
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = readerId,
+            Effect = AccessEffect.Allow,
+            Domain = domain,
+            Actions = actions,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeFeatureId = forFeature ? scopeId : null,
+            ScopeId = forFeature ? null : scopeId,
+        });
+        await db.SaveChangesAsync();
+    }
+
     private async Task GrantOverDocumentAsync(Guid documentId, AccessAction actions)
     {
         await using var scope = factory.Services.CreateAsyncScope();
