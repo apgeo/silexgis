@@ -37,9 +37,29 @@ function samePlace(left: TrackedPlace | null, right: TrackedPlace | null): boole
 export interface CaveViewTrackingOverlayProps {
   /** Everybody on the watch — including those no marker could be drawn for. */
   cavers: readonly TrackedCaver[];
-  /** Whether each marker carries the time of its last report as its second line. */
+  /**
+   * Whether each marker's label carries the time of its last report beside the name.
+   *
+   * <b>Beside the name rather than on a line the pointer reveals.</b> A marker collapsed with
+   * others has no such line — the viewer has nowhere to put one — so a switch that put the time
+   * there would have meant two different things depending on whether anybody else happened to be
+   * standing at the same station, which is a thing the reader neither chose nor can see.
+   */
   showTimes: boolean;
   onShowTimesChange(showTimes: boolean): void;
+  /**
+   * Whether the markers say who they are — the names on the model, not the markers themselves.
+   *
+   * <b>Offered to every reader, including the ones who may not write a thing.</b> The published
+   * trip page and the embed mount this read-only, and this control is still theirs: it takes text
+   * off their own screen and nothing else. Nothing is hidden by it that they were being shown for
+   * a reason — everybody on the watch is in the list either way, withheld positions included —
+   * and a stranger reading a live trip on a phone is exactly who a model crowded by a party at one
+   * station happens to, so withholding the way to clear it would be withholding it from the reader
+   * who needs it most.
+   */
+  showLabels: boolean;
+  onShowLabelsChange(showLabels: boolean): void;
   /** Whose card is open, or null when none is. Owned by the panel, which the viewer talks to. */
   openCaverId: string | null;
   onOpenCaver(caverId: string | null): void;
@@ -81,6 +101,8 @@ export default function CaveViewTrackingOverlay({
   cavers,
   showTimes,
   onShowTimesChange,
+  showLabels,
+  onShowLabelsChange,
   openCaverId,
   onOpenCaver,
   shown,
@@ -182,6 +204,20 @@ export default function CaveViewTrackingOverlay({
         data-testid={`caveview-caver-${caver.caverId}`}
       >
         <span className="caveview-tracking-person-name">{caver.name}</span>
+        {/* Said on the row and not only inside the card, so that the one place a reader can see
+            the whole party at once answers the question they came with. Out-ness reached only by
+            opening each card in turn is out-ness nobody checks on a crowded station — and this is
+            the surface somebody reads when they are deciding whether a party is still underground.
+            It is the same word the card uses and the same word the markers carry, so the model,
+            the list and the card do not each have their own way of saying it. */}
+        {caver.out && (
+          <span
+            className="caveview-tracking-person-out"
+            data-testid={`caveview-row-out-${caver.caverId}`}
+          >
+            {t('caveview.tracking.out')}
+          </span>
+        )}
         <span className="caveview-tracking-person-place">{shortPlace(caver.position)}</span>
       </Button>
     );
@@ -212,13 +248,29 @@ export default function CaveViewTrackingOverlay({
         </Button>
         {listOpen && (
           <>
+            {/* The two switches are a pair and are drawn as one: the first decides whether the
+                markers say anything, the second what they say. In that order, because the second
+                is a refinement of the first — and it is turned off with it, since a time nothing
+                is drawing is a switch that answers a press with no change anybody can see. */}
             <label className="caveview-tracking-switch">
               <Typography.Text style={{ fontSize: 12 }}>
+                {t('caveview.tracking.showLabels')}
+              </Typography.Text>
+              <Switch
+                size="small"
+                checked={showLabels}
+                onChange={onShowLabelsChange}
+                data-testid="caveview-tracking-labels"
+              />
+            </label>
+            <label className="caveview-tracking-switch">
+              <Typography.Text style={{ fontSize: 12 }} disabled={!showLabels}>
                 {t('caveview.tracking.showTimes')}
               </Typography.Text>
               <Switch
                 size="small"
                 checked={showTimes}
+                disabled={!showLabels}
                 onChange={onShowTimesChange}
                 data-testid="caveview-tracking-times"
               />

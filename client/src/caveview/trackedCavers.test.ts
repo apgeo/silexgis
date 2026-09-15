@@ -2,9 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import type { TrackingParticipant, TrackingState } from '../api/hooks.ts';
 import {
+  sharedTeamTitle,
   teamStation,
   trackedCaverTeams,
   trackedCaversFrom,
+  undergroundFirst,
   type TrackedCaver,
 } from './trackedCavers.ts';
 
@@ -188,6 +190,82 @@ const caver = (overrides: Partial<TrackedCaver> = {}): TrackedCaver => {
     positionAt: 'positionAt' in overrides ? (overrides.positionAt ?? null) : merged.lastRecordedAt,
   };
 };
+
+/**
+ * The word over a group of people standing at one station — and, mostly, when there is not one.
+ *
+ * A heading is a claim about who the names under it are, so every case that would make the claim
+ * false or empty answers with nothing and leaves the names to speak for themselves.
+ */
+describe('sharedTeamTitle', () => {
+  it('names the team where every one of them is on it', () => {
+    expect(
+      sharedTeamTitle([
+        caver({ caverId: 'a', teamId: 'team-1', teamTitle: 'Echipa 1' }),
+        caver({ caverId: 'b', teamId: 'team-1', teamTitle: 'Echipa 1' }),
+      ]),
+    ).toBe('Echipa 1');
+  });
+
+  it('names nothing for a mixture of teams, even one of teams with the same title', () => {
+    // Keyed on the id like everything else here: two teams of one trip may be called the same
+    // thing, and a heading taken from the title would call a chance meeting of both a team.
+    expect(
+      sharedTeamTitle([
+        caver({ caverId: 'a', teamId: 'team-1', teamTitle: 'Echipa' }),
+        caver({ caverId: 'b', teamId: 'team-2', teamTitle: 'Echipa' }),
+      ]),
+    ).toBeNull();
+  });
+
+  it('names nothing where anybody is on no team, and nothing for a team nobody named', () => {
+    expect(
+      sharedTeamTitle([
+        caver({ caverId: 'a', teamId: 'team-1', teamTitle: 'Echipa 1' }),
+        caver({ caverId: 'b', teamId: null, teamTitle: null }),
+      ]),
+    ).toBeNull();
+    expect(sharedTeamTitle([caver({ teamId: null, teamTitle: null })])).toBeNull();
+    expect(sharedTeamTitle([caver({ teamId: 'team-1', teamTitle: null })])).toBeNull();
+    expect(sharedTeamTitle([])).toBeNull();
+  });
+
+});
+
+/**
+ * The order the names of one collapsed marker are drawn in.
+ *
+ * A marker standing for a party says where those people were last reported, and somebody who has
+ * come out is among them — the station is where they were, not where they are. Putting them below
+ * whoever is still underground makes "is this party still down there" a question the shape of the
+ * block answers.
+ */
+describe('undergroundFirst', () => {
+  it('sets whoever has come out below whoever has not', () => {
+    expect(
+      undergroundFirst([
+        caver({ caverId: 'a', out: true }),
+        caver({ caverId: 'b' }),
+        caver({ caverId: 'c', out: true }),
+        caver({ caverId: 'd' }),
+      ]).map((member) => member.caverId),
+    ).toEqual(['b', 'd', 'a', 'c']);
+  });
+
+  it('leaves the watch’s own order alone within each of the two', () => {
+    // The watch lists the trip's roster, which is a club's arrangement of its own party. Sorting
+    // it by anything the radio said a minute ago would rearrange somebody's trip to suit the last
+    // report; the only thing that moves a name here is that person coming out.
+    expect(
+      undergroundFirst([
+        caver({ caverId: 'a' }),
+        caver({ caverId: 'b' }),
+        caver({ caverId: 'c' }),
+      ]).map((member) => member.caverId),
+    ).toEqual(['a', 'b', 'c']);
+    expect(undergroundFirst([])).toEqual([]);
+  });
+});
 
 describe('trackedCaverTeams', () => {
   it('gathers the party by the team’s id and never by its title', () => {

@@ -38,10 +38,21 @@ const clearHighlight = vi.fn();
 const addLiveMarker = vi.fn();
 const moveLiveMarker = vi.fn();
 const removeLiveMarker = vi.fn();
+const setLiveMarkerClusterLabel = vi.fn();
 const setStationMedia = vi.fn();
 const clearStationMedia = vi.fn();
 const toolbarDispose = vi.fn();
 let lastToolbar: { container: unknown; options: unknown } | undefined;
+
+/**
+ * Every viewer built, newest last.
+ *
+ * Kept per instance rather than as one recorded value, because whether the markers are labelled is
+ * a property of a viewer that the real one neither saves nor restores — so the question a test has
+ * to be able to ask is what the panel left on *this* viewer, the one built for the survey now on
+ * screen, and a single module-level flag would answer it with the last write to any of them.
+ */
+const viewers: FakeViewer[] = [];
 
 class FakeViewer {
   // The real viewer exposes this as a settable property, and what the panel does with it is the
@@ -52,8 +63,11 @@ class FakeViewer {
   set stationLabelOver(value: boolean) {
     stationLabelOver = value;
   }
+  /** As the real viewer starts: labels on, and nothing restores what the last viewer was left at. */
+  liveMarkerLabels = true;
   constructor(_containerId: string, config: Record<string, unknown>) {
     lastViewerConfig = config;
+    viewers.push(this);
   }
   addEventListener(type: string, listener: Listener) {
     listeners.set(type, [...(listeners.get(type) ?? []), listener]);
@@ -66,6 +80,7 @@ class FakeViewer {
   addLiveMarker = addLiveMarker;
   moveLiveMarker = moveLiveMarker;
   removeLiveMarker = removeLiveMarker;
+  setLiveMarkerClusterLabel = setLiveMarkerClusterLabel;
   setStationMedia = setStationMedia;
   clearStationMedia = clearStationMedia;
 }
@@ -86,6 +101,23 @@ function emit(type: string, event: unknown) {
   for (const listener of listeners.get(type) ?? []) {
     listener(event);
   }
+}
+
+/**
+ * What the viewer would draw in place of the markers of one station, asked exactly as it asks.
+ *
+ * The viewer holds the function and calls it again whenever what it draws is settled, handing over
+ * a marker object for each marker it collapsed — so this is the whole of the contract, and calling
+ * the registered function with ids is the only way to read back what a group says.
+ */
+function clusterLabel(...ids: string[]): string[] | null {
+  const label = setLiveMarkerClusterLabel.mock.calls.at(-1)?.[0] as
+    | ((markers: readonly { id: string }[]) => string[] | null)
+    | undefined;
+  if (label === undefined) {
+    throw new Error('the panel registered no cluster label');
+  }
+  return label(ids.map((id) => ({ id })));
 }
 
 const MODEL = 'model-1';
@@ -139,8 +171,25 @@ async function renderReady(props: Partial<Parameters<typeof CaveViewPanel>[0]> =
   return view;
 }
 
+/** The same panel with another watch on it — the element a poll's answer re-renders it as. */
+const watching = (trackedCavers: readonly TrackedCaver[]) => (
+  <CaveViewPanel
+    fileUrl="http://files.local/survey"
+    fileName="demo.lox"
+    surveyModelId={MODEL}
+    trackedCavers={trackedCavers}
+  />
+);
+
+/** Every call that changes what is on the model, which is the cost a poll is measured in. */
+const markerOperations = () =>
+  addLiveMarker.mock.calls.length
+  + moveLiveMarker.mock.calls.length
+  + removeLiveMarker.mock.calls.length;
+
 beforeEach(() => {
   listeners.clear();
+  viewers.length = 0;
   lastViewerConfig = undefined;
   stationLabelOver = false;
   lastToolbar = undefined;
@@ -309,7 +358,6 @@ describe('CaveViewPanel', () => {
 
       expect(addLiveMarker).toHaveBeenCalledWith('caver-1', 'p.g.7', {
         label: 'Ana',
-        sublabel: undefined,
         color: expect.any(String),
       });
 
@@ -381,25 +429,30 @@ describe('CaveViewPanel', () => {
       expect(screen.getByTestId('caveview-position-withheld')).toBeInTheDocument();
     });
 
-    it('adds the marker again when the time is taken off it, because a move cannot clear one', async () => {
+    it('puts a lone caver’s time on their label, where the switch can also take it off', async () => {
+      // One switch, one meaning. The time used to go on the hover line of a marker drawn alone
+      // and onto the label of a marker collapsed with others — so "show last update" showed
+      // nothing at all until the pointer rested on somebody, unless that somebody happened to
+      // have company at their station, which is a difference the reader neither asked for nor
+      // can see. Both read off the label now, and taking it off is a move rather than the
+      // add-again dance a sublabel needed, because every option is given on every call.
       await renderReady({ trackedCavers: [caver()] });
 
       fireEvent.click(screen.getByTestId('caveview-tracking-times'));
-      expect(moveLiveMarker).toHaveBeenCalledWith(
+      expect(moveLiveMarker).toHaveBeenLastCalledWith(
         'caver-1',
         'p.g.7',
-        expect.objectContaining({ sublabel: expect.any(String) }),
+        expect.objectContaining({ label: expect.stringMatching(/^Ana · \d/) }),
       );
+      expect(moveLiveMarker.mock.calls.at(-1)![2]).not.toHaveProperty('sublabel');
 
       fireEvent.click(screen.getByTestId('caveview-tracking-times'));
-      // A move leaves out what it is not given, so the sublabel would survive being switched
-      // off. Adding replaces the marker whole, which is the only call that takes it away.
-      expect(addLiveMarker).toHaveBeenCalledTimes(2);
-      expect(addLiveMarker).toHaveBeenLastCalledWith(
+      expect(moveLiveMarker).toHaveBeenLastCalledWith(
         'caver-1',
         'p.g.7',
-        expect.objectContaining({ sublabel: undefined }),
+        expect.objectContaining({ label: 'Ana' }),
       );
+      expect(addLiveMarker).toHaveBeenCalledTimes(1);
     });
 
     it('opens a caver’s card when the pointer rests on their marker', async () => {
@@ -409,6 +462,274 @@ describe('CaveViewPanel', () => {
       act(() => emit('liveMarkerHover', { id: 'caver-1' }));
 
       expect(await screen.findByTestId('caveview-caver-card')).toHaveTextContent('Team A');
+    });
+  });
+
+  /**
+   * What the markers say, and the switch that takes it off.
+   *
+   * <b>A party at one station is drawn as one marker, and the viewer knows only how many they
+   * are.</b> So the question this surface exists to answer — who is where — was answered with "3"
+   * for exactly the case where it matters most, a team standing together underground. The label is
+   * the application's to write, and what is asserted here is what it writes: the team's name and
+   * then its members, one to a line.
+   */
+  describe('names on the model', () => {
+    it('names a party standing together with its team and every one of its members', async () => {
+      await renderReady({
+        trackedCavers: [caver({ caverId: 'a', name: 'Ana' }), caver({ caverId: 'b', name: 'Bogdan' })],
+      });
+
+      expect(clusterLabel('a', 'b')).toEqual(['Team A', 'Ana', 'Bogdan']);
+    });
+
+    it('leaves a caver drawn on their own labelled with their own name', async () => {
+      // Including one who is on a team. A heading over a single name would be a claim that the
+      // team is at that station, which is true of a party standing together and is not true of one
+      // of its members — and the name is already the whole answer to "who is that".
+      await renderReady({ trackedCavers: [caver({ caverId: 'a', name: 'Ana' })] });
+
+      expect(addLiveMarker).toHaveBeenCalledWith(
+        'a',
+        'p.g.7',
+        expect.objectContaining({ label: 'Ana' }),
+      );
+    });
+
+    it('heads no group whose members are not one team', async () => {
+      // Two teams that happen to have met at one station are not a team, and everybody on no team
+      // has no name to be called by: in both cases the names are the whole of what is known, and a
+      // word over them would say more than anybody reported.
+      await renderReady({
+        trackedCavers: [
+          caver({ caverId: 'a', name: 'Ana' }),
+          caver({ caverId: 'c', name: 'Cora', teamId: 'team-b', teamTitle: 'Team B' }),
+        ],
+      });
+      expect(clusterLabel('a', 'c')).toEqual(['Ana', 'Cora']);
+
+      cleanup();
+      await renderReady({
+        trackedCavers: [
+          caver({ caverId: 'a', name: 'Ana', teamId: null, teamTitle: null }),
+          caver({ caverId: 'b', name: 'Bogdan', teamId: null, teamTitle: null }),
+        ],
+      });
+      expect(clusterLabel('a', 'b')).toEqual(['Ana', 'Bogdan']);
+    });
+
+    it('names only the markers collapsed, never the team standing behind them', async () => {
+      // The rule this whole surface is built around, in the one place a multi-line label could
+      // quietly break it: a label built from a team's roster would name somebody whose position
+      // this reader may not be told, and would name them *at a station* — an assertion about where
+      // a caver is, made out of a withholding. So the lines come from the ids the viewer collapsed.
+      await renderReady({
+        trackedCavers: [
+          caver({ caverId: 'a', name: 'Ana' }),
+          caver({ caverId: 'b', name: 'Bogdan', position: { kind: 'withheld', certain: true } }),
+          caver({ caverId: 'c', name: 'Cora' }),
+        ],
+      });
+
+      expect(addLiveMarker).not.toHaveBeenCalledWith('b', expect.anything(), expect.anything());
+      const label = clusterLabel('a', 'c');
+      expect(label).toEqual(['Team A', 'Ana', 'Cora']);
+      expect(label).not.toContain('Bogdan');
+    });
+
+    it('puts the time beside each name where the last update was asked for', async () => {
+      // The switch beside this one, honoured for a group, and honoured the same way for somebody
+      // standing alone: a collapsed marker has no hover line to put a time on, so inline is the
+      // only spelling that can be the same on both sides of a party gathering at one station.
+      await renderReady({
+        trackedCavers: [
+          caver({ caverId: 'a', name: 'Ana' }),
+          caver({ caverId: 'b', name: 'Bogdan', lastRecordedAt: '2026-09-12T10:30:00Z' }),
+        ],
+      });
+
+      fireEvent.click(screen.getByTestId('caveview-tracking-times'));
+
+      const label = clusterLabel('a', 'b')!;
+      expect(label[0]).toBe('Team A');
+      expect(label[1]).toMatch(/^Ana · \d/);
+      expect(label[2]).toMatch(/^Bogdan · \d/);
+    });
+
+    /**
+     * Whether what the label says reaches the model at all.
+     *
+     * <b>The viewer asks the label function, and only when a marker is added, slid or removed.</b>
+     * So a poll that changed an input of the label without moving anybody used to change nothing
+     * on screen: the table and the list beside the model followed a rename and the model went on
+     * drawing the old name. Setting the function again is what re-asks it, which is why these
+     * tests assert on the registration and not only on what the registered function answers — the
+     * function reads the watch through a ref and would answer correctly either way.
+     */
+    describe('reaching the model when nobody has moved', () => {
+      const party = (teamTitle: string) => [
+        caver({ caverId: 'a', name: 'Ana', teamTitle }),
+        caver({ caverId: 'b', name: 'Bogdan', teamTitle }),
+      ];
+
+      it('follows a team being renamed, with no marker moving', async () => {
+        const { rerender } = await renderReady({ trackedCavers: party('Team A') });
+        expect(clusterLabel('a', 'b')).toEqual(['Team A', 'Ana', 'Bogdan']);
+        const asked = setLiveMarkerClusterLabel.mock.calls.length;
+        const operations = markerOperations();
+
+        rerender(watching(party('The far team')));
+
+        // Two surfaces on one screen disagreeing about one team is what this stops: the list
+        // follows the rename by re-rendering, and the model follows it only by being re-asked.
+        expect(setLiveMarkerClusterLabel.mock.calls.length).toBeGreaterThan(asked);
+        expect(clusterLabel('a', 'b')).toEqual(['The far team', 'Ana', 'Bogdan']);
+        // And the party is exactly where it was, which is the half of this that must not be
+        // bought by redrawing anybody.
+        expect(markerOperations()).toBe(operations);
+      });
+
+      it('stops heading a group the moment one of them is on another team', async () => {
+        // The worse half of the same defect. A heading is the claim that the names under it are
+        // one team, so a stale one goes on asserting a single team over a set that has become a
+        // mixture — which is the one claim the shared-title rule exists to refuse.
+        const { rerender } = await renderReady({ trackedCavers: party('Team A') });
+        expect(clusterLabel('a', 'b')).toEqual(['Team A', 'Ana', 'Bogdan']);
+        const asked = setLiveMarkerClusterLabel.mock.calls.length;
+        const operations = markerOperations();
+
+        rerender(
+          watching([
+            caver({ caverId: 'a', name: 'Ana' }),
+            caver({ caverId: 'b', name: 'Bogdan', teamId: 'team-b', teamTitle: 'Team B' }),
+          ]),
+        );
+
+        expect(setLiveMarkerClusterLabel.mock.calls.length).toBeGreaterThan(asked);
+        expect(clusterLabel('a', 'b')).toEqual(['Ana', 'Bogdan']);
+        expect(markerOperations()).toBe(operations);
+      });
+
+      it('asks the viewer nothing again for a poll that changed nothing', async () => {
+        // The other half of the fix, and the one that is easy to lose: re-registering on every
+        // re-read would rebuild every collapsed marker twice a minute for a party that has not
+        // moved. A poll arrives as a fresh array of fresh objects, so identity says nothing and
+        // the comparison has to be over what the label is actually read from.
+        const { rerender } = await renderReady({ trackedCavers: party('Team A') });
+        const asked = setLiveMarkerClusterLabel.mock.calls.length;
+        const operations = markerOperations();
+
+        rerender(watching(party('Team A')));
+
+        expect(setLiveMarkerClusterLabel.mock.calls.length).toBe(asked);
+        expect(markerOperations()).toBe(operations);
+      });
+    });
+
+    /**
+     * What a group says about somebody who has come out.
+     *
+     * A marker drawn alone says it in the muted colour. Collapsed, that is gone — one dot in one
+     * colour over a list of names — and the label was making the strongest claim on this surface,
+     * that these people are at this station, about people who had left it. Nobody is dropped from
+     * the label: the marker stands for their marker too, and the station really is the last place
+     * they were reported. What changes is that no line of it reads as somebody present.
+     */
+    describe('who has come out', () => {
+      it('does not read as all present when some of a group have come out', async () => {
+        await renderReady({
+          trackedCavers: [
+            caver({ caverId: 'a', name: 'Ana' }),
+            caver({ caverId: 'b', name: 'Bogdan' }),
+            caver({ caverId: 'c', name: 'Cora', out: true }),
+            caver({ caverId: 'd', name: 'Dan', out: true }),
+            caver({ caverId: 'e', name: 'Elena' }),
+          ],
+        });
+
+        const label = clusterLabel('a', 'b', 'c', 'd', 'e')!;
+        // Five names at one station, two of whom are above ground. Whoever is still underground
+        // is the block at the top, so the answer to "is this party still down there" is the shape
+        // of the label rather than five lines to be read one at a time.
+        expect(label).toEqual(['Team A', 'Ana', 'Bogdan', 'Elena', 'Cora (out)', 'Dan (out)']);
+        expect(label).not.toContain('Cora');
+        expect(label).not.toContain('Dan');
+      });
+
+      it('says it of a caver drawn on their own too, rather than only in the colour', async () => {
+        // The same person one report later can be alone at their station or collapsed with the
+        // rest of their team, and which of the two is the viewer's decision — so a fact carried
+        // one way and not the other appears and disappears under a reader doing nothing. The
+        // colour stays; it is simply not the only thing saying this.
+        await renderReady({ trackedCavers: [caver({ caverId: 'a', name: 'Ana', out: true })] });
+
+        expect(addLiveMarker).toHaveBeenCalledWith(
+          'a',
+          'p.g.7',
+          expect.objectContaining({ label: 'Ana (out)', color: trackedCaverPalette.out }),
+        );
+      });
+
+      it('reads the heading from everybody collapsed, whoever has come out included', async () => {
+        // Taking the title from the people still underground would head this block with one
+        // team's name and leave the other team below the fold — the same false claim, told by
+        // the fix for a different one.
+        await renderReady({
+          trackedCavers: [
+            caver({ caverId: 'a', name: 'Ana' }),
+            caver({ caverId: 'c', name: 'Cora', teamId: 'team-b', teamTitle: 'Team B', out: true }),
+          ],
+        });
+
+        expect(clusterLabel('a', 'c')).toEqual(['Ana', 'Cora (out)']);
+      });
+    });
+
+    it('leaves the viewer its own count when the watch holds none of them', async () => {
+      // Answering null is what leaves the count drawn. A group the panel can say nothing about is
+      // better drawn as "2" than as a label built out of whatever is left of a stale watch.
+      await renderReady({ trackedCavers: [caver({ caverId: 'a' })] });
+
+      expect(clusterLabel('gone-1', 'gone-2')).toBeNull();
+    });
+
+    it('takes the labels off the viewer and leaves every marker on the model', async () => {
+      await renderReady({ trackedCavers: [caver({ caverId: 'a' })] });
+      expect(viewers.at(-1)!.liveMarkerLabels).toBe(true);
+
+      fireEvent.click(screen.getByTestId('caveview-tracking-labels'));
+
+      expect(viewers.at(-1)!.liveMarkerLabels).toBe(false);
+      // The point of the property over simply not drawing the markers: they stay on the model and
+      // stay pointable, so a crowded screen is cleared without anybody disappearing from it.
+      expect(removeLiveMarker).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByTestId('caveview-tracking-labels'));
+      expect(viewers.at(-1)!.liveMarkerLabels).toBe(true);
+    });
+
+    it('asks again for each survey loaded, because a new viewer starts with its labels on', async () => {
+      // Whether the markers are labelled is deliberately none of the view state the viewer saves,
+      // and this panel builds a *new* viewer for every survey file it is pointed at. So nothing
+      // but this panel will put the setting back, and without that the second cave somebody opens
+      // brings back the labels they had just taken off — with the switch still reading off.
+      const { rerender } = await renderReady({ trackedCavers: [caver({ caverId: 'a' })] });
+      fireEvent.click(screen.getByTestId('caveview-tracking-labels'));
+      expect(viewers.at(-1)!.liveMarkerLabels).toBe(false);
+
+      rerender(
+        <CaveViewPanel
+          fileUrl="http://files.local/another-survey"
+          fileName="another.lox"
+          surveyModelId={MODEL}
+          trackedCavers={[caver({ caverId: 'a' })]}
+        />,
+      );
+      await waitFor(() => expect(viewers).toHaveLength(2));
+      act(() => emit('newCave', {}));
+
+      await waitFor(() => expect(viewers.at(-1)!.liveMarkerLabels).toBe(false));
+      expect(screen.getByTestId('caveview-tracking-labels')).not.toBeChecked();
     });
   });
 

@@ -2101,8 +2101,10 @@
     },
     "tracking": {
       "people": "Cavers ({{count}})",
+      "showLabels": "Show names on the model",
       "showTimes": "Show last update",
-      "markerSublabel": "Last update {{when}}",
+      "markerNameTime": "{{name}} · {{when}}",
+      "markerNameOut": "{{name}} (out)",
       "close": "Close",
       "out": "Out",
       "noTeam": "No team",

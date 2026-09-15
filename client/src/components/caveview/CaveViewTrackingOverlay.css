@@ -126,6 +126,24 @@ html[data-theme='dark'] .caveview-tracking-card {
   opacity: 0.75;
 }
 
+/* Somebody reported out, said on their own row.
+
+   Drawn as a chip rather than as a third grey word on a row that already has two, where it would
+   be read as part of the name or part of the station. It borrows the row's own colour instead of
+   carrying one: the box behind this is translucent over a 3D scene in whichever theme the page is
+   in, so a fixed foreground would be the one thing on the row that stops being legible when the
+   scene behind it is lit. Held at its own width for the same reason the station is — the name is
+   what gives way. */
+.caveview-tracking-person-out {
+  flex-shrink: 0;
+  padding-inline: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  border: 1px solid currentcolor;
+  border-radius: 4px;
+  opacity: 0.7;
+}
+
 /* <b>The card keeps its height and the list above it is what gives way.</b> Same failure as the
    rows inside that list, one element out and the other way round: the overlay is a flex column
    capped at the panel's height, so with every child free to shrink the *card* was the one that
@@ -197,20 +215,29 @@ html[data-theme='dark'] .caveview-tracking-card {
   /* A switch has no size that makes it finger-sized: its height is the track, and the handle's
      travel is derived from it, so a height pushed in from here would move the knob off the rail.
      The tolerance goes around it instead. `::after` is free on the switch itself — antd reserves
-     `::before` on the *handle*, one element in, and nothing on the root. */
+     `::before` on the *handle*, one element in, and nothing on the root.
+
+     The two axes are not the same figure because the switch is not square: the track is 16px tall
+     and 28px wide, so 14px above and below reaches 44 and 10px either side reaches 48. Forty-four
+     is what a finger lands on, and the vertical figure is the one that had to grow when a second
+     switch arrived under the first. */
   .caveview-tracking-switch .ant-switch {
     position: relative;
   }
 
   .caveview-tracking-switch .ant-switch::after {
     position: absolute;
-    inset: -10px;
+    inset: -14px -10px;
     content: '';
   }
 
+  /* Forty-four for the row as well, and that is what keeps the tolerances above apart: two rows
+     of 44 with the box's own 4px gap put the switches 48px apart, so neither one's target reaches
+     into the other's. A row shorter than its switch's tolerance is how a tap aimed at the names
+     lands on the times instead — the sort of thing nothing looks wrong about afterwards. */
   .caveview-tracking-switch {
     flex-shrink: 0;
-    min-height: 40px;
+    min-height: 44px;
   }
 }
 
@@ -219,11 +246,12 @@ html[data-theme='dark'] .caveview-tracking-card {
    Chosen on the *height*, which is neither of the axes the rest of this file uses, and it has to
    be: the panel this overlay stands in is `min(460px, 60dvh)` tall, so a phone held sideways gives
    it 216px and the overlay 200px of that. What wants to go in there is a card of about 140px and a
-   box whose own floor is 104px — the button that opens the list and the switch above it, both held
-   at forty pixels because a finger presses them — and 244px does not go into 200 however the two
-   are made to share it. Above the rule below the card fits beside a scrolled list; below it one of
-   them has to go, and it is not the card: a reader who tapped a name is looking at that name's
-   card, and the list is one press of its close button away.
+   box whose own floor is 156px with its padding — the button that opens the list and the two
+   switches under it, held at forty and forty-four pixels because a finger presses them — and
+   296px does not go into 200 however the two are made to share it, which is more true of the pair
+   of switches than it was of one. Above the rule below the card fits beside a scrolled list; below
+   it one of them has to go, and it is not the card: a reader who tapped a name is looking at that
+   name's card, and the list is one press of its close button away.
 
    Read against the viewport rather than the panel because that is where the 60% comes from. A
    container query would say it more directly and is not available here: it needs `container-type:

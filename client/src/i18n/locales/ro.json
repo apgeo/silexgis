@@ -2101,8 +2101,10 @@
     },
     "tracking": {
       "people": "Speologi ({{count}})",
+      "showLabels": "Arată numele pe model",
       "showTimes": "Arată ultima actualizare",
-      "markerSublabel": "Ultima actualizare {{when}}",
+      "markerNameTime": "{{name}} · {{when}}",
+      "markerNameOut": "{{name}} (ieșit)",
       "close": "Închide",
       "out": "Ieșit",
       "noTeam": "Fără echipă",

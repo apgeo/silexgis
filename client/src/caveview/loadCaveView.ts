@@ -15,7 +15,7 @@ import { userManager } from '../auth/auth.tsx';
  * stale cached viewer across upgrades. A new vendored build lands in a new directory and
  * changes this constant in the same commit, so every asset URL changes with it.
  */
-export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.4/';
+export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.5/';
 
 const SCRIPT_URL = `${CAVEVIEW_HOME}js/CaveView2.min.js`;
 const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;
@@ -47,7 +47,11 @@ export type CaveViewerEvent =
   | 'station'
   | 'stationHover'
   | 'leg'
-  | 'liveMarkerHover';
+  | 'liveMarkerHover'
+  // What the viewer reports instead of the one above when markers share a station and are
+  // drawn as one. A panel that listens for only the first is silent for a party standing
+  // together, which is most of the time a party is anywhere.
+  | 'liveMarkerCluster';
 
 /**
  * How a station or a named part of a survey is addressed: the dotted path the viewer itself
@@ -77,13 +81,39 @@ export type CaveViewStationMediaSource =
   | ((station: unknown) => readonly CaveViewMediaEntry[] | null);
 
 /**
- * What a marker is drawn with. Options left out of a move are left as they were — which is why
- * taking a sublabel away means adding the marker again rather than moving it.
+ * What a label says: one line, or the lines it is drawn on, one below the other.
+ *
+ * A single string is the same label it always was — the array form is an addition, not a
+ * replacement — and the first line stays beside the dot however many lines follow it, so a block
+ * that grows downwards never moves the name the marker is first recognised by.
+ */
+export type CaveViewLabelText = string | readonly string[];
+
+/**
+ * What a marker is drawn with. An option left out of a move is left as it was, so this panel
+ * gives every one of them on every call rather than relying on what a marker already holds —
+ * a value that can only be replaced and never cleared is a value that outlives its reason.
  */
 export interface CaveViewLiveMarkerOptions {
-  label?: string;
-  sublabel?: string;
+  label?: CaveViewLabelText;
+  sublabel?: CaveViewLabelText;
   color?: string;
+}
+
+/**
+ * One marker as the viewer describes it back — the form a cluster label is asked about.
+ *
+ * Every field is a copy except the payload, which is handed back untouched.
+ */
+export interface CaveViewLiveMarker {
+  id: string;
+  ref: CaveViewRef;
+  label: CaveViewLabelText;
+  sublabel?: CaveViewLabelText;
+  color?: string;
+  payload?: unknown;
+  /** Whether the loaded model holds the station named. An unresolved marker is drawn nowhere. */
+  resolved: boolean;
 }
 
 /** What a focus does besides moving the camera. */
@@ -133,6 +163,36 @@ export interface CaveViewer {
   /** Slides a marker to another station. Null when no marker of that id was added. */
   moveLiveMarker(id: string, ref: CaveViewRef, options?: CaveViewLiveMarkerOptions): unknown;
   removeLiveMarker(id: string): boolean;
+  /**
+   * What the single marker drawn in place of several at one station says. The viewer knows only
+   * how many they are, so without this a party standing together is labelled with its count.
+   *
+   * <b>The viewer asks rather than being told, and it asks only when what it draws has moved.</b>
+   * The function is called again each time markers are added, slid or removed, and at no other
+   * moment — so an answer that changed for the caller's own reasons, a team renamed or a member
+   * moved to another team, reaches nothing until something moves. What re-asks it is setting a
+   * function again: the collapsed markers already displayed are built again, and only those whose
+   * text actually changed. A caller whose label reads from anything but the markers themselves
+   * therefore has to set it again when that thing changes.
+   *
+   * Answering null leaves the count in place, which is also what a function that throws leaves:
+   * a group that cannot be named is still drawn.
+   */
+  setLiveMarkerClusterLabel(
+    label: ((markers: readonly CaveViewLiveMarker[]) => CaveViewLabelText | null) | null,
+  ): void;
+  /**
+   * Whether the markers carry their labels at all. On by default.
+   *
+   * Markers stay drawn and stay pointable with this off — the labels are what go, which is how a
+   * screen a party has crowded is cleared without taking anybody off the model. It suppresses the
+   * hover sublabel with them.
+   *
+   * <b>Not part of the view state the viewer saves, and it has to be reapplied by whoever wants it
+   * remembered.</b> It is a property of the markers rather than of the view, so a viewer built for
+   * a newly loaded survey file starts with its labels on however this was left on the last one.
+   */
+  liveMarkerLabels: boolean;
   /** Pictures shown over the model for the station under the pointer. */
   setStationMedia(source: CaveViewStationMediaSource): void;
   clearStationMedia(): void;

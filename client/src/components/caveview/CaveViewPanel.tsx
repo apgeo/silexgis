@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Spin } from 'antd';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import {
   CAVEVIEW_HOME,
@@ -21,7 +22,11 @@ import {
 } from '../../caveview/modelParts.ts';
 import { mediaForStation } from '../../caveview/stationMedia.ts';
 import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
-import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
+import {
+  sharedTeamTitle,
+  undergroundFirst,
+  type TrackedCaver,
+} from '../../caveview/trackedCavers.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
@@ -183,12 +188,65 @@ function showPicturesForTap(
   });
 }
 
-/** What one marker is currently drawn as, so the next answer can be turned into the moves it needs. */
+/**
+ * What one marker is currently drawn as, so the next answer can be turned into the moves it needs.
+ *
+ * <b>A marker's own label is one line and stays a string.</b> Several lines are a thing a *group*
+ * of markers at one station says, and that label is answered by a function the viewer asks rather
+ * than carried in a marker's options — so the comparison below stays a string comparison. An array
+ * here would be a new value on every render and would slide every marker on every re-read of the
+ * watch, which is precisely the rebuild this diff exists to avoid.
+ *
+ * <b>Nothing is carried on the hover line any more, and the switch is why.</b> The last-report time
+ * used to go there, revealed by a pointer resting on the marker. A collapsed marker has no such
+ * line — the viewer says so outright — so a group's times had to be drawn on the label instead, and
+ * one switch therefore meant two different things: hover-only for a caver standing alone, permanent
+ * for the same caver a minute later once somebody joined them at their station. Both read off the
+ * label now. The case that needed a marker to be added again rather than moved — a sublabel cannot
+ * be taken off by a move, because a move replaces only the options it is given — goes with it.
+ */
 interface DrawnMarker {
   station: string;
   label: string;
-  sublabel: string | undefined;
   color: string;
+}
+
+/** What a line of a label is composed against: the words, the clock and the switch. */
+interface MarkerLineOptions {
+  t: TFunction;
+  language: string;
+  showTimes: boolean;
+}
+
+/**
+ * One person as a label reads them: their name, the time beside it where that was asked for, and
+ * whether they have come out.
+ *
+ * <b>One spelling for a marker drawn alone and for a line of a group's label.</b> Which of the two
+ * somebody appears as is the viewer's decision, taken from whether anybody else resolved to the
+ * same station, and it changes under a reader who is doing nothing — so anything said one way and
+ * not the other is a fact that appears and disappears as the party gathers and separates. That is
+ * how the out flag came to be dropped: it survived collapsing as a colour, and a collapsed marker
+ * has only one colour for all of them.
+ *
+ * <b>Out is said in words, not only in the muted colour.</b> The colour is still drawn where a
+ * marker stands alone, and it carries nothing for a reader who cannot separate two greys on a dark
+ * scene — on a surface somebody uses to decide whether a party is still underground, that is not a
+ * thing to leave to a hue.
+ *
+ * Defined at module scope on purpose: the effect that draws the markers calls it, and a function
+ * rebuilt on every render would have to be named in that effect's dependencies, which would redraw
+ * every marker on every render of the page around it.
+ */
+function markerLine(caver: TrackedCaver, { t, language, showTimes }: MarkerLineOptions): string {
+  const named =
+    showTimes && caver.lastRecordedAt !== null
+      ? t('caveview.tracking.markerNameTime', {
+          name: caver.name,
+          when: new Date(caver.lastRecordedAt).toLocaleTimeString(language),
+        })
+      : caver.name;
+  return caver.out ? t('caveview.tracking.markerNameOut', { name: named }) : named;
 }
 
 /**
@@ -222,6 +280,17 @@ export default function CaveViewPanel({
   /** Set when a link named a part of the survey this model turned out not to hold. */
   const [missingPart, setMissingPart] = useState(false);
   const [showMarkerTimes, setShowMarkerTimes] = useState(false);
+  /**
+   * Whether the markers say who they are, rather than only where somebody is.
+   *
+   * <b>On, and remembered nowhere.</b> A reader who has never asked for anything is the one this
+   * is drawn for — a name beside a dot is the answer to "who is that", and a model of anonymous
+   * dots makes them ask the list for every one of them. Turning it off is for a screen a party at
+   * one station has crowded, which is a thing about this view at this moment rather than a
+   * preference: it lasts as long as the panel is mounted and a fresh page opens with names again,
+   * exactly like the last-update switch beside it.
+   */
+  const [showMarkerLabels, setShowMarkerLabels] = useState(true);
   const [openCaverId, setOpenCaverId] = useState<string | null>(null);
   /** Which row of the watch the camera was last sent to, and whose station carries the mark. */
   const [shownPlace, setShownPlace] = useState<TrackedPlace | null>(null);
@@ -283,6 +352,49 @@ export default function CaveViewPanel({
   // fresh closure, which is what the callbacks above already ride a ref to avoid.
   const crsLookupRef = useRef(crsLookup);
   crsLookupRef.current = crsLookup;
+
+  /**
+   * What the one marker drawn in place of a party standing together says.
+   *
+   * <b>A count is not an answer to the question this surface exists for.</b> Three dots at one
+   * station collapse to a single marker reading "3", and who those three are is the whole of what
+   * somebody watching a trip wants from the model — so the group is named: its team, where the
+   * people in it are one team, and then each of them on a line of their own.
+   *
+   * <b>Only the markers the viewer collapsed are named.</b> The lines are built from the ids it
+   * hands over and never from a team's roster, so somebody whose position was withheld — who has
+   * no marker, deliberately — cannot appear under a heading that would place them at a station
+   * nobody said they were at. That rule is the reason this reads ids rather than teams.
+   *
+   * <b>Ordered by the watch, not by the viewer.</b> Markers arrive in the order they were added,
+   * and a marker re-added moves to the end of that order — so a label built in it would silently
+   * re-sort itself while nothing about the party had changed. The watch's order is the trip's
+   * roster; the one rearrangement made of it is that whoever has come out is set below whoever
+   * has not, which is a fact about the people rather than about the drawing.
+   *
+   * <b>The heading is read from everybody collapsed, including whoever is out.</b> It is the claim
+   * that the names under it are one team, so it is answered by the whole set the marker stands for:
+   * a caver of another team who has come out at this station is still a second team at it, and
+   * heading the block with the first team's name because the mixture only shows below the fold
+   * would be the same false claim the shared-title rule exists to refuse.
+   *
+   * Answering null where none of them is on the watch any more leaves the viewer's own count,
+   * which is the honest thing to draw when the panel has nothing to say about them.
+   */
+  const clusterLabelRef = useRef<(ids: readonly string[]) => string[] | null>(() => null);
+  clusterLabelRef.current = (ids) => {
+    const here = new Set(ids);
+    const members = (trackedCavers ?? []).filter((caver) => here.has(caver.caverId));
+    if (members.length === 0) {
+      return null;
+    }
+    const title = sharedTeamTitle(members);
+    const line = { t, language: i18n.language, showTimes: showMarkerTimes };
+    return [
+      ...(title === null ? [] : [title]),
+      ...undergroundFirst(members).map((member) => markerLine(member, line)),
+    ];
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -349,13 +461,26 @@ export default function CaveViewPanel({
         }
       });
       // Resting on a caver's marker opens that caver's card. `handled` is left alone here too,
-      // for a different reason: on this event it suppresses only the marker's own second line,
-      // which is the last-report time somebody asked for with the switch. Claiming the event
-      // would quietly turn that switch off.
+      // and now decides nothing: what it suppresses is the marker's own hover line, and no marker
+      // this panel draws is given one — everything the switches ask for is on the label, where a
+      // collapsed marker can say it too. Left unset rather than set, so a hover line added here
+      // later is not swallowed by a flag nobody would think to look for.
       viewer.addEventListener('liveMarkerHover', (event) => {
         const id = (event as { id?: unknown }).id;
         if (!disposed && typeof id === 'string') {
           setOpenCaverId(id);
+        }
+      });
+      // A caver standing with others is not the same event: the viewer collapses them and
+      // reports the group, so listening only for the one above leaves a party of three
+      // answering nothing — which is most of them, because a party moves together. The card
+      // is per person, so the group's first line is opened; the list beside the model is how
+      // a reader reaches the rest, and it is already showing them together.
+      viewer.addEventListener('liveMarkerCluster', (event) => {
+        const markers = (event as { markers?: readonly { id?: unknown }[] }).markers;
+        const first = markers?.find((marker) => typeof marker.id === 'string')?.id;
+        if (!disposed && typeof first === 'string') {
+          setOpenCaverId(first);
         }
       });
 
@@ -376,6 +501,58 @@ export default function CaveViewPanel({
     };
   }, [fileUrl, fileName]);
 
+  // ---- Re-asking the viewer what a group says ----
+  //
+  // <b>The viewer asks, but only when something it draws has moved.</b> It calls the cluster-label
+  // function as markers are added, slid and removed, and at no other moment — so a poll that
+  // renamed a team, or moved one caver of a standing party onto another team, changed what that
+  // function would answer while nothing asked it again. Seen live: the table and the list beside
+  // the model both followed a rename and the model went on drawing the old name, two surfaces on
+  // one screen disagreeing about one team. The membership case is worse than untidy — a heading is
+  // the claim that the names under it are one team, and it went on asserting that over a set that
+  // had become a mixture, which is the one claim the shared-title rule exists to refuse. A party
+  // standing at one station stands there for an hour, so "it corrects itself when somebody moves"
+  // is not a correction.
+  //
+  // Setting the function again is what re-asks it: the viewer rebuilds the collapsed markers
+  // already displayed, and rebuilds only those whose text has actually changed — a marker drawn on
+  // its own is not touched at all. So the whole of the fix is to set it again whenever the answer
+  // could differ, which is what the key below decides. That key is read from exactly what the label
+  // is built out of: who is on the watch, what each of them is called, whose team they are on,
+  // whether they have come out, and the switch, the clock and the language that shape the lines.
+  // An unchanged poll composes the same string, re-registers nothing, and leaves the per-marker
+  // diffing below to do what it already did — which is what keeps this from becoming a rebuild of
+  // every collapsed marker every thirty seconds.
+  //
+  // Declared *before* the marker effect so that on the commit a model becomes ready the label is in
+  // place before the first marker is added: a party already standing together is then named as it
+  // is drawn, rather than drawn as a count and relabelled a moment later.
+  const clusterLabelKey = JSON.stringify([
+    showMarkerTimes,
+    i18n.language,
+    (trackedCavers ?? []).map((caver) => [
+      caver.caverId,
+      caver.name,
+      caver.teamId,
+      caver.teamTitle,
+      caver.out,
+      showMarkerTimes ? caver.lastRecordedAt : null,
+    ]),
+  ]);
+
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (viewer === undefined || status !== 'ready') {
+      return;
+    }
+    // The answer itself still rides a ref, so what is registered is one shape of function and the
+    // watch it reads is always the current one. `status` is a dependency because a panel pointed at
+    // a second survey file builds a second viewer, which has been told none of this.
+    viewer.setLiveMarkerClusterLabel((markers) =>
+      clusterLabelRef.current(markers.map((marker) => marker.id)),
+    );
+  }, [clusterLabelKey, status]);
+
   // ---- Live markers ----
   //
   // Added, slid and taken off the loaded model as the watch is re-read, which happens every half
@@ -390,6 +567,9 @@ export default function CaveViewPanel({
 
     const drawn = drawnMarkersRef.current;
     const wanted = new Map<string, DrawnMarker>();
+    // Built here rather than shared with the cluster label above, so that everything this effect
+    // composes a label from is also something it is re-run for.
+    const line = { t, language: i18n.language, showTimes: showMarkerTimes };
     for (const caver of trackedCavers ?? []) {
       if (caver.position.kind !== 'station') {
         // No marker is invented for a position nobody reported or one that was withheld: there
@@ -398,17 +578,14 @@ export default function CaveViewPanel({
         continue;
       }
       wanted.set(caver.caverId, {
+        // The same line a group's label gives this person, so that the party gathering at one
+        // station and separating again does not add and drop facts about them as it goes.
         station: caver.position.station,
-        label: caver.name,
-        sublabel:
-          showMarkerTimes && caver.lastRecordedAt !== null
-            ? t('caveview.tracking.markerSublabel', {
-                when: new Date(caver.lastRecordedAt).toLocaleTimeString(i18n.language),
-              })
-            : undefined,
-        // Somebody reported out is drawn in the muted colour: their marker is where they were
-        // last seen, not where they are, and a party half of which is above ground has to read
-        // as that rather than as everybody still being underground.
+        label: markerLine(caver, line),
+        // Somebody reported out is drawn in the muted colour as well: their marker is where they
+        // were last seen, not where they are, and a party half of which is above ground has to
+        // read as that rather than as everybody still being underground. The colour is the part
+        // of that which collapsing throws away, which is why the label says it too.
         //
         // Both colours are stated rather than taken from the interface theme, for two reasons the
         // palette spells out: the scene behind them is the viewer's own, not the page's, and a
@@ -420,18 +597,14 @@ export default function CaveViewPanel({
 
     for (const [id, marker] of wanted) {
       const before = drawn.get(id);
-      const options = { label: marker.label, sublabel: marker.sublabel, color: marker.color };
-      // A move only replaces the options it is given, so an option that has gone away cannot be
-      // taken off a marker by moving it — turning the time off would leave every marker showing
-      // the time it had when it was turned off. Adding replaces the marker whole, which is what
-      // that case needs; it costs the slide, and nothing there is sliding anyway.
-      const clearsSublabel = before !== undefined && before.sublabel !== undefined && marker.sublabel === undefined;
-      if (before === undefined || clearsSublabel) {
+      const options = { label: marker.label, color: marker.color };
+      // A move replaces only the options it is given, which is no longer a trap: every option
+      // these markers carry is given on every call, so none of them can be left behind by one.
+      if (before === undefined) {
         viewer.addLiveMarker(id, marker.station, options);
       } else if (
         before.station !== marker.station
         || before.label !== marker.label
-        || before.sublabel !== marker.sublabel
         || before.color !== marker.color
       ) {
         viewer.moveLiveMarker(id, marker.station, options);
@@ -445,6 +618,25 @@ export default function CaveViewPanel({
 
     drawnMarkersRef.current = wanted;
   }, [trackedCavers, showMarkerTimes, status, t, i18n.language]);
+
+  // ---- Whether the markers say who they are ----
+  //
+  // <b>Applied whenever a model is ready, not only when the switch is moved.</b> The setting
+  // belongs to the markers rather than to the view, so the viewer neither saves it nor restores
+  // it — and this panel builds a *new* viewer for every survey file it is pointed at, each of
+  // which starts with its labels on. Without the `status` dependency, opening a second cave would
+  // quietly bring back the labels somebody had just taken off, with the switch still reading off.
+  //
+  // Nothing is added or removed here: the markers stay drawn and stay pointable with their labels
+  // off, so a party that crowds the screen is read by pressing it rather than by squinting at it,
+  // and the cards the list and the marker hover open are unaffected.
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (viewer === undefined || status !== 'ready') {
+      return;
+    }
+    viewer.liveMarkerLabels = showMarkerLabels;
+  }, [showMarkerLabels, status]);
 
   // ---- A place asked for from outside ----
   //
@@ -651,6 +843,8 @@ export default function CaveViewPanel({
           cavers={trackedCavers}
           showTimes={showMarkerTimes}
           onShowTimesChange={setShowMarkerTimes}
+          showLabels={showMarkerLabels}
+          onShowLabelsChange={setShowMarkerLabels}
           openCaverId={openCaverId}
           onOpenCaver={setOpenCaverId}
           shown={shownPlace}

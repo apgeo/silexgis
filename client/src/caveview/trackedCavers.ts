@@ -202,6 +202,55 @@ export function trackedCaverTeams(cavers: readonly TrackedCaver[]): TrackedCaver
   return groups;
 }
 
+/**
+ * The name of the one team all of these people are on, or null where there is no such name.
+ *
+ * <b>Written for the heading over a group of people standing at one station.</b> A heading is a
+ * claim about who the names under it are, so it is only printed where the claim is true of every
+ * one of them: null is answered for a mixture of teams, for anybody on no team, and for a team the
+ * watch carried no title for — in each of those cases the names alone are the whole of what is
+ * known, and a word over them would say more than that.
+ *
+ * <b>It says whose people these are, never that the team is complete.</b> The lines under the
+ * heading are the claim about who is at the station, and a member whose position was withheld or
+ * who has not been placed is not among them — so a team of five, three of whom are here, is headed
+ * by its name over three names. Inventing the missing two, or suppressing the heading because they
+ * are missing, would each say something nobody reported.
+ */
+export function sharedTeamTitle(members: readonly TrackedCaver[]): string | null {
+  const first = members[0];
+  if (first === undefined || first.teamId === null) {
+    return null;
+  }
+  if (members.some((member) => member.teamId !== first.teamId)) {
+    return null;
+  }
+  const title = first.teamTitle;
+  return title === null || title.length === 0 ? null : title;
+}
+
+/**
+ * The same people, whoever is still underground first.
+ *
+ * <b>Written for the block of names one collapsed marker draws.</b> That marker stands for
+ * everybody whose last reported station is this one, and somebody reported out is among them —
+ * their last position is where they were, not where they are, which is the whole reason their
+ * marker is drawn in the muted colour when it is drawn alone. Collapsed, that colour is gone: one
+ * dot in one colour, over a list of names. Saying it on each line is what puts it back, and
+ * putting the marked lines together is what makes the answer readable rather than findable: the
+ * names above the break are the party still at the station, and a reader deciding whether to call
+ * somebody out reads the shape of the block instead of checking five lines one at a time.
+ *
+ * <b>A stable partition, which is why this is not a re-ordering.</b> Inside each half the watch's
+ * own order survives untouched, and that is the trip's roster order — a club's arrangement of its
+ * own party, not something the last radio report gets to rearrange. The one thing that moves a
+ * name is that person coming out, which is exactly the change somebody watching this is watching
+ * for.
+ */
+export function undergroundFirst(members: readonly TrackedCaver[]): TrackedCaver[] {
+  return [...members.filter((member) => !member.out), ...members.filter((member) => member.out)];
+}
+
 /** An instant that can be compared, or null where the string was absent or unreadable. */
 function instantOf(value: string | null): number | null {
   if (value === null) {

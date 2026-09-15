@@ -29,12 +29,15 @@ const asked: (TrackedPlace | null)[] = [];
 function Harness({ cavers }: { cavers: readonly TrackedCaver[] }) {
   const [open, setOpen] = useState<string | null>(null);
   const [times, setTimes] = useState(false);
+  const [labels, setLabels] = useState(true);
   const [shown, setShown] = useState<TrackedPlace | null>(null);
   return (
     <CaveViewTrackingOverlay
       cavers={cavers}
       showTimes={times}
       onShowTimesChange={setTimes}
+      showLabels={labels}
+      onShowLabelsChange={setLabels}
       openCaverId={open}
       onOpenCaver={setOpen}
       shown={shown}
@@ -91,6 +94,24 @@ describe('CaveViewTrackingOverlay', () => {
     expect(screen.queryByTestId('caveview-caver-card')).not.toBeInTheDocument();
   });
 
+  it('marks the row of somebody reported out, not only the card behind it', () => {
+    // The list is the one place the whole party is visible at once, and out-ness used to be
+    // reachable from it only by opening each caver's card in turn — which on a crowded station is
+    // out-ness nobody checks. The model says it on the marker; this is the surface beside the
+    // model, and the two have to agree about who is still underground.
+    render(
+      <Harness
+        cavers={[
+          caver({ caverId: 'a', name: 'Ana' }),
+          caver({ caverId: 'b', name: 'Bogdan', out: true }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('caveview-row-out-b')).toHaveTextContent('Out');
+    expect(screen.queryByTestId('caveview-row-out-a')).toBeNull();
+  });
+
   it('says why a position is missing where there is room to say it', () => {
     render(<Harness cavers={[caver({ position: { kind: 'withheld', certain: true }, out: true })]} />);
 
@@ -135,6 +156,8 @@ describe('CaveViewTrackingOverlay', () => {
         cavers={[caver()]}
         showTimes={false}
         onShowTimesChange={onChange}
+        showLabels
+        onShowLabelsChange={vi.fn()}
         openCaverId={null}
         onOpenCaver={vi.fn()}
         shown={null}
@@ -145,6 +168,32 @@ describe('CaveViewTrackingOverlay', () => {
     fireEvent.click(screen.getByTestId('caveview-tracking-times'));
 
     expect(onChange).toHaveBeenCalledWith(true, expect.anything());
+  });
+
+  /**
+   * The names on the model, and the switch that takes them off.
+   *
+   * It sits beside the last-update switch because the two are one question asked twice — whether
+   * the markers say anything, and then what they say — and a reader looking for either looks in
+   * the same place. Handed straight out for the same reason the other one is: the viewer is held
+   * by the panel and this list has no way to reach it.
+   */
+  it('hands the names switch out, on by default, and greys the times out with it', () => {
+    render(<Harness cavers={[caver()]} />);
+
+    const labels = screen.getByTestId('caveview-tracking-labels');
+    expect(labels).toBeChecked();
+
+    fireEvent.click(labels);
+
+    expect(labels).not.toBeChecked();
+    // A time is drawn on a label, so with no labels the switch beside it governs nothing anybody
+    // can see. Left pressable it would answer a press with no change at all, which reads as a
+    // control that has stopped working rather than as one with nothing to work on.
+    expect(screen.getByTestId('caveview-tracking-times')).toBeDisabled();
+
+    fireEvent.click(labels);
+    expect(screen.getByTestId('caveview-tracking-times')).toBeEnabled();
   });
 
   /**
