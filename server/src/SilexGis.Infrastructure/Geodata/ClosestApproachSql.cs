@@ -209,6 +209,15 @@ public static class ClosestApproachSql
             ? "ORDER BY dist ASC NULLS LAST, a_id, b_id\n                LIMIT @ca_limit"
             : string.Empty;
 
+        // The threshold is stated in the same metres as every figure on the answer — the 3-D
+        // ones — so the 2-D ST_DWithin above is only ever a pre-filter that over-includes, and
+        // the real cut happens here on the distance the table actually reports. Without it, two
+        // caves close in plan but far apart vertically are listed beyond the asked-for maximum.
+        // Cheap to repeat in the filter: by this point pa and pb are two points, not line work.
+        var distanceTrim = forArea
+            ? "WHERE ST_3DDistance(e.pa, e.pb) <= @ca_max_metres"
+            : string.Empty;
+
         return $"""
             WITH shape AS MATERIALIZED (
                 SELECT c.cave_feature_id AS cave_id,
@@ -260,6 +269,7 @@ public static class ClosestApproachSql
                 -- all but a handful would be paying for answers nobody is shown.
                 SELECT e.*, ST_3DDistance(e.pa, e.pb) AS dist
                 FROM ends e
+                {distanceTrim}
                 {ordering}
             )
             SELECT e.a_id AS "CaveAId",

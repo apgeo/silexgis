@@ -324,6 +324,44 @@ public sealed class ClosestApproachTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
+    /// The threshold is stated in the metres the table reports — the three-dimensional ones. A
+    /// pair close in plan but far apart vertically has two distances, and only one of them is
+    /// printed on the answer; a threshold between the two is the only input that can tell which
+    /// one the cut was made on. Cut on the plan distance, the pair stays listed at a figure
+    /// larger than the maximum the caller asked for, and the parameter silently means something
+    /// weaker than every number beside it.
+    /// </summary>
+    [Fact]
+    public async Task The_threshold_cuts_on_the_reported_distance_and_not_on_the_plan_one()
+    {
+        // A band of its own: the class shares one database, so a window over another test's
+        // latitudes would count that test's caves.
+        const double band = 46.05;
+        const string window = "west=23.9&south=46.045&east=24.1&north=46.065";
+
+        var south = await CreateCaveAsync();
+        await UploadCenterlineAsync(south, Passage(band, band + 0.001, SouthAltitude));
+        var north = await CreateCaveAsync();
+        await UploadCenterlineAsync(north, Passage(band + 0.003, band + 0.004, NorthAltitude));
+
+        // Between the plan distance (222 m) and the reported one (268 m): the two-dimensional
+        // pre-filter admits the pair, so only a cut on the reported figure can remove it.
+        var between = await Read(viewer.GetAsync(
+            $"/api/v1/caves/closest-approaches?{window}&maxDistanceM=250"));
+        between.GetProperty("pairs").GetArrayLength().ShouldBe(0);
+
+        // Just above the reported distance the pair is back, at the figure the cut is made on —
+        // which is what says the empty table above was the threshold and not a broken fixture.
+        var above = await Read(viewer.GetAsync(
+            $"/api/v1/caves/closest-approaches?{window}&maxDistanceM=300"));
+        var pairs = above.GetProperty("pairs");
+        pairs.GetArrayLength().ShouldBe(1);
+        pairs[0].GetProperty("distanceM").GetDouble().ShouldBe(ExpectedDistanceM, 2d);
+        new[] { pairs[0].GetProperty("caveAId").GetGuid(), pairs[0].GetProperty("caveBId").GetGuid() }
+            .ShouldBe([south, north], ignoreOrder: true);
+    }
+
+    /// <summary>
     /// What the pairing costs per pair, asserted against the plan rather than against a clock.
     ///
     /// <para>
