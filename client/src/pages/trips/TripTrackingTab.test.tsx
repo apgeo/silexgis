@@ -66,6 +66,9 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     armedAt: '2026-09-12T06:00:00Z',
     closedAt: null,
     positionsWithheld: false,
+    // What the published page would call the party. The panel that mints a link words its notice
+    // from this, so the fixture states it rather than leaving the surface to guess.
+    publishesRealNames: true,
     teams: [],
     participants: [
       {

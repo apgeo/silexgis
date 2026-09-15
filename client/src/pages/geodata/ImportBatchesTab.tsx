@@ -52,6 +52,10 @@ export default function ImportBatchesTab() {
       // what this column can honestly say about it.
       case 'tripCsv':
         return t('vectorImport.batchFromTrips');
+      // A trip recorded on a phone and exported, and the same again: the archive is a stored file
+      // rather than a geofile, so there is no file name on the batch to show.
+      case 'speleolocArchive':
+        return t('vectorImport.batchFromSpeleoloc');
       case 'vectorFile':
         return fileName ?? t('vectorImport.fileGone');
       default: {

@@ -256,7 +256,14 @@ export default function TripTrackingTab({
       {/* Under the setup rather than at the foot of the tab: publishing is a decision about the
           watch as it is configured — which cave, which survey — and the card above it is where
           that configuration is read. A link handed out before a model is chosen is refused. */}
-      <TrackingSharePanel tripLogId={trip.id} tripTitle={trip.title} canEdit={canEdit} />
+      <TrackingSharePanel
+        tripLogId={trip.id}
+        tripTitle={trip.title}
+        canEdit={canEdit}
+        // What the published page will call the party, which is the installation's setting and
+        // arrives on the trip's own read rather than being asked for a second time.
+        publishesRealNames={data.publishesRealNames}
+      />
 
       <div>
         {/* <b>Selecting everybody is a control of this page's own, and not the checkbox antd puts

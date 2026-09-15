@@ -10,6 +10,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Profiles;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
@@ -40,30 +41,62 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
 {
     private readonly SilexGisApiFactory factory;
     private readonly string filesRoot;
+    private readonly string connectionString;
 
     private HttpClient owner = null!;
     private HttpClient reader = null!;
     private HttpClient anonymous = null!;
+    private string ownerEmail = null!;
     private long caveTypeId;
 
     public TripTrackingPublicationTests(PostgresFixture postgres)
     {
+        connectionString = postgres.ConnectionString;
         filesRoot = Path.Combine(AppContext.BaseDirectory, "test-data", $"trkpub-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(
-            postgres.ConnectionString,
-            new Dictionary<string, string?>
-            {
-                ["Files:Root"] = filesRoot,
-                ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
-            },
+            connectionString,
+            HostSettings(),
             // Workers off: the graph-extraction job would otherwise pick up the fake survey file
             // below, fail to parse it, and rewrite the very station rows these tests seed.
             JobWorkers.RemoveFrom);
     }
 
+    /// <summary>
+    /// What every host this class builds is configured with. Shared so a second host reads the
+    /// same file store and signs delivery URLs with the same keys as the first.
+    /// </summary>
+    private Dictionary<string, string?> HostSettings() => new()
+    {
+        ["Files:Root"] = filesRoot,
+        ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
+    };
+
+    /// <summary>
+    /// A second host over the same database, run by an operator who has turned published names off.
+    /// </summary>
+    /// <remarks>
+    /// The setting is read where the envelope is built rather than stored anywhere, so this is how
+    /// a test compares the two answers to <em>one</em> published link: the trip, the share and the
+    /// reports are the same rows, and the only difference between the two envelopes is the setting.
+    /// </remarks>
+    private SilexGisApiFactory NamesOffFactory()
+    {
+        var settings = HostSettings();
+        settings["TripTracking:PublishRealNames"] = "false";
+        return new SilexGisApiFactory(connectionString, settings, JobWorkers.RemoveFrom);
+    }
+
+    /// <summary>What a followed page calls each member of the party, in the envelope's order.</summary>
+    private static List<string?> Labels(JsonElement envelope) =>
+        [.. envelope.GetProperty("participants").EnumerateArray()
+            .Select(p => p.GetProperty("label").ValueKind == JsonValueKind.Null
+                ? null
+                : p.GetProperty("label").GetString())];
+
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
+        ownerEmail = $"pub-own-{suffix}@t.local";
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"pub-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"pub-read-{suffix}@t.local");
 
@@ -156,7 +189,7 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         var guideId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, email);
         var guide = await AuthHelper.BearerClientAsync(factory, email);
 
-        var (trip, cavers) = await CreateTripAsync("Guided", guests: 1, client: guide);
+        var (trip, cavers, _) = await CreateTripAsync("Guided", guests: 1, client: guide);
         (await PutConfigAsync(guide, trip, new { state = "armed", surveyModelId = model }))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         (await guide.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
@@ -284,13 +317,19 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     }
 
     /// <summary>
-    /// A follower is told a place in the party and whatever an administrator typed, and nothing
-    /// else about who anybody is. The signed-in read of the same trip is the positive half: it
-    /// names the cavers, which is what makes the absence in the public envelope a fact about this
-    /// surface rather than about an empty trip.
+    /// A follower is told the party's names — the roster's own, which is what this installation
+    /// publishes by default — and still nothing that identifies anybody beyond that.
     /// </summary>
+    /// <remarks>
+    /// The two halves are one test on purpose. That names arrive says nothing on its own unless
+    /// the same body is also shown to carry no caver identity: a page that published the names by
+    /// publishing the people would satisfy the first sentence and defeat the point of the second.
+    /// The signed-in read of the same trip is here for the other direction — it keys by
+    /// <c>caverId</c> and it keeps doing so, so publishing names widened the public envelope and
+    /// changed nothing about what a caller with an account is told.
+    /// </remarks>
     [Fact]
-    public async Task The_published_party_carries_no_caver_identity_beyond_what_the_admin_typed()
+    public async Task The_published_party_is_named_from_the_roster_and_still_carries_no_caver_identity()
     {
         var trip = await TrackedTripAsync("Naming", locationProtected: false, guests: 2);
         var (_, token) = await PublishAsync(trip.Trip);
@@ -305,18 +344,26 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         var before = JsonDocument.Parse(raw).RootElement.GetProperty("participants").EnumerateArray().ToList();
         before.Count.ShouldBe(2);
         before.Select(p => p.GetProperty("ordinal").GetInt32()).ShouldBe(new[] { 1, 2 });
-        before.ShouldAllBe(p => p.GetProperty("label").ValueKind == JsonValueKind.Null);
+        // The names the roster holds, and exactly those: not a rendering of the ordinal, and not
+        // somebody else's name — which is why the trip's own names are compared and not merely
+        // the fact that some string arrived.
+        before.Select(p => p.GetProperty("label").GetString()).Order()
+            .ShouldBe(trip.Names.Order());
 
-        // The signed-in read of the same trip does name them — so the envelope above is
-        // withholding an identity that exists, not describing a trip that has none.
+        // The signed-in read of the same trip is unchanged by any of this: it names the cavers by
+        // identity, as it always has, and the caption field stays empty because nobody typed one.
         var signedIn = await StateAsync(owner, trip.Trip);
         signedIn.GetProperty("participants").EnumerateArray()
             .Select(p => p.GetProperty("caverId").GetGuid())
             .Order()
             .ShouldBe(trip.Cavers.Order());
+        signedIn.GetProperty("participants").EnumerateArray()
+            .ShouldAllBe(p => p.GetProperty("label").ValueKind == JsonValueKind.Null);
+        signedIn.GetProperty("publishesRealNames").GetBoolean().ShouldBeTrue(
+            "the panel that mints a link words itself from this, so it has to say what the page does");
 
-        // Naming somebody is a deliberate act, and it is the only thing that puts a name on the
-        // page. The person nobody named stays a number.
+        // Naming somebody is still a deliberate act and still wins: the caption is what the page
+        // shows, and the person nobody captioned keeps the roster's name.
         var named = await owner.PutAsJsonAsync(
             $"/api/v1/trip-logs/{trip.Trip}/tracking/participants/{trip.Cavers[0]}",
             new { label = "Ana P." });
@@ -324,14 +371,158 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
 
         var after = (await FollowAsync(token)).GetProperty("participants").EnumerateArray().ToList();
         after.Count(p => p.GetProperty("label").GetString() == "Ana P.").ShouldBe(1);
-        after.Count(p => p.GetProperty("label").ValueKind == JsonValueKind.Null).ShouldBe(1);
+        after.Count(p => trip.Names.Contains(p.GetProperty("label").GetString() ?? "")).ShouldBe(1);
 
-        // Clearing it takes the name back off the page.
+        // Clearing the caption puts that person back to the roster's name rather than to nothing:
+        // the caption overrode a name, it did not create the only one there was.
         (await owner.PutAsJsonAsync(
             $"/api/v1/trip-logs/{trip.Trip}/tracking/participants/{trip.Cavers[0]}",
             new { label = "   " })).StatusCode.ShouldBe(HttpStatusCode.OK);
         (await FollowAsync(token)).GetProperty("participants").EnumerateArray()
-            .ShouldAllBe(p => p.GetProperty("label").ValueKind == JsonValueKind.Null);
+            .Select(p => p.GetProperty("label").GetString()).Order()
+            .ShouldBe(trip.Names.Order());
+    }
+
+    /// <summary>
+    /// The installation-wide switch, and the one thing that outranks it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both settings are exercised against <b>one trip and one live token</b>, which is the only
+    /// way the negative means anything: the same link that answers a party of names here answers
+    /// places in the party to a server told not to publish names, so what changed is the setting
+    /// and not the fixture. A second host over the same database is what makes that comparison
+    /// possible — the setting is read where the envelope is built, not stored on the trip.
+    /// </para>
+    /// <para>
+    /// And the caption an administrator typed wins on both, because that field is how one person
+    /// who does not want to appear is kept off a public page without the whole installation
+    /// turning the feature off. If the switch could override it, somebody who asked not to be
+    /// named would be named the moment a setting somewhere else moved.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task An_installation_can_publish_no_names_and_a_caption_still_outranks_the_setting()
+    {
+        var trip = await TrackedTripAsync("Quiet", locationProtected: false, guests: 2);
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        using var quiet = NamesOffFactory();
+        using var visitor = quiet.CreateClient();
+
+        // As this installation is configured, the link names the party.
+        Labels(await FollowAsync(token)).Order().ShouldBe(trip.Names.Order());
+        // The same link, read by a server whose operator has turned names off, names nobody.
+        var quietBefore = await FollowAsync(token, visitor);
+        Labels(quietBefore).ShouldAllBe(label => label == null);
+        quietBefore.GetProperty("participants").EnumerateArray()
+            .Select(p => p.GetProperty("ordinal").GetInt32()).ShouldBe(new[] { 1, 2 });
+        // What the page is still for does not depend on the setting: where the party is, is there.
+        quietBefore.GetProperty("participants").EnumerateArray()
+            .Count(p => p.GetProperty("stationName").GetString() == "cave.upper.2").ShouldBe(1);
+
+        (await owner.PutAsJsonAsync(
+            $"/api/v1/trip-logs/{trip.Trip}/tracking/participants/{trip.Cavers[0]}",
+            new { label = "Ana P." })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The caption is shown whichever way the setting is set; only what an uncaptioned
+        // participant is called differs between the two.
+        var quietAfter = Labels(await FollowAsync(token, visitor));
+        quietAfter.Count(label => label == "Ana P.").ShouldBe(1);
+        quietAfter.Count(label => label == null).ShouldBe(1);
+
+        var loudAfter = Labels(await FollowAsync(token));
+        loudAfter.Count(label => label == "Ana P.").ShouldBe(1);
+        loudAfter.Count(label => trip.Names.Contains(label ?? "")).ShouldBe(1);
+
+        // And each server's own trip read says which of the two a link minted there would be —
+        // which is what the panel that mints one words itself from. Both halves, because a flag
+        // that answered the same thing everywhere would tell an administrator nothing.
+        (await StateAsync(owner, trip.Trip)).GetProperty("publishesRealNames").GetBoolean().ShouldBeTrue();
+        using var quietOwner = await AuthHelper.BearerClientAsync(quiet, ownerEmail);
+        (await StateAsync(quietOwner, trip.Trip)).GetProperty("publishesRealNames").GetBoolean()
+            .ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A member who holds an account is published under the <b>roster's</b> name for them, not under
+    /// the display name their account carries — a decision, pinned here so it cannot drift silently.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The two names are asserted against each other in one test because either alone proves
+    /// nothing. That the page says "Ana Popescu" is unremarkable until the same person is shown to
+    /// be called something else everywhere a caller is signed in; that the signed-in page says
+    /// "Ana P." is unremarkable until the published page is shown not to follow it. Together they
+    /// say what is actually true: this application calls one person by two names, on purpose, and
+    /// which surface uses which is fixed.
+    /// </para>
+    /// <para>
+    /// Why the roster's, when the shared resolver would have preferred the account's: that resolver
+    /// composes "display name, or user name, or <c>user-</c> and eight hex digits", and accounts are
+    /// created with the address as the user name — so on a page whose whole point is naming people,
+    /// deferring to it would publish <c>user-1a2b3c4d</c> for every member who never chose a display
+    /// name. The second half of this test is that demonstration, not a decoration: the account made
+    /// the ordinary way resolves to exactly that string, and the published page does not use it.
+    /// </para>
+    /// <para>
+    /// What a member does have is the caption, so the last assertion is that it reaches them like
+    /// anybody else — the person who wants a different name on a public page is not without a way
+    /// to get one.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_member_is_published_under_the_roster_name_and_not_under_their_account_label()
+    {
+        var member = await MemberWithOwnDisplayNameAsync();
+        var trip = await TrackedTripAsync("Member", locationProtected: false, guests: 1,
+            memberCaver: member.Caver);
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        // The published page: the roster's name for them, and not the one their account carries.
+        var published = Labels(await FollowAsync(token));
+        published.ShouldContain(member.RosterName);
+        published.ShouldNotContain(member.AccountLabel);
+
+        // The signed-in page, which is where the account's own name is honoured — so the line above
+        // is this application preferring one existing name over another, not a page that had only
+        // one to choose from.
+        var detail = await BodyAsync(await owner.GetAsync($"/api/v1/trip-logs/{trip.Trip}"));
+        // Both lists: the roster is split by role on that surface, and which side a row lands on is
+        // not what this test is about.
+        var onTrip = detail.GetProperty("participants").EnumerateArray()
+            .Concat(detail.GetProperty("proposers").EnumerateArray())
+            .Single(p => p.GetProperty("caverId").GetGuid() == member.Caver);
+        onTrip.GetProperty("name").GetString().ShouldBe(member.AccountLabel);
+
+        // And the alternative is worse rather than merely different. The trip's own owner holds an
+        // account made the ordinary way — nobody chose a display name for it, and the address is its
+        // user name — and the resolver the published page deliberately does not use renders exactly
+        // that account as a placeholder. Publishing through it would put that string on the page in
+        // place of a person's name, for every member who never chose one.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var ordinary = await db.Users.AsNoTracking().FirstAsync(u => u.Email == ownerEmail);
+            ordinary.DisplayName.ShouldBeNull("this account is the ordinary case: nobody named it");
+            ProfileProtection.Label(ordinary.Id, ordinary.DisplayName, ordinary.UserName, ordinary.Email)
+                .ShouldStartWith(ProfileProtection.AnonymousLabelPrefix);
+        }
+
+        // Turned off, a member is a place in the party exactly as a guest is: holding an account
+        // neither exempts somebody from the setting nor subjects them to a different rule.
+        using var quiet = NamesOffFactory();
+        using var visitor = quiet.CreateClient();
+        Labels(await FollowAsync(token, visitor)).ShouldAllBe(label => label == null);
+
+        // The caption reaches a member like anybody else, which is the way somebody who holds an
+        // account gets a different name onto a public page.
+        (await owner.PutAsJsonAsync(
+            $"/api/v1/trip-logs/{trip.Trip}/tracking/participants/{member.Caver}",
+            new { label = "A club member" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var captioned = Labels(await FollowAsync(token));
+        captioned.ShouldContain("A club member");
+        captioned.ShouldNotContain(member.RosterName);
     }
 
     /// <summary>
@@ -444,7 +635,7 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
         // Never shown the trip at all: indistinguishable from a trip that does not exist.
-        var (hidden, _) = await CreateTripAsync("Private", guests: 1, visibility: "private");
+        var (hidden, _, _) = await CreateTripAsync("Private", guests: 1, visibility: "private");
         var unseen = await reader.PostAsync(Shares(hidden), null);
         unseen.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await unseen.Content.ReadAsStringAsync()).ShouldContain("trip_log.not_found");
@@ -480,10 +671,10 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     private static string Follow(string token) => $"/api/v1/public/trips/{Uri.EscapeDataString(token)}";
 
     /// <summary>A trip, armed against a survey model of its own cave, with one caver placed.</summary>
-    private async Task<(Guid Trip, Guid Cave, Guid Model, List<Guid> Cavers)> TrackedTripAsync(
-        string title, bool locationProtected, int guests = 1)
+    private async Task<(Guid Trip, Guid Cave, Guid Model, List<Guid> Cavers, List<string> Names)> TrackedTripAsync(
+        string title, bool locationProtected, int guests = 1, Guid? memberCaver = null)
     {
-        var (trip, cavers) = await CreateTripAsync(title, guests);
+        var (trip, cavers, names) = await CreateTripAsync(title, guests, existingCaver: memberCaver);
         var cave = await CreateCaveAsync(locationProtected);
         var model = await SeedModelWithStationsAsync(cave);
         (await PutConfigAsync(owner, trip, new { state = "armed", surveyModelId = model }))
@@ -494,7 +685,7 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
             kind = "atStation",
             stationName = "cave.upper.2",
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
-        return (trip, cave, model, cavers);
+        return (trip, cave, model, cavers, names);
     }
 
     private async Task<(Guid Id, string Token)> PublishAsync(Guid trip, HttpClient? client = null)
@@ -577,9 +768,13 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     private Task<HttpResponseMessage> RevokeAsync(Guid trip, Guid shareId) =>
         owner.DeleteAsync($"{Shares(trip)}/{shareId}");
 
-    private async Task<JsonElement> FollowAsync(string token)
+    /// <summary>
+    /// The page a follower sees. A client may be named so that one link can be read through more
+    /// than one host — the same token, answered by a differently-configured server.
+    /// </summary>
+    private async Task<JsonElement> FollowAsync(string token, HttpClient? client = null)
     {
-        var response = await anonymous.GetAsync(Follow(token));
+        var response = await (client ?? anonymous).GetAsync(Follow(token));
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await BodyAsync(response);
     }
@@ -596,11 +791,32 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().SaveChangesAsync();
     }
 
-    private async Task<(Guid Trip, List<Guid> Cavers)> CreateTripAsync(
-        string title, int guests, string visibility = "authenticated", HttpClient? client = null)
+    /// <summary>
+    /// A trip with a roster, created through the real API.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The names it invents are returned as well as the ids, because the roster's name is what a
+    /// published page now shows: a test that asserted only "some string arrived" would pass on a
+    /// server that published the wrong person's name, or a rendering of the ordinal.
+    /// </para>
+    /// <para>
+    /// <paramref name="existingCaver"/> puts somebody already in the roster on the trip instead of
+    /// inventing them — the only way to build a participant who holds an account, since a guest
+    /// added by name never has one. Their name is not in <c>Names</c>: whoever asked for them knows
+    /// it, and the point of the ones returned is that they were invented here.
+    /// </para>
+    /// </remarks>
+    private async Task<(Guid Trip, List<Guid> Cavers, List<string> Names)> CreateTripAsync(
+        string title, int guests, string visibility = "authenticated", HttpClient? client = null,
+        Guid? existingCaver = null)
     {
-        var participants = Enumerable.Range(1, guests)
-            .Select(i => new { newCaverName = $"Guest {i} {Guid.NewGuid():N}"[..24] })
+        var invented = Enumerable.Range(1, guests)
+            .Select(i => $"Guest {i} {Guid.NewGuid():N}"[..24])
+            .ToList();
+        var participants = invented
+            .Select(name => (object)new { newCaverName = name })
+            .Concat(existingCaver is { } already ? [new { caverId = already }] : [])
             .ToArray();
         var response = await (client ?? owner).PostAsJsonAsync("/api/v1/trip-logs/", new
         {
@@ -617,8 +833,35 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         var cavers = await db.TripLogParticipants.Where(p => p.TripLogId == trip)
             .Select(p => p.CaverId).Distinct().OrderBy(c => c).ToListAsync();
-        cavers.Count.ShouldBe(guests);
-        return (trip, cavers);
+        cavers.Count.ShouldBe(guests + (existingCaver is null ? 0 : 1));
+        return (trip, cavers, invented);
+    }
+
+    /// <summary>
+    /// A club member: an account, its roster entry renamed to what a roster-keeper would have typed,
+    /// and a display name of their own that differs from it.
+    /// </summary>
+    /// <remarks>
+    /// Written straight to the database rather than through the profile routes because what is being
+    /// set up is a <em>disagreement</em> between two names — the state every account reaches the
+    /// moment somebody edits either one — and the fastest way to it is to state both.
+    /// </remarks>
+    private async Task<(Guid Caver, string RosterName, string AccountLabel)> MemberWithOwnDisplayNameAsync()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var email = $"pub-member-{suffix}@t.local";
+        var rosterName = $"Ana Popescu {suffix}";
+        var accountLabel = $"Ana P. {suffix}";
+
+        var userId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, email);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var user = await db.Users.FirstAsync(u => u.Id == userId);
+        user.DisplayName = accountLabel;
+        var caver = await db.Cavers.FirstAsync(c => c.UserId == userId);
+        caver.FullName = rosterName;
+        await db.SaveChangesAsync();
+        return (caver.Id, rosterName, accountLabel);
     }
 
     private async Task<Guid> CreateCaveAsync(bool locationProtected)

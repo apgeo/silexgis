@@ -17,6 +17,11 @@ interface Props {
   /** The trip's own name, which is what the frame is captioned with on somebody else's website. */
   tripTitle: string;
   canEdit: boolean;
+  /**
+   * Whether this installation publishes the party's real names — the server's answer, passed down
+   * rather than asked for again, because the page around this panel has already read it.
+   */
+  publishesRealNames: boolean;
 }
 
 /**
@@ -34,8 +39,20 @@ interface Props {
  * and taking it back is the only thing that ends one, since the read has no caller to re-check.
  * The other half — a cave that gains protection after the fact — is the server's, decided again on
  * every read and needing nobody to remember anything.
+ *
+ * <b>Whether the page will name people is said here, in words, before the button is pressed and
+ * again when the address appears.</b> The people named are not the person pressing the button —
+ * they are the rest of the club — so a link that puts their names in front of the internet must
+ * not be minted by somebody who was never told it would. Which of the two sentences is true is an
+ * installation's setting rather than a property of this trip, so it is read from the server and
+ * never guessed here.
  */
-export default function TrackingSharePanel({ tripLogId, tripTitle, canEdit }: Props) {
+export default function TrackingSharePanel({
+  tripLogId,
+  tripTitle,
+  canEdit,
+  publishesRealNames,
+}: Props) {
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
   // Every control here is pressed, and how big a thing has to be to be pressed depends on what is
@@ -119,6 +136,12 @@ export default function TrackingSharePanel({ tripLogId, tripTitle, canEdit }: Pr
 
   const live = (shares.data ?? []).filter((share) => share.revokedAt === null);
 
+  // Anything but an explicit "no" is worded as the disclosing case. A server that did not answer
+  // the question — an older build, a read that has not landed — leaves an administrator warned
+  // about names that may not appear, which costs them a moment; the other way round costs somebody
+  // else their name on a public page.
+  const namesShown = publishesRealNames !== false;
+
   return (
     <Card
       size="small"
@@ -142,6 +165,17 @@ export default function TrackingSharePanel({ tripLogId, tripTitle, canEdit }: Pr
         {t('trips.tracking.publish.explain')}
       </Typography.Paragraph>
 
+      {/* Not `type="secondary"` like the paragraph above it: this one is the disclosure, and it is
+          the sentence somebody has to have read before they hand the address to a club's website. */}
+      <Typography.Paragraph data-testid="trip-tracking-publish-names">
+        {/* Two whole calls rather than one call over a chosen key: the check that every key the
+            code asks for exists reads them out of the source text, and a key assembled at the
+            call is a key that check cannot see. */}
+        {namesShown
+          ? t('trips.tracking.publish.namesShown')
+          : t('trips.tracking.publish.namesHidden')}
+      </Typography.Paragraph>
+
       {minted !== null && (
         <Alert
           type="success"
@@ -150,6 +184,13 @@ export default function TrackingSharePanel({ tripLogId, tripTitle, canEdit }: Pr
           description={
             <Flex vertical gap={8} style={{ marginTop: 4 }}>
               <Typography.Text strong>{t('trips.tracking.publish.tokenOnce')}</Typography.Text>
+              {/* Said again beside the address itself. The paragraph above is read before anybody
+                  decides; this is what is on screen at the moment there is something to paste. */}
+              <Typography.Text data-testid="trip-tracking-publish-minted-names">
+                {namesShown
+                  ? t('trips.tracking.publish.mintedNamesShown')
+                  : t('trips.tracking.publish.mintedNamesHidden')}
+              </Typography.Text>
 
               <div>
                 <Typography.Text type="secondary">

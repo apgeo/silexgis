@@ -166,6 +166,39 @@ describe('a published trip is the one exception', () => {
   });
 });
 
+describe('a published trip is kept out of search indexes', () => {
+  // Here rather than in a file of its own because it is the same rule about the same location block
+  // in the same three languages, and splitting it is how one of the three gets edited alone.
+  //
+  // The disclosure is what makes it matter. A follow token IS the credential, and the paste-in block
+  // this application hands an administrator puts that token into the HTML of a club's public
+  // article — so the documented workflow, with nobody leaking anything, is what walks a crawler up
+  // to a page naming the party, saying which station each of them was last at and who is still
+  // underground. An indexed copy outlives the share: revoking closes the live page and does nothing
+  // to a cache, so the one remedy a follow link has would stop covering it.
+  it('says noindex on the two published addresses, in every configuration that serves them', () => {
+    for (const config of [packaged, standalone]) {
+      assert.match(
+        embedBlock(config),
+        /add_header X-Robots-Tag "noindex, nofollow" always;/,
+        'a published trip must tell crawlers not to index it',
+      );
+    }
+    assert.match(devServer, /'X-Robots-Tag', 'noindex, nofollow'/);
+  });
+
+  it('says it only there, so nothing else in the application is spoken for', () => {
+    // The workspace and the sign-in pages sit behind a login and index as nothing anyway; a blanket
+    // noindex would be a decision about a club's own front page that this rule has no business
+    // taking. The count is the check: a second one appearing is a widening somebody should have to
+    // argue for.
+    for (const config of [packaged, standalone]) {
+      const found = [...directives(config).matchAll(/X-Robots-Tag/g)];
+      assert.equal(found.length, 1, 'exactly one location may speak to crawlers');
+    }
+  });
+});
+
 describe('the one setting reaches the packaged web server', () => {
   it('is installed as a template, because a finished file can expand nothing', () => {
     assert.match(image, /COPY nginx\.conf \/etc\/nginx\/templates\/default\.conf\.template/);

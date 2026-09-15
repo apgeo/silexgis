@@ -37,6 +37,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     armedAt: '2026-09-12T08:00:00Z',
     closedAt: null,
     positionsWithheld: false,
+    publishesRealNames: true,
     teams: [{ id: 'team-1', title: 'Echipa 1' }],
     participants: [participant()],
     ...overrides,

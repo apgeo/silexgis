@@ -92,14 +92,20 @@ public sealed record PublicTripTeamDto(Guid Id, string Title);
 /// </summary>
 /// <param name="Ordinal">
 /// Their place in the party, counted in the order the roster was written. The identity this
-/// response is keyed by: a number that means nothing outside this page, so an envelope with no
-/// labels set discloses that somebody is at a station and not who.
+/// response is keyed by — a number that means nothing outside this page — and the only thing a
+/// follower is told about somebody the envelope carries no name for.
 /// </param>
 /// <param name="Label">
-/// What an administrator chose to call them, or null where nobody chose — which is the default,
-/// and the reason this surface is safe by construction rather than by care. A viewer with no
-/// label names them from <paramref name="Ordinal"/> in its own language; the server does not
-/// invent a display string, because it has no caller's language to invent one in.
+/// What this page calls them: the label an administrator typed, failing that the roster's own
+/// name for them where the installation publishes names, and null where neither applies.
+/// <para>
+/// <b>Null is a real answer and stays one.</b> It is what an installation that does not publish
+/// names sends for everybody, what a participant an administrator has deliberately named as a
+/// place in the party sends, and what a roster row with a blank name sends. A viewer given null
+/// names them from <paramref name="Ordinal"/> in its own language; the server still does not
+/// invent a display string, because it has no caller's language to invent one in — what it sends
+/// where it sends a name is a name somebody wrote down, never a rendering of a number.
+/// </para>
 /// </param>
 /// <param name="LastRecordedAt">
 /// When anything was last heard about them, whatever it said — the same "last word" the

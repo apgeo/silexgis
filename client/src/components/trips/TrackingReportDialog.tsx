@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { ConfigProvider, Form, Input, Modal, Select } from 'antd';
+import { useEffect, useState } from 'react';
+import { Alert, ConfigProvider, Flex, Form, Input, Modal, Select, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import type { TrackingTeam } from '../../api/hooks.ts';
+import type { TrackingTeam, TripPositionEventKind } from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import TrackingWhenField from './TrackingWhenField.tsx';
 import { useTrackingPanelTheme } from './trackingControlSizes.ts';
@@ -27,10 +28,30 @@ import './TrackingReportDialog.css';
  */
 const COARSE_CONTROL_HEIGHT = 44;
 
-/** What the dialog asks for. The station is a field rather than a fact, and see below for why. */
+/**
+ * What a report opened by pressing a station may be, and why the list is shorter than the card's.
+ *
+ * A press names one place, and the four kinds here are the ones that statement can survive: the
+ * report at that station, and the three that carry no place at all — went in, came out, a note —
+ * which the dialog says are carrying none rather than quietly dropping the station.
+ *
+ * <b>A depth report is deliberately not offered.</b> It is the opposite act to this one: the server
+ * turns a depth into the nearest station under the trip's filter and datum, which is a decision
+ * worth watching being made, so the card under the watch offers it a preview and each candidate as
+ * something to take. Reproducing that here would be a second copy of a flow whose whole value is
+ * that somebody looks at it — and asking for a depth on the surface that exists because a station
+ * was pressed has nothing to recommend it.
+ *
+ * `atStation` first because it is the default and the reason this dialog was opened; the rest in
+ * the order a trip runs.
+ */
+const DIALOG_KINDS: readonly TripPositionEventKind[] = ['atStation', 'entered', 'exited', 'note'];
+
+/** What the dialog asks for. The station is a fact rather than a field, and see below for why. */
 interface DialogForm extends TrackingReportValues {
   caverIds: string[];
-  stationName: string;
+  kind: TripPositionEventKind;
+  stationName?: string;
 }
 
 interface Props {
@@ -57,11 +78,22 @@ interface Props {
  * somebody is still on the line. Pressing the station on the model names it exactly and skips three
  * of those five acts; everything left is in this one dialog.
  *
- * <b>The station is still a field.</b> It arrives filled in with what was pressed, and it can be
- * changed, because the viewer's spelling of a station and the server's are not guaranteed to be the
- * same string for every survey format — the server prefixes some models with the root survey's name
- * and the viewer's reader does not. When they differ the server answers that it has no station by
- * that name, and a read-only field would leave the reader with a refusal and nothing to do about it.
+ * <b>The station is a statement, not a question.</b> Nobody typed it: it is the place that was
+ * pressed, and asking somebody to confirm a fact the application already holds is how a form makes
+ * itself look like work. So it is stated — the place this report is about — and the only thing that
+ * can turn it back into a field is the server saying it does not know it, which is the one case
+ * where a reader has something to do about it. That case is real rather than theoretical: the
+ * viewer's spelling of a station and the server's are not guaranteed to be the same string for
+ * every survey format, because the server prefixes some models with the root survey's name and the
+ * viewer's reader does not. A refusal with nothing to act on would strand somebody mid-call, so the
+ * refusal reveals the field with the pressed spelling already in it.
+ *
+ * <b>What is being reported can be changed, and the statement above it changes with it.</b> A press
+ * is often not the whole of what a voice on the phone just said — "we're at P42" and "we're out"
+ * arrive through the same call — so the kinds that carry no place are offered here too. None of
+ * them is a report *at* a station, and the request would carry no station name whichever way this
+ * dialog was written; what the dialog owes is to say so rather than to leave a place named on
+ * screen above a report that does not claim it.
  *
  * <b>Who the report is about is asked here rather than read off the table.</b> The table's ticks are
  * offered as the answer, because somebody who ticked a team and then pressed a station meant that
@@ -90,6 +122,18 @@ export default function TrackingReportDialog({
   // the watch has no value on the render that opens the dialog — and a button that reads "Record
   // for 0" for one frame, on the surface built for speed, is read as a form that lost the answer.
   const chosen = Form.useWatch('caverIds', form) ?? defaultCaverIds;
+  const kind = Form.useWatch('kind', form) ?? 'atStation';
+
+  /**
+   * Whether the server has said it has no station by the pressed name.
+   *
+   * Held for as long as this dialog stands and cleared whenever it opens on a station again: a
+   * spelling the server refused once is refused every time, so leaving the field revealed would be
+   * correct — but leaving it revealed for the *next* station, which nobody has disputed, would put
+   * the question back on a surface built to remove it.
+   */
+  const [stationDisputed, setStationDisputed] = useState(false);
+  useEffect(() => setStationDisputed(false), [station, open]);
 
   const controlSize: 'large' | 'middle' = coarse ? 'large' : 'middle';
   // The portalled panels' own sizes, plus the height every `large` control in here is built from.
@@ -107,9 +151,25 @@ export default function TrackingReportDialog({
       // does not surface as an unhandled rejection in the browser, which is watched for.
       return;
     }
-    if (await report.send(tripLogId, values.caverIds, { ...values, kind: 'atStation' })) {
+    // The pressed station unless somebody has been given the field to correct it in. Taken from
+    // the press rather than from the form store, because a field that is not on screen is not a
+    // field the form is keeping an answer for.
+    const stationName = stationDisputed ? values.stationName : (station ?? '');
+    const outcome = await report.send(tripLogId, values.caverIds, {
+      ...values,
+      stationName,
+    });
+    if (outcome.recorded) {
       onRecorded();
       onClose();
+      return;
+    }
+    // The one refusal this surface can do something about: the model's spelling of the station is
+    // not the server's. The refusal has already been worded; what is added here is somewhere to
+    // act on it.
+    if (outcome.code === 'tracking.station_unknown') {
+      form.setFieldValue('stationName', station ?? '');
+      setStationDisputed(true);
     }
   };
 
@@ -135,6 +195,31 @@ export default function TrackingReportDialog({
         destroyOnHidden
         data-testid="trip-tracking-record-here"
       >
+        {kind === 'atStation' ? (
+          <Flex
+            gap={8}
+            align="baseline"
+            wrap
+            style={{ marginBottom: 16 }}
+            data-testid="trip-tracking-dialog-place"
+          >
+            <Typography.Text type="secondary">
+              {t('trips.tracking.reportPlaceLabel')}
+            </Typography.Text>
+            <Typography.Text strong data-testid="trip-tracking-dialog-station-name">
+              {station}
+            </Typography.Text>
+          </Flex>
+        ) : (
+          <Alert
+            type="info"
+            showIcon
+            title={t('trips.tracking.reportNoPlace', { station: station ?? '' })}
+            style={{ marginBottom: 16 }}
+            data-testid="trip-tracking-dialog-no-place"
+          />
+        )}
+
         <Form<DialogForm>
           form={form}
           layout="vertical"
@@ -142,7 +227,7 @@ export default function TrackingReportDialog({
           size={controlSize}
           initialValues={{
             caverIds: [...defaultCaverIds],
-            stationName: station ?? '',
+            kind: 'atStation' as TripPositionEventKind,
           }}
         >
           <Form.Item
@@ -162,14 +247,28 @@ export default function TrackingReportDialog({
             />
           </Form.Item>
 
-          <Form.Item
-            name="stationName"
-            label={t('trips.tracking.reportStation')}
-            extra={t('trips.tracking.reportStationHelp')}
-            rules={trackingStationRules(t)}
-          >
-            <Input data-testid="trip-tracking-dialog-station" />
+          <Form.Item name="kind" label={t('trips.tracking.reportKind')}>
+            <Select
+              data-testid="trip-tracking-dialog-kind"
+              options={DIALOG_KINDS.map((value) => ({
+                value,
+                label: t(`trips.tracking.kinds.${value}`),
+              }))}
+            />
           </Form.Item>
+
+          {/* Only after the server has refused the pressed spelling. The rule is the card's own, so
+              a correction this dialog accepts cannot be one the card would have refused. */}
+          {kind === 'atStation' && stationDisputed && (
+            <Form.Item
+              name="stationName"
+              label={t('trips.tracking.reportStation')}
+              extra={t('trips.tracking.reportStationCorrect')}
+              rules={trackingStationRules(t)}
+            >
+              <Input data-testid="trip-tracking-dialog-station" />
+            </Form.Item>
+          )}
 
           {teams.length > 0 && (
             <Form.Item name="teamId" label={t('trips.tracking.reportTeam')}>

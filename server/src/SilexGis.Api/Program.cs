@@ -172,6 +172,8 @@ try
     builder.Services.AddSingleton<IValidateOptions<SpatialOptions>, SpatialOptionsValidator>();
     builder.Services.AddOptions<SyncOptions>()
         .BindConfiguration(SyncOptions.SectionName);
+    builder.Services.AddOptions<TripTrackingOptions>()
+        .BindConfiguration(TripTrackingOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<AdminTestSendThrottle>();
 builder.Services.AddScoped<GroupAnnouncementThrottle>();

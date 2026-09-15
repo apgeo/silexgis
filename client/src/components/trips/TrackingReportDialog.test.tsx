@@ -3,6 +3,7 @@ import { App } from 'antd';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 
 const recordEvents = vi.fn();
 
@@ -49,6 +50,15 @@ async function accept() {
   });
 }
 
+/** Chooses one of the kinds the dialog offers, by the words it offers them in. */
+async function chooseKind(label: string) {
+  const kind = screen.getByTestId('trip-tracking-dialog-kind');
+  fireEvent.mouseDown(kind.querySelector('.ant-select-selector') ?? kind);
+  await act(async () => {
+    fireEvent.click(document.querySelector(`.ant-select-item-option[title="${label}"]`)!);
+  });
+}
+
 beforeEach(() => {
   coarse = false;
   recordEvents.mockReset().mockResolvedValue([{}]);
@@ -62,15 +72,23 @@ afterEach(cleanup);
  * The dialog a station press opens.
  *
  * Its whole reason for existing is speed — it is filled in one-handed while somebody is still on
- * the phone — so what is tested is that the press really does the work: the station arrives named,
- * the likely party arrives chosen, and the thing that is sent is the same thing the card under the
- * watch sends.
+ * the phone — so what is tested is that the press really does the work: the station arrives named
+ * rather than asked for, the likely party arrives chosen, and the thing that is sent is the same
+ * thing the card under the watch sends.
  */
 describe('TrackingReportDialog', () => {
-  it('arrives with the pressed station and the ticked party already in it', () => {
+  /**
+   * The station is a statement about what was pressed, not a question about it.
+   *
+   * Asserted as both halves at once: the place is on screen in the model's own spelling, and there
+   * is no field asking anybody to type it. Only the second half says the first one is a statement
+   * — a field with the right value in it would satisfy the first on its own.
+   */
+  it('states the pressed station instead of asking for it, with the ticked party already in', () => {
     show();
 
-    expect(screen.getByTestId('trip-tracking-dialog-station')).toHaveValue('p.g.42');
+    expect(screen.getByTestId('trip-tracking-dialog-place')).toHaveTextContent('p.g.42');
+    expect(screen.queryByTestId('trip-tracking-dialog-station')).toBeNull();
     expect(screen.getByRole('button', { name: /Record for 1/ })).toBeInTheDocument();
   });
 
@@ -100,28 +118,102 @@ describe('TrackingReportDialog', () => {
   });
 
   /**
-   * The station is a field and not a fact.
+   * The one refusal that turns the statement back into a field.
    *
    * The viewer's spelling of a station and the server's are not guaranteed to be the same string
    * for every survey format — the server prefixes some models with the root survey's name and the
-   * viewer's reader does not. When they differ the server answers that it has no station by that
-   * name, and a read-only field would leave the reader holding a refusal with nothing to do about
-   * it.
+   * viewer's reader does not. A read-only fact would leave the reader holding a refusal with
+   * nothing to do about it, so that refusal, and no other, reveals the field with the pressed
+   * spelling in it. Both halves are here: no field before the refusal, a working one after it,
+   * and the corrected report goes out through the same call as every other.
    */
-  it('lets the pressed station be corrected, and refuses an empty one', async () => {
+  it('reveals the station as a field once the server says it has no such station', async () => {
+    recordEvents.mockRejectedValueOnce(new ApiError(400, 'tracking.station_unknown'));
     show();
-    const station = screen.getByTestId('trip-tracking-dialog-station');
 
-    fireEvent.change(station, { target: { value: '' } });
+    expect(screen.queryByTestId('trip-tracking-dialog-station')).toBeNull();
     await accept();
-    expect(recordEvents).not.toHaveBeenCalled();
-    expect(await screen.findByText('Say which station.')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+
+    const station = await screen.findByTestId('trip-tracking-dialog-station');
+    expect(station).toHaveValue('p.g.42');
 
     fireEvent.change(station, { target: { value: 'pestera.p.g.42' } });
     await accept();
-    expect(recordEvents).toHaveBeenCalledWith(
-      expect.objectContaining({ stationName: 'pestera.p.g.42' }),
+    expect(recordEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'atStation', stationName: 'pestera.p.g.42' }),
     );
+  });
+
+  /** And once it is a field it carries the card's own rule, so an emptied one is refused. */
+  it('refuses an emptied correction rather than sending a report about no station', async () => {
+    recordEvents.mockRejectedValueOnce(new ApiError(400, 'tracking.station_unknown'));
+    show();
+    await accept();
+
+    fireEvent.change(await screen.findByTestId('trip-tracking-dialog-station'), {
+      target: { value: '' },
+    });
+    await accept();
+
+    expect(recordEvents).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Say which station.')).toBeInTheDocument();
+  });
+
+  /**
+   * Any other refusal leaves the statement standing.
+   *
+   * Otherwise the field would appear whenever anything went wrong — a watch that is not armed, a
+   * report about somebody who is not on the trip — and the reader would be invited to correct the
+   * one thing that was right.
+   */
+  it('keeps the station a statement when the refusal was about something else', async () => {
+    recordEvents.mockRejectedValue(new ApiError(409, 'tracking.not_armed'));
+    show();
+
+    await accept();
+
+    await waitFor(() => expect(recordEvents).toHaveBeenCalled());
+    expect(screen.queryByTestId('trip-tracking-dialog-station')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-dialog-place')).toHaveTextContent('p.g.42');
+  });
+
+  /**
+   * A press is often not the whole of what a voice on the phone just said, so the kinds that carry
+   * no place are offered here too — and the moment one is chosen the dialog stops claiming the
+   * station. The request carries none either way; what is tested is that the screen says so rather
+   * than leaving a place named above a report that does not claim it.
+   */
+  it('stops naming the station when the report is one that carries no place', async () => {
+    show();
+    await chooseKind('Came out');
+
+    expect(screen.queryByTestId('trip-tracking-dialog-place')).toBeNull();
+    expect(screen.getByTestId('trip-tracking-dialog-no-place')).toHaveTextContent('p.g.42');
+
+    await accept();
+
+    expect(recordEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'exited', stationName: null, depthM: null }),
+    );
+  });
+
+  /**
+   * A depth report is the opposite act to pressing a station: the server resolves it to the
+   * nearest station under the trip's filter and datum, which is a decision the card offers a
+   * preview of and each candidate as something to take. This surface does not reproduce that, so
+   * it does not offer the kind either — an offer with no preview behind it would put a resolved
+   * position on a log nobody looked at.
+   */
+  it('offers the kinds a pressed station survives, and not a depth', () => {
+    show();
+    const kind = screen.getByTestId('trip-tracking-dialog-kind');
+    fireEvent.mouseDown(kind.querySelector('.ant-select-selector') ?? kind);
+
+    const offered = Array.from(document.querySelectorAll('.ant-select-item-option')).map(
+      (option) => option.getAttribute('title'),
+    );
+    expect(offered).toEqual(['At a station', 'Went in', 'Came out', 'Note']);
   });
 
   it('refuses a report about nobody rather than sending one', async () => {

@@ -106,7 +106,7 @@ export default function TrackingReportForm({
   }
 
   const send = async (values: TrackingReportValues) => {
-    if (await report.send(tripLogId, caverIds, values)) {
+    if ((await report.send(tripLogId, caverIds, values)).recorded) {
       form.resetFields(['stationName', 'depthM', 'note', 'recordedAt']);
       setCandidates(null);
       onRecorded();

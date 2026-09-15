@@ -8146,6 +8146,192 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/speleoloc-imports/{fileId}/recordings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The recordings the uploaded archive holds, newest first. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpeleolocRecordingsDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/speleoloc-imports/{fileId}/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's review of this archive, resumed where they left it. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpeleolocImportSessionDto"];
+                    };
+                };
+            };
+        };
+        /** Saves the review as the reviewer works; nothing is created. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SpeleolocImportSessionWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpeleolocImportSessionDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/speleoloc-imports/{fileId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reads the chosen recording and answers each scan with the stations it could be. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SpeleolocImportPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpeleolocImportPreviewDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/speleoloc-imports/{fileId}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records the chosen scans as tracking positions, as one batch that reverts as a unit. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    fileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SpeleolocImportCommitRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpeleolocImportCommitResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/photo-libraries/status": {
         parameters: {
             query?: never;
@@ -20636,7 +20822,7 @@ export interface components {
             photoClusterRadiusMeters: number;
         };
         /** @enum {unknown} */
-        ImportSource: "vectorFile" | "photos" | "deviceSync" | "externalCatalogue" | "tripCsv";
+        ImportSource: "vectorFile" | "photos" | "deviceSync" | "externalCatalogue" | "tripCsv" | "speleolocArchive";
         /** @enum {unknown} */
         ImportTargetKind: "cave" | "caveEntrance" | "surfaceFeature";
         /** @enum {unknown} */
@@ -22610,6 +22796,153 @@ export interface components {
         SpatialPatternKind: "undetermined" | "random" | "clustered" | "dispersed";
         /** @enum {unknown} */
         SpeleogeneticPatternKind: "insufficient" | "undetermined" | "vadoseBranchwork" | "waterTable" | "looping" | "angularMaze";
+        SpeleolocImportCommitRequest: {
+            options: null | components["schemas"]["SpeleolocImportOptions"];
+            pointIds: null | string[];
+            decisions: null | {
+                [key: string]: components["schemas"]["SpeleolocPointDecision"];
+            };
+        };
+        SpeleolocImportCommitResultDto: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: uuid */
+            tripLogId: string;
+            createdTrip: boolean;
+            /** Format: int32 */
+            createdEventCount: number;
+            /** Format: int32 */
+            skippedCount: number;
+            failures: components["schemas"]["SpeleolocImportFailureDto"][];
+        };
+        SpeleolocImportFailureDto: {
+            pointId: string;
+            /** Format: date-time */
+            scannedAt: string;
+            code: string;
+            reason: string;
+        };
+        SpeleolocImportOptions: {
+            tripUuid?: null | string;
+            /** Format: uuid */
+            tripLogId?: null | string;
+            createTrip?: boolean;
+            /** Format: uuid */
+            surveyModelId?: null | string;
+            cavers?: {
+                [key: string]: string;
+            };
+            /** Format: uuid */
+            cavingGroupId?: null | string;
+            visibility?: components["schemas"]["Visibility"];
+            /** Format: int32 */
+            candidateCount?: number;
+        };
+        SpeleolocImportPreviewDto: {
+            points: components["schemas"]["SpeleolocPointDto"][];
+            /** Format: int32 */
+            page: number;
+            /** Format: int32 */
+            pageSize: number;
+            /** Format: int32 */
+            totalItems: number;
+            selectablePointIds: string[];
+            deviceUsers: string[];
+            unmappedDeviceUsers: string[];
+            caversNotOnRoster: string[];
+            modelUsable: boolean;
+            /** Format: int32 */
+            proposedCount: number;
+            /** Format: int32 */
+            unresolvedCount: number;
+            recordingTitle: string;
+            /** Format: date-time */
+            recordingStartedAt: string;
+            /** Format: date-time */
+            recordingEndedAt: null | string;
+            /** Format: int32 */
+            documentCount: number;
+        };
+        SpeleolocImportPreviewRequest: {
+            options: null | components["schemas"]["SpeleolocImportOptions"];
+            /** Format: int32 */
+            page: null | number;
+            /** Format: int32 */
+            pageSize: null | number;
+        };
+        SpeleolocImportSessionDto: {
+            /** Format: uuid */
+            fileId: string;
+            fileName: null | string;
+            options: components["schemas"]["SpeleolocImportOptions"];
+            decisions: {
+                [key: string]: components["schemas"]["SpeleolocPointDecision"];
+            };
+            positionsWithheld: boolean;
+            /** Format: date-time */
+            updatedAt: null | string;
+        };
+        SpeleolocImportSessionWriteRequest: {
+            options: null | components["schemas"]["SpeleolocImportOptions"];
+            decisions: null | {
+                [key: string]: components["schemas"]["SpeleolocPointDecision"];
+            };
+        };
+        /** @enum {unknown} */
+        SpeleolocPointAction: "record" | "skip" | null;
+        SpeleolocPointDecision: {
+            action?: null | components["schemas"]["SpeleolocPointAction"];
+            stationName?: null | string;
+            /** Format: uuid */
+            caverId?: null | string;
+        };
+        SpeleolocPointDto: {
+            pointId: string;
+            /** Format: date-time */
+            scannedAt: string;
+            notes: null | string;
+            /** Format: uuid */
+            placeId: null | string;
+            placeTitle: null | string;
+            /** Format: double */
+            placeDepthM: null | number;
+            deviceUserId: null | string;
+            /** Format: uuid */
+            caverId: null | string;
+            state: components["schemas"]["SpeleolocPointState"];
+            candidates: components["schemas"]["SpeleolocStationCandidate"][];
+            decision: null | components["schemas"]["SpeleolocPointDecision"];
+        };
+        /** @enum {unknown} */
+        SpeleolocPointState: "proposed" | "noPlace" | "placeUnknown" | "depthUnknown" | "noStationAtDepth" | "modelUnavailable";
+        SpeleolocRecordingDto: {
+            id: string;
+            title: string;
+            caveTitle: null | string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            endedAt: null | string;
+            deviceUserId: null | string;
+            /** Format: int32 */
+            pointCount: number;
+            /** Format: int32 */
+            documentCount: number;
+        };
+        SpeleolocRecordingsDto: {
+            /** Format: uuid */
+            fileId: string;
+            fileName: null | string;
+            recordings: components["schemas"]["SpeleolocRecordingDto"][];
+        };
+        SpeleolocStationCandidate: {
+            stationName: string;
+            surveyName: null | string;
+            /** Format: double */
+            depthM: number;
+            /** Format: double */
+            deltaM: number;
+        };
         /** @enum {unknown} */
         SpeologieAction: "create" | "update" | "skip" | null;
         SpeologieBasinDto: {
@@ -23440,6 +23773,7 @@ export interface components {
             /** Format: date-time */
             closedAt: null | string;
             positionsWithheld: boolean;
+            publishesRealNames: boolean;
             teams: components["schemas"]["TrackingTeamDto"][];
             participants: components["schemas"]["TrackingParticipantDto"][];
         };

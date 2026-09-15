@@ -137,7 +137,18 @@ describe('a trip followed by somebody with no account', () => {
     ]);
   });
 
-  it('names each person as the administrator named them, and the rest by their place', () => {
+  /**
+   * The name is the envelope's; a place in the party is what this page draws where it carries none.
+   *
+   * Which of the two arrives is the server's decision and not this page's. It may be a name an
+   * administrator typed for this trip, or the roster's own name where the installation publishes
+   * names; it is absent where the installation does not publish names, and also where somebody has
+   * deliberately been kept off the page as a place in the party. This page cannot tell those apart
+   * and must not try — what it owes is to show a name it was given and to say "Caver 2" in the
+   * reader's own language when it was given none. Both halves are asserted here, because a page
+   * that numbered everybody would pass the second on its own.
+   */
+  it('shows the name the envelope carries, and a place in the party where it carries none', () => {
     ready();
     render(<PublicTripPage />);
 

@@ -266,6 +266,7 @@ test.describe('who may frame this application', () => {
     const workspace = await page.request.get('/map');
     expect(workspace.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
     expect(workspace.headers()['x-frame-options']).toBe('DENY');
+    expect(workspace.headers()['x-robots-tag']).toBeUndefined();
 
     for (const path of [`/shared/trips/${TOKEN}`, `/shared/trips/${TOKEN}/embed`]) {
       const published = await page.request.get(path);
@@ -274,6 +275,11 @@ test.describe('who may frame this application', () => {
       // The header that cannot name an origin must not be sent beside the one that can: it would
       // refuse exactly what the other allows, and the embed would fail as a blank frame.
       expect(published.headers()['x-frame-options']).toBeUndefined();
+      // Framing is how this page legitimately reaches a club's public article, and the token in the
+      // paste-in block goes into that article's HTML — so the same permission that makes the embed
+      // work is what walks a crawler up to a page naming the party. An index outlives revocation,
+      // which is the only remedy a follow link has.
+      expect(published.headers()['x-robots-tag']).toBe('noindex, nofollow');
     }
   });
 });

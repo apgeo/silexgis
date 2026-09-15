@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -49,8 +50,10 @@ namespace SilexGis.Api.Features.TripTracking;
 /// </para>
 /// <para>
 /// Who a follower is told about is the other half. The envelope is keyed by a participant's
-/// place in the party, never by a caver id, and it carries a name only where an administrator
-/// typed one — see <see cref="PublicTripParticipantDto"/>.
+/// place in the party, never by a caver id; what it calls them is whatever an administrator
+/// typed, failing that the caver's roster name where the installation publishes names, and
+/// failing that nothing at all — see <see cref="PublicTripParticipantDto"/> and
+/// <see cref="TripTrackingOptions.PublishRealNames"/>.
 /// </para>
 /// </remarks>
 public static class TripTrackingPublicationEndpoints
@@ -177,7 +180,7 @@ public static class TripTrackingPublicationEndpoints
 
     private static async Task<Results<Ok<PublicTripTrackingEnvelopeDto>, ProblemHttpResult>> FollowAsync(
         string token, SilexGisDbContext db, FeatureProtection protection, ICrsRegistry crs,
-        IFileAccessTokenService tokens, CancellationToken ct)
+        IFileAccessTokenService tokens, IOptions<TripTrackingOptions> options, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(token) || token.Length > TripTrackingRules.MaxShareTokenLength)
         {
@@ -219,6 +222,36 @@ public static class TripTrackingPublicationEndpoints
             .Select(g => new { CaverId = g.Key, FirstRowId = g.Min(p => p.Id) })
             .ToListAsync(ct);
 
+        // The roster's own name for each of them, where this installation publishes names at all.
+        //
+        // Read straight off the roster rather than through the shared caver-label resolver, and
+        // deliberately: that resolver answers nothing to a caller with no account (an anonymous
+        // caller never turns an id into a name, which is the rule everywhere else in this
+        // application) and otherwise applies the account-profile rules, under which an account
+        // holder's chosen display name can stand in for their roster name. Neither belongs here.
+        // What a club publishes about a trip is the name the trip itself records — the roster's —
+        // and it is published because the people running this installation decided to publish it,
+        // not because a profile setting happened to allow it. A later reader tempted to "fix" this
+        // by routing it through the resolver would silently empty every published page.
+        //
+        // <b>The consequence, stated so that nobody meets it as a surprise:</b> where a caver holds
+        // an account and has set a display name, every signed-in surface calls them by it and this
+        // page calls them by their roster name instead — so one person can appear under two names,
+        // which is exactly what the shared resolver exists to prevent elsewhere. It is accepted
+        // here, and the alternative is worse rather than merely different: the account label is
+        // "display name, or user name, or `user-` and eight hex digits", and accounts are created
+        // with the address as the user name, so deferring to it would publish `user-1a2b3c4d` for
+        // every member who never chose a display name — a name-shaped string that identifies
+        // nobody, on the page whose whole point is naming people. The control that does travel to
+        // this page is the caption below, which an administrator sets per trip.
+        var rosterIds = roster.Select(r => r.CaverId).ToList();
+        var names = options.Value.PublishRealNames
+            ? await db.Cavers.AsNoTracking()
+                .Where(c => rosterIds.Contains(c.Id))
+                .Select(c => new { c.Id, c.FullName })
+                .ToDictionaryAsync(c => c.Id, c => c.FullName, ct)
+            : [];
+
         // A tracked trip's whole event log is small (reports arrive by relayed word, minutes
         // apart) — fold the latest-per-caver in memory, exactly as the signed-in read does.
         var events = await db.TripPositionEvents.AsNoTracking()
@@ -252,7 +285,7 @@ public static class TripTrackingPublicationEndpoints
             var isOut = last?.Kind == TripPositionEventKind.Exited;
             participants.Add(new PublicTripParticipantDto(
                 ordinal,
-                labels.GetValueOrDefault(member.CaverId),
+                NameFor(member.CaverId, labels, names),
                 lastTeamed?.TeamId,
                 positionOpen ? lastPositioned?.StationName : null,
                 positionOpen ? lastPositioned?.DepthEnteredM : null,
@@ -274,6 +307,36 @@ public static class TripTrackingPublicationEndpoints
             await ModelAsync(db, crs, tokens, tracking.SurveyModelId, configCave, ct),
             [.. teams.Select(t => new PublicTripTeamDto(t.Id, t.Title))],
             participants));
+    }
+
+    /// <summary>
+    /// What a followed page calls one member of the party, or null for "a place in the party".
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The order is the whole rule and it is read top to bottom. <b>A label an administrator typed
+    /// wins over everything</b>, because that field exists precisely so that one person can be kept
+    /// off a public page by name while the rest of the party is named — if the installation's
+    /// setting could override it, somebody who asked not to appear would appear the moment a
+    /// setting somewhere else was flipped. Failing a label, the roster's own name, where the
+    /// installation publishes names. Failing both, nothing, and the page that draws the envelope
+    /// says "Caver 3" in its reader's own language.
+    /// </para>
+    /// <para>
+    /// A roster row with a blank name answers nothing rather than an empty string: a name-shaped
+    /// hole on the page is worse than the ordinal it would replace, and the difference between
+    /// "unnamed" and "named badly" is one a follower cannot see.
+    /// </para>
+    /// </remarks>
+    private static string? NameFor(
+        Guid caverId, Dictionary<Guid, string> labels, Dictionary<Guid, string> rosterNames)
+    {
+        if (labels.TryGetValue(caverId, out var label) && !string.IsNullOrWhiteSpace(label))
+        {
+            return label;
+        }
+        var name = rosterNames.GetValueOrDefault(caverId);
+        return string.IsNullOrWhiteSpace(name) ? null : name;
     }
 
     /// <summary>

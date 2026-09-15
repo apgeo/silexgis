@@ -24,8 +24,13 @@ public sealed record TrackingParticipantDto(
     decimal? DepthM,
     bool Out,
     /// <summary>
-    /// What the trip's published page calls this person, where somebody chose a name. Null is
-    /// the ordinary state and means the page names them by their place in the party instead.
+    /// The caption an administrator chose for this person on the trip's published page, or null
+    /// where nobody chose one — which is the ordinary state.
+    /// <para>
+    /// Null does not say what the page will call them: that is the installation's setting, and it
+    /// is answered once for the whole trip by <c>publishesRealNames</c> rather than repeated on
+    /// every row. A caption is what the page shows whichever way that setting is set.
+    /// </para>
     /// </summary>
     string? Label);
 
@@ -38,6 +43,19 @@ public sealed record TrackingStateDto(
     DateTimeOffset? ClosedAt,
     /// <summary>True when at least one position existed but was withheld from this caller.</summary>
     bool PositionsWithheld,
+    /// <summary>
+    /// Whether publishing this trip would put the party's real names on the page. This is the
+    /// installation's setting, not a fact about this trip or this caller.
+    /// <para>
+    /// Carried on the trip's own read because the panel that mints a follow link is drawn on the
+    /// same page, and whoever presses that button has to be told what the page will show
+    /// <em>before</em> there is a link to hand out. What it discloses is one boolean about how this
+    /// server is configured, to a caller who can already read the trip — no name, and nothing about
+    /// any person. Somebody an administrator has named as a place in the party is still shown that
+    /// way whatever this says.
+    /// </para>
+    /// </summary>
+    bool PublishesRealNames,
     IReadOnlyList<TrackingTeamDto> Teams,
     IReadOnlyList<TrackingParticipantDto> Participants);
 

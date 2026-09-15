@@ -1020,6 +1020,36 @@ There is no upgrade path across that rewrite: recreate the database (or restore 
 took before switching to the development branch) and load your data again. A released
 installation is never in this position.
 
+### Upgrading across the release that names the party on published trips
+
+**Read this one before you upgrade if your installation has follow links in circulation.** Before
+this release, a published trip named nobody: every participant appeared as their place in the party
+— "Caver 1", "Caver 2" — unless an administrator had captioned them by hand. From this release
+`SILEXGIS__TripTracking__PublishRealNames` defaults to `true`, and a published trip names each
+participant by the name your roster holds for them.
+
+It applies to **links already handed out**, not only to links minted afterwards. The setting is read
+as each page is drawn rather than stored on the share, so the first time somebody opens a follow link
+you issued months ago on the old build, it names the party. Nothing is re-minted, nothing is revoked,
+and nobody is asked. In the application an administrator is told what a page will show at the moment
+they publish — but that card is on each trip's page, so it is not where an operator finds out, which
+is why it is here.
+
+Decide before you upgrade, not after:
+
+- **Keep the old behaviour for the whole installation.** Put `SILEXGIS__TripTracking__PublishRealNames=false`
+  in `.env` *in the same step as the upgrade*, and every published page stays exactly what it was.
+- **Take the new behaviour but keep one person off the page.** Leave the setting alone and caption
+  that person on each trip they are on (the tracking panel, "what followers see"). A caption is what
+  the page shows whichever way the setting is set, so this works without turning the feature off for
+  everybody.
+- **Take the new behaviour and start clean.** Revoke the links minted under the old promise —
+  each trip's publish panel lists its live links — and mint new ones, so that nobody is following an
+  address they were given on different terms.
+
+Both published addresses are served with `X-Robots-Tag: noindex, nofollow`, so this does not put
+anybody's name into a search index; see "Letting a website embed a live trip".
+
 ## External login providers
 
 Sign-in with Google, GitHub, or any OpenID Connect provider is optional and off by default —
@@ -1230,6 +1260,7 @@ the reasoning beside each one.
 | `SILEXGIS__Sync__AllowAdministratorRead` | `false` | lets a full administrator read a sync set belonging to another account — the named selection of caves a caver's phone carries, the club its uploads are created for, its code-generation settings and when it was last edited. Off unless you turn it on: a sync set is the one thing in the installation that says where a particular person goes, so an installation opts into that support ability deliberately rather than inheriting it. It widens **reading one set whose identifier the administrator already knows**, and nothing else — the listing still answers with the caller's own sets so it cannot be used to count anybody's, replacing and deleting a set stay the owner's alone, and no device can download or upload through a set it does not own however privileged the account it is signed in as. The identifier has to come from the caver, their phone or the database — nothing in the web interface shows another account's set identifier, and this setting deliberately adds no way to find one: it answers "what does this set carry?" for somebody already handed the identifier, never "which sets does that caver have?" |
 | `SILEXGIS__Sync__UploadRowsMax` | `500` | the most rows one upload batch from a phone may carry. A batch is applied as a unit, so this bounds what a single failed or repeated request costs. Values outside 1 to 5000 are brought back inside that range |
 | `SILEXGIS__Sync__DuplicateRadiusMeters` | `50` | how close something already in the registry has to be to a row a phone just created before the answer mentions it. Reporting only — it never refuses a row. `0` turns the report off; values above 5000 are brought back to 5000. The same figure a file import uses, because how close two entrances can be before they are probably one is a property of the karst rather than of the channel |
+| `SILEXGIS__TripTracking__PublishRealNames` | `true` | whether a **published** trip names the party for real. On by default, and the one setting here that defaults to showing something: a club publishes a trip so that families and friends can watch a party come out, and a page that will not say which person is still underground does not answer the question it was opened for. Set it to `false` and every published page in this installation goes back to naming nobody — each person appears as their place in the party ("Caver 2") and the page says nothing else about who they are. It applies as each page is read rather than being stored on a share, so it moves links already handed out in both directions: turning it off closes the disclosure on every live link with nothing to re-issue, and turning it on — which is what upgrading from a build before this setting existed does — opens it on links minted when the page named nobody. An installation with follow links in circulation should decide in the same step as the upgrade; see "Upgrading across the release that names the party on published trips" above. Two things it does not decide. An administrator can give one person a name of their own for a trip's page, and that name is what the page shows whichever way this is set — which is how somebody who does not want to appear is kept off a public page without the club turning names off for everybody. And a cave whose coordinates are protected still cannot be published at all, whatever this says. Note that where a club has also allowed its own website to embed the page, that site is told the party the same way |
 | `SILEXGIS__SpeleoLocDev__Allow` | `false` | permits `seed-speleoloc-dev` on a host that is not in development. That command creates a login, so it is refused without this |
 | `SILEXGIS__SpeleoLocDev__MemberPassword` | `dev-member-pass-1` | the password `member@dev.local` is created with. The default is printed in this guide, so set your own if you allow the command at all |
 | `SILEXGIS__TestLogins__Enabled` | `false` | seeds three demo accounts (full administrator, editor, viewer) and prints their credentials on the sign-in page for anyone who reaches it. For throwaway test installations only — see "Running a test installation" above |
@@ -1315,5 +1346,13 @@ type the origins straight into the `location ~ ^/shared/trips/` block of
 **It affects only the two published-trip addresses.** Everything else — the workspace, the sign-in
 pages, every other kind of share — goes on refusing to be framed by anybody, and this setting
 cannot change that.
+
+**Search engines are told not to index a published trip, and you need do nothing about it.** Both
+published addresses are served with `X-Robots-Tag: noindex, nofollow`. That matters because pasting
+the block into a public article puts the follow link — which *is* the credential — into a page
+crawlers read, and what the page then says is who is on the trip, where each of them was last
+reported and who is still underground. Revoking a share closes the live page but cannot take a copy
+out of somebody's index, so the page refuses to be indexed in the first place. If you build your own
+wrapper page around the frame, give that page the same treatment.
 
 Secrets belong only in the environment / `.env`, never in the repository.

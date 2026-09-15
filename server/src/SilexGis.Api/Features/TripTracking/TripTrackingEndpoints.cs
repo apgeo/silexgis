@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
@@ -114,7 +115,8 @@ public static class TripTrackingEndpoints
 
     private static async Task<Results<Ok<TrackingStateDto>, ProblemHttpResult>> GetAsync(
         Guid tripLogId, HttpContext http, SilexGisDbContext db, IAccessService access,
-        FeatureProtection protection, IAccessContextAccessor accessAccessor, CancellationToken ct)
+        FeatureProtection protection, IAccessContextAccessor accessAccessor,
+        IOptions<TripTrackingOptions> options, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null) return ApiProblems.NotFound("trip_log.not_found");
@@ -185,6 +187,9 @@ public static class TripTrackingEndpoints
             tracking?.ArmedAt,
             tracking?.ClosedAt,
             withheldAny,
+            // Said on every read of the trip rather than only when a link is minted: the panel that
+            // publishes has to word what the page will show before anybody presses the button.
+            options.Value.PublishRealNames,
             [.. teams.Select(t => new TrackingTeamDto(t.Id, t.Title))],
             participants));
     }
@@ -235,7 +240,7 @@ public static class TripTrackingEndpoints
     private static async Task<Results<Ok<TrackingStateDto>, ProblemHttpResult>> PutConfigAsync(
         Guid tripLogId, TrackingConfigRequest request, HttpContext http, SilexGisDbContext db,
         IAccessService access, FeatureProtection protection, IAccessContextAccessor accessAccessor,
-        CancellationToken ct)
+        IOptions<TripTrackingOptions> options, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
@@ -337,7 +342,7 @@ public static class TripTrackingEndpoints
             return ApiProblems.Conflict("tracking.concurrent_write", "Another tracking write landed first — reload and retry.");
         }
 
-        return await GetAsync(tripLogId, http, db, access, protection, accessAccessor, ct);
+        return await GetAsync(tripLogId, http, db, access, protection, accessAccessor, options, ct);
     }
 
     private static async Task<Results<Ok<TrackingTeamDto>, ProblemHttpResult>> CreateTeamAsync(

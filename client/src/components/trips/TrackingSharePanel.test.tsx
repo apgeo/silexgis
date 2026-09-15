@@ -23,10 +23,15 @@ vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => fals
 
 const { default: TrackingSharePanel } = await import('./TrackingSharePanel.tsx');
 
-function view(canEdit = true) {
+function view(canEdit = true, publishesRealNames = true) {
   return render(
     <App>
-      <TrackingSharePanel tripLogId="trip-1" tripTitle="Peștera Demo Mare" canEdit={canEdit} />
+      <TrackingSharePanel
+        tripLogId="trip-1"
+        tripTitle="Peștera Demo Mare"
+        canEdit={canEdit}
+        publishesRealNames={publishesRealNames}
+      />
     </App>,
   );
 }
@@ -53,6 +58,47 @@ describe('publishing a tracked trip', () => {
     view();
 
     expect(screen.getByText(/This trip is not published/)).toBeInTheDocument();
+  });
+
+  /**
+   * What the page will show is said before anybody presses the button, and again beside the
+   * address once there is one.
+   *
+   * The people named are not the person pressing the button — they are the rest of the club — so a
+   * link that puts their names in front of the internet must not be minted by somebody who was
+   * never told it would. Both sentences are asserted together with the other setting's, because a
+   * notice that is always on screen says nothing: only the pair proves this one is reading the
+   * installation's answer rather than reciting a constant.
+   */
+  it('says the page will name people, before the link exists and beside it', async () => {
+    view(true, true);
+
+    expect(screen.getByTestId('trip-tracking-publish-names')).toHaveTextContent(
+      /publishes real names/,
+    );
+    fireEvent.click(screen.getByTestId('trip-tracking-publish-mint'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('trip-tracking-publish-minted-names')).toHaveTextContent(
+        /real names/,
+      ),
+    );
+  });
+
+  it('says the opposite where the installation has turned names off', async () => {
+    view(true, false);
+
+    expect(screen.getByTestId('trip-tracking-publish-names')).toHaveTextContent(
+      /Names are not published here/,
+    );
+    expect(screen.getByTestId('trip-tracking-publish-names')).toHaveTextContent(/Caver 1/);
+    fireEvent.click(screen.getByTestId('trip-tracking-publish-mint'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('trip-tracking-publish-minted-names')).toHaveTextContent(
+        /not people's names/,
+      ),
+    );
   });
 
   it('shows the address and the website block together, once, when a link is minted', async () => {

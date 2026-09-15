@@ -45,7 +45,11 @@ describe('a published trip, folded into people a model can draw', () => {
     expect(cavers.map((caver) => caver.caverId)).toEqual(['1', '7']);
   });
 
-  it('uses the label an administrator typed, and a number for everybody else', () => {
+  // Whatever name the envelope carries — a caption an administrator typed, or the roster's own
+  // name where the installation publishes names — and a number for a place in the party it carries
+  // no name for. The fold does not know which of the two it was handed, and nothing here should
+  // make it able to tell.
+  it('uses the name the envelope carries, and a number for everybody else', () => {
     const cavers = publicTrackedCavers(
       envelope({
         participants: [

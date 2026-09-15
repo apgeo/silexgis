@@ -285,6 +285,13 @@ const PUBLIC_TRIP_PATH = /^\/shared\/trips\//;
  * framable by this installation and by whatever origins an operator named. The variable is the same
  * one the container reads, so there is one name for the setting and not a development spelling of
  * it.
+ *
+ * <b>The published trip also gets `X-Robots-Tag: noindex`</b>, which is the other half of the same
+ * decision and belongs beside it. Framing is how that page legitimately reaches a club's public
+ * article, and the token in the paste-in block goes into that article's HTML — so the exact workflow
+ * this application documents is also what walks a crawler up to a page naming the party and saying
+ * who is still underground. Indexing outlives revocation, and revocation is the only remedy a follow
+ * link has, so the page says "do not index me" wherever it says "you may frame me".
  */
 function framingPolicy(): Plugin {
   const allowed = (process.env.SILEXGIS__Web__FrameAncestors ?? '').trim();
@@ -300,6 +307,7 @@ function framingPolicy(): Plugin {
         const path = (request.url ?? '/').split('?')[0];
         if (PUBLIC_TRIP_PATH.test(path)) {
           response.setHeader('Content-Security-Policy', embeddable);
+          response.setHeader('X-Robots-Tag', 'noindex, nofollow');
         } else {
           response.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
           // Only where the answer is "nobody": this header cannot name an origin, so beside an

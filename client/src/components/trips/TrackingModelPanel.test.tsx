@@ -436,7 +436,7 @@ describe('TrackingModelPanel', () => {
       pressStation();
 
       expect(screen.getByTestId('trip-tracking-picked-station')).toHaveTextContent('p.g.7');
-      expect(screen.queryByTestId('trip-tracking-dialog-station')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-dialog-place')).toBeNull();
     });
 
     it('sends the report through the same call the card under the watch sends', async () => {
@@ -444,8 +444,9 @@ describe('TrackingModelPanel', () => {
       pressStation('p.g.42');
 
       fireEvent.click(screen.getByTestId('trip-tracking-record-here-open'));
-      // The station arrives filled in from the press — that is the whole of what the press buys.
-      expect(screen.getByTestId('trip-tracking-dialog-station')).toHaveValue('p.g.42');
+      // The station arrives named by the press rather than asked for — that is the whole of what
+      // the press buys, and the dialog states it rather than offering it as something to type.
+      expect(screen.getByTestId('trip-tracking-dialog-place')).toHaveTextContent('p.g.42');
 
       fireEvent.click(screen.getByRole('button', { name: /Record for/ }));
 

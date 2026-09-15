@@ -3,7 +3,7 @@ import { App } from 'antd';
 import type { Rule } from 'antd/es/form';
 import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { isConcurrencyConflict } from '../../api/client.ts';
+import { ApiError, isConcurrencyConflict } from '../../api/client.ts';
 import { useRecordTrackingEvents, type TripPositionEventKind } from '../../api/hooks.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
 
@@ -23,6 +23,27 @@ import { trackingProblemMessage } from './trackingProblems.ts';
  * lets the table's selection go; the dialog closes. Both are about the surface and not about the
  * report.
  */
+
+/**
+ * What became of one report, in the only terms a surface is allowed to act on.
+ *
+ * <b>The words for a refusal are still not the caller's business</b> — they have been said already,
+ * by the one place that words them — and this carries the server's stable code purely so that a
+ * surface can change *itself* in answer to a particular refusal. The dialog opened from the model
+ * is the case: it states the pressed station as a fact rather than offering it as a field, and the
+ * one refusal that makes that statement wrong is the server saying it has no station by that name.
+ * Anything else is shown and nothing more.
+ *
+ * One shape rather than two: `code` is null where the report landed, and also where it was refused
+ * by something that named no code — a network that never answered, or a rule the client applied
+ * before asking. A surface that wants to act on a particular refusal tests for that refusal by
+ * name, so all three of those cases fall through to "nothing to do about it here", which is what
+ * they are.
+ */
+export interface TrackingReportOutcome {
+  recorded: boolean;
+  code: string | null;
+}
 
 /** What either surface has filled in, in the form's own types. */
 export interface TrackingReportValues {
@@ -81,7 +102,7 @@ export function trackingStationRules(t: ReturnType<typeof useTranslation>['t']):
  *
  * Answers whether the report landed, so a surface can decide what to do with itself — the card
  * keeps standing and clears its fields, the dialog closes — without either of them having to know
- * how a refusal is told apart from a success.
+ * how a refusal is told apart from a success, and without either of them wording one.
  *
  * A concurrent write is said as a warning and everything else as an error, because that one is not
  * a mistake anybody made: somebody else wrote to the same watch in the same moment, and the answer
@@ -96,18 +117,18 @@ export function useTrackingReport() {
     tripLogId: string,
     caverIds: readonly string[],
     values: TrackingReportValues,
-  ): Promise<boolean> => {
+  ): Promise<TrackingReportOutcome> => {
     try {
       const created = await record.mutateAsync(trackingReportBody(tripLogId, caverIds, values));
       message.success(t('trips.tracking.recorded', { count: created.length }));
-      return true;
+      return { recorded: true, code: null };
     } catch (error) {
       if (isConcurrencyConflict(error)) {
         message.warning(trackingProblemMessage(error, t));
       } else {
         message.error(trackingProblemMessage(error, t));
       }
-      return false;
+      return { recorded: false, code: error instanceof ApiError ? (error.code ?? null) : null };
     }
   };
 
