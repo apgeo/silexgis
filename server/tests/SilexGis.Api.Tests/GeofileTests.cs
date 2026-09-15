@@ -214,6 +214,54 @@ public sealed class GeofileTests : IAsyncLifetime, IDisposable, IClassFixture<Po
     }
 
     /// <summary>
+    /// A bbox export finds a protected cave where it is published, not where it is. The file
+    /// prints the snapped point for a caller who may not place the cave, so the honest box test
+    /// is against that same point: membership then moves only in whole grid steps, and a
+    /// caller-drawn box cannot be bisected against the true position — which is what a box over
+    /// the stored coordinate allowed, one edge-crossing at a time. Both directions are pinned,
+    /// and then reversed for the owner, for whom the true point governs.
+    /// </summary>
+    [Fact]
+    public async Task A_bbox_export_finds_a_protected_cave_where_it_is_published_not_where_it_is()
+    {
+        // Off the lattice by 0.4 of a cell on each axis, so a small box can hold exactly one of
+        // the two points. 0.4 rounds down: the published point is at the lattice indices.
+        var cell = LocationProtection.CellDegrees(5000);
+        var lonIndex = Math.Round(17.0 / cell);
+        var latIndex = Math.Round(44.0 / cell);
+        var lonTrue = (lonIndex + 0.4) * cell;
+        var latTrue = (latIndex + 0.4) * cell;
+
+        var name = $"Export Grid Cave {tag}";
+        var caveId = await CreateCaveAsync(name, await CaveTypeIdAsync(), locationProtected: true);
+        await CreateEntranceAsync(caveId, await EntranceTypeIdAsync(), lonTrue, latTrue);
+
+        string BoxAround(double lon, double lat) => FormattableString.Invariant(
+            $"{lon - 0.15 * cell},{lat - 0.15 * cell},{lon + 0.15 * cell},{lat + 0.15 * cell}");
+
+        (await ExportedNamesAsync(viewer, BoxAround(lonTrue, latTrue)))
+            .ShouldNotContain(name, "membership followed the true position of a cave the caller may not place");
+        (await ExportedNamesAsync(viewer, BoxAround(lonIndex * cell, latIndex * cell)))
+            .ShouldContain(name);
+
+        // The owner places the cave exactly, so for them the same two boxes reverse — the rule
+        // is about placement, not about boxes.
+        (await ExportedNamesAsync(editor, BoxAround(lonTrue, latTrue))).ShouldContain(name);
+        (await ExportedNamesAsync(editor, BoxAround(lonIndex * cell, latIndex * cell)))
+            .ShouldNotContain(name);
+    }
+
+    private async Task<List<string?>> ExportedNamesAsync(HttpClient client, string bbox)
+    {
+        var response = await client.GetAsync(
+            $"/api/v1/export/caves?format=geojson&search={tag}&bbox={bbox}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        return [.. body.GetProperty("features").EnumerateArray()
+            .Select(f => f.GetProperty("properties").GetProperty("name").GetString())];
+    }
+
+    /// <summary>
     /// The feature export applies the same protection rule as the map: a protected point
     /// leaves snapped and flagged, and protected geometry that cannot be snapped without
     /// disclosing shape or extent does not leave at all.
