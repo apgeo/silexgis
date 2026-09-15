@@ -80,4 +80,25 @@ public static class SpatialSql
     public static string HasAltitudes(string geometryExpression) =>
         $"(ST_NDims({geometryExpression}) = 3 "
         + $"AND (ST_ZMin({geometryExpression}) <> 0 OR ST_ZMax({geometryExpression}) <> 0))";
+
+    /// <summary>
+    /// One coordinate snapped to the protection grid, exactly as the domain rule snaps it.
+    ///
+    /// <para>
+    /// This is the SQL twin of the coordinate-obfuscation snap, and the <c>::numeric</c> cast is
+    /// the load-bearing part: PostgreSQL's <c>round(double precision)</c> rounds half to EVEN,
+    /// while the domain rule — and <c>round(numeric)</c> — round half away from zero. Written
+    /// without the cast, the two disagree at exactly the halfway values a coordinate can land on,
+    /// and two endpoints snapping the same protected cave to different grid intersections is a
+    /// disclosure: the disagreement itself says the true value lies between them. Every query that
+    /// snaps interpolates this fragment rather than spelling its own, so the rule cannot fork
+    /// again.
+    /// </para>
+    /// </summary>
+    /// <param name="coordinateExpression">An expression yielding one coordinate (an X or a Y).</param>
+    /// <param name="cellParameter">
+    /// Name of the query parameter carrying the grid cell size in degrees, without the marker.
+    /// </param>
+    public static string SnapToGrid(string coordinateExpression, string cellParameter) =>
+        $"round(({coordinateExpression} / @{cellParameter})::numeric)::float8 * @{cellParameter}";
 }

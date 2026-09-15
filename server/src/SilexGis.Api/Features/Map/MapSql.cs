@@ -6,6 +6,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -57,19 +58,21 @@ public static class MapSql
         // join; the exact-view rule resolves protection roots from the row's ancestor
         // array. Cluster centroid of points == arithmetic mean of coordinates; avg(x)/
         // avg(y) avoids materializing ST_Collect geometry collections (which dominated
-        // cost at 50k rows). SQL round() rounds half away from zero, exactly matching
-        // LocationProtection.Snap (MidpointRounding.AwayFromZero) — keep them identical.
+        // cost at 50k rows). The snap comes from the shared fragment, whose numeric cast
+        // is what makes SQL round half away from zero as LocationProtection.Snap does —
+        // round(double precision) rounds half to EVEN, and this statement carried that
+        // wrong form for a while, disagreeing with every other snap at halfway values.
         var sql = $"""
             SELECT avg(g.gx) AS lon, avg(g.gy) AS lat, COUNT(*)::int AS count
             FROM (
                 SELECT
                     CASE WHEN {exactSql}
                         THEN ST_X(f.geom)
-                        ELSE round(ST_X(f.geom) / @protection_cell) * @protection_cell
+                        ELSE {SpatialSql.SnapToGrid("ST_X(f.geom)", "protection_cell")}
                     END AS gx,
                     CASE WHEN {exactSql}
                         THEN ST_Y(f.geom)
-                        ELSE round(ST_Y(f.geom) / @protection_cell) * @protection_cell
+                        ELSE {SpatialSql.SnapToGrid("ST_Y(f.geom)", "protection_cell")}
                     END AS gy
                 FROM features f
                 WHERE f.kind = {(short)FeatureKind.CaveEntrance}
