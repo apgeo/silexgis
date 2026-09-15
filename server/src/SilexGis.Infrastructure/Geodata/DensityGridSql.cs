@@ -73,6 +73,15 @@ public sealed record DensityCellRow(
 /// the true one.
 /// </para>
 /// <para>
+/// <b>Membership is decided on the same point that is counted.</b> An entrance the caller may not
+/// place exactly is snapped before anything else is asked about it, and "is it inside the outline"
+/// is asked of the snapped point, never the stored one. Asked of the stored point, the outline
+/// becomes a probe: a caller's own polygon is always exactly placeable for them, so they could
+/// bisect its edge and read a protected entrance's true position out of when the count moved —
+/// below the protection grid, which the snap exists to prevent. Deciding on the snapped point
+/// keeps every position-dependent answer quantised to the lattice.
+/// </para>
+/// <para>
 /// <b>The cell size is not this file's decision.</b> A grid finer than the protection lattice would
 /// undo the snap, so the caller's cell size is checked against that floor before this statement is
 /// built, and a smaller one is refused rather than quietly widened. This body assumes the check has
@@ -171,18 +180,18 @@ public static class DensityGridSql
                   AND a.deleted_at IS NULL
                   AND a.geom IS NOT NULL
             ),
-            located AS (
+            -- MATERIALIZED so the exact-view walk in the CASE runs once per row: the CTE below
+            -- reads the point three times, and an inlined CTE would re-evaluate the walk's
+            -- EXISTS subplans at every reference.
+            placed AS MATERIALIZED (
                 SELECT
                     CASE WHEN {exactSql}
-                        THEN ST_X(f.geom)
-                        ELSE round((ST_X(f.geom) / @dg_protection_cell)::numeric)::float8
-                             * @dg_protection_cell
-                    END AS gx,
-                    CASE WHEN {exactSql}
-                        THEN ST_Y(f.geom)
-                        ELSE round((ST_Y(f.geom) / @dg_protection_cell)::numeric)::float8
-                             * @dg_protection_cell
-                    END AS gy
+                        THEN f.geom
+                        ELSE ST_SetSRID(ST_MakePoint(
+                                 {SpatialSql.SnapToGrid("ST_X(f.geom)", "dg_protection_cell")},
+                                 {SpatialSql.SnapToGrid("ST_Y(f.geom)", "dg_protection_cell")}),
+                             4326)
+                    END AS pt
                 FROM features f
                 WHERE f.kind = {(short)FeatureKind.CaveEntrance}
                   AND f.deleted_at IS NULL
@@ -192,9 +201,16 @@ public static class DensityGridSql
                                         (@dg_last_x + 0.5) * @dg_cell, (@dg_last_y + 0.5) * @dg_cell,
                                         4326),
                         @dg_protection_cell)
-                  AND (@dg_area_id IS NULL OR EXISTS (
-                        SELECT 1 FROM study a WHERE ST_Intersects(f.geom, a.geom)))
                   AND {visibleSql}
+            ),
+            located AS (
+                -- Membership in the study area is asked of the placed point, deliberately: for an
+                -- entrance the caller may not place exactly that is the snapped point, so a
+                -- caller-drawn outline cannot be bisected against the true position.
+                SELECT ST_X(p.pt) AS gx, ST_Y(p.pt) AS gy
+                FROM placed p
+                WHERE @dg_area_id IS NULL OR EXISTS (
+                        SELECT 1 FROM study a WHERE ST_Intersects(p.pt, a.geom))
             ),
             counted AS (
                 SELECT round((gx / @dg_cell)::numeric)::bigint AS cx,

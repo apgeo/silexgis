@@ -119,8 +119,8 @@ public static class ExportEndpoints
 
         if (Bbox.TryParse(bbox, out var box))
         {
-            var polygon = box.ToPolygon();
-            query = query.Where(f => f.Geom!.Intersects(polygon));
+            query = await NarrowedToBoxAsync(
+                query, ctx, protection, box.ToPolygon(), access.Value.LocationGridMeters, ct);
         }
 
         var caveTypes = await db.CaveTypes.AsNoTracking().ToDictionaryAsync(t => t.Id, t => t.Code, ct);
@@ -171,7 +171,10 @@ public static class ExportEndpoints
                 ["region"] = row.Region,
                 ["surveyed_length_m"] = row.SurveyedLength is null ? null : (double)row.SurveyedLength,
                 ["depth_m"] = row.Depth is null ? null : (double)row.Depth,
-                ["altitude_m"] = row.Altitude is null ? null : (double)row.Altitude,
+                // An altitude is a coordinate: beside a snapped point it narrows the grid
+                // cell to wherever its contour crosses it. It travels only with an exact
+                // position, under the same rule the cave's own record applies.
+                ["altitude_m"] = exact && row.Altitude is not null ? (double)row.Altitude : null,
                 ["entrances"] = row.EntranceCount,
                 // Approximate flag travels with obfuscated coordinates so consumers cannot
                 // mistake a snapped grid point for a surveyed location.
@@ -180,6 +183,49 @@ public static class ExportEndpoints
         }
 
         return WriteFile(vectorIO, target, "caves", features);
+    }
+
+    /// <summary>
+    /// Applies a bounding box so that membership follows the point the file will publish.
+    ///
+    /// <para>
+    /// These exports place a feature the caller may not see exactly on the protection grid, so
+    /// the honest box test is against that same snapped point: the row is in the file exactly
+    /// when the point printed in the file is inside the box. Tested against the stored
+    /// coordinate instead, the box becomes a probe — membership flips when a caller-chosen edge
+    /// crosses the true position, which bisects a protected cave onto the map to any precision,
+    /// while the snapped point moves only in whole grid steps and gives nothing finer away.
+    /// Exactly-placeable rows are narrowed by their true geometry, as ever: for them position is
+    /// not a secret.
+    /// </para>
+    /// </summary>
+    private static async Task<IQueryable<Feature>> NarrowedToBoxAsync(
+        IQueryable<Feature> query,
+        AccessContext ctx,
+        FeatureProtection protection,
+        Polygon polygon,
+        double gridMeters,
+        CancellationToken ct)
+    {
+        var candidates = await query
+            .Where(f => f.IsProtectedEffective)
+            .Select(f => new { f.Id, f.Geom })
+            .ToListAsync(ct);
+        var placeable = candidates.Count == 0
+            ? new HashSet<Guid>()
+            : await protection.ExactViewIdsAsync(ctx, [.. candidates.Select(c => c.Id)], ct);
+
+        // Only a plain point has a published position at all; anything else is dropped later
+        // rather than degraded, so it has no point the box could honestly be tested against.
+        var publishedInside = candidates
+            .Where(c => !placeable.Contains(c.Id) && c.Geom is Point)
+            .Where(c => polygon.Intersects(LocationProtection.Snap((Point)c.Geom!, gridMeters)))
+            .Select(c => c.Id)
+            .ToArray();
+
+        return query.Where(f =>
+            ((!f.IsProtectedEffective || placeable.Contains(f.Id)) && f.Geom!.Intersects(polygon))
+            || publishedInside.Contains(f.Id));
     }
 
     private static async Task<Results<FileContentHttpResult, UnauthorizedHttpResult, ProblemHttpResult>> ExportFeaturesAsync(
@@ -241,8 +287,8 @@ public static class ExportEndpoints
 
         if (Bbox.TryParse(bbox, out var box))
         {
-            var polygon = box.ToPolygon();
-            query = query.Where(f => f.Geom!.Intersects(polygon));
+            query = await NarrowedToBoxAsync(
+                query, ctx, protection, box.ToPolygon(), access.Value.LocationGridMeters, ct);
         }
 
         var featureTypes = await db.FeatureTypes.AsNoTracking()

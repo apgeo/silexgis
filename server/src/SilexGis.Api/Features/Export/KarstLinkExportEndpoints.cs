@@ -11,6 +11,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Export;
 using SilexGis.Infrastructure.Grottocenter;
+using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Export;
@@ -181,10 +182,12 @@ public static class KarstLinkExportEndpoints
     /// the wrong size, and the exporter would be answering about caves that are not the ones
     /// going into the file.
     /// </remarks>
-    private static IQueryable<Feature> Selected(
+    private static async Task<IQueryable<Feature>> SelectedAsync(
         SilexGisDbContext db,
         AccessContext ctx,
-        KarstLinkExportRequest request)
+        FeatureProtection protection,
+        KarstLinkExportRequest request,
+        CancellationToken ct)
     {
         // Read gate first and on its own. Which caves the caller may read is a different
         // question from which positions they may place, and it is settled before the second
@@ -240,7 +243,26 @@ public static class KarstLinkExportEndpoints
         if (Bbox.TryParse(request.Bbox, out var box))
         {
             var polygon = box.ToPolygon();
-            query = query.Where(f => f.Geom!.Intersects(polygon));
+
+            // A bbox narrows by position only what position may narrow. Testing a protected
+            // cave's stored geometry against a caller-chosen rectangle makes the selection a
+            // probe: bisect the edge and read the true position out of when the count moves —
+            // the attack the density grid quantises its window to prevent. So the placement
+            // question is asked first, over just the protected candidates, and a protected cave
+            // the caller may not place matches a bbox-filtered request wherever it is: its
+            // membership then says nothing about where it sits, the preview says how many such
+            // caves the choice moves, and the treatment decides what the file carries for them.
+            var protectedIds = await query
+                .Where(f => f.IsProtectedEffective)
+                .Select(f => f.Id)
+                .ToListAsync(ct);
+            var placeable = protectedIds.Count == 0
+                ? new HashSet<Guid>()
+                : await protection.ExactViewIdsAsync(ctx, protectedIds, ct);
+
+            query = query.Where(f =>
+                (f.IsProtectedEffective && !placeable.Contains(f.Id))
+                || f.Geom!.Intersects(polygon));
         }
 
         return query;
@@ -260,6 +282,7 @@ public static class KarstLinkExportEndpoints
         KarstLinkExportRequest request,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
+        FeatureProtection protection,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -268,7 +291,7 @@ public static class KarstLinkExportEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var query = Selected(db, ctx, request);
+        var query = await SelectedAsync(db, ctx, protection, request, ct);
         var flags = await query
             .Select(f => f.IsProtectedEffective)
             .Take(MaxExportedCaves + 1)
@@ -294,6 +317,7 @@ public static class KarstLinkExportEndpoints
         ICurrentUser currentUser,
         IOptions<AccessOptions> access,
         GrottocenterClient grottocenter,
+        FeatureProtection protection,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -307,7 +331,7 @@ public static class KarstLinkExportEndpoints
         // question from which positions they may place, and it is settled before the second
         // one is asked: a cave that fails here is not in the file under any treatment, is not
         // counted among the omitted, and is not named by any refusal.
-        var query = Selected(db, ctx, request);
+        var query = await SelectedAsync(db, ctx, protection, request, ct);
 
         var rows = await query
             .OrderBy(f => f.Name)
@@ -346,16 +370,6 @@ public static class KarstLinkExportEndpoints
         // nobody afterwards, so a protected cave gets a treatment or the export is refused.
         var protectedIds = rows.Where(r => r.LocationProtected).Select(r => r.Id).ToHashSet();
 
-        // The same cave in a register outside this installation, so two files about the same
-        // caves can be joined at all — this file's own identifiers mean nothing anywhere else.
-        // Read only for the caves whose position is not protected: an entry in somebody else's
-        // register publishes coordinates, so a link to it hands over by reference exactly the
-        // position a treatment was chosen to withhold.
-        var openIds = ids.Where(id => !protectedIds.Contains(id)).ToArray();
-        var sameAs = await db.FeatureExternalIds.AsNoTracking()
-            .Where(x => openIds.Contains(x.FeatureId) && x.System == ExternalIdSystem.Grottocenter)
-            .ToDictionaryAsync(x => x.FeatureId, x => x.Value, ct);
-
         var result = CaveExportPlanner.Resolve(
             ids,
             protectedIds,
@@ -370,6 +384,20 @@ public static class KarstLinkExportEndpoints
         }
 
         var plan = result.Plan!;
+
+        // The same cave in a register outside this installation, so two files about the same
+        // caves can be joined at all — this file's own identifiers mean nothing anywhere else.
+        // Read only for the caves whose record carries its exact position: an entry in somebody
+        // else's register publishes coordinates, so a link to it hands over by reference exactly
+        // the position a treatment — chosen for a protected cave, or asked for voluntarily on an
+        // open one — was picked to withhold.
+        var openIds = ids
+            .Where(id => plan.Positions[id] == CaveExportPosition.Exact)
+            .ToArray();
+        var sameAs = await db.FeatureExternalIds.AsNoTracking()
+            .Where(x => openIds.Contains(x.FeatureId) && x.System == ExternalIdSystem.Grottocenter)
+            .ToDictionaryAsync(x => x.FeatureId, x => x.Value, ct);
+
         var caves = new List<KarstLinkCave>(rows.Count);
         foreach (var row in rows)
         {
@@ -412,7 +440,14 @@ public static class KarstLinkExportEndpoints
             // the exporter chose is still recorded on the cave, so the file does not claim a
             // position was never protected.
 
-            plan.Treatments.TryGetValue(row.Id, out var treatment);
+            // An altitude is a coordinate — beside a region it narrows a search to a contour
+            // line, and beside a grid position it narrows the protection cell to wherever that
+            // contour crosses it. It travels exactly when the exact position does, under the
+            // same rule the cave's own record applies.
+            double? altitude = position == CaveExportPosition.Exact && row.Altitude is not null
+                ? (double)row.Altitude
+                : null;
+
             caves.Add(new KarstLinkCave(
                 row.Id,
                 row.Name,
@@ -421,11 +456,13 @@ public static class KarstLinkExportEndpoints
                 row.Region,
                 lat,
                 lon,
-                row.Altitude is null ? null : (double)row.Altitude,
+                altitude,
                 row.SurveyedLength,
                 row.Depth,
                 precision,
-                plan.Treatments.ContainsKey(row.Id) ? treatment : null,
+                plan.Treatments.TryGetValue(row.Id, out var treatment)
+                    ? (ProtectedPositionTreatment?)treatment
+                    : null,
                 sameAs.TryGetValue(row.Id, out var externalId) ? grottocenter.EntryUrl(externalId) : null));
         }
 

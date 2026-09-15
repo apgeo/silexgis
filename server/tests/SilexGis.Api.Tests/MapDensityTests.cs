@@ -392,6 +392,56 @@ public sealed class MapDensityTests : IAsyncLifetime, IDisposable, IClassFixture
         }
     }
 
+    /// <summary>
+    /// Whether an entrance is counted inside an outline is asked of the same point that is
+    /// counted — the snapped one, for a caller who may not place it exactly. Asked of the true
+    /// point, the outline is a probe: the caller draws their own polygon, bisects its edge, and
+    /// reads the protected position out of when the count moves, below the grid the snap
+    /// quantises everything else to. Both directions are pinned — a box around the true point
+    /// that misses the lattice, and a box around the lattice that misses the true point — and
+    /// then the same two boxes for a caller who may place exactly, where the true point governs.
+    /// </summary>
+    [Fact]
+    public async Task An_outline_counts_a_protected_entrance_where_it_is_published_not_where_it_is()
+    {
+        var cell = LocationProtection.CellDegrees(GridMeters);
+
+        // Deliberately off-lattice by 0.4 of a cell on each axis, so the published point and the
+        // true one are far enough apart that a small box can hold exactly one of them.
+        var lonIndex = Math.Round(14.0 / cell);
+        var latIndex = Math.Round(39.0 / cell);
+        var lonTrue = (lonIndex + 0.4) * cell;
+        var latTrue = (latIndex + 0.4) * cell;
+        var lonSnapped = lonIndex * cell;
+        var latSnapped = latIndex * cell;
+
+        await CreateCaveWithEntranceAsync(
+            owner, "Dens Outline Probe", lonTrue, latTrue, locationProtected: true);
+
+        var half = 0.15 * cell;
+        var aroundTrue = await CreateKarstAreaAsync(
+            "Dens Around True", lonTrue - half, latTrue - half, lonTrue + half, latTrue + half);
+        var aroundSnapped = await CreateKarstAreaAsync(
+            "Dens Around Snapped",
+            lonSnapped - half, latSnapped - half, lonSnapped + half, latSnapped + half);
+
+        var bbox = FormattableString.Invariant(
+            $"{(lonIndex - 1) * cell},{(latIndex - 1) * cell},{(lonIndex + 2) * cell},{(latIndex + 2) * cell}");
+
+        // The viewer may read the cave and not place it: the outline sees only the snapped point.
+        (await GridAsync(viewer, bbox, GridMeters, aroundTrue))["featureCount"]!.GetValue<int>()
+            .ShouldBe(0, "an outline around the true position counted an entrance published elsewhere");
+        (await GridAsync(viewer, bbox, GridMeters, aroundSnapped))["featureCount"]!.GetValue<int>()
+            .ShouldBe(1);
+
+        // The owner places it exactly, so for them the true point governs — which is what says
+        // the two results above came from placement and not from a broken outline.
+        (await GridAsync(owner, bbox, GridMeters, aroundTrue))["featureCount"]!.GetValue<int>()
+            .ShouldBe(1);
+        (await GridAsync(owner, bbox, GridMeters, aroundSnapped))["featureCount"]!.GetValue<int>()
+            .ShouldBe(0);
+    }
+
     [Fact]
     public async Task A_window_outside_the_world_is_refused_before_anything_is_sized_from_it()
     {

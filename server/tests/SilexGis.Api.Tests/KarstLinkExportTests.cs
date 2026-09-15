@@ -438,6 +438,88 @@ public sealed class KarstLinkExportTests : IAsyncLifetime, IDisposable, IClassFi
         }
     }
 
+    /// <summary>
+    /// A file's membership must not be a map. The bbox narrows by position only the caves whose
+    /// position the caller may see exactly; a protected cave they may merely read matches a
+    /// bbox-filtered request wherever it is, so no sequence of shrinking boxes can walk the
+    /// count onto its true point — which is the attack the density grid quantises its window
+    /// against, and a file that can be requested repeatedly is a better oracle than a map.
+    /// </summary>
+    [Fact]
+    public async Task A_bbox_cannot_be_used_to_locate_a_protected_cave()
+    {
+        var (openName, protectedName) = await SeedAsync();
+
+        // Both caves sit at the same surveyed point; one box holds it and one misses it.
+        var around = FormattableString.Invariant(
+            $"{ExactLon - 0.01},{ExactLat - 0.01},{ExactLon + 0.01},{ExactLat + 0.01}");
+        var away = FormattableString.Invariant(
+            $"{ExactLon + 0.05},{ExactLat + 0.05},{ExactLon + 0.07},{ExactLat + 0.07}");
+
+        // For a reader who may not place the protected cave, moving the box off the true point
+        // removes only the open cave: the protected one's membership never follows its position.
+        var inside = await PreviewAsync(reader, around);
+        inside.GetProperty("caveCount").GetInt32().ShouldBe(2);
+        inside.GetProperty("protectedCaveCount").GetInt32().ShouldBe(1);
+
+        var outside = await PreviewAsync(reader, away);
+        outside.GetProperty("caveCount").GetInt32().ShouldBe(1);
+        outside.GetProperty("protectedCaveCount").GetInt32().ShouldBe(1);
+
+        // The author owns both caves and may place them exactly, so for them the same box
+        // narrows both — the rule is about placement, not about bboxes.
+        (await PreviewAsync(author, away)).GetProperty("caveCount").GetInt32().ShouldBe(0);
+
+        // And the file taken under the missing box still carries the protected cave, under its
+        // treatment, saying nothing about where it is.
+        var document = await ExportAsync(reader, "no_position", away);
+        Names(document).ShouldContain(protectedName);
+        Names(document).ShouldNotContain(openName);
+    }
+
+    /// <summary>
+    /// An altitude is a coordinate: beside a region it narrows a search to a contour line, and
+    /// beside a grid position it narrows the protection cell to wherever that contour crosses
+    /// it. It travels exactly when the exact position does — under every treatment, on every
+    /// cave, including one whose treatment was asked for voluntarily.
+    /// </summary>
+    [Fact]
+    public async Task An_altitude_travels_only_beside_an_exact_position()
+    {
+        var openName = $"KL Alt Open {tag}";
+        var protectedName = $"KL Alt Protected {tag}";
+        var openId = await CreateCaveAsync(openName, locationProtected: false, altitude: 731.5);
+        await CreateEntranceAsync(openId);
+        await CreateEntranceAsync(
+            await CreateCaveAsync(protectedName, locationProtected: true, altitude: 942.25), OtherLon, OtherLat);
+
+        foreach (var treatment in new[] { "grid_position", "no_position" })
+        {
+            var document = await ExportAsync(reader, treatment);
+            Node(document, openName).GetProperty("altitude").GetDouble().ShouldBe(731.5);
+            Node(document, protectedName).TryGetProperty("altitude", out _).ShouldBeFalse(
+                $"under '{treatment}' the record carried the exact elevation beside a withheld position");
+        }
+
+        // A treatment asked for on an open cave withholds the same things it withholds on a
+        // protected one — the altitude, and the link into a register that publishes positions.
+        var put = await author.PutAsJsonAsync(
+            $"/api/v1/caves/{openId}/external-ids/grottocenter", new { value = $"reg-{tag}" });
+        put.StatusCode.ShouldBe(HttpStatusCode.OK, await put.Content.ReadAsStringAsync());
+
+        var voluntary = await ExportBodyAsync(reader, new
+        {
+            search = tag,
+            treatmentForAll = "no_position",
+            treatments = new Dictionary<string, string> { [openId.ToString()] = "no_position" },
+        });
+        var node = Node(voluntary, openName);
+        node.TryGetProperty("latitude", out _).ShouldBeFalse();
+        node.TryGetProperty("altitude", out _).ShouldBeFalse();
+        node.TryGetProperty("sameAs", out _).ShouldBeFalse(
+            "a record whose position was withheld carried a link to a register that publishes it");
+    }
+
     // ---- fixture ----
 
     /// <summary>Seeds one cave anybody signed in may place, and one this installation protects.</summary>
@@ -451,16 +533,19 @@ public sealed class KarstLinkExportTests : IAsyncLifetime, IDisposable, IClassFi
         return (openName, protectedName);
     }
 
-    private async Task<JsonElement> PreviewAsync(HttpClient client)
+    private async Task<JsonElement> PreviewAsync(HttpClient client, string? bbox = null)
     {
-        var response = await client.PostAsJsonAsync(PreviewUrl, new { search = tag });
+        var response = await client.PostAsJsonAsync(PreviewUrl, new { search = tag, bbox });
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         return await ReadAsync(response);
     }
 
-    private async Task<JsonElement> ExportAsync(HttpClient client, string treatmentForAll)
+    private async Task<JsonElement> ExportAsync(HttpClient client, string treatmentForAll, string? bbox = null)
+        => await ExportBodyAsync(client, new { search = tag, treatmentForAll, bbox });
+
+    private async Task<JsonElement> ExportBodyAsync(HttpClient client, object body)
     {
-        var response = await client.PostAsJsonAsync(Url, new { search = tag, treatmentForAll });
+        var response = await client.PostAsJsonAsync(Url, body);
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         response.Content.Headers.ContentType!.MediaType.ShouldBe("application/ld+json");
         return await ReadAsync(response);
@@ -493,7 +578,7 @@ public sealed class KarstLinkExportTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     private async Task<Guid> CreateCaveAsync(
-        string name, bool locationProtected, string visibility = "authenticated")
+        string name, bool locationProtected, string visibility = "authenticated", double? altitude = null)
     {
         var response = await author.PostAsJsonAsync("/api/v1/caves", new
         {
@@ -505,6 +590,7 @@ public sealed class KarstLinkExportTests : IAsyncLifetime, IDisposable, IClassFi
             isShowCave = false,
             surveyedLength = 1234.5,
             depth = 88.5,
+            altitude,
         });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);

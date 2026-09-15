@@ -128,4 +128,42 @@ public sealed class WorkingSridBehaviourTests(PostgresFixture postgres) : IClass
         working.ShouldBeGreaterThan(80);
         working.ShouldBeLessThan(95);
     }
+
+    [Fact]
+    public async Task The_shared_snap_fragment_rounds_halves_exactly_as_the_domain_rule_does()
+    {
+        // The obfuscation snap has two spellings — one in C#, one in SQL — and they must agree
+        // everywhere, because two endpoints snapping the same protected cave to different grid
+        // intersections is itself a disclosure: the disagreement says the true value lies between
+        // them. The value under test is a coordinate exactly halfway between two intersections,
+        // which is where PostgreSQL's own two roundings part company: round(double precision)
+        // takes halves to the even neighbour, round(numeric) takes them away from zero as the
+        // domain rule does. The shared fragment must side with the domain rule, and the uncast
+        // spelling must demonstrably not — that second assertion is what keeps somebody from
+        // "simplifying" the cast away and passing every other test in the suite.
+        await using var connection = await OpenAsync();
+
+        // Dyadic values, deliberately: 0.25 and 0.625 are exact in binary floating point, so
+        // x / cell is exactly 2.5 on both sides of the wire and the assertion tests the rounding
+        // rule rather than the representation error of the fixture.
+        const double cell = 0.25;
+        const double half = 0.625; // exactly between the 2nd and 3rd intersections
+
+        var snapped = await connection.ExecuteScalarAsync<double>(
+            $"SELECT {SpatialSql.SnapToGrid("@x", "cell")}", new { x = half, cell });
+
+        // Inverted through the same public conversion the rule itself uses, so no copy of the
+        // metres-per-degree constant leaks into this test.
+        var gridMeters = cell / SilexGis.Domain.Geo.LocationProtection.CellDegrees(1);
+        var domain = SilexGis.Domain.Geo.LocationProtection.Snap(
+            new NetTopologySuite.Geometries.Point(half, half) { SRID = 4326 }, gridMeters);
+
+        snapped.ShouldBe(domain.X, 1e-12);
+        snapped.ShouldBe(0.75, 1e-12);
+
+        var uncast = await connection.ExecuteScalarAsync<double>(
+            "SELECT round(@x / @cell) * @cell", new { x = half, cell });
+        uncast.ShouldBe(0.5, 1e-12);
+        uncast.ShouldNotBe(snapped);
+    }
 }
