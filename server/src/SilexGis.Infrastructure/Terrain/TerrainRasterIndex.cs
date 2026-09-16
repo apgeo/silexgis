@@ -164,6 +164,17 @@ public sealed class TerrainRasterIndex(
             return [.. stored.Select(Prepared)];
         }
 
+        // Nothing stored can mean "not described yet" or "this build has no prepared rasters", and
+        // the two look identical from here. Describing first tells them apart without writing:
+        // a build with nothing on disk would otherwise send every probe through the write path
+        // below — a transaction, an exclusive per-build lock and a delete, on every read, with
+        // concurrent probes serialising on the lock — for a set that is empty and stays empty.
+        // A read asks the disk at most once; only something to record opens a transaction.
+        if (Describe(buildId).Count == 0)
+        {
+            return [];
+        }
+
         return await RefreshAsync(buildId, ct);
     }
 

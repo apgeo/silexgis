@@ -205,19 +205,30 @@ internal sealed class SimpleGraph
         int n = NodeCount;
         var betweenness = new double[n];
 
+        // Allocated once and cleared per source rather than rebuilt inside the loop. The search
+        // runs once per node, so a fresh list per node per source is n² lists — for a reduced
+        // network of ten thousand junctions that is a hundred million allocations to hold the
+        // same shape each time, and this runs while a survey file is being read.
+        var stack = new Stack<int>();
+        var predecessors = new List<int>[n];
+        for (int i = 0; i < n; i++) { predecessors[i] = []; }
+        var routes = new double[n];
+        var distance = new int[n];
+        var dependency = new double[n];
+        var queue = new Queue<int>();
+
         for (int s = 0; s < n; s++)
         {
-            var stack = new Stack<int>();
-            var predecessors = new List<int>[n];
-            for (int i = 0; i < n; i++) { predecessors[i] = []; }
+            stack.Clear();
+            queue.Clear();
+            for (int i = 0; i < n; i++) { predecessors[i].Clear(); }
+            Array.Clear(routes);
+            Array.Clear(dependency);
 
-            var routes = new double[n];
-            var distance = new int[n];
             Array.Fill(distance, -1);
             routes[s] = 1.0;
             distance[s] = 0;
 
-            var queue = new Queue<int>();
             queue.Enqueue(s);
             while (queue.Count > 0)
             {
@@ -238,7 +249,6 @@ internal sealed class SimpleGraph
                 }
             }
 
-            var dependency = new double[n];
             while (stack.Count > 0)
             {
                 int w = stack.Pop();
