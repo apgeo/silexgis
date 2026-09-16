@@ -17276,6 +17276,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Accounts of this installation (Read on the Users domain). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUserDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One account (Read on the Users domain). */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUserDto"];
+                    };
+                };
+            };
+        };
+        /** Locks or unlocks an account (Write on the Users domain). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AdminUserUpdateRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUserDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Deletes an account (Delete on the Users domain). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/map-views": {
         parameters: {
             query?: never;
@@ -18231,6 +18351,24 @@ export interface components {
             photoLibraries: components["schemas"]["PhotoLibrarySuspensionDto"];
             mailConfigured: boolean;
             smsConfigured: boolean;
+        };
+        AdminUserDto: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            email: null | string;
+            emailConfirmed: boolean;
+            isLockedOut: boolean;
+            /** Format: date-time */
+            lockoutEnd: null | string;
+            isFullAdministrator: boolean;
+            /** Format: uuid */
+            caverId: null | string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AdminUserUpdateRequest: {
+            locked: boolean;
         };
         AlbumDto: {
             /** Format: uuid */
@@ -22239,6 +22377,8 @@ export interface components {
             depthM: null | number;
             /** Format: date-time */
             lastRecordedAt: null | string;
+            /** Format: date-time */
+            positionRecordedAt: null | string;
             in: boolean;
             out: boolean;
         };
@@ -23742,9 +23882,12 @@ export interface components {
             lastKind: null | components["schemas"]["TripPositionEventKind"];
             /** Format: date-time */
             lastRecordedAt: null | string;
+            /** Format: date-time */
+            positionRecordedAt: null | string;
             stationName: null | string;
             /** Format: double */
             depthM: null | number;
+            in: boolean;
             out: boolean;
             label: null | string;
         };
