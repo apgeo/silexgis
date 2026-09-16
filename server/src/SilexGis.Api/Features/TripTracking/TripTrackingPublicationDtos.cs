@@ -75,6 +75,16 @@ public sealed record PublicTripTrackingEnvelopeDto(
 /// string in the envelope widens the anonymous surface by nothing at all, where opening an
 /// enumerable route widens it for every caller on the internet.
 /// </param>
+/// <param name="Pictures">
+/// The photographs this page hangs on the drawing's stations, and never anything else. Empty is
+/// the ordinary answer and a correct one: a club that has published no photographs has none here.
+/// <para>
+/// Carried in the envelope for the same reason <paramref name="Proj4"/> is. The route a station's
+/// pictures are otherwise read from takes an account, and opening it — or any enumerable route
+/// over what is linked to a model — would widen the anonymous surface for every caller on the
+/// internet in order to serve one page. A list in this response widens it by nothing at all.
+/// </para>
+/// </param>
 public sealed record PublicTripSurveyModelDto(
     SurveyModelFormat Format,
     string ModelUrl,
@@ -83,7 +93,56 @@ public sealed record PublicTripSurveyModelDto(
     double? AnchorLatitude,
     double? AnchorHeightM,
     int? SourceEpsg,
-    string? Proj4);
+    string? Proj4,
+    IReadOnlyList<PublicTripStationPictureDto> Pictures);
+
+/// <summary>
+/// One photograph a followed page shows at one station of the drawing.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Only a photograph somebody has already published.</b> A station's pictures are authored as
+/// links, by whoever was on the trip, and go on being authored after a follow link is handed out —
+/// so publishing all of them on the strength of that link would publish a set nobody reviewed and
+/// one that keeps growing under an article already written. The flag that puts a photograph in the
+/// installation's public gallery is an act of publication that already exists and already means
+/// "anyone may see this", taken deliberately, by a person, about that one picture. It is the whole
+/// of the consent this surface asks for, and its consequence is accepted rather than worked around:
+/// an installation that has curated no gallery shows no pictures here.
+/// </para>
+/// <para>
+/// <b>It is consent, not a location decision, so the location decision is made separately.</b> Three
+/// things stand between a photograph and the position it could give away. The cave the trip is
+/// published against carries no protection at all — that is decided before this list is built and
+/// again on every read, and a protected cave is refused the whole page rather than this part of it.
+/// The link that anchors the picture names no feature that is protected, so a picture cannot arrive
+/// here carrying an association with something guarded. And the URL below reaches a rendering only,
+/// so the capture point a camera wrote into the upload never leaves, whatever the picture is of.
+/// </para>
+/// </remarks>
+/// <param name="StationName">
+/// The station the picture hangs on, spelled the way the viewer addresses stations — which is the
+/// string the anchor itself stores, passed through rather than rebuilt, so this page and the
+/// signed-in panels place the same picture at the same point.
+/// </param>
+/// <param name="ThumbnailUrl">
+/// A short-lived signed URL for a <em>rendering</em> of the photograph, and deliberately never for
+/// the upload. A survey file is only useful as its own bytes, which is why the model above is
+/// handed over whole; a photograph is not, and its own bytes carry the fix its camera recorded —
+/// a position rather than a fact about one. The rendering is produced by this application with
+/// every metadata profile stripped, so it discloses what it depicts and nothing else. The width in
+/// the URL is a starting point: a viewer re-points the same URL at whatever width it draws,
+/// spending the token it was handed rather than asking for a second one.
+/// </param>
+/// <param name="Caption">
+/// What the picture shows, in the words somebody wrote for it, or the photograph's title where
+/// there is no caption. Both are already published verbatim for this same photograph by the
+/// curated gallery the flag above put it in, so neither says anything the consent did not cover.
+/// </param>
+public sealed record PublicTripStationPictureDto(
+    string StationName,
+    string ThumbnailUrl,
+    string? Caption);
 
 public sealed record PublicTripTeamDto(Guid Id, string Title);
 

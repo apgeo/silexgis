@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo } from 'react';
-import { useResLinksForTarget } from '../api/hooks.ts';
+import { useMemo, useRef } from 'react';
+import { useResLinksForTarget, type PublicTripStationPicture } from '../api/hooks.ts';
 import type { CaveViewMediaEntry } from './loadCaveView.ts';
-import { stationMediaFromLinks } from './stationMedia.ts';
+import {
+  restampStationMedia,
+  stationMediaFromEnvelope,
+  stationMediaFromLinks,
+} from './stationMedia.ts';
 
 /** How many of a model's links are read for pictures. The same bound the links panel uses. */
 const MAX_LINKS = 200;
@@ -47,4 +51,32 @@ export function useStationMedia(
     () => stationMediaFromLinks(data?.items ?? [], surveyModelId ?? ''),
     [data, surveyModelId],
   );
+}
+
+/**
+ * The same strip on a published page, built from the envelope because nothing else is readable.
+ *
+ * <b>Here, beside the hook above, for the reason that one gives.</b> There are two anonymous
+ * surfaces that draw this strip — the followed page and the embed of it inside somebody's article —
+ * and everything around the derivation is what they would otherwise each spell out: that the
+ * pictures come from the envelope and never from a route, and that an envelope carrying none must
+ * hand the viewer nothing rather than an empty map.
+ *
+ * <b>What it adds to the derivation is that the answer is the same object for as long as it is the
+ * same photographs.</b> A published page keeps re-reading its envelope while it is open, and every
+ * read re-signs every picture URL — so the derivation alone would hand the viewer a new source
+ * every time, and the viewer drops the open strip and its hover listeners whenever it is handed
+ * one. The map is therefore kept across reads and restamped in place; see
+ * `restampStationMedia` for what that costs and what it buys. A page that memoised the
+ * derivation itself would look correct and would dismiss a photograph somebody is looking at,
+ * which is exactly the kind of thing only one of these two pages would ever be fixed for.
+ */
+export function usePublishedStationMedia(
+  pictures: readonly PublicTripStationPicture[] | undefined,
+): ReadonlyMap<string, readonly CaveViewMediaEntry[]> | undefined {
+  const held = useRef<Map<string, CaveViewMediaEntry[]> | undefined>(undefined);
+  return useMemo(() => {
+    held.current = restampStationMedia(held.current, stationMediaFromEnvelope(pictures ?? []));
+    return held.current;
+  }, [pictures]);
 }

@@ -22382,6 +22382,11 @@ export interface components {
             in: boolean;
             out: boolean;
         };
+        PublicTripStationPictureDto: {
+            stationName: string;
+            thumbnailUrl: string;
+            caption: null | string;
+        };
         PublicTripSurveyModelDto: {
             format: components["schemas"]["SurveyModelFormat"];
             modelUrl: string;
@@ -22395,6 +22400,7 @@ export interface components {
             /** Format: int32 */
             sourceEpsg: null | number;
             proj4: null | string;
+            pictures: components["schemas"]["PublicTripStationPictureDto"][];
         };
         PublicTripTeamDto: {
             /** Format: uuid */

@@ -8,6 +8,7 @@ import CaveViewPanel, {
   type CaveViewFocusRequest,
 } from '../../components/caveview/CaveViewPanel.tsx';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
+import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import {
   EMBED_CHANNEL,
@@ -67,6 +68,13 @@ export default function PublicTripEmbedPage() {
   );
 
   const crsLookup = useMemo(() => envelopeCrsLookup(model), [model]);
+
+  // Kept fresh across re-reads rather than pinned like the model URL, and kept as one object while
+  // it is the same photographs — both for the reason the page next door gives at length. The case
+  // is sharper here: an embed sits inside an article about a trip that finished months ago, opened
+  // by a reader who scrolls to the drawing when they get to it, so its picture URLs are the ones
+  // most likely to be spent long after they were minted.
+  const stationMedia = usePublishedStationMedia(model?.pictures);
 
   /** The party as the framing document is told it: a place, a name, and a station or nothing. */
   const party = useMemo(
@@ -247,10 +255,11 @@ export default function PublicTripEmbedPage() {
         crsLookup={crsLookup}
         focusRequest={focusRequest}
         toolbar
-        // No `stationMedia`, for the same reason as the page next door: the links a station's
-        // pictures are read from answer only to an account, and this document is served to a
-        // stranger on somebody else's website. The envelope is the whole of what is readable here
-        // and carries no pictures yet — see the page next door for what changes when it does.
+        // From the envelope, exactly as on the page next door and through the same derivation. The
+        // links a station's pictures are otherwise read from answer only to an account, and this
+        // document is served to a stranger on somebody else's website — so what is drawn here is
+        // what the server decided may be published, and this file decides nothing further.
+        stationMedia={stationMedia}
       />
     </div>
   );

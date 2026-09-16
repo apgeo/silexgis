@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom';
 import { usePublicTrip, type PublicTripParticipant } from '../../api/hooks.ts';
 import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
+import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import {
@@ -81,6 +82,26 @@ export default function PublicTripPage() {
   }, [data]);
 
   const crsLookup = useMemo(() => envelopeCrsLookup(model), [model]);
+
+  /**
+   * The pictures the envelope carried, shaped for the viewer.
+   *
+   * <b>Deliberately not pinned the way the model URL above is.</b> The model is pinned because the
+   * viewer re-downloads and re-parses it when its address changes, and the camera goes back to the
+   * opening view with it — a minute's poll must not do that to somebody watching. A picture is
+   * fetched only when a finger lands on the station holding it, which is what makes pinning them
+   * the wrong way round: the model URL is spent the instant it arrives and never again, while a
+   * picture URL may not be spent for half an hour, by which time a signature good for ten minutes
+   * has expired. A pinned set would be a page of broken thumbnails on somebody's website.
+   *
+   * <b>So they are kept fresh, and kept fresh without disturbing anybody.</b> The re-read that
+   * re-signs them is arranged in the query itself, which goes on asking — more slowly — while a
+   * published page carries pictures; and what the fresh signatures land on is the map the viewer is
+   * already holding rather than a new one, so a strip standing open under somebody's thumb is not
+   * closed by a poll they did not make. Both halves live in one place for the two pages that need
+   * them.
+   */
+  const stationMedia = usePublishedStationMedia(model?.pictures);
 
   const cavers = useMemo(
     () =>
@@ -304,15 +325,15 @@ export default function PublicTripPage() {
               trackedCavers={cavers}
               crsLookup={crsLookup}
               toolbar
-              // No `stationMedia`, and it is deliberate rather than an omission. A station's
-              // pictures are read from the model's links, and that route takes an account — the
+              // The pictures come from the envelope and from nothing else. The hook the signed-in
+              // surfaces share reads the model's links, and that route takes an account — the
               // visitor holding this one token is refused it, as they are refused every other
-              // address here. So the hook the signed-in surfaces share must not be reached for
-              // from this page: it would fire a request that answers 401 where no console is being
-              // watched, and then draw precisely what a cave with no pictures draws, which is a
-              // gap nobody would ever see reported. The published envelope is the only thing this
-              // page can read and it carries no pictures today; the day it does, the map is built
-              // from it beside the other derivation rather than inside this file.
+              // address here — so reaching for it would fire a request that answers 401 where no
+              // console is being watched, and then draw exactly what a cave with no pictures
+              // draws. What the server sends is already decided: only photographs somebody
+              // published, with URLs that reach a rendering and never an upload. Nothing is
+              // filtered on the way through, because nothing here could be trusted to.
+              stationMedia={stationMedia}
             />
           </div>
         )}

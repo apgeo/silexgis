@@ -62,7 +62,18 @@ const model = {
   anchorHeightM: null,
   sourceEpsg: 31700,
   proj4: '+proj=sterea',
+  pictures: [],
 };
+
+/** One published photograph, as the envelope hands it over: a rendering URL and nothing else. */
+const picture = (stationName: string, token: string, caption: string | null = null) => ({
+  stationName,
+  thumbnailUrl: `/api/v1/files/${token}/thumbnail?size=480&token=${token}`,
+  caption,
+});
+
+/** The viewer's media source as this file reads it back off the mocked panel. */
+type Strips = ReadonlyMap<string, readonly { url: string; thumbnailUrl?: string; caption?: string }[]>;
 
 function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelope {
   return {
@@ -144,7 +155,65 @@ describe('the viewer a website frames', () => {
    * with its own viewer mount — and the one that would be forgotten, since it carries no chrome of
    * its own to make the omission visible to anybody reading it.
    */
-  it('reaches for no station pictures, because a framed stranger cannot read the links', () => {
+  it('hangs the envelope\u2019s pictures on their stations without reaching for any route', () => {
+    answer = {
+      data: envelope({
+        model: { ...model, pictures: [picture('p.g.7', 'tok-a', 'The pitch head')] },
+      }),
+      isPending: false,
+      error: null,
+    };
+    render(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('viewer')).toBeInTheDocument();
+    expect(reachedBeyondTheEnvelope).toEqual([]);
+    const strips = given?.stationMedia as Strips;
+    expect([...strips.keys()]).toEqual(['p.g.7']);
+    expect(strips.get('p.g.7')![0].url).toBe('/api/v1/files/tok-a/thumbnail?size=1200&token=tok-a');
+    // Nothing on this surface ever points at the upload a rendering was drawn from.
+    expect(JSON.stringify(strips)).not.toContain('/content');
+  });
+
+  /**
+   * A re-read re-signs every picture URL, and this document is the one where that matters most.
+   *
+   * An embed lives in an article about a trip that finished months ago, opened by a reader who
+   * reaches the drawing when they reach it — so its picture URLs are the ones most likely to be
+   * spent long after they were minted, and the page goes on re-reading for no other reason. What
+   * the reader must not pay for that is the strip they are looking at: handing the viewer a new
+   * source closes it. So the same source comes back, restamped.
+   */
+  it('restamps the pictures it already framed instead of handing over a new set', () => {
+    const signed = (signature: string) => ({
+      stationName: 'p.g.7',
+      thumbnailUrl: `/api/v1/files/photo-1/thumbnail?size=480&token=${signature}`,
+      caption: null,
+    });
+    answer = {
+      data: envelope({ model: { ...model, pictures: [signed('sig-first')] } }),
+      isPending: false,
+      error: null,
+    };
+    const view = render(<PublicTripEmbedPage />);
+    const framed = given?.stationMedia as Strips;
+
+    answer = {
+      data: envelope({ model: { ...model, pictures: [signed('sig-second')] } }),
+      isPending: false,
+      error: null,
+    };
+    view.rerender(<PublicTripEmbedPage />);
+
+    expect(given?.stationMedia).toBe(framed);
+    expect(framed.get('p.g.7')![0].url).toContain('token=sig-second');
+  });
+
+  /**
+   * The twin, and the ordinary case: a club that has published no photographs frames a drawing
+   * with no picture surface at all rather than an empty one — so no station gains a strip, a
+   * hover, or a thumbnail element with nothing behind it.
+   */
+  it('shows the viewer no picture surface at all when the envelope carried none', () => {
     render(<PublicTripEmbedPage />);
 
     expect(screen.getByTestId('viewer')).toBeInTheDocument();

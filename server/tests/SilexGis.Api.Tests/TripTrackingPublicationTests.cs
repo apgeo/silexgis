@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ImageMagick;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
@@ -47,6 +48,8 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     private HttpClient owner = null!;
     private HttpClient reader = null!;
     private HttpClient anonymous = null!;
+    /// <summary>Putting a photograph in the public gallery is an administrator's act and nobody else's.</summary>
+    private HttpClient publisher = null!;
     private string ownerEmail = null!;
     private long caveTypeId;
 
@@ -100,6 +103,7 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         ownerEmail = $"pub-own-{suffix}@t.local";
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"pub-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"pub-read-{suffix}@t.local");
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Admin, $"pub-adm-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
         {
@@ -109,6 +113,7 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
 
         owner = await AuthHelper.BearerClientAsync(factory, $"pub-own-{suffix}@t.local");
         reader = await AuthHelper.BearerClientAsync(factory, $"pub-read-{suffix}@t.local");
+        publisher = await AuthHelper.BearerClientAsync(factory, $"pub-adm-{suffix}@t.local");
         anonymous = factory.CreateClient();
     }
 
@@ -848,6 +853,247 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         (await tooLong.Content.ReadAsStringAsync()).ShouldContain("validation.failed");
     }
 
+    // ---- the pictures on a followed page -----------------------------------------------------
+
+    /// <summary>
+    /// A photograph an administrator published is shown at the station it was taken at, and the
+    /// identical photograph that nobody published is not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both halves in one test because either alone proves nothing. A page that showed no pictures
+    /// at all would pass the absence; a page that showed everything linked to the model would pass
+    /// the presence. The two photographs here are alike in every way that could matter — same
+    /// upload path, same link shape, same station, same trip — and differ only in the flag that
+    /// says a person decided this one may be seen by anybody.
+    /// </para>
+    /// <para>
+    /// What the URL opens is asserted by spending it rather than by reading it, and spent by the
+    /// caller it was actually minted for: somebody with no account at all. The rendering is served
+    /// and the upload is refused, which is the whole difference between the reach a photograph gets
+    /// here and the reach the survey model gets.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_published_photograph_is_shown_at_its_station_and_an_unpublished_one_is_not()
+    {
+        var trip = await TrackedTripAsync("Pictures", locationProtected: false);
+
+        var shown = await PhotographAsync("shown");
+        var kept = await PhotographAsync("kept");
+        await LinkAsync(trip.Model, "cave.upper.2", shown.Document);
+        await LinkAsync(trip.Model, "cave.upper.2", kept.Document);
+        await PublishPhotographAsync(shown.Document);
+
+        var (_, token) = await PublishAsync(trip.Trip);
+        var page = await FollowAsync(token);
+        var pictures = Pictures(page);
+
+        var picture = pictures.ShouldHaveSingleItem();
+        picture.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        var url = picture.GetProperty("thumbnailUrl").GetString()!;
+        url.ShouldStartWith($"/api/v1/files/{shown.File}/thumbnail?");
+        url.ShouldContain("token=");
+
+        // The absence, said against the fixture rather than against the count alone: nothing
+        // anywhere in this envelope names the photograph nobody published.
+        var whole = page.GetRawText();
+        whole.ShouldNotContain(kept.File.ToString());
+        whole.ShouldNotContain(kept.Document.ToString());
+
+        // The rendering is served to a caller carrying nothing...
+        (await anonymous.GetAsync(url)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // ...and the same token, moved to the route that hands over the upload, opens nothing.
+        // That is what a renderings-only reach is for: a photograph's own bytes carry the fix its
+        // camera wrote, and a rendering is drawn here with every metadata profile stripped.
+        (await anonymous.GetAsync(ContentInsteadOf(url))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // And nothing on this surface offers the upload in the first place — the model is the one
+        // thing handed over whole, because a survey is only useful as its own bytes.
+        whole.ShouldNotContain($"/api/v1/files/{shown.File}/content");
+    }
+
+    /// <summary>
+    /// A photograph's caption travels; where there is none, its title does. Both are already
+    /// published for this very picture by the gallery the flag above put it in.
+    /// </summary>
+    [Fact]
+    public async Task A_published_photographs_caption_travels_and_its_title_stands_in_for_one()
+    {
+        var trip = await TrackedTripAsync("Captions", locationProtected: false);
+
+        var captioned = await PhotographAsync("captioned");
+        var bare = await PhotographAsync("bare");
+        await LinkAsync(trip.Model, "cave.upper.2", captioned.Document);
+        await LinkAsync(trip.Model, "cave.deep.3", bare.Document);
+        await PublishPhotographAsync(captioned.Document);
+        await PublishPhotographAsync(bare.Document);
+        var credited = await owner.PutAsJsonAsync($"/api/v1/photos/{captioned.Document}/credit", new
+        {
+            photographerCaverId = (Guid?)null,
+            photographerName = (string?)null,
+            caption = "Head of the second pitch",
+            licenceCode = (string?)null,
+            placeName = (string?)null,
+        });
+        credited.StatusCode.ShouldBe(HttpStatusCode.OK, await credited.Content.ReadAsStringAsync());
+
+        var (_, token) = await PublishAsync(trip.Trip);
+        var pictures = Pictures(await FollowAsync(token));
+
+        Picture(pictures, "cave.upper.2").GetProperty("caption").GetString()
+            .ShouldBe("Head of the second pitch");
+        // Not null, and not the empty string: a nameless thumbnail is worse than a plainly-named one.
+        Picture(pictures, "cave.deep.3").GetProperty("caption").GetString()
+            .ShouldNotBeNullOrWhiteSpace();
+    }
+
+    /// <summary>
+    /// Protecting the cave after the link was handed out closes the page, pictures and all.
+    /// </summary>
+    /// <remarks>
+    /// The decision that matters is not a picture decision at all: a trip in a protected cave is
+    /// refused the whole envelope, re-decided on every read, so there is no answer for a picture to
+    /// ride out on. Asserted in three moves over one unchanged token — published and shown, guarded
+    /// and gone, unguarded and shown again — because a 404 on its own is what a mistyped token also
+    /// answers, and only the recovery says which of the two happened.
+    /// </remarks>
+    [Fact]
+    public async Task Protecting_the_cave_after_minting_takes_the_pictures_with_the_page()
+    {
+        var trip = await TrackedTripAsync("Guarded later", locationProtected: false);
+        var photograph = await PhotographAsync("later");
+        await LinkAsync(trip.Model, "cave.upper.2", photograph.Document);
+        await PublishPhotographAsync(photograph.Document);
+
+        var (_, token) = await PublishAsync(trip.Trip);
+        Pictures(await FollowAsync(token)).Count.ShouldBe(1);
+
+        await SetLocationProtectedAsync(trip.Cave, true);
+        var refused = await anonymous.GetAsync(Follow(token));
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        // The refusal carries nothing of the picture either — not a file id, not a URL.
+        (await refused.Content.ReadAsStringAsync()).ShouldNotContain(photograph.File.ToString());
+
+        await SetLocationProtectedAsync(trip.Cave, false);
+        Pictures(await FollowAsync(token)).Count.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A published, geotagged photograph whose link also names a guarded cave is withheld, and the
+    /// same photograph on a link that names no guarded thing is shown.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the case the gallery flag cannot answer. Marking a picture public is a decision
+    /// about whether it may be <em>seen</em>; it says nothing about where a cave is. A link is an
+    /// assertion that its members belong together, so publishing one of them at a point in the
+    /// drawing gives the whole assertion a position — and a link that also names a cave whose
+    /// coordinates are guarded would then stand that cave beside a position. That is the same
+    /// pairing the association rule withholds elsewhere, spelled for a surface that names no
+    /// feature at all.
+    /// </para>
+    /// <para>
+    /// The twin is the same rows with the flag turned off, so what is being proved is the
+    /// protection and not some accident of the fixture: one picture is withheld while its
+    /// neighbour on the clean link is shown, and the withheld one appears the moment the second
+    /// cave stops being guarded.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_published_photograph_whose_link_names_a_guarded_cave_is_withheld()
+    {
+        var trip = await TrackedTripAsync("Entangled", locationProtected: false);
+        var guarded = await CreateCaveAsync(locationProtected: true);
+
+        // Both are geotagged: what decides between them is the company their link keeps, never
+        // whether the file happens to carry a fix — the reach already answers that one.
+        var clean = await PhotographAsync("clean", GeotaggedJpeg(45.6, 25.6));
+        var entangled = await PhotographAsync("entangled", GeotaggedJpeg(45.6, 25.6));
+        await PublishPhotographAsync(clean.Document);
+        await PublishPhotographAsync(entangled.Document);
+
+        await LinkAsync(trip.Model, "cave.upper.2", clean.Document);
+        await LinkAsync(trip.Model, "cave.deep.3", entangled.Document, alsoNaming: guarded);
+
+        var (_, token) = await PublishAsync(trip.Trip);
+        var page = await FollowAsync(token);
+
+        Pictures(page).ShouldHaveSingleItem()
+            .GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        page.GetRawText().ShouldNotContain(entangled.File.ToString());
+        // And the guarded cave is not named anywhere either — it never could be, which is the
+        // structural half of why this surface is safe at all.
+        page.GetRawText().ShouldNotContain(guarded.ToString());
+
+        // The twin: one flag, and the withheld picture arrives.
+        await SetLocationProtectedAsync(guarded, false);
+        var reopened = Pictures(await FollowAsync(token));
+        reopened.Count.ShouldBe(2);
+        Picture(reopened, "cave.deep.3").GetProperty("thumbnailUrl").GetString()
+            .ShouldStartWith($"/api/v1/files/{entangled.File}/thumbnail?");
+    }
+
+    /// <summary>
+    /// A published trip whose stations nobody has linked a published photograph to carries an
+    /// empty list — never a null, and never a station with a URL behind nothing.
+    /// </summary>
+    /// <remarks>
+    /// The ordinary answer for most installations, and it has to be a shape the page can draw: an
+    /// absent field and a list of one broken URL are the two ways this goes wrong quietly.
+    /// </remarks>
+    [Fact]
+    public async Task A_trip_with_no_published_photographs_carries_an_empty_list()
+    {
+        var trip = await TrackedTripAsync("Nothing published", locationProtected: false);
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        var model = (await FollowAsync(token)).GetProperty("model");
+        model.GetProperty("pictures").ValueKind.ShouldBe(JsonValueKind.Array);
+        model.GetProperty("pictures").GetArrayLength().ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A photograph published on a model that already carries a full window of older station
+    /// links still reaches the page.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The number of links one model is read for is bounded, and a bound is only half of a window:
+    /// which end it is taken from decides what a club with a long-worked cave actually sees. The
+    /// signed-in strip pages a model's links newest first, so a photograph linked last week is the
+    /// first thing on it. A published page reading the other end would answer with the oldest links
+    /// on the model and nothing else — and the failure is silent in the worst way, because "no
+    /// photograph of the new pitch appears" is exactly what a correctly-working page answers for an
+    /// installation that has published nothing.
+    /// </para>
+    /// <para>
+    /// The filler links are backdated in both the ways a window could be taken from: their creation
+    /// stamps and their time-ordered identifiers. Two hundred of them is the window the server
+    /// reads; if that number ever rises, this one has to rise with it or the test stops asking
+    /// anything. Its twin is every other test in this section, each of which publishes a photograph
+    /// on a model carrying only its own handful of links.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_photograph_linked_after_a_full_window_of_older_links_is_still_published()
+    {
+        var trip = await TrackedTripAsync("Long-worked cave", locationProtected: false);
+        await OlderStationLinksAsync(trip.Model, "cave.deep.3", 200);
+
+        var photograph = await PhotographAsync("newest");
+        await LinkAsync(trip.Model, "cave.upper.2", photograph.Document);
+        await PublishPhotographAsync(photograph.Document);
+
+        var (_, token) = await PublishAsync(trip.Trip);
+        var picture = Pictures(await FollowAsync(token)).ShouldHaveSingleItem();
+
+        picture.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        picture.GetProperty("thumbnailUrl").GetString()
+            .ShouldStartWith($"/api/v1/files/{photograph.File}/thumbnail?");
+    }
+
     // ---- plumbing --------------------------------------------------------------------------
 
     private static string Shares(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/shares";
@@ -1173,4 +1419,167 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
 
     private static async Task<JsonElement> BodyAsync(HttpResponseMessage response) =>
         JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.Clone();
+
+    // ---- pictures ----------------------------------------------------------------------------
+
+    private static List<JsonElement> Pictures(JsonElement envelope) =>
+        [.. envelope.GetProperty("model").GetProperty("pictures").EnumerateArray()];
+
+    private static JsonElement Picture(IEnumerable<JsonElement> pictures, string station) =>
+        pictures.Single(p => p.GetProperty("stationName").GetString() == station);
+
+    /// <summary>
+    /// The same delivery URL aimed at the route that hands over the upload, token and all.
+    /// </summary>
+    /// <remarks>
+    /// The reach a token was signed with is the whole of what it opens and the delivery routes
+    /// re-decide nothing, so moving one between routes is exactly the attempt the reach exists to
+    /// refuse — and the only honest way to assert which reach was minted.
+    /// </remarks>
+    private static string ContentInsteadOf(string thumbnailUrl)
+    {
+        var query = thumbnailUrl[(thumbnailUrl.IndexOf('?') + 1)..]
+            .Split('&')
+            .Single(part => part.StartsWith("token=", StringComparison.Ordinal));
+        return thumbnailUrl[..thumbnailUrl.IndexOf('?')].Replace("/thumbnail", "/content") + "?" + query;
+    }
+
+    /// <summary>
+    /// A photograph uploaded the real way — a file row cannot exist outside the documents chain —
+    /// returned as both identities, because the envelope names a file and the gallery flag names a
+    /// document.
+    /// </summary>
+    private async Task<(Guid Document, Guid File)> PhotographAsync(string label, byte[]? bytes = null)
+    {
+        var content = new ByteArrayContent(bytes ?? PlainJpeg());
+        content.Headers.ContentType = new("image/jpeg");
+        using var form = new MultipartFormDataContent { { content, "file", $"{label}-{Guid.NewGuid():N}.jpg" } };
+        var response = await owner.PostAsync("/api/v1/files/?allowDuplicate=true", form);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var fileId = (await BodyAsync(response)).GetProperty("id").GetGuid();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var file = await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == fileId);
+        var version = await db.DocumentVersions.AsNoTracking().FirstAsync(v => v.Id == file.DocumentVersionId);
+        return (version.DocumentId, fileId);
+    }
+
+    /// <summary>
+    /// Puts a photograph in the installation's public gallery — the act of publication this page
+    /// takes as consent, performed by the only kind of account allowed to perform it.
+    /// </summary>
+    private async Task PublishPhotographAsync(Guid documentId)
+    {
+        var response = await publisher.PutAsync($"/api/v1/photos/{documentId}/public?published=true", null);
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// "This photograph was taken at that station", authored exactly as the viewer authors it: a
+    /// link whose one member anchors to a station of the model and whose other is the picture.
+    /// <paramref name="alsoNaming"/> adds a third member, which is how a link comes to touch a
+    /// feature the trip is not about.
+    /// </summary>
+    private async Task<Guid> LinkAsync(
+        Guid surveyModelId, string station, Guid documentId, Guid? alsoNaming = null)
+    {
+        List<object> members =
+        [
+            new
+            {
+                targetType = "surveyModel",
+                targetId = surveyModelId,
+                isMain = false,
+                sortOrder = 0,
+                anchorKind = "modelStation",
+                anchor = new { station },
+            },
+            new { targetType = "document", targetId = documentId, isMain = false, sortOrder = 1 },
+        ];
+        if (alsoNaming is { } feature)
+        {
+            members.Add(new { targetType = "feature", targetId = feature, isMain = false, sortOrder = 2 });
+        }
+
+        var response = await owner.PostAsJsonAsync("/api/v1/reslinks", new
+        {
+            relationTypeId = (long?)null,
+            description = (string?)null,
+            members,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await BodyAsync(response)).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// Older links anchored to a station of one model, enough of them to fill the window a
+    /// published page reads — and carrying no photograph, so what they contribute is their number
+    /// and their age and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Written straight into storage rather than authored through the route: what a test needs of
+    /// these is that they are old, and nothing minted this second can be. Both of the things a
+    /// window could be taken from are made old — the creation stamp, and the time-ordered
+    /// identifier — so a query reading either end by either key is answered honestly.
+    /// </remarks>
+    private async Task OlderStationLinksAsync(Guid surveyModelId, string station, int count)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+        var earlier = DateTimeOffset.UtcNow.AddYears(-1);
+        var ids = new List<Guid>(count);
+        for (var i = 0; i < count; i++)
+        {
+            var id = Guid.CreateVersion7(earlier.AddSeconds(i));
+            ids.Add(id);
+            db.ResLinks.Add(new ResLink { Id = id, ShortCode = Guid.NewGuid().ToString("N")[..8] });
+            db.ResLinkMembers.Add(new ResLinkMember
+            {
+                Id = Guid.CreateVersion7(earlier.AddSeconds(i)),
+                ResLinkId = id,
+                EntityType = AttachedEntityType.SurveyModel,
+                EntityId = surveyModelId,
+                AnchorKind = AnchorKind.ModelStation,
+                Anchor = JsonSerializer.Serialize(new { station }),
+            });
+        }
+        await db.SaveChangesAsync();
+
+        // Every insert is stamped with the moment it was inserted, so the ages these rows exist
+        // for are written afterwards, by a statement that does not go through that stamping.
+        (await db.ResLinks.Where(l => ids.Contains(l.Id))
+            .ExecuteUpdateAsync(rows => rows.SetProperty(l => l.CreatedAt, earlier)))
+            .ShouldBe(count);
+    }
+
+    private static byte[] PlainJpeg()
+    {
+        using var image = new MagickImage(MagickColors.SlateGray, 64, 64);
+        return image.ToByteArray(MagickFormat.Jpeg);
+    }
+
+    /// <summary>A JPEG stamped with a capture point — a photograph that can place what it shows.</summary>
+    private static byte[] GeotaggedJpeg(double lat, double lon)
+    {
+        using var image = new MagickImage(MagickColors.ForestGreen, 64, 64);
+        var exif = new ExifProfile();
+        exif.SetValue(ExifTag.GPSLatitudeRef, lat >= 0 ? "N" : "S");
+        exif.SetValue(ExifTag.GPSLatitude, ToDms(Math.Abs(lat)));
+        exif.SetValue(ExifTag.GPSLongitudeRef, lon >= 0 ? "E" : "W");
+        exif.SetValue(ExifTag.GPSLongitude, ToDms(Math.Abs(lon)));
+        image.SetProfile(exif);
+        return image.ToByteArray(MagickFormat.Jpeg);
+    }
+
+    /// <summary>Degrees → EXIF degrees/minutes/seconds rationals.</summary>
+    private static Rational[] ToDms(double degrees)
+    {
+        var d = (uint)degrees;
+        var minutesFull = (degrees - d) * 60d;
+        var m = (uint)minutesFull;
+        var seconds = (minutesFull - m) * 60d;
+        return [new Rational(d), new Rational(m), new Rational(seconds)];
+    }
 }

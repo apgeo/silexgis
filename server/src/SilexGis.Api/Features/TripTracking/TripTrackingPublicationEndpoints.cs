@@ -2,6 +2,7 @@
 using System.Buffers.Text;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -310,7 +311,7 @@ public static class TripTrackingPublicationEndpoints
             tracking.ArmedAt,
             tracking.ClosedAt,
             withheldAny,
-            await ModelAsync(db, crs, tokens, tracking.SurveyModelId, configCave, ct),
+            await ModelAsync(db, protection, crs, tokens, tracking.SurveyModelId, configCave, ct),
             [.. teams.Select(t => new PublicTripTeamDto(t.Id, t.Title))],
             participants));
     }
@@ -357,8 +358,8 @@ public static class TripTrackingPublicationEndpoints
     /// all rather than published without its drawing.
     /// </remarks>
     private static async Task<PublicTripSurveyModelDto?> ModelAsync(
-        SilexGisDbContext db, ICrsRegistry crs, IFileAccessTokenService tokens,
-        Guid? surveyModelId, Guid configCave, CancellationToken ct)
+        SilexGisDbContext db, FeatureProtection protection, ICrsRegistry crs,
+        IFileAccessTokenService tokens, Guid? surveyModelId, Guid configCave, CancellationToken ct)
     {
         if (surveyModelId is null) return null;
         var model = await db.SurveyModels.AsNoTracking()
@@ -373,8 +374,301 @@ public static class TripTrackingPublicationEndpoints
             model.Anchor?.Y,
             model.AnchorHeightM,
             model.SourceEpsg,
-            model.SourceEpsg is { } epsg ? crs.Proj4(epsg) : null);
+            model.SourceEpsg is { } epsg ? crs.Proj4(epsg) : null,
+            // Built on this branch and no other: the model in hand is a model of the very cave
+            // the publication decision was taken about, so a picture hung on one of its stations
+            // is hung inside a cave that has already been established to carry no protection.
+            await StationPicturesAsync(db, protection, tokens, model.Id, ct));
     }
+
+    // ---- the pictures a follower is shown ----------------------------------------------------
+
+    /// <summary>
+    /// How many station-anchoring links one published model is read for.
+    /// </summary>
+    /// <remarks>
+    /// The same number the signed-in panels page a model's links with — and, because a bound is
+    /// only half of a window, taken from the same end: the most recently created ones. A model can
+    /// accumulate more links than this, and the two surfaces reading opposite ends of the same list
+    /// would be the worst possible failure here — a club marks last week's photograph for the
+    /// gallery, watches it appear on the signed-in strip, and it never reaches the published page,
+    /// with nothing anywhere to tell that apart from the correct answer of "nothing is published".
+    /// </remarks>
+    private const int MaxPictureLinks = 200;
+
+    /// <summary>
+    /// How many pictures one station is published with. The viewer draws a thumbnail per entry
+    /// and fetches each one as the strip appears, on a phone, over a model surface that fits two
+    /// across — so a station somebody has linked forty photographs to would be forty requests to
+    /// show a handful. The same bound the signed-in derivation applies, for the same reason.
+    /// </summary>
+    private const int MaxPicturesPerStation = 12;
+
+    /// <summary>
+    /// How many pictures the whole envelope carries. A published page is not a bulk export, and a
+    /// link somebody put in an article must not become the cheapest way to walk an archive.
+    /// </summary>
+    private const int MaxPictures = 200;
+
+    /// <summary>
+    /// The width the pictures are published at; a viewer re-points the same URL at the width it
+    /// actually draws, spending the token it was handed rather than asking for a second one.
+    /// </summary>
+    private const int PublishedPictureSize = 480;
+
+    /// <summary>
+    /// The photographs a followed page hangs on this model's stations.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>There is no photo-per-station table and none is invented here.</b> "This photograph was
+    /// taken at station 7" is a link with a member anchored to that station and a member that is
+    /// the photograph — authored by clicking the station in the viewer — and this reads it back,
+    /// the same shape the signed-in panels read. What it does not do is read it on the same terms:
+    /// those ask a caller's rights, and here there is no caller to ask. So every gate below is a
+    /// fact about the picture and about the cave, never a fact about who is looking.
+    /// </para>
+    /// <para>
+    /// <b>The consent gate.</b> Only a photograph an administrator has put in the installation's
+    /// public gallery. That flag is an act of publication that already exists and already means
+    /// "anyone may see this", and it is the only thing here that a person decided about this one
+    /// picture. The trip's own share token cannot stand in for it: the token was minted once, and
+    /// the set of pictures linked to a model keeps growing afterwards — a picture linked next month
+    /// would otherwise appear in an article published today, reviewed by nobody. The consequence is
+    /// accepted rather than softened: an installation that has curated no gallery publishes no
+    /// pictures here, and that is the correct answer rather than a gap to fill.
+    /// </para>
+    /// <para>
+    /// <b>The location gates, which the consent flag is not.</b> Somebody marking a picture public
+    /// decided it may be seen; they did not decide anything about where a cave is. Three separate
+    /// things answer that, and all three are on the server because the caller is a stranger:
+    /// </para>
+    /// <para>
+    /// <em>One.</em> The cave. This runs only inside the branch that already holds a model of the
+    /// cave the publication decision was taken about — and that decision refuses a protected cave
+    /// the whole page, re-decided on every read. So a link minted while a cave was open and read
+    /// after it was guarded answers the same 404 it always did, with no pictures in it, because
+    /// there is no envelope at all.
+    /// </para>
+    /// <para>
+    /// <em>Two.</em> The link. A link relates any number of things, and publishing one of its
+    /// members at a point in space gives the whole association a position — which is the same
+    /// reasoning that withholds a geotagged photograph shown under a guarded feature's name, spelled
+    /// for a surface that names no feature. So a link naming any feature that is not itself
+    /// unguarded publishes none of its pictures: not the guarded feature's name, which this envelope
+    /// never carries anyway, but the picture that would otherwise stand as the position of it. A
+    /// feature that is missing, soft-deleted or protected all fail the same closed way, and a member
+    /// naming another survey model is resolved to that model's cave and asked the same question.
+    /// </para>
+    /// <para>
+    /// <em>Three.</em> The reach. Every URL minted here opens a rendering and never the upload, so
+    /// the fix a camera wrote into the file cannot leave by this door whatever the picture is of or
+    /// however the URL is used afterwards. That is the one gate that holds even if a picture arrives
+    /// here by a mistake in the two above.
+    /// </para>
+    /// <para>
+    /// <b>What none of this can decide is what the picture depicts.</b> A photograph of a
+    /// recognisable entrance places a cave by being looked at, and no rule can see that. The gallery
+    /// flag is the answer to it and the only possible one — a person looked at the picture and
+    /// published it — which is a further reason the flag is the gate rather than the share token.
+    /// </para>
+    /// </remarks>
+    private static async Task<IReadOnlyList<PublicTripStationPictureDto>> StationPicturesAsync(
+        SilexGisDbContext db, FeatureProtection protection, IFileAccessTokenService tokens,
+        Guid surveyModelId, CancellationToken ct)
+    {
+        // The links that anchor something to a station of this model. Ordered and bounded here
+        // rather than after the joins, so the cost of this list is the same for a model with four
+        // pictures on it and one with four thousand.
+        //
+        // Newest first, which is the order the signed-in panel pages the same model's links in.
+        // Ordering by the link's creation is what makes the bound above mean the same thing on both
+        // surfaces: a photograph linked today is inside the window on both, and what a heavily
+        // linked model loses is the oldest links on both. Ordering by the identifier would read
+        // the same way — these are time-ordered — but it would say it by accident, and the day the
+        // key changes shape it would quietly start reading some other end of the list.
+        var anchored = db.ResLinkMembers.AsNoTracking()
+            .Where(m => m.EntityType == AttachedEntityType.SurveyModel
+                && m.EntityId == surveyModelId
+                && m.AnchorKind == AnchorKind.ModelStation);
+        var linkIds = await db.ResLinks.AsNoTracking()
+            .Where(l => anchored.Any(m => m.ResLinkId == l.Id))
+            .OrderByDescending(l => l.CreatedAt)
+            .ThenBy(l => l.Id)
+            .Select(l => l.Id)
+            .Take(MaxPictureLinks)
+            .ToListAsync(ct);
+        if (linkIds.Count == 0) return [];
+
+        var members = await db.ResLinkMembers.AsNoTracking()
+            .Where(m => linkIds.Contains(m.ResLinkId))
+            .OrderBy(m => m.ResLinkId).ThenBy(m => m.SortOrder).ThenBy(m => m.Id)
+            .ToListAsync(ct);
+
+        // Every survey model any of these links names — including ones belonging to other caves,
+        // which is how a link comes to touch a second cave at all. A model whose row has gone is
+        // deliberately absent from this map, and a link naming it is withheld below: with nothing
+        // left to evaluate protection against, the only safe answer is no answer.
+        var namedModelIds = members
+            .Where(m => m.EntityType == AttachedEntityType.SurveyModel && m.EntityId != null)
+            .Select(m => m.EntityId!.Value).Distinct().ToList();
+        var caveOfModel = await db.SurveyModels.AsNoTracking()
+            .Where(m => namedModelIds.Contains(m.Id))
+            .Select(m => new { m.Id, m.CaveFeatureId })
+            .ToDictionaryAsync(m => m.Id, m => m.CaveFeatureId, ct);
+
+        var namedFeatureIds = members
+            .Select(m => m.FeatureId)
+            .OfType<Guid>()
+            .Concat(caveOfModel.Values)
+            .Distinct()
+            .ToList();
+        var unguarded = await TrackingWithholding.UnguardedFeatureIdsAsync(db, protection, namedFeatureIds, ct);
+
+        // The photographs, filtered to the ones somebody published. Joined through the document's
+        // current version, because what a picture is now is the file that version serves — the same
+        // file every other surface shows, so a replaced photograph is published as its replacement
+        // rather than as the bytes it was uploaded with.
+        var documentIds = members
+            .Where(m => m.EntityType == AttachedEntityType.Document && m.EntityId != null)
+            .Select(m => m.EntityId!.Value).Distinct().ToList();
+        var published = documentIds.Count == 0
+            ? []
+            : await (from details in db.PhotoDetails.AsNoTracking()
+                     where documentIds.Contains(details.DocumentId) && details.InPublicGallery
+                     join document in db.Documents.AsNoTracking() on details.DocumentId equals document.Id
+                     join version in db.DocumentVersions.AsNoTracking() on document.Id equals version.DocumentId
+                     where version.IsCurrent
+                     join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
+                     // No rendering exists for anything but an image, and a URL pointing at one
+                     // that cannot be drawn is a broken picture on somebody's website.
+                     where file.Kind == FileKind.Image
+                     orderby file.CreatedAt, file.Id
+                     select new
+                     {
+                         DocumentId = document.Id,
+                         document.Title,
+                         details.Caption,
+                         FileId = file.Id,
+                     })
+                .ToListAsync(ct);
+        var pictureOf = published
+            .GroupBy(row => row.DocumentId)
+            .ToDictionary(g => g.Key, g => g.First());
+        if (pictureOf.Count == 0) return [];
+
+        var pictures = new List<PublicTripStationPictureDto>();
+        var perStation = new Dictionary<string, int>(StringComparer.Ordinal);
+        var placed = new HashSet<(string Station, Guid Document)>();
+        var byLink = members.GroupBy(m => m.ResLinkId).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var linkId in linkIds)
+        {
+            var own = byLink.GetValueOrDefault(linkId) ?? [];
+            if (!LinkIsUnguarded(own, caveOfModel, unguarded)) continue;
+
+            // Only stations of the model on screen. A link can anchor to a station of some other
+            // model as well, and that name means nothing in this drawing.
+            var stations = own
+                .Where(m => m.EntityType == AttachedEntityType.SurveyModel
+                    && m.EntityId == surveyModelId
+                    && m.AnchorKind == AnchorKind.ModelStation)
+                .Select(m => StationOf(m.Anchor))
+                .OfType<string>()
+                .ToList();
+            if (stations.Count == 0) continue;
+
+            var linked = own
+                .Where(m => m.EntityType == AttachedEntityType.Document && m.EntityId != null)
+                .Select(m => pictureOf.GetValueOrDefault(m.EntityId!.Value))
+                .Where(row => row is not null)
+                .ToList();
+            if (linked.Count == 0) continue;
+
+            // A link holding several stations and several pictures puts all of its pictures on all
+            // of its stations: what it says is that these things belong together, and it names no
+            // pairing inside itself for this to read one out of.
+            foreach (var station in stations)
+            {
+                foreach (var row in linked)
+                {
+                    if (pictures.Count >= MaxPictures) return pictures;
+                    if (perStation.GetValueOrDefault(station) >= MaxPicturesPerStation) break;
+                    // The same photograph reaches one station through two links as often as not —
+                    // it is linked to the station and to the passage the station stands in — and
+                    // the strip would otherwise show it twice.
+                    if (!placed.Add((station, row!.DocumentId))) continue;
+
+                    pictures.Add(new PublicTripStationPictureDto(
+                        station,
+                        ThumbnailUrl(tokens, row.FileId),
+                        string.IsNullOrWhiteSpace(row.Caption) ? NullIfBlank(row.Title) : row.Caption));
+                    perStation[station] = perStation.GetValueOrDefault(station) + 1;
+                }
+            }
+        }
+
+        return pictures;
+    }
+
+    /// <summary>
+    /// Whether every feature this link names carries no protection — the link-level gate.
+    /// </summary>
+    /// <remarks>
+    /// Written as "nothing it names falls outside the unguarded set" rather than "nothing it names
+    /// is protected", because the two differ on everything the set could not account for: a feature
+    /// that has been deleted, one whose row is gone, a survey-model member whose model no longer
+    /// exists. Those are the cases where there is nothing left to evaluate, and the answer to
+    /// nothing must be no.
+    /// </remarks>
+    private static bool LinkIsUnguarded(
+        IReadOnlyList<ResLinkMember> members,
+        IReadOnlyDictionary<Guid, Guid> caveOfModel,
+        HashSet<Guid> unguarded)
+    {
+        foreach (var member in members)
+        {
+            if (member.FeatureId is { } feature && !unguarded.Contains(feature)) return false;
+            if (member.EntityType == AttachedEntityType.SurveyModel && member.EntityId is { } modelId)
+            {
+                if (!caveOfModel.TryGetValue(modelId, out var cave) || !unguarded.Contains(cave))
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// The station a model-station anchor names, or null when the payload does not carry one.
+    /// </summary>
+    /// <remarks>
+    /// The string is passed through exactly as it was stored, and is deliberately not rebuilt from
+    /// the model's station rows: what an anchor holds is the name the viewer handed over when
+    /// somebody clicked the station, and it is the name the viewer resolves a picture by. Spelling
+    /// it again from the rows would invent a second spelling of an address that already exists.
+    /// </remarks>
+    private static string? StationOf(string? anchor)
+    {
+        if (string.IsNullOrEmpty(anchor)) return null;
+        try
+        {
+            using var payload = JsonDocument.Parse(anchor);
+            if (payload.RootElement.ValueKind != JsonValueKind.Object) return null;
+            if (!payload.RootElement.TryGetProperty("station", out var station)) return null;
+            return station.ValueKind == JsonValueKind.String ? NullIfBlank(station.GetString()) : null;
+        }
+        catch (JsonException)
+        {
+            // A payload this build cannot read anchors nothing it can place, which is the same
+            // answer as no payload at all.
+            return null;
+        }
+    }
+
+    private static string? NullIfBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     // ---- shared ----------------------------------------------------------------------------
 
@@ -431,6 +725,35 @@ public static class TripTrackingPublicationEndpoints
     private static string HashToken(string token) =>
         Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
+    /// <summary>
+    /// The stored bytes of one file, for the caller of this envelope. Reserved for the survey
+    /// model, which is only useful as its own bytes — see the picture mint below for why nothing
+    /// else on this surface gets this reach.
+    /// </summary>
     private static string FileUrl(IFileAccessTokenService tokens, Guid fileId) =>
         $"/api/v1/files/{fileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(fileId, FileDelivery.Full))}";
+
+    /// <summary>
+    /// A rendering of one image file, and never the upload it was drawn from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="FileDelivery.DerivativesOnly"/> unconditionally, and not as a default anybody may
+    /// widen later. A photograph's own bytes carry the fix its camera wrote, which is a position
+    /// rather than a fact about one; the rendering is produced here with every metadata profile
+    /// stripped, so it shows what the picture shows and carries nothing the picture did not. The
+    /// route that redeems this token re-decides nothing — a URL handed out is a decision already
+    /// taken — so the reach signed in at this line is the whole of what a follower can ever spend
+    /// it on, and it refuses the stored bytes however the URL is used afterwards.
+    /// </para>
+    /// <para>
+    /// The delivery route it points at is already on the anonymous allow-list and has to be: a
+    /// browser loads an image ambiently and can attach no header, so the token in the address is
+    /// the whole of the caller's claim. Publishing pictures here therefore widens the set of routes
+    /// a stranger can reach by nothing at all.
+    /// </para>
+    /// </remarks>
+    private static string ThumbnailUrl(IFileAccessTokenService tokens, Guid fileId) =>
+        $"/api/v1/files/{fileId}/thumbnail?size={PublishedPictureSize}"
+            + $"&token={Uri.EscapeDataString(tokens.CreateToken(fileId, FileDelivery.DerivativesOnly))}";
 }

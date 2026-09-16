@@ -55,8 +55,8 @@ let given:
       height?: number | string;
       trackedCavers?: readonly TrackedCaver[];
       crsLookup?: (code: string) => Promise<string | null>;
-      /** Absent on this surface; see the test that says why. */
-      stationMedia?: unknown;
+      /** Built from the envelope, and absent when it carried nothing; see the tests that say why. */
+      stationMedia?: ReadonlyMap<string, readonly { url: string; thumbnailUrl?: string; caption?: string }[]>;
     }
   | undefined;
 let mounts = 0;
@@ -408,7 +408,26 @@ describe('the drawing on a followed page', () => {
     anchorHeightM: null,
     sourceEpsg: 31700,
     proj4: '+proj=sterea +lat_0=46',
+    pictures: [],
   };
+
+  /** One published photograph, as the envelope hands it over: a rendering URL and nothing else. */
+  const picture = (stationName: string, token: string, caption: string | null = null) => ({
+    stationName,
+    thumbnailUrl: `/api/v1/files/${token}/thumbnail?size=480&token=${token}`,
+    caption,
+  });
+
+  /**
+   * The same photograph as a later read hands it over: one file, a signature that is new every
+   * time. Which is what a re-read of this envelope actually looks like — the file a picture is
+   * cannot change, and the string that opens it cannot stay the same.
+   */
+  const resigned = (stationName: string, file: string, signature: string) => ({
+    stationName,
+    thumbnailUrl: `/api/v1/files/${file}/thumbnail?size=480&token=${signature}`,
+    caption: null,
+  });
 
   it('invents a file name whose extension selects the parser, since the envelope carries none', () => {
     ready({ model });
@@ -418,25 +437,111 @@ describe('the drawing on a followed page', () => {
   });
 
   /**
-   * Station pictures: this page shows none, and the way it shows none is by asking for none.
+   * Station pictures come out of the envelope, and out of nothing else.
    *
    * <b>The failure being guarded against is a silent one.</b> The signed-in surfaces draw a strip
    * of photographs over the stations of this same model, read from the model's links — and that
    * route takes an account. A page that copied the signed-in wiring here would fire a request that
    * answers 401, bury it in a query nobody inspects, and render a model with no strips: identical,
    * pixel for pixel, to a cave whose stations genuinely have no photographs. Nothing would ever
-   * report it. So the assertion is about the request, not about the picture.
-   *
-   * <b>And no half-promise.</b> An empty `stationMedia` map would be the viewer being told this
-   * surface shows pictures; the prop's absence is what says it has none to show.
+   * report it. So the request is asserted as well as the picture.
    */
-  it('reaches for no station pictures, because a visitor cannot read the links they come from', () => {
-    ready({ model });
+  it('hangs the envelope\u2019s pictures on their stations without reaching for any route', () => {
+    ready({
+      model: { ...model, pictures: [picture('p.g.7', 'tok-a', 'The pitch head'), picture('p.g.9', 'tok-b')] },
+    });
+    render(<PublicTripPage />);
+
+    expect(screen.getByTestId('viewer')).toBeTruthy();
+    expect(reachedBeyondTheEnvelope).toEqual([]);
+    expect([...given!.stationMedia!.keys()]).toEqual(['p.g.7', 'p.g.9']);
+
+    // Both widths come off the one signed URL the envelope carried \u2014 the token is spent, never
+    // replaced, and nothing anywhere reaches for the upload the rendering was drawn from.
+    const [entry] = given!.stationMedia!.get('p.g.7')!;
+    expect(entry.url).toBe('/api/v1/files/tok-a/thumbnail?size=1200&token=tok-a');
+    expect(entry.thumbnailUrl).toBe('/api/v1/files/tok-a/thumbnail?size=160&token=tok-a');
+    expect(entry.caption).toBe('The pitch head');
+    expect(JSON.stringify(given!.stationMedia)).not.toContain('/content');
+  });
+
+  /**
+   * The positive test's twin, and the ordinary case rather than an edge one.
+   *
+   * A club that has curated no public gallery publishes no photographs, which the owner settled as
+   * correct rather than as a gap. What matters is <em>how</em> the page says so: not an empty map,
+   * which tells the viewer this surface shows pictures and turns on the station label a strip would
+   * hang under, but the prop's absence \u2014 so a trip with nothing to show behaves exactly as it did
+   * before pictures existed, and no station draws a thumbnail element with nothing behind it.
+   */
+  it('shows the viewer no picture surface at all when the envelope carried none', () => {
+    ready({ model: { ...model, pictures: [] } });
     render(<PublicTripPage />);
 
     expect(screen.getByTestId('viewer')).toBeTruthy();
     expect(reachedBeyondTheEnvelope).toEqual([]);
     expect(given!.stationMedia).toBeUndefined();
+  });
+
+  /**
+   * The pictures are deliberately <em>not</em> pinned the way the model URL is \u2014 and just as
+   * deliberately not rebuilt.
+   *
+   * <b>Not pinned</b>, because a signed picture URL expires in about ten minutes and is spent
+   * lazily: a thumbnail is fetched when a finger lands on its station, which may be long after the
+   * page opened. A pinned set would be thumbnails that had quietly stopped resolving.
+   *
+   * <b>Not rebuilt</b>, because the viewer is told about pictures by being handed a source, and
+   * being handed a new one closes the strip and drops the hover listeners under it. Every re-read
+   * re-signs every URL, so a page that simply re-derived would dismiss the photographs a reader was
+   * looking at, up to a minute after they tapped the station and without them touching anything.
+   * So the same map comes back, restamped \u2014 which is also why this asserts an identity rather than
+   * only a string.
+   */
+  it('restamps the pictures it already handed over instead of handing over a new set', () => {
+    ready({ model: { ...model, pictures: [resigned('p.g.7', 'photo-1', 'sig-first')] } });
+    const view = render(<PublicTripPage />);
+    const handedOver = given!.stationMedia!;
+    expect(handedOver.get('p.g.7')![0].url).toContain('token=sig-first');
+
+    ready({
+      model: {
+        ...model,
+        modelUrl: '/api/v1/files/abc/content?token=second',
+        pictures: [resigned('p.g.7', 'photo-1', 'sig-second')],
+      },
+    });
+    view.rerender(<PublicTripPage />);
+
+    expect(given?.fileUrl).toBe('/api/v1/files/abc/content?token=first');
+    expect(given!.stationMedia).toBe(handedOver);
+    expect(given!.stationMedia!.get('p.g.7')![0].url).toContain('token=sig-second');
+  });
+
+  /**
+   * The twin of the test above, and what stops it from being read as "never change the source".
+   *
+   * A photograph published since the page opened is something the reader is owed, and the strip
+   * closing once is what showing it costs.
+   */
+  it('hands over a new set when a re-read actually brought different photographs', () => {
+    ready({ model: { ...model, pictures: [resigned('p.g.7', 'photo-1', 'sig-first')] } });
+    const view = render(<PublicTripPage />);
+    const handedOver = given!.stationMedia!;
+
+    ready({
+      model: {
+        ...model,
+        pictures: [
+          resigned('p.g.7', 'photo-1', 'sig-second'),
+          resigned('p.g.9', 'photo-2', 'sig-second'),
+        ],
+      },
+    });
+    view.rerender(<PublicTripPage />);
+
+    expect(given!.stationMedia).not.toBe(handedOver);
+    expect([...given!.stationMedia!.keys()]).toEqual(['p.g.7', 'p.g.9']);
   });
 
   it('resolves the coordinate system out of the envelope, never over the network', async () => {

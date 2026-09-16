@@ -7662,6 +7662,16 @@ export type PublicTripTeam = components['schemas']['PublicTripTeamDto'];
 export type PublicTripModel = components['schemas']['PublicTripSurveyModelDto'];
 
 /**
+ * One photograph a published trip hangs on a station of its drawing.
+ *
+ * The envelope is the whole of what a visitor holding a follow link can read — every other address
+ * in this installation refuses them — so this is the only shape a station picture reaches a public
+ * surface in. What it carries is a station, a URL good for a rendering, and a caption; there is
+ * deliberately no document id and no way from here to the photograph's own page.
+ */
+export type PublicTripStationPicture = components['schemas']['PublicTripStationPictureDto'];
+
+/**
  * The trip's follow links — when each was minted, by whom, and whether it has been taken back.
  *
  * Deliberately carries no token. A token exists in one response, the one that minted it, and is
@@ -7738,16 +7748,39 @@ export function useRevokeTripTrackingShare() {
 const PUBLIC_TRACKING_POLL_MS = 60_000;
 
 /**
- * The one condition a published read is kept fresh on — the same condition the signed-in reads
- * use, said again here rather than shared, because the two answers carry different shapes of state
- * and the interval is deliberately not the same number.
+ * How often a finished trip that publishes photographs is re-read, and why one is at all.
  *
- * Exported so the condition can be checked directly. It is the whole of what stops a link handed
- * round a club from being a hundred tabs asking a server about a finished trip forever, and that
- * is worth a test which does not have to stand a query client up to state it.
+ * <b>Nothing on such a page changes any more; what changes is what its URLs open.</b> Every picture
+ * the envelope carries is a signed URL good for about ten minutes, and those are spent lazily — a
+ * thumbnail is fetched when a finger lands on the station it hangs at, not when the page loads. The
+ * page most likely to be read that way is the one this matters most for: an embed inside an article
+ * about a trip that came out months ago, where a reader gets to the drawing when they get to it. A
+ * page that read once would offer them broken pictures, on somebody's website, with no way back
+ * except reloading a frame they cannot see the edges of.
+ *
+ * Comfortably inside the ten minutes, and seven times gentler than the live watch. Two other things
+ * keep it modest: the query only asks this of a trip whose envelope actually carried photographs,
+ * and an interval does not fire for a tab nobody is looking at — a backgrounded article costs
+ * nothing until it is looked at again, which is itself a moment that re-reads.
  */
-export function publicTripPollInterval(state: TripTrackingState | undefined) {
-  return state === 'armed' ? PUBLIC_TRACKING_POLL_MS : (false as const);
+const PUBLIC_PICTURE_REFRESH_MS = 7 * 60_000;
+
+/**
+ * The conditions a published read is kept fresh on — said here rather than shared with the
+ * signed-in reads, because the two answers carry different shapes of state and neither interval is
+ * the other's number.
+ *
+ * Exported so the conditions can be checked directly. This is the whole of what stops a link handed
+ * round a club from being a hundred tabs asking a server about a finished trip forever, and it is
+ * worth a test that does not have to stand a query client up to state it.
+ */
+export function publicTripPollInterval(trip: PublicTripEnvelope | undefined) {
+  if (trip?.state === 'armed') {
+    return PUBLIC_TRACKING_POLL_MS;
+  }
+  // A finished trip with nothing to keep alive is asked about no more, which is the ordinary case:
+  // most installations publish no photographs at all, and for those this page reads exactly once.
+  return (trip?.model?.pictures.length ?? 0) > 0 ? PUBLIC_PICTURE_REFRESH_MS : (false as const);
 }
 
 /**
@@ -7758,9 +7791,10 @@ export function publicTripPollInterval(state: TripTrackingState | undefined) {
  * second reading of it to attempt. `retryQuery` already declines to retry a 4xx, so that answer
  * settles at once instead of holding a stranger on a spinner for seven seconds.
  *
- * Kept fresh only while the watch is armed. A closed watch is a finished trip: the page goes on
- * saying what it said and stops asking, which matters more here than on the signed-in surface —
- * a link handed round a club can be open in a hundred tabs nobody is looking at.
+ * Kept fresh while the watch is armed, and afterwards only for as long as something in the answer
+ * goes stale on its own — which is the signed URL behind every published photograph, and nothing
+ * else. A closed trip that publishes none is read once and never asked about again, because a link
+ * handed round a club can be open in a hundred tabs nobody is looking at.
  */
 export function usePublicTrip(token: string | undefined) {
   return useQuery({
@@ -7768,7 +7802,7 @@ export function usePublicTrip(token: string | undefined) {
     queryFn: () =>
       unwrap(api.GET('/api/v1/public/trips/{token}', { params: { path: { token: token! } } })),
     enabled: !!token,
-    refetchInterval: (query) => publicTripPollInterval(query.state.data?.state),
+    refetchInterval: (query) => publicTripPollInterval(query.state.data),
   });
 }
 
