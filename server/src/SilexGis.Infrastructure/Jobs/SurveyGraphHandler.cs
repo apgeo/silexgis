@@ -83,6 +83,15 @@ public sealed class SurveyGraphHandler(
             // nothing to do with the write below has no business sharing its transaction.
             var shape = await MeasureAsync(extraction, ct);
 
+            // Measured before the transaction opens, not inside it. The contraction and the
+            // betweenness behind it are superlinear in the station count, so on a large system this
+            // is seconds to minutes of pure arithmetic with no database in it — and run inside the
+            // transaction below it would hold the delete locks for that whole time with the
+            // connection idle, which an installation that sets a timeout on idle transactions
+            // kills outright. A file with no network at all is measured as nothing.
+            var topology = SurveyTopologyAnalyzer.Measure(
+                CenterlineGraph.Build(parsed), model.Id, DateTime.UtcNow);
+
             // Clearing what a previous read left behind and writing what this one found are one
             // change to the survey, so they are one transaction. Without it a read that fails on
             // the way in has already deleted the rows it was replacing, and the model is left
@@ -116,12 +125,8 @@ public sealed class SurveyGraphHandler(
 
                 await WriteCenterlineAsync(model, shape, ct);
 
-                // Measured now rather than when somebody asks, because the contraction and the
-                // betweenness behind it are superlinear in the station count and a large system is
-                // tens of thousands of stations — a figure a request has to wait for is a figure a
-                // request times out on. A file with no network at all is measured as nothing.
-                var topology = SurveyTopologyAnalyzer.Measure(
-                    CenterlineGraph.Build(parsed), model.Id, DateTime.UtcNow);
+                // Measured above, before this transaction opened: written here, where it is part
+                // of the one commit that replaces everything this reading produced.
                 if (topology is not null) { db.SurveyTopologies.Add(topology); }
 
                 model.Anchor = new Point(extraction.AnchorLongitude, extraction.AnchorLatitude) { SRID = 4326 };

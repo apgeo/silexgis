@@ -145,6 +145,24 @@ public sealed class TerrainDerivativeHandler(
         }
         catch (Exception e)
         {
+            // Everything this run staged is dropped before the failure is written. The tracker
+            // still holds the previous version's rasters marked for removal and this run's marked
+            // for insertion, and a save that carried them would commit half a replacement beside
+            // a status saying it failed — rows naming files the line below is about to delete.
+            // The two sibling handlers clear the tracker for the same reason.
+            foreach (var entry in db.ChangeTracker.Entries().ToList())
+            {
+                if (entry.State == EntityState.Added)
+                {
+                    entry.State = EntityState.Detached;
+                }
+                else if (entry.State is EntityState.Modified or EntityState.Deleted)
+                {
+                    entry.CurrentValues.SetValues(entry.OriginalValues);
+                    entry.State = EntityState.Unchanged;
+                }
+            }
+
             layer.Status = TerrainDerivativeStatus.Failed;
             layer.ErrorCode = e is TerrainBuildException failed
                 ? failed.Code

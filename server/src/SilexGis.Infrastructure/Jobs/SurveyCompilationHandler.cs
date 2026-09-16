@@ -202,10 +202,18 @@ public sealed class SurveyCompilationHandler(
         record.AverageLoopErrorPercent = null;
         record.TotalLengthM = null;
         record.TotalLengthAdjustedM = null;
+        // The same transaction as the success path uses, and for the same reason: the delete runs
+        // as its own statement the moment it is called, so outside one, a save that then failed
+        // would leave a record still claiming a loop count over a table with no loops in it —
+        // figures asserting a run whose evidence had just been removed.
+        await using var tx = await db.Database.BeginTransactionAsync(CancellationToken.None);
+
         await db.SurveyCompilationLoops
             .Where(l => l.SurveyCompilationId == compilationId)
             .ExecuteDeleteAsync(CancellationToken.None);
         await db.SaveChangesAsync(CancellationToken.None);
+
+        await tx.CommitAsync(CancellationToken.None);
     }
 
     private static string? Clipped(string? value, int max) =>
