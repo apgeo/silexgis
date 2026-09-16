@@ -15,6 +15,7 @@ function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTrip
     depthM: null,
     lastRecordedAt: null,
     positionRecordedAt: null,
+    positionOnOtherModel: false,
     in: false,
     out: false,
     ...overrides,
@@ -102,6 +103,31 @@ describe('a published trip, folded into people a model can draw', () => {
 
     expect(cavers[0].position).toEqual({ kind: 'station', station: 'p.g.7' });
     expect(cavers[1].position).toEqual({ kind: 'depth', depthM: 84 });
+  });
+
+  it('says a place the envelope measured in another survey, never as an absence', () => {
+    // The server strips the station and the depth off such a row and sends one bit instead, so
+    // this fold has nothing but that bit to tell "known, not shown here" from "nobody reported
+    // one" — and a follower is the reader least able to work the difference out for themselves.
+    const cavers = publicTrackedCavers(
+      envelope({
+        participants: [
+          participant({
+            ordinal: 1,
+            lastRecordedAt: '2026-09-12T09:00:00Z',
+            positionOnOtherModel: true,
+          }),
+          // The twin, on the survey this page draws: still placed, still drawn.
+          participant({ ordinal: 2, stationName: 'p.g.7', positionOnOtherModel: false }),
+          participant({ ordinal: 3, lastRecordedAt: '2026-09-12T09:00:00Z' }),
+        ],
+      }),
+      unnamed,
+    );
+
+    expect(cavers[0].position).toEqual({ kind: 'otherModel' });
+    expect(cavers[1].position).toEqual({ kind: 'station', station: 'p.g.7' });
+    expect(cavers[2].position).toEqual({ kind: 'unreported' });
   });
 
   it('tells an absence nobody reported apart from one that was withheld', () => {

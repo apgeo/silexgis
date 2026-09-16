@@ -25,7 +25,26 @@ public class TripTracking : ITimestamped, IAuditable, IAuditChild
 
     public TripTrackingState State { get; set; }
 
-    /// <summary>The survey model cavers are placed in; chosen per trip by the admin.</summary>
+    /// <summary>
+    /// The survey model cavers are placed in; chosen per trip by the admin.
+    ///
+    /// <para>
+    /// <b>A bare id, deliberately carrying no foreign key</b> — the same stance
+    /// <see cref="TripPositionEvent.ViewerStationName"/> takes, and for the same reason. A
+    /// reference that blanks itself when the model row goes turns a watch armed on a model
+    /// somebody deleted into a watch that reads as though it never had one, which is
+    /// indistinguishable from the shape a reader who may not be told the model sees. Keeping the
+    /// id makes "the model this watch is armed on is no longer here" a state the read can state
+    /// out loud instead of a null two other things already mean.
+    /// </para>
+    /// <para>
+    /// Nothing ever re-points this on a watch's behalf. A model arriving for the cave is a new
+    /// model, never a replacement of this one, and moving a live watch onto it silently is the
+    /// failure this field is arranged to prevent: the party would keep being drawn, on stations
+    /// that are not the ones their reports named. Re-pointing is an administrator's deliberate
+    /// act, and what it costs is said on the surface where it is taken.
+    /// </para>
+    /// </summary>
     public Guid? SurveyModelId { get; set; }
 
     /// <summary>

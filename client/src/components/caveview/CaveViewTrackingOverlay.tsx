@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
-import { CloseOutlined, EyeInvisibleOutlined, TeamOutlined } from '@ant-design/icons';
+import { CloseOutlined, EyeInvisibleOutlined, SwapOutlined, TeamOutlined } from '@ant-design/icons';
 import { Button, Switch, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { shortNameOf } from '../../caveview/modelParts.ts';
@@ -150,6 +150,15 @@ export default function CaveViewTrackingOverlay({
             )}
           </Tag>
         );
+      // A place is known and belongs to another survey. Drawn as its own tag rather than as the
+      // dash next door: the dash means nobody has said where this person is, which of all the
+      // wrong things this row could say is the one a reader would act on.
+      case 'otherModel':
+        return (
+          <Tag icon={<SwapOutlined />} data-testid="caveview-position-other-model">
+            {t('caveview.tracking.positionOtherModel')}
+          </Tag>
+        );
       case 'unreported':
         return '—';
     }
@@ -168,6 +177,8 @@ export default function CaveViewTrackingOverlay({
             ? 'caveview.tracking.positionWithheld'
             : 'caveview.tracking.positionMaybeWithheld',
         );
+      case 'otherModel':
+        return t('caveview.tracking.positionOtherModel');
       case 'unreported':
         return t('caveview.tracking.positionUnreported');
     }
@@ -420,6 +431,15 @@ export default function CaveViewTrackingOverlay({
                   ? 'caveview.tracking.positionWithheldDetail'
                   : 'caveview.tracking.positionMaybeWithheldDetail',
               )}
+            </Typography.Text>
+          )}
+          {/* Said at length for the same reason the withholding is: the short tag names the
+              condition, and the card is where there is room to say that the report exists, that the
+              survey it was made in is not the one on screen, and therefore why no marker is drawn
+              for somebody whose place somebody does know. */}
+          {open.position.kind === 'otherModel' && (
+            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+              {t('caveview.tracking.positionOtherModelDetail')}
             </Typography.Text>
           )}
         </div>

@@ -47,6 +47,7 @@ function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTrip
     depthM: null,
     lastRecordedAt: null,
     positionRecordedAt: null,
+    positionOnOtherModel: false,
     in: false,
     out: false,
     ...overrides,
@@ -237,6 +238,36 @@ describe('the viewer a website frames', () => {
     expect(screen.queryByTestId('public-trip-embed-failure')).toBeNull();
   });
 
+  /**
+   * The pin, and the one thing it must not survive.
+   *
+   * An address is re-signed on every poll and names the same file, so passing it through would
+   * re-download and re-parse the survey inside somebody's article every minute. A survey that has
+   * actually been replaced — a watch re-pointed at a corrected one while the party is underground
+   * — is the opposite case: the drawing has to follow, or the frame shows new stations on old
+   * geometry.
+   */
+  it('keeps the survey while it is re-signed, and takes up a survey that has been replaced', () => {
+    const view = render(<PublicTripEmbedPage />);
+    expect(given?.fileUrl).toBe('/api/v1/files/abc/content?token=first');
+
+    answer = {
+      data: envelope({ model: { ...model, modelUrl: '/api/v1/files/abc/content?token=second' } }),
+      isPending: false,
+      error: null,
+    };
+    view.rerender(<PublicTripEmbedPage />);
+    expect(given?.fileUrl).toBe('/api/v1/files/abc/content?token=first');
+
+    answer = {
+      data: envelope({ model: { ...model, modelUrl: '/api/v1/files/def/content?token=third' } }),
+      isPending: false,
+      error: null,
+    };
+    view.rerender(<PublicTripEmbedPage />);
+    expect(given?.fileUrl).toBe('/api/v1/files/def/content?token=third');
+  });
+
   it('says so in words when a published trip has no drawing to frame', () => {
     // An empty box on somebody else's website reads as a broken embed.
     answer = { data: envelope({ model: null }), isPending: false, error: null };
@@ -265,6 +296,41 @@ describe('the conversation with the page that framed it', () => {
       party: [
         { ordinal: 1, name: 'Ana', station: 'p.g.7' },
         { ordinal: 2, name: 'Caver 2', station: null },
+      ],
+    });
+  });
+
+  /**
+   * A station is absent for two unrelated reasons, and the article around this frame writes its
+   * prose against what it is told. Handed one shape for both, a page that greys out a link where
+   * there is no station says nobody knows where a person underground is — at the moment when
+   * somebody does, and only the survey the place was measured in is in the way.
+   */
+  it('tells the framer which absences are places it cannot draw', () => {
+    answer = {
+      data: envelope({
+        participants: [
+          participant({ ordinal: 1, label: 'Ana', in: true, positionOnOtherModel: true }),
+          participant({ ordinal: 2, in: true }),
+          participant({ ordinal: 3, label: 'Dan', stationName: 'p.g.7', in: true }),
+        ],
+      }),
+      isPending: false,
+      error: null,
+    };
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+
+    deliver(parent, HOST, hello);
+
+    expect(sent[0].message).toMatchObject({
+      type: 'ready',
+      party: [
+        // A place exists and is not on this drawing: no station is handed over, and the reason is.
+        { ordinal: 1, name: 'Ana', station: null, onOtherSurvey: true },
+        // The twins: nobody has placed this one, and this one is placed on the survey in frame.
+        { ordinal: 2, name: 'Caver 2', station: null, onOtherSurvey: false },
+        { ordinal: 3, name: 'Dan', station: 'p.g.7', onOtherSurvey: false },
       ],
     });
   });

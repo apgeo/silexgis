@@ -38,7 +38,12 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         // Being tracked is a fact about the person; it blocks deleting the person, like the roster.
         builder.HasOne<Caver>().WithMany().HasForeignKey(x => x.CaverId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<TripTeam>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.SetNull);
-        builder.HasOne<SurveyModel>().WithMany().HasForeignKey(x => x.SurveyModelId).OnDelete(DeleteBehavior.SetNull);
+        // SurveyModelId is deliberately a bare column with no foreign key. Under one the delete of
+        // a model blanked it, and a station name beside no model is already this slice's spelling
+        // of "kept from this reader" — so a report made in an older survey came back wearing the
+        // one shape that makes a reader draw it on the current one. The column is a record of what
+        // the report was measured against, not a live pointer; it may name a row that is gone, and
+        // saying that plainly is the whole point. Protection continues to hang off CaveFeatureId.
         builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<SilexGisUser>().WithMany().HasForeignKey(x => x.RecordedByUserId).OnDelete(DeleteBehavior.SetNull);
 
@@ -57,7 +62,10 @@ public sealed class TripTrackingConfiguration : IEntityTypeConfiguration<TripTra
         builder.Property(x => x.ReferenceStationName).HasMaxLength(400);
         builder.Property(x => x.DepthFilter).HasColumnType("text[]");
         builder.HasOne<TripLog>().WithOne().HasForeignKey<TripTracking>(x => x.TripLogId).OnDelete(DeleteBehavior.Cascade);
-        builder.HasOne<SurveyModel>().WithMany().HasForeignKey(x => x.SurveyModelId).OnDelete(DeleteBehavior.SetNull);
+        // Bare column, no foreign key, for the reason the event rows carry one: a watch whose model
+        // was deleted must read as a watch whose model was deleted, and a self-blanking reference
+        // turns it into a watch that reads as never having had one — the same null a withheld
+        // configuration sends. Keeping the id is what lets the read say which of the two it is.
         builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.SetNull);
     }
 }

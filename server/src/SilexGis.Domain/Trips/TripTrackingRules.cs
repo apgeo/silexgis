@@ -50,6 +50,38 @@ public static class TripTrackingRules
     public static readonly TimeSpan RecordedAtSkew = TimeSpan.FromMinutes(2);
 
     /// <summary>
+    /// How many pictures one write may hang on the trip's moments. Sized for the act it exists
+    /// for — somebody emptying a memory card after the trip — and bounded because each one costs
+    /// a document read and a membership row.
+    /// </summary>
+    public const int MaxPicturesPerWrite = 100;
+
+    /// <summary>How long a caption on one of those pictures may be. A line, not an account.</summary>
+    public const int MaxPictureCaptionLength = 1000;
+
+    /// <summary>
+    /// Whether a moment claims to be later than the clock allows — the same skew a report is held
+    /// to, applied to the same kind of claim.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Said here rather than at the endpoint because two write paths now make the same claim about
+    /// the same trip ("this happened at 14:05") and a second reading of the allowance is how they
+    /// come to disagree by a minute.
+    /// </para>
+    /// <para>
+    /// Note what is deliberately <em>not</em> checked, here or anywhere: that the moment falls
+    /// inside the stretch of time the watch covers. A camera clock set to the wrong hour is the
+    /// same class of thing as a station anchor naming a station its model does not have — it is
+    /// accepted and degrades where it is drawn, because a refusal would throw away the one record
+    /// of a picture on the grounds of a number the person attaching it can fix afterwards. The
+    /// surface that offers the moment warns; the server does not refuse.
+    /// </para>
+    /// </remarks>
+    public static bool MomentIsInFuture(DateTimeOffset at, DateTimeOffset now) =>
+        at > now + RecordedAtSkew;
+
+    /// <summary>
     /// Off arms, Armed closes, Closed re-arms (a party that turns out to still be underground),
     /// and any state restates itself. Nothing returns to Off: history exists, and "we never
     /// tracked this trip" would be a lie the moment one event row is on the timeline.
@@ -62,6 +94,69 @@ public static class TripTrackingRules
         (TripTrackingState.Closed, TripTrackingState.Armed) => true,
         _ => false,
     };
+
+    /// <summary>
+    /// Whether a position recorded against <paramref name="recordedOn"/> may be drawn on the model
+    /// <paramref name="modelInUse"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A station path is a name inside one survey and means whatever that survey says it means, so
+    /// <c>sala-mare.4</c> of a re-survey is not necessarily the place <c>sala-mare.4</c> of the
+    /// survey before it was. Drawing a report from one model on another is therefore a confident
+    /// statement about where somebody is, assembled out of a collision of names — the one kind of
+    /// wrong answer a surface read during a rescue must never produce.
+    /// </para>
+    /// <para>
+    /// Both nulls answer false, and that is the fail-closed half. A row with no model claims no
+    /// place worth drawing; a panel that does not know which model it is showing has nothing to
+    /// compare against. Neither is an invitation to guess.
+    /// </para>
+    /// <para>
+    /// <b>What follows from a false is "say so", not "say nothing".</b> The position exists and is
+    /// known — it is only unplaceable <em>here</em> — so the surfaces that cannot draw it report it
+    /// as recorded elsewhere rather than as a person nobody has reported, which would be a false
+    /// statement about somebody underground.
+    /// </para>
+    /// </remarks>
+    public static bool DrawableOn(Guid? recordedOn, Guid? modelInUse) =>
+        recordedOn is not null && modelInUse is not null && recordedOn == modelInUse;
+
+    /// <summary>
+    /// Whether a watch that will be in <paramref name="state"/>, anchored to
+    /// <paramref name="anchoredCave"/>, may be pointed at a model belonging to
+    /// <paramref name="newCave"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Replacing the model of a watch that is <em>armed</em> is a legitimate act and is allowed: a
+    /// survey corrected or re-imported while a party is underground is exactly the situation a
+    /// coordinator may have to follow, and refusing it would leave them arguing with the
+    /// application during a callout. What is refused is the narrower thing — moving an armed watch
+    /// to a model of a <b>different cave</b>. A party is in one cave, and the cave is also the
+    /// anchor every position on the log is protected by, so a swap that crosses caves either
+    /// re-points a live watch at a place the party is not, or moves the protection anchor of the
+    /// config's own station vocabulary to a cave nobody decided that about. Neither is recoverable
+    /// by reading the screen afterwards.
+    /// </para>
+    /// <para>
+    /// A watch that is off or closed may be pointed anywhere: nothing is being followed, and
+    /// history keeps its own per-row anchor whatever the configuration later says.
+    /// </para>
+    /// <para>
+    /// <b>The state to ask about is the one the watch will be in, not the one it is in.</b> A
+    /// single write says both things at once, and which of the two is read decides the answer to
+    /// two real acts. Ending a watch and re-pointing it in one act is free by the paragraph above
+    /// — the party is no longer being followed by the time the new model applies — and asking
+    /// about the state it was in refuses it for a fact about the past. Arming a closed watch
+    /// directly onto another cave's survey is the very thing the paragraph before that refuses,
+    /// and asking about the state it was in permits it: the watch arms, and the anchor protecting
+    /// its station vocabulary moves to a cave nobody decided that about. Both are the same
+    /// mistake, in opposite directions, and the fix for both is to ask about the outcome.
+    /// </para>
+    /// </remarks>
+    public static bool MayPointAtCave(TripTrackingState state, Guid? anchoredCave, Guid newCave) =>
+        state != TripTrackingState.Armed || anchoredCave is null || anchoredCave == newCave;
 
     /// <summary>
     /// Where one member of the party stands, folded from every report about them.

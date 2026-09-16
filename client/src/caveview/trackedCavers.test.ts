@@ -23,6 +23,9 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     positionRecordedAt: '2026-09-12T09:00:00Z',
     stationName: 'p.g.7',
     depthM: null,
+    // Placed on the very model the panel is showing, which is the ordinary case. A test about a
+    // place measured in another survey says so itself.
+    positionSurveyModelId: MODEL,
     in: true,
     out: false,
     // What a published page would caption this person with. Nothing on a signed-in surface reads
@@ -36,6 +39,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
   return {
     state: 'armed',
     surveyModelId: MODEL,
+    surveyModelMissing: false,
     referenceStationName: null,
     depthFilter: [],
     armedAt: '2026-09-12T08:00:00Z',
@@ -192,12 +196,51 @@ describe('trackedCaversFrom', () => {
     expect(cavers[0].position).toEqual({ kind: 'depth', depthM: 35 });
   });
 
-  it('draws nobody when the watch is resolved against another model', () => {
-    // Station names belong to the model they were measured in. Drawing them on a different cave
-    // would be a confident claim about where somebody is, made from a name that happens to
-    // collide with one in the model on screen.
-    expect(trackedCaversFrom(state({ surveyModelId: 'model-2' }), roster, MODEL)).toEqual([]);
-    expect(trackedCaversFrom(state({ surveyModelId: null }), roster, MODEL)).toEqual([]);
+  it('says a place measured in another survey rather than drawing it or hiding the person', () => {
+    // Station names belong to the survey they were measured in. `p.g.7` of a re-survey may be a
+    // different place, or no place at all, so a marker drawn from one on the other survey is a
+    // confident claim assembled out of a collision of names.
+    const [drawn, elsewhere] = trackedCaversFrom(
+      state({
+        participants: [
+          // The twin that says the rule is about the survey and not about refusing everything: the
+          // same station name, measured in the survey on screen, is still drawn.
+          participant({ caverId: 'caver-1', positionSurveyModelId: MODEL }),
+          participant({ caverId: 'caver-2', positionSurveyModelId: 'model-2' }),
+        ],
+      }),
+      roster,
+      MODEL,
+    );
+    expect(drawn.position).toEqual({ kind: 'station', station: 'p.g.7' });
+    expect(elsewhere.position).toEqual({ kind: 'otherModel' });
+    // Never the absence: "nobody has reported a place for this person" is false of somebody a
+    // report has placed, and on a rescue surface it is the reading that gets acted on.
+    expect(elsewhere.position).not.toEqual({ kind: 'unreported' });
+    // The person stays on the list either way — a watch that drops people is a watch that says
+    // somebody is not on the trip.
+    expect(elsewhere.caverId).toBe('caver-2');
+  });
+
+  it('keeps the ordinary absence ordinary when the watch has moved survey', () => {
+    // Somebody no report has placed is unreported, not "recorded elsewhere": the model comparison
+    // has to be about a place that exists, or every un-placed caver on a re-pointed watch would be
+    // marked as though something were known about them.
+    const [nobody] = trackedCaversFrom(
+      state({
+        surveyModelId: 'model-2',
+        participants: [
+          participant({ stationName: null, depthM: null, positionSurveyModelId: null }),
+        ],
+      }),
+      roster,
+      MODEL,
+    );
+    expect(nobody.position).toEqual({ kind: 'unreported' });
+  });
+
+  it('draws nobody when the panel does not know which survey it is showing', () => {
+    // Nothing to compare a report against, so there is no honest way to place anybody.
     expect(trackedCaversFrom(state(), roster, undefined)).toEqual([]);
   });
 

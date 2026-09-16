@@ -249,4 +249,48 @@ public class TripTrackingDomainTests
             TripPositionEventKind.Note, TripPositionEventKind.Entered, TripPositionEventKind.Note,
             TripPositionEventKind.Exited, TripPositionEventKind.Note).ShouldBe(TripStanding.Out);
     }
+
+    [Fact]
+    public void A_place_is_drawable_only_on_the_survey_it_was_measured_in_and_never_against_nothing()
+    {
+        var measuredIn = Guid.NewGuid();
+        var another = Guid.NewGuid();
+
+        // The positive half first, because a rule that refuses everything would pass the rest of
+        // this test and would take the whole party off the model.
+        TripTrackingRules.DrawableOn(measuredIn, measuredIn).ShouldBeTrue();
+
+        // Two surveys of the same cave spell a station the same way and mean different places by
+        // it, so identity of the id is the whole test and nothing weaker will do.
+        TripTrackingRules.DrawableOn(measuredIn, another).ShouldBeFalse();
+
+        // Both nulls fail closed: a row naming no survey claims no place worth drawing, and a
+        // panel that does not know its own survey has nothing to compare against. Null equals
+        // null is deliberately not true here — that is the reading under which a report whose
+        // survey reference had been blanked got drawn on whatever happened to be on screen.
+        TripTrackingRules.DrawableOn(null, measuredIn).ShouldBeFalse();
+        TripTrackingRules.DrawableOn(measuredIn, null).ShouldBeFalse();
+        TripTrackingRules.DrawableOn(null, null).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void An_armed_watch_may_change_survey_within_its_cave_and_may_not_leave_it()
+    {
+        var cave = Guid.NewGuid();
+        var elsewhere = Guid.NewGuid();
+
+        // A corrected or re-imported survey arriving mid-trip is a thing a co-ordinator has to be
+        // able to follow; refusing it would be answered by closing the watch.
+        TripTrackingRules.MayPointAtCave(TripTrackingState.Armed, cave, cave).ShouldBeTrue();
+
+        // The party is in one cave, and that cave is also the anchor every position on the log is
+        // protected by. Moving a live watch out of it is the one swap nothing downstream can undo.
+        TripTrackingRules.MayPointAtCave(TripTrackingState.Armed, cave, elsewhere).ShouldBeFalse();
+
+        // A watch that is following nobody may be pointed anywhere, and a watch with no cave yet
+        // is being configured rather than moved.
+        TripTrackingRules.MayPointAtCave(TripTrackingState.Off, cave, elsewhere).ShouldBeTrue();
+        TripTrackingRules.MayPointAtCave(TripTrackingState.Closed, cave, elsewhere).ShouldBeTrue();
+        TripTrackingRules.MayPointAtCave(TripTrackingState.Armed, null, elsewhere).ShouldBeTrue();
+    }
 }

@@ -82,6 +82,7 @@ function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTrip
     depthM: null,
     lastRecordedAt: null,
     positionRecordedAt: null,
+    positionOnOtherModel: false,
     in: false,
     out: false,
     ...overrides,
@@ -202,6 +203,55 @@ describe('a trip followed by somebody with no account', () => {
 
     expect(screen.getByTestId('public-trip-caver-1')).toHaveTextContent('p.g.7');
     expect(screen.getByTestId('public-trip-caver-2')).toHaveTextContent('No position reported');
+  });
+
+  /**
+   * The sentence this page must never produce about somebody underground.
+   *
+   * A watch re-pointed at a corrected survey mid-trip leaves every earlier report naming the
+   * survey it was measured in. The server drops the station and the depth from those rows — a name
+   * from another survey put beside this drawing reads as a place on it — and raises a bit saying
+   * which kind of absence it is. Read as an ordinary absence, the page tells the family of a
+   * person underground that nobody has reported where they are, which is false: somebody has.
+   */
+  it('says a place was reported on another survey rather than saying none was reported', () => {
+    ready({
+      participants: [
+        participant({
+          ordinal: 1,
+          label: 'Ana',
+          in: true,
+          lastRecordedAt: '2026-09-14T09:00:00Z',
+          positionOnOtherModel: true,
+        }),
+        // The twin, so this cannot pass by the page having stopped saying "no position" at all:
+        // somebody nobody has placed still reads as nobody having placed them.
+        participant({ ordinal: 2, in: true, lastRecordedAt: '2026-09-14T08:40:00Z' }),
+      ],
+    });
+    render(<PublicTripPage />);
+
+    const card = screen.getByTestId('public-trip-caver-1');
+    expect(within(card).getByTestId('public-trip-position-other-model')).toBeInTheDocument();
+    expect(card).toHaveTextContent('Reported on another survey');
+    expect(card).not.toHaveTextContent('No position reported');
+    // And the page says once, in full sentences, what the tag beside a name is short for — in
+    // words that are actually drawn, rather than on an attribute nobody reads on a phone.
+    expect(screen.getByTestId('public-trip-other-model')).toHaveTextContent(
+      'Some places are not shown on this drawing',
+    );
+    expect(screen.getByTestId('public-trip-other-model')).toHaveTextContent(
+      /It is not that nobody knows where they are/,
+    );
+
+    expect(screen.getByTestId('public-trip-caver-2')).toHaveTextContent('No position reported');
+  });
+
+  it('says nothing about other surveys when every place is on the one being drawn', () => {
+    ready();
+    render(<PublicTripPage />);
+
+    expect(screen.queryByTestId('public-trip-other-model')).toBeNull();
   });
 
   it('marks a withheld position as withheld rather than as an absence', () => {
@@ -566,6 +616,27 @@ describe('the drawing on a followed page', () => {
     view.rerender(<PublicTripPage />);
 
     expect(given?.fileUrl).toBe('/api/v1/files/abc/content?token=first');
+  });
+
+  /**
+   * The other half of the pin, and the half that was missing: what is held still is the survey,
+   * not the address of a survey.
+   *
+   * A coordinator may re-point an armed watch at a corrected survey while the party is
+   * underground. The server then publishes stations measured in the new survey, and a page still
+   * drawing the old one places a marker at whatever node of the old geometry happens to carry that
+   * name — a confident marker for a person underground, on geometry their report was never
+   * measured against. So an address naming a different file replaces the pin, camera reset and all.
+   */
+  it('takes up the new survey when the trip is re-pointed at one, mid-follow', () => {
+    ready({ model });
+    const view = render(<PublicTripPage />);
+    expect(given?.fileUrl).toBe('/api/v1/files/abc/content?token=first');
+
+    ready({ model: { ...model, modelUrl: '/api/v1/files/def/content?token=third' } });
+    view.rerender(<PublicTripPage />);
+
+    expect(given?.fileUrl).toBe('/api/v1/files/def/content?token=third');
   });
 
   it('draws the party on the model, keyed by their place in it', () => {

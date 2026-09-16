@@ -346,6 +346,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTripLogEndpoints();
     api.MapTripInvitationEndpoints();
     api.MapTripTrackingEndpoints();
+    api.MapTripTrackingPictureEndpoints();
     api.MapTripTrackingPublicationEndpoints();
     api.MapTripChecklistEndpoints();
     api.MapChecklistEndpoints();

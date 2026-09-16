@@ -5,13 +5,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 
 const recordEvents = vi.fn();
-const resolveDepth = vi.fn();
+/**
+ * What the depth in the box means, as the server answers it. Held as a whole query result because
+ * that is what the card reads: the candidates, whether the answer is still coming, and the refusal
+ * where there is one.
+ */
+const depthReading = vi.fn();
 
 vi.mock('../../api/hooks.ts', () => ({
   TRACKING_EVENT_KINDS: ['entered', 'atStation', 'atDepth', 'note', 'exited'],
   useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
-  useResolveTrackingDepth: () => ({ mutateAsync: resolveDepth, isPending: false }),
+  useTrackingDepthReading: (_tripLogId: string, depthM: number | null) => depthReading(depthM),
 }));
+
+/** Asking the check again, the way the button on a failed reading does. */
+const checkAgain = vi.fn();
 
 // What decides how big every target on this card is drawn, and how big the two panels that open
 // out of it are built. False by default: the machine this suite is read on has a mouse.
@@ -32,6 +40,14 @@ function show() {
       />
     </App>,
   );
+}
+
+/** Puts the card on a depth report with a number typed into it, the way a coordinator does. */
+async function toDepth(value: string) {
+  const kind = screen.getByTestId('trip-tracking-kind');
+  fireEvent.mouseDown(kind.querySelector('.ant-select-selector') ?? kind);
+  fireEvent.click(document.querySelector('.ant-select-item-option[title="At a depth"]')!);
+  fireEvent.change(await screen.findByTestId('trip-tracking-depth'), { target: { value } });
 }
 
 /** Opens the calendar behind "when it was said", the way pressing the field does. */
@@ -75,7 +91,10 @@ function panelSizes(): string {
 beforeEach(() => {
   coarse = false;
   recordEvents.mockReset().mockResolvedValue([{}]);
-  resolveDepth.mockReset().mockResolvedValue([]);
+  checkAgain.mockReset();
+  depthReading
+    .mockReset()
+    .mockReturnValue({ data: undefined, isFetching: false, error: null, refetch: checkAgain });
 });
 
 afterEach(cleanup);
@@ -263,16 +282,9 @@ describe('TrackingReportForm, the depth preview', () => {
 
   /** Takes the form to a depth report with the preview asked for and answered. */
   async function preview() {
-    resolveDepth.mockResolvedValue([candidate]);
+    depthReading.mockReturnValue({ data: [candidate], isFetching: false, error: null });
     show();
-    const kind = screen.getByTestId('trip-tracking-kind');
-    fireEvent.mouseDown(kind.querySelector('.ant-select-selector') ?? kind);
-    fireEvent.click(
-      document.querySelector('.ant-select-item-option[title="At a depth"]')!,
-    );
-    fireEvent.change(await screen.findByTestId('trip-tracking-depth'), {
-      target: { value: '85' },
-    });
+    await toDepth('85');
     fireEvent.click(screen.getByTestId('trip-tracking-depth-preview'));
     return screen.findByTestId('trip-tracking-depth-candidates');
   }
@@ -301,5 +313,168 @@ describe('TrackingReportForm, the depth preview', () => {
     await preview();
 
     expect(screen.getByTestId('trip-tracking-depth-choose-p.g.12')).toHaveClass('ant-btn-lg');
+  });
+});
+
+/**
+ * A depth that nothing in the cave is anywhere near, said before it is recorded.
+ *
+ * <b>This is the defect the preview button could not reach.</b> Resolution takes whichever station
+ * of the trip's filter is nearest and has no tolerance underneath it at all, so a coordinator
+ * taking relayed word who types 1200 for 120 against a 140 m cave is not refused and is not asked
+ * anything — the party is written down at the bottom of the system. The preview that would have
+ * shown it is a button on the other side of the form, and somebody typing a number off a phone call
+ * presses Record.
+ *
+ * The scenario below is the same mistake one digit smaller — 700 for 70 — so that the wording being
+ * asserted does not depend on how a thousands separator is drawn.
+ */
+describe('TrackingReportForm, a depth nothing in the cave is near', () => {
+  /** A 140 m cave: the deepest station there is, and how far 700 m is from it. */
+  const bottom = { stationName: 'p.g.140', surveyName: 'p.g', depthM: 139.4, deltaM: 560.6 };
+  /** The ordinary case: the survey has no station at exactly 120 m, and one 40 cm away. */
+  const nearby = { stationName: 'p.g.119', surveyName: 'p.g', depthM: 119.6, deltaM: 0.4 };
+
+  it('warns while the number is still in the box, with nothing pressed to ask it', async () => {
+    depthReading.mockReturnValue({ data: [bottom], isFetching: false, error: null });
+    show();
+    await toDepth('700');
+
+    const warning = await screen.findByTestId('trip-tracking-depth-gap');
+    // Both halves of what is wrong: where it would land, and how far that is from what was said.
+    expect(warning).toHaveTextContent('p.g.140');
+    expect(warning).toHaveTextContent('560.6');
+    expect(warning).toHaveTextContent('139.4');
+    // Nothing was pressed to get it — the list of candidates is still unasked for, which is the
+    // whole point: the answer used to be on the other side of a button.
+    expect(screen.queryByTestId('trip-tracking-depth-candidates')).toBeNull();
+  });
+
+  it('warns rather than refuses, because the number may be right and the survey thin', async () => {
+    depthReading.mockReturnValue({ data: [bottom], isFetching: false, error: null });
+    show();
+    await toDepth('700');
+    await screen.findByTestId('trip-tracking-depth-gap');
+
+    fireEvent.click(screen.getByTestId('trip-tracking-record'));
+
+    await waitFor(() => expect(recordEvents).toHaveBeenCalled());
+    expect(recordEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'atDepth', depthM: 700 }),
+    );
+  });
+
+  /**
+   * The twin of the two above, and the reason the threshold is a judgement rather than a zero.
+   * A survey has no station at exactly the depth anybody reports, so a card that remarked on every
+   * one of them would teach a coordinator to read past the one that mattered.
+   */
+  it('says nothing when the nearest station is all but where the report said', async () => {
+    depthReading.mockReturnValue({ data: [nearby], isFetching: false, error: null });
+    show();
+    await toDepth('120');
+
+    // Waited on rather than asserted at once: the question has to have been asked and answered
+    // before "no warning" means anything, or "not yet" passes for "never".
+    await waitFor(() => expect(depthReading).toHaveBeenCalledWith(120));
+    expect(screen.queryByTestId('trip-tracking-depth-gap')).toBeNull();
+  });
+});
+
+/**
+ * A check that did not happen must not look like a check that passed.
+ *
+ * <b>Everything this card now does about a wild depth rests on a warning being absent meaning "it
+ * was checked, and it is fine".</b> One failed request — a 500, a connection dropped mid-callout, a
+ * session that lapsed behind the form — makes the card pixel-identical to a depth that resolved
+ * half a metre from a station: no warning either way. Record then succeeds, because the write
+ * resolves on the server's own path and is never blocked, and the party is stored at the bottom of
+ * the cave with nothing on screen having disagreed. That is the original defect restored by one
+ * dropped request, so the refusal is drawn whenever a depth has been typed, not once somebody has
+ * pressed the button that asks for the list.
+ */
+describe('TrackingReportForm, a depth the survey could not be asked about', () => {
+  /** What a station half a metre away looks like, for the twin of every silence below. */
+  const nearby = { stationName: 'p.g.119', surveyName: 'p.g', depthM: 119.6, deltaM: 0.4 };
+  /** A request that failed rather than a question that was answered. */
+  const failed = { data: undefined, isFetching: false, error: new Error('gone'), refetch: checkAgain };
+
+  it('says the check failed without anything having been pressed to ask for it', async () => {
+    depthReading.mockReturnValue(failed);
+    show();
+    await toDepth('120');
+
+    const notice = await screen.findByTestId('trip-tracking-depth-check-failed');
+    expect(notice).toHaveTextContent('has not been checked against the survey');
+    // And what it means for the act in front of them: recording is not blocked and the number
+    // still lands at the nearest station, so the check is theirs to make.
+    expect(notice).toHaveTextContent('Recording is not blocked');
+    // The list of candidates is still unasked for. That button is exactly what this used to be
+    // hidden behind, and hiding it there is why one failed request was silent.
+    expect(screen.queryByTestId('trip-tracking-depth-candidates')).toBeNull();
+  });
+
+  /**
+   * The twin. Without it the assertion above would pass on a card that cried failure at a depth
+   * that resolved perfectly well.
+   */
+  it('says nothing of the sort when the check came back', async () => {
+    depthReading.mockReturnValue({ data: [nearby], isFetching: false, error: null, refetch: checkAgain });
+    show();
+    await toDepth('120');
+
+    await waitFor(() => expect(depthReading).toHaveBeenCalledWith(120));
+    expect(screen.queryByTestId('trip-tracking-depth-check-failed')).toBeNull();
+  });
+
+  /**
+   * A rejection is held under the same key as the question, so retyping the same number re-reads it
+   * and stays quiet. Asking again has to be something a person can do.
+   */
+  it('offers the check again rather than leaving a refusal standing for ever', async () => {
+    depthReading.mockReturnValue(failed);
+    show();
+    await toDepth('120');
+    await screen.findByTestId('trip-tracking-depth-check-failed');
+
+    fireEvent.click(screen.getByTestId('trip-tracking-depth-check-again'));
+
+    expect(checkAgain).toHaveBeenCalled();
+  });
+
+  /** Warned, never refused: the number may be right and the check merely unavailable. */
+  it('still records the depth, because a failed check is not a reason to refuse a report', async () => {
+    depthReading.mockReturnValue(failed);
+    show();
+    await toDepth('120');
+    await screen.findByTestId('trip-tracking-depth-check-failed');
+
+    fireEvent.click(screen.getByTestId('trip-tracking-record'));
+
+    await waitFor(() => expect(recordEvents).toHaveBeenCalled());
+    expect(recordEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'atDepth', depthM: 120 }),
+    );
+  });
+
+  /**
+   * And the third state silence could mean. A number typed and Record pressed within the second is
+   * the hurry a callout is conducted in, and "not asked yet" reads exactly like "asked, and fine".
+   */
+  it('says the check is still running while it is', async () => {
+    depthReading.mockReturnValue({ data: undefined, isFetching: true, error: null, refetch: checkAgain });
+    show();
+    await toDepth('120');
+
+    expect(await screen.findByTestId('trip-tracking-depth-checking')).toBeTruthy();
+  });
+
+  it('stops saying it once the answer is in', async () => {
+    depthReading.mockReturnValue({ data: [nearby], isFetching: false, error: null, refetch: checkAgain });
+    show();
+    await toDepth('120');
+
+    await waitFor(() => expect(depthReading).toHaveBeenCalledWith(120));
+    expect(screen.queryByTestId('trip-tracking-depth-checking')).toBeNull();
   });
 });

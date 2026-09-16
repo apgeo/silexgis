@@ -23,6 +23,7 @@ function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTrip
     depthM: null,
     lastRecordedAt: null,
     positionRecordedAt: null,
+    positionOnOtherModel: false,
     in: false,
     out: false,
     ...overrides,

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, type CSSProperties, type ReactNode } from 'react';
 import { EyeInvisibleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { Alert, Card, Flex, Result, Spin, Tag, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,7 @@ import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTra
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import {
   partyByTeam,
   partyStandings,
@@ -48,29 +49,11 @@ export default function PublicTripPage() {
   const { token: antdToken } = theme.useToken();
   const { data, isPending, error } = usePublicTrip(token);
 
-  /**
-   * The delivery URL the viewer was given, kept as it was.
-   *
-   * The URL is signed and expires in about ten minutes, and the only way to get a fresh one is to
-   * read the envelope again — which this page does every minute while the party is underground. So
-   * a page that simply passed the latest URL through would hand the viewer a different address on
-   * every poll, and the viewer reloads on the address: the model would be downloaded and parsed
-   * again every minute, and the camera would be thrown back to the view the model opens at, for
-   * the whole time somebody sat watching it.
-   *
-   * Pinning the first one costs nothing, because the viewer fetches exactly once. Whether that
-   * address still works an hour later is of no interest to a model that is already in the browser.
-   * A first load that fails is recovered by reloading the page, which mints a fresh URL — the same
-   * recovery every expired delivery URL in this application has.
-   */
-  const [pinnedModelUrl, setPinnedModelUrl] = useState<string | null>(null);
+  // The address the viewer is given: held still while it is the same survey, replaced when the
+  // survey itself changes. Both halves matter and the reasoning for each lives with the rule,
+  // beside the page that shares it.
   const model = data?.model ?? null;
-  useEffect(() => setPinnedModelUrl(null), [token]);
-  useEffect(() => {
-    if (model !== null) {
-      setPinnedModelUrl((current) => current ?? model.modelUrl);
-    }
-  }, [model]);
+  const pinnedModelUrl = usePinnedModelUrl(model?.modelUrl, token);
 
   // The tab a link opens in says which trip it is. Worth doing here and nowhere else in this
   // application: everything else is opened from inside a workspace whose tab is already named,
@@ -171,6 +154,29 @@ export default function PublicTripPage() {
   const positionOf = (
     participant: PublicTripParticipant,
   ): { shown: ReactNode; placedAt: string | null } => {
+    // Read before the two absences below, because both of them would be wrong about it and one of
+    // them would be the worst sentence this page can produce.
+    //
+    // <b>Somebody has reported where this person is.</b> The place was measured in a different
+    // survey of the cave than the one drawn here — a watch re-pointed at a corrected survey while
+    // the party is underground leaves every earlier report naming the survey it was made in — so
+    // the server sends the station and the depth as absences, deliberately, and raises this bit to
+    // say which kind of absence it is. Without reading it the page falls through to "No position
+    // reported" and tells the family of somebody underground that nobody knows where they are,
+    // which is false. The drawing beside it already says "on another survey"; this is the same
+    // page's other half, and it is the half read on a phone.
+    if (participant.positionOnOtherModel) {
+      return {
+        shown: (
+          <Tag icon={<QuestionCircleOutlined />} data-testid="public-trip-position-other-model">
+            {t('publicTrip.positionOtherModel')}
+          </Tag>
+        ),
+        // No moment either, and for the reason the server sends none: an hour beside a place this
+        // page cannot show would date something a reader can only read as the place beside it.
+        placedAt: null,
+      };
+    }
     if (participant.stationName !== null && participant.stationName.length > 0) {
       return { shown: participant.stationName, placedAt: participant.positionRecordedAt };
     }
@@ -310,6 +316,25 @@ export default function PublicTripPage() {
             title={t('publicTrip.withheldTitle')}
             description={t('publicTrip.withheldBody')}
             data-testid="public-trip-withheld"
+          />
+        )}
+
+        {/* Said once for the page as well as once per person, because the tag beside a name is a
+            label and this is the explanation of it — and the reader is somebody waiting for a
+            party to come out, who needs to know that a place they cannot see is not a place
+            nobody knows.
+
+            `message` rather than the `title` its three siblings above pass: the library's alert has
+            no `title` prop, so that string lands on the wrapper as a browser tooltip and is never
+            read on the phone this page is designed for. Fixed here rather than on all four, because
+            the other three are somebody else's line this week; it is a defect in them too. */}
+        {data.participants.some((participant) => participant.positionOnOtherModel) && (
+          <Alert
+            type="info"
+            showIcon
+            message={t('publicTrip.otherModelTitle')}
+            description={t('publicTrip.otherModelBody')}
+            data-testid="public-trip-other-model"
           />
         )}
 

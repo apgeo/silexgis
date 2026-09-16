@@ -284,6 +284,47 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     }
 
     /// <summary>
+    /// The address a follower is handed names the file it delivers, so a re-read of the same trip
+    /// is recognisably the same survey and a survey that has been swapped is recognisably not.
+    /// </summary>
+    /// <remarks>
+    /// <b>A page keeps the address it first loaded, and it has to know when not to.</b> The
+    /// envelope is re-read every minute and re-signs the same file each time, so a viewer handed
+    /// the newest string would re-download the survey and reset its camera once a minute. But a
+    /// coordinator may re-point an armed watch at a corrected survey while the party is
+    /// underground, and a page that kept the first address forever would then draw the old
+    /// geometry under the new survey's station names. The followed page tells the two apart by the
+    /// address's path — everything before the signature — and this is the property of the server
+    /// that makes that reading sound. There is deliberately no survey identifier on the envelope
+    /// to compare instead.
+    /// </remarks>
+    [Fact]
+    public async Task The_delivery_url_keeps_its_path_across_re_reads_and_changes_it_when_the_survey_does()
+    {
+        var trip = await TrackedTripAsync("Same survey, fresh signature", locationProtected: false);
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        static string PathOf(JsonElement envelope)
+        {
+            var url = envelope.GetProperty("model").GetProperty("modelUrl").GetString()!;
+            var query = url.IndexOf('?', StringComparison.Ordinal);
+            return query < 0 ? url : url[..query];
+        }
+
+        var first = PathOf(await FollowAsync(token));
+        // A minute later, the same trip and the same survey: whatever the signature says, the file
+        // being delivered is the one already in the browser.
+        PathOf(await FollowAsync(token)).ShouldBe(first);
+
+        // And the corrected survey, uploaded and pointed at mid-trip: a different drawing, said by
+        // a different address, which is the only thing telling the page to take it up.
+        var corrected = await SeedModelWithStationsAsync(trip.Cave);
+        (await PutConfigAsync(owner, trip.Trip, new { state = "armed", surveyModelId = corrected }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+        PathOf(await FollowAsync(token)).ShouldNotBe(first);
+    }
+
+    /// <summary>
     /// Revoked, unknown, malformed and oversized tokens are one answer, and the live link beside
     /// them is the half that says the answer means something.
     /// </summary>
@@ -1092,6 +1133,71 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         picture.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
         picture.GetProperty("thumbnailUrl").GetString()
             .ShouldStartWith($"/api/v1/files/{photograph.File}/thumbnail?");
+    }
+
+    /// <summary>
+    /// A place reported before the trip's survey was changed is not handed to a follower as a
+    /// place on the survey the page draws — it is dropped, and said to have been dropped.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This page is a drawing, and a station name printed beside it reads as a place on it. The
+    /// two surveys here spell their stations identically, so the collision is exact: publishing
+    /// <c>cave.upper.2</c> of the earlier survey next to the later survey's drawing would put a
+    /// person at a named place in a cave on a page their family is reading.
+    /// </para>
+    /// <para>
+    /// What is kept is that somebody <em>is</em> placed. The envelope carries one bit for it, not
+    /// the survey's id — a follower is handed no survey identifiers at all — and the bit exists
+    /// because "known, not shown here" and "nobody has reported where they are" are the two
+    /// readings this page must never merge.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_place_reported_on_the_earlier_survey_is_not_published_beside_the_later_ones_drawing()
+    {
+        var trip = await TrackedTripAsync("Re-surveyed mid-trip", locationProtected: false);
+
+        // The twin first, while the watch is still on the survey that place was measured in: the
+        // station is published and the page says nothing about another survey.
+        var (_, before) = await PublishAsync(trip.Trip);
+        var published = (await FollowAsync(before)).GetProperty("participants").EnumerateArray().Single();
+        published.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        published.GetProperty("positionOnOtherModel").GetBoolean().ShouldBeFalse();
+        TimeOf(published, "positionRecordedAt").ShouldNotBeNull();
+
+        // A corrected survey of the same cave arrives and the watch is moved onto it.
+        var corrected = await SeedModelWithStationsAsync(trip.Cave);
+        (await PutConfigAsync(owner, trip.Trip, new { state = "armed", surveyModelId = corrected }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var envelope = await FollowAsync(before);
+        var moved = envelope.GetProperty("participants").EnumerateArray().Single();
+        moved.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        moved.GetProperty("depthM").ValueKind.ShouldBe(JsonValueKind.Null);
+        moved.GetProperty("positionOnOtherModel").GetBoolean().ShouldBeTrue();
+        // The hour goes with the place: a time beside no place is dated from whatever is nearest,
+        // and on this page the nearest thing is the drawing.
+        TimeOf(moved, "positionRecordedAt").ShouldBeNull();
+        // What is not lost: the page still says somebody is underground and still says when they
+        // were last heard from, which is the whole reason a family opens it.
+        moved.GetProperty("in").GetBoolean().ShouldBeTrue();
+        TimeOf(moved, "lastRecordedAt").ShouldNotBeNull();
+        // Nothing here is a withholding, and the flag that means that must not have moved.
+        envelope.GetProperty("positionsWithheld").GetBoolean().ShouldBeFalse();
+
+        // And the second twin: a report made against the survey now in use is published again, so
+        // the rule is about which survey a place was measured in and not about a page that has
+        // stopped showing places.
+        (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip.Trip}/tracking/events", new
+        {
+            caverIds = new[] { trip.Cavers[0] },
+            kind = "atStation",
+            stationName = "cave.deep.3",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var again = (await FollowAsync(before)).GetProperty("participants").EnumerateArray().Single();
+        again.GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        again.GetProperty("positionOnOtherModel").GetBoolean().ShouldBeFalse();
     }
 
     // ---- plumbing --------------------------------------------------------------------------

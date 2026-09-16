@@ -93,6 +93,54 @@
   font-size: 12px;
 }
 
+/* ---- The depth somebody reported, under the station it was recorded at.
+
+   <b>`block` is the whole point of this rule, and it is not decoration.</b> The two used to be one
+   string joined by a middle dot, which read as one description of one place — a station and "the
+   depth it is at" — when what they are is what was asked for and what it came out as. On its own
+   line, prefixed by words that say which of the two it is, it can no longer be read as the
+   station's own depth. Left to run on, a phone would wrap them back onto one line the moment a
+   station name got long, which is exactly the reading being repaired.
+
+   Same size and same secondary colour as the age above it, because it is the same kind of thing:
+   a qualification of the answer on the line above, not a second answer. The colour is the
+   library's, said in the component, so it answers in either theme. */
+.tracking-position-asked {
+  display: block;
+  font-size: 12px;
+}
+
+/* The station itself: the answer of the three lines, at the page's own size and colour. It is
+   marked only so that it is one element rather than a text node adrift among its qualifications —
+   nothing about how it looks is decided here. */
+.tracking-position-station {
+  display: block;
+}
+
+/* And the mark that says the two are a long way apart. Its own line again, under both, so that a
+   narrow cell cannot put a warning tag beside a number and have the two read as one phrase. The
+   colour is the library's `warning` preset rather than anything written here — one fewer pair of
+   values to keep in step across the two themes. */
+.tracking-position-gap {
+  display: inline-block;
+  margin-top: 2px;
+  margin-inline-end: 0;
+  white-space: normal;
+}
+
+/* And the mark that says the place was measured in another survey than the one this watch is on.
+   Laid out exactly like the gap mark above and for the same reason: on its own line, under the
+   station and the age, so that a narrow cell cannot set it beside the station name and have the
+   two read as one phrase — "cave.deep.3 on another survey" is the sentence, but only when the
+   words are in that order and a wrapped tag does not guarantee it. Colour from the library's
+   preset, so both themes are answered without a value written here. */
+.tracking-position-other-model {
+  display: inline-block;
+  margin-top: 2px;
+  margin-inline-end: 0;
+  white-space: normal;
+}
+
 @media (hover: none), (pointer: coarse) {
   .tracking-table .ant-table-selection-column {
     position: relative;

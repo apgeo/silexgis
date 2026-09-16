@@ -13,17 +13,34 @@ const CARMEN = '33333333-3333-3333-3333-333333333333';
 const trackingQuery = vi.fn();
 const eventsQuery = vi.fn();
 const recordEvents = vi.fn();
-const resolveDepth = vi.fn();
+/** What one depth resolves to, as the report card asks it while somebody types. */
+const depthReading = vi.fn();
+/**
+ * And what every depth already on screen resolves to — the answer the rows measure themselves
+ * against. Keyed by the depth that was typed, exactly as the hook returns it.
+ */
+const depthReadings = vi.fn();
 const deleteEvent = vi.fn();
 const setTracking = vi.fn();
 const setLabel = vi.fn();
+/** The trip's links, where a photograph hung on one of its moments lives. */
+const pictureLinks = vi.fn();
+const detachPicture = vi.fn();
+/**
+ * What the attach dialog was opened with. Recorded rather than driven, because the property under
+ * test is the <em>moment</em> it is opened at — a report's instant, never the report's id.
+ */
+const pictureDialogProps = vi.fn();
 
 vi.mock('../../api/hooks.ts', () => ({
   TRACKING_EVENT_KINDS: ['entered', 'atStation', 'atDepth', 'note', 'exited'],
   useTripTracking: () => trackingQuery(),
   useTripTrackingEvents: () => eventsQuery(),
   useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
-  useResolveTrackingDepth: () => ({ mutateAsync: resolveDepth, isPending: false }),
+  useTrackingDepthReading: () => depthReading(),
+  // Arguments passed straight through, because which depths the tab decides to ask about is itself
+  // a thing worth asserting: a report the screen cannot honestly measure must not cost a request.
+  useTrackingDepthReadings: (...args: unknown[]) => depthReadings(...args),
   useDeleteTrackingEvent: () => ({ mutateAsync: deleteEvent, isPending: false }),
   useSetTripTracking: () => ({ mutateAsync: setTracking, isPending: false }),
   useCreateTrackingTeam: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -39,6 +56,15 @@ vi.mock('../../api/hooks.ts', () => ({
   // The pictures linked to the model's stations, asked for on that same surface and only once the
   // model has been opened — which these tests never do, there being no model on the watch.
   useResLinksForTarget: () => ({ data: undefined, isPending: false, error: null }),
+  // The photographs hung on the trip's own moments — read on this tab rather than inside the
+  // survey panel, which is the whole point of them: a moment picture belongs to an instant of the
+  // trip and not to a place in a cave, so it must be reachable with no model on screen at all.
+  // Arguments passed through, because whether a trip nobody ever watched is asked about is itself
+  // a property worth asserting.
+  useTripMomentPictureLinks: (...args: unknown[]) => pictureLinks(...args),
+  useDetachTrackingPicture: () => ({ mutateAsync: detachPicture, isPending: false }),
+  useAttachTrackingPictures: () => ({ mutate: vi.fn(), isPending: false }),
+  usePhotos: () => ({ data: { items: [] }, isPending: false }),
   surveyModelReadableByViewer: (m: { format: string }) => m.format === 'lox' || m.format === 'survex3d',
   // Publishing the trip: this tab mounts the card that offers it, and what the card does has its
   // own tests. Nothing here has published anything, so the list is empty and neither write is
@@ -49,6 +75,15 @@ vi.mock('../../api/hooks.ts', () => ({
   // Naming somebody as a follower of the published page sees them. The dialog that does it has its
   // own tests; what this suite asks is whether the tab reaches it at all, which nothing did before.
   useSetTrackingParticipantLabel: () => ({ mutateAsync: setLabel, isPending: false }),
+}));
+
+// The dialog that picks photographs off the trip's gallery has its own tests; what this suite asks
+// is what it is opened with, so it is recorded rather than driven.
+vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
+  default: (props: { defaultAt: number; defaultCaverId: string | null }) => {
+    pictureDialogProps(props);
+    return <div data-testid="trip-tracking-pictures-dialog" />;
+  },
 }));
 
 // What decides how big every target on this surface is drawn, and how much room the selection
@@ -69,6 +104,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
   return {
     state: 'armed',
     surveyModelId: null,
+    surveyModelMissing: false,
     referenceStationName: null,
     depthFilter: [],
     armedAt: '2026-09-12T06:00:00Z',
@@ -87,6 +123,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         positionRecordedAt: '2026-09-12T07:00:00Z',
         stationName: 'P12',
         depthM: 84,
+        positionSurveyModelId: null,
         in: true,
         out: false,
         label: null,
@@ -99,6 +136,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         positionRecordedAt: null,
         stationName: null,
         depthM: null,
+        positionSurveyModelId: null,
         in: true,
         out: false,
         label: null,
@@ -150,8 +188,12 @@ beforeEach(() => {
   });
   eventsQuery.mockReturnValue({ data: { items: [], page: 1, pageSize: 20, totalItems: 0 }, isPending: false });
   recordEvents.mockReset().mockResolvedValue([{}, {}]);
-  resolveDepth.mockReset().mockResolvedValue([]);
+  depthReading.mockReset().mockReturnValue({ data: undefined, isFetching: false, error: null });
+  depthReadings.mockReset().mockReturnValue(new Map());
   deleteEvent.mockReset().mockResolvedValue(undefined);
+  pictureLinks.mockReset().mockReturnValue({ data: undefined, isPending: false, error: null });
+  detachPicture.mockReset().mockResolvedValue(undefined);
+  pictureDialogProps.mockReset();
   coarse = false;
   narrow = false;
   setTracking.mockReset().mockResolvedValue(state());
@@ -182,6 +224,7 @@ describe('TripTrackingTab', () => {
             // reader without the right to place the cave.
             stationName: null,
             depthM: null,
+            positionSurveyModelId: null,
             in: true,
             out: false,
             label: null,
@@ -220,6 +263,7 @@ describe('TripTrackingTab', () => {
             positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            positionSurveyModelId: null,
             in: true,
             out: false,
             label: null,
@@ -232,6 +276,7 @@ describe('TripTrackingTab', () => {
             positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            positionSurveyModelId: null,
             in: false,
             out: false,
             label: null,
@@ -269,6 +314,7 @@ describe('TripTrackingTab', () => {
             positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            positionSurveyModelId: null,
             in: true,
             out: false,
             label: null,
@@ -283,6 +329,7 @@ describe('TripTrackingTab', () => {
             positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            positionSurveyModelId: null,
             in: true,
             out: false,
             label: null,
@@ -384,10 +431,14 @@ describe('TripTrackingTab', () => {
    * number can still be changed.
    */
   it('shows which stations a depth could mean before the depth is recorded', async () => {
-    resolveDepth.mockResolvedValue([
-      { stationName: 'P12', surveyName: 'entrance series', depthM: 118, deltaM: 2 },
-      { stationName: 'Q4', surveyName: null, depthM: 131, deltaM: 11 },
-    ]);
+    depthReading.mockReturnValue({
+      data: [
+        { stationName: 'P12', surveyName: 'entrance series', depthM: 118, deltaM: 2 },
+        { stationName: 'Q4', surveyName: null, depthM: 131, deltaM: 11 },
+      ],
+      isFetching: false,
+      error: null,
+    });
     show();
 
     const kind = within(screen.getByTestId('trip-tracking-kind')).getByRole('combobox');
@@ -401,9 +452,6 @@ describe('TripTrackingTab', () => {
     fireEvent.change(screen.getByTestId('trip-tracking-depth'), { target: { value: '120' } });
 
     fireEvent.click(screen.getByTestId('trip-tracking-depth-preview'));
-
-    await waitFor(() => expect(resolveDepth).toHaveBeenCalledTimes(1));
-    expect(resolveDepth.mock.calls[0][0]).toMatchObject({ tripLogId: 'trip-1', depthM: 120 });
 
     const candidates = await screen.findByTestId('trip-tracking-depth-candidates');
     expect(candidates).toHaveTextContent('P12');
@@ -541,9 +589,11 @@ describe('TripTrackingTab', () => {
       for (const label of ['On the public page', 'Team', 'Last report', 'Last heard', 'Where']) {
         expect(within(row).getByText(label)).toBeTruthy();
       }
-      // Including the one the whole surface is read for, and the one that carries whether a
-      // position was withheld.
-      expect(within(row).getByText('P12 · 84 m')).toBeTruthy();
+      // Including the one the whole surface is read for. The station and the depth somebody
+      // reported are two facts and are drawn as two, on a phone as anywhere else — a row that put
+      // them on one line would put back the reading this page exists not to make.
+      expect(within(row).getByText('P12')).toBeTruthy();
+      expect(within(row).getByText('Reported as 84 m down')).toBeTruthy();
     });
 
     it('says a withheld position on the row itself rather than past the right edge', () => {
@@ -560,6 +610,7 @@ describe('TripTrackingTab', () => {
               positionRecordedAt: null,
               stationName: null,
               depthM: null,
+              positionSurveyModelId: null,
               in: true,
               out: false,
               label: null,
@@ -1067,6 +1118,7 @@ describe('TripTrackingTab', () => {
             positionRecordedAt: '2026-09-12T07:00:00Z',
             stationName: 'P12',
             depthM: null,
+            positionSurveyModelId: null,
             in: true,
             out: false,
             label: null,
@@ -1079,6 +1131,7 @@ describe('TripTrackingTab', () => {
             positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            positionSurveyModelId: null,
             in: false,
             out: true,
             label: null,
@@ -1092,6 +1145,7 @@ describe('TripTrackingTab', () => {
             positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            positionSurveyModelId: null,
             in: false,
             out: false,
             label: null,
@@ -1219,6 +1273,7 @@ describe('TripTrackingTab', () => {
             positionRecordedAt: '2026-09-12T07:00:00Z',
             stationName: 'P12',
             depthM: null,
+            positionSurveyModelId: null,
             in: true,
             out: false,
             label: null,
@@ -1233,6 +1288,7 @@ describe('TripTrackingTab', () => {
             positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            positionSurveyModelId: null,
             in: true,
             out: false,
             label: null,
@@ -1245,6 +1301,7 @@ describe('TripTrackingTab', () => {
             positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            positionSurveyModelId: null,
             in: true,
             out: false,
             label: null,
@@ -1402,6 +1459,7 @@ describe('TripTrackingTab', () => {
               positionRecordedAt: null,
               stationName: null,
               depthM: null,
+              positionSurveyModelId: null,
               in: true,
               out: false,
               // Asked to be kept off the page, and this is the record of it.
@@ -1415,6 +1473,7 @@ describe('TripTrackingTab', () => {
               positionRecordedAt: null,
               stationName: null,
               depthM: null,
+              positionSurveyModelId: null,
               in: true,
               out: false,
               label: null,
@@ -1538,6 +1597,7 @@ describe('TripTrackingTab', () => {
               positionRecordedAt: null,
               stationName: null,
               depthM: null,
+              positionSurveyModelId: null,
               in: true,
               out: false,
               label: 'A club member',
@@ -1578,6 +1638,552 @@ describe('TripTrackingTab', () => {
       coarse = true;
       show();
       expect(screen.getByTestId(`trip-tracking-public-name-edit-${ANA}`)).toHaveClass('ant-btn-lg');
+    });
+  });
+});
+
+/**
+ * A depth report, on the log and on the row.
+ *
+ * <b>The two numbers a depth report carries are not two readings of one thing.</b> One is the
+ * station the server resolved to, which is what is stored and what the model draws; the other is
+ * the depth somebody typed. Joined by a middle dot they read as one description — "P3 · 120 m"
+ * says P3 is at 120 m — and nothing makes that true: resolution takes whichever station of the
+ * trip's filter is nearest, with no tolerance under it, so a coordinator who types 1200 for 120
+ * against a 140 m cave gets the bottom of the system and a row that says it is 1200 m down.
+ */
+describe('TripTrackingTab, a depth report read afterwards', () => {
+  /** The survey the watch is on, and the one the reports below were made against. */
+  const MODEL = 'model-1';
+  /** A 140 m cave, and the deepest station in it — where 1200 m lands. */
+  const bottom = { stationName: 'p.g.140', surveyName: 'p.g', depthM: 139.4, deltaM: 1060.6 };
+  /** The ordinary case: 120 m reported, the nearest station 40 cm away. */
+  const nearby = { stationName: 'p.g.119', surveyName: 'p.g', depthM: 119.6, deltaM: 0.4 };
+
+  /** The watch as it stands: armed on a survey, which is what makes a depth mean anything. */
+  beforeEach(() => {
+    trackingQuery.mockReturnValue({
+      data: state({ surveyModelId: MODEL }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+  });
+
+  /** One depth report on the log, for one person, at one station, against a named survey. */
+  function logged(stationName: string, depthEnteredM: number, surveyModelId: string | null = MODEL) {
+    eventsQuery.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: 'event-1',
+            caverId: ANA,
+            teamId: null,
+            kind: 'atDepth',
+            surveyModelId,
+            stationName,
+            depthEnteredM,
+            note: null,
+            recordedAt: '2026-09-12T07:00:00Z',
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        totalItems: 1,
+      },
+      isPending: false,
+    });
+  }
+
+  function logRow() {
+    return within(screen.getByTestId('trip-tracking-events')).getAllByRole('row').at(-1)!;
+  }
+
+  it('stops joining the station it recorded to the depth that was asked for', () => {
+    logged('p.g.140', 1200);
+    depthReadings.mockReturnValue(new Map([[1200, [bottom]]]));
+    show();
+
+    const row = logRow();
+    // The sentence this change exists to stop the row saying.
+    expect(within(row).queryByText('p.g.140 · 1,200 m')).toBeNull();
+    expect(within(row).queryByText('p.g.140 · 1200 m')).toBeNull();
+    // Two facts, each said as what it is: where the party was written down, and what was reported.
+    expect(within(row).getByText('p.g.140')).toBeTruthy();
+    expect(within(row).getByText('Reported as 1,200 m down')).toBeTruthy();
+  });
+
+  it('marks a station a long way from the depth that was reported', () => {
+    logged('p.g.140', 1200);
+    depthReadings.mockReturnValue(new Map([[1200, [bottom]]]));
+    show();
+
+    const mark = within(logRow()).getByTestId('trip-tracking-position-gap');
+    expect(mark.textContent).toContain('1,060.6');
+  });
+
+  /**
+   * The twin of the mark above. A survey has no station at exactly the depth anybody reports, so a
+   * log that remarked on every depth report would be a log somebody reads past — and the row the
+   * warning is for is the one they would read past first.
+   */
+  it('says nothing about a station the report all but landed on', () => {
+    logged('p.g.119', 120);
+    depthReadings.mockReturnValue(new Map([[120, [nearby]]]));
+    show();
+
+    const row = logRow();
+    // Both facts are still drawn — the silence is about the distance between them, not about them.
+    expect(within(row).getByText('p.g.119')).toBeTruthy();
+    expect(within(row).getByText('Reported as 120 m down')).toBeTruthy();
+    expect(within(row).queryByTestId('trip-tracking-position-gap')).toBeNull();
+  });
+
+  /**
+   * A report resolved under a filter somebody has edited since, or a reading that has not come
+   * back. Neither is evidence the position is sound, so neither may be drawn as one.
+   */
+  it('keeps the two facts apart even when it cannot say how far apart they are', () => {
+    logged('p.g.140', 1200);
+    depthReadings.mockReturnValue(new Map());
+    show();
+
+    const row = logRow();
+    expect(within(row).getByText('p.g.140')).toBeTruthy();
+    expect(within(row).getByText('Reported as 1,200 m down')).toBeTruthy();
+    expect(within(row).queryByTestId('trip-tracking-position-gap')).toBeNull();
+  });
+
+  /**
+   * A configuration edit must not repaint the log with warnings on reports that were exact.
+   *
+   * <b>The trap is that re-resolving a stored depth is a different question from the one the report
+   * answered.</b> An administrator setting the reference station to the real entrance thirty metres
+   * lower — an ordinary edit, made from the card at the top of this same tab — makes every station
+   * thirty metres deeper than it was. A report of 120 m that landed forty centimetres from its
+   * station is then thirty metres from it by today's arithmetic, and every depth row on the log
+   * would gain a warning at the same instant. The recorded station is still among the answers; it
+   * is simply no longer the first one, which is the evidence that something has moved.
+   */
+  it('does not warn about an exact report once the datum beneath it has moved', () => {
+    logged('p.g.119', 120);
+    depthReadings.mockReturnValue(
+      new Map([
+        [
+          120,
+          [
+            // What 120 m means now: a station thirty metres further down the cave.
+            { stationName: 'p.g.150', surveyName: 'p.g', depthM: 120.2, deltaM: 0.2 },
+            // And the one that was recorded, which today's datum puts 30 m away.
+            { stationName: 'p.g.119', surveyName: 'p.g', depthM: 89.6, deltaM: 30.4 },
+          ],
+        ],
+      ]),
+    );
+    show();
+
+    const row = logRow();
+    expect(within(row).queryByTestId('trip-tracking-position-gap')).toBeNull();
+    // The two facts are still drawn, because they are still true: this is a silence about the
+    // distance, not the row going blank.
+    expect(within(row).getByText('p.g.119')).toBeTruthy();
+    expect(within(row).getByText('Reported as 120 m down')).toBeTruthy();
+  });
+
+  /**
+   * And the mirror: a report made against one survey, the watch since re-pointed at another.
+   *
+   * <b>Station names commonly survive a re-survey, which is what makes measuring across two models
+   * so easy to do by accident and so hard to see.</b> The same name in the new model is a different
+   * place, or no place at all, so every number worked out from it belongs to some other row. Here
+   * that shows as a warning invented out of nothing: the depth is re-resolved in a survey the
+   * report was never resolved against, the answer is a long way from it, and a mark appears on a
+   * report whose own survey may have placed it perfectly.
+   */
+  it('does not measure a report against a survey it was never resolved in', () => {
+    logged('p.g.140', 1200, 'the-older-survey');
+    // What the survey now in use says about 1200 m. Its own `p.g.140` is nowhere near that depth —
+    // a different cave's worth of difference, which is the point: none of this is about that row.
+    depthReadings.mockReturnValue(
+      new Map([[1200, [{ stationName: 'p.g.140', surveyName: 'p.g', depthM: 139.4, deltaM: 1060.6 }]]]),
+    );
+    show();
+
+    const row = logRow();
+    expect(within(row).queryByTestId('trip-tracking-position-gap')).toBeNull();
+    expect(within(row).getByText('p.g.140')).toBeTruthy();
+    expect(within(row).getByText('Reported as 1,200 m down')).toBeTruthy();
+  });
+
+  /**
+   * The same crossing the other way round, where it is silent instead of loud — and the reason the
+   * test above is not the whole of it. A fuller re-survey that happens to hold a station of the
+   * recorded name near the mistyped depth answers a small, reassuring distance about a party
+   * stored a kilometre from where they were reported, and a row that believed it would say nothing
+   * at all. Nothing is what it says either way; what changes is that the question is never asked,
+   * which is asserted below where the asking is.
+   */
+  it('stays silent rather than reassuring when the new survey has a near station of that name', () => {
+    logged('p.g.140', 1200, 'the-older-survey');
+    depthReadings.mockReturnValue(
+      new Map([[1200, [{ stationName: 'p.g.140', surveyName: 'p.g', depthM: 1199.5, deltaM: 0.5 }]]]),
+    );
+    show();
+
+    expect(within(logRow()).queryByTestId('trip-tracking-position-gap')).toBeNull();
+  });
+
+  /**
+   * And the request that would have answered it is never made. Resolving one depth reads every
+   * station of the model, so a number the screen has already decided it cannot honestly measure is
+   * a full station-table read of a cave bought for an answer that would be thrown away.
+   */
+  it('asks only about the depths it could honestly measure', () => {
+    logged('p.g.140', 1200, 'the-older-survey');
+    depthReadings.mockReturnValue(new Map());
+    show();
+
+    expect(depthReadings.mock.calls.at(-1)?.[1]).toEqual([]);
+
+    // The twin, without which the assertion above would pass on a screen that asked about nothing
+    // at all: the same row, made against the survey the watch is on, is asked about.
+    cleanup();
+    logged('p.g.140', 1200);
+    show();
+
+    expect(depthReadings.mock.calls.at(-1)?.[1]).toEqual([1200]);
+  });
+
+  /** The same repair on the row that answers "where is everybody", which drew the same join. */
+  it('says both facts on the party table too, not only on the log', () => {
+    trackingQuery.mockReturnValue({
+      data: state({
+        surveyModelId: 'model-1',
+        participants: [
+          {
+            caverId: ANA,
+            teamId: null,
+            lastKind: 'atDepth',
+            lastRecordedAt: '2026-09-12T07:00:00Z',
+            positionRecordedAt: '2026-09-12T07:00:00Z',
+            stationName: 'p.g.140',
+            depthM: 1200,
+            positionSurveyModelId: 'model-1',
+            in: true,
+            out: false,
+            label: null,
+          },
+        ],
+      }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    depthReadings.mockReturnValue(new Map([[1200, [bottom]]]));
+    show();
+
+    const row = within(screen.getByTestId('trip-tracking-participants')).getAllByRole('row').at(-1)!;
+    expect(within(row).queryByText('p.g.140 · 1,200 m')).toBeNull();
+    expect(within(row).getByText('Reported as 1,200 m down')).toBeTruthy();
+    expect(within(row).getByTestId('trip-tracking-position-gap')).toBeTruthy();
+  });
+  /**
+   * The photographs hung on the trip's moments, on the tab rather than inside the survey panel.
+   *
+   * <b>Where this lives is the whole of what these tests are about.</b> Offered only inside the
+   * model panel, the act these exist for — somebody emptying a memory card a week later and
+   * turning a finished log into a trip report — needed a survey that still exists, that has
+   * finished importing, and that this reader may open, and then three presses that have nothing to
+   * do with attaching a photograph to a time. None of those conditions is hypothetical: a survey
+   * can be deleted after the trip, and a reader who may read the trip but may not place the cave
+   * never sees a model at all.
+   */
+  describe("the trip's own photographs", () => {
+    const AT = '2026-09-12T09:05:00Z';
+
+    /** One picture hung on a moment, in the shape the trip's links actually come back in. */
+    const link = (caverId: string | null) => ({
+      id: 'link-1',
+      members: [
+        {
+          id: 'member-trip',
+          targetType: 'tripLog',
+          targetId: 'trip-1',
+          isMain: true,
+          anchorKind: 'tripMoment',
+          anchor: { at: AT },
+          display: null,
+        },
+        ...(caverId === null
+          ? []
+          : [
+              {
+                id: 'member-caver',
+                targetType: 'caver',
+                targetId: caverId,
+                anchorKind: 'whole',
+                anchor: null,
+                display: null,
+              },
+            ]),
+        {
+          id: 'member-photo',
+          targetType: 'document',
+          targetId: 'doc-1',
+          anchorKind: 'whole',
+          anchor: null,
+          display: {
+            title: 'La capul puțului',
+            thumbnailUrl: 'http://files.local/doc-1/thumb?token=abc',
+            mediaType: 'image/jpeg',
+          },
+        },
+      ],
+    });
+
+    it('shows them with no survey model on the watch at all', () => {
+      pictureLinks.mockReturnValue({ data: { items: [link(ANA)] }, isPending: false, error: null });
+      // A reader, not an editor, and a watch pointing at no model — which is every condition the
+      // model panel needs and none of which this surface may depend on.
+      show(false);
+
+      const panel = screen.getByTestId('trip-tracking-moment-pictures');
+      expect(within(panel).getByTestId('trip-tracking-moment-picture-member-photo')).toBeTruthy();
+      // Said with the moment it is filed at and who it is about, which is what makes it a picture
+      // of a moment rather than a picture on a trip.
+      expect(within(panel).getByText('About Ana Popescu')).toBeTruthy();
+      // The URL is the rendering the server minted; nothing here reaches for stored bytes.
+      const image = within(panel).getByRole('img') as HTMLImageElement;
+      expect(image.src).toContain('token=abc');
+      expect(image.src).not.toContain('/content');
+      // A reader is shown them and offered neither control.
+      expect(screen.queryByTestId('trip-tracking-pictures-add')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-picture-detach-member-photo')).toBeNull();
+    });
+
+    it('says a trip has none rather than leaving the reader to guess, and asks nothing of a trip nobody watched', () => {
+      // The positive twin of the assertion below: an armed watch is asked about and says what it
+      // found, which on this trip is nothing.
+      show();
+      expect(pictureLinks).toHaveBeenCalledWith('trip-1', true);
+      expect(
+        within(screen.getByTestId('trip-tracking-moment-pictures')).getByText(
+          "No photographs have been hung on this trip's moments yet.",
+        ),
+      ).toBeTruthy();
+
+      cleanup();
+
+      // A trip nobody ever watched has no moments to hang anything on, so there is nothing to ask
+      // about and no card promising one.
+      pictureLinks.mockReturnValue({ data: undefined, isPending: false, error: null });
+      trackingQuery.mockReturnValue({
+        data: state({ state: 'off', armedAt: null }),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show();
+      expect(pictureLinks).toHaveBeenLastCalledWith('trip-1', false);
+      expect(screen.queryByTestId('trip-tracking-moment-pictures')).toBeNull();
+    });
+
+    /**
+     * <b>The offer on a log row attaches to the row's instant, never to the row.</b> A correction
+     * in this log is a deletion followed by a fresh report with a new id, so a picture keyed to a
+     * report would be destroyed by somebody fixing a typo in a time. The row is a convenient
+     * clock — the natural way to say "we were at the pitch head then, here is the photograph" —
+     * and what is stored is the moment it was showing.
+     */
+    it('offers a photograph at a report’s moment, carrying its instant and its caver', () => {
+      eventsQuery.mockReturnValue({
+        data: {
+          items: [
+            {
+              id: 'event-1',
+              caverId: ANA,
+              teamId: null,
+              kind: 'atStation',
+              surveyModelId: null,
+              stationName: 'P12',
+              depthEnteredM: null,
+              note: null,
+              recordedAt: AT,
+            },
+          ],
+          page: 1,
+          pageSize: 20,
+          totalItems: 1,
+        },
+        isPending: false,
+      });
+      show();
+
+      fireEvent.click(screen.getByTestId('trip-tracking-event-picture-event-1'));
+
+      expect(screen.getByTestId('trip-tracking-pictures-dialog')).toBeTruthy();
+      expect(pictureDialogProps).toHaveBeenLastCalledWith(
+        expect.objectContaining({ defaultAt: Date.parse(AT), defaultCaverId: ANA }),
+      );
+      // The negative twin, and the reason the whole design is shaped this way: nothing the dialog
+      // was opened with names the report that supplied the clock.
+      expect(JSON.stringify(pictureDialogProps.mock.calls.at(-1))).not.toContain('event-1');
+    });
+
+    it('offers nothing to write to a reader who may not write the log', () => {
+      eventsQuery.mockReturnValue({
+        data: {
+          items: [
+            {
+              id: 'event-1',
+              caverId: ANA,
+              teamId: null,
+              kind: 'note',
+              surveyModelId: null,
+              stationName: null,
+              depthEnteredM: null,
+              note: 'radio check',
+              recordedAt: AT,
+            },
+          ],
+          page: 1,
+          pageSize: 20,
+          totalItems: 1,
+        },
+        isPending: false,
+      });
+
+      // Positive half first: an editor is offered it on the same row.
+      show();
+      expect(screen.getByTestId('trip-tracking-event-picture-event-1')).toBeTruthy();
+      cleanup();
+
+      show(false);
+      expect(screen.queryByTestId('trip-tracking-event-picture-event-1')).toBeNull();
+    });
+
+    it('takes a photograph off a moment when the editor confirms it', async () => {
+      pictureLinks.mockReturnValue({ data: { items: [link(null)] }, isPending: false, error: null });
+      show();
+
+      // About nobody in particular, which the panel says rather than leaving blank — such a
+      // picture is on the timeline and is placed on no model at all.
+      expect(screen.getByText('About the party')).toBeTruthy();
+
+      fireEvent.click(screen.getByTestId('trip-tracking-picture-detach-member-photo'));
+      const confirm = await screen.findByRole('button', { name: 'OK' });
+      await act(async () => {
+        fireEvent.click(confirm);
+      });
+
+      // The membership, not the document: the same photograph can hang on two moments of one trip,
+      // and taking it off one has to leave the other alone.
+      expect(detachPicture).toHaveBeenCalledWith({ tripLogId: 'trip-1', memberId: 'member-photo' });
+    });
+  });
+
+  /**
+   * The column a coordinator actually reads, after somebody re-points the watch mid-trip.
+   *
+   * The signed-in read deliberately keeps the station name on a row whose place was measured in
+   * another survey — it is a true record of a report, and the log that shows a coordinator their
+   * own history goes on showing it. What must not survive is the cell reading as a current place
+   * on the survey in force, with a freshness age under it.
+   */
+  describe('a place measured in another survey', () => {
+    const MODEL = 'model-1';
+    const OTHER = 'model-2';
+
+    function party() {
+      return state({
+        surveyModelId: MODEL,
+        participants: [
+          {
+            caverId: ANA,
+            teamId: null,
+            lastKind: 'atStation',
+            lastRecordedAt: '2026-09-12T07:00:00Z',
+            positionRecordedAt: '2026-09-12T07:00:00Z',
+            // Measured before the watch was re-pointed, so this name belongs to the old survey.
+            stationName: 'cave.deep.3',
+            depthM: null,
+            positionSurveyModelId: OTHER,
+            in: true,
+            out: false,
+            label: null,
+          },
+          {
+            caverId: BOGDAN,
+            teamId: null,
+            lastKind: 'atStation',
+            lastRecordedAt: '2026-09-12T07:10:00Z',
+            positionRecordedAt: '2026-09-12T07:10:00Z',
+            // Reported since, on the survey now in use: the twin that keeps this a rule about the
+            // survey rather than a mark on every station in the table.
+            stationName: 'P12',
+            depthM: null,
+            positionSurveyModelId: MODEL,
+            in: true,
+            out: false,
+            label: null,
+          },
+        ],
+      });
+    }
+
+    beforeEach(() => {
+      trackingQuery.mockReturnValue({
+        data: party(),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+    });
+
+    it('marks the station and keeps it, and leaves a place on the survey in use unmarked', () => {
+      show();
+
+      // Still on screen: blanking it would hide the trip's own history from the person keeping it.
+      expect(screen.getByText('cave.deep.3')).toBeTruthy();
+      expect(screen.getByTestId(`trip-tracking-position-other-model-${ANA}`)).toBeTruthy();
+      expect(screen.getByText('On another survey')).toBeTruthy();
+      // And the twin: an ordinary station of the survey in use carries no mark at all.
+      expect(screen.getByText('P12')).toBeTruthy();
+      expect(screen.queryByTestId(`trip-tracking-position-other-model-${BOGDAN}`)).toBeNull();
+    });
+
+    /**
+     * The shape a deleted survey leaves: the pointer on every position that named it is nulled and
+     * the station name stays. Nothing on this server can resolve that name any more, so the cell
+     * must not present it as a place on whatever survey the watch is pointed at now.
+     */
+    it('marks a station whose own survey has been deleted', () => {
+      trackingQuery.mockReturnValue({
+        data: state({
+          surveyModelId: MODEL,
+          participants: [
+            {
+              caverId: ANA,
+              teamId: null,
+              lastKind: 'atStation',
+              lastRecordedAt: '2026-09-12T07:00:00Z',
+              positionRecordedAt: '2026-09-12T07:00:00Z',
+              stationName: 'cave.deep.3',
+              depthM: null,
+              positionSurveyModelId: null,
+              in: true,
+              out: false,
+              label: null,
+            },
+          ],
+        }),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show();
+
+      expect(screen.getByTestId(`trip-tracking-position-other-model-${ANA}`)).toBeTruthy();
     });
   });
 });

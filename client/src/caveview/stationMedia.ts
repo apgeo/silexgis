@@ -64,8 +64,16 @@ function stationOf(member: ResLinkMember, surveyModelId: string): string | null 
   return typeof station === 'string' && station.length > 0 ? station : null;
 }
 
-/** Whether a member is a picture that can be shown, and what to show of it. */
-function pictureOf(member: ResLinkMember): CaveViewMediaEntry | null {
+/**
+ * Whether a member is a picture that can be shown, and what to show of it.
+ *
+ * <b>Exported because a second derivation reads the same members.</b> Pictures hung on the moments
+ * of a tracked trip are members of the same shape, and what makes one showable — a document target,
+ * a display the server was willing to fill in, an image, and the two widths taken off the one
+ * signed URL — is a single rule with a single home. A second copy of it is how one surface comes
+ * to reach for an original the other correctly refuses.
+ */
+export function pictureOf(member: ResLinkMember): CaveViewMediaEntry | null {
   const display = member.display;
   if (
     member.targetType !== 'document'

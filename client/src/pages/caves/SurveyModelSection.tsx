@@ -20,6 +20,7 @@ import {
 import SurveyModelViewerModal from '../../components/caveview/SurveyModelViewerModal.tsx';
 import { openModelWindow } from '../../caveview/openModelWindow.ts';
 import SurveyModelUploadModal from './SurveyModelUploadModal.tsx';
+import { surveyModelProblemMessage } from './surveyModelProblems.ts';
 
 /**
  * What each format is called in the list. The two line-plot names are product names and read the
@@ -170,8 +171,14 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                     onConfirm={async () => {
                       try {
                         await remove.mutateAsync({ id: model.id, caveId });
-                      } catch {
-                        message.error(t('common.saveFailed'));
+                      } catch (error) {
+                        // The server's own reason, where it has one. This delete can be refused
+                        // because a trip's live tracking is armed on the model, and a person told
+                        // only "could not be saved" would try again, then wonder — while the thing
+                        // they have to do instead is on another page entirely.
+                        message.error(
+                          surveyModelProblemMessage(error, t, 'surveyModels.deleteFailed'),
+                        );
                       }
                     }}
                   >

@@ -21,6 +21,11 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'tracking.state_invalid': 'trips.tracking.problems.stateInvalid',
   'tracking.model_missing': 'trips.tracking.problems.modelMissing',
   'tracking.model_unavailable': 'trips.tracking.problems.modelUnavailable',
+  // Moving an *armed* watch to a survey of another cave, which is the one model change the server
+  // refuses. Worded as its own refusal rather than folded into the one above: a survey that cannot
+  // be used and a survey that belongs to a different cave lead whoever is reading to two different
+  // acts, and this one has to say which cave the watch is anchored to the party being in.
+  'tracking.model_other_cave': 'trips.tracking.problems.modelOtherCave',
   'tracking.reference_unknown': 'trips.tracking.problems.referenceUnknown',
   'tracking.station_unknown': 'trips.tracking.problems.stationUnknown',
   'tracking.no_station_at_depth': 'trips.tracking.problems.noStationAtDepth',

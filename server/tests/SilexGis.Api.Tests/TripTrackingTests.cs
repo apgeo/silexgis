@@ -610,6 +610,303 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         after.GetProperty("lastKind").GetString().ShouldBe("entered");
     }
 
+    // ---- the survey under a live watch ------------------------------------------------------
+
+    /// <summary>
+    /// A survey a party is being followed against cannot be deleted out from under them, and
+    /// becomes deletable again the moment nobody is being followed against it.
+    /// </summary>
+    /// <remarks>
+    /// The refusal is the point and the second half is what makes it a rule rather than a block:
+    /// a model of a cave somebody once tracked a trip in must not become undeletable for ever.
+    /// </remarks>
+    [Fact]
+    public async Task The_survey_an_armed_watch_names_cannot_be_deleted_until_the_watch_is_closed()
+    {
+        var (trip, cavers) = await CreateTripAsync("Delete under a watch", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers,
+            kind = "atStation",
+            stationName = "cave.deep.3",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var refused = await owner.DeleteAsync($"/api/v1/survey-models/{model}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("survey_model.tracking_armed");
+
+        // Refused means not deleted: the watch is still armed on a survey that is still here, and
+        // a report still lands. A refusal that had removed the row anyway would pass a status
+        // check and leave the co-ordinator exactly where this test exists to keep them out of.
+        var still = await StateAsync(owner, trip);
+        still.GetProperty("state").GetString().ShouldBe("armed");
+        still.GetProperty("surveyModelId").GetGuid().ShouldBe(model);
+        still.GetProperty("surveyModelMissing").GetBoolean().ShouldBeFalse();
+        (await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers,
+            kind = "atStation",
+            stationName = "cave.upper.2",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The twin: nobody is being followed against it now, so it goes.
+        (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.DeleteAsync($"/api/v1/survey-models/{model}")).StatusCode
+            .ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// A watch whose survey has gone anyway says so, keeps saying which survey it was, and refuses
+    /// to be armed again on the reference to nothing.
+    /// </summary>
+    /// <remarks>
+    /// The route that would do this is refused above, so the model is removed here the way an
+    /// operator or a future path could: straight out of the table. What is asserted is the state
+    /// the application is left in — armed, useless, and <em>saying so</em>. The reference itself
+    /// survives on purpose (the column carries no foreign key any more): blanked, it would arrive
+    /// as the same null a caller who may not be told the configuration is sent, and the surface
+    /// could not tell "the survey was deleted" from "you are not being told which survey".
+    /// </remarks>
+    [Fact]
+    public async Task A_watch_whose_survey_was_deleted_says_so_instead_of_reading_as_one_that_never_had_one()
+    {
+        var (trip, cavers) = await CreateTripAsync("Survey gone", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers,
+            kind = "atStation",
+            stationName = "cave.deep.3",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The twin, before anything is removed: this flag is about the condition and not about
+        // being armed, so it has to be false on the watch that is working.
+        (await StateAsync(owner, trip)).GetProperty("surveyModelMissing").GetBoolean().ShouldBeFalse();
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var row = await db.SurveyModels.SingleAsync(m => m.Id == model);
+            db.SurveyModels.Remove(row);
+            await db.SaveChangesAsync();
+        }
+
+        var after = await StateAsync(owner, trip);
+        after.GetProperty("state").GetString().ShouldBe("armed");
+        after.GetProperty("surveyModelMissing").GetBoolean().ShouldBeTrue();
+        // The id is still there — that is what makes the flag readable as a condition rather than
+        // as one more absence.
+        after.GetProperty("surveyModelId").GetGuid().ShouldBe(model);
+
+        // History is untouched by the survey going: the report still names its station and still
+        // names the survey it was measured in, which is how nothing downstream draws it elsewhere.
+        var folded = after.GetProperty("participants").EnumerateArray().Single();
+        folded.GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        folded.GetProperty("positionSurveyModelId").GetGuid().ShouldBe(model);
+
+        // And the watch cannot be re-armed onto the reference to nothing. Closing is allowed —
+        // ending a watch is never blocked — but arming again takes a survey that exists.
+        (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var rearm = await PutConfigAsync(owner, trip, new { state = "armed" });
+        rearm.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await rearm.Content.ReadAsStringAsync()).ShouldContain("tracking.model_missing");
+    }
+
+    /// <summary>
+    /// Replacing the survey under an armed watch is allowed, and every report already on the log
+    /// keeps naming the survey it was made against rather than being re-read on the new one.
+    /// </summary>
+    /// <remarks>
+    /// The two surveys here spell their stations identically, which is the whole danger: a report
+    /// of <c>cave.deep.3</c> measured in the first one names a place the second one also has a
+    /// name for, and nothing in the string says which was meant. The read hands over the survey
+    /// each position was measured in so that no surface has to guess.
+    /// </remarks>
+    [Fact]
+    public async Task A_place_reported_before_the_survey_changed_keeps_naming_the_survey_it_was_measured_in()
+    {
+        var (trip, cavers) = await CreateTripAsync("Survey replaced", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var first = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, first)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers,
+            kind = "atStation",
+            stationName = "cave.deep.3",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A corrected survey of the same cave arrives and the co-ordinator moves the watch onto
+        // it. This is allowed: a re-import mid-trip is a real thing, and an application that
+        // refused it would be answered by closing the watch.
+        var second = await SeedModelWithStationsAsync(cave);
+        var moved = await PutConfigAsync(owner, trip, new { state = "armed", surveyModelId = second });
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+
+        var after = await StateAsync(owner, trip);
+        after.GetProperty("surveyModelId").GetGuid().ShouldBe(second);
+        var stale = after.GetProperty("participants").EnumerateArray().Single();
+        // The name is kept — it is a true record of a report, and the log a co-ordinator reads
+        // goes on showing it — while the survey beside it is the one that was measured in.
+        stale.GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        stale.GetProperty("positionSurveyModelId").GetGuid().ShouldBe(first);
+        stale.GetProperty("positionSurveyModelId").GetGuid().ShouldNotBe(second);
+
+        // The twin, and the half that says the watch still works: a report made now is measured in
+        // the survey now in use and comes back saying so.
+        (await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers,
+            kind = "atStation",
+            stationName = "cave.upper.2",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var fresh = (await StateAsync(owner, trip)).GetProperty("participants").EnumerateArray().Single();
+        fresh.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        fresh.GetProperty("positionSurveyModelId").GetGuid().ShouldBe(second);
+    }
+
+    /// <summary>
+    /// An armed watch may be moved to another survey of its own cave and may not be moved to a
+    /// survey of a different one.
+    /// </summary>
+    /// <remarks>
+    /// A party is in one cave, and that cave is also the anchor every position on the log is
+    /// protected by — so a swap that crosses caves either points a live watch at a place the party
+    /// is not, or moves the protection anchor of the configuration's own station vocabulary to a
+    /// cave nobody decided that about. Neither is visible afterwards on the screen it happens on.
+    /// </remarks>
+    [Fact]
+    public async Task An_armed_watch_moves_survey_inside_its_cave_and_is_refused_a_survey_of_another()
+    {
+        var (trip, _) = await CreateTripAsync("Cave swap", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        var elsewhere = await CreateCaveAsync(locationProtected: false);
+        var otherCavesModel = await SeedModelWithStationsAsync(elsewhere);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var refused = await PutConfigAsync(owner, trip, new
+        {
+            state = "armed",
+            surveyModelId = otherCavesModel,
+        });
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("tracking.model_other_cave");
+        // Refused means unchanged, not half-applied: the watch is still on the survey it was armed
+        // on, in the cave the party is actually in.
+        (await StateAsync(owner, trip)).GetProperty("surveyModelId").GetGuid().ShouldBe(model);
+
+        // The twin: another survey of the same cave is exactly what this must not get in the way
+        // of, and it is allowed while the watch is armed.
+        var corrected = await SeedModelWithStationsAsync(cave);
+        (await PutConfigAsync(owner, trip, new { state = "armed", surveyModelId = corrected }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // And the refusal is about following a party, not about the configuration: once the watch
+        // is closed it may be pointed anywhere.
+        (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PutConfigAsync(owner, trip, new { state = "closed", surveyModelId = otherCavesModel }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The predicate is asked about the state the watch will be in, so ending a watch and pointing
+    /// it elsewhere in one act is allowed, and arming a closed one straight onto another cave is
+    /// not.
+    /// </summary>
+    /// <remarks>
+    /// Asked about the state the watch is <em>in</em>, both answers come out backwards: a single
+    /// write that says "closed, and here is another cave's survey" is refused for a fact about the
+    /// past, while a closed watch is allowed to arm onto a different cave — which moves the anchor
+    /// every position on its log is protected by, to a cave nobody decided that about. The rule
+    /// itself is tested next door; what is tested here is which state the call site hands it,
+    /// which no test of the rule can see.
+    /// </remarks>
+    [Fact]
+    public async Task A_watch_may_be_closed_and_re_pointed_in_one_act_and_may_not_arm_onto_another_cave()
+    {
+        var (trip, _) = await CreateTripAsync("Close and repoint", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        var elsewhere = await CreateCaveAsync(locationProtected: false);
+        var elsewhereModel = await SeedModelWithStationsAsync(elsewhere);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // One write, two statements: the party is no longer being followed, and the configuration
+        // now names another cave's survey. Nothing is being followed by the time it applies.
+        var repointed = await PutConfigAsync(owner, trip, new
+        {
+            state = "closed",
+            surveyModelId = elsewhereModel,
+        });
+        repointed.StatusCode.ShouldBe(HttpStatusCode.OK, await repointed.Content.ReadAsStringAsync());
+        var closed = await StateAsync(owner, trip);
+        closed.GetProperty("state").GetString().ShouldBe("closed");
+        closed.GetProperty("surveyModelId").GetGuid().ShouldBe(elsewhereModel);
+
+        // And the other direction, which used to be let through: arming a closed watch straight
+        // onto a third cave's survey.
+        var third = await CreateCaveAsync(locationProtected: false);
+        var thirdModel = await SeedModelWithStationsAsync(third);
+        var refused = await PutConfigAsync(owner, trip, new
+        {
+            state = "armed",
+            surveyModelId = thirdModel,
+        });
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("tracking.model_other_cave");
+        // Refused means unchanged, not half-applied.
+        var after = await StateAsync(owner, trip);
+        after.GetProperty("state").GetString().ShouldBe("closed");
+        after.GetProperty("surveyModelId").GetGuid().ShouldBe(elsewhereModel);
+
+        // The twin: arming on the survey the watch is already anchored to is the ordinary act and
+        // is allowed, so this is a rule about crossing caves and not about arming.
+        (await PutConfigAsync(owner, trip, new { state = "armed", surveyModelId = elsewhereModel }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The refusal that guards a live watch names the trip to a caller who may read it, so that it
+    /// carries the act it is asking for rather than only the reason for refusing.
+    /// </summary>
+    /// <remarks>
+    /// An armed watch stays armed until a person ends it, so this refusal is routinely about a
+    /// trip nobody is thinking about any more. Told nothing, whoever holds it has a survey that
+    /// cannot be deleted and an instruction they cannot carry out; told which trip, they go and
+    /// close it. The naming goes through the trips' own visibility, so it discloses nothing a
+    /// caller could not already read.
+    /// </remarks>
+    [Fact]
+    public async Task The_refusal_over_an_armed_watch_names_the_trip_to_somebody_who_may_read_it()
+    {
+        var (trip, _) = await CreateTripAsync("Nameable watch", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var refused = await owner.DeleteAsync($"/api/v1/survey-models/{model}");
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var body = await refused.Content.ReadAsStringAsync();
+        body.ShouldContain("survey_model.tracking_armed");
+        // The trip, as a member of its own: the sentence beside it is written for a person and is
+        // translated on the way to one, so a client recovering the name out of prose would break
+        // the moment the prose is reworded.
+        (JsonDocument.Parse(body).RootElement.GetProperty("armedTrips").GetString() ?? "")
+            .ShouldContain("Nameable watch");
+
+        // The twin, so the naming is a property of this refusal rather than of every refusal: once
+        // the watch is closed the delete goes through and there is nothing to name.
+        (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await owner.DeleteAsync($"/api/v1/survey-models/{model}")).StatusCode
+            .ShouldBe(HttpStatusCode.NoContent);
+    }
+
     // ---- plumbing --------------------------------------------------------------------------
 
     private async Task<(Guid Trip, List<Guid> Cavers)> CreateTripAsync(

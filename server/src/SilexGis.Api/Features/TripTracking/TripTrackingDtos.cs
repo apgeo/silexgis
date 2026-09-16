@@ -72,6 +72,27 @@ public sealed record TrackingParticipantDto(
     DateTimeOffset? PositionRecordedAt,
     string? StationName,
     decimal? DepthM,
+    /// <summary>
+    /// The survey model the placing report was recorded against, or null where there is no
+    /// position to speak of and on exactly the branch that withholds one.
+    /// <para>
+    /// <b>Carried because a station name alone does not say where somebody is.</b> A station path
+    /// is a name inside one survey; the same path in a re-survey of the same cave may be a
+    /// different place, or no place at all. A watch can be re-pointed at another model while the
+    /// party is underground — a corrected survey mid-trip is a real thing a coordinator does — and
+    /// every report already on the log keeps naming the model it was made against. Without this
+    /// field the read hands over those names indistinguishable from names measured in the model
+    /// now in use, and the surface that draws them puts the party on stations nobody reported.
+    /// </para>
+    /// <para>
+    /// So whoever draws a marker compares this against the model they are drawing, and where the
+    /// two differ says the position was recorded elsewhere rather than drawing it or, worse,
+    /// leaving the person looking unreported. <see cref="StationName"/> itself is <em>not</em>
+    /// blanked for that case: the name is a true record of a report and the log that shows the
+    /// coordinator their own history goes on showing it. What changes is only what may be drawn.
+    /// </para>
+    /// </summary>
+    Guid? PositionSurveyModelId,
     bool In,
     bool Out,
     /// <summary>
@@ -88,6 +109,25 @@ public sealed record TrackingParticipantDto(
 public sealed record TrackingStateDto(
     TripTrackingState State,
     Guid? SurveyModelId,
+    /// <summary>
+    /// True when the watch names a survey model this server no longer holds — somebody deleted it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A watch in that condition is the one this flag exists for: still <c>Armed</c>, still
+    /// accepting notes and entries and exits, and unable to place anybody — the station control
+    /// and the party on the model simply are not there, and nothing on the screen says why. Left
+    /// to infer it, a surface has only a model id that resolves to nothing, which is also what a
+    /// model still being read, a model this caller may not open, and a plain network failure look
+    /// like. This is the server saying which of them it is.
+    /// </para>
+    /// <para>
+    /// False whenever the configuration is being withheld from this caller: they are sent
+    /// <see cref="SurveyModelId"/> as null, and "the model that watch is on was deleted" is a fact
+    /// about a cave they may not be told about. Fail closed, as the rest of this read does.
+    /// </para>
+    /// </remarks>
+    bool SurveyModelMissing,
     string? ReferenceStationName,
     IReadOnlyList<string> DepthFilter,
     DateTimeOffset? ArmedAt,

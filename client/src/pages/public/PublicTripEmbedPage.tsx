@@ -10,6 +10,7 @@ import CaveViewPanel, {
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
+import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import {
   EMBED_CHANNEL,
   EMBED_PROTOCOL,
@@ -47,17 +48,12 @@ export default function PublicTripEmbedPage() {
   const { data, isPending } = usePublicTrip(token);
   const [focusRequest, setFocusRequest] = useState<CaveViewFocusRequest | undefined>();
 
-  // Pinned for the life of the mount, exactly as on the followed page: the viewer downloads the
-  // model once, and handing it a freshly signed address on every poll would re-parse the model and
-  // throw the camera back to its opening view every minute.
-  const [pinnedModelUrl, setPinnedModelUrl] = useState<string | null>(null);
+  // Held still while it is the same survey and replaced when it is not, by the one rule the
+  // followed page uses — a re-signed address must not re-parse the model and throw the camera
+  // back to its opening view every minute, and a survey swapped mid-trip must not leave this
+  // drawing the old geometry under the new survey's station names.
   const model = data?.model ?? null;
-  useEffect(() => setPinnedModelUrl(null), [token]);
-  useEffect(() => {
-    if (model !== null) {
-      setPinnedModelUrl((current) => current ?? model.modelUrl);
-    }
-  }, [model]);
+  const pinnedModelUrl = usePinnedModelUrl(model?.modelUrl, token);
 
   const cavers = useMemo(
     () =>
@@ -76,13 +72,22 @@ export default function PublicTripEmbedPage() {
   // most likely to be spent long after they were minted.
   const stationMedia = usePublishedStationMedia(model?.pictures);
 
-  /** The party as the framing document is told it: a place, a name, and a station or nothing. */
+  /**
+   * The party as the framing document is told it: a place, a name, a station or nothing, and which
+   * kind of nothing it is.
+   *
+   * The second half is not a nicety. A station is absent for two unrelated reasons — nobody has
+   * reported a place, or a place was reported on a different survey than the one in this frame and
+   * cannot honestly be drawn on it — and the article around this viewer writes its prose against
+   * what it is told. Told only "no station", it says nobody knows where somebody underground is.
+   */
   const party = useMemo(
     () =>
       cavers.map((caver) => ({
         ordinal: Number(caver.caverId),
         name: caver.name,
         station: caver.position.kind === 'station' ? caver.position.station : null,
+        onOtherSurvey: caver.position.kind === 'otherModel',
       })),
     [cavers],
   );

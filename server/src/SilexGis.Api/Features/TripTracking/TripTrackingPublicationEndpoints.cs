@@ -283,6 +283,20 @@ public static class TripTrackingPublicationEndpoints
                 || TrackingWithholding.PositionOpen(lastPositioned, openCaves);
             if (!positionOpen) withheldAny = true;
 
+            // Whether that place belongs to the survey this page hands over. A watch re-pointed at
+            // a corrected survey mid-trip leaves every earlier report naming the one it was made
+            // against, and this page is a drawing: a name from another survey put beside it reads
+            // as a place on it. Refused here rather than in the viewer, because a follower's page
+            // must not be trusted to hide what the server sent, and the row is dropped to the same
+            // shape a placeless report has — with the bit below saying that this one is not that.
+            var drawable = lastPositioned is null
+                || TripTrackingRules.DrawableOn(lastPositioned.SurveyModelId, tracking.SurveyModelId);
+            // Only ever said of a position this reader was allowed in the first place: a withheld
+            // row is already an absence, and a second bit explaining that absence would give back
+            // exactly what the withholding keeps.
+            var elsewhere = positionOpen && !drawable;
+            var shown = positionOpen && drawable ? lastPositioned : null;
+
             // Standing is Domain's answer, asked exactly as the signed-in read asks it. Somebody
             // nothing has been said about yet is neither in nor out — a party that has not set
             // off must not read as one that is underground — and a note about somebody must move
@@ -293,12 +307,15 @@ public static class TripTrackingPublicationEndpoints
                 ordinal,
                 NameFor(member.CaverId, labels, names),
                 lastTeamed?.TeamId,
-                positionOpen ? lastPositioned?.ViewerStationName : null,
-                positionOpen ? lastPositioned?.DepthEnteredM : null,
+                shown?.ViewerStationName,
+                shown?.DepthEnteredM,
                 last?.RecordedAt,
                 // The position's own time rides the position's own withholding: when the station
-                // is kept back the time that would date it is kept back with it.
-                positionOpen ? lastPositioned?.RecordedAt : null,
+                // is kept back the time that would date it is kept back with it. It rides the
+                // other-survey refusal too — an hour beside no place is a place the reader dates
+                // from whatever is nearest, which on this page is a station measured elsewhere.
+                shown?.RecordedAt,
+                PositionOnOtherModel: elsewhere,
                 In: standing == TripStanding.Underground,
                 Out: standing == TripStanding.Out));
         }

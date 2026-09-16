@@ -274,7 +274,7 @@ public static class SurveyModelEndpoints
             .WithSummary("Metadata update (Write on the cave).");
         api.MapDelete("/survey-models/{id:guid}", DeleteAsync)
             .WithTags("SurveyModels")
-            .WithSummary("Deletes the survey model (Write on the cave); the stored file is kept.");
+            .WithSummary("Deletes the survey model (Write on the cave); the stored file is kept. Refused while a trip's live tracking is armed on it.");
 
         return api;
     }
@@ -615,6 +615,65 @@ public static class SurveyModelEndpoints
             return stale;
         }
 
+        // A party is being followed against this model right now: refused, and this is the one
+        // place the refusal can be made.
+        //
+        // Deleting it succeeds in every technical sense — nothing the database knows about is
+        // damaged, and the position rows keep their own cave anchor and their own record of the
+        // survey they were measured in. What breaks is the live surface: the watch stays Armed,
+        // goes on taking entries, exits and notes, and can place nobody, because the model the
+        // coordinator presses stations on is gone. That is a rescue surface quietly losing the
+        // ability to say where anyone is, discovered at the moment somebody tries to record a
+        // position. Weighed against it, the cost of refusing is one deliberate act by the person
+        // who was already about to take a deliberate act — close the watch, or point it at the
+        // replacement survey — and a re-survey landing mid-trip is not blocked by any of this:
+        // uploading a model never touches an existing one, so the new survey is already there.
+        //
+        // Armed only. A watch that is off or closed is following nobody, and a model of a cave
+        // somebody once tracked a trip in must not become undeletable for ever.
+        //
+        // And the refusal has to carry a way out of itself, or it is a trap. "Close that watch"
+        // is only an instruction to somebody who can find the watch. A watch stays armed
+        // until a person ends it — a party that came out and nobody told the application is the
+        // ordinary steady state, not an exception — so an abandoned one would otherwise make this
+        // survey undeletable for good, by a refusal whose instruction the only person holding it
+        // cannot carry out.
+        //
+        // So the trips are named, filtered by what this caller may read. Whoever may write a
+        // cave's surveys is still not thereby entitled to learn which trips exist, which is why
+        // the naming goes through the same visibility the trips' own routes use rather than
+        // through the tracking rows: a caller who may not read the trip learns only that one
+        // exists and is told who can end it. A full administrator reads every trip, so there is
+        // always somebody for whom this refusal names its own remedy — which is what keeps a
+        // survey deletable.
+        var armedTripIds = await db.TripTrackings.AsNoTracking()
+            .Where(t => t.SurveyModelId == model.Id && t.State == TripTrackingState.Armed)
+            .Select(t => t.TripLogId)
+            .ToListAsync(ct);
+        if (armedTripIds.Count > 0)
+        {
+            // No context, no names — unreachable, because writing this cave's surveys was already
+            // required above, but said as a branch rather than as a null-forgiving operator: the
+            // one thing that must not happen here is a list assembled for a caller nobody read.
+            var named = ctx is null
+                ? []
+                : await db.TripLogs.AsNoTracking()
+                    .VisibleTo(ctx, AccessDomain.TripLogs)
+                    .Where(t => armedTripIds.Contains(t.Id))
+                    .OrderBy(t => t.TripDate).ThenBy(t => t.Id)
+                    .Select(t => t.Title)
+                    .Take(MaxNamedArmedTrips)
+                    .ToListAsync(ct);
+            return ApiProblems.Conflict("survey_model.tracking_armed",
+                named.Count > 0
+                    ? $"A trip's live tracking is armed on this survey model ({string.Join(", ", named)}). Close that watch, or point it at another model, before deleting this one."
+                    : "A trip's live tracking is armed on this survey model, and it is a trip this account cannot read. Ask its team, or an administrator, to close that watch or point it at another model.",
+                // The names as a member of their own, because the sentence above is written for a
+                // person and gets translated: a client recovering them out of that prose would
+                // break the moment the prose is reworded.
+                "armedTrips", string.Join(", ", named));
+        }
+
         // The centerline a reading of this file produced goes with it. It is not a centerline
         // anybody drew — it exists only as this file's line work — and the model's own foreign key
         // on it merely blanks itself, so leaving it would strand a machine-made shape nobody can
@@ -640,6 +699,16 @@ public static class SurveyModelEndpoints
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
     }
+
+    /// <summary>
+    /// How many armed watches a delete refusal names before it stops listing them.
+    /// </summary>
+    /// <remarks>
+    /// A refusal is read at a glance and acted on; past a few names it stops being a route to a
+    /// remedy and becomes a wall of text with the remedy somewhere in it. One is the ordinary
+    /// answer, because one party is in one cave at a time.
+    /// </remarks>
+    private const int MaxNamedArmedTrips = 5;
 
     private static async Task<(SurveyModel? Model, Feature? Cave)> FindWithCaveAsync(
         SilexGisDbContext db, Guid id, CancellationToken ct)

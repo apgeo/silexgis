@@ -66,6 +66,17 @@ function positionOf(
   participant: PublicTripParticipant,
   positionsWithheld: boolean,
 ): TrackedCaverPosition {
+  // Measured in a survey other than the one this page draws, and the server has already taken the
+  // station and the depth off the row — so this bit is the only thing that tells the difference
+  // between "a place is known and cannot be shown here" and "nobody has reported one". Read first,
+  // because every other branch below would answer the second of those.
+  //
+  // <b>Decided on the server, not here.</b> The signed-in fold compares two ids because it is given
+  // both; a follower is given neither, deliberately — which survey a report was measured in is a
+  // fact about the cave's surveying and no part of what a page like this hands out.
+  if (participant.positionOnOtherModel) {
+    return { kind: 'otherModel' };
+  }
   if (participant.stationName !== null && participant.stationName.length > 0) {
     return { kind: 'station', station: participant.stationName };
   }

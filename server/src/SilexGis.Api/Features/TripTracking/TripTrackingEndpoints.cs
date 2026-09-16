@@ -185,6 +185,16 @@ public static class TripTrackingEndpoints
         var configOpen = !configHasVocabulary
             || (tracking!.CaveFeatureId is not null && openCaves.Contains(tracking.CaveFeatureId.Value));
 
+        // Whether the model this watch is armed on is still here. Asked outright rather than left
+        // to be inferred: the id survives the model row (that column carries no foreign key, and
+        // the entity says why), so every surface downstream would otherwise have to read a model
+        // it cannot fetch, which is equally what a model still being processed, one this caller may
+        // not open, and a failed request look like. A watch whose model was deleted is armed,
+        // accepts entries and notes, and can place nobody — the one state on this read that looks
+        // like ordinary operation and is not.
+        var modelMissing = tracking?.SurveyModelId is { } armedOn
+            && !await db.SurveyModels.AsNoTracking().AnyAsync(m => m.Id == armedOn, ct);
+
         var withheldAny = configHasVocabulary && !configOpen;
         var byCaver = events.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
         var participants = new List<TrackingParticipantDto>();
@@ -216,6 +226,12 @@ public static class TripTrackingEndpoints
                 positionOpen ? lastPositioned?.RecordedAt : null,
                 positionOpen ? lastPositioned?.ViewerStationName : null,
                 positionOpen ? lastPositioned?.DepthEnteredM : null,
+                // Which model that place was measured in, on the same branch as the place itself:
+                // the name and the survey it is a name inside are one statement, and handing over
+                // half of it is what lets a report from a replaced survey be drawn on the current
+                // one. Withheld together for the same reason they are sent together — a model id
+                // is station vocabulary of a cave, and this read never leaks one past the gate.
+                positionOpen ? lastPositioned?.SurveyModelId : null,
                 standing == TripStanding.Underground,
                 standing == TripStanding.Out,
                 labels.GetValueOrDefault(caverId)));
@@ -225,6 +241,10 @@ public static class TripTrackingEndpoints
         return TypedResults.Ok(new TrackingStateDto(
             tracking?.State ?? TripTrackingState.Off,
             configOpen ? tracking?.SurveyModelId : null,
+            // Said only to a caller who is being told which model it is: to anyone else the id
+            // arrives null anyway, and "the survey that watch was on has been deleted" is a fact
+            // about a cave whose vocabulary they were just refused.
+            configOpen && modelMissing,
             configOpen ? tracking?.ReferenceStationName : null,
             configOpen ? tracking?.DepthFilter ?? [] : [],
             tracking?.ArmedAt,
@@ -317,6 +337,23 @@ public static class TripTrackingEndpoints
             return ApiProblems.Conflict("tracking.model_missing", "Tracking needs a survey model to place cavers in.");
         }
 
+        // Arming on a survey that is no longer here is the same refusal, deliberately worded the
+        // same way. A closed watch keeps the id of the survey it was on; the survey can be deleted
+        // while the watch is closed, and re-arming would then succeed on a reference to nothing —
+        // a watch that says Armed, takes reports, and can place nobody, which is the whole failure
+        // this work is about. One shape for both, so the answer discloses nothing about whether a
+        // survey ever existed to a caller who is not being told the configuration anyway.
+        //
+        // Existence only, not the placing right: re-arming a watch has never required it, and
+        // checking whether a row is there is not learning where a cave is. A caller who changes
+        // the model goes through the gate above, which does take that right.
+        if (target == TripTrackingState.Armed && !modelChanging && effectiveModelId is { } keeping
+            && !await db.SurveyModels.AsNoTracking().AnyAsync(m => m.Id == keeping, ct))
+        {
+            return ApiProblems.Conflict("tracking.model_missing",
+                "The survey model this watch was armed on is no longer here — choose another before arming.");
+        }
+
         var referenceChanging = request.ReferenceStationName is not null && request.ReferenceStationName.Length > 0;
         // The datum, once a station has been named and found, in the spelling it is stored in:
         // the viewer's, like every other station name this feature writes down. Whichever of the
@@ -332,6 +369,26 @@ public static class TripTrackingEndpoints
             if (usable is null) return ApiProblems.Conflict("tracking.model_unavailable",
                 "The survey model does not exist here, or its cave cannot be placed by this account.");
             snapshotCave = usable.Value.Cave.Id;
+            // Swapping the survey under an armed watch is allowed and stays allowed: a corrected or
+            // re-imported survey arriving while a party is underground is a thing a coordinator has
+            // to be able to follow, and an application that argued with them during a callout would
+            // be answered by closing the watch — the worst of the available outcomes. What is
+            // refused is the narrower act of moving an armed watch to a model of a *different*
+            // cave, which would re-point a live watch at a place the party is not and would move
+            // the anchor the config's own station vocabulary is protected by. The reasoning, and
+            // why an unarmed watch may be pointed anywhere, live with the rule in Domain.
+            // The state the watch will be in when this write lands, not the one it is in now.
+            // Asked of `current`, the predicate refused the one act it says is free — ending a
+            // watch and re-pointing it in a single write, which is what somebody does when the
+            // trip turns out to have been somewhere else — and allowed the one it exists to
+            // refuse: arming a closed watch straight onto another cave's survey, which moves the
+            // anchor every position on the log is protected by.
+            if (modelChanging
+                && !TripTrackingRules.MayPointAtCave(target, tracking?.CaveFeatureId, snapshotCave.Value))
+            {
+                return ApiProblems.Conflict("tracking.model_other_cave",
+                    "An armed watch can only be moved to another survey of the same cave — close it first.");
+            }
             if (referenceChanging)
             {
                 // Resolved rather than compared, for the reason a reported station is: somebody

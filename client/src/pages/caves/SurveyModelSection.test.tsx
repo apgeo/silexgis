@@ -420,6 +420,54 @@ describe('uploading a survey model', () => {
     expect(await screen.findByText(expected)).toBeInTheDocument();
   });
 
+  /**
+   * A refusal that has to carry a way out of itself.
+   *
+   * Deleting a survey a party is being followed on is refused, rightly — the watch would stay
+   * armed over a drawing that is gone. But "close that watch" is an instruction only to somebody
+   * who can find the watch, and an armed watch stays armed until a person ends it, so this
+   * refusal is routinely about a trip nobody is thinking about any more. Told which trip, the
+   * person deleting goes and closes it; told nothing, they are holding a survey that cannot be
+   * deleted and an instruction they cannot carry out.
+   */
+  it('names the trip whose watch is in the way of a delete, where the server named it', async () => {
+    models = [model()];
+    deleteMutate.mockRejectedValue(
+      new ApiError(409, 'survey_model.tracking_armed', 'server wording', {
+        code: 'survey_model.tracking_armed',
+        armedTrips: 'Digging weekend',
+      }),
+    );
+    show();
+    await screen.findByText('Grind walls');
+
+    fireEvent.click(screen.getByRole('img', { name: 'delete' }).closest('button')!);
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(/Digging weekend/)).toBeInTheDocument();
+  });
+
+  it('says who can end a watch on a trip this account cannot read', async () => {
+    // The other situation, and a different sentence rather than a different phrasing: naming the
+    // trip would tell somebody who may write this cave's surveys which trips exist, so what is
+    // said instead is who can end it — and a full administrator reads every trip, which is what
+    // keeps the survey deletable at all.
+    models = [model()];
+    deleteMutate.mockRejectedValue(
+      new ApiError(409, 'survey_model.tracking_armed', 'server wording', {
+        code: 'survey_model.tracking_armed',
+        armedTrips: '',
+      }),
+    );
+    show();
+    await screen.findByText('Grind walls');
+
+    fireEvent.click(screen.getByRole('img', { name: 'delete' }).closest('button')!);
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+
+    expect(await screen.findByText(/administrator, who can read every trip/)).toBeInTheDocument();
+  });
+
   it('falls back to a general failure for a refusal nobody has wording for', async () => {
     // A paraphrase of an unknown code would be a guess presented as an explanation.
     uploadMutate.mockRejectedValue(new ApiError(500, 'something.nobody.wrote'));

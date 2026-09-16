@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TrackingState } from '../api/hooks.ts';
+import { placeOnModel } from './drawableOn.ts';
 // What "no moment" means is one rule with one home, and this is a caller of it rather than a
 // second copy: an absent moment, a field a server never wrote and a string that will not parse all
 // have to answer the same way here, where they decide which member speaks for a team, as they do
@@ -36,6 +37,20 @@ export type TrackedCaverPosition =
   | { kind: 'depth'; depthM: number }
   /** A position exists and this reader may not be told it. `certain` is the stronger claim. */
   | { kind: 'withheld'; certain: boolean }
+  /**
+   * A place was reported and it was measured in a different survey than the one on screen, so it
+   * cannot honestly be drawn here.
+   *
+   * <b>Not a withholding and not an absence — a third thing, and it needs its own word.</b> A
+   * station path is a name inside one survey; `sala-mare.4` of a re-survey may be a different
+   * place, or no place at all. A watch pointed at a corrected survey while the party is
+   * underground leaves every earlier report naming the survey it was made in, and drawing one of
+   * those on the new model would be a confident statement about where somebody is, assembled out
+   * of a collision of names. Folding it into `unreported` instead is the other wrong answer, and
+   * on a rescue surface it is the worse of the two: it tells a co-ordinator that nobody knows
+   * where a caver is, when somebody does.
+   */
+  | { kind: 'otherModel' }
   /** Nobody has reported a place for this person. */
   | { kind: 'unreported' };
 
@@ -92,11 +107,20 @@ export interface TrackedCaverIdentity {
 /**
  * The people of one watch, placed against one survey model.
  *
- * <b>Nothing is returned when the watch resolves positions against another model.</b> A station
- * path means whatever the model it was measured in says it means, so `sala-mare.4` of one cave
- * names a place in a different cave with the same survey names — and a marker drawn from it would
- * be a confident statement about where somebody is, made from a name that happens to collide. A
- * panel showing a different model than the watch names therefore shows no watch at all.
+ * <b>A place is drawn only on the survey it was measured in, and that is decided per person.</b> A
+ * station path means whatever the model it was measured in says it means, so `sala-mare.4` of a
+ * re-survey — or of another cave with the same survey names — is not the place the report meant.
+ * Every position on the watch therefore carries the model it was recorded against, and a person
+ * whose place was measured elsewhere is returned as `otherModel`: listed, said to be placed
+ * somewhere, and not drawn here.
+ *
+ * <b>This used to be one comparison for the whole watch, and that was not enough.</b> The old rule
+ * asked whether the *watch's current* model was the one on screen and returned nobody when it was
+ * not — which is a true rule that never fires, because the panel shows the model the watch names
+ * and the two operands were the same value by construction. Meanwhile the thing it was written to
+ * prevent walked past it: re-pointing the watch at a corrected survey mid-trip leaves reports that
+ * name the *old* model, and those arrived looking exactly like reports made in the new one. The
+ * comparison belongs where the difference lives, which is the row.
  *
  * @param identify what the trip's own roster says about a caver id: the watch carries ids, and
  *   nothing on it knows what anybody is called.
@@ -107,11 +131,9 @@ export function trackedCaversFrom(
   identify: (caverId: string) => TrackedCaverIdentity,
   surveyModelId: string | undefined,
 ): TrackedCaver[] {
-  if (
-    surveyModelId === undefined
-    || tracking.surveyModelId === null
-    || tracking.surveyModelId !== surveyModelId
-  ) {
+  // Nothing to compare a report against: a panel that does not know its own model cannot say of
+  // any place whether it belongs here, and guessing is the one answer that draws a wrong marker.
+  if (surveyModelId === undefined) {
     return [];
   }
 
@@ -125,7 +147,7 @@ export function trackedCaversFrom(
       teamId: participant.teamId,
       teamTitle:
         participant.teamId === null ? null : (teamTitles.get(participant.teamId) ?? null),
-      position: positionOf(participant, tracking.positionsWithheld),
+      position: positionOf(participant, surveyModelId, tracking.positionsWithheld),
       lastRecordedAt: participant.lastRecordedAt,
       // The position's own moment, as the watch now folds it. This used to be guessed from the
       // kind of the latest report — known only where that report was itself a position, and null
@@ -147,15 +169,23 @@ export function positionCarryingKind(kind: TrackingState['participants'][number]
 
 function positionOf(
   participant: TrackingState['participants'][number],
+  surveyModelId: string,
   positionsWithheld: boolean,
 ): TrackedCaverPosition {
-  if (participant.stationName !== null && participant.stationName.length > 0) {
-    return { kind: 'station', station: participant.stationName };
-  }
-  // A depth is a position and is not a station: it is somewhere on a line the model does not
-  // draw, so it is reported in words rather than placed at a station it might not be at.
-  if (participant.depthM !== null) {
-    return { kind: 'depth', depthM: participant.depthM };
+  // Whether a place was reported at all, and whether it belongs to the model on screen, are one
+  // question asked in one place — the same place the replay beside this asks it, and the same rule
+  // the server applies before it hands a published page anything. Written out here it was a third
+  // spelling of it, and the three disagreed about a report whose model has been deleted.
+  const place = placeOnModel(
+    {
+      stationName: participant.stationName,
+      depthM: participant.depthM,
+      surveyModelId: participant.positionSurveyModelId,
+    },
+    surveyModelId,
+  );
+  if (place !== null) {
+    return place;
   }
   if (participant.lastRecordedAt === null || !positionsWithheld) {
     return { kind: 'unreported' };

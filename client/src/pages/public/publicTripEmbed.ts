@@ -83,12 +83,22 @@ export interface EmbedReadyMessage {
   loaded: boolean;
   /**
    * The party exactly as the embedded page is showing it — the place in the party, the name it is
-   * drawn under, and the station it is drawn at when there is one.
+   * drawn under, the station it is drawn at when there is one, and whether a place that exists is
+   * one this drawing cannot show.
    *
    * Nothing else, and in particular nothing the page itself was not given: this is the same
    * envelope a follower already holds, handed to the document framing it.
+   *
+   * <b>`onOtherSurvey` is why `station` alone is not enough.</b> A null station has two very
+   * different causes: nobody has reported where that person is, or somebody has and it was
+   * measured in a different survey of the cave than the one in this frame — which happens
+   * whenever a watch is re-pointed at a corrected survey while the party is underground. Handed
+   * over as one shape, an article that greys out a link on `station === null` would tell its
+   * readers that nobody knows where a person underground is, at the moment when somebody does.
+   * The station of such a place is deliberately not handed over: a name from another survey is
+   * not a point of this drawing, and the page has nowhere honest to put it.
    */
-  party: { ordinal: number; name: string; station: string | null }[];
+  party: { ordinal: number; name: string; station: string | null; onOtherSurvey: boolean }[];
 }
 
 /** The answer to one focus: whether the model turned out to hold what the prose named. */

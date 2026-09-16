@@ -76,7 +76,25 @@ public class TripPositionEvent : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public TripPositionEventSource Source { get; set; } = TripPositionEventSource.Reported;
 
-    /// <summary>Survey model the station reference belongs to; null for placeless kinds.</summary>
+    /// <summary>
+    /// Survey model the station reference belongs to; null for placeless kinds.
+    ///
+    /// <para>
+    /// <b>A bare id carrying no foreign key</b>, kept for the reason
+    /// <see cref="ViewerStationName"/> is kept as text: a station path means whatever the model it
+    /// was measured in says it means, so the report and the model it was made against are one
+    /// statement and neither half survives usefully alone. A reference that blanked itself when the
+    /// model row went would leave a station name beside no model at all — and that shape already
+    /// means something else here, namely a position kept from this reader, which is the one
+    /// reading under which a name recorded in an older survey gets drawn on the current one.
+    /// </para>
+    /// <para>
+    /// So null on a row that names a station is impossible by construction, and a non-null id that
+    /// resolves to nothing is the honest record of a report made against a survey somebody has
+    /// since deleted. Protection is not evaluated against this — that is
+    /// <see cref="CaveFeatureId"/>'s job, and a model id is not an anchor.
+    /// </para>
+    /// </summary>
     public Guid? SurveyModelId { get; set; }
 
     /// <summary>

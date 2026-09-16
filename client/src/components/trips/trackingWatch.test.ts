@@ -26,6 +26,7 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     positionRecordedAt: null,
     stationName: null,
     depthM: null,
+    positionSurveyModelId: null,
     in: true,
     out: false,
     label: null,

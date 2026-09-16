@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { AimOutlined, LogoutOutlined } from '@ant-design/icons';
 import {
   Alert,
-  App,
   Button,
   Card,
   ConfigProvider,
@@ -17,15 +16,17 @@ import {
 import { useTranslation } from 'react-i18next';
 import {
   TRACKING_EVENT_KINDS,
-  useResolveTrackingDepth,
+  useTrackingDepthReading,
   type TrackingDepthCandidate,
   type TrackingTeam,
   type TripPositionEventKind,
 } from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import List from '../List.tsx';
 import TrackingWhenField from './TrackingWhenField.tsx';
 import { useTrackingPanelTheme } from './trackingControlSizes.ts';
+import { trackingDepthGap } from './trackingDepthGap.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
 import {
   trackingStationRules,
@@ -64,6 +65,17 @@ interface Props {
  * which is the difference between a preview and a lookup: the whole reason to ask which station a
  * depth means is that you may want to report that station rather than the depth.
  *
+ * <b>And a depth that lands a long way from anything is said without being asked, because the
+ * preview is on the wrong side of the form to catch it.</b> Resolution has no tolerance in it: the
+ * nearest station to 1200 m in a 140 m cave is the bottom of the cave, and it is stored as
+ * confidently as a station half a metre away would be. Somebody taking word off a relayed phone
+ * call types a number and presses Record; if the only thing that would have shown the discrepancy
+ * is a button they did not press, the party is written down at the wrong end of the system and
+ * nothing on screen ever disagreed. So the same answer the preview is built on is asked for as the
+ * number settles, and a gap too wide to be an estimate is drawn above the Record button — as a
+ * warning, never as a refusal, because a coordinator with better information than this page has
+ * must still be able to record what they were told.
+ *
  * The form is drawn only while the watch is armed. The server refuses reports otherwise, and
  * relying on that refusal would mean offering somebody a form that cannot work at the moment they
  * most need one — the wording here says which act is missing instead.
@@ -80,17 +92,43 @@ export default function TrackingReportForm({
   onRecorded,
 }: Props) {
   const { t } = useTranslation();
-  // The depth preview's own refusal. A report's refusals are worded where a report is sent.
-  const { message } = App.useApp();
   // Every control here is pressed, and how big it has to be follows the pointer and not the width:
   // a phone in landscape has a desk's room across and still no pixel precision.
   const coarse = useCoarsePointer();
   const [form] = Form.useForm<ReportForm>();
   const kind = Form.useWatch('kind', form) ?? 'entered';
+  const depthTyped = Form.useWatch('depthM', form);
   const report = useTrackingReport();
-  const resolve = useResolveTrackingDepth();
-  const [candidates, setCandidates] = useState<TrackingDepthCandidate[] | null>(null);
+  /** Whether the list of stations the depth could mean has been asked for. */
+  const [listing, setListing] = useState(false);
   const panelTheme = useTrackingPanelTheme(coarse);
+
+  /**
+   * The depth to ask about, once somebody has stopped typing it.
+   *
+   * <b>Debounced because every intermediate number is a real depth somewhere.</b> Typing 120 passes
+   * through 1 and 12, and asking about each of them would be three requests and, worse, a warning
+   * flickering on and off under a field somebody is still filling in. A third of a second after the
+   * number settles is late enough to be quiet and early enough to be on screen before a hand moves
+   * from the keyboard to Record.
+   */
+  const askedDepth = useDebouncedValue(
+    kind === 'atDepth' && typeof depthTyped === 'number' && Number.isFinite(depthTyped)
+      ? depthTyped
+      : null,
+  );
+
+  /**
+   * What that depth means, asked of the one place that knows.
+   *
+   * Reports land on an armed watch and on no other, and a watch cannot be armed without a survey
+   * model — so wherever this form is drawn at all there is a model to resolve against, and the
+   * question is never asked into the void.
+   */
+  const reading = useTrackingDepthReading(tripLogId, askedDepth);
+  const candidates: TrackingDepthCandidate[] | undefined = reading.data;
+  /** How far the station this depth would be recorded at sits from the depth itself. */
+  const gap = trackingDepthGap(askedDepth, candidates?.[0]);
 
   if (!armed) {
     return (
@@ -108,7 +146,7 @@ export default function TrackingReportForm({
   const send = async (values: TrackingReportValues) => {
     if ((await report.send(tripLogId, caverIds, values)).recorded) {
       form.resetFields(['stationName', 'depthM', 'note', 'recordedAt']);
-      setCandidates(null);
+      setListing(false);
       onRecorded();
     }
   };
@@ -131,19 +169,6 @@ export default function TrackingReportForm({
   const onMarkOut = () =>
     send({ kind: 'exited', teamId: form.getFieldValue('teamId') ?? null });
 
-  const onPreviewDepth = async () => {
-    const depthM = form.getFieldValue('depthM') as number | null | undefined;
-    if (depthM === null || depthM === undefined) {
-      return;
-    }
-    try {
-      setCandidates(await resolve.mutateAsync({ tripLogId, depthM }));
-    } catch (error) {
-      setCandidates(null);
-      message.error(trackingProblemMessage(error, t));
-    }
-  };
-
   /**
    * Taking one of the offered stations as the answer.
    *
@@ -156,7 +181,7 @@ export default function TrackingReportForm({
    */
   const onChooseCandidate = (candidate: TrackingDepthCandidate) => {
     form.setFieldsValue({ kind: 'atStation', stationName: candidate.stationName });
-    setCandidates(null);
+    setListing(false);
   };
 
   const nobody = caverIds.length === 0;
@@ -184,7 +209,7 @@ export default function TrackingReportForm({
           <Form.Item name="kind" label={t('trips.tracking.reportKind')}>
             <Select
               data-testid="trip-tracking-kind"
-              onChange={() => setCandidates(null)}
+              onChange={() => setListing(false)}
               options={TRACKING_EVENT_KINDS.map((value) => ({
                 value,
                 label: t(`trips.tracking.kinds.${value}`),
@@ -213,22 +238,97 @@ export default function TrackingReportForm({
               >
                 <InputNumber
                   style={{ width: '100%' }}
-                  onChange={() => setCandidates(null)}
                   data-testid="trip-tracking-depth"
                 />
               </Form.Item>
+              {/* Said while the answer is still coming, because silence has to mean one thing.
+                  Everything below turns on a warning being absent, and absence is only worth
+                  trusting if it cannot also mean "not asked yet" — a number typed and Record
+                  pressed within the second is exactly the hurry a callout is conducted in. */}
+              {askedDepth !== null && reading.data === undefined && reading.error == null && (
+                <Typography.Text
+                  type="secondary"
+                  style={{ display: 'block', marginBottom: 12 }}
+                  data-testid="trip-tracking-depth-checking"
+                >
+                  {t('trips.tracking.depthChecking')}
+                </Typography.Text>
+              )}
+              {/* <b>Drawn without being asked for, and this is the half of the preview that catches
+                  the typo.</b> The button below opens a list somebody chooses from; this appears on
+                  its own when what the depth resolves to is further away than any estimate could
+                  be. It is a warning and not a bar: the number may be right and the survey thin,
+                  and a coordinator who knows that must still be able to record what they heard.
+                  What it must never do is stay quiet, which is what a form with the answer one
+                  unpressed button away was doing. */}
+              {gap?.wide === true && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  title={t('trips.tracking.depthGapTitle', {
+                    station: gap.stationName,
+                    gap: gap.gapM,
+                  })}
+                  description={t('trips.tracking.depthGapBody', {
+                    asked: Math.abs(askedDepth ?? 0),
+                    station: gap.stationName,
+                    depth: gap.stationDepthM,
+                  })}
+                  style={{ marginBottom: 12 }}
+                  data-testid="trip-tracking-depth-gap"
+                />
+              )}
+              {/* <b>Said whenever the check fails, not only once somebody has asked for the list —
+                  because the whole value of the warning above is that nobody has to ask.</b> A card
+                  whose reading failed is otherwise pixel-identical to a card whose depth resolved
+                  half a metre from a station: no warning either way. Gated behind a button nobody
+                  pressed, one dropped request restores the original defect in full — the party is
+                  written down at the bottom of the cave and nothing on screen ever disagreed. So
+                  the absence of a warning is only allowed to mean "checked, and it is fine"; where
+                  it was not checked, that is what is drawn.
+
+                  In the Alert rather than as a passing toast for the same reason: a toast over a
+                  form somebody is filling in during a callout is gone by the time they look up. */}
+              {askedDepth !== null && reading.error != null && (
+                <Alert
+                  type="error"
+                  showIcon
+                  title={t('trips.tracking.depthCheckFailed')}
+                  description={
+                    <>
+                      <div>{trackingProblemMessage(reading.error, t)}</div>
+                      {/* What it means for the act in front of them, which the refusal itself does
+                          not say: recording is not blocked and resolves on the server's own path,
+                          so the number goes in unchecked unless they check it. */}
+                      <div>{t('trips.tracking.depthCheckFailedBody')}</div>
+                    </>
+                  }
+                  action={
+                    <Button
+                      size={controlSize}
+                      onClick={() => void reading.refetch()}
+                      loading={reading.isFetching}
+                      data-testid="trip-tracking-depth-check-again"
+                    >
+                      {t('common.retry')}
+                    </Button>
+                  }
+                  style={{ marginBottom: 12 }}
+                  data-testid="trip-tracking-depth-check-failed"
+                />
+              )}
               <Flex gap="small" wrap style={{ marginBottom: 12 }}>
                 <Button
                   size={controlSize}
                   icon={<AimOutlined />}
-                  onClick={() => void onPreviewDepth()}
-                  loading={resolve.isPending}
+                  onClick={() => setListing(true)}
+                  loading={listing && reading.isFetching}
                   data-testid="trip-tracking-depth-preview"
                 >
                   {t('trips.tracking.depthPreview')}
                 </Button>
               </Flex>
-              {candidates !== null && (
+              {listing && candidates !== undefined && (
                 <div style={{ marginBottom: 12 }} data-testid="trip-tracking-depth-candidates">
                   {candidates.length === 0 ? (
                     <Typography.Text type="secondary">

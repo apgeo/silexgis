@@ -201,6 +201,33 @@ public sealed record PublicTripParticipantDto(
     DateTimeOffset? LastRecordedAt,
     DateTimeOffset? PositionRecordedAt,
     /// <summary>
+    /// True when the report that placed them was made against a survey other than the one this
+    /// envelope hands over — so there is a known place for this person and it cannot honestly be
+    /// shown here.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A station path is a name inside one survey. A watch re-pointed at a corrected survey while
+    /// the party is underground leaves every earlier report naming the survey it was made against,
+    /// and the same path in the new one is a different place or no place at all. So the station and
+    /// the depth are dropped for such a row rather than drawn — but the fact that somebody
+    /// <em>is</em> placed is kept, because the alternative is a page telling the family of a person
+    /// underground that nobody has reported where they are, which is false.
+    /// </para>
+    /// <para>
+    /// A boolean rather than the model's id: this envelope deliberately hands over no survey
+    /// identifiers, and which survey a report was measured in is a fact about the cave's surveying
+    /// that a follower has no use for. What they need is the difference between "not known" and
+    /// "known, not shown here", and that is one bit.
+    /// </para>
+    /// <para>
+    /// Never true beside a position that was withheld for protection: that row is refused earlier
+    /// and arrives as the ordinary absence, so this bit cannot become a second channel saying
+    /// something exists.
+    /// </para>
+    /// </remarks>
+    bool PositionOnOtherModel,
+    /// <summary>
     /// The last report that <em>stated</em> a standing put them inside the cave, or nothing has
     /// stated one and a report has placed them inside it. False together with <see cref="Out"/> is
     /// the third state and a real answer: nobody has said yet that they went in, came out, or were

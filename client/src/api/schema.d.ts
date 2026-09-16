@@ -863,7 +863,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Deletes the survey model (Write on the cave); the stored file is kept. */
+        /** Deletes the survey model (Write on the cave); the stored file is kept. Refused while a trip's live tracking is armed on it. */
         delete: {
             parameters: {
                 query?: never;
@@ -13119,6 +13119,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{tripLogId}/tracking/pictures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hang photographs on the moments of the trip they were taken at — a memory card at a time. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingPictureWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingPictureResultDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/pictures/{memberId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take one photograph off the moment it was hung on. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    memberId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{tripLogId}/tracking/shares": {
         parameters: {
             query?: never;
@@ -18419,7 +18498,7 @@ export interface components {
             subjectEntityId: null | string;
         };
         /** @enum {unknown} */
-        AnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange" | "modelStation" | "modelStationRange" | "modelSurvey" | "modelSurveyRange" | "modelPoint" | "waypoint" | "waypointRange";
+        AnchorKind: "whole" | "textRange" | "page" | "pageRange" | "imageRegion" | "timePoint" | "timeRange" | "modelStation" | "modelStationRange" | "modelSurvey" | "modelSurveyRange" | "modelPoint" | "waypoint" | "waypointRange" | "tripMoment";
         AnnotatedBlock: {
             type: components["schemas"]["AnnotatedBlockType"];
             text: string;
@@ -22379,6 +22458,7 @@ export interface components {
             lastRecordedAt: null | string;
             /** Format: date-time */
             positionRecordedAt: null | string;
+            positionOnOtherModel: boolean;
             in: boolean;
             out: boolean;
         };
@@ -23893,6 +23973,8 @@ export interface components {
             stationName: null | string;
             /** Format: double */
             depthM: null | number;
+            /** Format: uuid */
+            positionSurveyModelId: null | string;
             in: boolean;
             out: boolean;
             label: null | string;
@@ -23905,6 +23987,34 @@ export interface components {
         TrackingParticipantLabelRequest: {
             label: null | string;
         };
+        TrackingPictureAttachedDto: {
+            /** Format: uuid */
+            memberId: string;
+            /** Format: uuid */
+            documentId: string;
+            /** Format: date-time */
+            at: string;
+            /** Format: uuid */
+            caverId: null | string;
+        };
+        TrackingPictureInput: {
+            /** Format: uuid */
+            documentId: string;
+            /** Format: date-time */
+            at: string;
+            /** Format: uuid */
+            caverId: null | string;
+            caption: null | string;
+        };
+        TrackingPictureResultDto: {
+            attached: components["schemas"]["TrackingPictureAttachedDto"][];
+            refused: {
+                [key: string]: string;
+            };
+        };
+        TrackingPictureWriteRequest: {
+            items: null | components["schemas"]["TrackingPictureInput"][];
+        };
         TrackingResolveDepthRequest: {
             /** Format: double */
             depthM: null | number;
@@ -23915,6 +24025,7 @@ export interface components {
             state: components["schemas"]["TripTrackingState"];
             /** Format: uuid */
             surveyModelId: null | string;
+            surveyModelMissing: boolean;
             referenceStationName: null | string;
             depthFilter: string[];
             /** Format: date-time */

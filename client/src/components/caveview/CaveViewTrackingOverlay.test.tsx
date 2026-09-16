@@ -76,6 +76,49 @@ describe('CaveViewTrackingOverlay', () => {
     expect(screen.getByTestId('caveview-caver-c')).toBeInTheDocument();
   });
 
+  it('says a place measured in another survey, and does not draw it as an absence', () => {
+    // The third answer this list has to be able to give. Somebody placed on a survey that is not
+    // the one on screen has no marker — there is nowhere honest to put one — but "no position
+    // reported" would be a false statement about a person a report has placed, and on a rescue
+    // surface it is the one a reader acts on.
+    render(
+      <Harness
+        cavers={[
+          caver({ caverId: 'a', name: 'Ana', position: { kind: 'otherModel' } }),
+          // The twin: the same list, the same row shape, a place measured here — still drawn.
+          caver({
+            caverId: 'b',
+            name: 'Bogdan',
+            position: { kind: 'station', station: 'pestera.galerie.7' },
+          }),
+          caver({ caverId: 'c', name: 'Cora', position: { kind: 'unreported' } }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('caveview-position-other-model')).toHaveTextContent(
+      'On another survey',
+    );
+    // Told apart from both of its neighbours, which is the whole reason it is its own answer.
+    expect(screen.queryByTestId('caveview-position-withheld')).not.toBeInTheDocument();
+    const drawn = screen.getByTestId('caveview-caver-b');
+    expect(drawn).toHaveTextContent('7');
+    expect(drawn).not.toHaveTextContent('On another survey');
+    expect(screen.getByTestId('caveview-caver-a')).toBeInTheDocument();
+  });
+
+  it('says at length why nothing is drawn for a place measured in another survey', () => {
+    render(<Harness cavers={[caver({ position: { kind: 'otherModel' } })]} />);
+
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+
+    const card = screen.getByTestId('caveview-caver-card');
+    expect(card).toHaveTextContent('Somebody did report where this caver is');
+    // No moment is put on a place that was not drawn: an hour beside nothing is read as dating
+    // whatever is nearest, which here would be a station this panel deliberately did not show.
+    expect(screen.getByTestId('caveview-caver-card-position-at')).toHaveTextContent('—');
+  });
+
   it('opens and closes a caver’s card from a tap, with no hover anywhere in it', () => {
     // The marker hover this card also opens never happens on a touchscreen, so the row is the
     // path that has to work: tap to open, a button to close, and Escape for the keyboard.
