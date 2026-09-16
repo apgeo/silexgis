@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -17,6 +17,45 @@ function featureMember(): ResLinkMember {
     isMain: false,
     display: { title: 'Falia Demo', subtitle: null, path: null, thumbnailUrl: null },
   } as unknown as ResLinkMember;
+}
+
+/**
+ * The delivery URL a resolved photograph arrives with. Written out in full rather than built,
+ * because the assertions below are about these exact bytes surviving: the token in it signs how
+ * far this reader may reach, and a chip that rebuilt the URL instead of spending the one it was
+ * handed would be taking a decision the server had already taken.
+ */
+const pictureUrl =
+  '/api/v1/files/8f6a1c2e-0000-4000-8000-000000000001/thumbnail?size=480&token=derivatives-only-token';
+
+/**
+ * A chip naming a photograph the server resolved a picture for. This is the shape every
+ * picture-showing surface depends on, and the one that was never asserted: the strip and the
+ * hover preview are both driven by `display.thumbnailUrl`, so a fixture that leaves it null
+ * proves only that the empty case is handled.
+ */
+function pictureMember(): ResLinkMember {
+  return {
+    id: 'member-2',
+    targetType: 'document',
+    targetId: 'document-1',
+    isMain: false,
+    display: {
+      title: 'Intrarea, spre lumină',
+      subtitle: null,
+      path: null,
+      mediaType: 'image/jpeg',
+      thumbnailUrl: pictureUrl,
+    },
+  } as unknown as ResLinkMember;
+}
+
+/** Opens a hover preview and lets antd's open delay elapse; jsdom runs no animation. */
+async function hover(element: HTMLElement) {
+  fireEvent.mouseEnter(element);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 600));
+  });
 }
 
 /**
@@ -67,4 +106,35 @@ it('a chip nobody may amend offers no close icon at all', () => {
 
   expect(screen.queryByLabelText('Remove from link')).toBeNull();
   expect(screen.getByText('Falia Demo')).toBeTruthy();
+});
+
+it('shows the picture the server resolved, at exactly the URL it was handed', async () => {
+  render(
+    <MemoryRouter>
+      <MemberChip member={pictureMember()} />
+    </MemoryRouter>,
+  );
+
+  await hover(screen.getByText('Intrarea, spre lumină'));
+
+  // Queried off the document rather than by role: the preview is decorative beside the title
+  // it accompanies, so it carries an empty alt and has no image role to find it by.
+  const pictures = document.querySelectorAll('img');
+  expect(pictures).toHaveLength(1);
+
+  // The whole URL, not merely the file id in it. The size and the token are what make it
+  // fetchable, and a chip that dropped either would draw a broken image for a reader who was
+  // entitled to the picture — which is indistinguishable, on screen, from having no picture.
+  expect(pictures[0].getAttribute('src')).toBe(pictureUrl);
+});
+
+it('draws no picture for a target that resolved without one', async () => {
+  // The twin of the test above, and worth stating: every other fixture in this file leaves
+  // the field null, so without the positive case an empty preview would pass for correct
+  // whatever the server sent.
+  renderChip(undefined);
+
+  await hover(screen.getByText('Falia Demo'));
+
+  expect(document.querySelectorAll('img')).toHaveLength(0);
 });

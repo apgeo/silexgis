@@ -683,20 +683,24 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
         var exportId = JsonDocument.Parse(await requested.Content.ReadAsStringAsync())
             .RootElement.GetProperty("id").GetGuid();
 
-        // Run the handler directly rather than waiting on the polling worker.
-        using (var scope = factory.Services.CreateScope())
+        long exportJobId;
+        await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             // Selected by requester rather than by payload contents: the payload is jsonb, which
-            // has no text-pattern operator.
-            var job = await db.ProcessingJobs
+            // has no text-pattern operator. Not filtered by status either — this host keeps a
+            // polling worker, so the row may already have been claimed, and asking only for queued
+            // rows would find nothing and assert against an export that was never built.
+            exportJobId = await db.ProcessingJobs
                 .Where(j => j.Kind == ProcessingJobKinds.AccountDataExport && j.RequestedBy == myId)
                 .OrderByDescending(j => j.Id)
+                .Select(j => j.Id)
                 .FirstAsync();
-            var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-                .First(h => h.Kind == ProcessingJobKinds.AccountDataExport);
-            await handler.ExecuteAsync(job, CancellationToken.None);
         }
+
+        // Carried through here rather than waited on, but claimed first: the worker is entitled to
+        // the same row, and two runs of one export are two writers over one archive.
+        await QueuedJob.RunAsync(factory.Services, exportJobId);
 
         var download = await me.GetAsync($"/api/v1/me/data-export/{exportId}/download");
         download.StatusCode.ShouldBe(HttpStatusCode.OK, await download.Content.ReadAsStringAsync());

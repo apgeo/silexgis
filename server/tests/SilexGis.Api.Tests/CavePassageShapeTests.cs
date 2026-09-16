@@ -498,28 +498,15 @@ public sealed class CavePassageShapeTests : IAsyncLifetime, IDisposable, IClassF
     /// <summary>Runs what one upload queued, the way the background worker would.</summary>
     private async Task RunQueuedGraphJobAsync(Guid modelId)
     {
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.SurveyGraph);
-
-        var queued = await db.ProcessingJobs
-            .Where(j => j.Kind == ProcessingJobKinds.SurveyGraph && j.Status == ProcessingJobStatus.Queued)
-            .ToListAsync();
-
-        // This model's job and no other: the queue is shared with every class in the collection.
-        var mine = queued.Where(j =>
-            JsonSerializer.Deserialize<SurveyGraphPayload>(j.Payload, JsonSerializerOptions.Web)
-                ?.SurveyModelId == modelId).ToList();
+        // This model's job and no other: a class keeps its stored files under a directory of its
+        // own, so running another model's job reads a file this host does not have.
+        var mine = (await QueuedJob.OfKindAsync(factory.Services, ProcessingJobKinds.SurveyGraph))
+            .Where(j => JsonSerializer.Deserialize<SurveyGraphPayload>(j.Payload, JsonSerializerOptions.Web)
+                ?.SurveyModelId == modelId)
+            .ToList();
         mine.ShouldHaveSingleItem();
 
-        foreach (var job in mine)
-        {
-            job.Status = ProcessingJobStatus.Succeeded;
-            await handler.ExecuteAsync(job, CancellationToken.None);
-        }
-
-        await db.SaveChangesAsync();
+        await QueuedJob.RunAsync(factory.Services, mine[0].Id);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

@@ -51,3 +51,37 @@ export function trackingProblemMessage(
   const key = TRACKING_PROBLEM_MESSAGE_KEYS[error.code];
   return key ? t(key) : t('common.saveFailed');
 }
+
+/**
+ * Why a watch will not be read again, for a refusal the server has settled.
+ *
+ * <b>Separate from the sentence above because a read is not a write, and the fallback is the whole
+ * difference.</b> When a write fails and nothing here has words for the code, "that could not be
+ * saved" is true and useful. When a *read* fails it is neither: nobody was saving anything, and a
+ * coordinator watching a party underground would be told the wrong thing about the wrong act at
+ * the moment they most need the right one. So the fallbacks here are read-shaped, and the one
+ * refusal a signed-in surface hits without any code at all — a session that lapsed behind the
+ * reader while a poll was in flight — is named rather than lumped in, because it is the only one
+ * of them the reader can do something about immediately.
+ *
+ * <b>The two fallbacks are worded outside the table above, and that is not tidying.</b> That table
+ * holds one sentence per code the server answers with, and the check that keeps it honest asserts
+ * the two sets are equal — wording kept there for a code nothing answers with would sit unread with
+ * nothing ever saying so. Neither of these is a code: both are read off a status, for refusals that
+ * arrive carrying no code at all.
+ */
+export function trackingReadRefusalMessage(
+  error: unknown,
+  t: ReturnType<typeof useTranslation>['t'],
+): string {
+  if (error instanceof ApiError) {
+    const key = error.code ? TRACKING_PROBLEM_MESSAGE_KEYS[error.code] : undefined;
+    if (key) {
+      return t(key);
+    }
+    if (error.status === 401) {
+      return t('trips.tracking.refusedSignedOut');
+    }
+  }
+  return t('trips.tracking.refusedUnknown');
+}

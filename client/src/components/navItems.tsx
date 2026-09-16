@@ -31,6 +31,7 @@ import {
   ImportOutlined,
   LineChartOutlined,
   MailOutlined,
+  MobileOutlined,
   MonitorOutlined,
   PictureOutlined,
   PieChartOutlined,
@@ -252,6 +253,18 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
       // otherwise be an invitation to spend an afternoon on a review nobody may act on.
       ...(gates.tripLogCreate
         ? [{ key: 'trip-logs/import', icon: <ImportOutlined />, label: t('nav.tripImport') }]
+        : []),
+      // Reading a trip recorded on a phone into a tracked trip's position history. Gated on the
+      // same right and for the same reason: the server refuses the whole review — the dry run
+      // included — to anybody who may not record trips.
+      ...(gates.tripLogCreate
+        ? [
+            {
+              key: 'trip-logs/speleoloc-import',
+              icon: <MobileOutlined />,
+              label: t('nav.speleolocImport'),
+            },
+          ]
         : []),
       // The lists trips work through. Everybody may keep their own, so this is not
       // gated on a right: what a caller may read and write is settled per row.

@@ -638,36 +638,21 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// </summary>
     private async Task RunQueuedGraphJobAsync(Guid modelId, bool expectFailure = false)
     {
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.SurveyGraph);
-
-        var queued = await db.ProcessingJobs
-            .Where(j => j.Kind == ProcessingJobKinds.SurveyGraph && j.Status == ProcessingJobStatus.Queued)
-            .ToListAsync();
-
-        var mine = queued.Where(j =>
-            JsonSerializer.Deserialize<SurveyGraphPayload>(j.Payload, JsonSerializerOptions.Web)
-                ?.SurveyModelId == modelId).ToList();
+        var mine = (await QueuedJob.OfKindAsync(factory.Services, ProcessingJobKinds.SurveyGraph))
+            .Where(j => JsonSerializer.Deserialize<SurveyGraphPayload>(j.Payload, JsonSerializerOptions.Web)
+                ?.SurveyModelId == modelId)
+            .ToList();
         mine.ShouldHaveSingleItem();
 
-        foreach (var job in mine)
+        try
         {
-            job.Status = ProcessingJobStatus.Succeeded;
-            try
-            {
-                await handler.ExecuteAsync(job, CancellationToken.None);
-            }
-            catch (Exception) when (expectFailure)
-            {
-                // The handler records the reason on the model and rethrows so the worker can record
-                // the failure too; what this test is checking is the record it left behind.
-                job.Status = ProcessingJobStatus.Failed;
-            }
+            await QueuedJob.RunAsync(factory.Services, mine[0].Id);
         }
-
-        await db.SaveChangesAsync();
+        catch (Exception) when (expectFailure)
+        {
+            // The handler records the reason on the model and rethrows so the failure is recorded
+            // against the job too; what this test is checking is the record it left behind.
+        }
     }
 
     /// <summary>Runs the reading again for one model, as a re-run after a crash would.</summary>

@@ -65,6 +65,13 @@ public sealed class ImportCommitHandler(
         // Already done: a retry of a job whose transaction committed must not create the batch
         // twice. The batch id is fixed by whoever queued this, which is what makes that
         // checkable at all.
+        //
+        // A shortcut, not the guarantee. This read is taken outside the transaction that creates
+        // the batch, so it answers "no" to every runner that asks before any of them commits, and
+        // two runners inside the same confirmation both come through here. What actually decides
+        // the matter is the unique index on the batch's id, and the arrival-late case is answered
+        // off the error it raises; this only saves a runner that is plainly too late the cost of
+        // reading the file and walking the selection again.
         if (await db.ImportBatches.AsNoTracking().AnyAsync(b => b.Id == payload.BatchId, ct))
         {
             return;

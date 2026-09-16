@@ -371,23 +371,13 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
         return batchId;
     }
 
-    /// <summary>Runs the newest queued job of a kind and answers the batch it wrote into.</summary>
+    /// <summary>Runs the newest job of a kind and answers the batch it wrote into.</summary>
     private static async Task<Guid> RunQueuedAsync(SilexGisApiFactory api, string kind)
     {
-        await using var scope = api.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var jobs = await QueuedJob.OfKindAsync(api.Services, kind);
+        jobs.ShouldNotBeEmpty($"nothing of kind '{kind}' was queued");
 
-        var job = await db.ProcessingJobs
-            .Where(j => j.Kind == kind && j.Status == ProcessingJobStatus.Queued)
-            .OrderByDescending(j => j.Id)
-            .FirstAsync();
-
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>().Single(h => h.Kind == kind);
-        await handler.ExecuteAsync(job, CancellationToken.None);
-
-        job.Status = ProcessingJobStatus.Succeeded;
-        await db.SaveChangesAsync();
-
+        var job = await QueuedJob.RunAsync(api.Services, jobs[0].Id);
         return JsonDocument.Parse(job.Payload).RootElement.GetProperty("batchId").GetGuid();
     }
 

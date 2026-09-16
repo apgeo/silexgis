@@ -56,14 +56,35 @@ export function isConcurrencyConflict(error: unknown): boolean {
 }
 
 /**
- * How often a failed read is attempted again. A 4xx is the server's settled answer — the
- * identical request cannot produce anything else, so the three default attempts merely hold
- * the screen in its loading state for the whole 1s + 2s + 4s backoff before the failure
- * finally becomes visible. Rate limiting is the one client error worth waiting out: 429
- * clears by itself once the window rolls over. Network faults and 5xx keep the retries.
+ * Whether the server has answered this request for good.
+ *
+ * A 4xx is an answer rather than a mishap: the identical request cannot produce anything else, so
+ * nothing at all is gained by asking again. Rate limiting is the one client error that is not
+ * settled — 429 clears by itself once the window rolls over. Network faults and 5xx are not
+ * settled either; they are the ordinary consequence of a dropped connection or a server that is
+ * coming back.
+ *
+ * <b>One home, because two different decisions turn on it and they must not disagree.</b> The
+ * retry policy below reads it to decide whether to ask again, and a screen holding data from an
+ * earlier read reads it to decide whether a failure is a blip to wait out or an answer to act on.
+ * A page that stopped retrying while still telling its reader "it starts refreshing again by
+ * itself as soon as it can" would be the application contradicting itself, over a table that will
+ * never refresh — and the reader would be the person who has to act on the difference.
+ */
+export function isSettledRefusal(error: unknown): boolean {
+  return (
+    error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429
+  );
+}
+
+/**
+ * How often a failed read is attempted again. A settled refusal is not attempted again at all —
+ * the three default attempts would merely hold the screen in its loading state for the whole
+ * 1s + 2s + 4s backoff before the failure finally becomes visible. Everything else keeps the
+ * retries.
  */
 export function retryQuery(failureCount: number, error: unknown): boolean {
-  if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429) {
+  if (isSettledRefusal(error)) {
     return false;
   }
   return failureCount < 3;

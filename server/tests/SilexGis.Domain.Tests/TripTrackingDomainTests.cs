@@ -83,4 +83,100 @@ public class TripTrackingDomainTests
         TripTrackingRules.MayTransition(TripTrackingState.Armed, TripTrackingState.Off).ShouldBeFalse();
         TripTrackingRules.MayTransition(TripTrackingState.Closed, TripTrackingState.Off).ShouldBeFalse();
     }
+
+    // ---- where one member of the party stands --------------------------------------------
+    //
+    // StandingOf is pure, takes a plain sequence and is the one home both tracking reads ask.
+    // Every ordering it can be handed is enumerable here for the cost of a line, which is worth
+    // doing precisely because the surfaces that consume it are HTTP tests against a database:
+    // those prove the reads ask this question, and these prove the answer.
+
+    private static TripStanding Standing(params TripPositionEventKind[] reports) =>
+        TripTrackingRules.StandingOf([.. reports.Select(kind => new TripPositionEvent { Kind = kind })]);
+
+    [Fact]
+    public void Nothing_that_speaks_to_presence_leaves_somebody_unheard_from_rather_than_out()
+    {
+        // The distinction the whole three-state answer exists for: somebody still in the car park
+        // and somebody safely back out are the two readings a watcher most needs told apart, so
+        // neither a missing log nor an empty one nor a log of pure notes may collapse into "out".
+        TripTrackingRules.StandingOf(null).ShouldBe(TripStanding.Unheard);
+        TripTrackingRules.StandingOf([]).ShouldBe(TripStanding.Unheard);
+        Standing(TripPositionEventKind.Note).ShouldBe(TripStanding.Unheard);
+        Standing(TripPositionEventKind.Note, TripPositionEventKind.Note).ShouldBe(TripStanding.Unheard);
+
+        // The twin, so that the three above cannot pass on a rule that had stopped reading at all.
+        Standing(TripPositionEventKind.Note, TripPositionEventKind.Entered).ShouldBe(TripStanding.Underground);
+    }
+
+    [Fact]
+    public void The_last_report_that_states_a_standing_is_the_answer_however_often_it_changes()
+    {
+        Standing(TripPositionEventKind.Entered).ShouldBe(TripStanding.Underground);
+        Standing(TripPositionEventKind.Entered, TripPositionEventKind.Exited).ShouldBe(TripStanding.Out);
+
+        // A party that turns out to still be underground goes back in, which is the same event
+        // the tracking lifecycle re-arms for; nothing about it is exceptional to this fold.
+        Standing(
+            TripPositionEventKind.Entered, TripPositionEventKind.Exited,
+            TripPositionEventKind.Entered).ShouldBe(TripStanding.Underground);
+        Standing(
+            TripPositionEventKind.Entered, TripPositionEventKind.Exited,
+            TripPositionEventKind.Entered, TripPositionEventKind.Exited).ShouldBe(TripStanding.Out);
+
+        // An exit with nothing before it still lands: reports are not required to start with one.
+        Standing(TripPositionEventKind.Exited).ShouldBe(TripStanding.Out);
+    }
+
+    [Fact]
+    public void A_place_answers_only_where_nothing_has_stated_one_and_never_overturns_an_exit()
+    {
+        // Word arrives by relayed phone call and what gets relayed first is routinely where a
+        // team is, not that they went in — so a place has to be able to answer on its own, or a
+        // party whose station is on the screen would be counted as never heard from.
+        Standing(TripPositionEventKind.AtStation).ShouldBe(TripStanding.Underground);
+        Standing(TripPositionEventKind.AtDepth).ShouldBe(TripStanding.Underground);
+        Standing(TripPositionEventKind.Note, TripPositionEventKind.AtStation).ShouldBe(TripStanding.Underground);
+
+        // And the other half of the same decision. A report's time defaults to the clock at the
+        // moment it is written and an imported scan carries a device's clock, so a place sorting
+        // after an exit is as likely to be late log-keeping as a real return underground. The
+        // stated standing therefore wins, and going back in is recorded by saying so.
+        Standing(TripPositionEventKind.Exited, TripPositionEventKind.AtStation).ShouldBe(TripStanding.Out);
+        Standing(TripPositionEventKind.Exited, TripPositionEventKind.AtDepth).ShouldBe(TripStanding.Out);
+        Standing(
+            TripPositionEventKind.Entered, TripPositionEventKind.Exited,
+            TripPositionEventKind.AtStation, TripPositionEventKind.AtDepth).ShouldBe(TripStanding.Out);
+        Standing(
+            TripPositionEventKind.AtStation, TripPositionEventKind.Exited,
+            TripPositionEventKind.AtStation).ShouldBe(TripStanding.Out);
+
+        // The twins: the recorded entry does put them back, and a place after an entry is a
+        // position report doing its ordinary job rather than a no-op.
+        Standing(
+            TripPositionEventKind.Exited, TripPositionEventKind.AtStation,
+            TripPositionEventKind.Entered).ShouldBe(TripStanding.Underground);
+        Standing(
+            TripPositionEventKind.Entered, TripPositionEventKind.AtStation).ShouldBe(TripStanding.Underground);
+        Standing(
+            TripPositionEventKind.AtStation, TripPositionEventKind.Entered).ShouldBe(TripStanding.Underground);
+    }
+
+    [Fact]
+    public void A_note_is_transparent_wherever_it_lands()
+    {
+        // The defect this rule was written for: a note about somebody already out used to put
+        // them back underground, and a note before the party set off used to put them there too.
+        // A note is defined as word with no position claim, so it has to leave every standing
+        // exactly as it found it — checked against each of the three rather than against one.
+        Standing(TripPositionEventKind.Exited, TripPositionEventKind.Note).ShouldBe(TripStanding.Out);
+        Standing(TripPositionEventKind.Entered, TripPositionEventKind.Note).ShouldBe(TripStanding.Underground);
+        Standing(TripPositionEventKind.AtStation, TripPositionEventKind.Note).ShouldBe(TripStanding.Underground);
+
+        // Interleaved rather than trailing, since "the last report is a note" is only the easiest
+        // way to get this wrong and not the only one.
+        Standing(
+            TripPositionEventKind.Note, TripPositionEventKind.Entered, TripPositionEventKind.Note,
+            TripPositionEventKind.Exited, TripPositionEventKind.Note).ShouldBe(TripStanding.Out);
+    }
 }

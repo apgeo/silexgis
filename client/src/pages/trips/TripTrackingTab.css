@@ -32,6 +32,51 @@
   margin-bottom: 8px;
 }
 
+/* ---- How the party divides, in three figures.
+
+   <b>Three equal columns, and they stay three at every width.</b> The three states are read against
+   each other — six underground and one out over a party of eight is a sentence about the eighth
+   person — so a layout that wrapped the third onto its own line, or shrank it to fit, would break
+   the comparison exactly where it matters. `1fr` each rather than flex so the columns are equal
+   whatever the numbers in them are: a party of 12 and a party of 3 must not make their labels sit
+   at different places across the row.
+
+   No colour of this stylesheet's own anywhere here. The figure is the page's own text colour and
+   the label is the library's secondary — both already answer in either theme, and a colour written
+   here would have to be written twice and kept in step by hand. */
+.tracking-standings {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tracking-standing-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.tracking-standing-count {
+  font-size: 24px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-standing-label {
+  /* Small enough that "Not heard from" stays on one line in a third of a 360px screen, which is
+     what keeps the three labels reading as one row of three rather than as a ragged block. */
+  font-size: 12px;
+}
+
+/* What the published page will call this party — one paragraph, above the table whose column it
+   explains, close enough to be read as belonging to it. */
+.tracking-public-names {
+  margin-bottom: 8px;
+}
+
 @media (hover: none), (pointer: coarse) {
   .tracking-table .ant-table-selection-column {
     position: relative;

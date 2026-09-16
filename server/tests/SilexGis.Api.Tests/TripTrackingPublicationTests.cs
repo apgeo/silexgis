@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
@@ -583,6 +584,12 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
             .GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
         publishedBefore.GetProperty("positionsWithheld").GetBoolean().ShouldBeFalse();
         signedInBefore.GetProperty("positionsWithheld").GetBoolean().ShouldBeFalse();
+        // The hour a position was reported at travels with the station on both surfaces, so the
+        // negative below is a withholding rather than a field neither read ever fills in.
+        TimeOf(publishedBefore.GetProperty("participants").EnumerateArray().Single(), "positionRecordedAt")
+            .ShouldNotBeNull();
+        TimeOf(signedInBefore.GetProperty("participants").EnumerateArray().Single(), "positionRecordedAt")
+            .ShouldNotBeNull();
 
         // Sever the row's own anchor — the cave the protection rule would be evaluated against.
         // The configuration keeps its own, so the page still opens; the row, with nothing left to
@@ -603,11 +610,188 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
             .GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
         signedInAfter.GetProperty("participants").EnumerateArray().Single()
             .GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        // And the hour goes with it, on both, so that no surface can put an age on a place it was
+        // refused. What it does not do is make the hour a secret — the last-heard time is still
+        // sent to a follower who cannot be shown a position, because a page whose whole purpose is
+        // that somebody is still being heard from has to keep saying when. Asserted beside the
+        // null so the pair is read together rather than as a protection it is not.
+        TimeOf(publishedAfter.GetProperty("participants").EnumerateArray().Single(), "positionRecordedAt")
+            .ShouldBeNull();
+        TimeOf(signedInAfter.GetProperty("participants").EnumerateArray().Single(), "positionRecordedAt")
+            .ShouldBeNull();
+        TimeOf(publishedAfter.GetProperty("participants").EnumerateArray().Single(), "lastRecordedAt")
+            .ShouldNotBeNull();
 
         // What is not withheld is who is still underground: a follower keeps the fact the page
-        // exists for even when a position cannot be shown.
+        // exists for even when a position cannot be shown. That this one caver — placed by a
+        // station report and never by an `entered` — reads as underground is the presence rule
+        // itself: a station of the cave's own model is a place inside the cave.
         publishedAfter.GetProperty("participants").EnumerateArray().Single()
             .GetProperty("in").GetBoolean().ShouldBeTrue();
+        signedInAfter.GetProperty("participants").EnumerateArray().Single()
+            .GetProperty("in").GetBoolean().ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// The page a family is watching does not move somebody between the counts because a note was
+    /// written about them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Three people, one report apiece to tell them apart, and each is the twin of another: the
+    /// note after an exit against the note after an entry, and the person nothing has been said
+    /// about against the same person once they go in. Somebody reading only the first would not
+    /// know whether the page had stopped folding reports altogether.
+    /// </para>
+    /// <para>
+    /// This is the published half of a rule that now lives in one place in Domain and is asked for
+    /// by both reads. The signed-in half of it is asserted in the tracking tests; what this one
+    /// adds is that the envelope a stranger is handed agrees, since the two used to compute
+    /// standing from hand-written copies that could differ.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_note_about_somebody_already_out_leaves_them_out_on_the_followed_page()
+    {
+        var trip = await ArmedTripAsync("Standing", locationProtected: false, guests: 3);
+        await CaptionAsync(trip.Trip, trip.Cavers[0], "Waiting");
+        await CaptionAsync(trip.Trip, trip.Cavers[1], "Inside");
+        await CaptionAsync(trip.Trip, trip.Cavers[2], "Home");
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        // Word about the first arrives before the party sets off; the other two go in.
+        await ReportAsync(trip.Trip, new { caverIds = new[] { trip.Cavers[0] }, kind = "note", note = "running late" }, At(8, 0));
+        await ReportAsync(trip.Trip, new { caverIds = new[] { trip.Cavers[1], trip.Cavers[2] }, kind = "entered" }, At(9, 0));
+        await ReportAsync(trip.Trip, new { caverIds = new[] { trip.Cavers[1] }, kind = "note", note = "asked for rope" }, At(9, 5));
+        await ReportAsync(trip.Trip, new { caverIds = new[] { trip.Cavers[2] }, kind = "exited" }, At(17, 0));
+        await ReportAsync(trip.Trip, new { caverIds = new[] { trip.Cavers[2] }, kind = "note", note = "got a lift home" }, At(17, 5));
+
+        var page = await FollowAsync(token);
+
+        // Neither in nor out, and it has to stay that way: to somebody waiting at home the
+        // difference between "they have not gone in yet" and "they are safely back" is the page.
+        var waiting = Member(page, "Waiting");
+        waiting.GetProperty("in").GetBoolean().ShouldBeFalse();
+        waiting.GetProperty("out").GetBoolean().ShouldBeFalse();
+        TimeOf(waiting, "lastRecordedAt").ShouldBe(At(8, 0), "the note was heard, it just said nothing about presence");
+
+        // The twin: the same kind of report about somebody underground leaves them underground.
+        var inside = Member(page, "Inside");
+        inside.GetProperty("in").GetBoolean().ShouldBeTrue();
+        inside.GetProperty("out").GetBoolean().ShouldBeFalse();
+
+        // And the defect this test is named for: a note about somebody already out.
+        var home = Member(page, "Home");
+        home.GetProperty("out").GetBoolean().ShouldBeTrue();
+        home.GetProperty("in").GetBoolean().ShouldBeFalse();
+        TimeOf(home, "lastRecordedAt").ShouldBe(At(17, 5), "the note landed after the exit, and still did not undo it");
+
+        // The other twin: the page does still move when something that speaks to presence arrives.
+        await ReportAsync(trip.Trip, new { caverIds = new[] { trip.Cavers[0] }, kind = "entered" }, At(18, 0));
+        var arrived = Member(await FollowAsync(token), "Waiting");
+        arrived.GetProperty("in").GetBoolean().ShouldBeTrue();
+        arrived.GetProperty("out").GetBoolean().ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A place reported after somebody came out does not put them back underground on the page
+    /// their family is watching; a recorded entry does.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The published half of the rule, and the half that matters most, because this page has no
+    /// author present when it changes. A report's time is the clock at the moment it was written
+    /// unless somebody set it, and rows also arrive from a device-export import carrying a
+    /// recorder's own clock — a cave affords no fix to correct that clock against, and an archive
+    /// from Saturday is routinely imported on Monday. A page gated on the share token and on its
+    /// cave still being publishable, never on whether the trip is over, will re-render either of
+    /// those. Under the rule this replaces, that re-render moved somebody who is at home back into
+    /// the underground count with nothing on the page to explain it.
+    /// </para>
+    /// <para>
+    /// The second caver is the twin: the same exit, then the one report that is meant to undo it.
+    /// Without them this would pass on a page whose standings had simply stopped changing.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_place_reported_after_an_exit_does_not_return_a_follower_to_the_underground_count()
+    {
+        var trip = await ArmedTripAsync("Backfilled", locationProtected: false, guests: 2);
+        await CaptionAsync(trip.Trip, trip.Cavers[0], "Home");
+        await CaptionAsync(trip.Trip, trip.Cavers[1], "Back inside");
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        await ReportAsync(trip.Trip, new { caverIds = trip.Cavers, kind = "entered" }, At(9, 0));
+        await ReportAsync(trip.Trip, new { caverIds = trip.Cavers, kind = "exited" }, At(17, 0));
+
+        var home = Member(await FollowAsync(token), "Home");
+        home.GetProperty("out").GetBoolean().ShouldBeTrue();
+
+        // Word about where one of them was, stamped after the exit it describes the run-up to.
+        await ReportAsync(
+            trip.Trip,
+            new { caverIds = new[] { trip.Cavers[0] }, kind = "atStation", stationName = "cave.deep.3" },
+            At(17, 20));
+        // And the other really did go back in, with somebody saying so.
+        await ReportAsync(trip.Trip, new { caverIds = new[] { trip.Cavers[1] }, kind = "entered" }, At(17, 20));
+
+        var page = await FollowAsync(token);
+
+        // The place lands and is shown with its own hour — this is not a rule that drops the
+        // report — and the person it is about is still out.
+        var stillHome = Member(page, "Home");
+        stillHome.GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        TimeOf(stillHome, "positionRecordedAt").ShouldBe(At(17, 20));
+        stillHome.GetProperty("out").GetBoolean().ShouldBeTrue();
+        stillHome.GetProperty("in").GetBoolean().ShouldBeFalse();
+
+        var backInside = Member(page, "Back inside");
+        backInside.GetProperty("in").GetBoolean().ShouldBeTrue();
+        backInside.GetProperty("out").GetBoolean().ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A published position carries the hour it was reported at, and a later note does not age it.
+    /// </summary>
+    /// <remarks>
+    /// The twin is the first read: while the station <em>is</em> the latest word the two times
+    /// agree, so the second read's disagreement is the note arriving and nothing else. This page is
+    /// read by people judging how old a place is, and it used to carry only the time of the last
+    /// report of any kind — beside a station that could be hours older.
+    /// </remarks>
+    [Fact]
+    public async Task A_published_positions_time_is_its_own_report_and_a_later_note_does_not_age_it()
+    {
+        var trip = await ArmedTripAsync("Ages", locationProtected: false, guests: 2);
+        await CaptionAsync(trip.Trip, trip.Cavers[0], "Placed");
+        await CaptionAsync(trip.Trip, trip.Cavers[1], "Unplaced");
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        await ReportAsync(trip.Trip, new { caverIds = trip.Cavers, kind = "entered" }, At(9, 0));
+        await ReportAsync(
+            trip.Trip,
+            new { caverIds = new[] { trip.Cavers[0] }, kind = "atStation", stationName = "cave.upper.2" },
+            At(9, 30));
+
+        var fresh = await FollowAsync(token);
+        var placed = Member(fresh, "Placed");
+        placed.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        TimeOf(placed, "lastRecordedAt").ShouldBe(At(9, 30));
+        TimeOf(placed, "positionRecordedAt").ShouldBe(At(9, 30));
+
+        // Nobody has placed the other one; they still have a last word.
+        var unplaced = Member(fresh, "Unplaced");
+        unplaced.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        TimeOf(unplaced, "positionRecordedAt").ShouldBeNull();
+        TimeOf(unplaced, "lastRecordedAt").ShouldBe(At(9, 0));
+
+        // Four hours later a note lands. The station is four hours old and has to keep saying so.
+        await ReportAsync(trip.Trip, new { caverIds = new[] { trip.Cavers[0] }, kind = "note", note = "asked for rope" }, At(13, 30));
+
+        var aged = Member(await FollowAsync(token), "Placed");
+        aged.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        TimeOf(aged, "lastRecordedAt").ShouldBe(At(13, 30));
+        TimeOf(aged, "positionRecordedAt").ShouldBe(At(9, 30));
     }
 
     /// <summary>
@@ -670,8 +854,8 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
 
     private static string Follow(string token) => $"/api/v1/public/trips/{Uri.EscapeDataString(token)}";
 
-    /// <summary>A trip, armed against a survey model of its own cave, with one caver placed.</summary>
-    private async Task<(Guid Trip, Guid Cave, Guid Model, List<Guid> Cavers, List<string> Names)> TrackedTripAsync(
+    /// <summary>A trip, armed against a survey model of its own cave, with nothing reported yet.</summary>
+    private async Task<(Guid Trip, Guid Cave, Guid Model, List<Guid> Cavers, List<string> Names)> ArmedTripAsync(
         string title, bool locationProtected, int guests = 1, Guid? memberCaver = null)
     {
         var (trip, cavers, names) = await CreateTripAsync(title, guests, existingCaver: memberCaver);
@@ -679,14 +863,64 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         var model = await SeedModelWithStationsAsync(cave);
         (await PutConfigAsync(owner, trip, new { state = "armed", surveyModelId = model }))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
+        return (trip, cave, model, cavers, names);
+    }
+
+    /// <summary>A trip, armed against a survey model of its own cave, with one caver placed.</summary>
+    private async Task<(Guid Trip, Guid Cave, Guid Model, List<Guid> Cavers, List<string> Names)> TrackedTripAsync(
+        string title, bool locationProtected, int guests = 1, Guid? memberCaver = null)
+    {
+        var armed = await ArmedTripAsync(title, locationProtected, guests, memberCaver);
+        (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{armed.Trip}/tracking/events", new
         {
-            caverIds = new[] { cavers[0] },
+            caverIds = new[] { armed.Cavers[0] },
             kind = "atStation",
             stationName = "cave.upper.2",
         })).StatusCode.ShouldBe(HttpStatusCode.OK);
-        return (trip, cave, model, cavers, names);
+        return armed;
     }
+
+    /// <summary>
+    /// The trip's own day. Reports are folded in the order the <em>reporter</em> gave, not the
+    /// order they were typed, so a test about that order has to state its own times.
+    /// </summary>
+    private static DateTimeOffset At(int hour, int minute) =>
+        new(2026, 9, 12, hour, minute, 0, TimeSpan.Zero);
+
+    /// <summary>One report, stamped with the hour the reporter gave, asserted to have landed.</summary>
+    private async Task ReportAsync(Guid trip, object body, DateTimeOffset recordedAt)
+    {
+        var json = JsonSerializer.SerializeToNode(body)!.AsObject();
+        json["recordedAt"] = recordedAt.ToString("O");
+        var response = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", json);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// Captions the party so that a test can name who it is asserting about.
+    /// </summary>
+    /// <remarks>
+    /// The envelope is keyed by a place in the party and carries no caver id, which is the whole
+    /// point of it — so a test cannot look somebody up by identity and must not be given a way to.
+    /// A caption is the one label this page shows whatever else is configured, so captioning the
+    /// party is how a test says "this row is that person" without the response carrying a person.
+    /// </remarks>
+    private async Task CaptionAsync(Guid trip, Guid caver, string caption)
+    {
+        var response = await owner.PutAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/participants/{caver}", new { label = caption });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private static JsonElement Member(JsonElement envelope, string caption) =>
+        envelope.GetProperty("participants").EnumerateArray()
+            .Single(p => p.GetProperty("label").GetString() == caption);
+
+    /// <summary>A nullable instant off the wire — null is a real answer on every time this page sends.</summary>
+    private static DateTimeOffset? TimeOf(JsonElement element, string property) =>
+        element.GetProperty(property).ValueKind == JsonValueKind.Null
+            ? null
+            : element.GetProperty(property).GetDateTimeOffset();
 
     private async Task<(Guid Id, string Token)> PublishAsync(Guid trip, HttpClient? client = null)
     {

@@ -111,6 +111,28 @@ public sealed record PublicTripTeamDto(Guid Id, string Title);
 /// When anything was last heard about them, whatever it said — the same "last word" the
 /// signed-in read shows, which can be later than the report that placed them.
 /// </param>
+/// <param name="PositionRecordedAt">
+/// When the report that <em>placed</em> them was made — the recorded time of the very row
+/// <paramref name="StationName"/> and <paramref name="DepthM"/> were read off.
+/// <para>
+/// <b>Two times, because the position and the last word are routinely two different reports.</b>
+/// The position stays the latest report that actually claimed a place, while
+/// <paramref name="LastRecordedAt"/> follows every report — so one note later, a station heard
+/// four hours ago would sit beside a timestamp eight minutes old. This page is read by the
+/// families of people underground, who are reading the time to judge how old the place beside it
+/// is: that reading is only true of this field. Anything ageing a position reads this one.
+/// </para>
+/// <para>
+/// Null on exactly the branch that nulls the station, so that no surface can put an age on a
+/// place this page was refused. <b>Consistency, not confidentiality</b> — do not cite it as a
+/// protection: <paramref name="LastRecordedAt"/> is unconditional, and whenever the placing
+/// report is also the latest report it carries the same instant. Keeping the last-heard time for
+/// a follower who cannot be shown a position is the deliberate choice, here and in the audit
+/// timeline's rule: a page whose whole purpose is that somebody is still being heard from must
+/// keep saying when. Null here means "nothing has placed them" and "the place cannot be shown
+/// here" alike.
+/// </para>
+/// </param>
 public sealed record PublicTripParticipantDto(
     int Ordinal,
     string? Label,
@@ -118,7 +140,17 @@ public sealed record PublicTripParticipantDto(
     string? StationName,
     decimal? DepthM,
     DateTimeOffset? LastRecordedAt,
-    /// <summary>Somebody has been reported underground and not reported out since.</summary>
+    DateTimeOffset? PositionRecordedAt,
+    /// <summary>
+    /// The last report that <em>stated</em> a standing put them inside the cave, or nothing has
+    /// stated one and a report has placed them inside it. False together with <see cref="Out"/> is
+    /// the third state and a real answer: nobody has said yet that they went in, came out, or were
+    /// anywhere.
+    /// </summary>
     bool In,
-    /// <summary>The last word about them was that they are out.</summary>
+    /// <summary>
+    /// The last report that stated a standing was that they are out. A later note, and a later
+    /// report of a place, both leave it standing — only a recorded entry puts somebody back
+    /// underground, so this page never moves a person between the counts unexplained.
+    /// </summary>
     bool Out);

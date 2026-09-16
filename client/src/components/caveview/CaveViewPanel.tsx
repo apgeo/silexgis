@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Alert, Spin } from 'antd';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +9,7 @@ import {
   focusNamedNothing,
   loadCaveView,
   makeCrsLookup,
+  type CaveViewMediaEntry,
   type CaveViewStationMediaSource,
   type CaveViewToolbar,
   type CaveViewToolbarOptions,
@@ -18,6 +20,7 @@ import {
   focusForRef,
   partFromLeg,
   partFromStation,
+  pathOf,
   type PickedModelPart,
 } from '../../caveview/modelParts.ts';
 import { mediaForStation } from '../../caveview/stationMedia.ts';
@@ -32,6 +35,7 @@ import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
+import Lightbox from '../gallery/Lightbox.tsx';
 import CaveViewTrackingOverlay, { type TrackedPlace } from './CaveViewTrackingOverlay.tsx';
 import './CaveViewPanel.css';
 
@@ -141,51 +145,69 @@ export interface CaveViewPanelProps {
 let panelSequence = 0;
 
 /**
- * A station's pictures, opened by the tap that picked it.
+ * The pictures a click on a thumbnail opens, and which of them was clicked.
  *
- * <b>A finger cannot hover, and the strip is a hover.</b> The viewer follows the pointer to decide
- * which station's pictures to show, and a stationary tap moves no pointer — so on a touch screen
- * that strip is unreachable, and would stay unreachable however large its thumbnails were made.
- * What a tap does produce is the pick this panel already listens for, and focusing a station is the
- * documented way to show its strip without a pointer: it centres the station, which is also what
- * keeps the strip on screen, since the strip is only drawn while its station is in view.
- *
- * Three things are deliberate. <b>Only a pointer that cannot hover takes this path</b>, so a mouse
- * click keeps meaning exactly what it meant. <b>A station with no pictures is left alone</b> rather
- * than focused for nothing, because the camera move is the cost of asking. And <b>tapping the same
- * station again takes the strip off</b>, which is the only way to dismiss one where no pointer will
- * ever leave the station: clearing the source and setting it again is what removes the strip
- * itself, and the source is put straight back so the next tap still has pictures to find.
+ * <b>The station's whole set, not the one thumbnail.</b> The strip is bounded by the model it is
+ * drawn over — two thumbnails across on a phone, and the rows past what fits are cut off at its edge
+ * — so the pictures a station carries beyond the first few can be reached in exactly one way:
+ * opening one of the ones that are drawn and moving on from it. The set is also not an arbitrary
+ * one; it is what somebody linked to this station, which is as much of a sequence as a run of
+ * photographs anywhere in this application has.
  */
-function showPicturesForTap(
-  viewer: CaveViewer,
-  source: CaveViewStationMediaSource | undefined,
-  shown: { current: string | null },
-  station: { node: unknown; path: string; pointerType: string | undefined },
-): void {
-  const byFinger = station.pointerType === 'touch' || station.pointerType === 'pen';
-  if (source === undefined || !byFinger) {
-    return;
-  }
-  if (mediaForStation(source, station.path, station.node).length === 0) {
-    return;
-  }
-  if (shown.current === station.path) {
-    shown.current = null;
-    viewer.clearStationMedia();
-    viewer.setStationMedia(source);
-    return;
-  }
+interface OpenedPictures {
+  entries: readonly CaveViewMediaEntry[];
+  index: number;
+}
 
-  shown.current = station.path;
-  void viewer.focusStation(station.path, { popup: true }).catch(() => {
-    // Nothing was shown, so the next tap on this station has to ask again rather than try to take
-    // away a strip that is not there. Silent by design: the station came from a click on the model
-    // in front of the reader, so a rejection here is an abandoned camera move, not a lost place.
-    if (shown.current === station.path) {
-      shown.current = null;
-    }
-  });
+/**
+ * What a clicked thumbnail opens, read back out of the same source the strip was built from.
+ *
+ * The clicked entry is the object this panel handed over in the first place, so it is normally
+ * found in the set by identity; the URL comparison is what answers a source that rebuilt its
+ * entries between the strip being drawn and the thumbnail being pressed. A station that cannot be
+ * named, or a set the entry is not in, opens the one picture that was actually clicked rather than
+ * nothing — a thumbnail that answers with an empty viewer is worse than one that answers narrowly.
+ */
+function openedFrom(
+  source: CaveViewStationMediaSource | undefined,
+  station: unknown,
+  entry: CaveViewMediaEntry,
+): OpenedPictures {
+  if (source === undefined) {
+    return { entries: [entry], index: 0 };
+  }
+  const entries = mediaForStation(source, pathOf(station) ?? '', station);
+  const index = entries.findIndex(
+    (candidate) => candidate === entry || candidate.url === entry.url,
+  );
+  return index < 0 ? { entries: [entry], index: 0 } : { entries, index };
+}
+
+/**
+ * Where the picture viewer has to be drawn to be seen at all, or null for its place in the panel.
+ *
+ * <b>An element covering the screen paints over the whole document, whatever anything else's
+ * stacking order says.</b> The viewer's own fullscreen button puts the drawing surface — not this
+ * panel — into the browser's top layer, and nothing outside that element is drawn while it is
+ * there. The picture viewer is a fixed sheet with a z-index, and a sibling of the surface: opened
+ * from a thumbnail while the model is fullscreen it would be painted behind the model, having also
+ * suppressed the viewer's own in-model popup, so the thumbnail would answer with nothing at all —
+ * and the Escape that ought to close the picture would leave fullscreen instead, taking the unseen
+ * sheet with it. Below 768px the same thing happens without the top layer, because the surface is
+ * then pinned over the screen by the class the viewer adds, at a z-index above this sheet's.
+ *
+ * So while the surface covers the screen the sheet is rendered inside it, where it is part of the
+ * same stacking context and paints over the model. Both ways of covering the screen are asked
+ * about, because the second raises no `fullscreenchange` and happens exactly where the first is
+ * refused — inside an embedded frame, which is how this viewer is read on somebody else's page.
+ */
+function screenCoveringSurface(surface: HTMLElement | null): HTMLElement | null {
+  if (surface === null) {
+    return null;
+  }
+  const covering =
+    document.fullscreenElement === surface || surface.classList.contains('toggle-fullscreen');
+  return covering ? surface : null;
 }
 
 /**
@@ -294,6 +316,23 @@ export default function CaveViewPanel({
   const [openCaverId, setOpenCaverId] = useState<string | null>(null);
   /** Which row of the watch the camera was last sent to, and whose station carries the mark. */
   const [shownPlace, setShownPlace] = useState<TrackedPlace | null>(null);
+  /**
+   * The pictures a reader opened from a station's strip, or null while none is open.
+   *
+   * The entries themselves, which are plain data the viewer was handed in the first place — a URL,
+   * a caption and which document each is. The `station` the event also carries is a viewer object
+   * and is deliberately not kept: what a reader opened is pictures, and holding the model's own
+   * node in React state is how a scene outlives the viewer that owns it.
+   */
+  const [openedPictures, setOpenedPictures] = useState<OpenedPictures | null>(null);
+  /**
+   * The element the picture viewer is drawn inside, or null for its ordinary place in the panel.
+   *
+   * Settled when a thumbnail is clicked and re-settled while the picture is open, because leaving
+   * fullscreen underneath an open picture has to bring it back out of the surface — a sheet left
+   * inside a container that is no longer covering the screen is a sheet inside a card.
+   */
+  const [pictureHost, setPictureHost] = useState<HTMLElement | null>(null);
 
   // The viewer that holds the loaded survey, kept so links, markers, pictures and the toolbar can
   // reach it after the load. The survey file itself is no longer kept: showing a named part of it
@@ -301,8 +340,6 @@ export default function CaveViewPanel({
   const viewerRef = useRef<{ viewer: CaveViewer; ui: CaveViewUi } | null>(null);
   /** What is drawn for each caver right now — the thing the next answer is compared against. */
   const drawnMarkersRef = useRef(new Map<string, DrawnMarker>());
-  /** The station whose pictures a tap put on screen, so a second tap on it takes them off again. */
-  const strippedStationRef = useRef<string | null>(null);
 
   const focusOf = (ref: ResourceRef) => focusForRef(ref, surveyModelId);
 
@@ -408,7 +445,9 @@ export default function CaveViewPanel({
     // A new viewer draws none of the old one's markers, so nothing is drawn until they are added
     // again — which the marker effect does as soon as this one reports the model loaded.
     drawnMarkersRef.current = new Map();
-    strippedStationRef.current = null;
+    // A picture opened from the model on screen belongs to that model. A second survey file loaded
+    // under it would leave a photograph of another cave's pitch head sitting over the new one.
+    setOpenedPictures(null);
 
     (async () => {
       const cv2 = await loadCaveView();
@@ -442,17 +481,46 @@ export default function CaveViewPanel({
       // treats a true as "the application dealt with this click", which would stop the viewer
       // selecting and highlighting what was clicked — so offering to link a station would take
       // away the ability to simply look at one.
+      //
+      // <b>A tap is not answered with a camera move, and used to be.</b> The reasoning for that was
+      // that the strip is a hover and a finger cannot hover, so the only way to it was focusing the
+      // station — which flies and recentres the camera. It is not: the viewer reports a station
+      // tapped as well as hovered, and shows the strip for it where it stands. Driven against the
+      // vendored bundle on a 286px surface, a stationary tap on a station dispatched `station` and
+      // then `stationHover` with `pointerType` touch and drew the strip at the station, with
+      // nothing having called `focusStation`; a tap on empty space took it off again, which is the
+      // dismissal a finger otherwise has to be given. So the move bought nothing, and it cost the
+      // most on the one surface where a tap means something else — the tracking tab, where somebody
+      // taps the station the party is at and then reaches for "Record here" while the model slides
+      // out from under their finger.
       viewer.addEventListener('station', (event) => {
         if (disposed) return;
-        const picked = event as { node?: unknown; mouseEvent?: { pointerType?: string } };
-        const part = partFromStation(picked.node);
+        const part = partFromStation((event as { node?: unknown }).node);
         if (part === null) return;
         onPartPickRef.current?.(part);
-        showPicturesForTap(viewer, stationMediaRef.current, strippedStationRef, {
-          node: picked.node,
-          path: part.anchor.station,
-          pointerType: picked.mouseEvent?.pointerType,
-        });
+      });
+      // A thumbnail of the strip was clicked. Taken over from the viewer's own popup, which draws
+      // the picture into the model at the station: that is the right fallback for a host with
+      // nowhere better to put it, but this application has a picture viewer, and a photograph of a
+      // pitch head is worth more than a small square floating in a line drawing — it can be
+      // zoomed, panned, read with its caption and dismissed with Escape.
+      //
+      // `handled` is set only once there is something to show. A malformed entry leaves it alone
+      // so the viewer still does whatever it would have done, rather than the click doing nothing
+      // at all because this listener claimed it and then declined.
+      viewer.addEventListener('mediaOpen', (event) => {
+        if (disposed) return;
+        const opened = event as { entry?: CaveViewMediaEntry; station?: unknown; handled?: boolean };
+        const entry = opened.entry;
+        if (entry == null || typeof entry.url !== 'string' || entry.url.length === 0) {
+          return;
+        }
+        opened.handled = true;
+        // Where it has to be drawn is a question about this moment — whether the model is covering
+        // the screen right now — so it is asked now, with the element the viewer would have put
+        // into the top layer in hand.
+        setPictureHost(screenCoveringSurface(document.getElementById(containerIdRef.current!)));
+        setOpenedPictures(openedFrom(stationMediaRef.current, opened.station, entry));
       });
       viewer.addEventListener('leg', (event) => {
         const part = partFromLeg((event as { leg?: unknown }).leg);
@@ -801,17 +869,32 @@ export default function CaveViewPanel({
     }
     viewer.setStationMedia(stationMedia);
     viewer.stationLabelOver = true;
-    strippedStationRef.current = null;
     return () => {
       if (viewerRef.current?.viewer === viewer) {
         viewer.clearStationMedia();
         // The panel asked for the label and takes it back with the pictures it was for. Where the
         // pictures are merely being replaced, the run that follows this one asks again.
         viewer.stationLabelOver = false;
-        strippedStationRef.current = null;
       }
     };
   }, [stationMedia, status]);
+
+  // ---- Following the screen under an open picture ----
+  //
+  // Which element the picture viewer belongs in is settled when a thumbnail is clicked, and one
+  // thing can change it underneath: leaving fullscreen while the picture is open, by the browser's
+  // own way out rather than by a control this panel drew. A sheet left inside a surface that is no
+  // longer covering the screen is a full-screen viewer squeezed into a card, so it is moved back.
+  const picturesOpen = openedPictures !== null;
+  useEffect(() => {
+    if (!picturesOpen) {
+      return;
+    }
+    const settle = () =>
+      setPictureHost(screenCoveringSurface(document.getElementById(containerIdRef.current!)));
+    document.addEventListener('fullscreenchange', settle);
+    return () => document.removeEventListener('fullscreenchange', settle);
+  }, [picturesOpen]);
 
   return (
     <div className="caveview-panel" style={{ height }}>
@@ -852,6 +935,46 @@ export default function CaveViewPanel({
           raised={toolbarWanted && toolbarPlacement === 'bottom'}
         />
       )}
+      {openedPictures !== null
+        && inside(
+          pictureHost,
+          /*
+           * The station's pictures, opened at the one that was clicked. Paging through them is how
+           * the pictures the strip could not fit are seen at all — the strip is held inside the
+           * model surface, which on a phone is two thumbnails across — and the set is exactly what
+           * somebody linked to this one station, so moving through it is moving through the
+           * photographs of one place rather than through an invented sequence.
+           *
+           * <b>Only the renderings are offered, and the download refuses itself.</b> No `contentUrl`
+           * and no `mayDownloadOriginal` is passed because the panel holds neither — the strip's
+           * entries are derived from a published thumbnail URL, at the sizes the reader is entitled
+           * to, precisely so that a reader who may not have a photograph's stored bytes is never
+           * handed them by a screen that is only displaying it. The viewer's download control reads
+           * that absence as "withheld" and says so, which is the honest answer here.
+           */
+          <Lightbox
+            photos={openedPictures.entries.map((entry) => ({
+              documentId: entry.documentId ?? entry.url,
+              // Shown only where the picture carries no caption of its own; the viewer prefers the
+              // caption wherever there is one.
+              title: t('caveview.stationPicture'),
+              previewUrl: entry.url,
+              caption: entry.caption,
+            }))}
+            index={openedPictures.index}
+            // What the facts panel opens into, for the same reason the sheet itself is placed: an
+            // overlay the component library puts at the end of the document is not drawn at all
+            // while the model is covering the screen.
+            overlayContainer={pictureHost}
+            onClose={() => setOpenedPictures(null)}
+            onIndexChange={(index) => setOpenedPictures({ ...openedPictures, index })}
+          />,
+        )}
     </div>
   );
+}
+
+/** Draws something inside an element that is covering the screen, or where it stands. */
+function inside(host: HTMLElement | null, node: ReactNode): ReactNode {
+  return host === null ? node : createPortal(node, host);
 }

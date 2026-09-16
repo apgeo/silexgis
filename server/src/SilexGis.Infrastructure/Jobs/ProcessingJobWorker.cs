@@ -34,13 +34,14 @@ public abstract class ProcessingJobWorkerBase(
         var pollSeconds = configuration.GetValue("Jobs:PollSeconds", DefaultPollSeconds);
         if (pollSeconds <= 0)
         {
-            // The same switch the notification drain carries, for the same reason. Every test
-            // class shares one database, so a worker started by one class claims the job another
-            // class queued a moment earlier and is about to run itself — and the second class then
-            // finds no queued job at all. That failure is intermittent by construction: it needs
-            // the poll to land inside the gap between enqueueing a job and reading it back, so it
-            // fires under load and passes when the machine is quiet, which is the worst shape a
-            // test failure can have. A test that means to drive a handler drives it directly.
+            // The same switch the notification drain carries, for the same reason. A test host
+            // that queues a job and then means to run it itself has two runners the moment this
+            // loop is polling: the claim below is the only mutual exclusion there is, and a caller
+            // that does not issue it takes part in none of it. That failure is intermittent by
+            // construction — it needs the poll to land inside the gap between enqueueing a job and
+            // reading it back, so it fires under load and passes when the machine is quiet, which
+            // is the worst shape a test failure can have. A host that has no use for the queue
+            // switches it off here; one that needs it claims the row before running anything.
             logger.LogInformation("Job processing is switched off (Jobs:PollSeconds <= 0)");
             return;
         }
