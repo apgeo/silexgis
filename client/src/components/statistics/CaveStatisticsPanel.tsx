@@ -161,7 +161,7 @@ export default function CaveStatisticsPanel({ caveId }: { caveId: string }) {
           type="warning"
           showIcon
           style={{ marginTop: 16 }}
-          message={t('statistics.cave.disagreementTitle')}
+          title={t('statistics.cave.disagreementTitle')}
           description={t('statistics.cave.disagreementBody')}
         />
       )}

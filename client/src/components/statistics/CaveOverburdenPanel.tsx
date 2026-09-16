@@ -68,10 +68,16 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
       const sample = samples[index];
       if (!sample) return '';
       const where = t('overburden.readoutWhere', { distance: metres(sample.distanceAlongM) });
+      // A reading that says it was sampled and carries no thickness is a contradiction the
+      // server does not produce — but the fallback is a key lookup, and a key that does not exist
+      // renders as its own name, so the reader would be shown a fragment of source code rather
+      // than a sentence. Named explicitly instead, with the same words an unmeasured place gets.
+      const absent =
+        sample.outcome === 'sampled' ? 'noData' : sample.outcome;
       const thickness =
         sample.outcome === 'sampled' && sample.overburdenM !== null
           ? t('overburden.readoutThickness', { value: metres(sample.overburdenM) })
-          : t(`overburden.readoutAbsent.${sample.outcome}`);
+          : t(`overburden.readoutAbsent.${absent}`);
       const piece = t('overburden.readoutSegment', { index: sample.segmentIndex + 1 });
       return [where, thickness, piece].join('<br/>');
     },
@@ -187,7 +193,7 @@ export default function CaveOverburdenPanel({ caveId }: { caveId: string }) {
               thickness:
                 chosen.outcome === 'sampled' && chosen.overburdenM !== null
                   ? metres(chosen.overburdenM)
-                  : t(`overburden.readoutAbsent.${chosen.outcome}`),
+                  : t(`overburden.readoutAbsent.${chosen.outcome === 'sampled' ? 'noData' : chosen.outcome}`),
               segment: chosen.segmentIndex + 1,
             })}
           </Typography.Paragraph>

@@ -79,7 +79,11 @@ export default function RegistryCorrelationPage() {
     () => ({ ...registryScopeQuery(filter), measure: filter.x, bins: 2 }),
     [filter],
   );
-  const { data: bounds, isError: boundsFailed } = useRegistryDistribution(boundsQuery);
+  const {
+    data: bounds,
+    isError: boundsFailed,
+    isPlaceholderData: boundsArePrevious,
+  } = useRegistryDistribution(boundsQuery);
 
   const logarithmic = data?.logarithmic ?? filter.logarithmic ?? DefaultCorrelationLogarithmic;
 
@@ -94,13 +98,25 @@ export default function RegistryCorrelationPage() {
    * was taken over: both queries keep the previous answer while a new one loads, so a range left
    * over from the pair that was on screen a moment ago would otherwise be drawn across as this
    * pair's own.
+   *
+   * Matching the measurement is not enough to establish that, because narrowing the set — a cave
+   * type, a region — changes neither measurement's name. What settles it is that the two answers
+   * are equally old: both fresh means both describe the narrowing now in force, and both stale
+   * means both describe the one that was, which is the pair whose figures are on screen anyway.
+   * One of each is the only incoherent combination, and it is exactly what a narrowing produces
+   * while the slower of the two requests is still out.
    */
   const domain = useMemo<CorrelationDomain>(() => {
-    if (data !== undefined && bounds !== undefined && bounds.measure === data.x) {
+    if (
+      data !== undefined
+      && bounds !== undefined
+      && bounds.measure === data.x
+      && boundsArePrevious === isPlaceholderData
+    ) {
       return { state: 'answered', minimum: bounds.minimum, maximum: bounds.maximum };
     }
     return boundsFailed ? { state: 'unavailable' } : { state: 'pending' };
-  }, [data, bounds, boundsFailed]);
+  }, [data, bounds, boundsFailed, boundsArePrevious, isPlaceholderData]);
 
   const drawn = useMemo(() => correlationLine(data, domain), [data, domain]);
 
@@ -200,6 +216,11 @@ export default function RegistryCorrelationPage() {
             <Typography.Text type="secondary">{t('registryStats.region')}</Typography.Text>
             <Input
               data-testid="registry-correlation-region"
+              // Keyed on the narrowing in force so the box follows the address rather than only
+              // seeding from it: the value lives in the URL, and a Back navigation that changed it
+              // would otherwise leave the previous text sitting in a field nothing is filtering by.
+              // Keyed rather than controlled so typing does not re-render the page per keystroke.
+              key={filter.region ?? ''}
               allowClear
               style={{ width: 200, display: 'block' }}
               placeholder={t('registryStats.regionPlaceholder')}
@@ -236,7 +257,7 @@ export default function RegistryCorrelationPage() {
           type="error"
           showIcon
           data-testid="registry-correlation-error"
-          message={t('registryStats.correlationFailed')}
+          title={t('registryStats.correlationFailed')}
           description={error instanceof ApiError ? error.detail : undefined}
         />
       ) : data === undefined ? (

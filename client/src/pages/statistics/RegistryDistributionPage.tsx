@@ -252,6 +252,11 @@ export default function RegistryDistributionPage() {
             <Typography.Text type="secondary">{t('registryStats.region')}</Typography.Text>
             <Input
               data-testid="registry-region"
+              // Keyed on the narrowing in force so the box follows the address rather than only
+              // seeding from it: the value lives in the URL, and a Back navigation that changed it
+              // would otherwise leave the previous text sitting in a field nothing is filtering by.
+              // Keyed rather than controlled so typing does not re-render the page per keystroke.
+              key={filter.region ?? ''}
               allowClear
               style={{ width: 200, display: 'block' }}
               placeholder={t('registryStats.regionPlaceholder')}
@@ -288,7 +293,7 @@ export default function RegistryDistributionPage() {
           type="error"
           showIcon
           data-testid="registry-distribution-error"
-          message={t('registryStats.failed')}
+          title={t('registryStats.failed')}
           description={error instanceof ApiError ? error.detail : undefined}
         />
       ) : data === undefined ? (
