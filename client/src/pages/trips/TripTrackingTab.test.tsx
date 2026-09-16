@@ -86,6 +86,25 @@ vi.mock('../../components/trips/TrackingPicturesDialog.tsx', () => ({
   },
 }));
 
+/**
+ * The survey panel, kept as a stand-in for one reason: it holds the only thing on this page that
+ * can answer whether the drawing contains the station a report names.
+ *
+ * <b>That answer comes from a parsed survey file and from nothing else.</b> The viewer inside the
+ * panel resolves each marker against the model it loaded and reports back the ones it could not
+ * place; no row of the watch can be read to produce it. What the panel does with it, and how it
+ * asks the viewer, is covered where the panel is. What is covered here is the other half — that
+ * this table says it — so the stand-in's whole job is to hand the answer over as the real one does
+ * and let a test drive it.
+ */
+let answerUnplaced: ((stations: ReadonlySet<string>) => void) | undefined;
+vi.mock('../../components/trips/TrackingModelPanel.tsx', () => ({
+  default: (props: { onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void }) => {
+    answerUnplaced = props.onUnplacedStationsChange;
+    return <div data-testid="trip-tracking-model-panel" />;
+  },
+}));
+
 // What decides how big every target on this surface is drawn, and how much room the selection
 // column is given. Mocked rather than driven by a media query, as the rest of this application
 // tests its finger layouts; false by default, which is the machine every other test here is being
@@ -196,6 +215,7 @@ beforeEach(() => {
   pictureDialogProps.mockReset();
   coarse = false;
   narrow = false;
+  answerUnplaced = undefined;
   setTracking.mockReset().mockResolvedValue(state());
   setLabel.mockReset().mockResolvedValue({ caverId: ANA, label: null });
 });
@@ -2184,6 +2204,148 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
       show();
 
       expect(screen.getByTestId(`trip-tracking-position-other-model-${ANA}`)).toBeTruthy();
+    });
+  });
+
+  /**
+   * And the same column after the survey itself was re-exported under it.
+   *
+   * <b>The general case of the one above, and worse, because it needs no administrator action.</b>
+   * Nothing has been re-pointed and nothing deleted: the watch is on the survey it was armed on,
+   * every report names that survey, and the drawing of it simply has no station of the names the
+   * reports give — which is what a re-export with renamed stations leaves behind. No pair of stored
+   * ids can reveal that. The viewer in the panel below parses the file and is the only thing that
+   * can, so it is asked, and the answer reaches this table.
+   */
+  describe('a station the drawing below does not hold', () => {
+    const MODEL = 'model-1';
+
+    function party() {
+      return state({
+        surveyModelId: MODEL,
+        participants: [
+          {
+            caverId: ANA,
+            teamId: null,
+            lastKind: 'atStation',
+            lastRecordedAt: '2026-09-12T07:00:00Z',
+            positionRecordedAt: '2026-09-12T07:00:00Z',
+            stationName: 'cave.deep.3',
+            depthM: null,
+            // Measured against the survey in force: everything a row can be asked says this is
+            // drawable, which is exactly why the drawing has to be asked as well.
+            positionSurveyModelId: MODEL,
+            in: true,
+            out: false,
+            label: null,
+          },
+          {
+            caverId: BOGDAN,
+            teamId: null,
+            lastKind: 'atStation',
+            lastRecordedAt: '2026-09-12T07:10:00Z',
+            positionRecordedAt: '2026-09-12T07:10:00Z',
+            stationName: 'P12',
+            depthM: null,
+            positionSurveyModelId: MODEL,
+            in: true,
+            out: false,
+            label: null,
+          },
+        ],
+      });
+    }
+
+    beforeEach(() => {
+      trackingQuery.mockReturnValue({
+        data: party(),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+    });
+
+    it('marks whoever the drawing could not place, and keeps their station', () => {
+      show();
+      // Nothing is claimed until a drawing has answered: with the model unopened this table knows
+      // of no viewer and says nothing.
+      expect(screen.queryByTestId(`trip-tracking-position-not-on-model-${ANA}`)).toBeNull();
+
+      act(() => answerUnplaced?.(new Set(['cave.deep.3'])));
+
+      expect(screen.getByTestId(`trip-tracking-position-not-on-model-${ANA}`)).toBeTruthy();
+      expect(screen.getByText('Not on the drawing')).toBeTruthy();
+      // The station is what was reported and what would be read out over a phone, so it is marked
+      // rather than taken off the screen — the same rule the mark above it keeps.
+      expect(screen.getByText('cave.deep.3')).toBeTruthy();
+      // And the twin, on the same table: somebody the drawing did place carries no mark.
+      expect(screen.getByText('P12')).toBeTruthy();
+      expect(screen.queryByTestId(`trip-tracking-position-not-on-model-${BOGDAN}`)).toBeNull();
+    });
+
+    it('takes the mark off when the drawing goes away', () => {
+      show();
+      act(() => answerUnplaced?.(new Set(['cave.deep.3'])));
+      expect(screen.getByTestId(`trip-tracking-position-not-on-model-${ANA}`)).toBeTruthy();
+
+      // Closing the model unmounts the viewer, which answers with nobody on its way out. A mark
+      // left standing would be a claim about a drawing that is no longer on the screen.
+      act(() => answerUnplaced?.(new Set()));
+
+      expect(screen.queryByTestId(`trip-tracking-position-not-on-model-${ANA}`)).toBeNull();
+    });
+
+    it('marks by the station that is missing, not by the person standing at it', () => {
+      // <b>The answer names places, and this table is not always the list the drawing is showing.</b>
+      // The panel below can be replaying an earlier moment of the trip, with a wholly different
+      // party on the model, while this table goes on showing the watch as it stands. A station name
+      // means the same thing to both of them; a person does not.
+      show();
+
+      act(() => answerUnplaced?.(new Set(['P12'])));
+
+      expect(screen.getByTestId(`trip-tracking-position-not-on-model-${BOGDAN}`)).toBeTruthy();
+      expect(screen.queryByTestId(`trip-tracking-position-not-on-model-${ANA}`)).toBeNull();
+      // And the twin, as the answer moves: the mark moves with the station it belongs to.
+      act(() => answerUnplaced?.(new Set(['cave.deep.3'])));
+
+      expect(screen.getByTestId(`trip-tracking-position-not-on-model-${ANA}`)).toBeTruthy();
+      expect(screen.queryByTestId(`trip-tracking-position-not-on-model-${BOGDAN}`)).toBeNull();
+    });
+
+    it('never marks a place measured in another survey as missing from this drawing', () => {
+      // Two questions in order, and one mark per row. A report measured elsewhere is not drawn at
+      // all, so it cannot also be missing from a drawing it was never going to be on — and a row
+      // carrying both marks would be telling a coordinator two different stories at once.
+      trackingQuery.mockReturnValue({
+        data: state({
+          surveyModelId: MODEL,
+          participants: [
+            {
+              caverId: ANA,
+              teamId: null,
+              lastKind: 'atStation',
+              lastRecordedAt: '2026-09-12T07:00:00Z',
+              positionRecordedAt: '2026-09-12T07:00:00Z',
+              stationName: 'cave.deep.3',
+              depthM: null,
+              positionSurveyModelId: 'model-2',
+              in: true,
+              out: false,
+              label: null,
+            },
+          ],
+        }),
+        isPending: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show();
+
+      act(() => answerUnplaced?.(new Set(['cave.deep.3'])));
+
+      expect(screen.getByTestId(`trip-tracking-position-other-model-${ANA}`)).toBeTruthy();
+      expect(screen.queryByTestId(`trip-tracking-position-not-on-model-${ANA}`)).toBeNull();
     });
   });
 });

@@ -83,22 +83,40 @@ export interface EmbedReadyMessage {
   loaded: boolean;
   /**
    * The party exactly as the embedded page is showing it — the place in the party, the name it is
-   * drawn under, the station it is drawn at when there is one, and whether a place that exists is
-   * one this drawing cannot show.
+   * drawn under, the station it is drawn at when there is one, and, when there is not, which kind
+   * of nothing that is.
    *
    * Nothing else, and in particular nothing the page itself was not given: this is the same
    * envelope a follower already holds, handed to the document framing it.
    *
-   * <b>`onOtherSurvey` is why `station` alone is not enough.</b> A null station has two very
-   * different causes: nobody has reported where that person is, or somebody has and it was
-   * measured in a different survey of the cave than the one in this frame — which happens
-   * whenever a watch is re-pointed at a corrected survey while the party is underground. Handed
-   * over as one shape, an article that greys out a link on `station === null` would tell its
-   * readers that nobody knows where a person underground is, at the moment when somebody does.
-   * The station of such a place is deliberately not handed over: a name from another survey is
-   * not a point of this drawing, and the page has nowhere honest to put it.
+   * <b>`station` alone is not enough, and there are three ways for it to be null.</b> Nobody has
+   * reported where that person is. Or somebody has, and it was measured in a different survey of
+   * the cave than the one in this frame — which happens whenever a watch is re-pointed at a
+   * corrected survey while the party is underground — and that is `onOtherSurvey`. Or somebody has,
+   * naming a station of this very survey, and the drawing in the frame turns out to hold no node of
+   * that name: a survey re-exported with its stations renamed does that to every place reported
+   * before it, under the same model id, with nobody having touched the watch. That is
+   * `notOnDrawing`, it is known only once this browser has parsed the file, and no server could
+   * have said it.
+   *
+   * Handed over as one shape, an article that greys out a link on `station === null` would tell its
+   * readers that nobody knows where a person underground is, at the moment when somebody does. So
+   * an article is expected to read the two flags, and each of them wants different words — "on a
+   * different survey of the cave" and "at a station this drawing does not contain".
+   *
+   * <b>The station of such a place is deliberately not handed over</b>, in both cases and for one
+   * reason: a name that is not a point of this drawing has no honest use in prose printed beside
+   * it. It would be interpolated into "X is at Y" and linked, and the link would fly nowhere. The
+   * name is not lost — the frame's own list of people says it, marked, which is where a reader can
+   * see the drawing that cannot show it in the same glance.
    */
-  party: { ordinal: number; name: string; station: string | null; onOtherSurvey: boolean }[];
+  party: {
+    ordinal: number;
+    name: string;
+    station: string | null;
+    onOtherSurvey: boolean;
+    notOnDrawing: boolean;
+  }[];
 }
 
 /** The answer to one focus: whether the model turned out to hold what the prose named. */

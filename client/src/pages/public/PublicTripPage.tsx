@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, type CSSProperties, type ReactNode } from 'react';
-import { EyeInvisibleOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { EyeInvisibleOutlined, QuestionCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { Alert, Card, Flex, Result, Spin, Tag, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { usePublicTrip, type PublicTripParticipant } from '../../api/hooks.ts';
 import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
+import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
@@ -94,6 +95,34 @@ export default function PublicTripPage() {
     [data, t],
   );
 
+  /**
+   * The stations the drawing on this page turns out not to hold.
+   *
+   * <b>Read from the viewer and from nowhere else, and it is the one thing on this page the server
+   * cannot answer.</b> Everything else here was decided before the envelope was sent: which places
+   * may be shown at all, which were measured in another survey. Whether the file this browser
+   * parsed contains a station of the name it was given is known only after it is parsed, in this
+   * browser, by the viewer that parsed it. Empty until a drawing is loaded, so a phone that has not
+   * downloaded the model yet claims nothing about it.
+   *
+   * Station paths, as the viewer answers them: a name either is one of the drawing's nodes or it is
+   * not, and two followers' places that share a name share the answer.
+   */
+  const [unplacedStations, setUnplacedStations] = useState<ReadonlySet<string>>(noStationsMissing);
+  /**
+   * Whether this page was given a station and the drawing above holds no node of that name.
+   *
+   * Two questions in order, exactly as the coordinator's own table asks them. A place measured in
+   * another survey is not drawn here at all, so it can never also be missing from a drawing it was
+   * never going to be on — and a follower told both things about one person is being told two
+   * different stories at once.
+   */
+  const offModel = (participant: PublicTripParticipant) =>
+    !participant.positionOnOtherModel
+    && participant.stationName !== null
+    && participant.stationName.length > 0
+    && unplacedStations.has(participant.stationName);
+
   // Antd's tokens reach the stylesheet as custom properties on the page's own root, so the
   // rules below stay readable and the colours still come from the one place they are decided.
   const palette = {
@@ -175,6 +204,32 @@ export default function PublicTripPage() {
         // No moment either, and for the reason the server sends none: an hour beside a place this
         // page cannot show would date something a reader can only read as the place beside it.
         placedAt: null,
+      };
+    }
+    // A station this page was given, and the drawing above holds no station of that name.
+    //
+    // <b>The name stays and is marked, rather than being replaced by a tag.</b> A family reading
+    // this is being told where somebody was reported, and that is still true — it is the drawing
+    // that cannot show it, because the survey has been re-exported with its stations renamed since
+    // the report was made. Dropping the name would take away the one thing this page is for;
+    // leaving it unmarked beside a drawing showing nobody would let a reader search that drawing
+    // for a dot that was never going to be there.
+    if (offModel(participant)) {
+      return {
+        shown: (
+          <>
+            {participant.stationName}
+            <Tag
+              icon={<WarningOutlined />}
+              color="warning"
+              className="public-trip-position-mark"
+              data-testid={`public-trip-position-not-on-model-${participant.ordinal}`}
+            >
+              {t('publicTrip.positionNotOnModel')}
+            </Tag>
+          </>
+        ),
+        placedAt: participant.positionRecordedAt,
       };
     }
     if (participant.stationName !== null && participant.stationName.length > 0) {
@@ -324,17 +379,34 @@ export default function PublicTripPage() {
             party to come out, who needs to know that a place they cannot see is not a place
             nobody knows.
 
-            `message` rather than the `title` its three siblings above pass: the library's alert has
-            no `title` prop, so that string lands on the wrapper as a browser tooltip and is never
-            read on the phone this page is designed for. Fixed here rather than on all four, because
-            the other three are somebody else's line this week; it is a defect in them too. */}
+            `title`, like its three siblings above. This one passed `message` under a comment saying
+            the library's alert had no `title` prop and that the other three were therefore losing
+            their headings to a browser tooltip. That was true of the version it was written
+            against and is not true of the one installed: `title` is the prop and `message` is the
+            deprecated spelling of it, which this alert was announcing on the console of every
+            phone that opened a trip with a place on another survey. */}
         {data.participants.some((participant) => participant.positionOnOtherModel) && (
           <Alert
             type="info"
             showIcon
-            message={t('publicTrip.otherModelTitle')}
+            title={t('publicTrip.otherModelTitle')}
             description={t('publicTrip.otherModelBody')}
             data-testid="public-trip-other-model"
+          />
+        )}
+
+        {/* And the one the server could not have warned about, because it is not a fact about the
+            report at all: the drawing itself has no station of the name that was reported. Said
+            once for the page as well as beside each name, for the same reason its neighbour above
+            is — the mark beside a name is a label, and a reader waiting for a party to come out
+            needs to be told that a place the drawing cannot show is not a place nobody knows. */}
+        {data.participants.some(offModel) && (
+          <Alert
+            type="warning"
+            showIcon
+            title={t('publicTrip.notOnModelTitle')}
+            description={t('publicTrip.notOnModelBody')}
+            data-testid="public-trip-not-on-model"
           />
         )}
 
@@ -343,6 +415,9 @@ export default function PublicTripPage() {
             <CaveViewPanel
               fileUrl={pinnedModelUrl}
               fileName={unnamedViewerFileName(model.format)}
+              // Which stations the viewer could not place a marker at, so the list of people
+              // below this one says it in words. The list is the half read on a phone.
+              onUnplacedStationsChange={setUnplacedStations}
               // The same share of the screen the signed-in panel reserves, and for the same
               // reason: the viewer takes every gesture that begins inside it, so it must never
               // be the only thing under a thumb. dvh because a phone's address bar collapses.

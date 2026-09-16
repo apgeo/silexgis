@@ -36,6 +36,15 @@
  * known; it is unplaceable <em>here</em>. Folding it into "nobody has reported a place" would tell
  * a coordinator — or a family reading a published page — that nobody knows where a caver is, when
  * somebody does. That is the single worst sentence either surface can produce.
+ *
+ * <b>A true here is not a promise that anything can be drawn, and that is why there are two
+ * rules.</b> This one compares two recorded identifiers and can be answered from a row, which is
+ * what lets the server answer it before a published page is handed out. Whether the drawing on
+ * screen actually holds a station of the name a report gives is a question about the contents of a
+ * parsed file, and no identifier can answer it: a survey re-exported with its stations renamed
+ * keeps its model id and loses every name. Only the viewer can say, and `placedOnModel.ts` is
+ * where what it says is turned into an answer. Merging the two would make one of them wrong —
+ * this one would need a viewer it cannot have, or that one would be back to comparing ids.
  */
 export function drawableOn(
   recordedOn: string | null | undefined,

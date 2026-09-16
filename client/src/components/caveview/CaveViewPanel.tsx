@@ -23,6 +23,7 @@ import {
   pathOf,
   type PickedModelPart,
 } from '../../caveview/modelParts.ts';
+import { noStationsMissing, stationsNotOnModel } from '../../caveview/placedOnModel.ts';
 import { mediaForStation } from '../../caveview/stationMedia.ts';
 import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
 import {
@@ -101,6 +102,29 @@ export interface CaveViewPanelProps {
    * pages, only one of which has a trip at all. Absent means no markers and no chrome for them.
    */
   trackedCavers?: readonly TrackedCaver[];
+  /**
+   * Told which stations the loaded model turns out to hold no node for.
+   *
+   * <b>Only this panel can answer it, and the surfaces that most need the answer are not in
+   * it.</b> Whether a station somebody named exists in the drawing is a fact about the parsed file
+   * and is known to the viewer alone; the coordinator's table sits above this panel and a
+   * published page's list of people sits beside it, and both of them state a station as a place
+   * somebody is. So the answer is handed back out rather than kept to the list drawn over the
+   * model.
+   *
+   * <b>Stations rather than the people standing at them, which is what makes the answer usable
+   * outside this panel.</b> What the viewer knows is a property of the survey it parsed, true
+   * whoever is drawn on it and true of nobody at all; the party this panel is drawing is not
+   * necessarily the party the caller is listing — a replay hands this panel the watch as it stood
+   * an hour ago while the table above it goes on showing the watch as it stands. Keyed by person
+   * the answer would be about the wrong party the moment those two differ.
+   *
+   * Answered again whenever it changes, with an empty set when nothing is claimed — including as
+   * this panel goes off the screen, because a claim about the drawing is only true while there is
+   * one. A caller that keeps the last answer after closing the model would be marking a table
+   * against a drawing nobody is looking at.
+   */
+  onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
   /**
    * Opts into the viewer's own row of controls, placed over the model.
    *
@@ -342,6 +366,7 @@ export default function CaveViewPanel({
   onPartPick,
   surveyModelId,
   trackedCavers,
+  onUnplacedStationsChange,
   toolbar = false,
   stationMedia,
   crsLookup,
@@ -384,6 +409,20 @@ export default function CaveViewPanel({
    */
   const [showMarkerLabels, setShowMarkerLabels] = useState(true);
   const [openCaverId, setOpenCaverId] = useState<string | null>(null);
+  /**
+   * Which stations the loaded model could not place a marker at — asked of the viewer, never
+   * inferred.
+   *
+   * <b>A set of station paths in React state, which is not the rule this panel keeps for viewer
+   * objects.</b> Nothing of the viewer's is held here: what is kept is the answer to a question,
+   * as plain strings, because three surfaces have to draw it and a ref draws nothing.
+   *
+   * It only ever grows while one model stays loaded, and it is emptied when another is. What the
+   * viewer says about a station is a fact about the file it parsed, so it does not stop being true
+   * when the marker that revealed it is taken off the model — which is what happens to the whole
+   * party every time a coordinator engages the replay under this panel.
+   */
+  const [unplacedStations, setUnplacedStations] = useState<ReadonlySet<string>>(noStationsMissing);
   /** Which row of the watch the camera was last sent to, and whose station carries the mark. */
   const [shownPlace, setShownPlace] = useState<TrackedPlace | null>(null);
   /**
@@ -515,6 +554,12 @@ export default function CaveViewPanel({
     // A new viewer draws none of the old one's markers, so nothing is drawn until they are added
     // again — which the marker effect does as soon as this one reports the model loaded.
     drawnMarkersRef.current = new Map();
+    // And nothing is known yet about what the next model can place. Left standing, the answer
+    // about the survey just taken off the screen would be drawn against the one arriving — on a
+    // panel that is mid-load and showing no model at all, which is where a stale claim is least
+    // visible and most wrong. This is also the one moment the answer may shrink: a station name is
+    // missing from a *drawing*, so what is learned about one survey is worth nothing about another.
+    setUnplacedStations(noStationsMissing);
     // A picture opened from the model on screen belongs to that model. A second survey file loaded
     // under it would leave a photograph of another cave's pitch head sitting over the new one.
     setOpenedPictures(null);
@@ -762,7 +807,56 @@ export default function CaveViewPanel({
     }
 
     drawnMarkersRef.current = wanted;
+
+    // ---- And then ask the viewer what actually went onto the model ----
+    //
+    // <b>The viewer has always known, and this is where it is finally asked.</b> Every call above
+    // answers with the marker as the viewer now holds it, and a marker naming a station the loaded
+    // model has no node for is held <em>unresolved</em> — kept, in case a model containing it is
+    // loaded later, and drawn nowhere at all. The answers used to be thrown away, so a watch whose
+    // stations the model does not hold drew nobody while the list beside it went on naming each
+    // caver and the station they were at. Nothing was logged. Nothing was said. A coordinator reads
+    // that as "we know where they are" over an empty cave.
+    //
+    // <b>The whole list is asked for rather than the answers collected one by one</b>, and the
+    // difference is not tidiness: an add and a move each answer about the marker they acted on,
+    // while a poll that changed nobody's station calls neither — and a marker already standing can
+    // stop being drawable without this panel touching it, because the viewer re-resolves all of
+    // them whenever a survey is loaded. One read covers the markers this pass moved and the ones
+    // it did not.
+    //
+    // <b>What is learned is kept, and it is kept about stations rather than about people.</b> A
+    // marker taken off the model takes its evidence with it, so an answer rebuilt from the markers
+    // standing at this instant would forget a station the moment nobody was at it. That is not a
+    // corner: the coordinator's panel replaces this panel's whole party whenever its replay is
+    // engaged, so the answer would empty itself while the table above went on printing those same
+    // stations as places somebody is — the very sentence this exists to stop. A station the drawing
+    // has no node for stays one for as long as that drawing is loaded, and the load above is where
+    // it is unlearned.
+    //
+    // <b>The moment is safe, which is the thing that would otherwise make this lie.</b> A marker
+    // added before the survey is parsed is unresolved and would be reported as unplaceable; the
+    // vendored viewer dispatches its survey-loaded event before the one this panel takes as ready,
+    // and nothing here adds a marker until then. So by the time anything above has run, the model
+    // is parsed and the answer is the final one.
+    //
+    // This cannot feed itself: the same set is answered when nothing was learned, and it is named
+    // in no dependency list of this effect.
+    setUnplacedStations((known) => stationsNotOnModel(known, viewer.getLiveMarkers()));
   }, [trackedCavers, showMarkerTimes, status, t, i18n.language, today]);
+
+  // ---- Handing that answer to the surfaces outside this panel ----
+  //
+  // The table above the model and a published page's list of people each state a station as where
+  // somebody is, and neither of them can ask the viewer anything. Told on every change rather than
+  // polled, and told again — empty — when this panel goes off the screen, because "the drawing does
+  // not hold this station" is a claim about a drawing that is on it.
+  const onUnplacedRef = useRef(onUnplacedStationsChange);
+  onUnplacedRef.current = onUnplacedStationsChange;
+  useEffect(() => {
+    onUnplacedRef.current?.(unplacedStations);
+  }, [unplacedStations]);
+  useEffect(() => () => onUnplacedRef.current?.(noStationsMissing), []);
 
   // ---- Whether the markers say who they are ----
   //
@@ -1001,6 +1095,8 @@ export default function CaveViewPanel({
       {trackedCavers !== undefined && trackedCavers.length > 0 && status !== 'error' && (
         <CaveViewTrackingOverlay
           cavers={trackedCavers}
+          // Which stations the model on screen has no node for, as the viewer answered it.
+          unplacedStations={unplacedStations}
           showTimes={showMarkerTimes}
           onShowTimesChange={setShowMarkerTimes}
           showLabels={showMarkerLabels}

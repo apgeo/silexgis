@@ -26,7 +26,14 @@ const caver = (overrides: Partial<TrackedCaver> = {}): TrackedCaver => ({
 const asked: (TrackedPlace | null)[] = [];
 
 /** The overlay with the panel's own state around it, which is where the open card lives. */
-function Harness({ cavers }: { cavers: readonly TrackedCaver[] }) {
+function Harness({
+  cavers,
+  unplacedStations,
+}: {
+  cavers: readonly TrackedCaver[];
+  /** What the viewer answered about this model — the panel's own answer, handed straight down. */
+  unplacedStations?: ReadonlySet<string>;
+}) {
   const [open, setOpen] = useState<string | null>(null);
   const [times, setTimes] = useState(false);
   const [labels, setLabels] = useState(true);
@@ -34,6 +41,7 @@ function Harness({ cavers }: { cavers: readonly TrackedCaver[] }) {
   return (
     <CaveViewTrackingOverlay
       cavers={cavers}
+      unplacedStations={unplacedStations}
       showTimes={times}
       onShowTimesChange={setTimes}
       showLabels={labels}
@@ -117,6 +125,131 @@ describe('CaveViewTrackingOverlay', () => {
     // No moment is put on a place that was not drawn: an hour beside nothing is read as dating
     // whatever is nearest, which here would be a station this panel deliberately did not show.
     expect(screen.getByTestId('caveview-caver-card-position-at')).toHaveTextContent('—');
+  });
+
+  it('says a station the drawing does not hold, and tells it apart from a place measured elsewhere', () => {
+    // The fourth answer, and the one nothing in a report can reveal. Ana's place was measured on
+    // this very survey — every identifier agrees — and the drawing on screen has no station of
+    // that name, because the survey was re-exported with its stations renamed. Read as the two
+    // rows below it, she is simply somewhere; read as an absence she is nowhere.
+    render(
+      <Harness
+        cavers={[
+          caver({ caverId: 'a', name: 'Ana' }),
+          // The twin: same list, same row shape, a station of the same survey — one the drawing
+          // does hold.
+          caver({ caverId: 'b', name: 'Bogdan', position: { kind: 'station', station: 'pestera.sala.4' } }),
+          caver({ caverId: 'c', name: 'Cora', position: { kind: 'otherModel' } }),
+        ]}
+        unplacedStations={new Set(['pestera.galerie.7'])}
+      />,
+    );
+
+    const missing = screen.getByTestId('caveview-caver-a');
+    expect(missing).toHaveTextContent('Not on the drawing');
+    const drawn = screen.getByTestId('caveview-caver-b');
+    expect(drawn).toHaveTextContent('4');
+    expect(drawn).not.toHaveTextContent('Not on the drawing');
+    // And not folded into either of the answers that already exist: this is not a withholding and
+    // it is not a place belonging to another survey.
+    expect(screen.queryByTestId('caveview-position-withheld')).not.toBeInTheDocument();
+    expect(screen.getByTestId('caveview-caver-c')).toHaveTextContent('On another survey');
+  });
+
+  it('says it of everybody standing at the station, because it is the station that is missing', () => {
+    // What the viewer answers is a fact about the survey it parsed — a name either is one of the
+    // drawing's nodes or it is not — so two people reported at one station are both undrawn, and
+    // nothing had to name either of them for that to be true.
+    render(
+      <Harness
+        cavers={[
+          caver({ caverId: 'a', name: 'Ana' }),
+          caver({ caverId: 'b', name: 'Bogdan' }),
+          caver({ caverId: 'c', name: 'Cora', position: { kind: 'station', station: 'pestera.sala.4' } }),
+        ]}
+        unplacedStations={new Set(['pestera.galerie.7'])}
+      />,
+    );
+
+    expect(screen.getByTestId('caveview-caver-a')).toHaveTextContent('Not on the drawing');
+    expect(screen.getByTestId('caveview-caver-b')).toHaveTextContent('Not on the drawing');
+    // And the twin standing somewhere the drawing does hold, on the same render.
+    expect(screen.getByTestId('caveview-caver-c')).not.toHaveTextContent('Not on the drawing');
+  });
+
+  it('keeps the station on the card and says there what is wrong with it', () => {
+    // The row has one line and spends it on the fact. The card is where the name survives — it is
+    // what was reported and what would be read out over a phone — with the reason beside it.
+    render(<Harness cavers={[caver()]} unplacedStations={new Set(['pestera.galerie.7'])} />);
+
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+
+    const card = screen.getByTestId('caveview-caver-card');
+    expect(card).toHaveTextContent('pestera.galerie.7');
+    expect(screen.getByTestId('caveview-caver-card-not-on-model')).toHaveTextContent(
+      'this drawing holds no station of that name',
+    );
+  });
+
+  it('asks for no flight to a station the drawing does not hold, and asks for one that it does', () => {
+    // Pressing a row sends the camera. A station the model has no node for rejects the move and
+    // answers with a notice about a link nobody followed, so the offer is withdrawn before it is
+    // pressed rather than apologised for afterwards.
+    render(
+      <Harness
+        cavers={[
+          caver({ caverId: 'a', name: 'Ana' }),
+          caver({ caverId: 'b', name: 'Bogdan', position: { kind: 'station', station: 'pestera.sala.4' } }),
+        ]}
+        unplacedStations={new Set(['pestera.galerie.7'])}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('caveview-caver-a'));
+    expect(asked).toEqual([null]);
+
+    fireEvent.click(screen.getByTestId('caveview-caver-b'));
+    expect(asked.at(-1)).toEqual({ kind: 'caver', id: 'b', station: 'pestera.sala.4' });
+  });
+
+  it('heads a team by a member the drawing can show, and says so when it can show none', () => {
+    // A heading is a claim about where a team is, and it is read before the names under it. The
+    // newest word here belongs to somebody the drawing cannot place, so a heading taken from the
+    // newest word alone would name a station the model is showing nobody at.
+    const team = (id: string, station: string, at: string) =>
+      caver({
+        caverId: id,
+        name: id,
+        teamId: 'team-1',
+        teamTitle: 'Echipa 1',
+        position: { kind: 'station', station },
+        lastRecordedAt: at,
+      });
+
+    const { rerender } = render(
+      <Harness
+        cavers={[team('a', 'pestera.galerie.7', '2026-09-12T09:00:00Z'), team('b', 'pestera.sala.4', '2026-09-12T11:00:00Z')]}
+        unplacedStations={new Set(['pestera.sala.4'])}
+      />,
+    );
+
+    const heading = screen.getByTestId('caveview-team-team-1');
+    expect(heading).toHaveTextContent('7');
+    expect(heading).not.toHaveTextContent('Not on the drawing');
+    expect(heading).not.toBeDisabled();
+
+    // And when the drawing can place nobody on the team, the heading says that rather than the
+    // dash it would otherwise fall to — which reads as a team nobody has reported at all.
+    rerender(
+      <Harness
+        cavers={[team('a', 'pestera.galerie.7', '2026-09-12T09:00:00Z'), team('b', 'pestera.sala.4', '2026-09-12T11:00:00Z')]}
+        unplacedStations={new Set(['pestera.galerie.7', 'pestera.sala.4'])}
+      />,
+    );
+
+    const headless = screen.getByTestId('caveview-team-team-1');
+    expect(headless).toHaveTextContent('Not on the drawing');
+    expect(headless).toBeDisabled();
   });
 
   it('opens and closes a caver’s card from a tap, with no hover anywhere in it', () => {

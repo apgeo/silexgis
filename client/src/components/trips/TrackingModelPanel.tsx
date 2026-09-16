@@ -49,6 +49,22 @@ export interface TrackingModelPanelProps {
   selectedCaverIds: readonly string[];
   /** Called once a report has landed, so the selection that produced it can be let go. */
   onRecorded: () => void;
+  /**
+   * Passed on from the viewer: the stations the drawing turns out not to hold.
+   *
+   * Carried up rather than answered here, because the table above this panel says the same
+   * stations in words and is the surface somebody actually reads. Empty while this panel is
+   * closed — there is no drawing then, and nothing to say about one.
+   *
+   * <b>Stations, and the replay below is the reason it has to be stations.</b> Engaging the replay
+   * hands the viewer the watch as it stood at a past moment, so the party being drawn stops being
+   * the party the table above is listing. An answer naming people would then be an answer about
+   * the wrong ones — it would drop every mark from that table the moment the scrubber moved, and
+   * put a mark on a row whose station the drawing holds. A station name means the same thing to
+   * both halves and to every moment of the trip, so it is forwarded exactly as it arrives and the
+   * replay changes nothing about it.
+   */
+  onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
 }
 
 /** Taller than a phone can spare, shorter than a desk screen would waste. */
@@ -180,6 +196,7 @@ export default function TrackingModelPanel({
   canEdit,
   selectedCaverIds,
   onRecorded,
+  onUnplacedStationsChange,
 }: TrackingModelPanelProps) {
   const { t } = useTranslation();
   const narrow = useIsMobile();
@@ -510,6 +527,9 @@ export default function TrackingModelPanel({
             height={modelHeight(narrow, large)}
             surveyModelId={model.id}
             trackedCavers={shown}
+            // Handed straight through, replay or no replay: what comes back names stations of the
+            // drawing, which is the one thing about this panel a scrubbed moment cannot change.
+            onUnplacedStationsChange={onUnplacedStationsChange}
             // A leg or a splay names no single place to report from, so it clears the offer rather
             // than leaving the last station standing under a press that meant something else.
             onPartPick={

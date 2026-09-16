@@ -178,12 +178,41 @@ export interface CaveViewer {
   highlightStation(ref: CaveViewRef): unknown;
   /** Takes off the mark either of the two above put on. Safe with nothing marked. */
   clearHighlight(): void;
-  /** Places a marker over the model. A reference the loaded model does not hold is held
-   *  unresolved and placed when a model containing it is loaded. */
-  addLiveMarker(id: string, ref: CaveViewRef, options?: CaveViewLiveMarkerOptions): unknown;
-  /** Slides a marker to another station. Null when no marker of that id was added. */
-  moveLiveMarker(id: string, ref: CaveViewRef, options?: CaveViewLiveMarkerOptions): unknown;
+  /**
+   * Places a marker over the model. A reference the loaded model does not hold is held
+   * unresolved and placed when a model containing it is loaded.
+   *
+   * <b>The answer says whether it went anywhere, and it is not decoration.</b> The marker comes
+   * back as the viewer now holds it, `resolved` and all — so a station the loaded model has no
+   * node for is reported here, at the moment of asking, and a caller that throws this away has no
+   * other way of learning it. Null only for a marker asked for with no id at all.
+   */
+  addLiveMarker(
+    id: string,
+    ref: CaveViewRef,
+    options?: CaveViewLiveMarkerOptions,
+  ): CaveViewLiveMarker | null;
+  /**
+   * Slides a marker to another station, answering it as the viewer now holds it — the same
+   * `resolved` an add answers, about the station it has just been slid to. Null when no marker of
+   * that id was added.
+   */
+  moveLiveMarker(
+    id: string,
+    ref: CaveViewRef,
+    options?: CaveViewLiveMarkerOptions,
+  ): CaveViewLiveMarker | null;
   removeLiveMarker(id: string): boolean;
+  /**
+   * Every marker the viewer is holding, in the order they were added.
+   *
+   * <b>The one way to ask about markers nothing has just touched.</b> An add and a move each
+   * answer for the marker they acted on; the viewer re-resolves <em>all</em> of them whenever a
+   * survey is loaded, so a marker placed before that and left alone can change its answer with
+   * nothing having called anything. This is that answer, for all of them at once, and each marker
+   * is a copy rather than the viewer's own object.
+   */
+  getLiveMarkers(): readonly CaveViewLiveMarker[];
   /**
    * What the single marker drawn in place of several at one station says. The viewer knows only
    * how many they are, so without this a party standing together is labelled with its count.

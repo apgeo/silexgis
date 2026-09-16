@@ -7,6 +7,7 @@ import { usePublicTrip } from '../../api/hooks.ts';
 import CaveViewPanel, {
   type CaveViewFocusRequest,
 } from '../../components/caveview/CaveViewPanel.tsx';
+import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
@@ -65,6 +66,20 @@ export default function PublicTripEmbedPage() {
 
   const crsLookup = useMemo(() => envelopeCrsLookup(model), [model]);
 
+  /**
+   * The stations the drawing in this frame turns out not to hold, as the viewer answers it.
+   *
+   * <b>This frame has no chrome, so everything it knows it knows on somebody else's behalf.</b> The
+   * page next door marks such a station in its own list of people; here the list of people is the
+   * article around the frame, written by a club against the message below. Read from the viewer and
+   * from nowhere else: no server can say whether a parsed file contains a station of a given name.
+   *
+   * Empty until a drawing has been parsed, so a frame still downloading a model claims nothing
+   * about it — which matters more here than anywhere, because the first announcement goes out
+   * before the envelope has even landed.
+   */
+  const [unplacedStations, setUnplacedStations] = useState<ReadonlySet<string>>(noStationsMissing);
+
   // Kept fresh across re-reads rather than pinned like the model URL, and kept as one object while
   // it is the same photographs — both for the reason the page next door gives at length. The case
   // is sharper here: an embed sits inside an article about a trip that finished months ago, opened
@@ -76,20 +91,35 @@ export default function PublicTripEmbedPage() {
    * The party as the framing document is told it: a place, a name, a station or nothing, and which
    * kind of nothing it is.
    *
-   * The second half is not a nicety. A station is absent for two unrelated reasons — nobody has
-   * reported a place, or a place was reported on a different survey than the one in this frame and
-   * cannot honestly be drawn on it — and the article around this viewer writes its prose against
-   * what it is told. Told only "no station", it says nobody knows where somebody underground is.
+   * The second half is not a nicety. A station is absent for three unrelated reasons — nobody has
+   * reported a place; a place was reported on a different survey than the one in this frame and
+   * cannot honestly be drawn on it; or a place was reported naming a station of this survey and the
+   * drawing turns out to hold no node of that name — and the article around this viewer writes its
+   * prose against what it is told. Told only "no station", it says nobody knows where somebody
+   * underground is.
+   *
+   * <b>The third is the one the frame itself has to discover, and it was the one missing here.</b>
+   * The other two are settled before the envelope is sent; this one is known only once this browser
+   * has parsed the model, so it can only come from the viewer inside this frame. Without it the
+   * message said "Ana is at cave.deep.3", the article printed that and linked it, and the drawing
+   * beside the prose showed nobody — with the honest answer arriving only after a reader pressed
+   * the link. So the station is withheld the same way a place on another survey is, and the reason
+   * is handed over beside it.
    */
   const party = useMemo(
     () =>
-      cavers.map((caver) => ({
-        ordinal: Number(caver.caverId),
-        name: caver.name,
-        station: caver.position.kind === 'station' ? caver.position.station : null,
-        onOtherSurvey: caver.position.kind === 'otherModel',
-      })),
-    [cavers],
+      cavers.map((caver) => {
+        const station = caver.position.kind === 'station' ? caver.position.station : null;
+        const notOnDrawing = station !== null && unplacedStations.has(station);
+        return {
+          ordinal: Number(caver.caverId),
+          name: caver.name,
+          station: notOnDrawing ? null : station,
+          onOtherSurvey: caver.position.kind === 'otherModel',
+          notOnDrawing,
+        };
+      }),
+    [cavers, unplacedStations],
   );
   const loaded = data !== undefined;
 
@@ -139,14 +169,24 @@ export default function PublicTripEmbedPage() {
     }
   }, [announce, loaded, party]);
 
-  /** Where a place named by the host page is in this model, or null when it is nowhere. */
+  /**
+   * Where a place named by the host page is in this model, or null when it is nowhere.
+   *
+   * <b>A station this drawing does not hold is nowhere, and it is answered as nowhere here rather
+   * than by flying at it.</b> Handed to the panel it would reject, and the reader — who pressed a
+   * link in an article and is looking at a frame with no chrome in it — would get a camera that did
+   * not move and a notice inside somebody else's page. The frame answers `found: false` instead, in
+   * the same breath as a place nobody has reported, which is what lets the article grey the link out
+   * rather than offer one that goes nowhere.
+   */
   const stationOfCaver = useCallback(
     (ref: string) => {
       const ordinal = Number.parseInt(ref, 10);
       const participant = data?.participants.find((person) => person.ordinal === ordinal);
-      return participant?.stationName ?? null;
+      const station = participant?.stationName ?? null;
+      return station === null || unplacedStations.has(station) ? null : station;
     },
-    [data],
+    [data, unplacedStations],
   );
 
   useEffect(() => {
@@ -257,6 +297,9 @@ export default function PublicTripEmbedPage() {
         // chosen by whoever pasted the snippet, and the page that scrolls is theirs.
         height="100%"
         trackedCavers={cavers}
+        // The one thing this frame learns for itself. The list of people that would have said it is
+        // the article around the frame, so it leaves here on the message instead.
+        onUnplacedStationsChange={setUnplacedStations}
         crsLookup={crsLookup}
         focusRequest={focusRequest}
         toolbar

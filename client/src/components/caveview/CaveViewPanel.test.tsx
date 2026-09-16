@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { CAVEVIEW_HOME, type Cv2Namespace } from '../../caveview/loadCaveView.ts';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
+import { shortNameOf } from '../../caveview/modelParts.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import { reveal, resetViewControlsForTests } from '../../viewlinks/viewTargets.ts';
 import CaveViewPanel from './CaveViewPanel.tsx';
@@ -35,9 +36,39 @@ const focusStation = vi.fn<(ref: unknown, options?: unknown) => Promise<unknown>
 const focusSurvey = vi.fn<(ref: unknown) => Promise<void>>();
 const highlightStation = vi.fn();
 const clearHighlight = vi.fn();
-const addLiveMarker = vi.fn();
-const moveLiveMarker = vi.fn();
-const removeLiveMarker = vi.fn();
+/**
+ * The stations this fake model does not hold, which is the whole of what makes a marker unresolved.
+ *
+ * <b>Modelled rather than stubbed, because the thing under test is whether the panel asks.</b> The
+ * vendored viewer keeps a marker whose reference names no station of the loaded survey and reports
+ * it back as `resolved: false` — it does not refuse it, and it raises nothing. A fake that simply
+ * returned a fixed list would let a panel that never asked pass, so this one answers from what it
+ * was told and from what the panel actually did to it.
+ */
+const missingStations = new Set<string>();
+/** What the fake viewer is holding, keyed as the real one keys markers. */
+const heldMarkers = new Map<string, { id: string; ref: unknown; resolved: boolean }>();
+const held = (id: string, ref: unknown) => ({
+  id,
+  ref,
+  resolved: !missingStations.has(String(ref)),
+});
+
+const addLiveMarker = vi.fn((id: string, ref: unknown, _options?: unknown) => {
+  const marker = held(id, ref);
+  heldMarkers.set(id, marker);
+  return marker;
+});
+const moveLiveMarker = vi.fn((id: string, ref: unknown, _options?: unknown) => {
+  if (!heldMarkers.has(id)) {
+    return null;
+  }
+  const marker = held(id, ref);
+  heldMarkers.set(id, marker);
+  return marker;
+});
+const removeLiveMarker = vi.fn((id: string) => heldMarkers.delete(id));
+const getLiveMarkers = vi.fn(() => [...heldMarkers.values()]);
 const setLiveMarkerClusterLabel = vi.fn();
 const setStationMedia = vi.fn();
 const clearStationMedia = vi.fn();
@@ -80,6 +111,7 @@ class FakeViewer {
   addLiveMarker = addLiveMarker;
   moveLiveMarker = moveLiveMarker;
   removeLiveMarker = removeLiveMarker;
+  getLiveMarkers = getLiveMarkers;
   setLiveMarkerClusterLabel = setLiveMarkerClusterLabel;
   setStationMedia = setStationMedia;
   clearStationMedia = clearStationMedia;
@@ -190,6 +222,8 @@ const markerOperations = () =>
 beforeEach(() => {
   listeners.clear();
   viewers.length = 0;
+  missingStations.clear();
+  heldMarkers.clear();
   lastViewerConfig = undefined;
   stationLabelOver = false;
   lastToolbar = undefined;
@@ -465,6 +499,150 @@ describe('CaveViewPanel', () => {
 
       expect(addLiveMarker).not.toHaveBeenCalled();
       expect(screen.getByTestId('caveview-position-withheld')).toBeInTheDocument();
+    });
+
+    it('says so when the model turns out to hold no station of the name a report gave', async () => {
+      // The defect this pair exists for. The viewer accepts a marker for a station the loaded
+      // survey has no node for, keeps it, draws it nowhere and reports it back unresolved — and
+      // the list beside the model went on naming the caver and the station, over a model showing
+      // nobody. Nothing was logged and nothing was said.
+      missingStations.add('p.g.7');
+
+      await renderReady({ trackedCavers: [caver()] });
+
+      expect(addLiveMarker).toHaveBeenCalledWith('caver-1', 'p.g.7', expect.any(Object));
+      const row = screen.getByTestId('caveview-caver-caver-1');
+      expect(within(row).getByTestId('caveview-position-not-on-model')).toBeInTheDocument();
+      // And the heading over them, which names a station of its own drawn from the same members:
+      // a team read as standing at a place the drawing cannot show is the same false sentence one
+      // line up.
+      const team = screen.getByTestId('caveview-team-team-a');
+      expect(within(team).getByTestId('caveview-position-not-on-model')).toBeInTheDocument();
+    });
+
+    it('says nothing of the kind about a station the model does hold', async () => {
+      // The twin, and the one that makes the test above mean something: the same watch, the same
+      // station, a model that holds it — and the row reads as the place it is.
+      await renderReady({ trackedCavers: [caver()] });
+
+      const row = screen.getByTestId('caveview-caver-caver-1');
+      expect(within(row).queryByTestId('caveview-position-not-on-model')).not.toBeInTheDocument();
+      expect(row).toHaveTextContent(shortNameOf('p.g.7'));
+    });
+
+    it('offers no flight to a station the drawing does not hold, and still opens the card', async () => {
+      // Pressing a row is how a reader asks "which of these is that". A station the model has no
+      // node for answers that with a rejected move and a notice about a link nobody followed, so
+      // the row stops offering the flight — while staying the tap path to the person's own card,
+      // which is the only one a phone has.
+      missingStations.add('p.g.7');
+      await renderReady({ trackedCavers: [caver()] });
+
+      fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+
+      expect(focusStation).not.toHaveBeenCalled();
+      expect(screen.getByTestId('caveview-caver-card')).toBeInTheDocument();
+      expect(screen.getByTestId('caveview-caver-card-not-on-model')).toBeInTheDocument();
+    });
+
+    it('still flies to a station the drawing does hold', async () => {
+      // The twin. Same press, same row, a model that holds the station.
+      await renderReady({ trackedCavers: [caver()] });
+
+      fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+
+      await waitFor(() =>
+        expect(focusStation).toHaveBeenCalledWith('p.g.7', { highlight: true }),
+      );
+      expect(screen.queryByTestId('caveview-caver-card-not-on-model')).not.toBeInTheDocument();
+    });
+
+    it('tells whoever mounted it which stations the model could not place a marker at', async () => {
+      // The table above this panel and a published page's list of people say the same stations in
+      // words, and neither of them can ask a viewer anything. So the answer leaves the panel.
+      missingStations.add('p.g.7');
+      const answers: ReadonlySet<string>[] = [];
+
+      await renderReady({
+        trackedCavers: [caver(), caver({ caverId: 'caver-2', name: 'Radu', position: { kind: 'station', station: 'p.g.9' } })],
+        onUnplacedStationsChange: (stations: ReadonlySet<string>) => answers.push(stations),
+      });
+
+      // The station, not the person standing at it: what the viewer knows is a property of the
+      // file it parsed, and the surfaces reading this answer are not always listing this party.
+      expect([...(answers.at(-1) ?? [])]).toEqual(['p.g.7']);
+    });
+
+    it('goes on saying it when the party being drawn is replaced', async () => {
+      // <b>What engaging the replay under the coordinator's panel does.</b> The viewer is handed
+      // the watch as it stood at a past moment, so every live marker comes off the model — and an
+      // answer rebuilt from the markers standing at that instant would empty itself, while the
+      // table above went on printing those same stations with a freshness age under them. The
+      // drawing has not changed and neither has what it holds.
+      missingStations.add('p.g.7');
+      const answers: ReadonlySet<string>[] = [];
+      const listen = (stations: ReadonlySet<string>) => answers.push(stations);
+      const view = await renderReady({
+        trackedCavers: [caver()],
+        onUnplacedStationsChange: listen,
+      });
+      expect([...(answers.at(-1) ?? [])]).toEqual(['p.g.7']);
+
+      // The party of an earlier moment: nobody had been reported yet, so there is nothing to draw.
+      view.rerender(
+        <CaveViewPanel
+          fileUrl="http://files.local/survey"
+          fileName="demo.lox"
+          surveyModelId={MODEL}
+          trackedCavers={[]}
+          onUnplacedStationsChange={listen}
+        />,
+      );
+
+      expect(removeLiveMarker).toHaveBeenCalledWith('caver-1');
+      expect([...(answers.at(-1) ?? [])]).toEqual(['p.g.7']);
+    });
+
+    it('never says it of a station the drawing turned out to hold', async () => {
+      // The twin of the pair above, driven the same way: a party replaced by another party teaches
+      // nothing about the stations of either, and a station the model placed is never named.
+      missingStations.add('p.g.7');
+      const answers: ReadonlySet<string>[] = [];
+      const listen = (stations: ReadonlySet<string>) => answers.push(stations);
+      const view = await renderReady({
+        trackedCavers: [caver()],
+        onUnplacedStationsChange: listen,
+      });
+
+      view.rerender(
+        <CaveViewPanel
+          fileUrl="http://files.local/survey"
+          fileName="demo.lox"
+          surveyModelId={MODEL}
+          trackedCavers={[caver({ caverId: 'caver-2', name: 'Radu', position: { kind: 'station', station: 'p.g.9' } })]}
+          onUnplacedStationsChange={listen}
+        />,
+      );
+
+      expect([...(answers.at(-1) ?? [])]).toEqual(['p.g.7']);
+      expect(answers.at(-1)?.has('p.g.9')).toBe(false);
+    });
+
+    it('claims nothing about a drawing that is no longer on the screen', async () => {
+      // A panel taken off the screen has stopped answering the question, and the answer it gave
+      // last belongs to a model nobody is looking at. Left standing it would mark a table against
+      // a drawing that has been closed.
+      missingStations.add('p.g.7');
+      const answers: ReadonlySet<string>[] = [];
+      const view = await renderReady({
+        trackedCavers: [caver()],
+        onUnplacedStationsChange: (stations: ReadonlySet<string>) => answers.push(stations),
+      });
+      expect([...(answers.at(-1) ?? [])]).toEqual(['p.g.7']);
+
+      view.unmount();
+
+      expect([...(answers.at(-1) ?? [])]).toEqual([]);
     });
 
     it('puts a lone caver’s time on their label, where the switch can also take it off', async () => {

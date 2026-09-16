@@ -75,6 +75,13 @@ interface GivenProps {
   trackedCavers?: readonly TrackedCaver[];
   height?: number | string;
   onPartPick?: (part: PickedModelPart) => void;
+  /**
+   * Where the viewer answers which stations the drawing turns out not to hold.
+   *
+   * Carried up rather than kept, because the table above this panel says those same stations in
+   * words — see the test that engages a replay and watches it keep flowing.
+   */
+  onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
   /** Which of the viewer's own controls this panel asks for — see the test that reads it. */
   toolbar?: boolean | { buttons?: readonly string[] };
   /**
@@ -193,7 +200,11 @@ const onRecorded = vi.fn();
 function show(
   state = tracking(),
   events: TrackingEvent[] = [],
-  props: { canEdit?: boolean; selectedCaverIds?: string[] } = {},
+  props: {
+    canEdit?: boolean;
+    selectedCaverIds?: string[];
+    onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+  } = {},
 ) {
   return render(
     // The dialog inside this panel words its own answers, and that needs the library's message
@@ -207,6 +218,7 @@ function show(
         canEdit={props.canEdit ?? true}
         selectedCaverIds={props.selectedCaverIds ?? [ANA]}
         onRecorded={onRecorded}
+        onUnplacedStationsChange={props.onUnplacedStationsChange}
       />
     </App>,
   );
@@ -589,6 +601,41 @@ describe('TrackingModelPanel', () => {
     fireEvent.click(screen.getByTestId('trip-tracking-replay-leave'));
 
     expect(given!.trackedCavers).toEqual(live);
+  });
+
+  /**
+   * The drawing's own answer keeps reaching the table above, replay or no replay.
+   *
+   * <b>The two halves of this surface show different parties, and only one of them is in here.</b>
+   * Engaging the replay hands the viewer the watch as it stood at some past moment; the table above
+   * this panel goes on listing the watch as it stands, and has no idea a replay is running. What
+   * comes back from the viewer names stations of the drawing — the one thing a scrubbed moment
+   * cannot change — so it is forwarded exactly as it arrives. Held back or reworded into people
+   * while a replay ran, it would drop every mark from that table the moment the scrubber moved, and
+   * leave a station reading as a place somebody is over a model drawing nobody.
+   */
+  it('goes on carrying the drawing’s answer up while a replay is engaged', () => {
+    log = [
+      atStation(ANA, '2026-09-12T06:40:00Z', 'p.g.3'),
+      entered(ANA, '2026-09-12T06:10:00Z'),
+    ];
+    const answers: ReadonlySet<string>[] = [];
+    show(tracking(), [entered(ANA, '2026-09-12T06:10:00Z')], {
+      onUnplacedStationsChange: (stations) => answers.push(stations),
+    });
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    const channel = given!.onUnplacedStationsChange;
+    expect(channel).toBeTypeOf('function');
+
+    fireEvent.click(screen.getByTestId('trip-tracking-replay-open'));
+
+    // The party drawn is now the party of an earlier moment — and the channel is the same one.
+    expect(given!.trackedCavers![0].position).toEqual({ kind: 'unreported' });
+    expect(given!.onUnplacedStationsChange).toBe(channel);
+
+    act(() => given!.onUnplacedStationsChange?.(new Set(['p.g.7'])));
+
+    expect([...(answers.at(-1) ?? [])]).toEqual(['p.g.7']);
   });
 
   /**

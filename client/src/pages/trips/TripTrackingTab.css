@@ -128,14 +128,25 @@
   white-space: normal;
 }
 
-/* And the mark that says the place was measured in another survey than the one this watch is on.
-   Laid out exactly like the gap mark above and for the same reason: on its own line, under the
-   station and the age, so that a narrow cell cannot set it beside the station name and have the
+/* And the two marks that say a station is not a place anybody can be found at on the survey being
+   drawn: one for a place measured in another survey, one for a station this drawing has no node
+   for. Laid out like the gap mark above and for the same reason: on their own line, under the
+   station and the age, so that a narrow cell cannot set one beside the station name and have the
    two read as one phrase — "cave.deep.3 on another survey" is the sentence, but only when the
    words are in that order and a wrapped tag does not guarantee it. Colour from the library's
-   preset, so both themes are answered without a value written here. */
-.tracking-position-other-model {
-  display: inline-block;
+   preset, so both themes are answered without a value written here.
+
+   <b>`block` rather than the `inline-block` this carried, which is a correction.</b> Its own line
+   was always the intent and only happened by luck: the line above a mark is the reported depth,
+   which is a block — and a station report has no depth, so there was no such line and the tag sat
+   beside the name, where a column this narrow cut it off. Measured on a desk screen at the width
+   the table gives this column, with the tag reading as part of the station path and its last word
+   off the edge. `fit-content` keeps the tag's background around its words rather than drawing it
+   across the cell. */
+.tracking-position-other-model,
+.tracking-position-not-on-model {
+  display: block;
+  width: fit-content;
   margin-top: 2px;
   margin-inline-end: 0;
   white-space: normal;

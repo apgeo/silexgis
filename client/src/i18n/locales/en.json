@@ -1346,6 +1346,8 @@
       "positionsOnOtherModelBody": "This watch now uses a different survey model than the one those reports were made against. A station name means whatever the survey it was measured in says it means, so those places are not drawn on the survey in use — they are marked as reported on another survey instead of being moved onto it. Report a place again to put somebody on the survey now in use.",
       "positionOtherModel": "On another survey",
       "positionOtherModelDetail": "This place was reported against a different survey model than the one this watch uses now — either the watch was re-pointed, or the survey it was measured in has been deleted. A station name means whatever the survey it was measured in says it means, so this is a true record of what was reported and not where this caver is on the survey in force. Report a place again to put them on it.",
+      "positionNotOnModel": "Not on the drawing",
+      "positionNotOnModelDetail": "This place was reported against the survey this watch uses, and the drawing of it opened below holds no station of that name — so nobody can be marked there, and the model shows this caver nowhere. A survey re-exported with its stations renamed does that to every place reported before it, under the same survey, with nobody having changed the watch. What was reported stands; where it is on the drawing does not. Report a place again to put this caver back on it.",
       "modelSwapClearsDatumTitle": "Saving this will clear the depth datum and the station filter",
       "modelSwapClearsDatumBody": "Both name stations of the survey in use now, and those names mean nothing — or somewhere else — in another survey, so they are not carried across. Until a reference station is set again, a depth report will be refused: set it on the new survey straight after saving, or type one into the box below and save both together. Places already reported keep the survey they were measured against.",
       "modelSwapClearedDatumNotice": "The depth datum and the station filter were cleared with the survey. Set a reference station on the new survey before reporting a depth.",
@@ -2219,6 +2221,8 @@
       "positionMaybeWithheldDetail": "This caver's last report carried no place — going in, coming out and a note never do. So either nobody has reported where they are, or a position was reported and is one you may not be told.",
       "positionOtherModel": "On another survey",
       "positionOtherModelDetail": "Somebody did report where this caver is, but they were placed on a different survey of this cave than the one drawn here. The same station name can mean a different place in another survey, so no marker is drawn rather than one that might be wrong. The report itself is on the trip's log.",
+      "positionNotOnModel": "Not on the drawing",
+      "positionNotOnModelDetail": "Somebody reported this caver at {{station}}, on the very survey drawn here — but this drawing holds no station of that name, so there is nowhere to mark them. That is what a survey re-exported with its stations renamed does to every place reported before it, without anybody having changed anything. The report itself stands on the trip's log, and the station above is what it said.",
       "positionUnreported": "No position reported"
     }
   },
@@ -2894,6 +2898,9 @@
     "positionOtherModel": "Reported on another survey",
     "otherModelTitle": "Some places are not shown on this drawing",
     "otherModelBody": "Somebody reported where these cavers are, but the place was measured on a different survey of this cave than the one drawn here. The same station name can mean a different place in another survey, so it is left off the drawing rather than shown somewhere it might not be. It is not that nobody knows where they are.",
+    "positionNotOnModel": "Not on the drawing",
+    "notOnModelTitle": "The drawing does not hold some of these stations",
+    "notOnModelBody": "These cavers were reported at stations of the very survey drawn above, and that drawing has no station of those names — the survey has been redrawn since, and the names moved with it. Their places are named here in words instead of being marked on the drawing. It is not that nobody knows where they are: somebody reported each of them, and what was reported is what is written beside their name.",
     "closedTitle": "This trip is over",
     "closedBody": "The watch has been closed, so this page no longer changes. What it shows is the last word about each person.",
     "withheldTitle": "Some positions are not shown here",

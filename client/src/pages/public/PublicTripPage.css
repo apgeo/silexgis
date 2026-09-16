@@ -161,6 +161,21 @@
   font-size: 0.72rem;
 }
 
+/* The mark that says the drawing above holds no station of the name beside it.
+
+   Its own line, under the station and over the age, for the reason the age itself is on one: at
+   360px a fact is a column 130px wide, so a mark left to run on lands wherever the station name
+   happened to stop wrapping — beside it on a short name and under it on a long one, which is the
+   same mark reading as two different things on two rows of one list. `fit-content` keeps the tag's
+   own background around its words instead of drawing it across the column. */
+.public-trip-position-mark {
+  display: block;
+  width: fit-content;
+  margin-top: 2px;
+  margin-inline-end: 0;
+  white-space: normal;
+}
+
 .public-trip-foot {
   padding: 12px;
   text-align: center;

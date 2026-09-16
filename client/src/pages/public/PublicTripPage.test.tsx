@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import '../../i18n';
 import type { PublicTripEnvelope, PublicTripParticipant } from '../../api/hooks.ts';
@@ -57,6 +57,8 @@ let given:
       crsLookup?: (code: string) => Promise<string | null>;
       /** Built from the envelope, and absent when it carried nothing; see the tests that say why. */
       stationMedia?: ReadonlyMap<string, readonly { url: string; thumbnailUrl?: string; caption?: string }[]>;
+      /** How the viewer tells this page what the drawing could not place — see the test that drives it. */
+      onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
     }
   | undefined;
 let mounts = 0;
@@ -531,6 +533,41 @@ describe('the drawing on a followed page', () => {
     expect(screen.getByTestId('viewer')).toBeTruthy();
     expect(reachedBeyondTheEnvelope).toEqual([]);
     expect(given!.stationMedia).toBeUndefined();
+  });
+
+  it('says which places the drawing cannot show, once for the page and beside each name', () => {
+    // The one thing on this page the server could not have warned about. Ana's station was
+    // measured on the very survey drawn above, so nothing in the envelope is out of the ordinary —
+    // and the drawing this browser parsed holds no station of that name, which only the viewer
+    // that parsed it can say. Unmarked, a family reads a name, a station and an age, and then
+    // searches a drawing for a dot that was never going to be there.
+    ready({ model });
+    render(<PublicTripPage />);
+    expect(screen.queryByTestId('public-trip-not-on-model')).toBeNull();
+
+    act(() => {
+      (given!.onUnplacedStationsChange as (stations: ReadonlySet<string>) => void)(
+        // The station, as the viewer answers it: what it knows is which names are nodes of the
+        // file it parsed, and that is true of whoever is reported there.
+        new Set(['p.g.7']),
+      );
+    });
+
+    const card = screen.getByTestId('public-trip-caver-1');
+    expect(within(card).getByTestId('public-trip-position-not-on-model-1')).toBeInTheDocument();
+    // The station stays: it is what somebody reported, and it is what would be read out over a
+    // phone. What is added is that the drawing above cannot show it.
+    expect(card).toHaveTextContent('p.g.7');
+    expect(screen.getByTestId('public-trip-not-on-model')).toHaveTextContent(
+      'The drawing does not hold some of these stations',
+    );
+    expect(screen.getByTestId('public-trip-not-on-model')).toHaveTextContent(
+      /It is not that nobody knows where they are/,
+    );
+
+    // The twin, on the same render: a reader watching somebody the drawing can place is told
+    // nothing new about them.
+    expect(screen.getByTestId('public-trip-caver-3')).not.toHaveTextContent('Not on the drawing');
   });
 
   /**

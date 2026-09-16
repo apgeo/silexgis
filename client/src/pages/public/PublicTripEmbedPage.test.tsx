@@ -124,6 +124,21 @@ function deliver(source: Window, origin: string, data: unknown) {
 }
 
 const hello = { silexgis: EMBED_CHANNEL, v: EMBED_PROTOCOL, type: 'hello' };
+
+/**
+ * The viewer answering what the drawing it parsed turned out not to hold.
+ *
+ * The one thing this frame learns for itself: no server can say whether a parsed file contains a
+ * station of a given name, so it arrives from the panel and from nowhere else. Driven here the way
+ * the real panel drives it — a set of station paths, answered again whenever it changes.
+ */
+const answerUnplaced = (stations: ReadonlySet<string>) => {
+  const tell = given?.onUnplacedStationsChange as ((s: ReadonlySet<string>) => void) | undefined;
+  if (tell === undefined) {
+    throw new Error('the frame gave the viewer nowhere to answer that question');
+  }
+  act(() => tell(stations));
+};
 const focus = (kind: string, ref: string) => ({
   silexgis: EMBED_CHANNEL,
   v: EMBED_PROTOCOL,
@@ -327,10 +342,57 @@ describe('the conversation with the page that framed it', () => {
       type: 'ready',
       party: [
         // A place exists and is not on this drawing: no station is handed over, and the reason is.
-        { ordinal: 1, name: 'Ana', station: null, onOtherSurvey: true },
+        { ordinal: 1, name: 'Ana', station: null, onOtherSurvey: true, notOnDrawing: false },
         // The twins: nobody has placed this one, and this one is placed on the survey in frame.
-        { ordinal: 2, name: 'Caver 2', station: null, onOtherSurvey: false },
-        { ordinal: 3, name: 'Dan', station: 'p.g.7', onOtherSurvey: false },
+        { ordinal: 2, name: 'Caver 2', station: null, onOtherSurvey: false, notOnDrawing: false },
+        { ordinal: 3, name: 'Dan', station: 'p.g.7', onOtherSurvey: false, notOnDrawing: false },
+      ],
+    });
+  });
+
+  /**
+   * And the third kind of nothing, which is the one this frame has to discover for itself.
+   *
+   * <b>The article writes its prose from this message, and that is what made the omission
+   * expensive.</b> Ana's place was measured on the very survey in the frame — every identifier
+   * agrees — and the drawing holds no node of that name, because the survey was re-exported with
+   * its stations renamed. Told the station anyway, a club's page printed "Ana is at cave.deep.3"
+   * and linked it, beside a drawing showing nobody; the honest answer arrived only after a reader
+   * pressed the link. So the station is withheld exactly as a place on another survey is, and the
+   * reason is handed over beside it.
+   */
+  it('withholds a station its own drawing cannot show, and says which kind of nothing that is', () => {
+    answer = {
+      data: envelope({
+        participants: [
+          participant({ ordinal: 1, label: 'Ana', stationName: 'cave.deep.3', in: true }),
+          participant({ ordinal: 2, label: 'Dan', stationName: 'p.g.7', in: true }),
+        ],
+      }),
+      isPending: false,
+      error: null,
+    };
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+
+    deliver(parent, HOST, hello);
+    // Nothing is claimed about a model that has not been parsed yet, which is the state the first
+    // announcement always goes out in.
+    expect(sent.at(-1)!.message).toMatchObject({
+      party: [
+        { ordinal: 1, station: 'cave.deep.3', notOnDrawing: false },
+        { ordinal: 2, station: 'p.g.7', notOnDrawing: false },
+      ],
+    });
+
+    answerUnplaced(new Set(['cave.deep.3']));
+
+    expect(sent.at(-1)!.message).toMatchObject({
+      type: 'ready',
+      party: [
+        { ordinal: 1, name: 'Ana', station: null, onOtherSurvey: false, notOnDrawing: true },
+        // The twin, in the same message: a station this drawing does hold is handed over as one.
+        { ordinal: 2, name: 'Dan', station: 'p.g.7', onOtherSurvey: false, notOnDrawing: false },
       ],
     });
   });
@@ -504,6 +566,26 @@ describe('the conversation with the page that framed it', () => {
     const second = given?.focusRequest as CaveViewFocusRequest;
 
     expect(second).not.toBe(first);
+  });
+
+  it('answers a link to a place its drawing cannot show, rather than flying at it', () => {
+    // The offer is withdrawn before it is taken up. Handed to the panel this rejects, and what a
+    // reader gets — in a frame with no chrome, inside somebody else's article — is a camera that
+    // did not move and a notice in a box they did not ask for. Answered as not found, the article
+    // can grey the link out instead. The twin is the test four above: the same link, the same
+    // person, a drawing that holds the station, and the flight is asked for.
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    answerUnplaced(new Set(['p.g.7']));
+
+    deliver(parent, HOST, focus('caver', '1'));
+
+    expect(given?.focusRequest).toBeUndefined();
+    expect(sent.at(-1)?.message).toMatchObject({
+      type: 'focused',
+      found: false,
+      target: { kind: 'caver', ref: '1' },
+    });
   });
 
   it('tells the framer whether the model held what the prose named', () => {

@@ -58,6 +58,7 @@ import {
   type TrackingStanding,
 } from '../../components/trips/trackingWatch.ts';
 import { drawableOn } from '../../caveview/drawableOn.ts';
+import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 // The position's age is worded by the followed page's own rule, called rather than copied — the
@@ -122,6 +123,24 @@ export default function TripTrackingTab({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** Whose caption on the published page is being set, or null while nobody's is. */
   const [naming, setNaming] = useState<TrackingParticipant | null>(null);
+  /**
+   * The stations the model below turns out not to hold, as the viewer in it answers.
+   *
+   * <b>Kept here so the table can say it, which is the whole point of carrying it this far.</b>
+   * This is the surface somebody reads to answer "where is everybody"; the model is opened
+   * deliberately and costs a download. A station name printed here with a freshness age under it
+   * reads as a current place on the survey in force — and when the drawing holds no station of
+   * that name, that is exactly the sentence that has to be stopped.
+   *
+   * <b>Stations, not the people at them, because the panel below is not always drawing this
+   * table's party.</b> Its replay hands the viewer the watch as it stood at some earlier moment
+   * while this table goes on showing the watch as it stands, so an answer naming people would be
+   * an answer about the wrong ones. A station name is the same name in both.
+   *
+   * Empty while the model is closed, because it is answered by a viewer and there is none: what is
+   * said is "the drawing opened below does not hold this", never "this station does not exist".
+   */
+  const [unplacedStations, setUnplacedStations] = useState<ReadonlySet<string>>(noStationsMissing);
   /**
    * The moment photographs are being hung on, and who they are about, or null while nothing is.
    *
@@ -445,6 +464,35 @@ export default function TripTrackingTab({
   );
 
   /**
+   * A station that was reported against the survey in force, and that the drawing of it cannot
+   * show.
+   *
+   * <b>Not the tag above it, and the difference is the one this mark exists for.</b> That one says
+   * the report was measured in a <em>different</em> survey — two recorded identifiers that do not
+   * match, which this page can work out for itself from the row. This one says the identifiers
+   * match perfectly and the drawing still holds no station of that name: a survey re-exported with
+   * its stations renamed does that to every place reported before it, under the same model id,
+   * with nobody having touched the watch. Nothing in a row can reveal it. The viewer in the panel
+   * below is asked, and this is its answer.
+   *
+   * <b>The station stays on screen and is marked, for the same reason the other one is.</b> It is
+   * a true record of what was said and it is what would be read out over a phone; what is not true
+   * is that anybody can be found at it on the drawing below.
+   */
+  const notOnModelTag = (caverId: string) => (
+    <Tooltip title={t('trips.tracking.positionNotOnModelDetail')}>
+      <Tag
+        color="warning"
+        icon={<WarningOutlined />}
+        className="tracking-position-not-on-model"
+        data-testid={`trip-tracking-position-not-on-model-${caverId}`}
+      >
+        {t('trips.tracking.positionNotOnModel')}
+      </Tag>
+    </Tooltip>
+  );
+
+  /**
    * How far the station a depth was recorded at sits from the depth itself, where that is knowable.
    *
    * The model each report was made against is carried through rather than assumed, because the
@@ -556,15 +604,27 @@ export default function TripTrackingTab({
           surveyModelId: participant.positionSurveyModelId,
         }),
       );
+      // Two questions in order, and they are not the same question. The first is which survey this
+      // place was measured in, which two stored ids answer. The second is whether the drawing of
+      // that survey actually holds the station — which only the viewer below can answer, and which
+      // it is asked about a place that passed the first test. A report measured elsewhere is not
+      // drawn at all, so it is never also marked as missing from a drawing it was never on.
+      const here = drawableOn(participant.positionSurveyModelId, data.surveyModelId);
+      // Looked up by the station's own name, which is also what keeps a depth report out of this:
+      // a row placed by metres alone names no station, so there is nothing to find and nothing
+      // about the drawing to say.
+      const missing =
+        here && participant.stationName !== null && unplacedStations.has(participant.stationName);
       return {
-        shown: drawableOn(participant.positionSurveyModelId, data.surveyModelId) ? (
-          shown
-        ) : (
-          <>
-            {shown}
-            {otherModelTag(participant.caverId)}
-          </>
-        ),
+        shown:
+          here && !missing ? (
+            shown
+          ) : (
+            <>
+              {shown}
+              {here ? notOnModelTag(participant.caverId) : otherModelTag(participant.caverId)}
+            </>
+          ),
         placedAt: participant.positionRecordedAt,
       };
     }
@@ -1072,6 +1132,10 @@ export default function TripTrackingTab({
         // with these already chosen, so the fast path never depends on having ticked anybody.
         selectedCaverIds={[...selected]}
         onRecorded={() => setSelected(new Set())}
+        // Which stations the viewer in it could not place a marker at, so the table above says it
+        // too. Answered empty while the model is closed, which is what keeps this table from
+        // marking a row against a drawing nobody has opened.
+        onUnplacedStationsChange={setUnplacedStations}
       />
 
       {canEdit && (

@@ -1346,6 +1346,8 @@
       "positionsOnOtherModelBody": "Această urmărire folosește acum alt model topo decât cel față de care au fost făcute acele rapoarte. Un nume de stație înseamnă ceea ce spune ridicarea în care a fost măsurat, așa că acele locuri nu se desenează pe ridicarea în uz — sunt marcate ca raportate pe altă ridicare, nu mutate pe ea. Raportează din nou un loc ca să pui pe cineva pe ridicarea folosită acum.",
       "positionOtherModel": "Pe altă ridicare",
       "positionOtherModelDetail": "Acest loc a fost raportat față de alt model topo decât cel folosit acum de această urmărire — fie urmărirea a fost îndreptată în altă parte, fie ridicarea în care a fost măsurat a fost ștearsă. Un nume de stație înseamnă ceea ce spune ridicarea în care a fost măsurat, așa că aceasta este o consemnare adevărată a ceea ce s-a raportat, nu locul unde se află acest om pe ridicarea în vigoare. Raportează din nou un loc ca să îl pui pe ea.",
+      "positionNotOnModel": "Nu e pe desen",
+      "positionNotOnModelDetail": "Acest loc a fost raportat față de ridicarea folosită de această urmărire, iar desenul ei deschis mai jos nu are nicio stație cu acel nume — deci nimeni nu poate fi marcat acolo, iar modelul nu îl arată nicăieri pe acest om. O ridicare reexportată cu stațiile redenumite face asta fiecărui loc raportat înainte, sub aceeași ridicare, fără ca nimeni să fi schimbat urmărirea. Ceea ce s-a raportat rămâne adevărat; locul de pe desen nu. Raportează din nou un loc ca să îl pui înapoi pe el.",
       "modelSwapClearsDatumTitle": "Salvarea va șterge reperul de adâncime și filtrul de stații",
       "modelSwapClearsDatumBody": "Amândouă numesc stații ale ridicării folosite acum, iar acele nume nu înseamnă nimic — sau înseamnă altceva — în altă ridicare, așa că nu sunt duse mai departe. Până când se stabilește din nou o stație de referință, un raport de adâncime va fi refuzat: stabilește-o pe noua ridicare imediat după salvare sau scrie una în câmpul de mai jos și salvează-le împreună. Locurile deja raportate păstrează ridicarea față de care au fost măsurate.",
       "modelSwapClearedDatumNotice": "Reperul de adâncime și filtrul de stații au fost șterse odată cu ridicarea. Stabilește o stație de referință pe noua ridicare înainte de a raporta o adâncime.",
@@ -2219,6 +2221,8 @@
       "positionMaybeWithheldDetail": "Ultimul raport al acestui om nu a purtat niciun loc — intrarea, ieșirea și o notă nu poartă niciodată unul. Deci ori nimeni nu a raportat unde se află, ori a fost raportată o poziție care nu îți poate fi comunicată.",
       "positionOtherModel": "Pe altă ridicare",
       "positionOtherModelDetail": "Cineva chiar a raportat unde se află acest om, dar a fost plasat pe altă ridicare a acestei peșteri decât cea desenată aici. Același nume de stație poate însemna alt loc într-o altă ridicare, așa că nu se desenează niciun marcaj în loc de unul care ar putea fi greșit. Raportul în sine se află în jurnalul turei.",
+      "positionNotOnModel": "Nu e pe desen",
+      "positionNotOnModelDetail": "Cineva a raportat acest om la {{station}}, chiar pe ridicarea desenată aici — dar acest desen nu are nicio stație cu acel nume, așa că nu are unde să fie marcat. Asta face o ridicare reexportată cu stațiile redenumite fiecărui loc raportat înainte, fără ca nimeni să fi schimbat ceva. Raportul în sine rămâne în jurnalul turei, iar stația de mai sus este ceea ce a spus.",
       "positionUnreported": "Nicio poziție raportată"
     }
   },
@@ -2894,6 +2898,9 @@
     "positionOtherModel": "Raportat pe altă ridicare",
     "otherModelTitle": "Unele locuri nu sunt arătate pe acest desen",
     "otherModelBody": "Cineva a raportat unde se află acești oameni, dar locul a fost măsurat pe altă ridicare a acestei peșteri decât cea desenată aici. Același nume de stație poate însemna alt loc în altă ridicare, așa că este lăsat în afara desenului, nu arătat undeva unde poate nu este. Asta nu înseamnă că nimeni nu știe unde se află.",
+    "positionNotOnModel": "Nu e pe desen",
+    "notOnModelTitle": "Desenul nu conține unele dintre aceste stații",
+    "notOnModelBody": "Acești oameni au fost raportați la stații chiar ale ridicării desenate mai sus, iar desenul nu are nicio stație cu acele nume — ridicarea a fost redesenată între timp, iar numele s-au mutat odată cu ea. Locurile lor sunt scrise aici în cuvinte, în loc să fie marcate pe desen. Asta nu înseamnă că nimeni nu știe unde se află: cineva i-a raportat pe fiecare, iar ceea ce s-a raportat este scris lângă numele lor.",
     "closedTitle": "Această tură s-a încheiat",
     "closedBody": "Urmărirea a fost închisă, așa că pagina nu se mai schimbă. Ce arată este ultimul cuvânt despre fiecare.",
     "withheldTitle": "Unele poziții nu sunt arătate aici",

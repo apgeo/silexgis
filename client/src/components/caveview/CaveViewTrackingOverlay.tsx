@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useMemo, useState } from 'react';
-import { CloseOutlined, EyeInvisibleOutlined, SwapOutlined, TeamOutlined } from '@ant-design/icons';
+import {
+  CloseOutlined,
+  EyeInvisibleOutlined,
+  SwapOutlined,
+  TeamOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
 import { Button, Switch, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { shortNameOf } from '../../caveview/modelParts.ts';
+import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import {
   teamStation,
   trackedCaverTeams,
@@ -37,6 +44,23 @@ function samePlace(left: TrackedPlace | null, right: TrackedPlace | null): boole
 export interface CaveViewTrackingOverlayProps {
   /** Everybody on the watch — including those no marker could be drawn for. */
   cavers: readonly TrackedCaver[];
+  /**
+   * The stations the model on screen turned out not to hold, as the viewer answered it.
+   *
+   * <b>A third thing, and the list would otherwise state it as a place.</b> These people were
+   * reported, at a named station, measured against this very survey — everything the rest of this
+   * component knows about them says they are drawn. They are not: the drawing holds no station of
+   * that name, which is what a survey re-exported with renamed stations does to every place
+   * reported before it. Listed with their station read as fact, over a model showing nobody, that
+   * is the same false sentence the withheld and the other-survey cases exist to refuse.
+   *
+   * Station paths rather than the people standing at them, because that is the shape of what the
+   * viewer knows: a name either is one of the drawing's nodes or it is not, whoever is reported
+   * there and whether or not anybody is.
+   *
+   * Empty while nothing is claimed, which is also what a panel with no model loaded answers.
+   */
+  unplacedStations?: ReadonlySet<string>;
   /**
    * Whether each marker's label carries the time of its last report beside the name.
    *
@@ -86,6 +110,13 @@ export interface CaveViewTrackingOverlayProps {
  * may not be told has no marker — there is nowhere to put one — and leaving them out of the list
  * as well would turn a withholding into an absence, which reads as nobody knowing where they are.
  *
+ * <b>And a station the drawing does not hold is listed as that, which is a third thing again.</b>
+ * Never reported, reported and kept from this reader, reported and named but not in the survey on
+ * screen: three states, and the last is the one nothing in a report can reveal — the viewer is the
+ * only thing that knows, and it is asked. Collapsed into any of the others it would be either an
+ * absence nobody reported or a secret nobody is keeping, and in both cases the list would go on
+ * naming a station beside a name over a model drawing nobody.
+ *
  * <b>A row is also the way to the place itself.</b> Reading a station name tells somebody who knows
  * the cave where a caver is; on a model of two hundred stations it tells nobody else anything. So
  * pressing a row sends the camera there and marks the station, and pressing it again takes the mark
@@ -99,6 +130,7 @@ export interface CaveViewTrackingOverlayProps {
  */
 export default function CaveViewTrackingOverlay({
   cavers,
+  unplacedStations = noStationsMissing,
   showTimes,
   onShowTimesChange,
   showLabels,
@@ -126,11 +158,50 @@ export default function CaveViewTrackingOverlay({
   // of the phone's screen spent restating that there is nothing to say.
   const grouped = groups.some((group) => group.teamId !== null);
 
+  /**
+   * Whether the model on screen could not put this person anywhere.
+   *
+   * <b>Asked of the viewer, not derived from the watch — which is the whole reason this is a
+   * separate question.</b> Everything else on this row is read off the report: who reported it,
+   * when, and which survey it was measured against. None of that can say whether the file the
+   * viewer parsed contains a station of the name the report gives, and a survey re-exported with
+   * its stations renamed keeps its model id while losing every one of those names.
+   *
+   * The kind is read rather than checked beside a set of people, because only a station is ever
+   * drawn: a depth is said in words and was never asked of the viewer, so it can be neither placed
+   * nor unplaced, and there is no name of one to look up.
+   */
+  const offModel = (caver: TrackedCaver) =>
+    caver.position.kind === 'station' && unplacedStations.has(caver.position.station);
+
+  /**
+   * The mark for a place the drawing cannot show, on a row that has one line for it.
+   *
+   * Drawn in the warning colour rather than the plain one the two absences beside it wear. Those
+   * say something about what this reader is being told; this says the model in front of them is
+   * not showing somebody it appears to be showing, which is a thing to notice rather than a thing
+   * to read.
+   */
+  const notOnModelTag = () => (
+    <Tag
+      icon={<WarningOutlined />}
+      color="warning"
+      data-testid="caveview-position-not-on-model"
+    >
+      {t('caveview.tracking.positionNotOnModel')}
+    </Tag>
+  );
+
   /** The short form for a list row: enough to recognise, never wide enough to push the name out. */
-  const shortPlace = (position: TrackedCaverPosition) => {
+  const shortPlace = (caver: TrackedCaver) => {
+    const position = caver.position;
     switch (position.kind) {
       case 'station':
-        return shortNameOf(position.station);
+        // The station name is not wrong and is not dropped — it is what was reported, and the card
+        // one press away says it in full with what is wrong with it. What a row has room for is
+        // the one thing a reader cannot get from the model itself: that this name is not one of
+        // the dots on it.
+        return offModel(caver) ? notOnModelTag() : shortNameOf(position.station);
       case 'depth':
         return t('trips.metres', { value: position.depthM });
       case 'withheld':
@@ -184,22 +255,50 @@ export default function CaveViewTrackingOverlay({
     }
   };
 
+  /**
+   * The station this person can be shown at, or null when there is nowhere to send the camera.
+   *
+   * <b>A station the drawing does not hold is nowhere to send it.</b> Flying to one rejects, and
+   * what a reader would see is the camera staying put and a notice saying the model does not hold
+   * what was asked for — the right words in the wrong place, arriving after a press that read as
+   * an offer. The row says so before it is pressed instead.
+   */
+  const placeOf = (caver: TrackedCaver): TrackedPlace | null =>
+    caver.position.kind === 'station' && !offModel(caver)
+      ? { kind: 'caver', id: caver.caverId, station: caver.position.station }
+      : null;
+
+  /**
+   * Where a team was last reported, and whether the drawing can show it.
+   *
+   * <b>Read through the same rule a single member's place is</b>, so a heading and the names under
+   * it cannot disagree about what the model is showing. Whoever spoke last among the members the
+   * model <em>can</em> place speaks for the team — that is the ordinary answer and the one a press
+   * flies to. Only when it can place none of them does this fall back to whoever spoke last of the
+   * rest, and then it says so: a heading reading "—" over a team whose members were all reported
+   * an hour ago is the absence this whole component exists to stop stating.
+   */
+  const teamPlace = (
+    members: readonly TrackedCaver[],
+  ): { station: string; placed: boolean } | null => {
+    const drawable = teamStation(members.filter((member) => !offModel(member)));
+    if (drawable !== null) {
+      return { station: drawable, placed: true };
+    }
+    const reported = teamStation(members);
+    return reported === null ? null : { station: reported, placed: false };
+  };
+
   /** Pressing a person: their card, and the place the camera is sent to. */
   const onPressCaver = (caver: TrackedCaver) => {
     const wasOpen = caver.caverId === openCaverId;
     onOpenCaver(wasOpen ? null : caver.caverId);
-    const place: TrackedPlace | null =
-      caver.position.kind === 'station'
-        ? { kind: 'caver', id: caver.caverId, station: caver.position.station }
-        : null;
+    const place = placeOf(caver);
     onShow(wasOpen || place === null || samePlace(shown, place) ? null : place);
   };
 
   const caverRow = (caver: TrackedCaver) => {
-    const here: TrackedPlace | null =
-      caver.position.kind === 'station'
-        ? { kind: 'caver', id: caver.caverId, station: caver.position.station }
-        : null;
+    const here = placeOf(caver);
     const marked = samePlace(shown, here);
     return (
       <Button
@@ -229,7 +328,7 @@ export default function CaveViewTrackingOverlay({
             {t('caveview.tracking.out')}
           </span>
         )}
-        <span className="caveview-tracking-person-place">{shortPlace(caver.position)}</span>
+        <span className="caveview-tracking-person-place">{shortPlace(caver)}</span>
       </Button>
     );
   };
@@ -289,9 +388,11 @@ export default function CaveViewTrackingOverlay({
             <div className="caveview-tracking-people">
               {grouped
                 ? groups.map((group) => {
-                    const station = teamStation(group.members);
+                    const place = teamPlace(group.members);
                     const here: TrackedPlace | null =
-                      station === null ? null : { kind: 'team', id: group.teamId, station };
+                      place === null || !place.placed
+                        ? null
+                        : { kind: 'team', id: group.teamId, station: place.station };
                     const marked = samePlace(shown, here);
                     return (
                       <div className="caveview-tracking-group" key={group.teamId ?? 'no-team'}>
@@ -312,7 +413,11 @@ export default function CaveViewTrackingOverlay({
                             {group.title ?? t('caveview.tracking.noTeam')}
                           </span>
                           <span className="caveview-tracking-person-place">
-                            {station === null ? '—' : shortNameOf(station)}
+                            {place === null
+                              ? '—'
+                              : place.placed
+                                ? shortNameOf(place.station)
+                                : notOnModelTag()}
                           </span>
                         </Button>
                         {group.members.map(caverRow)}
@@ -440,6 +545,19 @@ export default function CaveViewTrackingOverlay({
           {open.position.kind === 'otherModel' && (
             <Typography.Text type="secondary" style={{ fontSize: 11 }}>
               {t('caveview.tracking.positionOtherModelDetail')}
+            </Typography.Text>
+          )}
+          {/* The station kept its place in the row above — it is what somebody reported and it is
+              what would be read out over a phone — and this is what has to be said next to it: the
+              drawing on screen holds no station of that name, so nobody is being marked there.
+              Said at length here because the row has one line and can only carry the fact. */}
+          {open.position.kind === 'station' && offModel(open) && (
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 11 }}
+              data-testid="caveview-caver-card-not-on-model"
+            >
+              {t('caveview.tracking.positionNotOnModelDetail', { station: open.position.station })}
             </Typography.Text>
           )}
         </div>
