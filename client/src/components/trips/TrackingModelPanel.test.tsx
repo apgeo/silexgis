@@ -16,6 +16,15 @@ let askedFor: string | undefined;
 /** The whole log the replay reads, and whether anything has asked for it yet. */
 let log: TrackingEvent[] = [];
 let logAskedFor: { tripLogId: string | undefined; enabled: boolean } | undefined;
+/**
+ * The model's links — where a station's pictures come from — and what was asked for them.
+ *
+ * Recorded rather than merely answered, because *whether* this was asked at all is the property
+ * under test: this tab is opened to record that a party went in, and the pictures must cost
+ * nothing until somebody opens the model.
+ */
+let links: unknown[] = [];
+let linksAskedFor: { targetType: string; targetId: string; enabled: boolean } | undefined;
 
 /** The one call that writes a report, whichever surface filled it in. */
 const recordEvents = vi.fn();
@@ -32,6 +41,15 @@ vi.mock('../../api/hooks.ts', () => ({
     logAskedFor = { tripLogId, enabled };
     return { data: enabled ? log : undefined, isPending: !enabled, error: null };
   },
+  useResLinksForTarget: (
+    targetType: string,
+    targetId: string,
+    _params: unknown,
+    enabled: boolean,
+  ) => {
+    linksAskedFor = { targetType, targetId, enabled };
+    return { data: enabled ? { items: links } : undefined, isPending: !enabled, error: null };
+  },
 }));
 
 // The viewer itself is a three.js bundle holding a drawing context. What it is handed is the
@@ -44,6 +62,8 @@ interface GivenProps {
   onPartPick?: (part: PickedModelPart) => void;
   /** Which of the viewer's own controls this panel asks for — see the test that reads it. */
   toolbar?: boolean | { buttons?: readonly string[] };
+  /** The station pictures handed to the viewer, keyed by the station's dotted path. */
+  stationMedia?: ReadonlyMap<string, readonly { url: string }[]>;
 }
 let given: GivenProps | undefined;
 vi.mock('../caveview/CaveViewPanel.tsx', () => ({
@@ -164,6 +184,8 @@ beforeEach(() => {
   given = undefined;
   log = [];
   logAskedFor = undefined;
+  links = [];
+  linksAskedFor = undefined;
   narrow = false;
   coarse = false;
   onRecorded.mockReset();
@@ -234,6 +256,106 @@ describe('TrackingModelPanel', () => {
 
     expect(given!.trackedCavers).toHaveLength(1);
     expect(given!.trackedCavers![0].position).toEqual({ kind: 'withheld', certain: true });
+  });
+
+  /**
+   * The pictures a station carries, on the surface a watch is actually kept from.
+   *
+   * <b>What is being protected here is the closed tab.</b> This panel sits on a tab somebody opens
+   * to record that the party went in, on a phone, on a hillside — so the cost of the pictures has
+   * to be nothing at all until the model is opened, and that is a property of a request that is
+   * never made rather than of one that returns quickly.
+   */
+  describe('station pictures', () => {
+    const linkWithPhoto = (station: string, photo = 'photo-1') => ({
+      id: `link-${station}`,
+      members: [
+        {
+          id: `station-${station}`,
+          targetType: 'surveyModel',
+          targetId: MODEL,
+          anchorKind: 'modelStation',
+          anchor: { station },
+          display: null,
+        },
+        {
+          id: photo,
+          targetType: 'document',
+          targetId: photo,
+          anchorKind: 'whole',
+          anchor: null,
+          display: {
+            title: 'Sala mare',
+            thumbnailUrl: `http://files.local/${photo}/thumb?token=abc`,
+            mediaType: 'image/jpeg',
+          },
+        },
+      ],
+    });
+
+    it('asks for nothing until the model is opened', () => {
+      links = [linkWithPhoto('p.g.7')];
+      show(tracking(), []);
+
+      // The tab is drawn, the model is not. Asking here would spend a request on a hillside for
+      // pictures that have nowhere to be drawn.
+      expect(linksAskedFor).toMatchObject({ enabled: false });
+
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+      // Opened: now they are worth having, and they are asked for about the model rather than
+      // about the cave, which is what anchors them to a station at all.
+      expect(linksAskedFor).toEqual({
+        targetType: 'surveyModel',
+        targetId: MODEL,
+        enabled: true,
+      });
+    });
+
+    it('stops asking again when the model is closed', () => {
+      links = [linkWithPhoto('p.g.7')];
+      show(tracking(), []);
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      expect(linksAskedFor).toMatchObject({ enabled: true });
+
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+      expect(linksAskedFor).toMatchObject({ enabled: false });
+    });
+
+    it('hands the viewer the pictures at the station they are linked to', () => {
+      links = [linkWithPhoto('p.g.7')];
+      show(tracking(), []);
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+      const media = given!.stationMedia;
+      expect(media?.get('p.g.7')).toHaveLength(1);
+      // Derived from the published thumbnail URL, token and all — never the stored bytes. The
+      // same rule the survey viewer's strip is built by, because it is the same derivation.
+      expect(media?.get('p.g.7')?.[0].url).toContain('/thumb');
+      expect(media?.get('p.g.7')?.[0].url).not.toContain('/content');
+    });
+
+    it('shows no strip at a station nothing is linked to', () => {
+      links = [linkWithPhoto('p.g.7')];
+      show(tracking(), []);
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+      // A station with no pictures is absent from the map rather than present and empty, which is
+      // what the viewer reads as "draw no strip here".
+      expect(given!.stationMedia?.get('p.g.9')).toBeUndefined();
+    });
+
+    it('still shows the model when nothing is linked to any station', () => {
+      links = [];
+      show(tracking(), []);
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+      // An empty map, not a missing prop: its presence is what says this surface shows pictures at
+      // all, and a cave nobody has photographed yet is not a cave whose model should be withheld.
+      expect(given!.stationMedia?.size).toBe(0);
+      expect(screen.getByTestId('viewer')).toBeTruthy();
+    });
   });
 
   /**

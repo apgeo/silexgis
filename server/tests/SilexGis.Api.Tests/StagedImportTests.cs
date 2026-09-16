@@ -864,28 +864,84 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
         // The queue retries a job whose handler threw. A retry of one whose transaction had
         // already committed must not create every object a second time — which is why the batch
         // id is fixed by whoever queued it rather than invented by the run.
-        // The first of the two runs is the queue's own. The worker claims the row on its own
-        // schedule, so this waits for it rather than racing it: executing the handler by hand while
-        // the worker is already inside the same job is not a retry, it is two writers, and it fails
-        // on the batch's primary key for a reason that has nothing to do with what is asserted here.
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
-        while ((await SearchFeatureNamesAsync(editor)).Count < selection.Count)
-        {
-            DateTimeOffset.UtcNow.ShouldBeLessThan(deadline, "the queued import did not finish in time");
-            await Task.Delay(200);
-        }
+        //
+        // The first of the two runs is the queue's own, and the second waits for it to be over
+        // rather than racing it: running the handler by hand while a worker is still inside the
+        // same job is not a retry, it is two writers, and it fails on the batch's primary key for
+        // a reason that has nothing to do with what is asserted here.
+        var first = await QueuedJob.RunAsync(factory.Services, jobId);
+        first.Kind.ShouldBe(ProcessingJobKinds.ImportCommit);
+        (await SearchFeatureNamesAsync(editor)).Count.ShouldBe(selection.Count);
 
-        // The second run: the retry, by hand, of a job the queue has already carried through.
+        // The second run: the retry, by hand, of a job that has already been carried through.
+        await QueuedJob.RunAgainAsync(factory.Services, jobId);
+
+        (await SearchFeatureNamesAsync(editor)).Count.ShouldBe(selection.Count);
+    }
+
+    /// <summary>
+    /// Two runners inside one confirmation at the same moment create its objects once between
+    /// them, and neither is told the confirmation failed.
+    /// </summary>
+    /// <remarks>
+    /// Not a hypothetical. The queue has no owner column: the pass that returns interrupted work
+    /// to the queue matches on status and lane alone, so a second process starting up puts back a
+    /// job the first is currently inside, and both then run the same handler. The handler's own
+    /// "already done" read cannot stop that on its own — it is a read taken outside the
+    /// transaction that creates the batch, so both runners pass it while neither can see the
+    /// other's uncommitted row, and they meet on the batch's primary key instead. Whoever loses
+    /// used to have the failure recorded against the job, which told the person who confirmed the
+    /// import that it had failed while its objects sat there, created.
+    /// <para>
+    /// Driven by hand and concurrently rather than through the queue, so it does not depend on
+    /// winning a race: the row is claimed first, which is what keeps this host's own worker out of
+    /// it and leaves exactly the two runners this test is about.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Two_runners_inside_one_confirmation_create_its_objects_once()
+    {
+        var geofileId = await UploadGpxAsync(SimpleGpx($"Izbuc {tag}", 45.53, 25.44));
+        var selection = ClassifiedSourceIds(await PreviewAsync(editor, geofileId));
+        selection.ShouldNotBeEmpty();
+
+        var response = await editor.PostAsJsonAsync($"/api/v1/geofiles/{geofileId}/import/commit", new
+        {
+            options = DefaultOptions(),
+            selection,
+            decisions = new Dictionary<string, object>(),
+            withoutReview = false,
+        });
+        var accepted = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        var jobId = accepted.GetProperty("jobId").GetInt64();
+        var batchId = accepted.GetProperty("batchId").GetGuid();
+
+        // Claimed, so the only two runners are the ones started below.
         await using (var scope = factory.Services.CreateAsyncScope())
         {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var claimed = await db.ProcessingJobs
+                .Where(j => j.Id == jobId && j.Status == ProcessingJobStatus.Queued)
+                .ExecuteUpdateAsync(s => s.SetProperty(j => j.Status, ProcessingJobStatus.Running));
+            claimed.ShouldBe(1, "the worker took the job before this test could claim it");
+        }
+
+        await Task.WhenAll(RunOnceAsync(), RunOnceAsync());
+
+        // One batch, holding every object exactly once.
+        var batch = (await GetJsonAsync(editor, $"/api/v1/import-batches/{batchId}")).GetProperty("batch");
+        batch.GetProperty("createdCount").GetInt32().ShouldBe(selection.Count);
+        (await SearchFeatureNamesAsync(editor)).Count.ShouldBe(selection.Count);
+
+        async Task RunOnceAsync()
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             var job = await db.ProcessingJobs.SingleAsync(j => j.Id == jobId);
             var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
                 .Single(h => h.Kind == ProcessingJobKinds.ImportCommit);
             await handler.ExecuteAsync(job, CancellationToken.None);
         }
-
-        (await SearchFeatureNamesAsync(editor)).Count.ShouldBe(selection.Count);
     }
 
     private async Task<JsonElement> CommitAsync(
@@ -910,11 +966,11 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
     /// old synchronous answer was so the assertions above it still read the same.
     /// </summary>
     /// <remarks>
-    /// The job is executed here rather than waited for. The container runs a live worker, so
-    /// waiting would work most of the time and race the rest — and a test that sometimes asserts
-    /// against a batch that does not exist yet reports a defect in whatever it was checking.
-    /// Running the handler directly is the same code on the same row, at a moment this test
-    /// chooses.
+    /// The job is carried through here rather than merely waited for, so that it runs at a moment
+    /// this test chooses. This host keeps a live worker — every upload above depends on one — so
+    /// the row is claimed first and the handler is run only if the claim succeeded: the worker's
+    /// poll is entitled to the same row, and two executions of one confirmation both pass the
+    /// handler's "already done" read and then collide on the batch's primary key.
     /// </remarks>
     private async Task<JsonElement> RunCommitAsync(HttpClient client, HttpResponseMessage response)
     {
@@ -924,15 +980,8 @@ public sealed class StagedImportTests : IAsyncLifetime, IDisposable, IClassFixtu
         var jobId = accepted.GetProperty("jobId").GetInt64();
         var batchId = accepted.GetProperty("batchId").GetGuid();
 
-        await using (var scope = factory.Services.CreateAsyncScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-            var job = await db.ProcessingJobs.SingleAsync(j => j.Id == jobId);
-            job.Kind.ShouldBe(ProcessingJobKinds.ImportCommit);
-            var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-                .Single(h => h.Kind == ProcessingJobKinds.ImportCommit);
-            await handler.ExecuteAsync(job, CancellationToken.None);
-        }
+        var job = await QueuedJob.RunAsync(factory.Services, jobId);
+        job.Kind.ShouldBe(ProcessingJobKinds.ImportCommit);
 
         // Shaped as the synchronous answer was — `{ batch, failures }` — so every assertion
         // written against that still says what it said. The failures now live on the batch,

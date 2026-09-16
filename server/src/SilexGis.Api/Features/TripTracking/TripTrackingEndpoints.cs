@@ -162,19 +162,31 @@ public static class TripTrackingEndpoints
             byCaver.TryGetValue(caverId, out var own);
             var last = own?.Count > 0 ? own[^1] : null;
             // A note or an exit says something happened, not where — the displayed position
-            // stays the latest report that actually claimed a place.
+            // stays the latest report that actually claimed a place, and so does its own time.
+            // Those two travel together: a station carried beside the time of some later note
+            // is a place presented as fresher than it is, which on a live watch is read as a
+            // party that has moved.
             var lastPositioned = own?.LastOrDefault(TrackingWithholding.HasPosition);
             var lastTeamed = own?.LastOrDefault(e => e.TeamId is not null);
             var positionOpen = lastPositioned is null || TrackingWithholding.PositionOpen(lastPositioned, openCaves);
             if (!positionOpen) withheldAny = true;
+            // Standing is Domain's answer, not a test on the latest report. Which kinds speak to
+            // it, and which of those may overturn one already stated, is written down once there
+            // together with the argument for it — this read and the published one now ask the
+            // same question of the same rule, having each answered it themselves before.
+            var standing = TripTrackingRules.StandingOf(own);
             participants.Add(new TrackingParticipantDto(
                 caverId,
                 lastTeamed?.TeamId,
                 last?.Kind,
                 last?.RecordedAt,
+                // The position's own time rides the position's own withholding: when the
+                // station is kept back the time that would date it is kept back with it.
+                positionOpen ? lastPositioned?.RecordedAt : null,
                 positionOpen ? lastPositioned?.StationName : null,
                 positionOpen ? lastPositioned?.DepthEnteredM : null,
-                last?.Kind == TripPositionEventKind.Exited,
+                standing == TripStanding.Underground,
+                standing == TripStanding.Out,
                 labels.GetValueOrDefault(caverId)));
         }
 

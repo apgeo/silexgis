@@ -67,8 +67,28 @@ describe('stationMediaFromLinks', () => {
         url: 'http://files.local/photo-1/thumb?token=abc&size=1200',
         thumbnailUrl: 'http://files.local/photo-1/thumb?token=abc&size=160',
         caption: 'Sala mare',
+        // Which photograph this is, carried so that the click the viewer reports back names a
+        // document rather than a URL to be matched against the map that produced it.
+        documentId: 'photo-1',
       },
     ]);
+  });
+
+  it('derives every URL from the published thumbnail, never from the stored bytes', () => {
+    const media = stationMediaFromLinks([link([stationMember('p.g.7'), photoMember('photo-1')])], MODEL);
+
+    // The protection rule this file exists for, asserted rather than described: a strip is built
+    // only out of renderings of the published thumbnail URL, carrying the token that came with it.
+    // A reader who may not have a photograph's stored bytes is handed no address that would serve
+    // them — so an entry pointing at /content, or one that dropped the token on the way, is the
+    // failure to catch here and not in a browser.
+    for (const entry of media.get('p.g.7') ?? []) {
+      for (const url of [entry.url, entry.thumbnailUrl ?? '']) {
+        expect(url).toContain('/thumb');
+        expect(url).not.toContain('/content');
+        expect(url).toContain('token=abc');
+      }
+    }
   });
 
   it('puts every picture of a link on every station of it', () => {
@@ -91,6 +111,36 @@ describe('stationMediaFromLinks', () => {
     );
 
     expect(media.get('p.g.7')).toHaveLength(1);
+  });
+
+  it('hands one station no more pictures than a strip drawn over a model can hold', () => {
+    // The strip is laid out inside the model surface and fetches a thumbnail for every entry it is
+    // given, so an unbounded set is a block of pictures larger than the model it is drawn over and
+    // a request for each of them every time a finger lands on the station. Measured on the width a
+    // 360px phone leaves the tracking panel, what is readable there is two across and under three
+    // rows down.
+    const members = [stationMember('p.g.7')];
+    for (let index = 0; index < 30; index++) {
+      members.push(photoMember(`photo-${index}`));
+    }
+
+    const media = stationMediaFromLinks([link(members)], MODEL);
+
+    expect(media.get('p.g.7')).toHaveLength(12);
+    // The first of them in the order they were linked, not an arbitrary twelve of the thirty.
+    expect(media.get('p.g.7')?.[0].url).toContain('photo-0');
+    expect(media.get('p.g.7')?.[11].url).toContain('photo-11');
+  });
+
+  it('counts that bound over the station, not over one link at a time', () => {
+    // Thirty photographs reaching one station through thirty links are the same block of pictures
+    // as thirty on a single link, and a bound applied per link would be no bound at all.
+    const links = [];
+    for (let index = 0; index < 30; index++) {
+      links.push(link([stationMember('p.g.7'), photoMember(`photo-${index}`)]));
+    }
+
+    expect(stationMediaFromLinks(links, MODEL).get('p.g.7')).toHaveLength(12);
   });
 
   it('ignores what it cannot show and what is not a point of this model', () => {
@@ -125,8 +175,8 @@ describe('stationMediaFromLinks', () => {
   });
 
   it('answers what a station holds, whichever kind of source it was given', () => {
-    // Asked before a tap flies the camera to a station, so that a tap at a station with nothing
-    // to show does not answer by moving the view for nothing.
+    // Asked when a thumbnail is clicked, so that the picture viewer it opens holds the station's
+    // whole set — including the pictures the strip had no room to draw.
     const entry = { url: 'http://files.local/photo-1?size=1200' };
     const station = { name: () => 'p.g.7' };
 

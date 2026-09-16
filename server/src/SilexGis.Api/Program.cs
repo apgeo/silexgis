@@ -376,6 +376,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapCavingGroupAnnouncementEndpoints();
     api.MapCaverEndpoints();
     api.MapUserEndpoints();
+    api.MapUserAdminEndpoints();
     api.MapMapViewEndpoints();
     api.MapAdminSettingsEndpoints();
     api.MapAdminTemplateEndpoints();

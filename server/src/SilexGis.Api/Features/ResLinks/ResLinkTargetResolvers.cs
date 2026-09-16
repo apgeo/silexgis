@@ -6,6 +6,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Geo;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Profiles;
 using SilexGis.Domain.ResLinks;
@@ -53,6 +54,42 @@ public static class ResLinkTargets
         featureId is not null
             ? FeatureName
             : JsonNamingPolicy.CamelCase.ConvertName(entityType!.Value.ToString());
+}
+
+/// <summary>
+/// The one place a resource-link chip's picture is minted.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A thumbnail URL is a capability: whoever holds it can fetch the rendering, and nothing
+/// downstream of it re-decides anything. So it is only ever built on a branch that has
+/// already established this caller may see the file — never as a field filled in beside
+/// one.
+/// </para>
+/// <para>
+/// The reach is <see cref="FileDelivery.DerivativesOnly"/> unconditionally, and not because
+/// no caller here could have the stored bytes: some could, through the file's own routes.
+/// It is because a chip only ever draws a rendering, so the wider reach would be handed out
+/// for nothing — and the one thing the narrower reach withholds is exactly the thing this
+/// surface must not leak, since a photograph's own bytes carry the GPS fix its camera wrote
+/// and that fix is a position rather than a fact about one. A mint site that has not
+/// resolved the caller's right to place what the picture shows must not offer the original,
+/// and this one deliberately never resolves it.
+/// </para>
+/// </remarks>
+internal static class ResLinkPictures
+{
+    /// <summary>
+    /// The width the chip's picture is published at. The client re-points the same URL at
+    /// whatever width it actually draws, spending the token it was handed rather than
+    /// asking for a second one, so this is a starting point and not a limit.
+    /// </summary>
+    private const int PublishedSize = 480;
+
+    /// <summary>A delivery URL for one file's rendering, good for renderings only.</summary>
+    public static string Thumbnail(IFileAccessTokenService tokens, Guid fileId) =>
+        $"/api/v1/files/{fileId}/thumbnail?size={PublishedSize}&token="
+            + Uri.EscapeDataString(tokens.CreateToken(fileId, FileDelivery.DerivativesOnly));
 }
 
 /// <summary>
@@ -137,8 +174,13 @@ public sealed class ResLinkTargetDirectory
 
 /// <summary>Features of any kind, through the shared visibility filter. The title is the
 /// feature's name — never a coordinate; exact-location handling stays with the location
-/// protection machinery.</summary>
-public sealed class FeatureTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver
+/// protection machinery. The picture is the feature's headline attachment, which is the
+/// same picture its own page shows and is decided by the same rule.</summary>
+public sealed class FeatureTargetResolver(
+    SilexGisDbContext db,
+    IAccessService access,
+    AssociationDisclosure associations,
+    IFileAccessTokenService tokens) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => null;
 
@@ -172,7 +214,10 @@ public sealed class FeatureTargetResolver(SilexGisDbContext db, IAccessService a
         // role field is a row of these, and a per-chip query would make the field cost
         // grow with what was recorded on the trip.
         var paths = await PathsAsync(ctx, rows, ct);
-        return rows.ToDictionary(r => r.Id, r => Display(r, paths.GetValueOrDefault(r.Id)));
+        var headlines = await HeadlinesAsync(ctx, [.. rows.Select(r => r.Id)], ct);
+        return rows.ToDictionary(
+            r => r.Id,
+            r => Display(r, paths.GetValueOrDefault(r.Id), headlines.GetValueOrDefault(r.Id)));
     }
 
     public async Task<IReadOnlyList<ResLinkTargetHitDto>> SearchAsync(
@@ -227,11 +272,99 @@ public sealed class FeatureTargetResolver(SilexGisDbContext db, IAccessService a
                     .Select(name => name!)]);
     }
 
-    private static ResLinkTargetDisplayDto Display(FeatureRow r, IReadOnlyList<string>? path) => new(
+    /// <summary>
+    /// The headline picture of each of these features, where the caller may be shown one —
+    /// the feature's primary image attachment, which is the picture the feature's own page
+    /// leads with. At most one row per feature exists: a partial unique index keeps a single
+    /// attachment primary per object.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two rules decide it, exactly as the feature's own page decides the same picture, and
+    /// neither is restated here. The first is the document's: being attached to something
+    /// readable is how most documents are reached, but a rule written against the document
+    /// itself is consulted first and a deny among them is final. Reach is not in doubt for
+    /// these rows — every one of them hangs on a feature that survived the visibility filter
+    /// a few lines above — so the walk costs no query per row.
+    /// </para>
+    /// <para>
+    /// The second is the association rule, and it is the reason a picture can be withheld
+    /// from somebody who may read both the feature and the document. A photograph shown
+    /// beside a feature's name says the two belong together, and for a feature whose
+    /// position is guarded that pairing is what is being kept back: a picture stamped with
+    /// coordinates of its own, placed under a cave's name, is not a name at all — it is the
+    /// position, to within however far the photographer stood from the entrance. The rule
+    /// has one home, and it is asked there rather than reasoned about again.
+    /// </para>
+    /// <para>
+    /// Batched throughout: one attachment query, one cabinet-reach query that is skipped
+    /// unless a cabinet rule could change an answer, and one protection pass — the same
+    /// cost for a field of forty chips as for one.
+    /// </para>
+    /// </remarks>
+    private async Task<Dictionary<Guid, string>> HeadlinesAsync(
+        AccessContext ctx, IReadOnlyList<Guid> featureIds, CancellationToken ct)
+    {
+        var headlines = new Dictionary<Guid, string>();
+        if (featureIds.Count == 0)
+        {
+            return headlines;
+        }
+
+        var rows = await (from attachment in db.Attachments.AsNoTracking()
+                          where attachment.FeatureId != null
+                              && featureIds.Contains(attachment.FeatureId.Value)
+                              && attachment.IsPrimary
+                          join file in db.StoredFiles.AsNoTracking() on attachment.FileId equals file.Id
+                          where file.Kind == FileKind.Image
+                          join version in db.DocumentVersions.AsNoTracking()
+                              on file.DocumentVersionId equals version.Id
+                          join document in db.Documents.AsNoTracking() on version.DocumentId equals document.Id
+                          select new
+                          {
+                              AttachmentId = attachment.Id,
+                              FeatureId = attachment.FeatureId!.Value,
+                              FileId = file.Id,
+                              Document = document,
+                              HasOwnPosition = file.Geom != null,
+                          })
+            .ToListAsync(ct);
+        if (rows.Count == 0)
+        {
+            return headlines;
+        }
+
+        var cabinetReach = await DocumentAccessRules.CabinetReachAsync(
+            db, ctx, AccessAction.Read, [.. rows.Select(r => r.Document.Id)], ct);
+        var readable = rows
+            .Where(r => DocumentAccessRules.AllowedByOwnRulesOrAttachment(
+                ctx, r.Document, AccessAction.Read, cabinetReach))
+            .ToList();
+        if (readable.Count == 0)
+        {
+            return headlines;
+        }
+
+        var withheld = await associations.WithheldIdsAsync(
+            ctx,
+            [.. readable.Select(r => new AssociationCandidate(
+                r.AttachmentId, new FeatureAssociation(r.FeatureId, r.HasOwnPosition)))],
+            ct);
+
+        foreach (var row in readable.Where(r => !withheld.Contains(r.AttachmentId)))
+        {
+            headlines[row.FeatureId] = ResLinkPictures.Thumbnail(tokens, row.FileId);
+        }
+
+        return headlines;
+    }
+
+    private static ResLinkTargetDisplayDto Display(
+        FeatureRow r, IReadOnlyList<string>? path, string? headline) => new(
         Title(r),
         r.TypeName ?? r.Kind.ToString(),
         r.Kind == FeatureKind.Cave ? $"/caves/{r.Id}" : $"/features/{r.Id}",
-        null,
+        headline,
         path is { Count: > 0 } ? path : null);
 
     private static string Title(FeatureRow r) => r.Name ?? r.Kind.ToString();
@@ -247,7 +380,8 @@ public sealed class FeatureTargetResolver(SilexGisDbContext db, IAccessService a
 /// reachable only through something it is attached to is fetchable and displayable but
 /// not findable in the picker, the same stated trade-off the cabinet listing makes.
 /// </summary>
-public sealed class DocumentTargetResolver(SilexGisDbContext db, IAccessService access) : IResLinkTargetResolver
+public sealed class DocumentTargetResolver(
+    SilexGisDbContext db, IAccessService access, IFileAccessTokenService tokens) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => AttachedEntityType.Document;
 
@@ -311,7 +445,24 @@ public sealed class DocumentTargetResolver(SilexGisDbContext db, IAccessService 
                     document.Title,
                     document.DocumentTypeId is { } typeId ? typeNames.GetValueOrDefault(typeId) : null,
                     null,
-                    null,
+                    // Minted inside the branch that just decided this caller may read the
+                    // document, and nowhere else: the picture a photograph shows is the
+                    // document, so the right to see it is the right the walk above answered.
+                    // A document serving anything but an image has no rendering to point at.
+                    //
+                    // Deliberately not conditioned on what the document is filed under, which
+                    // is the tempting second gate and would be the wrong one. A picture here
+                    // asserts what this document is, to somebody already admitted to reading
+                    // it — never that it belongs to any particular feature, which is the
+                    // assertion the feature side withholds and makes separately. The reach is
+                    // the same one the file's own surface publishes to the same caller on the
+                    // same walk: an identical rendering route, and a token that opens the
+                    // rendering and refuses the stored bytes the camera's fix lives in. So
+                    // narrowing it here would withhold nothing — it would only cost a reader
+                    // two requests to arrive at the same URL.
+                    content is { Kind: FileKind.Image }
+                        ? ResLinkPictures.Thumbnail(tokens, content.Id)
+                        : null,
                     MediaType: content?.MimeType);
             }
         }
@@ -391,6 +542,10 @@ public sealed class TripLogTargetResolver(SilexGisDbContext db, IAccessService a
         var rows = await Readable(ctx).Where(t => ids.Contains(t.Id)).ToListAsync(ct);
         return rows.ToDictionary(
             t => t.Id,
+            // No picture, deliberately. A trip can carry a headline attachment like anything
+            // else, but no trip surface in this application leads with one, so minting it here
+            // would have the link surface introduce a cover picture the product does not have.
+            // If a trip is to have a cover, its own page decides that first and this follows.
             t => new ResLinkTargetDisplayDto(
                 t.Title, Subtitle(t), $"/trip-logs/{t.Id}", null));
     }
@@ -422,7 +577,9 @@ public sealed class TripLogTargetResolver(SilexGisDbContext db, IAccessService a
 /// <see cref="CaverProtection"/>, so link display can never show more of a person than
 /// the roster itself would.</summary>
 public sealed class CaverTargetResolver(
-    SilexGisDbContext db, IUserContextAccessor userAccessor) : IResLinkTargetResolver
+    SilexGisDbContext db,
+    IUserContextAccessor userAccessor,
+    IFileAccessTokenService tokens) : IResLinkTargetResolver
 {
     public AttachedEntityType? TargetType => AttachedEntityType.Caver;
 
@@ -483,9 +640,21 @@ public sealed class CaverTargetResolver(
             {
                 // For an account holder the profile projection has already applied their
                 // own settings; the tier rule itself has one home in CaverProtection.
-                var projected = CaverProtection.Project(
-                    c, canKeepRoster, c.UserId is { } userId ? profiles.GetValueOrDefault(userId) : null);
-                return new ResLinkTargetDisplayDto(projected.FullName, projected.Email, null, null);
+                var profile = c.UserId is { } userId ? profiles.GetValueOrDefault(userId) : null;
+                var projected = CaverProtection.Project(c, canKeepRoster, profile);
+                return new ResLinkTargetDisplayDto(
+                    projected.FullName,
+                    projected.Email,
+                    null,
+                    // The person's own portrait, and only ever their own: a roster entry with
+                    // no account has no picture to show, and one with an account shows the
+                    // picture that account chose. Avatars carry no visibility setting of their
+                    // own — a person list must always have something to draw — so the gate is
+                    // the projection above, which has already decided how much of this person
+                    // this caller may see.
+                    profile?.AvatarFileId is { } avatarId
+                        ? ResLinkPictures.Thumbnail(tokens, avatarId)
+                        : null);
             });
     }
 
@@ -567,6 +736,9 @@ public sealed class CavingGroupTargetResolver(SilexGisDbContext db) : IResLinkTa
             .ToListAsync(ct);
         return rows
             .Where(g => MayRead(ctx, g.Id))
+            // No picture: a club is directory facts here — name and nothing else — and a
+            // badge would be the club's content, which this resolver deliberately never
+            // reaches for.
             .ToDictionary(g => g.Id, g => new ResLinkTargetDisplayDto(g.Name, null, null, null));
     }
 
@@ -621,6 +793,9 @@ public sealed class MapViewTargetResolver(SilexGisDbContext db, IAccessService a
         }
 
         var rows = await Readable(ctx).Where(v => ids.Contains(v.Id)).ToListAsync(ct);
+        // No picture: a saved view is a viewport, and the only honest thumbnail of one would
+        // be a rendering of the map at that extent — which is the map's exact position drawn
+        // small, for a view that may well be centred on a guarded cave.
         return rows.ToDictionary(
             v => v.Id, v => new ResLinkTargetDisplayDto(v.Name, null, null, null));
     }
@@ -684,6 +859,9 @@ public sealed class CabinetTargetResolver(SilexGisDbContext db) : IResLinkTarget
         var breadcrumbs = await BreadcrumbsAsync(rows, ct);
         return rows.ToDictionary(
             c => c.Id,
+            // No picture: a shelf is filing structure. Anything it could show would be one of
+            // the documents filed on it, and those answer under their own rules rather than
+            // through the shelf's.
             c => new ResLinkTargetDisplayDto(c.Name, breadcrumbs.GetValueOrDefault(c.Id), null, null));
     }
 
@@ -813,6 +991,10 @@ public sealed class SurveyModelTargetResolver(
             .Where(m => caves.ContainsKey(m.CaveFeatureId) && exact.Contains(m.CaveFeatureId))
             .ToDictionary(
                 m => m.Id,
+                // No picture: nothing renders a survey model to an image today, and the
+                // plausible one — a plan of the cave — would be its absolute georeferenced
+                // coordinates drawn out, which is the very thing this resolver withholds a
+                // whole row for.
                 m => new ResLinkTargetDisplayDto(
                     m.Name, caves[m.CaveFeatureId], $"/caves/{m.CaveFeatureId}", null));
     }
@@ -867,6 +1049,8 @@ public sealed class GeofileTargetResolver(SilexGisDbContext db, IAccessService a
         var rows = await Readable(ctx).Where(g => ids.Contains(g.Id)).ToListAsync(ct);
         return rows.ToDictionary(
             g => g.Id,
+            // No picture: a geofile is coordinates. The only thumbnail of one is a map of
+            // where it goes, which would place everything in it for anybody holding the URL.
             g => new ResLinkTargetDisplayDto(g.Name, g.Format.ToString(), null, null));
     }
 
@@ -921,6 +1105,10 @@ public sealed class ExpeditionTargetResolver(SilexGisDbContext db, IAccessServic
             // The camp's own page. Only ever named while that page exists in the client: a route
             // this application does not carry puts the reader on the router's error screen, which
             // is worse than leaving the chip un-navigable, so the two are changed together.
+            //
+            // No picture, for the reason a trip has none: a camp can hold a headline attachment,
+            // but no camp surface leads with one, and a display resolver is the wrong place to
+            // decide that it should.
             e => new ResLinkTargetDisplayDto(e.Name, Subtitle(e), $"/expeditions/{e.Id}", null));
     }
 

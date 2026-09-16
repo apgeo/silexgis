@@ -381,27 +381,21 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable, IClassFixtur
     /// </summary>
     private async Task RunQueuedMeshJobAsync(Guid modelId, bool expectFailure = false)
     {
-        using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.SurveyMesh);
+        var mine = (await QueuedJob.OfKindAsync(factory.Services, ProcessingJobKinds.SurveyMesh))
+            .Where(j => JsonSerializer.Deserialize<SurveyMeshPayload>(j.Payload, JsonSerializerOptions.Web)
+                ?.SurveyModelId == modelId)
+            .ToList();
 
-        var job = await db.ProcessingJobs
-            .Where(j => j.Kind == ProcessingJobKinds.SurveyMesh && j.Status == ProcessingJobStatus.Queued)
-            .ToListAsync();
-
-        foreach (var queued in job.Where(j =>
-            JsonSerializer.Deserialize<SurveyMeshPayload>(j.Payload, JsonSerializerOptions.Web)
-                ?.SurveyModelId == modelId))
+        foreach (var queued in mine)
         {
             try
             {
-                await handler.ExecuteAsync(queued, CancellationToken.None);
+                await QueuedJob.RunAsync(factory.Services, queued.Id);
             }
             catch (Exception) when (expectFailure)
             {
-                // The handler records the reason on the model and rethrows so the worker records
-                // the failure too; what this test is checking is the record it left behind.
+                // The handler records the reason on the model and rethrows so the failure is
+                // recorded against the job too; what this test checks is the record it left behind.
             }
         }
     }

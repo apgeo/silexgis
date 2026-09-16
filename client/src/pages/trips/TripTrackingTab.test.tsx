@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { TrackingState, TripLogInfo } from '../../api/hooks.ts';
 
 const ANA = '11111111-1111-1111-1111-111111111111';
@@ -15,6 +16,7 @@ const recordEvents = vi.fn();
 const resolveDepth = vi.fn();
 const deleteEvent = vi.fn();
 const setTracking = vi.fn();
+const setLabel = vi.fn();
 
 vi.mock('../../api/hooks.ts', () => ({
   TRACKING_EVENT_KINDS: ['entered', 'atStation', 'atDepth', 'note', 'exited'],
@@ -34,6 +36,9 @@ vi.mock('../../api/hooks.ts', () => ({
   // the replay reads is asked for on the same surface and is not asked for here either.
   useSurveyModel: () => ({ data: undefined, isPending: false }),
   useTripTrackingEventLog: () => ({ data: undefined, isPending: true, error: null }),
+  // The pictures linked to the model's stations, asked for on that same surface and only once the
+  // model has been opened — which these tests never do, there being no model on the watch.
+  useResLinksForTarget: () => ({ data: undefined, isPending: false, error: null }),
   surveyModelReadableByViewer: (m: { format: string }) => m.format === 'lox' || m.format === 'survex3d',
   // Publishing the trip: this tab mounts the card that offers it, and what the card does has its
   // own tests. Nothing here has published anything, so the list is empty and neither write is
@@ -41,6 +46,9 @@ vi.mock('../../api/hooks.ts', () => ({
   useTripTrackingShares: () => ({ data: [], error: null }),
   useMintTripTrackingShare: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRevokeTripTrackingShare: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  // Naming somebody as a follower of the published page sees them. The dialog that does it has its
+  // own tests; what this suite asks is whether the tab reaches it at all, which nothing did before.
+  useSetTrackingParticipantLabel: () => ({ mutateAsync: setLabel, isPending: false }),
 }));
 
 // What decides how big every target on this surface is drawn, and how much room the selection
@@ -143,6 +151,7 @@ beforeEach(() => {
   coarse = false;
   narrow = false;
   setTracking.mockReset().mockResolvedValue(state());
+  setLabel.mockReset().mockResolvedValue({ caverId: ANA, label: null });
 });
 
 afterEach(cleanup);
@@ -510,8 +519,12 @@ describe('TripTrackingTab', () => {
       // headings would be the same words again on the axis there is least of.
       expect(table.querySelector('thead')).toBeNull();
 
-      const row = within(table).getByText('Ana Popescu').closest('tr') as HTMLElement;
-      for (const label of ['Team', 'Last report', 'When', 'Where']) {
+      // Taken as the row rather than by searching for the name: the name is on the row twice on
+      // purpose — once as who they are and once as what the published page will call them — and
+      // that is the contrast the public-name field exists to draw.
+      const row = table.querySelector('tbody tr') as HTMLElement;
+      expect(within(row).getAllByText('Ana Popescu').length).toBeGreaterThan(0);
+      for (const label of ['On the public page', 'Team', 'Last report', 'Last heard', 'Where']) {
         expect(within(row).getByText(label)).toBeTruthy();
       }
       // Including the one the whole surface is read for, and the one that carries whether a
@@ -816,4 +829,532 @@ describe('TripTrackingTab', () => {
     });
   });
 
+  /**
+   * <b>One failed poll used to destroy the whole watch.</b> The read refreshes itself every thirty
+   * seconds while a party is underground, and TanStack Query reports a failed *refresh* by setting
+   * the error while still holding the answer it had. Taking that as "there is nothing here" tore
+   * down the configuration, the share panel, the table, the log, the report being typed off a phone
+   * call, and the survey model — whose viewer is keyed on the file it was handed, so the recovery
+   * was to download and parse the entire survey again. The tab already handles its own event query
+   * this way; this is the same idiom on the read the whole surface stands on.
+   */
+  describe('a poll that fails', () => {
+    const failedRefresh = () =>
+      trackingQuery.mockReturnValue({
+        data: state(),
+        isPending: false,
+        isFetching: false,
+        error: new Error('Failed to fetch'),
+        refetch: vi.fn(),
+      });
+
+    it('keeps the whole watch on screen and says only that it has stopped refreshing', () => {
+      failedRefresh();
+      show();
+
+      // Everything a failed poll used to take away, asserted one by one rather than as a spot
+      // check: each of these is a separate thing somebody loses on a surface being read during a
+      // callout.
+      expect(screen.getByTestId('trip-tracking-state')).toBeTruthy();
+      expect(screen.getByTestId('trip-tracking-publish')).toBeTruthy();
+      expect(screen.getByTestId('trip-tracking-participants')).toHaveTextContent('Ana Popescu');
+      expect(screen.getByTestId('trip-tracking-events')).toBeTruthy();
+      expect(screen.getByTestId('trip-tracking-record')).toBeTruthy();
+
+      expect(screen.getByTestId('trip-tracking-stale')).toHaveTextContent(
+        'This watch has stopped refreshing',
+      );
+      // And the refusal is not dressed up as news about the trip: the hard error belongs to the
+      // case below, where there is genuinely nothing to show.
+      expect(screen.queryByText("This trip's tracking could not be read.")).toBeNull();
+    });
+
+    /**
+     * The half of it that is not about pixels. A coordinator taking word off a phone call has
+     * ticked who it is about and typed half a note; the poll fails behind them; and before this
+     * split, both were gone — along with the survey model, whose viewer is keyed on the file it
+     * was handed, so the recovery was to fetch and parse the whole survey again.
+     */
+    it('keeps a half-typed report and the ticks that say who it is about', () => {
+      const view = show();
+      fireEvent.click(rowChecks()[0]);
+      fireEvent.change(screen.getByTestId('trip-tracking-note'), {
+        target: { value: 'out at 14:00, all well' },
+      });
+      expect(screen.getByTestId('trip-tracking-record')).toHaveTextContent('Record for 1 selected');
+
+      failedRefresh();
+      view.rerender(
+        <App>
+          <TripTrackingTab trip={trip()} canEdit />
+        </App>,
+      );
+
+      expect(screen.getByTestId('trip-tracking-stale')).toBeTruthy();
+      expect(screen.getByTestId('trip-tracking-record')).toHaveTextContent('Record for 1 selected');
+      expect(screen.getByTestId('trip-tracking-note')).toHaveValue('out at 14:00, all well');
+    });
+
+    it('offers a retry that re-reads rather than leaving the half minute to run out', () => {
+      const refetch = vi.fn();
+      trackingQuery.mockReturnValue({
+        data: state(),
+        isPending: false,
+        isFetching: false,
+        error: new Error('Failed to fetch'),
+        refetch,
+      });
+      show();
+
+      fireEvent.click(screen.getByTestId('trip-tracking-retry'));
+
+      expect(refetch).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * The twin, and the reason the split is a split rather than a deletion: a read that has
+     * genuinely never answered has no watch to keep on screen, and saying "this has stopped
+     * refreshing" over an empty tab would name a state the reader cannot act on.
+     */
+    it('still says the watch could not be read when there is no watch at all', () => {
+      trackingQuery.mockReturnValue({
+        data: undefined,
+        isPending: false,
+        isFetching: false,
+        error: new Error('403'),
+        refetch: vi.fn(),
+      });
+      show();
+
+      expect(screen.getByText("This trip's tracking could not be read.")).toBeTruthy();
+      expect(screen.queryByTestId('trip-tracking-stale')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-participants')).toBeNull();
+      // And no reason is invented for it: nothing here was told why, and a guess offered as an
+      // explanation is worst on the surface least able to afford one.
+      expect(screen.queryByText(/no longer yours to read/)).toBeNull();
+    });
+
+    it('says nothing about refreshing while the reads are going through', () => {
+      show();
+
+      expect(screen.queryByTestId('trip-tracking-stale')).toBeNull();
+      expect(screen.queryByTestId('trip-tracking-retry')).toBeNull();
+    });
+
+    /**
+     * <b>A poll that was refused is not a poll that did not arrive, and keeping the whole watch on
+     * screen must not turn the first into the second.</b> The retry policy stops asking at a 4xx,
+     * so a trip that has been deleted, or one this account may no longer read, sets the error on
+     * the very first failed poll with the last answer still in hand. Worded as a dropped
+     * connection it would tell a coordinator watching a party underground that the figures in
+     * front of them are about to become current, under a Retry that is refused on every press —
+     * and they would keep pressing it, during a callout, instead of doing the one thing that would
+     * help. What the server settled is said as settled.
+     */
+    const refusedBy = (error: unknown) =>
+      trackingQuery.mockReturnValue({
+        data: state(),
+        isPending: false,
+        isFetching: false,
+        error,
+        refetch: vi.fn(),
+      });
+
+    it('says a refusal the server settled as an answer rather than as a dropped connection', () => {
+      refusedBy(new ApiError(404, 'trip_log.not_found'));
+      show();
+
+      expect(screen.getByTestId('trip-tracking-refused')).toHaveTextContent(
+        'This trip is no longer there, or is no longer yours to read.',
+      );
+      expect(screen.queryByTestId('trip-tracking-stale')).toBeNull();
+      // The control that would be refused every time it was pressed is not offered at all.
+      expect(screen.queryByTestId('trip-tracking-retry')).toBeNull();
+      // And it is still not a demolition: everything the split was built to keep is kept.
+      expect(screen.getByTestId('trip-tracking-participants')).toHaveTextContent('Ana Popescu');
+      expect(screen.getByTestId('trip-tracking-record')).toBeTruthy();
+    });
+
+    // The one settled refusal that arrives with no code of its own, and the only one the reader
+    // can put right in the next ten seconds — so it is named rather than lumped in with the rest.
+    it('names a sign-in that has lapsed rather than blaming the connection for it', () => {
+      refusedBy(new ApiError(401));
+      show();
+
+      expect(screen.getByTestId('trip-tracking-refused')).toHaveTextContent(
+        'You are no longer signed in',
+      );
+      expect(screen.queryByTestId('trip-tracking-retry')).toBeNull();
+    });
+
+    /**
+     * The twin, and the reason this is a fork rather than a replacement: a connection that dropped
+     * really does come back by itself, and saying "open the trip again" at every poll a phone
+     * misses in a valley would be the same error pointing the other way.
+     */
+    it('still calls a poll that did not get through a poll that did not get through', () => {
+      failedRefresh();
+      show();
+
+      expect(screen.getByTestId('trip-tracking-stale')).toBeTruthy();
+      expect(screen.getByTestId('trip-tracking-retry')).toBeTruthy();
+      expect(screen.queryByTestId('trip-tracking-refused')).toBeNull();
+    });
+
+    // A rate limit is the one client refusal that clears by itself, and the read goes on retrying
+    // through it. A watch that declared itself over on a 429 would end during the one minute a
+    // coordinator is reloading it hardest.
+    it('waits a rate limit out instead of declaring the watch over', () => {
+      refusedBy(new ApiError(429, undefined, 'slow down'));
+      show();
+
+      expect(screen.getByTestId('trip-tracking-stale')).toBeTruthy();
+      expect(screen.getByTestId('trip-tracking-retry')).toBeTruthy();
+      expect(screen.queryByTestId('trip-tracking-refused')).toBeNull();
+    });
+
+    // The first-read half of the same distinction: there is no watch to keep, but there is still a
+    // reason, and "could not be read" on its own leaves somebody reloading a trip that is gone.
+    it('says why when the very first read is the one that is refused', () => {
+      trackingQuery.mockReturnValue({
+        data: undefined,
+        isPending: false,
+        isFetching: false,
+        error: new ApiError(404, 'trip_log.not_found'),
+        refetch: vi.fn(),
+      });
+      show();
+
+      expect(screen.getByText("This trip's tracking could not be read.")).toBeTruthy();
+      expect(screen.getByText('This trip is no longer there, or is no longer yours to read.')).toBeTruthy();
+    });
+  });
+
+  /**
+   * <b>The coordinator's own screen had the worst time sense in the product.</b> A follower without
+   * an account was told "3 hours ago"; the person who has to notice that nobody has heard from a
+   * team since noon was given clock times and left to subtract them, during a callout. And nothing
+   * counted the people nobody had heard from at all.
+   */
+  describe('how long it has been', () => {
+    /** Ten o'clock, so the fixture's reports are three hours and a half hour old. */
+    const AT_TEN = Date.parse('2026-09-12T10:00:00Z');
+
+    function party() {
+      return state({
+        participants: [
+          {
+            caverId: ANA,
+            teamId: null,
+            lastKind: 'atStation',
+            lastRecordedAt: '2026-09-12T07:00:00Z',
+            stationName: 'P12',
+            depthM: null,
+            out: false,
+            label: null,
+          },
+          {
+            caverId: BOGDAN,
+            teamId: null,
+            lastKind: 'exited',
+            lastRecordedAt: '2026-09-12T09:30:00Z',
+            stationName: null,
+            depthM: null,
+            out: true,
+            label: null,
+          },
+          {
+            // Nobody has said a single word about her. This is the row the whole change is for.
+            caverId: CARMEN,
+            teamId: null,
+            lastKind: null,
+            lastRecordedAt: null,
+            stationName: null,
+            depthM: null,
+            out: false,
+            label: null,
+          },
+        ],
+      });
+    }
+
+    /** jsdom's clock is the real one, so the moment every age is measured from is said out loud. */
+    let clock: MockInstance<typeof Date.now>;
+
+    beforeEach(() => {
+      clock = vi.spyOn(Date, 'now').mockReturnValue(AT_TEN);
+      trackingQuery.mockReturnValue({
+        data: party(),
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+    });
+
+    // Restored one by one rather than through a blanket restore, which would also reset the module
+    // mocks this whole suite is built on.
+    afterEach(() => clock.mockRestore());
+
+    it('says how long ago somebody was heard from rather than at what time', () => {
+      show(false);
+      const table = screen.getByTestId('trip-tracking-participants');
+
+      expect(within(table).getByText('3 hours ago')).toBeTruthy();
+      expect(within(table).getByText('30 minutes ago')).toBeTruthy();
+      // The exact moment is not lost, only moved off the first reading of the row — the same
+      // arrangement the followed page uses.
+      expect(within(table).getByText('3 hours ago')).toHaveAttribute(
+        'title',
+        expect.stringContaining('2026'),
+      );
+    });
+
+    /**
+     * Silence is not an age. Every set of words for "how long ago was the report that never
+     * arrived" — "just now", "0 minutes ago", an epoch date — is a claim this watch was never
+     * given, and on this table it would be read as word having come in.
+     */
+    it('draws a person nobody has reported as silent rather than as freshly heard from', () => {
+      show(false);
+      const table = screen.getByTestId('trip-tracking-participants');
+
+      expect(within(table).getByTestId('trip-tracking-never-heard')).toHaveTextContent(
+        'No word yet',
+      );
+      // The twin: the two people who *have* been heard from are still given their ages, so this
+      // cannot pass by drawing everybody as silent.
+      expect(within(table).getAllByTestId('trip-tracking-never-heard')).toHaveLength(1);
+      expect(within(table).queryByText('0 minutes ago')).toBeNull();
+    });
+
+    /**
+     * The count that was missing, and the three states it is made of. A watch that said
+     * "1 underground, 1 out" over a party of three would be leaving out the one person the
+     * coordinator most needs to think about — and doing it silently, because the figures look
+     * complete.
+     */
+    it('counts the people nobody has heard from beside the other two', () => {
+      show(false);
+
+      expect(screen.getByTestId('trip-tracking-count-underground')).toHaveTextContent('1');
+      expect(screen.getByTestId('trip-tracking-count-out')).toHaveTextContent('1');
+      expect(screen.getByTestId('trip-tracking-count-unheard')).toHaveTextContent('1');
+      expect(screen.getByTestId('trip-tracking-counts')).toHaveTextContent('Not heard from');
+    });
+
+    it('keeps the three states apart on the rows as well as in the counts', () => {
+      show(false);
+      const table = screen.getByTestId('trip-tracking-participants');
+
+      expect(within(table).getAllByTestId('trip-tracking-standing-underground')).toHaveLength(1);
+      expect(within(table).getAllByTestId('trip-tracking-standing-out')).toHaveLength(1);
+      expect(within(table).getAllByTestId('trip-tracking-standing-unheard')).toHaveLength(1);
+      expect(within(table).getByTestId('trip-tracking-standing-unheard')).toHaveTextContent(
+        'Not heard from',
+      );
+    });
+
+    it('says it on a phone too, where the fields are stacked down the row', () => {
+      narrow = true;
+      show(false);
+      const table = screen.getByTestId('trip-tracking-participants');
+
+      expect(within(table).getByText('3 hours ago')).toBeTruthy();
+      expect(within(table).getByTestId('trip-tracking-never-heard')).toBeTruthy();
+      expect(screen.getByTestId('trip-tracking-count-unheard')).toHaveTextContent('1');
+    });
+  });
+
+  /**
+   * <b>The one thing that keeps a named person off a public page, and it had no user interface at
+   * all.</b> The route existed, the generated client carried it, and nothing in the application
+   * called it — while the installation's own setting publishes real names, so every member of every
+   * followed trip is named and this is their only opt-out.
+   */
+  describe('what the published page calls each person', () => {
+    it('says what the page will call somebody, per person, before a link is minted', () => {
+      trackingQuery.mockReturnValue({
+        data: state({
+          participants: [
+            {
+              caverId: ANA,
+              teamId: null,
+              lastKind: 'entered',
+              lastRecordedAt: '2026-09-12T06:30:00Z',
+              stationName: null,
+              depthM: null,
+              out: false,
+              // Asked to be kept off the page, and this is the record of it.
+              label: 'A club member',
+            },
+            {
+              caverId: BOGDAN,
+              teamId: null,
+              lastKind: 'entered',
+              lastRecordedAt: '2026-09-12T06:30:00Z',
+              stationName: null,
+              depthM: null,
+              out: false,
+              label: null,
+            },
+          ],
+        }),
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show(false);
+
+      expect(screen.getByTestId(`trip-tracking-public-name-${ANA}`)).toHaveTextContent(
+        'A club member',
+      );
+      // The twin, and the contrast the column exists to draw: his name goes out as it stands.
+      expect(screen.getByTestId(`trip-tracking-public-name-${BOGDAN}`)).toHaveTextContent(
+        'Bogdan Ilie',
+      );
+    });
+
+    it('says a party the page will number rather than name', () => {
+      trackingQuery.mockReturnValue({
+        data: state({ publishesRealNames: false }),
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show(false);
+
+      expect(screen.getByTestId(`trip-tracking-public-name-${ANA}`)).toHaveTextContent(
+        'A place in the party',
+      );
+      expect(screen.getByTestId('trip-tracking-names-setting')).toHaveTextContent(
+        'This installation publishes places in the party',
+      );
+    });
+
+    /**
+     * What the installation does is stated on the tab itself, not only on the panel that mints the
+     * link: a reader deciding whether somebody needs a caption is reading the table, and a rule
+     * they have to go and find somewhere else is a rule they apply after the link has gone out.
+     */
+    it('says what this installation publishes, and what a caption does to it', () => {
+      show();
+
+      expect(screen.getByTestId('trip-tracking-names-setting')).toHaveTextContent(
+        'This installation publishes real names.',
+      );
+      expect(
+        screen.getByText(/outranks the setting above in both directions/),
+      ).toBeInTheDocument();
+    });
+
+    /**
+     * <b>The one part of this column that is a good guess rather than a fact, said on the page.</b>
+     * The names in the table are the ones this application uses — an account's own display name
+     * where one is set — while the published page prints the name the club's roster holds. The two
+     * start out identical and part company the moment a member chooses a display name, and this is
+     * the surface whose entire job is to answer what a follow link will print *before* the link is
+     * minted. Left unsaid, the cell and the dialog would both state a string as fact and the page
+     * would then print another.
+     */
+    it('says the name shown here is not exactly the name the published page prints', () => {
+      show(false);
+
+      expect(screen.getByTestId('trip-tracking-roster-name')).toHaveTextContent(
+        "prints the name on the club's roster",
+      );
+    });
+
+    /**
+     * The twin, and not a symmetry for its own sake: on an installation that numbers its party no
+     * name of any kind goes out, so a caveat about which name would be a worry about nothing —
+     * offered on every trip, beside the sentence that has just said no names are published.
+     */
+    it('says nothing about roster names where no name is published at all', () => {
+      trackingQuery.mockReturnValue({
+        data: state({ publishesRealNames: false }),
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show(false);
+
+      expect(screen.queryByTestId('trip-tracking-roster-name')).toBeNull();
+      expect(screen.getByTestId('trip-tracking-names-setting')).toHaveTextContent(
+        'This installation publishes places in the party',
+      );
+    });
+
+    it('reaches the write that nothing in this application reached before', async () => {
+      show();
+
+      fireEvent.click(screen.getByTestId(`trip-tracking-public-name-edit-${ANA}`));
+      fireEvent.change(await screen.findByTestId('trip-tracking-public-name-input'), {
+        target: { value: 'A club member' },
+      });
+      fireEvent.click(screen.getByTestId('trip-tracking-public-name-save'));
+
+      await waitFor(() => expect(setLabel).toHaveBeenCalledTimes(1));
+      expect(setLabel.mock.calls[0][0]).toEqual({
+        tripLogId: 'trip-1',
+        caverId: ANA,
+        label: 'A club member',
+      });
+    });
+
+    it('takes a caption back off again', async () => {
+      trackingQuery.mockReturnValue({
+        data: state({
+          participants: [
+            {
+              caverId: ANA,
+              teamId: null,
+              lastKind: 'entered',
+              lastRecordedAt: '2026-09-12T06:30:00Z',
+              stationName: null,
+              depthM: null,
+              out: false,
+              label: 'A club member',
+            },
+          ],
+        }),
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show();
+
+      fireEvent.click(screen.getByTestId(`trip-tracking-public-name-edit-${ANA}`));
+      fireEvent.click(await screen.findByTestId('trip-tracking-public-name-clear'));
+
+      await waitFor(() => expect(setLabel).toHaveBeenCalledTimes(1));
+      expect(setLabel.mock.calls[0][0]).toMatchObject({ caverId: ANA, label: null });
+    });
+
+    /**
+     * A reader who may not write the trip still has to be able to see what the page says about
+     * people — that is the reading half — but is offered nothing to change it with.
+     */
+    it('shows a reader who may not write the trip the answer and no control', () => {
+      show(false);
+
+      expect(screen.getByTestId(`trip-tracking-public-name-${ANA}`)).toBeTruthy();
+      expect(screen.queryByTestId(`trip-tracking-public-name-edit-${ANA}`)).toBeNull();
+    });
+
+    // The control is pressed by the same finger as everything else on this surface.
+    it('sizes the control on the pointer rather than on the width', () => {
+      const { unmount } = show();
+      expect(screen.getByTestId(`trip-tracking-public-name-edit-${ANA}`)).toHaveClass('ant-btn-sm');
+      unmount();
+
+      coarse = true;
+      show();
+      expect(screen.getByTestId(`trip-tracking-public-name-edit-${ANA}`)).toHaveClass('ant-btn-lg');
+    });
+  });
 });

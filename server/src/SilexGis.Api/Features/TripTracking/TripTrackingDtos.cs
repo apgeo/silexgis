@@ -10,18 +10,69 @@ namespace SilexGis.Api.Features.TripTracking;
 public sealed record TrackingTeamDto(Guid Id, string Title);
 
 /// <summary>
-/// One participant's current tracking state, folded from the latest event about them.
+/// One participant's current tracking state, folded from every report about them.
 /// Position fields are null both when nothing places the caver yet and when the caller may
 /// not learn the position — a reader without exact-location rights cannot tell the two
 /// apart, which is the point.
 /// </summary>
+/// <param name="LastKind">
+/// The kind of the latest report of <em>any</em> kind. It describes that report and nothing
+/// else: it is not the kind the station came from, and standing must not be re-derived from it
+/// — <paramref name="In"/> and <paramref name="Out"/> are the answer to that.
+/// </param>
+/// <param name="LastRecordedAt">
+/// When anything was last heard about them, whatever it said. A note and a "come out" are
+/// reports too, so this moves on word that carries no position at all.
+/// </param>
+/// <param name="PositionRecordedAt">
+/// When the report that <em>placed</em> them was made — the recorded time of the very row
+/// <paramref name="StationName"/> and <paramref name="DepthM"/> were read off.
+/// <para>
+/// <b>There are two times here because the position and the last word are routinely two
+/// different reports.</b> The displayed position stays the latest report that actually claimed a
+/// place, while <paramref name="LastRecordedAt"/> follows every report — so one note later, a
+/// station heard four hours ago sits beside a timestamp eight minutes old. Anything that ages a
+/// position, sorts the party by how fresh their places are, or tells a coordinator how stale a
+/// station is must read this one; <paramref name="LastRecordedAt"/> answers only "when was
+/// anything last said about this person".
+/// </para>
+/// <para>
+/// Null on exactly the branch that nulls the station, so that nothing downstream can put an age
+/// on a place it was refused. <b>Read that as consistency, not as confidentiality</b>, and do not
+/// cite it as a protection: <paramref name="LastRecordedAt"/> beside it is unconditional, and
+/// whenever the report that placed them is also the latest report — the ordinary case on a live
+/// watch — it carries the very same instant, so this null keeps back nothing its sibling has not
+/// already given. That is deliberate rather than an oversight. Where this project settles what a
+/// tracking report discloses to a reader who may not learn positions, it drops the station, the
+/// depth and the model as location vocabulary and keeps the recorded time, because "somebody was
+/// heard from eight minutes ago" is exactly what such a reader is meant to keep. Null here
+/// therefore means both "nothing has placed them" and "the place may not be told to this caller",
+/// the same deliberate ambiguity the position fields carry — it does not additionally mean that
+/// the hour is a secret.
+/// </para>
+/// </param>
+/// <param name="In">
+/// The last report that <em>stated</em> a standing put them inside the cave, or nothing has
+/// stated one and a report has placed them inside it. False together with <paramref name="Out"/>
+/// is the third state and a real answer — nobody has said yet that they went in, came out, or
+/// were anywhere — and folding that into "not underground" would draw a party who have not set
+/// off as one that is already back. Folded in Domain; never re-derive it from
+/// <paramref name="LastKind"/>, which is what the two hand-written copies of this used to do.
+/// </param>
+/// <param name="Out">
+/// The last report that stated a standing was that they are out. A later note, and a later report
+/// of a place, both leave it standing: an exit ends the watch for a person, and only a recorded
+/// entry starts it again.
+/// </param>
 public sealed record TrackingParticipantDto(
     Guid CaverId,
     Guid? TeamId,
     TripPositionEventKind? LastKind,
     DateTimeOffset? LastRecordedAt,
+    DateTimeOffset? PositionRecordedAt,
     string? StationName,
     decimal? DepthM,
+    bool In,
     bool Out,
     /// <summary>
     /// The caption an administrator chose for this person on the trip's published page, or null

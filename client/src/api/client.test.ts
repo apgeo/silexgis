@@ -1,7 +1,40 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import i18n from '../i18n';
-import { ApiError, retryQuery, sendsTheReadingLanguage } from './client.ts';
+import { ApiError, isSettledRefusal, retryQuery, sendsTheReadingLanguage } from './client.ts';
+
+/**
+ * <b>Whether the server has answered for good, which two different decisions now turn on.</b> The
+ * retry policy reads it to decide whether to ask again; a screen still holding an earlier answer
+ * reads it to decide whether to word a failure as a blip to wait out or as an answer to act on. A
+ * page that stopped retrying while telling its reader it would refresh again by itself would be
+ * the application contradicting itself over data that will never change, so the two are one rule
+ * and this is where it is pinned.
+ */
+describe('a refusal the server has settled', () => {
+  it('settles on a client error, whatever the screen holding it does next', () => {
+    for (const status of [400, 401, 403, 404, 409, 422]) {
+      expect(isSettledRefusal(new ApiError(status))).toBe(true);
+    }
+  });
+
+  it('leaves everything that can still come good unsettled', () => {
+    // Rate limiting clears when the window rolls over; a 5xx may be a single bad instant; a
+    // network fault never reached the server at all and arrives as a plain Error.
+    expect(isSettledRefusal(new ApiError(429))).toBe(false);
+    expect(isSettledRefusal(new ApiError(500))).toBe(false);
+    expect(isSettledRefusal(new ApiError(503))).toBe(false);
+    expect(isSettledRefusal(new TypeError('Failed to fetch'))).toBe(false);
+  });
+
+  // The retry policy is this rule and not a second reading of it: a 4xx that stopped being
+  // retried while some screen still called it transient is exactly the disagreement being avoided.
+  it('is the same answer the retry policy acts on', () => {
+    for (const error of [new ApiError(404), new ApiError(429), new ApiError(500), new Error('x')]) {
+      expect(retryQuery(0, error)).toBe(!isSettledRefusal(error));
+    }
+  });
+});
 
 describe('retryQuery', () => {
   it('gives up immediately on a client error', () => {

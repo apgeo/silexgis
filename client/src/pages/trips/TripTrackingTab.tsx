@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import {
   Alert,
   App,
   Button,
   Checkbox,
+  Flex,
   Popconfirm,
   Skeleton,
   Space,
@@ -16,6 +17,7 @@ import {
 } from 'antd';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isSettledRefusal } from '../../api/client.ts';
 import {
   useDeleteTrackingEvent,
   useTripTracking,
@@ -26,9 +28,20 @@ import {
 } from '../../api/hooks.ts';
 import TrackingConfigCard from '../../components/trips/TrackingConfigCard.tsx';
 import TrackingModelPanel from '../../components/trips/TrackingModelPanel.tsx';
+import TrackingPublicNameDialog from '../../components/trips/TrackingPublicNameDialog.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
 import TrackingSharePanel from '../../components/trips/TrackingSharePanel.tsx';
-import { trackingProblemMessage } from '../../components/trips/trackingProblems.ts';
+import {
+  trackingProblemMessage,
+  trackingReadRefusalMessage,
+} from '../../components/trips/trackingProblems.ts';
+import { publicNamingOf } from '../../components/trips/trackingPublicName.ts';
+import {
+  lastHeardInWords,
+  trackingStandingOf,
+  trackingStandings,
+  type TrackingStanding,
+} from '../../components/trips/trackingWatch.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import './TripTrackingTab.css';
@@ -55,6 +68,12 @@ const RECENT_EVENTS = 20;
  *
  * **A wrong report is deleted, never edited.** What is on the log is what somebody said at a
  * moment; rewriting one in place would leave a record indistinguishable from one nobody corrected.
+ *
+ * **A failed read is a notice, not a demolition.** The watch is re-read every half minute while a
+ * party is underground, so a refusal here is the ordinary consequence of a dropped connection
+ * rather than news about the trip. The watch already in hand stays on screen under a warning —
+ * along with the model somebody loaded, the selection they made and the report they are half-way
+ * through typing off a phone call.
  */
 export default function TripTrackingTab({
   trip,
@@ -71,17 +90,57 @@ export default function TripTrackingTab({
   // And chosen on the width, never on the pointer: how much room there is across is what decides
   // whether five columns can stand side by side, and a tablet with a trackpad has the room.
   const narrow = useIsMobile();
-  const { data, isPending, error, refetch } = useTripTracking(trip.id);
+  const { data, isPending, isFetching, error, refetch } = useTripTracking(trip.id);
   const events = useTripTrackingEvents(trip.id, { pageSize: RECENT_EVENTS });
   const deleteEvent = useDeleteTrackingEvent();
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  /** Whose caption on the published page is being set, or null while nobody's is. */
+  const [naming, setNaming] = useState<TrackingParticipant | null>(null);
+
+  /**
+   * Whether the server has answered this read for good, rather than failing to answer it.
+   *
+   * <b>Two failures wear the same shape here and a coordinator has to act on them differently.</b>
+   * A dropped connection, a server restarting, a phone in a valley: the poll comes round again in
+   * thirty seconds and fixes itself, and the right thing to say is "hold on". A trip that has been
+   * deleted, or one this account may no longer read, or a session that lapsed behind the reader:
+   * the same poll will refuse for ever, and saying "it starts refreshing again by itself" over a
+   * party table that will never refresh — with a retry that fails on every press — is the surface
+   * telling somebody watching a party underground that the stale figures in front of them are
+   * about to become current. They are not. The rule that separates the two is the one the retry
+   * policy already uses, called rather than written a second time.
+   */
+  const refused = isSettledRefusal(error);
 
   if (isPending) {
     return <Skeleton active />;
   }
 
-  if (error || !data) {
-    return <Alert type="error" showIcon message={t('trips.tracking.unavailable')} />;
+  /**
+   * Only when there is no watch at all.
+   *
+   * <b>A failed poll is not a failed tab, and the difference is everything this surface holds.</b>
+   * The read refreshes itself every thirty seconds while a party is underground, and a query that
+   * fails a refresh reports the failure while still holding the answer it had. Treating that as
+   * "there is nothing here" tore the whole watch down every time a connection blinked: the
+   * configuration, the share panel, the table, the log, the report being typed off a phone call,
+   * and the survey model — whose viewer is keyed on the file it was given, so the recovery was to
+   * download and parse the entire survey again. None of that was news about the trip; it was one
+   * request that did not come back. So this is the genuine empty case only, and the failure is said
+   * further down, beside everything it did not destroy.
+   */
+  if (!data) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        title={t('trips.tracking.unavailable')}
+        // Why, where the server settled it in words. A first read that merely failed to arrive is
+        // left at the title alone: naming a reason nobody was given would be a guess drawn as an
+        // explanation on the surface least able to afford one.
+        description={refused ? trackingReadRefusalMessage(error, t) : undefined}
+      />
+    );
   }
 
   const names = new Map(trip.participants.map((person) => [person.caverId, person.name]));
@@ -89,6 +148,105 @@ export default function TripTrackingTab({
   const named = (caverId: string) => names.get(caverId) ?? t('trips.tracking.unknownCaver');
   const when = (value: string | null) =>
     value ? new Date(value).toLocaleString(i18n.language) : '—';
+  // Taken once per render rather than per row, so every age on the screen is measured from one
+  // moment: two rows a millisecond apart rounding to different minutes would be a table disagreeing
+  // with itself about how long it has been.
+  const now = Date.now();
+  const standings = trackingStandings(data.participants);
+
+  /**
+   * How long ago somebody was last heard from, with the clock time kept for whoever wants it.
+   *
+   * <b>A watch is read for the gap, not for the clock.</b> The question this screen exists to
+   * answer is "has anybody heard from them lately", and a timestamp makes the person asking it
+   * subtract two times in their head, during a callout, having been awake since five. The exact
+   * moment is still there on hover and in the log below, which is the record.
+   *
+   * Silence is drawn as silence rather than as a dash: an empty cell in a column of ages reads as a
+   * rendering gap, and the one row on this table that nobody has said a word about is the row that
+   * must not be mistaken for a missing value.
+   */
+  const lastHeard = (participant: TrackingParticipant) => {
+    const words = lastHeardInWords(participant, now, i18n.language);
+    if (words === null) {
+      return (
+        <Typography.Text type="secondary" data-testid="trip-tracking-never-heard">
+          {t('trips.tracking.neverHeard')}
+        </Typography.Text>
+      );
+    }
+    return <Typography.Text title={when(participant.lastRecordedAt)}>{words}</Typography.Text>;
+  };
+
+  /**
+   * Where one person stands, as one of three and never as two.
+   *
+   * Underground, out, and nobody has said anything at all. The third is the one that goes missing
+   * when a surface asks "are they out?" and draws the answer as a pair — and on this tab it is the
+   * state the whole watch exists to notice, because a caver nobody has reported is not the same
+   * news as a caver who has been reported safely out.
+   */
+  const standingTag = (participant: TrackingParticipant) => {
+    const standing = trackingStandingOf(participant);
+    // Written out rather than assembled from the standing: the check that every key the code asks
+    // for exists reads them out of the source text, and a key built at the call is a key it cannot
+    // see — on wording that says whether somebody is still in a cave.
+    const label: Record<TrackingStanding, string> = {
+      underground: t('trips.tracking.standing.underground'),
+      out: t('trips.tracking.standing.out'),
+      unheard: t('trips.tracking.standing.unheard'),
+    };
+    return (
+      <Tag
+        color={standing === 'underground' ? 'blue' : standing === 'out' ? 'green' : 'default'}
+        data-testid={`trip-tracking-standing-${standing}`}
+      >
+        {label[standing]}
+      </Tag>
+    );
+  };
+
+  /**
+   * What the trip's published page will call one person — answered before a link is minted rather
+   * than after somebody's family has read it.
+   *
+   * <b>The name drawn for the "no caption" case is the one this application holds, and it is not a
+   * promise about the exact string.</b> A published page names people from the roster's own record,
+   * while every signed-in surface — this table included — calls somebody by the display name their
+   * account chose, where they have one. The two are the same person and usually the same words, and
+   * where they differ the published page is the plainer of the two. What is exact is the part that
+   * matters here: whether that page prints a name at all, and what a caption makes it print
+   * instead. That limit is said on the page as well as here — see the paragraph above the table,
+   * and the sentence this cell's own tooltip ends with. A reader who is told the string and not
+   * told its one qualification has been given a promise this surface cannot keep.
+   */
+  const publicNameOf = (participant: TrackingParticipant) => {
+    const kind = publicNamingOf(participant, data.publishesRealNames);
+    const testId = `trip-tracking-public-name-${participant.caverId}`;
+    if (kind === 'caption') {
+      return (
+        <Tooltip title={t('trips.tracking.publicName.captionDetail')}>
+          <Tag color="purple" data-testid={testId}>
+            {participant.label}
+          </Tag>
+        </Tooltip>
+      );
+    }
+    if (kind === 'realName') {
+      return (
+        <Tooltip title={t('trips.tracking.publicName.realNameDetail')}>
+          <span data-testid={testId}>{named(participant.caverId)}</span>
+        </Tooltip>
+      );
+    }
+    return (
+      <Tooltip title={t('trips.tracking.publicName.placeInPartyDetail')}>
+        <Typography.Text type="secondary" data-testid={testId}>
+          {t('trips.tracking.publicName.placeInParty')}
+        </Typography.Text>
+      </Tooltip>
+    );
+  };
 
   /**
    * An absence where a position would be, said as strongly as it is actually known.
@@ -230,8 +388,75 @@ export default function TripTrackingTab({
     </Popconfirm>
   );
 
+  /**
+   * What the published page calls somebody, and the way to change it — one cell, in both layouts.
+   *
+   * The reading and the writing are together on purpose. A caption is set because a person asked to
+   * be kept off a public page, and the act of setting one is inseparable from checking what that
+   * page would otherwise have said about them: put in a card of its own, the two would be a list of
+   * names in one place and a list of what they publish to in another, which is exactly the pairing
+   * somebody gets wrong at speed.
+   */
+  const publicNameCell = (participant: TrackingParticipant) => (
+    <Flex gap={4} align="center" wrap>
+      {publicNameOf(participant)}
+      {canEdit && (
+        <Button
+          type="text"
+          size={controlSize}
+          icon={<EditOutlined />}
+          aria-label={t('trips.tracking.publicName.edit')}
+          onClick={() => setNaming(participant)}
+          data-testid={`trip-tracking-public-name-edit-${participant.caverId}`}
+        />
+      )}
+    </Flex>
+  );
+
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      {/* The watch could not be re-read, said above everything it did not take away rather than in
+          place of it — see the guard above. Which of the two things it means is not the reader's to
+          work out: a refusal the server settled ends the watch until somebody acts, and a poll that
+          did not get through ends nothing. */}
+      {error != null &&
+        (refused ? (
+          /* No retry offered, deliberately. The same request will be refused every time it is made,
+             so a button promising otherwise would cost a coordinator presses and time during a
+             callout and teach them the page is broken rather than that the answer has changed.
+             What replaces it is the server's own reason, which is the only thing that can be acted
+             on. */
+          <Alert
+            type="error"
+            showIcon
+            title={t('trips.tracking.refusedTitle')}
+            description={t('trips.tracking.refusedBody', {
+              reason: trackingReadRefusalMessage(error, t),
+            })}
+            data-testid="trip-tracking-refused"
+          />
+        ) : (
+          /* The retry is the read this panel already holds: the poll comes round again on its own,
+             and a coordinator who does not want to wait thirty seconds for it should not have to. */
+          <Alert
+            type="warning"
+            showIcon
+            title={t('trips.tracking.staleTitle')}
+            description={t('trips.tracking.staleBody')}
+            data-testid="trip-tracking-stale"
+            action={
+              <Button
+                size={controlSize}
+                loading={isFetching}
+                onClick={() => void refetch()}
+                data-testid="trip-tracking-retry"
+              >
+                {t('common.retry')}
+              </Button>
+            }
+          />
+        ))}
+
       {/* Said once, at the top, as well as marked on every row it applies to: a reader who is
           being shown fewer positions than exist has to learn that from the page rather than from
           the shape of what is missing. */}
@@ -239,7 +464,7 @@ export default function TripTrackingTab({
         <Alert
           type="info"
           showIcon
-          message={t('trips.tracking.positionsWithheldTitle')}
+          title={t('trips.tracking.positionsWithheldTitle')}
           description={t('trips.tracking.positionsWithheldBody')}
           data-testid="trip-tracking-positions-withheld"
         />
@@ -266,6 +491,80 @@ export default function TripTrackingTab({
       />
 
       <div>
+        {/* <b>How the party divides, in three figures, because the third one is the one nobody was
+            counting.</b> Underground and out were readable off the rows; "nobody has said a word
+            about them" was not counted anywhere, and it is the figure a coordinator is actually
+            watching — a party of eight with six underground and one out has somebody unaccounted
+            for, and until this line existed the only way to notice was to read every row.
+
+            Drawn as three equal cells rather than as a sentence so the three stay side by side and
+            comparable at 360px, and so the silent count cannot be mistaken for a footnote to the
+            other two. */}
+        <div className="tracking-standings" data-testid="trip-tracking-counts">
+          {/* Written out one by one rather than mapped over the three names: the check that every
+              translation key the code asks for exists reads literal calls out of the source, and
+              these are the words that say whether anybody is still in a cave. */}
+          <div className="tracking-standing-cell">
+            <span className="tracking-standing-count" data-testid="trip-tracking-count-underground">
+              {standings.underground}
+            </span>
+            <Typography.Text type="secondary" className="tracking-standing-label">
+              {t('trips.tracking.standing.underground')}
+            </Typography.Text>
+          </div>
+          <div className="tracking-standing-cell">
+            <span className="tracking-standing-count" data-testid="trip-tracking-count-out">
+              {standings.out}
+            </span>
+            <Typography.Text type="secondary" className="tracking-standing-label">
+              {t('trips.tracking.standing.out')}
+            </Typography.Text>
+          </div>
+          <div className="tracking-standing-cell">
+            <span className="tracking-standing-count" data-testid="trip-tracking-count-unheard">
+              {standings.unheard}
+            </span>
+            <Typography.Text type="secondary" className="tracking-standing-label">
+              {t('trips.tracking.standing.unheard')}
+            </Typography.Text>
+          </div>
+        </div>
+
+        {/* <b>What the published page will call this party, said before a link is minted rather
+            than discovered after one has been handed out.</b> Which of the two sentences is true is
+            an installation's setting rather than a property of this trip, so it is read from the
+            server and never guessed; the caption beside each name is what overrides it, in both
+            directions, for one person at a time. Both halves have to be on this tab, because the
+            people named are not the person reading — they are the rest of the club. */}
+        <Typography.Paragraph type="secondary" className="tracking-public-names">
+          <span data-testid="trip-tracking-names-setting">
+            {/* Two whole calls over two literal keys rather than one over a chosen key, for the
+                reason given at the counts above. Anything but an explicit "no" is worded as the
+                naming case — see the rule this reads through. */}
+            {data.publishesRealNames !== false
+              ? t('trips.tracking.publicName.settingRealNames')
+              : t('trips.tracking.publicName.settingPlaces')}
+          </span>{' '}
+          {t('trips.tracking.publicName.columnExplain')}
+          {/* <b>The one thing on this column that is not exact, said on the page rather than only
+              in a comment.</b> Every signed-in screen here calls somebody by the display name their
+              account chose, where they have one; the published page prints the name the club's
+              roster holds. The two are the same person and start out the same words, and they part
+              company the moment a member sets a display name — so a column whose entire job is to
+              answer "what will a follow link print" must not read as a promise about the exact
+              string. Said only where names are published at all: on an installation that numbers
+              its party, no name of any kind goes out and the caveat would be a worry about
+              nothing. */}
+          {data.publishesRealNames !== false && (
+            <>
+              {' '}
+              <span data-testid="trip-tracking-roster-name">
+                {t('trips.tracking.publicName.rosterName')}
+              </span>
+            </>
+          )}
+        </Typography.Paragraph>
+
         {/* <b>Selecting everybody is a control of this page's own, and not the checkbox antd puts
             in the table's header.</b> Two reasons, and either would be enough on its own.
 
@@ -335,11 +634,18 @@ export default function TripTrackingTab({
                     key: 'caver',
                     render: (_value, row) => (
                       <div className="tracking-stacked">
-                        <Typography.Text strong>{named(row.caverId)}</Typography.Text>
+                        <div className="tracking-stacked-head">
+                          <Typography.Text strong>{named(row.caverId)}</Typography.Text>
+                          {/* Beside the name rather than down among the fields: where somebody
+                              stands is what the row is read for, and on a phone the fields below
+                              are read only after one of these has said which row to read. */}
+                          {standingTag(row)}
+                        </div>
                         <div className="tracking-stacked-facts">
+                          {fact(t('trips.tracking.publicName.column'), publicNameCell(row))}
                           {fact(t('trips.tracking.columnTeam'), teamOf(row.teamId))}
                           {fact(t('trips.tracking.columnLastKind'), kindOf(row.lastKind, row.out))}
-                          {fact(t('trips.tracking.columnLastRecordedAt'), when(row.lastRecordedAt))}
+                          {fact(t('trips.tracking.columnLastHeard'), lastHeard(row))}
                           {fact(t('trips.tracking.columnPosition'), positionOf(row))}
                         </div>
                       </div>
@@ -349,8 +655,18 @@ export default function TripTrackingTab({
               : [
                   {
                     title: t('trips.tracking.columnCaver'),
-                    dataIndex: 'caverId',
-                    render: (caverId: string) => named(caverId),
+                    key: 'caver',
+                    render: (_value, row) => (
+                      <Flex gap={8} align="center" wrap>
+                        <span>{named(row.caverId)}</span>
+                        {standingTag(row)}
+                      </Flex>
+                    ),
+                  },
+                  {
+                    title: t('trips.tracking.publicName.column'),
+                    key: 'publicName',
+                    render: (_value, row) => publicNameCell(row),
                   },
                   {
                     title: t('trips.tracking.columnTeam'),
@@ -363,9 +679,12 @@ export default function TripTrackingTab({
                     render: (kind: TrackingParticipant['lastKind'], row) => kindOf(kind, row.out),
                   },
                   {
-                    title: t('trips.tracking.columnLastRecordedAt'),
-                    dataIndex: 'lastRecordedAt',
-                    render: (value: string | null) => when(value),
+                    // Named for the last word rather than for the position beside it, because the
+                    // moment this read carries is the moment of the last report of any kind — see
+                    // the one function that derives it.
+                    title: t('trips.tracking.columnLastHeard'),
+                    key: 'lastHeard',
+                    render: (_value, row) => lastHeard(row),
                   },
                   {
                     title: t('trips.tracking.columnPosition'),
@@ -375,6 +694,23 @@ export default function TripTrackingTab({
                 ]
           }
         />
+
+        {/* Mounted only while somebody is being named, so the field starts empty of the last
+            person's caption whatever the dialog's own lifecycle does. */}
+        {naming !== null && (
+          <TrackingPublicNameDialog
+            open
+            tripLogId={trip.id}
+            // Taken from the watch rather than from the row that was pressed, so a caption saved by
+            // a second coordinator between the press and the write is the one this dialog shows.
+            participant={
+              data.participants.find((person) => person.caverId === naming.caverId) ?? naming
+            }
+            caverName={named(naming.caverId)}
+            publishesRealNames={data.publishesRealNames}
+            onClose={() => setNaming(null)}
+          />
+        )}
       </div>
 
       {/* The same watch on the survey it is resolved against, for whoever knows the cave well
@@ -418,7 +754,7 @@ export default function TripTrackingTab({
           <Alert
             type="error"
             showIcon
-            message={t('trips.tracking.eventsUnavailable')}
+            title={t('trips.tracking.eventsUnavailable')}
             style={{ marginBottom: 8 }}
             data-testid="trip-tracking-events-unavailable"
           />

@@ -247,6 +247,10 @@ export default function PublicTripEmbedPage() {
         crsLookup={crsLookup}
         focusRequest={focusRequest}
         toolbar
+        // No `stationMedia`, for the same reason as the page next door: the links a station's
+        // pictures are read from answer only to an account, and this document is served to a
+        // stranger on somebody else's website. The envelope is the whole of what is readable here
+        // and carries no pictures yet — see the page next door for what changes when it does.
       />
     </div>
   );

@@ -10,7 +10,22 @@ const HOST = 'https://club.example.org';
 
 let answer: { data?: PublicTripEnvelope; isPending: boolean; error: unknown };
 
-vi.mock('../../api/hooks.ts', () => ({ usePublicTrip: () => answer }));
+/**
+ * Every read this document made that a stranger on somebody else's website could not perform.
+ * Stubbed rather than omitted so that reaching for one fails with the rule rather than with a
+ * module error about a missing export — the page next door carries the whole of the reasoning.
+ */
+let reachedBeyondTheEnvelope: string[] = [];
+const authenticatedOnly = (name: string) => () => {
+  reachedBeyondTheEnvelope.push(name);
+  return { data: undefined, isPending: false, error: null };
+};
+
+vi.mock('../../api/hooks.ts', () => ({
+  usePublicTrip: () => answer,
+  useResLinksForTarget: authenticatedOnly('useResLinksForTarget'),
+  useSurveyModel: authenticatedOnly('useSurveyModel'),
+}));
 vi.mock('react-router-dom', () => ({ useParams: () => ({ token: 'follow-token' }) }));
 
 let given: Record<string, unknown> | undefined;
@@ -106,6 +121,7 @@ const focus = (kind: string, ref: string) => ({
 beforeEach(() => {
   answer = { data: envelope(), isPending: false, error: null };
   given = undefined;
+  reachedBeyondTheEnvelope = [];
 });
 
 afterEach(() => {
@@ -120,6 +136,19 @@ describe('the viewer a website frames', () => {
     expect(screen.getByTestId('viewer')).toBeInTheDocument();
     expect(screen.queryByText('Peștera Demo Mare')).toBeNull();
     expect(screen.queryByRole('heading')).toBeNull();
+  });
+
+  /**
+   * The same rule as the page next door, asserted separately because this is a separate document
+   * with its own viewer mount — and the one that would be forgotten, since it carries no chrome of
+   * its own to make the omission visible to anybody reading it.
+   */
+  it('reaches for no station pictures, because a framed stranger cannot read the links', () => {
+    render(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('viewer')).toBeInTheDocument();
+    expect(reachedBeyondTheEnvelope).toEqual([]);
+    expect(given?.stationMedia).toBeUndefined();
   });
 
   it('fills the frame it was given, rather than a share of the screen', () => {

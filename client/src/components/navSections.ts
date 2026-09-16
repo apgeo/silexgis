@@ -21,10 +21,10 @@ export const NAV_SECTIONS = [
   // 'statistics' prefix would resolve all three to a key no menu item carries, and nothing would
   // light up at all.
   'statistics/distribution', 'statistics/correlation', 'statistics/regions',
-  // Before the trip list, because the list's own prefix matches this path too and the first
-  // match is the one taken. Behind it, the reviewer reading a spreadsheet is shown the rail
-  // highlighting the trip list — a destination they are not on.
-  'trip-logs/import', 'trip-logs', 'expeditions', 'checklists',
+  // Both importers stand before the trip list, because the list's own prefix matches their paths
+  // too and the first match is the one taken. Behind it, the reviewer reading a spreadsheet or a
+  // phone's recording is shown the rail highlighting the trip list — a destination they are not on.
+  'trip-logs/speleoloc-import', 'trip-logs/import', 'trip-logs', 'expeditions', 'checklists',
   'caving-groups', 'cavers',
   'admin/audit', 'admin/notification-health', 'admin/messaging', 'admin/message-templates',
   'admin/permission-groups',

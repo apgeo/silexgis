@@ -282,7 +282,12 @@ public static class TripTrackingPublicationEndpoints
                 || TrackingWithholding.PositionOpen(lastPositioned, openCaves);
             if (!positionOpen) withheldAny = true;
 
-            var isOut = last?.Kind == TripPositionEventKind.Exited;
+            // Standing is Domain's answer, asked exactly as the signed-in read asks it. Somebody
+            // nothing has been said about yet is neither in nor out — a party that has not set
+            // off must not read as one that is underground — and a note about somebody must move
+            // neither them nor the count they are in, which is the whole reason this is one rule
+            // in one place rather than a test on the latest report written out twice.
+            var standing = TripTrackingRules.StandingOf(own);
             participants.Add(new PublicTripParticipantDto(
                 ordinal,
                 NameFor(member.CaverId, labels, names),
@@ -290,10 +295,11 @@ public static class TripTrackingPublicationEndpoints
                 positionOpen ? lastPositioned?.StationName : null,
                 positionOpen ? lastPositioned?.DepthEnteredM : null,
                 last?.RecordedAt,
-                // Somebody nothing has been said about yet is neither in nor out — a party that
-                // has not set off must not read as one that is underground.
-                In: last is not null && !isOut,
-                Out: isOut));
+                // The position's own time rides the position's own withholding: when the station
+                // is kept back the time that would date it is kept back with it.
+                positionOpen ? lastPositioned?.RecordedAt : null,
+                In: standing == TripStanding.Underground,
+                Out: standing == TripStanding.Out));
         }
 
         return TypedResults.Ok(new PublicTripTrackingEnvelopeDto(

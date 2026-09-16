@@ -38,6 +38,17 @@ export interface LightboxProps {
   onIndexChange: (index: number) => void;
   /** When given, the viewer offers a way to say who took this one. */
   onEdit?: (documentId: string) => void;
+  /**
+   * Where this viewer's own overlays are drawn, when the end of the document will not do.
+   *
+   * <b>Asked for by the one caller that is itself inside an element covering the screen.</b> The
+   * survey viewer's fullscreen puts its drawing surface into the browser's top layer, which paints
+   * over the whole document — so a picture opened from a station there is rendered inside that
+   * surface, and anything this viewer opens in turn has to be rendered inside it too or it is
+   * simply not drawn. Left unset, the overlays go where the component library puts them, which is
+   * right everywhere else.
+   */
+  overlayContainer?: HTMLElement | null;
 }
 
 /** How far in one step of the zoom control goes, and where it stops. */
@@ -67,6 +78,7 @@ export default function Lightbox({
   onClose,
   onIndexChange,
   onEdit,
+  overlayContainer,
 }: LightboxProps) {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState(1);
@@ -273,6 +285,7 @@ export default function Lightbox({
         placement="right"
         title={t('gallery.facts')}
         destroyOnHidden
+        getContainer={overlayContainer ?? undefined}
       >
         <Descriptions column={1} size="small">
           {photo.photographerName && (
