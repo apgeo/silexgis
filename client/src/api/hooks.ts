@@ -181,6 +181,14 @@ export const queryKeys = {
   // the choices, so moving a column mapping or the day/month order is a different question
   // rather than a stale answer to the same one.
   tripImportPreview: (fileId: string, body: unknown) => ['trip-import-preview', fileId, body] as const,
+  speleolocRecordings: (fileId: string) => ['speleoloc-recordings', fileId] as const,
+  speleolocImportSession: (fileId: string) => ['speleoloc-import-session', fileId] as const,
+  // The whole request is the key, as for every other dry run here: the archive is read again on
+  // each preview and what comes back is a pure function of the file and the choices, so naming
+  // another recording or another survey model is a different question rather than a stale answer
+  // to the same one.
+  speleolocImportPreview: (fileId: string, body: unknown) =>
+    ['speleoloc-import-preview', fileId, body] as const,
   photoLibraryStatus: ['photo-libraries', 'status'] as const,
   // How big the protected-position decision is for a given export request. The whole request
   // is the key: it is a pure function of what would be exported, so changing a filter is a
@@ -5271,6 +5279,139 @@ export function useCommitTripImport() {
 }
 
 // ---------------------------------------------------------------------------
+// A phone's trip recording into a tracked trip
+// ---------------------------------------------------------------------------
+
+export type SpeleolocImportOptions = components['schemas']['SpeleolocImportOptions'];
+export type SpeleolocPointDecision = components['schemas']['SpeleolocPointDecision'];
+export type SpeleolocPointAction = components['schemas']['SpeleolocPointAction'];
+export type SpeleolocPointState = components['schemas']['SpeleolocPointState'];
+export type SpeleolocRecording = components['schemas']['SpeleolocRecordingDto'];
+export type SpeleolocRecordings = components['schemas']['SpeleolocRecordingsDto'];
+export type SpeleolocImportSession = components['schemas']['SpeleolocImportSessionDto'];
+export type SpeleolocPoint = components['schemas']['SpeleolocPointDto'];
+export type SpeleolocStationCandidate = components['schemas']['SpeleolocStationCandidate'];
+export type SpeleolocImportPreview = components['schemas']['SpeleolocImportPreviewDto'];
+export type SpeleolocImportPreviewRequest = components['schemas']['SpeleolocImportPreviewRequest'];
+export type SpeleolocImportCommitResult = components['schemas']['SpeleolocImportCommitResultDto'];
+export type SpeleolocImportFailure = components['schemas']['SpeleolocImportFailureDto'];
+
+/**
+ * The recordings one uploaded archive holds, newest first.
+ *
+ * Not retried: every refusal this answers with — the upload is not there, the caller may not
+ * record trips, the file is not an archive — is the server's settled answer about this file, and
+ * asking twice more only holds the screen in its loading state through the whole backoff.
+ */
+export function useSpeleolocRecordings(fileId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.speleolocRecordings(fileId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/speleoloc-imports/{fileId}/recordings', {
+          params: { path: { fileId: fileId! } },
+        }),
+      ),
+    enabled: Boolean(fileId),
+    retry: false,
+  });
+}
+
+/**
+ * The caller's review of one archive, resumed where they left it. Answers with defaults rather
+ * than a 404 when nobody has reviewed this archive yet, so the screen has something to open with.
+ */
+export function useSpeleolocImportSession(fileId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.speleolocImportSession(fileId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/speleoloc-imports/{fileId}/session', {
+          params: { path: { fileId: fileId! } },
+        }),
+      ),
+    enabled: Boolean(fileId),
+    retry: false,
+  });
+}
+
+/**
+ * Saves the review as the reviewer works. Deliberately does not invalidate the session query, for
+ * the reason the spreadsheet review does not: the browser already holds what it just sent, and
+ * refetching would make every switch on the table fight the answer coming back.
+ */
+export function useSaveSpeleolocImportSession() {
+  return useMutation({
+    mutationFn: ({
+      fileId,
+      body,
+    }: {
+      fileId: string;
+      body: components['schemas']['SpeleolocImportSessionWriteRequest'];
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/speleoloc-imports/{fileId}/session', {
+          params: { path: { fileId } },
+          body,
+        }),
+      ),
+  });
+}
+
+/** The dry run. A POST because the choices are a body, but it writes nothing. */
+export function useSpeleolocImportPreview(
+  fileId: string | undefined,
+  body: SpeleolocImportPreviewRequest,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.speleolocImportPreview(fileId ?? '', body),
+    queryFn: () =>
+      unwrap(
+        api.POST('/api/v1/speleoloc-imports/{fileId}/preview', {
+          params: { path: { fileId: fileId! } },
+          body,
+        }),
+      ),
+    enabled: Boolean(fileId) && enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/**
+ * Confirms the review. The choices travel with it rather than being read back from the saved row,
+ * for the reason the spreadsheet confirmation carries its own: a second tab left open on a
+ * different survey model must not decide where a trip's whole history was.
+ */
+export function useCommitSpeleolocImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      fileId,
+      body,
+    }: {
+      fileId: string;
+      body: components['schemas']['SpeleolocImportCommitRequest'];
+    }) =>
+      unwrap(
+        api.POST('/api/v1/speleoloc-imports/{fileId}/commit', {
+          params: { path: { fileId } },
+          body,
+        }),
+      ),
+    onSuccess: () => {
+      // A confirmation writes positions onto a trip, may create the trip itself, records a batch
+      // that can be taken back, and spends the review that produced it. The trip key covers the
+      // tracking reads too, which are held under it.
+      void queryClient.invalidateQueries({ queryKey: ['trip-logs'] });
+      void queryClient.invalidateQueries({ queryKey: ['import-batches'] });
+      void queryClient.invalidateQueries({ queryKey: ['speleoloc-import-session'] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Photographs into the registry
 // ---------------------------------------------------------------------------
 
@@ -7365,6 +7506,52 @@ export function useDeleteTrackingTeam() {
           params: { path: { tripLogId, teamId } },
         }),
       ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * What the trip's published page calls one member of the party, or nothing in particular.
+ *
+ * <b>This is one person's only way off a public page, and it is the reason the route exists.</b>
+ * Where an installation publishes real names, everybody on a followed trip is named by the name the
+ * roster holds for them — so a caver who does not want their name in front of the internet has
+ * exactly one thing that can be done about it, and this is it. A caption set here outranks the
+ * installation's setting **in both directions**: it names somebody on a page that would otherwise
+ * number them, and it keeps somebody off a page that would otherwise name them. It has to outrank
+ * it, because a setting somewhere else being flipped must not undo a person's request.
+ *
+ * <b>Empty clears, and there is no second route that clears.</b> "Call them nothing in particular"
+ * is a value this field holds rather than an absence to be repaired, so an empty or blank caption
+ * is sent as the write it is; the server drops the row and the page goes back to whatever the
+ * installation's setting says. A caller that tried to clear by *not* sending the field would be
+ * asking for the one thing this route does not offer.
+ *
+ * Only somebody the trip's roster names can be captioned — a caption for anybody else would be a
+ * person the published page invents — and the server refuses the rest.
+ */
+export function useSetTrackingParticipantLabel() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      caverId,
+      label,
+    }: {
+      tripLogId: string;
+      caverId: string;
+      /** The caption to show, or null/empty to take the caption off again. */
+      label: string | null;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-logs/{tripLogId}/tracking/participants/{caverId}', {
+          params: { path: { tripLogId, caverId } },
+          body: { label },
+        }),
+      ),
+    // The caption rides on the watch's own read, beside the person it belongs to, so the surface
+    // that shows what the published page will call somebody is refreshed by the same invalidation
+    // every other tracking write uses.
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),
   });
 }
