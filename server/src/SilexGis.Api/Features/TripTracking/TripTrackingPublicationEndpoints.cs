@@ -292,7 +292,7 @@ public static class TripTrackingPublicationEndpoints
                 ordinal,
                 NameFor(member.CaverId, labels, names),
                 lastTeamed?.TeamId,
-                positionOpen ? lastPositioned?.StationName : null,
+                positionOpen ? lastPositioned?.ViewerStationName : null,
                 positionOpen ? lastPositioned?.DepthEnteredM : null,
                 last?.RecordedAt,
                 // The position's own time rides the position's own withholding: when the station

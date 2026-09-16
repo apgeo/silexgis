@@ -134,6 +134,11 @@ public sealed class SurveyGraphHandler(
                 model.AppliedRotationDeg = extraction.AppliedRotationDeg;
                 model.DroppedShotCount = extraction.DroppedShotCount;
                 model.MergedStationCount = extraction.MergedStationCount;
+                // Written on every reading, including back to null: a file replaced by one whose
+                // root survey is named differently must not keep the old name, because that name is
+                // what tells a stored station name from the way the viewer addresses the same
+                // station, and a stale one silently misaddresses every station in the model.
+                model.RootSurveyName = extraction.RootSurveyName;
                 model.Status = SurveyModelStatus.Ready;
                 model.ProcessingError = null;
                 await db.SaveChangesAsync(ct);

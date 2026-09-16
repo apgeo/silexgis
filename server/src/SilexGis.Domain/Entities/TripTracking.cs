@@ -36,8 +36,17 @@ public class TripTracking : ITimestamped, IAuditable, IAuditChild
     public Guid? CaveFeatureId { get; set; }
 
     /// <summary>
-    /// Station whose altitude is the depth datum (viewer spelling); null means the model's
-    /// highest entrance-flagged station.
+    /// Station whose altitude is the depth datum, in the survey viewer's spelling; null means the
+    /// model's highest entrance-flagged station.
+    ///
+    /// <para>
+    /// The viewer's spelling because this is a name a person typed after reading it off the model,
+    /// and it is shown back to them in the same box they typed it into — storing the survey rows'
+    /// own reading of it would answer an administrator with a name they cannot find anywhere on the
+    /// model they were looking at. Either spelling is accepted when it is set, and the altitude
+    /// lookup matches a station under either of its names, so nothing downstream has to know which
+    /// one this is.
+    /// </para>
     /// </summary>
     public string? ReferenceStationName { get; set; }
 

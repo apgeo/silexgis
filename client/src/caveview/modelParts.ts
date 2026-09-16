@@ -5,13 +5,20 @@ import type { AnchorKind } from '../api/hooks.ts';
  * Turning something clicked in the survey viewer into a link anchor.
  *
  * <b>The names are the viewer's own, deliberately.</b> For a `.lox` model the viewer and the
- * server call the same station different things — the server prefixes the root survey's name and
- * the viewer's reader does not — and for `.3d` they agree. Rather than reconcile two spellings,
- * an anchor authored here stores the path the viewer uses, and the viewer is what resolves it
- * again: the model's own id, which the member already carries as its target, says which survey
- * the path belongs to. That is the owner's decision (2026-09-03) and it is the one that cannot
- * silently fail — an anchor written in the viewer's words and read in the viewer's words round
- * trips whatever either side calls it elsewhere.
+ * survey rows can call the same station different things — the rows carry the root survey's name at
+ * the front of the path and the viewer's reader never added it, which shows whenever a file names
+ * its root survey — and for `.3d` they always agree. Rather than depend on knowing which of those
+ * a given file is, an anchor authored here stores the path the viewer uses, and the viewer is what
+ * resolves it again: the model's own id, which the member already carries as its
+ * target, says which survey the path belongs to. That is the owner's decision (2026-09-03) and it
+ * is the one that cannot silently fail — an anchor written in the viewer's words and read in the
+ * viewer's words round trips whatever either side calls it elsewhere.
+ *
+ * <b>It is no longer only an anchor's rule.</b> A recorded position now travels the same way: the
+ * server converts a reported station into the viewer's spelling as it is written down, so a station
+ * pressed here, an anchor stored here and a party drawn on the model are all named the same, and
+ * nothing on this side translates between two vocabularies. Which is what makes that conversion a
+ * server-side rule with one home rather than a step every caller has to remember.
  *
  * Nothing here imports the viewer, so all of it is arithmetic over plain objects that a test can
  * drive without a WebGL context — which matters more than usual, because there is no GPU on the

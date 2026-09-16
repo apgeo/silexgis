@@ -74,7 +74,7 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
             ? tracking
             : null;
 
-        var stations = model is null ? [] : await StationsOfAsync(model.Id, ct);
+        var stations = model is null ? [] : await StationsOfAsync(model, ct);
         var referenceZ = model is null
             ? null
             : TrackingDepthResolver.ReferenceZ(stations, configured?.ReferenceStationName);
@@ -130,10 +130,18 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
                 continue;
             }
 
+            // Proposed in the words the viewer uses, because a proposal here is a proposal of a
+            // position, and a position is stored and drawn in those words. The resolver carries
+            // both of a station's names for exactly this — for one of the two line-plot formats
+            // they are different strings for the same station — so the proposal and the row it
+            // will become are spelled the same without anything here choosing.
             var candidates = TrackingDepthResolver
                 .Resolve(stations, referenceZ.Value, depth.Value, filter, take)
                 .Select(c => new SpeleolocStationCandidate(
-                    c.Name, c.SurveyName, Math.Round(c.DepthM, 1), Math.Round(c.DeltaM, 1)))
+                    c.ViewerName,
+                    c.SurveyName,
+                    Math.Round(c.DepthM, 1),
+                    Math.Round(c.DeltaM, 1)))
                 .ToList();
 
             resolutions.Add(Row(
@@ -254,13 +262,14 @@ public sealed class SpeleolocTripImportResolver(SilexGisDbContext db)
     }
 
     private async Task<IReadOnlyList<TrackingDepthResolver.Station>> StationsOfAsync(
-        Guid surveyModelId, CancellationToken ct)
+        SurveyModel model, CancellationToken ct)
     {
         var rows = await db.SurveyStations.AsNoTracking()
-            .Where(s => s.SurveyModelId == surveyModelId)
+            .Where(s => s.SurveyModelId == model.Id)
             .Select(s => new { s.Name, s.SurveyName, s.Position, s.Flags })
             .ToListAsync(ct);
-        return [.. rows.Select(r => new TrackingDepthResolver.Station(
+        return [.. rows.Select(r => TrackingDepthResolver.Station.Of(
+            model.Format, model.RootSurveyName,
             r.Name, r.SurveyName, r.Position.Coordinate.Z, (r.Flags & SurveyStationFlags.Entrance) != 0))];
     }
 

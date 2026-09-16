@@ -92,8 +92,14 @@ public static class HistoryProtection
     // reader walks). The live tracking reads answer positions to whoever holds exact view;
     // the timeline keeps the event — a report landed, a config changed — and names no
     // station for anyone, the StoredFile.Geom defence-in-depth stance.
+    //
+    // These names are matched against keys already written into history rows, so renaming an
+    // audited property is only half done when this file compiles again: the rows written before
+    // the rename still carry the old key, and a name this list no longer mentions is a name the
+    // timeline stops dropping. The migration that renames the column renames the key in those
+    // rows with it, which is what keeps one spelling here sufficient.
     private static readonly string[] TripPositionEventNoise =
-        [nameof(TripPositionEvent.StationName), nameof(TripPositionEvent.DepthEnteredM),
+        [nameof(TripPositionEvent.ViewerStationName), nameof(TripPositionEvent.DepthEnteredM),
          nameof(TripPositionEvent.SurveyModelId), nameof(TripPositionEvent.CaveFeatureId)];
     private static readonly string[] TripTrackingNoise =
         [nameof(Entities.TripTracking.ReferenceStationName), nameof(Entities.TripTracking.DepthFilter),

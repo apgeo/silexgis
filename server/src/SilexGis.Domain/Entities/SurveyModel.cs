@@ -141,6 +141,21 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// </summary>
     public int? MergedStationCount { get; set; }
 
+    /// <summary>
+    /// The name of the file's root survey, where the format has a survey tree and the root is
+    /// named; null otherwise, and null before a line-plot model has been read.
+    ///
+    /// <para>
+    /// Read from the file rather than worked out from the station rows, because from the rows alone
+    /// it cannot be: a file whose root survey is called <c>a</c> and a file with an unnamed root and
+    /// one sub-survey called <c>a</c> produce exactly the same set of station names, and the viewer
+    /// addresses the two differently. This is the one fact that tells them apart, and everything
+    /// that converts between the two spellings is given it —
+    /// <see cref="Surveys.SurveyStationNames"/> holds that conversion and the reason it exists.
+    /// </para>
+    /// </summary>
+    public string? RootSurveyName { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

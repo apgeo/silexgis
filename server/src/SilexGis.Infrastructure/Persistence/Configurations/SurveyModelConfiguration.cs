@@ -17,6 +17,8 @@ public sealed class SurveyModelConfiguration : IEntityTypeConfiguration<SurveyMo
         builder.Property(x => x.Format).HasConversion<short>();
         builder.Property(x => x.Status).HasConversion<short>();
         builder.Property(x => x.ProcessingError).HasMaxLength(1000);
+        // One survey name, held to the same length every other survey name column is.
+        builder.Property(x => x.RootSurveyName).HasMaxLength(400);
         builder.Property(x => x.Anchor).HasColumnType("geometry(Point, 4326)");
 
         // Models die with their cave (purge path); the stored file survives.

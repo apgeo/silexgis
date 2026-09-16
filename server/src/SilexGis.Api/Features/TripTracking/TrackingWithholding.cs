@@ -83,22 +83,58 @@ internal static class TrackingWithholding
     /// and is therefore not publishable — the same fail-closed shape the per-row test takes.
     /// </para>
     /// </remarks>
-    internal static async Task<HashSet<Guid>> PublishableCaveIdsAsync(
+    internal static Task<HashSet<Guid>> PublishableCaveIdsAsync(
         SilexGisDbContext db, FeatureProtection protection,
-        IReadOnlyCollection<Guid> caveIds, CancellationToken ct)
+        IReadOnlyCollection<Guid> caveIds, CancellationToken ct) =>
+        UnguardedIdsAsync(db, protection, caveIds, FeatureKind.Cave, ct);
+
+    /// <summary>
+    /// Which of the given features — of any kind — carry no location protection at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same question <see cref="PublishableCaveIdsAsync"/> asks, asked of anything a feature
+    /// can be, and it exists because a published page now hangs photographs on the drawing. A
+    /// picture is anchored by a link, and a link relates any number of things: the picture, the
+    /// station, and whatever else somebody said belongs with them — an entrance, a spring, a GPS
+    /// point, another cave. Publishing one member of such a link at a point in space gives the
+    /// whole link a position, so a link naming something guarded must not have its picture
+    /// published, and "something guarded" there is not restricted to caves.
+    /// </para>
+    /// <para>
+    /// Deliberately the same two facts and the same fail-closed shape rather than a second
+    /// predicate written beside them — a second copy is exactly what this class exists to stop.
+    /// </para>
+    /// </remarks>
+    internal static Task<HashSet<Guid>> UnguardedFeatureIdsAsync(
+        SilexGisDbContext db, FeatureProtection protection,
+        IReadOnlyCollection<Guid> featureIds, CancellationToken ct) =>
+        UnguardedIdsAsync(db, protection, featureIds, kind: null, ct);
+
+    /// <summary>The two facts, in one place; <paramref name="kind"/> narrows what may qualify.</summary>
+    private static async Task<HashSet<Guid>> UnguardedIdsAsync(
+        SilexGisDbContext db, FeatureProtection protection,
+        IReadOnlyCollection<Guid> featureIds, FeatureKind? kind, CancellationToken ct)
     {
         var open = new HashSet<Guid>();
-        if (caveIds.Count == 0) return open;
+        if (featureIds.Count == 0) return open;
 
-        var ids = caveIds.Distinct().ToList();
+        var ids = featureIds.Distinct().ToList();
 
-        // Fact one, read under the ordinary filters: a live cave the derived column calls
+        // Fact one, read under the ordinary filters: a live feature the derived column calls
         // unprotected. Fact two, over the same candidates: no protection root above it,
-        // resolved without that column. A cave needs both.
-        var byColumn = await db.Features.AsNoTracking()
-            .Where(f => ids.Contains(f.Id) && f.Kind == FeatureKind.Cave && !f.IsProtectedEffective)
-            .Select(f => f.Id)
-            .ToListAsync(ct);
+        // resolved without that column. A feature needs both.
+        var candidates = db.Features.AsNoTracking()
+            .Where(f => ids.Contains(f.Id) && !f.IsProtectedEffective);
+        // Applied as a second Where rather than folded into the predicate, so the query the cave
+        // question asks is the one it always asked — a nullable compared inside the expression
+        // would put a parameter test in the SQL for every caller of both.
+        if (kind is { } wanted)
+        {
+            candidates = candidates.Where(f => f.Kind == wanted);
+        }
+
+        var byColumn = await candidates.Select(f => f.Id).ToListAsync(ct);
         if (byColumn.Count == 0) return open;
 
         var byAncestry = await protection.UnprotectedByAncestryIdsAsync(ids, ct);
@@ -111,7 +147,7 @@ internal static class TrackingWithholding
 
     /// <summary>A row that claims a place, however partially — anything here is location data.</summary>
     internal static bool HasPosition(TripPositionEvent e) =>
-        e.StationName is not null || e.DepthEnteredM is not null || e.SurveyModelId is not null;
+        e.ViewerStationName is not null || e.DepthEnteredM is not null || e.SurveyModelId is not null;
 
     /// <summary>
     /// Whether this caller may see the row's position, given the caves open to them. A position

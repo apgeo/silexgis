@@ -28,12 +28,20 @@ namespace SilexGis.Infrastructure.Surveys;
 /// <param name="MergedStationCount">
 /// Stations that stood at a position an earlier station already held, and so became one node.
 /// </param>
+/// <param name="RootSurveyName">
+/// The name of the file's root survey, where it has a survey tree with exactly one named root;
+/// null for a format that carries no tree, for an unnamed root, and for the malformed case of
+/// several surveys each claiming to be their own parent — in every one of those the name below is
+/// no longer the single component that would tell a stored station name from the way the survey
+/// viewer addresses the same station, so answering with one of them would be a guess.
+/// </param>
 public sealed record SurveyGraphExtraction(
     IReadOnlyList<SurveyStation> Stations,
     IReadOnlyList<SurveyShot> Shots,
     IReadOnlyList<SurveyLrud> Lrud,
     int DroppedShotCount,
     int MergedStationCount,
+    string? RootSurveyName,
     double AnchorLongitude,
     double AnchorLatitude,
     double AnchorHeightM,
@@ -230,6 +238,7 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
             readings,
             droppedShots,
             mergedStations,
+            RootSurveyName(model),
             placement.Anchor.Longitude,
             placement.Anchor.Latitude,
             placement.OriginHeightM,
@@ -390,6 +399,41 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
         }
 
         return paths;
+    }
+
+    /// <summary>
+    /// The name of the file's root survey — the one survey that is its own parent — or null where
+    /// the file has no survey tree, where that root has no name, or where more than one survey
+    /// claims to be its own parent.
+    ///
+    /// <para>
+    /// Surfaced rather than kept private because it is the single component by which a stored
+    /// station name differs from the way the survey viewer addresses the same station: the path
+    /// built above starts at the root, and the viewer's reader of this format leaves the root out
+    /// of its tree. Nothing else in the file says which of a station name's components that is, and
+    /// the station names alone cannot say — a root called <c>a</c> and an unnamed root with one
+    /// sub-survey called <c>a</c> produce the same names and want different answers.
+    /// </para>
+    /// </summary>
+    private static string? RootSurveyName(CaveModel model)
+    {
+        string? root = null;
+        foreach (var survey in model.Surveys)
+        {
+            if (survey.ParentId != survey.Id)
+            {
+                continue;
+            }
+
+            if (root is not null)
+            {
+                return null;
+            }
+
+            root = survey.Name;
+        }
+
+        return string.IsNullOrEmpty(root) ? null : root;
     }
 
     private static string? SurveyNameOf(uint? surveyId, IReadOnlyDictionary<uint, string> paths) =>

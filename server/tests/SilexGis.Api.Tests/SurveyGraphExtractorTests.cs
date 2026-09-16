@@ -3,6 +3,7 @@ using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
+using SilexGis.Domain.Surveys;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Surveys;
 using Therion.Blender;
@@ -62,6 +63,52 @@ public class SurveyGraphExtractorTests
 
         // The number the file wrote is kept as data and is not what anything keys on.
         extraction.Stations.ShouldAllBe(s => s.FileStationId != null);
+    }
+
+    [Fact]
+    public void The_root_survey_is_named_so_the_viewers_spelling_can_be_worked_out_again()
+    {
+        // A two-level file, written as real bytes and read back: a root survey with a station of
+        // its own, and a sub-survey with two more. The stored name of every one of them starts at
+        // the root, because the path is built from the top.
+        var extraction = Extractor.Extract(WrittenAndReadBack(TwoLevelCave()), ModelId, Local);
+
+        extraction.Stations.Select(s => s.Name).ShouldBe(
+            ["cave.0", "cave.entrance.1", "cave.entrance.2"], ignoreOrder: true);
+
+        // And the root is named, which is the one fact the station names cannot supply: a root
+        // called "cave" and an unnamed root with a single sub-survey called "cave" would produce
+        // the same list above and want different answers below.
+        extraction.RootSurveyName.ShouldBe("cave");
+
+        // The viewer's reader of this same file never adds the root to its tree, so it addresses
+        // these three stations without that first component. That conversion is a rule of its own
+        // with a home of its own; what this proves is that the fact it needs comes out of the file
+        // correctly, over bytes rather than over an object this test built.
+        extraction.Stations
+            .Select(s => SurveyStationNames.ViewerName(
+                SurveyModelFormat.Lox, extraction.RootSurveyName, s.Name))
+            .ShouldBe(["0", "entrance.1", "entrance.2"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public void A_file_whose_root_survey_has_no_name_says_so_rather_than_naming_a_sub_survey()
+    {
+        // The case that makes the answer above a fact and not a guess: the same shape with the root
+        // left unnamed. The rows then start at the first named survey — which is also where the
+        // viewer's tree starts — so there is nothing to convert, and saying "the root is called
+        // entrance" would cut a component off names that never had one.
+        //
+        // This, and not the named root above, is what the compiler actually emits: every compiled
+        // file available when this was written — eighteen of them, from several unrelated surveying
+        // projects, two to three hundred and thirty-nine surveys each — has exactly one root survey
+        // and that root is unnamed. So this test is the production case and the one above is the
+        // case the format permits; both have to hold, and only one of them has ever been seen.
+        var extraction = Extractor.Extract(WrittenAndReadBack(TwoLevelCave(rootName: "")), ModelId, Local);
+
+        extraction.RootSurveyName.ShouldBeNull();
+        extraction.Stations.Select(s => s.Name).ShouldBe(
+            ["0", "entrance.1", "entrance.2"], ignoreOrder: true);
     }
 
     [Fact]
@@ -685,6 +732,37 @@ public class SurveyGraphExtractorTests
                 ToLrud = new CaveLrud(0, 0, 0, 0),
             },
         ],
+    };
+
+    /// <summary>
+    /// A survey tree two levels deep: a root survey holding one station, and a sub-survey holding
+    /// two. The smallest cave that can tell a root survey's component apart from a sub-survey's.
+    /// </summary>
+    private static CaveModel TwoLevelCave(string rootName = "cave") => new()
+    {
+        SourceFormat = CaveSourceFormat.Lox,
+        Surveys =
+        [
+            new CaveSurvey(Id: 1, ParentId: 1, Name: rootName, Title: null),
+            new CaveSurvey(Id: 2, ParentId: 1, Name: "entrance", Title: null),
+        ],
+        Stations =
+        [
+            StationIn(1, survey: 1, "0", new CaveVector3(0, 0, 0), raw: LoxEntrance),
+            StationIn(2, survey: 2, "1", new CaveVector3(10, 0, -5), raw: 0),
+            StationIn(3, survey: 2, "2", new CaveVector3(20, 0, -9), raw: 0),
+        ],
+        Shots = [Leg(1, 2, raw: 0), Leg(2, 3, raw: 0)],
+    };
+
+    private static CaveStation StationIn(uint id, uint survey, string name, CaveVector3 position, uint raw) => new()
+    {
+        Id = id,
+        SurveyId = survey,
+        Name = name,
+        Position = position,
+        Flags = MapLoxStationFlags(raw),
+        RawFlags = raw,
     };
 
     private static CaveShot Leg(uint from, uint to, uint raw) => new()

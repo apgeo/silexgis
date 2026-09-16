@@ -28,8 +28,9 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
         // Provenance, stored beside the row and deliberately outside every read-side decision:
         // nothing about who may learn a position depends on which path wrote it.
         builder.Property(x => x.Source).HasConversion<short>().HasDefaultValue(TripPositionEventSource.Reported);
-        // Viewer-spelling station path; text kept even when the model row later disappears.
-        builder.Property(x => x.StationName).HasMaxLength(400);
+        // The viewer's own spelling of the station path; text kept even when the model row later
+        // disappears.
+        builder.Property(x => x.ViewerStationName).HasMaxLength(400);
         builder.Property(x => x.DepthEnteredM).HasPrecision(7, 1);
         builder.Property(x => x.Note).HasMaxLength(2000);
 

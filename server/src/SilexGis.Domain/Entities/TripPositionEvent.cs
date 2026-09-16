@@ -88,11 +88,26 @@ public class TripPositionEvent : ITimestamped, IAuditable, IAuditChild
     public Guid? CaveFeatureId { get; set; }
 
     /// <summary>
-    /// Station name in the viewer's spelling. Kept as text deliberately: history must stay
-    /// readable after a model is replaced, and a name that no longer resolves is shown as
-    /// unresolved rather than guessed.
+    /// The station this report places the caver at, <b>in the survey viewer's own spelling</b> —
+    /// which for one of the two line-plot formats is not the string the survey rows hold for the
+    /// same station. Null for the kinds that claim no place.
+    ///
+    /// <para>
+    /// Named for the spelling rather than for the field, because the spelling is the whole
+    /// difference between a marker drawn on the model and one that silently never appears. A
+    /// position exists to be shown at a place in the viewer, and a viewer resolves a station by its
+    /// own name for it; a string in any other vocabulary is one the surface that has to draw it
+    /// cannot look up, and it fails by drawing nothing rather than by complaining. Every write path
+    /// converts on the way in (see <see cref="Surveys.SurveyStationNames"/>), which is also where
+    /// the reason the two spellings differ at all is written down.
+    /// </para>
+    ///
+    /// <para>
+    /// Kept as text deliberately: history must stay readable after a model is replaced, and a name
+    /// that no longer resolves is shown as unresolved rather than guessed.
+    /// </para>
     /// </summary>
-    public string? StationName { get; set; }
+    public string? ViewerStationName { get; set; }
 
     /// <summary>The depth the reporter gave, metres positive down, for AtDepth events.</summary>
     public decimal? DepthEnteredM { get; set; }

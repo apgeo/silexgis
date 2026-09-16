@@ -1050,6 +1050,25 @@ Decide before you upgrade, not after:
 Both published addresses are served with `X-Robots-Tag: noindex, nofollow`, so this does not put
 anybody's name into a search index; see "Letting a website embed a live trip".
 
+### Upgrading across the release that records station names as the 3D viewer spells them
+
+**Almost certainly nothing to do here.** This release settles which spelling of a station name a
+tracked position is stored under, because a `.lox` survey file *may* name its own root survey, and
+where it does, the name the survey rows carry for a station and the name the 3D viewer knows the
+same station by differ by that one leading component. Every `.lox` file we have been able to examine
+— eighteen of them, from several unrelated surveying projects — leaves its root survey unnamed, and on
+those the two spellings are identical and always were. `.3d` files never carry a survey tree at all,
+so they were never affected either.
+
+If your installation does hold a `.lox` model whose file names its root survey, markers on that
+model and reports made by pressing a station on it would not have worked before this release, and
+they will work for models uploaded from now on. The fix needs one fact read out of the file, and
+that fact is recorded when a file is read, so a model already in your installation keeps behaving as
+it did: there is no button that re-reads one — upload the same file again as a new model for that
+cave, and track against the new one. Positions recorded before the upgrade keep the name they were
+written with; the tracking log is append-only by design, and a correction is made by deleting a
+report and entering it again.
+
 ## External login providers
 
 Sign-in with Google, GitHub, or any OpenID Connect provider is optional and off by default —

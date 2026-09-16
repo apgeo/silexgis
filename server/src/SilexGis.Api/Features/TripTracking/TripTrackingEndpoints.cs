@@ -6,6 +6,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Permissions;
+using SilexGis.Domain.Surveys;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
@@ -96,14 +97,44 @@ public static class TripTrackingEndpoints
         return await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct) ? (model, cave) : null;
     }
 
+    /// <summary>
+    /// The station of <paramref name="model"/> that <paramref name="given"/> names, answered in the
+    /// survey viewer's own spelling — or null when the model has no such station.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Either spelling is accepted</b>, and which reading wins is not decided here: the ordered
+    /// candidates and the reason for their order live with the conversion itself. What this adds is
+    /// the lookup — the rows of one model, fetched once for both readings rather than queried twice.
+    /// </para>
+    /// <para>
+    /// What comes back is always the viewer's spelling, whichever arrived: the stored name is read
+    /// by the surface that draws the party on the model, and a name it cannot resolve is a marker
+    /// that never appears and says nothing about why.
+    /// </para>
+    /// </remarks>
+    private static async Task<string?> ResolveStationAsync(
+        SilexGisDbContext db, SurveyModel model, string given, CancellationToken ct)
+    {
+        var candidates = SurveyStationNames.StoredCandidates(model.Format, model.RootSurveyName, given);
+        var found = await db.SurveyStations.AsNoTracking()
+            .Where(s => s.SurveyModelId == model.Id && candidates.Contains(s.Name))
+            .Select(s => s.Name)
+            .ToListAsync(ct);
+
+        return SurveyStationNames.ViewerNameOfMatch(
+            model.Format, model.RootSurveyName, given, found.Contains);
+    }
+
     private static async Task<IReadOnlyList<TrackingDepthResolver.Station>> StationsOfAsync(
-        SilexGisDbContext db, Guid surveyModelId, CancellationToken ct)
+        SilexGisDbContext db, SurveyModel model, CancellationToken ct)
     {
         var rows = await db.SurveyStations.AsNoTracking()
-            .Where(s => s.SurveyModelId == surveyModelId)
+            .Where(s => s.SurveyModelId == model.Id)
             .Select(s => new { s.Name, s.SurveyName, s.Position, s.Flags })
             .ToListAsync(ct);
-        return [.. rows.Select(r => new TrackingDepthResolver.Station(
+        return [.. rows.Select(r => TrackingDepthResolver.Station.Of(
+            model.Format, model.RootSurveyName,
             r.Name, r.SurveyName, r.Position.Coordinate.Z, (r.Flags & SurveyStationFlags.Entrance) != 0))];
     }
 
@@ -183,7 +214,7 @@ public static class TripTrackingEndpoints
                 // The position's own time rides the position's own withholding: when the
                 // station is kept back the time that would date it is kept back with it.
                 positionOpen ? lastPositioned?.RecordedAt : null,
-                positionOpen ? lastPositioned?.StationName : null,
+                positionOpen ? lastPositioned?.ViewerStationName : null,
                 positionOpen ? lastPositioned?.DepthEnteredM : null,
                 standing == TripStanding.Underground,
                 standing == TripStanding.Out,
@@ -239,7 +270,7 @@ public static class TripTrackingEndpoints
             return new TrackingEventDto(
                 e.Id, e.CaverId, e.TeamId, e.Kind,
                 open ? e.SurveyModelId : null,
-                open ? e.StationName : null,
+                open ? e.ViewerStationName : null,
                 open ? e.DepthEnteredM : null,
                 e.Note, e.RecordedAt);
         }).ToList();
@@ -287,6 +318,10 @@ public static class TripTrackingEndpoints
         }
 
         var referenceChanging = request.ReferenceStationName is not null && request.ReferenceStationName.Length > 0;
+        // The datum, once a station has been named and found, in the spelling it is stored in:
+        // the viewer's, like every other station name this feature writes down. Whichever of the
+        // two was typed, this is what goes back into the box the administrator typed it into.
+        string? referenceResolved = null;
         Guid? snapshotCave = tracking?.CaveFeatureId;
         if (modelChanging || referenceChanging)
         {
@@ -299,9 +334,12 @@ public static class TripTrackingEndpoints
             snapshotCave = usable.Value.Cave.Id;
             if (referenceChanging)
             {
-                var known = await db.SurveyStations.AsNoTracking()
-                    .AnyAsync(s => s.SurveyModelId == usable.Value.Model.Id && s.Name == request.ReferenceStationName, ct);
-                if (!known) return ApiProblems.Conflict("tracking.reference_unknown",
+                // Resolved rather than compared, for the reason a reported station is: somebody
+                // reading a station off the model types the viewer's spelling of it, and for a
+                // Therion model that is not guaranteed to be the string the survey rows hold.
+                referenceResolved = await ResolveStationAsync(
+                    db, usable.Value.Model, request.ReferenceStationName!, ct);
+                if (referenceResolved is null) return ApiProblems.Conflict("tracking.reference_unknown",
                     "The reference station is not a station of the chosen model.");
             }
         }
@@ -336,7 +374,7 @@ public static class TripTrackingEndpoints
         }
         if (request.ReferenceStationName is not null)
         {
-            tracking.ReferenceStationName = request.ReferenceStationName.Length == 0 ? null : request.ReferenceStationName;
+            tracking.ReferenceStationName = request.ReferenceStationName.Length == 0 ? null : referenceResolved;
         }
         if (request.DepthFilter is not null)
         {
@@ -529,15 +567,17 @@ public static class TripTrackingEndpoints
 
             if (kind == TripPositionEventKind.AtStation)
             {
-                var known = await db.SurveyStations.AsNoTracking()
-                    .AnyAsync(s => s.SurveyModelId == surveyModelId && s.Name == request.StationName, ct);
-                if (!known) return ApiProblems.BadRequest("tracking.station_unknown",
+                // Matched by resolving the name against the model rather than by comparing strings:
+                // the two sides of this application spell one station of a Therion model
+                // differently, so a station pressed on the model is a real station under a name a
+                // string comparison against the survey rows would call unknown.
+                stationName = await ResolveStationAsync(db, usable.Value.Model, request.StationName!, ct);
+                if (stationName is null) return ApiProblems.BadRequest("tracking.station_unknown",
                     "The station is not one of the chosen model's stations.");
-                stationName = request.StationName;
             }
             else
             {
-                var stations = await StationsOfAsync(db, surveyModelId.Value, ct);
+                var stations = await StationsOfAsync(db, usable.Value.Model, ct);
                 var referenceZ = TrackingDepthResolver.ReferenceZ(stations, tracking.ReferenceStationName);
                 if (referenceZ is null) return ApiProblems.Conflict("tracking.reference_unknown",
                     "The depth datum cannot be established for the chosen model.");
@@ -545,7 +585,11 @@ public static class TripTrackingEndpoints
                     stations, referenceZ.Value, (double)request.DepthM!.Value, tracking.DepthFilter, take: 1);
                 if (candidates.Count == 0) return ApiProblems.Conflict("tracking.no_station_at_depth",
                     "No station matches that depth under the trip's depth filter.");
-                stationName = candidates[0].Name;
+                // The winner under the name the viewer knows it by, which the resolver carried
+                // alongside the rows' own. A depth-placed position is drawn on the model exactly
+                // like a pressed one, and one stamped in the other spelling would be a marker that
+                // silently never appears.
+                stationName = candidates[0].ViewerName;
                 depthEntered = request.DepthM;
             }
         }
@@ -561,7 +605,7 @@ public static class TripTrackingEndpoints
                 Kind = kind,
                 SurveyModelId = surveyModelId,
                 CaveFeatureId = caveFeatureId,
-                StationName = stationName,
+                ViewerStationName = stationName,
                 DepthEnteredM = depthEntered,
                 Note = request.Note,
                 RecordedAt = recordedAt,
@@ -572,7 +616,7 @@ public static class TripTrackingEndpoints
         await db.SaveChangesAsync(ct);
 
         IReadOnlyList<TrackingEventDto> dtos = [.. created.Select(e => new TrackingEventDto(
-            e.Id, e.CaverId, e.TeamId, e.Kind, e.SurveyModelId, e.StationName, e.DepthEnteredM, e.Note, e.RecordedAt))];
+            e.Id, e.CaverId, e.TeamId, e.Kind, e.SurveyModelId, e.ViewerStationName, e.DepthEnteredM, e.Note, e.RecordedAt))];
         return TypedResults.Ok(dtos);
     }
 
@@ -614,15 +658,27 @@ public static class TripTrackingEndpoints
         if (usable is null) return ApiProblems.Conflict("tracking.model_unavailable",
             "The survey model does not exist here, or its cave cannot be placed by this account.");
 
-        var stations = await StationsOfAsync(db, usable.Value.Model.Id, ct);
+        var stations = await StationsOfAsync(db, usable.Value.Model, ct);
         var referenceZ = TrackingDepthResolver.ReferenceZ(stations, tracking.ReferenceStationName);
         if (referenceZ is null) return ApiProblems.Conflict("tracking.reference_unknown",
             "The depth datum cannot be established for the chosen model.");
 
         var candidates = TrackingDepthResolver.Resolve(
             stations, referenceZ.Value, (double)request.DepthM!.Value, tracking.DepthFilter, request.Take ?? 5);
+        // Named as the viewer names them, because this is a preview of what recording the depth
+        // would write down, and it is also a list somebody picks a station out of to report it
+        // outright. A preview that spells a station one way while the report it leads to stores it
+        // another is a preview of something else. The depth filter beside it accepts a prefix of
+        // either spelling, so a name copied out of this list still selects what it appears to.
+        // The survey name is left as the file labels it: it is the survey's own description of
+        // where the station sits, offered to tell two candidates apart, and not a path anything
+        // resolves.
         IReadOnlyList<TrackingDepthCandidateDto> dtos = [.. candidates.Select(c =>
-            new TrackingDepthCandidateDto(c.Name, c.SurveyName, Math.Round(c.DepthM, 1), Math.Round(c.DeltaM, 1)))];
+            new TrackingDepthCandidateDto(
+                c.ViewerName,
+                c.SurveyName,
+                Math.Round(c.DepthM, 1),
+                Math.Round(c.DeltaM, 1)))];
         return TypedResults.Ok(dtos);
     }
 }

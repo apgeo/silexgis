@@ -82,11 +82,17 @@ interface Props {
  * pressed, and asking somebody to confirm a fact the application already holds is how a form makes
  * itself look like work. So it is stated — the place this report is about — and the only thing that
  * can turn it back into a field is the server saying it does not know it, which is the one case
- * where a reader has something to do about it. That case is real rather than theoretical: the
- * viewer's spelling of a station and the server's are not guaranteed to be the same string for
- * every survey format, because the server prefixes some models with the root survey's name and the
- * viewer's reader does not. A refusal with nothing to act on would strand somebody mid-call, so the
- * refusal reveals the field with the pressed spelling already in it.
+ * where a reader has something to do about it.
+ *
+ * <b>That case is real rather than theoretical, and nothing here translates a name to avoid it.</b>
+ * The server resolves a reported station against the model instead of comparing it with a string,
+ * so a model that spells a survey path differently from this viewer — which the compiled Therion
+ * format permits, though no file anyone has looked at here is written that way — is accepted rather
+ * than refused. What is left is narrower and still happens: a station the file gives no name at all
+ * is called by a number in punctuation the two sides do not share, and a model re-read since this
+ * page loaded can have station names that no longer exist. Neither is something a reader can be
+ * told about in advance, and a refusal with nowhere to act on it would strand somebody mid-call, so
+ * the refusal still reveals the field with the pressed spelling already in it.
  *
  * <b>What is being reported can be changed, and the statement above it changes with it.</b> A press
  * is often not the whole of what a voice on the phone just said — "we're at P42" and "we're out"
@@ -164,9 +170,9 @@ export default function TrackingReportDialog({
       onClose();
       return;
     }
-    // The one refusal this surface can do something about: the model's spelling of the station is
-    // not the server's. The refusal has already been worded; what is added here is somewhere to
-    // act on it.
+    // The one refusal this surface can do something about: the model holds no station under the
+    // name that was pressed. The refusal has already been worded; what is added here is somewhere
+    // to act on it.
     if (outcome.code === 'tracking.station_unknown') {
       form.setFieldValue('stationName', station ?? '');
       setStationDisputed(true);

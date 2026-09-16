@@ -5,6 +5,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
+using SilexGis.Domain.Surveys;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Trips;
@@ -234,7 +235,16 @@ public sealed class SpeleolocTripImportCommitService(
             // model moments ago and is checked for the same reason: the two paths must not differ
             // in what they will accept, or the import becomes the way to write a name the live
             // path refuses.
-            if (!knownStations.Contains(station))
+            //
+            // Which means checking it the way the live path does: by resolving the name against the
+            // model rather than comparing it with the rows, because one of the two line-plot
+            // formats is spelled differently by the survey viewer than by the rows read out of the
+            // same file, and either spelling can arrive here — a reviewer may type a station they
+            // read off the model. The same call the live path makes, so the two cannot come to
+            // differ about which names a model answers to.
+            var viewerName = SurveyStationNames.ViewerNameOfMatch(
+                model.Format, model.RootSurveyName, station, knownStations.Contains);
+            if (viewerName is null)
             {
                 failures.Add(Failure(point, SpeleolocImportCodes.StationUnknown,
                     "That station is not one of the chosen model's stations."));
@@ -268,7 +278,10 @@ public sealed class SpeleolocTripImportCommitService(
                 // nothing else, so an imported position is withheld by exactly the rule that
                 // withholds a relayed one.
                 CaveFeatureId = cave.Id,
-                StationName = station,
+                // The viewer's own spelling, as the live path stores it. An imported position is
+                // drawn on the model by exactly the surface that draws a relayed one, so a name in
+                // the other vocabulary would be a marker that silently never appears.
+                ViewerStationName = viewerName,
                 // Not the place's depth. A depth on a position row is what a reporter claimed
                 // about where the party was; a device place's depth is a property of a marker
                 // somebody bolted to the wall years ago, and writing it here would read as a
