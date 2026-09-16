@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using Microsoft.EntityFrameworkCore;
+using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Permissions;
+using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Common;
 
@@ -41,6 +44,47 @@ public static class SurveyModelAccess
     public static async Task<bool> LocationOpenAsync(
         FeatureProtection protection, AccessContext? ctx, Guid caveFeatureId, CancellationToken ct) =>
         (await protection.ExactViewIdsAsync(ctx, [caveFeatureId], ct)).Contains(caveFeatureId);
+
+    /// <summary>
+    /// The cave whose survey may be measured, or null when it may not be.
+    ///
+    /// <para>
+    /// Null covers three different situations on purpose: the cave does not exist, the caller may
+    /// not read it, and the caller may read it but not place it exactly. Telling them apart would
+    /// say which caves are being kept from whom — a refusal that distinguishes "no such cave" from
+    /// "not for you" answers the question the protection exists to decline. Every surface that
+    /// derives a figure from a cave's survey asks this, and asks it here rather than spelling it
+    /// again: a gate whose whole property is that its refusals are indistinguishable cannot have
+    /// one copy per route, because the copy that gains a nuance the others lack becomes the
+    /// difference a caller can measure.
+    /// </para>
+    /// </summary>
+    /// <param name="withDeclaredFigures">
+    /// Load the cave subtype as well, for a caller that sets what the survey measures beside what
+    /// the record claims. Off by default: most callers want only the gate, and every one of them
+    /// would otherwise pay for a join it never reads.
+    /// </param>
+    public static async Task<Feature?> MeasurableCaveAsync(
+        SilexGisDbContext db,
+        IAccessService access,
+        FeatureProtection protection,
+        AccessContext ctx,
+        Guid id,
+        CancellationToken ct,
+        bool withDeclaredFigures = false)
+    {
+        var caves = db.Features.AsNoTracking();
+        if (withDeclaredFigures)
+        {
+            caves = caves.Include(f => f.Cave);
+        }
+
+        var cave = await caves.FirstOrDefaultAsync(f => f.Id == id && f.Kind == FeatureKind.Cave, ct);
+
+        return cave is not null && await VisibleAsync(access, protection, ctx, cave, ct)
+            ? cave
+            : null;
+    }
 
     /// <summary>Write on the cave — asked only of a caller who already passes
     /// <see cref="VisibleAsync"/>, never on its own.</summary>

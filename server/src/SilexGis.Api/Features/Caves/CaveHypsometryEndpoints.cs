@@ -105,7 +105,7 @@ public static class CaveHypsometryEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (await ReadableCaveAsync(db, access, protection, ctx, request.Id, ct) is null)
+        if (await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, request.Id, ct) is null)
         {
             return ApiProblems.NotFound(CaveNotFoundCode);
         }
@@ -182,7 +182,7 @@ public static class CaveHypsometryEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (await ReadableCaveAsync(db, access, protection, ctx, id, ct) is null)
+        if (await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, id, ct) is null)
         {
             return ApiProblems.NotFound(CaveNotFoundCode);
         }
@@ -208,7 +208,7 @@ public static class CaveHypsometryEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var cave = await ReadableCaveAsync(db, access, protection, ctx, id, ct);
+        var cave = await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, id, ct);
         if (cave is null)
         {
             return ApiProblems.NotFound(CaveNotFoundCode);
@@ -271,7 +271,7 @@ public static class CaveHypsometryEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var cave = await ReadableCaveAsync(db, access, protection, ctx, id, ct);
+        var cave = await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, id, ct);
         if (cave is null)
         {
             return ApiProblems.NotFound(CaveNotFoundCode);
@@ -356,26 +356,4 @@ public static class CaveHypsometryEndpoints
             caveId, true, bands, row.Note, row.ConfirmedBy, row.CreatedAt);
     }
 
-    /// <summary>
-    /// The cave whose heights may be read, or null when they may not be — which covers a cave that
-    /// does not exist, one the caller may not read, and one they may read but not place exactly.
-    /// All three are one answer on purpose: distinguishing them would say which caves are being
-    /// kept from whom, and the answer would say it to the person being kept out.
-    /// </summary>
-    private static async Task<Feature?> ReadableCaveAsync(
-        SilexGisDbContext db,
-        IAccessService access,
-        FeatureProtection protection,
-        AccessContext ctx,
-        Guid id,
-        CancellationToken ct)
-    {
-        var feature = await db.Features.AsNoTracking()
-            .FirstOrDefaultAsync(f => f.Id == id && f.Kind == FeatureKind.Cave, ct);
-
-        return feature is not null
-            && await SurveyModelAccess.VisibleAsync(access, protection, ctx, feature, ct)
-                ? feature
-                : null;
-    }
 }

@@ -71,10 +71,8 @@ public static class CaveStructureComparisonEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var cave = await db.Features.AsNoTracking()
-            .FirstOrDefaultAsync(f => f.Id == request.Id && f.Kind == FeatureKind.Cave, ct);
-
-        if (cave is null || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
+        var cave = await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, request.Id, ct);
+        if (cave is null)
         {
             return ApiProblems.NotFound(CaveNotFoundCode);
         }

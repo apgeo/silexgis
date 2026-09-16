@@ -96,7 +96,7 @@ public static class CaveOverburdenEndpoints
         // The whole gate runs before a single pixel is read. Reading first and filtering afterwards
         // would put a withheld cave's passage positions in memory beside a decision not to hand them
         // over, which is one careless change away from handing them over.
-        if (!await CaveCrossSectionEndpoints.ReadableCaveAsync(db, access, protection, ctx, request.Id, ct))
+        if (await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, request.Id, ct) is null)
         {
             return ApiProblems.NotFound(CaveNotFoundCode);
         }

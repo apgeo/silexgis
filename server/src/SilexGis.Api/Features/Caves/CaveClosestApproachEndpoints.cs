@@ -79,8 +79,8 @@ public static class CaveClosestApproachEndpoints
         // failing ends the request the same way. Measuring first and withholding afterwards would
         // put the answer in memory next to a decision not to give it, which is one refactoring
         // away from leaking it.
-        var first = await PlaceableCaveAsync(db, access, protection, ctx, request.Id, ct);
-        var second = await PlaceableCaveAsync(db, access, protection, ctx, request.Other, ct);
+        var first = await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, request.Id, ct);
+        var second = await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, request.Other, ct);
         if (first is null || second is null)
         {
             return ApiProblems.NotFound("cave.not_found");
@@ -164,26 +164,4 @@ public static class CaveClosestApproachEndpoints
             ? new ClosestApproachPointDto(x, y, z)
             : null;
 
-    /// <summary>
-    /// The cave one end of a measurement may be taken from, or null when it may not be — which
-    /// covers a cave that does not exist, one the caller may not read, and one the caller may read
-    /// but not place exactly. All three are one answer on purpose: the caller turns null into "no
-    /// such cave", and distinguishing them would say which caves are being kept from whom.
-    /// </summary>
-    private static async Task<Feature?> PlaceableCaveAsync(
-        SilexGisDbContext db,
-        IAccessService access,
-        FeatureProtection protection,
-        AccessContext ctx,
-        Guid id,
-        CancellationToken ct)
-    {
-        var feature = await db.Features.AsNoTracking()
-            .FirstOrDefaultAsync(f => f.Id == id && f.Kind == FeatureKind.Cave, ct);
-
-        return feature is not null
-            && await SurveyModelAccess.VisibleAsync(access, protection, ctx, feature, ct)
-                ? feature
-                : null;
-    }
 }

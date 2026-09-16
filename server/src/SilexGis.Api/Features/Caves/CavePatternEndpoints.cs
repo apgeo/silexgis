@@ -61,7 +61,7 @@ public static class CavePatternEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!await CaveCrossSectionEndpoints.ReadableCaveAsync(db, access, protection, ctx, request.Id, ct))
+        if (await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, request.Id, ct) is null)
         {
             return ApiProblems.NotFound("cave.not_found");
         }

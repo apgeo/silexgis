@@ -60,7 +60,7 @@ public static class CaveCrossSectionEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!await ReadableCaveAsync(db, access, protection, ctx, request.Id, ct))
+        if (await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, request.Id, ct) is null)
         {
             return ApiProblems.NotFound("cave.not_found");
         }
@@ -96,23 +96,4 @@ public static class CaveCrossSectionEndpoints
             s.FromStationName, s.ToStationName, s.SlopeLengthM ?? s.PlanLengthM, s.IsDuplicate)),
     ];
 
-    /// <summary>
-    /// Whether this cave's survey may be measured at all — false for a cave that does not exist, one
-    /// the caller may not read, and one the caller may read but not place exactly. All three are one
-    /// answer on purpose: distinguishing them would say which caves are being kept from whom.
-    /// </summary>
-    internal static async Task<bool> ReadableCaveAsync(
-        SilexGisDbContext db,
-        IAccessService access,
-        FeatureProtection protection,
-        AccessContext ctx,
-        Guid id,
-        CancellationToken ct)
-    {
-        var feature = await db.Features.AsNoTracking()
-            .FirstOrDefaultAsync(f => f.Id == id && f.Kind == FeatureKind.Cave, ct);
-
-        return feature is not null
-            && await SurveyModelAccess.VisibleAsync(access, protection, ctx, feature, ct);
-    }
 }

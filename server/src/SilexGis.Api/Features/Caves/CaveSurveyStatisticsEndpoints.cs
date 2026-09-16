@@ -81,7 +81,8 @@ public static class CaveSurveyStatisticsEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var feature = await ReadableCaveAsync(db, access, protection, ctx, request.Id, ct);
+        var feature = await SurveyModelAccess.MeasurableCaveAsync(
+            db, access, protection, ctx, request.Id, ct, withDeclaredFigures: true);
         if (feature?.Cave is not { } cave)
         {
             return ApiProblems.NotFound("cave.not_found");
@@ -132,7 +133,7 @@ public static class CaveSurveyStatisticsEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var feature = await ReadableCaveAsync(db, access, protection, ctx, request.Id, ct);
+        var feature = await SurveyModelAccess.MeasurableCaveAsync(db, access, protection, ctx, request.Id, ct);
         if (feature is null)
         {
             return ApiProblems.NotFound("cave.not_found");
@@ -177,27 +178,4 @@ public static class CaveSurveyStatisticsEndpoints
             dip));
     }
 
-    /// <summary>
-    /// The cave whose survey may be measured, or null when it may not be — which covers a cave that
-    /// does not exist, one the caller may not read, and one the caller may read but not place
-    /// exactly. All three are one answer on purpose: the callers turn null into "no such cave", and
-    /// distinguishing them would say which caves are being kept from whom.
-    /// </summary>
-    private static async Task<Feature?> ReadableCaveAsync(
-        SilexGisDbContext db,
-        IAccessService access,
-        FeatureProtection protection,
-        AccessContext ctx,
-        Guid id,
-        CancellationToken ct)
-    {
-        var feature = await db.Features.AsNoTracking()
-            .Include(f => f.Cave)
-            .FirstOrDefaultAsync(f => f.Id == id && f.Kind == FeatureKind.Cave, ct);
-
-        return feature is not null
-            && await SurveyModelAccess.VisibleAsync(access, protection, ctx, feature, ct)
-                ? feature
-                : null;
-    }
 }
