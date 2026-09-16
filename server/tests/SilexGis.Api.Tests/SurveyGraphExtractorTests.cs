@@ -495,6 +495,147 @@ public class SurveyGraphExtractorTests
         extraction.DroppedShotCount.ShouldBe(network - CenterlineGraph.Build(parsed).Edges.Count);
     }
 
+    [Fact]
+    public void The_points_a_survey_declined_to_name_are_not_stations_and_are_counted_as_such()
+    {
+        var extraction = Extractor.Extract(WrittenAndReadBack(WallShotCave()), ModelId, Local);
+
+        // Four real stations in two surveys, and nothing else. Six of the file's ten station
+        // records are the survey language's placeholder for the far end of a shot at the wall —
+        // three written as a dash, three as a full stop — and every one of them qualifies to the
+        // same string as its neighbours, which is exactly how a file like this used to arrive at a
+        // table whose unique index then refused the lot.
+        extraction.Stations.Select(s => s.Name).ShouldBe(
+            ["north.1", "north.2", "south.1", "south.2"], ignoreOrder: true);
+
+        // Not quietly: a station count that fell by six with nothing saying so reads as a reading
+        // that mislaid most of the cave, and on a real whole-system export it would be nine rows
+        // in ten.
+        //
+        // This six is also the only assertion in the suite holding the full-stop spelling, so do not
+        // trim it to a dash-only fixture on the belief that the committed real file covers the rest.
+        // That file carries 186 dashes and no full stop, and nor could any file cut from the export
+        // it came out of. Of eighteen compiled surveys measured, ten carry full stops and four of
+        // those carry no dash at all: a rule narrowed back to the dash alone would leave ten of the
+        // thirteen previously-unreadable files exactly as unreadable, and this assertion reading 3
+        // instead of 6 is the only place that would show it.
+        extraction.AnonymousStationCount.ShouldBe(6);
+    }
+
+    [Fact]
+    public void A_leg_fired_at_an_unnamed_point_is_kept_as_the_wall_shot_it_is()
+    {
+        var extraction = Extractor.Extract(WrittenAndReadBack(WallShotCave()), ModelId, Local);
+
+        // Every leg the file drew is still a row. The placeholders stop being stations; the legs
+        // that reached them were still surveyed, and throwing them away would throw away the
+        // passage shape they are the only record of.
+        extraction.Shots.Count.ShouldBe(WallShotCave().Shots.Count);
+
+        var wallShots = extraction.Shots.Where(s => (s.Flags & SurveyShotFlags.Splay) != 0).ToList();
+        wallShots.Count.ShouldBe(6);
+
+        // The far end has no name, and that is the truthful answer rather than a gap: the point is
+        // on the rock and the file declined to name it. The near end keeps the station it was
+        // fired from, which is what makes the leg locatable at all.
+        wallShots.ShouldAllBe(s => s.FromStationName != null);
+        wallShots.Count(s => s.ToStationName == null).ShouldBe(5);
+
+        // The exception, and it is not an exception to the rule but the rule working: this wall
+        // shot happened to land exactly on a station of the cave, so the far end is that station
+        // and is named. What decides it is where the leg ends, not what the file called the record
+        // sitting there.
+        wallShots.Count(s => s.ToStationName == "south.2").ShouldBe(1);
+
+        // This file flags none of its legs as wall shots — which is not a contrived case but the
+        // commoner one, six of eighteen measured files including the public demo survey of the
+        // viewer this application embeds. The file's own bits are left exactly as written; what
+        // gained the mark is this application's reading of them.
+        extraction.Shots.ShouldAllBe(s => s.RawFlags == 0);
+    }
+
+    [Fact]
+    public void Wall_shots_are_not_counted_as_legs_the_reading_failed_to_attach()
+    {
+        var extraction = Extractor.Extract(WrittenAndReadBack(WallShotCave()), ModelId, Local);
+
+        // Nothing was lost, so the count says nothing was. The trap this guards is arithmetic: the
+        // far ends of the wall shots are precisely the records that are no longer stations, so a
+        // reading that did not understand them as wall shots would report every one of them as a
+        // leg attached to nothing — on one measured file, 15,977 losses in place of 29, a number
+        // that accuses the reading of having dropped two thirds of the cave.
+        extraction.DroppedShotCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public void A_real_station_keeps_its_name_when_an_unnamed_point_stands_on_top_of_it()
+    {
+        var extraction = Extractor.Extract(WrittenAndReadBack(WallShotCave()), ModelId, Local);
+
+        // A wall shot ending exactly on a station of the cave — measured in real files, up to 54
+        // in one of them. Which station stands at a position is settled first-record-wins, and the
+        // placeholder is written first here, so it used to win the race and hand every leg meeting
+        // at that point a name nobody could resolve. It is not in that race any more.
+        extraction.Stations.ShouldContain(s => s.Name == "south.2");
+
+        // Both the leg that arrives at it and the wall shot that lands on it call it by its own
+        // name. Before, the placeholder written just above it took that position and both of these
+        // said "south.." instead.
+        extraction.Shots.Count(s => s.ToStationName == "south.2").ShouldBe(2);
+
+        // And it is not counted as a station merged into another, because it never was one.
+        extraction.MergedStationCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public void A_station_whose_name_merely_starts_with_the_placeholder_is_an_ordinary_station()
+    {
+        var extraction = Extractor.Extract(WrittenAndReadBack(PunctuatedNamesCave()), ModelId, Local);
+
+        // The positive twin of leaving the placeholders out, and the one that decides whether this
+        // is a naming rule or a wrecking ball. Real surveys name stations "1.0" and "-1"; a rule
+        // reading the first character instead of the whole name would stop storing them and look
+        // like it had fixed something while doing it.
+        // Written as the join rather than as one literal, because the last of them qualifies to a
+        // run of three full stops and a reader counting those by eye is a reader about to be wrong.
+        extraction.Stations.Select(s => s.Name).ShouldBe(
+            ["main.1.0", "main.-1", "main.--", "main." + ".."], ignoreOrder: true);
+        extraction.AnonymousStationCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public void A_survey_that_truly_names_two_stations_the_same_is_refused_in_words_not_by_the_database()
+    {
+        var thrown = Should.Throw<SurveySourceException>(
+            () => Extractor.Extract(WrittenAndReadBack(TrulyCollidingCave()), ModelId, Local));
+
+        // Something the uploader can act on, and arriving before a single row is offered to the
+        // database rather than out of the save that writes tens of thousands at once. What that
+        // used to produce was "the survey could not be read", which is the sentence kept for faults
+        // that are ours and holds nothing to act on.
+        thrown.Message.ShouldContain("2 station names");
+        thrown.Message.ShouldContain("4 stations in all");
+        thrown.Message.ShouldContain("re-export");
+
+        // Counts, never the names. This reason is written onto the survey model and shown wherever
+        // that record is, and a station name on a location-protected cave is part of what this
+        // application exists to keep.
+        thrown.Message.ShouldNotContain("north.1");
+        thrown.Message.ShouldNotContain("south.1");
+    }
+
+    [Fact]
+    public void A_file_whose_exporter_did_flag_its_wall_shots_is_read_exactly_as_before()
+    {
+        // The other positive twin: this rule must only ever add legs to the wall-shot set, never
+        // move one out of it, and never touch a file that had no placeholders to begin with.
+        var extraction = Extractor.Extract(WrittenAndReadBack(DisagreeingCave()), ModelId, Local);
+
+        extraction.AnonymousStationCount.ShouldBe(0);
+        extraction.Stations.Count.ShouldBe(8);
+        extraction.Shots.Count(s => (s.Flags & SurveyShotFlags.Splay) != 0).ShouldBe(1);
+    }
+
     private static (double X, double Y) PlanPositionOf(SurveyGraphExtraction extraction, string name)
     {
         var station = extraction.Stations.Single(s => s.Name == name);
@@ -755,6 +896,113 @@ public class SurveyGraphExtractorTests
         Shots = [Leg(1, 2, raw: 0), Leg(2, 3, raw: 0)],
     };
 
+    /// <summary>
+    /// A cave shaped the way the compiled Therion format really writes one: two surveys, each with
+    /// two named stations, and beside them the placeholder records that are the far ends of the
+    /// shots fired at the passage wall.
+    ///
+    /// <para>
+    /// Three things about it are deliberate and each guards a different way of getting this wrong.
+    /// <b>Both spellings appear</b> — the north survey's placeholders are written as a dash and the
+    /// south survey's as a full stop — because a rule that knew only the dash would still refuse
+    /// most real surveys. <b>Nothing is flagged as a wall shot</b>, which is not the awkward case
+    /// but the common one: six of eighteen measured files set that flag on no leg at all, so a
+    /// reading that trusts the flag is answered "this cave is all passage". And <b>one placeholder
+    /// stands exactly on a station of the cave</b>, which is what used to let it win the
+    /// first-record-wins race for that position and rename a real station to something nobody could
+    /// resolve.
+    /// </para>
+    ///
+    /// <para>
+    /// Both surveys number their own stations from 1, as surveys do, so the two "1"s are also a
+    /// standing check that qualifying by survey path still tells them apart.
+    /// </para>
+    /// </summary>
+    private static CaveModel WallShotCave() => new()
+    {
+        SourceFormat = CaveSourceFormat.Lox,
+        Surveys =
+        [
+            // Unnamed root with the named surveys under it — the shape every measured file has.
+            new CaveSurvey(Id: 1, ParentId: 1, Name: "", Title: null),
+            new CaveSurvey(Id: 2, ParentId: 1, Name: "north", Title: null),
+            new CaveSurvey(Id: 3, ParentId: 1, Name: "south", Title: null),
+        ],
+        Stations =
+        [
+            StationIn(1, survey: 2, "1", new CaveVector3(0, 0, 0), raw: LoxEntrance),
+            StationIn(2, survey: 2, "2", new CaveVector3(10, 0, -2), raw: 0),
+            StationIn(3, survey: 2, "-", new CaveVector3(0, 3, 0), raw: 0),
+            StationIn(4, survey: 2, "-", new CaveVector3(0, -3, 0), raw: 0),
+            StationIn(5, survey: 2, "-", new CaveVector3(10, 3, -2), raw: 0),
+
+            // Standing exactly where station 8 stands, and written before it, so that a rule
+            // settling positions first-record-wins would hand station 8's position this record's
+            // name — which is the placeholder, which is unresolvable.
+            StationIn(6, survey: 3, ".", new CaveVector3(30, 0, -6), raw: 0),
+            StationIn(7, survey: 3, "1", new CaveVector3(20, 0, -4), raw: 0),
+            StationIn(8, survey: 3, "2", new CaveVector3(30, 0, -6), raw: 0),
+            StationIn(9, survey: 3, ".", new CaveVector3(30, 4, -6), raw: 0),
+            StationIn(10, survey: 3, ".", new CaveVector3(30, -4, -6), raw: 0),
+        ],
+        Shots =
+        [
+            LegIn(1, 2, survey: 2, raw: 0),
+            LegIn(1, 3, survey: 2, raw: 0),
+            LegIn(1, 4, survey: 2, raw: 0),
+            LegIn(2, 5, survey: 2, raw: 0),
+            LegIn(7, 8, survey: 3, raw: 0),
+            LegIn(7, 6, survey: 3, raw: 0),
+            LegIn(8, 9, survey: 3, raw: 0),
+            LegIn(8, 10, survey: 3, raw: 0),
+        ],
+    };
+
+    /// <summary>
+    /// Stations whose names are made of the very characters the placeholder is made of, without
+    /// being it. Every one of these is a name a surveyor chose, and every one of them is a row.
+    /// </summary>
+    private static CaveModel PunctuatedNamesCave() => new()
+    {
+        SourceFormat = CaveSourceFormat.Lox,
+        Surveys = [new CaveSurvey(Id: 1, ParentId: 1, Name: "main", Title: null)],
+        Stations =
+        [
+            // The commonest real shape of all: one measured survey names some four thousand
+            // stations like this, full stops and all.
+            StationIn(1, survey: 1, "1.0", new CaveVector3(0, 0, 0), raw: 0),
+            StationIn(2, survey: 1, "-1", new CaveVector3(10, 0, 0), raw: 0),
+            StationIn(3, survey: 1, "--", new CaveVector3(20, 0, 0), raw: 0),
+            StationIn(4, survey: 1, "..", new CaveVector3(30, 0, 0), raw: 0),
+        ],
+        Shots = [LegIn(1, 2, survey: 1, raw: 0), LegIn(2, 3, survey: 1, raw: 0), LegIn(3, 4, survey: 1, raw: 0)],
+    };
+
+    /// <summary>
+    /// The genuine article: a file naming two different stations of one survey the same thing, and
+    /// doing it twice. Not one measured real survey does this — fifty thousand named stations
+    /// across eighteen files, no collisions at all — but the format permits it, the rows cannot
+    /// hold it, and what the uploader is told about it is the point.
+    /// </summary>
+    private static CaveModel TrulyCollidingCave() => new()
+    {
+        SourceFormat = CaveSourceFormat.Lox,
+        Surveys =
+        [
+            new CaveSurvey(Id: 1, ParentId: 1, Name: "", Title: null),
+            new CaveSurvey(Id: 2, ParentId: 1, Name: "north", Title: null),
+            new CaveSurvey(Id: 3, ParentId: 1, Name: "south", Title: null),
+        ],
+        Stations =
+        [
+            StationIn(1, survey: 2, "1", new CaveVector3(0, 0, 0), raw: 0),
+            StationIn(2, survey: 2, "1", new CaveVector3(10, 0, 0), raw: 0),
+            StationIn(3, survey: 3, "1", new CaveVector3(20, 0, 0), raw: 0),
+            StationIn(4, survey: 3, "1", new CaveVector3(30, 0, 0), raw: 0),
+        ],
+        Shots = [LegIn(1, 2, survey: 2, raw: 0), LegIn(3, 4, survey: 3, raw: 0)],
+    };
+
     private static CaveStation StationIn(uint id, uint survey, string name, CaveVector3 position, uint raw) => new()
     {
         Id = id,
@@ -770,6 +1018,16 @@ public class SurveyGraphExtractorTests
         FromStationId = from,
         ToStationId = to,
         SurveyId = 1,
+        Flags = MapLoxShotFlags(raw),
+        RawFlags = raw,
+    };
+
+    /// <summary>A leg of a named survey, for the fixtures whose surveys are not all survey 1.</summary>
+    private static CaveShot LegIn(uint from, uint to, uint survey, uint raw) => new()
+    {
+        FromStationId = from,
+        ToStationId = to,
+        SurveyId = survey,
         Flags = MapLoxShotFlags(raw),
         RawFlags = raw,
     };

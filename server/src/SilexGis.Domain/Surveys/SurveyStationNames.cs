@@ -65,6 +65,46 @@ public static class SurveyStationNames
     public const char Separator = '.';
 
     /// <summary>
+    /// Whether <paramref name="leafName"/> is a compiled survey's way of saying <em>there is no
+    /// station here</em>, rather than the name of one.
+    ///
+    /// <para>
+    /// <b>What the two spellings are.</b> The survey language writes a lone <c>-</c> or a lone
+    /// <c>.</c> in a station column to fire a shot at the passage wall from a station without
+    /// naming the far end, because the far end is a point on the rock and not a place anybody
+    /// will come back to. The compiler keeps that token as a station record whose name is literally
+    /// that one character, so the shot has two endpoints to reference. It is a placeholder, and it
+    /// is emitted once per wall shot: a survey with four hundred wall shots has four hundred of
+    /// them, all spelled the same.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Why this is a naming rule and not a statistic.</b> The two characters are the format's
+    /// own vocabulary, fixed by the language that writes them, so recognising them is reading the
+    /// file rather than guessing at the surveyor's habits. The flag that would otherwise say the
+    /// same thing cannot be relied on: of eighteen compiled files measured, six — including the
+    /// public demo survey of the viewer this application embeds — set the wall-shot flag on no leg
+    /// at all while carrying tens of thousands of these placeholders.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Exactly these two, and only whole.</b> Measured over those eighteen files: every leaf name
+    /// containing no letter or digit at all is exactly one of these two characters — there is no
+    /// third placeholder to miss, and nothing longer to over-match. The comparison is deliberately
+    /// against the whole name and not a prefix, because real station names beginning with the same
+    /// punctuation exist and are ordinary names.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>This is the leaf name, before the survey path is put in front of it.</b> A qualified name
+    /// ends in the placeholder rather than being it, and every wall shot of one survey qualifies to
+    /// the same string — which is how a file full of them used to arrive at the station table as
+    /// one name repeated thousands of times.
+    /// </para>
+    /// </summary>
+    public static bool IsAnonymousPoint(string? leafName) => leafName is "-" or ".";
+
+    /// <summary>
     /// How the viewer addresses the station a row calls <paramref name="storedName"/>.
     ///
     /// <para>

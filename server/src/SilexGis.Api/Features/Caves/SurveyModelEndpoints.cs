@@ -67,6 +67,22 @@ public sealed record SurveyModelDto(
     /// </summary>
     int? DroppedShotCount,
     int? MergedStationCount,
+    /// <summary>
+    /// How many of the file's station records were its "there is no station here" placeholder — the
+    /// far end of a shot at the passage wall — and so became no row. Null until a line plot has been
+    /// read, and zero for a file that fired no wall shots.
+    ///
+    /// <para>
+    /// Published for the reason the two counts above are, and more pressingly, because it is much
+    /// the largest of the three. Of fourteen measured files that use the placeholder at all, ten
+    /// carry more than ten of them for every station somebody named, and one carries a hundred and
+    /// eighty-five. A station count read without this beside it therefore looks like a reading that
+    /// mislaid most of the cave: the two numbers together account for the file, and either alone
+    /// does not. Nothing was lost — every one of those legs is still stored as a leg — but a
+    /// shortfall nobody can account for is indistinguishable from one that should worry them.
+    /// </para>
+    /// </summary>
+    int? AnonymousStationCount,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
@@ -679,6 +695,7 @@ public static class SurveyModelEndpoints
         m.SourcePrecisionLost,
         m.DroppedShotCount,
         m.MergedStationCount,
+        m.AnonymousStationCount,
         m.CreatedAt,
         m.UpdatedAt);
 

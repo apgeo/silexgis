@@ -28,6 +28,13 @@ namespace SilexGis.Infrastructure.Surveys;
 /// <param name="MergedStationCount">
 /// Stations that stood at a position an earlier station already held, and so became one node.
 /// </param>
+/// <param name="AnonymousStationCount">
+/// Station records the file wrote as its "there is no station here" placeholder — the far end of a
+/// shot at the passage wall — and which are therefore not stations and have no row. Counted rather
+/// than passed over in silence: on a whole-system export these outnumber the real stations ten to
+/// one, and a station count that shrank by that much with nothing saying why would look like the
+/// reading having lost most of the cave.
+/// </param>
 /// <param name="RootSurveyName">
 /// The name of the file's root survey, where it has a survey tree with exactly one named root;
 /// null for a format that carries no tree, for an unnamed root, and for the malformed case of
@@ -41,6 +48,7 @@ public sealed record SurveyGraphExtraction(
     IReadOnlyList<SurveyLrud> Lrud,
     int DroppedShotCount,
     int MergedStationCount,
+    int AnonymousStationCount,
     string? RootSurveyName,
     double AnchorLongitude,
     double AnchorLatitude,
@@ -82,13 +90,21 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
     /// </summary>
     /// <exception cref="SurveySourceException">
     /// The file cannot be placed: a local file with no position for its zero point, a coordinate
-    /// system this installation cannot resolve, or a projected file with no coordinates at all.
+    /// system this installation cannot resolve, or a projected file with no coordinates at all. Or
+    /// it names two of its own stations identically inside one survey, so the two cannot be told
+    /// apart — see <see cref="RefuseCollidingNames"/>.
     /// </exception>
     public SurveyGraphExtraction Extract(
-        CaveModel model, Guid surveyModelId, SurveySourceDeclaration declaration)
+        CaveModel source, Guid surveyModelId, SurveySourceDeclaration declaration)
     {
-        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(declaration);
+
+        // Read here and not left to the caller, so that every path into this — the job, a test,
+        // anything later — sees the same legs. A file whose exporter wrote no wall-shot flags is
+        // otherwise read as a cave made entirely of passage, and the rows below would say so.
+        var model = SurveyWallShots.Flagged(source);
+        var anonymousPointIds = SurveyWallShots.AnonymousPointIds(model);
 
         var placement = SurveyPlacement.Resolve(projector, declaration, () => FootprintCentre(model));
         var surveyPaths = SurveyPaths(model);
@@ -109,9 +125,28 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
 
         var stations = new List<SurveyStation>(model.Stations.Count);
         var mergedStations = 0;
+        var anonymousStations = 0;
 
         foreach (var station in model.Stations)
         {
+            // Not a station: the survey language's own token for the far end of a shot at the wall,
+            // kept by the compiler as a record so the leg has something to reference. It is a point
+            // on the rock, not a place anybody named, and the one thing this table's rows have to
+            // be is addressable — by a person typing a name, by a tracking position, by a resource
+            // link, and by the viewer, whose reader of this same format gives these points no
+            // addressable name at all. Every one of them in a survey carries the identical spelling,
+            // so admitting them would also be storing one name thousands of times over.
+            //
+            // Left out of the position index as well, and deliberately. That index answers "which
+            // station stands here" for the legs, first record at a position winning; a placeholder
+            // that happens to coincide with a real station used to win that race and hand the legs
+            // a name nobody could resolve.
+            if (anonymousPointIds.Contains(station.Id))
+            {
+                anonymousStations++;
+                continue;
+            }
+
             var surveyName = SurveyNameOf(station.SurveyId, surveyPaths);
             var name = StationName(station, surveyName, model.SeparatorChar);
             var (longitude, latitude, altitude) =
@@ -135,6 +170,8 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
                 mergedStations++;
             }
         }
+
+        RefuseCollidingNames(stations);
 
         string? StationOf(uint? fileStationId) =>
             fileStationId is { } id && nameByFileId.TryGetValue(id, out var known) ? known : null;
@@ -206,6 +243,13 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
             // A splay is a shot at the wall, and its far end is routinely a point the file names no
             // station for; a surface or duplicate leg is not passage to be counted either. None of
             // those is a loss, so counting them as one would bury the losses that matter.
+            //
+            // This is why the wall-shot flag is settled before any of this runs rather than taken
+            // from the file as it stands. On a survey whose exporter flags no wall shots, the wall
+            // shots' far ends are exactly the points that are no longer station rows, so every one
+            // of them would land here as a leg that joins nothing: measured on one such file, this
+            // count goes from 29 real losses to 15,977 — a number that says the reading lost two
+            // thirds of the cave, about a reading that lost nothing.
             const SurveyShotFlags notNetwork =
                 SurveyShotFlags.Splay | SurveyShotFlags.Surface | SurveyShotFlags.Duplicate;
             if ((flags & notNetwork) == 0 && (from is null || to is null || from == to))
@@ -238,11 +282,74 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
             readings,
             droppedShots,
             mergedStations,
+            anonymousStations,
             RootSurveyName(model),
             placement.Anchor.Longitude,
             placement.Anchor.Latitude,
             placement.OriginHeightM,
             placement.AppliedRotationDeg);
+    }
+
+    /// <summary>
+    /// Refuses a file that names two of its own stations identically, in words its uploader can act
+    /// on, before a single row of it is offered to the database.
+    ///
+    /// <para>
+    /// <b>Why it is said here and not left to the database.</b> A station's name is its identity
+    /// within a model, and the table says so with a unique index, so a file like this was already
+    /// refused — but by a constraint violation arriving out of the save that writes tens of
+    /// thousands of rows at once, long after the reading looked like it had succeeded. What the
+    /// uploader was shown for it was "the survey could not be read", which is true and useless: it
+    /// is the sentence kept for faults that are ours, and there is nothing in it to act on. Asked
+    /// here, the question is answered by arithmetic over the rows in hand, and the answer names the
+    /// thing that is wrong with their file.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Counts, never the names themselves.</b> The reason travels onto the survey model and is
+    /// shown wherever that record is, and a station name on a location-protected cave is part of
+    /// what this application exists to keep. How many is enough to act on; which ones is the
+    /// uploader's own file to look in.
+    /// </para>
+    ///
+    /// <para>
+    /// This is genuinely rare, and it is not what made whole files unreadable: of eighteen compiled
+    /// surveys measured, carrying some fifty thousand named stations between them, not one had a
+    /// real collision. What they had was the wall-shot placeholder admitted as a station, which is
+    /// no longer a row at all.
+    /// </para>
+    /// </summary>
+    /// <exception cref="SurveySourceException">Two or more stations share one qualified name.</exception>
+    private static void RefuseCollidingNames(IReadOnlyList<SurveyStation> stations)
+    {
+        var rowsPerName = new Dictionary<string, int>(stations.Count, StringComparer.Ordinal);
+        foreach (var station in stations)
+        {
+            rowsPerName[station.Name] = rowsPerName.GetValueOrDefault(station.Name) + 1;
+        }
+
+        var repeatedNames = 0;
+        var affectedRows = 0;
+        foreach (var (_, rows) in rowsPerName)
+        {
+            if (rows > 1)
+            {
+                repeatedNames++;
+                affectedRows += rows;
+            }
+        }
+
+        if (repeatedNames == 0)
+        {
+            return;
+        }
+
+        var names = repeatedNames == 1 ? "one station name" : $"{repeatedNames} station names";
+        throw new SurveySourceException(
+            $"This survey uses {names} for more than one station ({affectedRows} stations in all), "
+                + "so those stations cannot be told apart and the survey cannot be stored. Station "
+                + "names have to be unique within the survey they belong to: re-export with the "
+                + "duplicates renamed, or check whether one survey has been included twice.");
     }
 
     /// <summary>
@@ -444,14 +551,27 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
     /// where the format names stations only within their own survey. Two surveys in one file
     /// routinely both have a station called "1", and storing them under one name would store two
     /// stations as one.
+    ///
+    /// <para>
+    /// Nothing reaching here is one of the compiled Therion format's wall-shot placeholders: those
+    /// are not stations and were left out before this. The fallback below is a different case and
+    /// belongs to the other format — see the comment on it, and do not be tempted to widen it into
+    /// a way of telling the placeholders apart, which is the one thing it must not become.
+    /// </para>
     /// </summary>
     private static string StationName(CaveStation station, string? surveyName, char separator)
     {
-        // An anonymous station has no name of its own anywhere in the file, so the number the file
-        // wrote it at is the only handle there is. That number is assigned by file order in one of
-        // the formats and is reassigned by every re-export, which is exactly why it is not used for
-        // stations that do have names — an anonymous station simply cannot be followed across two
+        // A station with no name at all, which the other of the two formats does emit. The number
+        // the file wrote it at is then the only handle there is. That number is assigned by file
+        // order and is reassigned by every re-export, which is exactly why it is not used for
+        // stations that do have names — such a station simply cannot be followed across two
         // exports, and pretending otherwise would be worse than saying so.
+        //
+        // It is also why this is not the answer for the compiled Therion format's wall-shot
+        // placeholders, which do have a name — one character of it — and would fall straight
+        // through here if the test were widened to catch them. Numbering them would remove the
+        // collision and store tens of thousands of rows under names nobody can type and the viewer
+        // can never resolve, which is a worse answer wearing the look of a fix.
         var name = station.Name.Length > 0
             ? station.Name
             : "#" + station.Id.ToString(CultureInfo.InvariantCulture);

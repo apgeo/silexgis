@@ -212,6 +212,19 @@ public class DependencyRuleTests
         "Therion.Blender.CaveSurvey",
         "Therion.Blender.CaveVector3",
 
+        // The rest of what hangs off a parsed model, reachable since the reading began marking a
+        // file's wall shots for itself: that produces a model with the legs changed and everything
+        // else carried across unaltered, so the copy names every one of the model's own types.
+        // Looked at one at a time, which is what this rule is for — four immutable records
+        // describing wall meshes, a terrain height grid, its texture and a loop-closure error, and
+        // an enum naming which of the two formats a model was read from. Not one of them reads a
+        // file, locates anything or starts anything; they are shapes a reader hands back.
+        "Therion.Blender.CaveScrap",
+        "Therion.Blender.CaveSourceFormat",
+        "Therion.Blender.CaveSurfaceBitmap",
+        "Therion.Blender.CaveSurfaceGrid",
+        "Therion.Blender.CaveTraverseError",
+
         // The centreline graph derived from a model.
         "Therion.Blender.Geometry.CenterlineBranch",
         "Therion.Blender.Geometry.CenterlineComponent",

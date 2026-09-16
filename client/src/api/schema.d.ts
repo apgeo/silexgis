@@ -23283,6 +23283,8 @@ export interface components {
             droppedShotCount: null | number;
             /** Format: int32 */
             mergedStationCount: null | number;
+            /** Format: int32 */
+            anonymousStationCount: null | number;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
