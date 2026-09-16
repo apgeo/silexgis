@@ -81,27 +81,16 @@ public static class MapPointPatternEndpoints
 
         if (request.AreaId is { } areaId)
         {
-            var area = await db.Features.AsNoTracking()
-                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-                .Where(f => f.Id == areaId)
-                .Select(f => new { f.Geom })
-                .FirstOrDefaultAsync(ct);
-
-            if (area is null)
-            {
-                return ApiProblems.NotFound("feature.not_found");
-            }
-
             // Measuring inside an outline draws its edges, so the window is only available to a
-            // caller who may place it exactly. To everybody else it answers as an outline that is
-            // not there — the same answer as for one that does not exist, so the refusal itself
-            // discloses nothing.
-            if (!(await protection.ExactViewIdsAsync(ctx, [areaId], ct)).Contains(areaId))
+            // caller who may place it exactly. The shared gate answers null otherwise — and for an
+            // outline that does not exist as well, so the refusal below discloses nothing.
+            var areaGeometry = await protection.ScopeGeometryAsync(ctx, areaId, ct);
+            if (areaGeometry is null)
             {
                 return ApiProblems.NotFound("feature.not_found");
             }
 
-            if (area.Geom is not (Polygon or MultiPolygon))
+            if (areaGeometry is not (Polygon or MultiPolygon))
             {
                 return ApiProblems.BadRequest(
                     StudyAreaNotAnOutlineCode,

@@ -416,16 +416,10 @@ public static class RegistryStatisticsEndpoints
 
         if (scope.AreaId is { } areaId)
         {
-            var readable = await db.Features.AsNoTracking()
-                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-                .AnyAsync(f => f.Id == areaId, ct);
-            if (!readable)
-            {
-                return (null, new Answer<object>(false, ApiProblems.NotFound("feature.not_found"), null));
-            }
-
-            var placeable = await protection.ExactViewIdsAsync(ctx, [areaId], ct);
-            if (!placeable.Contains(areaId))
+            // Readable and exactly placeable, both, answered alike when either fails — and alike
+            // with an area that does not exist. The rule is the shared one rather than a fourth
+            // copy of the same ladder.
+            if (!await protection.MayScopeByAsync(ctx, areaId, ct))
             {
                 return (null, new Answer<object>(false, ApiProblems.NotFound("feature.not_found"), null));
             }

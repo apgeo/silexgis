@@ -177,26 +177,15 @@ public static class AreaKarstStatisticsEndpoints
             return TypedResults.Unauthorized();
         }
 
-        // An area this caller may not read answers exactly as one that does not exist, so asking
-        // about it discloses nothing about whether it is there.
-        var exists = await db.Features.AsNoTracking()
-            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-            .AnyAsync(f => f.Id == id, ct);
-
-        if (!exists)
-        {
-            return ApiProblems.NotFound("feature.not_found");
-        }
-
         // Everything below is measured against the outline: its ground area is the denominator of
         // every per-square-kilometre figure, the depression ratio is areas inside it, and the
         // drift hint tests caves for being inside it. An outline places itself, so all of that is
         // a description of where it is, and a caller who may not be shown that must not be able to
         // derive it — least of all by moving a cave of their own and watching the hint change. So
-        // the answer requires exact placement, and to everybody else the area answers as one that
-        // is not there: the same answer as for an outline that does not exist, so the refusal
-        // itself discloses nothing.
-        if (!(await protection.ExactViewIdsAsync(ctx, [id], ct)).Contains(id))
+        // the answer requires exact placement, and to everybody else — and for an outline that is
+        // not there at all — the shared gate answers the same way, so the refusal discloses
+        // nothing by being the refusal it is.
+        if (!await protection.MayScopeByAsync(ctx, id, ct))
         {
             return ApiProblems.NotFound("feature.not_found");
         }

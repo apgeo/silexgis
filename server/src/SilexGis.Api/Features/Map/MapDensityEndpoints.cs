@@ -133,30 +133,18 @@ public static class MapDensityEndpoints
 
         if (request.AreaId is { } areaId)
         {
-            // Projected into a wrapper rather than selected bare, so a readable outline that has
-            // no geometry is not indistinguishable from one this caller cannot read at all.
-            var area = await db.Features.AsNoTracking()
-                .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
-                .Where(f => f.Id == areaId)
-                .Select(f => new { f.Geom })
-                .FirstOrDefaultAsync(ct);
-
-            if (area is null)
-            {
-                return ApiProblems.NotFound("feature.not_found");
-            }
-
             // An outline places itself: dividing by it, cell by cell, would draw its edges for a
-            // caller who may not be shown where it is. So the denominator is only available to a
-            // caller who may place it exactly, and to everybody else the area answers as one that
-            // is not there — the same answer they get for an outline that does not exist, so the
-            // refusal itself discloses nothing.
-            if (!(await protection.ExactViewIdsAsync(ctx, [areaId], ct)).Contains(areaId))
+            // caller who may not be shown where it is. The shared gate answers with the geometry
+            // only for a caller who may both read the outline and place it exactly, and answers
+            // null otherwise — for an outline that does not exist as well, so the refusal below
+            // discloses nothing by being the refusal it is.
+            var areaGeometry = await protection.ScopeGeometryAsync(ctx, areaId, ct);
+            if (areaGeometry is null)
             {
                 return ApiProblems.NotFound("feature.not_found");
             }
 
-            if (area.Geom is not (Polygon or MultiPolygon))
+            if (areaGeometry is not (Polygon or MultiPolygon))
             {
                 return ApiProblems.BadRequest(
                     StudyAreaNotAnOutlineCode,

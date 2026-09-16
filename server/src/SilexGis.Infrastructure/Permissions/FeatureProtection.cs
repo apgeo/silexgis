@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using NetTopologySuite.Geometries;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
@@ -94,6 +95,68 @@ public sealed class FeatureProtection(SilexGisDbContext db, IAccessService acces
     /// construction rather than check it. Soft-deleted rows are read here (filters ignored) so
     /// a deleted protected root still refuses; protection is most-restrictive until purge.
     /// </remarks>
+    /// <summary>
+    /// Whether a caller may scope a question by this feature — the same rule as
+    /// <see cref="ScopeGeometryAsync"/>, for the callers that need the answer and not the shape.
+    /// </summary>
+    /// <remarks>
+    /// Separate so a route measuring <i>against</i> an outline does not load the outline in order
+    /// to throw it away: a karst area is a polygon of real size, and the two routes that only need
+    /// permission would otherwise fetch one per request for nothing. The rule itself is not
+    /// repeated — both ask the same two questions in the same order and answer alike.
+    /// </remarks>
+    public async Task<bool> MayScopeByAsync(
+        AccessContext ctx, Guid featureId, CancellationToken ct = default)
+    {
+        var readable = await db.Features.AsNoTracking()
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+            .AnyAsync(f => f.Id == featureId, ct);
+
+        return readable && (await ExactViewIdsAsync(ctx, [featureId], ct)).Contains(featureId);
+    }
+
+    /// <summary>
+    /// The geometry of a feature a caller may use to scope a question by place, or null when they
+    /// may not — which covers a feature that does not exist, one they cannot read, and one they can
+    /// read but cannot place exactly.
+    ///
+    /// <para>
+    /// The three are one answer deliberately, and the answer is the same words in every case: an
+    /// outline scopes a question by where it is, so admitting one the caller cannot place would
+    /// draw its edges for them a cell or a count at a time, and a refusal that distinguished "no
+    /// such outline" from "not yours to place" would say which outlines are protected. That
+    /// uniformity is the whole property, which is why it is decided here rather than in each route
+    /// that takes an area: four copies of a refusal ladder is four chances for one to answer
+    /// differently, and nothing fails when one does.
+    /// </para>
+    /// <para>
+    /// The geometry is returned rather than a yes: every caller needs it next, and a second query
+    /// for a row just fetched is both waste and a second place for the two to disagree about which
+    /// row they meant.
+    /// </para>
+    /// </summary>
+    public async Task<Geometry?> ScopeGeometryAsync(
+        AccessContext ctx, Guid featureId, CancellationToken ct = default)
+    {
+        // Projected rather than selected bare so that a readable outline carrying no geometry is
+        // distinguishable here from one the caller cannot read at all — the caller decides what to
+        // say about each, and they are not the same thing.
+        var found = await db.Features.AsNoTracking()
+            .VisibleTo(ctx, db.Features, db.FeatureSetMembers)
+            .Where(f => f.Id == featureId)
+            .Select(f => new { f.Geom })
+            .FirstOrDefaultAsync(ct);
+
+        if (found is null)
+        {
+            return null;
+        }
+
+        return (await ExactViewIdsAsync(ctx, [featureId], ct)).Contains(featureId)
+            ? found.Geom
+            : null;
+    }
+
     public async Task<HashSet<Guid>> UnprotectedByAncestryIdsAsync(
         IReadOnlyCollection<Guid> featureIds, CancellationToken ct = default)
     {
