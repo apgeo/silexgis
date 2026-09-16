@@ -147,6 +147,35 @@ public class PassageNetworkTests
     }
 
     /// <summary>
+    /// Several routes between the same two places: the junctions are real and so are the rings,
+    /// but each junction reaches only one distinct other place, so there is no pair of passages to
+    /// ask about and the clustering figure is absent rather than nought.
+    ///
+    /// <para>
+    /// Pinned because the absence is easy to read as "this cave has no junctions", which here
+    /// would be plainly false — and because the figure that does carry these rings is the
+    /// cyclomatic number, which counts two of them. Anything reasoning about whether a cave loops
+    /// should read that rather than inferring from a missing clustering.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Several_routes_between_the_same_two_places_ring_without_a_clustering_figure()
+    {
+        var figures = PassageNetwork.Measure(
+            [("X", "a"), ("a", "Y"), ("X", "b"), ("b", "Y"), ("X", "c"), ("c", "Y")]);
+
+        figures.ShouldNotBeNull();
+
+        // Two junctions, three routes between them: two independent loops.
+        figures.CyclomaticNumber.ShouldBe(2);
+        figures.ReducedNodeCount.ShouldBe(2);
+        figures.ExtremityCount.ShouldBe(0);
+
+        // And no clustering, for want of a pair rather than for want of a junction.
+        figures.Clustering.ShouldBeNull();
+    }
+
+    /// <summary>
     /// A single corridor has no place where two passages meet, so it has no pairs to be joined or
     /// not joined. Reporting nought would be a measurement of something nobody could measure, and
     /// the rule that reads this figure would then fire nowhere while looking as if it had looked.

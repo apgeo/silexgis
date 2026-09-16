@@ -17,11 +17,19 @@ namespace SilexGis.Domain.Geo;
 /// <param name="ExtremityCount">Stations with exactly one passage — where the survey stopped.
 /// Unchanged by the contraction for the same reason.</param>
 /// <param name="Clustering">How often two passages leaving one junction are themselves joined,
-/// averaged over the junctions — nought when no junction rings, one when every pair does. Null when
-/// the network holds no place where two passages meet, which is not a clustering of nought: a
-/// single corridor has no pairs to be joined or not joined. Measured on the contracted network and
-/// not on the raw stations, because a survey that put stations along its passages subdivides every
-/// ring into a path and would report nought for a cave made entirely of them.</param>
+/// averaged over the junctions — nought when no junction rings, one when every pair does. Measured
+/// on the contracted network and not on the raw stations, because a survey that put stations along
+/// its passages subdivides every ring into a path and would report nought for a cave made entirely
+/// of them.
+/// <para>
+/// Null when no junction has two <i>distinct</i> places to reach, which is not a clustering of
+/// nought: there are no pairs to be joined or not joined, and nought would claim the passages were
+/// checked and found unconnected. A single corridor is the ordinary case. The other one is a
+/// junction whose passages all lead to the same far junction — several routes between the same two
+/// places — where the contraction leaves one distinct neighbour and so no pair, even though the
+/// cave plainly has junctions and rings. Those rings are still counted by the cyclomatic number,
+/// which is what anything reasoning about loops should read.
+/// </para></param>
 public sealed record PassageNetworkFigures(
     int NodeCount,
     int EdgeCount,
