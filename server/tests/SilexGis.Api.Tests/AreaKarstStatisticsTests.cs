@@ -316,31 +316,45 @@ public sealed class AreaKarstStatisticsTests : IAsyncLifetime, IDisposable, ICla
             "SELECT indexname FROM pg_indexes WHERE tablename = 'features'"))
             .ShouldContain("ix_features_ancestor_ids");
 
-        // And the planner can actually reach it. Sequential scans are turned off for the one
-        // statement, because a test database holds a handful of rows and the planner would scan
-        // them whatever the predicate said — which is exactly how a predicate that *cannot* be
-        // indexed passes a plan assertion at test scale. With the scan closed off, a form the GIN
-        // index can serve produces an index scan and a form it cannot still produces a sequential
-        // one, so the two are told apart.
-        // In a transaction, because that is the only place SET LOCAL does anything: outside one
-        // PostgreSQL answers "SET LOCAL can only be used in transaction blocks", leaves the setting
-        // alone and carries on. This ran outside one until the classes stopped sharing a database,
-        // and the assertion below passed on the strength of a features table other classes had
-        // filled — the planner reached for the index because the table was big, not because the
-        // predicate could use it. That is the exact failure the paragraph above says it is here to
-        // prevent, so it is worth stating twice: without the transaction this test proves nothing.
+        // And the planner can actually reach it — asserted as a difference between the two forms
+        // rather than as a property of one plan.
+        //
+        // Asserting that the real statement's plan names the index cannot be made to mean anything
+        // at fixture scale. A handful of rows makes every index cheap, so the planner takes
+        // whichever narrow one it meets first and applies the containment as a filter; which index
+        // that is depends on how many rows other work happened to leave in the table, so the
+        // assertion passed or failed on suite order rather than on the predicate. Closing off
+        // sequential and plain index scans does not fix it either — there is always another small
+        // index to reach for.
+        //
+        // What is actually claimed is narrower and does not depend on scale: *this form can use
+        // that index and the other form cannot*. So both forms are planned over nothing but the
+        // containment predicate, with sequential scans closed off, and the index has to appear for
+        // one and not the other. A rewrite into the unindexable spelling fails this however many
+        // rows the table holds.
         if (connection.State != System.Data.ConnectionState.Open)
         {
             await connection.OpenAsync();
         }
 
+        // In a transaction, because that is the only place SET LOCAL does anything: outside one
+        // PostgreSQL answers "SET LOCAL can only be used in transaction blocks", leaves the
+        // setting alone and carries on.
         await using var transaction = await connection.BeginTransactionAsync();
         await connection.ExecuteAsync("SET LOCAL enable_seqscan = off", transaction: transaction);
-        var plan = string.Join(
-            '\n',
-            await connection.QueryAsync<string>($"EXPLAIN {sql}", parameters, transaction: transaction));
 
-        plan.ShouldContain("ix_features_ancestor_ids", Case.Insensitive, plan);
+        async Task<string> PlanOfAsync(string predicate) => string.Join(
+            '\n',
+            await connection.QueryAsync<string>(
+                $"EXPLAIN SELECT count(*) FROM features f WHERE {predicate}",
+                new { ka_area_id = areaId },
+                transaction: transaction));
+
+        var indexable = await PlanOfAsync("f.ancestor_ids @> ARRAY[@ka_area_id]::uuid[]");
+        var scalar = await PlanOfAsync("@ka_area_id = ANY(f.ancestor_ids)");
+
+        indexable.ShouldContain("ix_features_ancestor_ids", Case.Insensitive, indexable);
+        scalar.ShouldNotContain("ix_features_ancestor_ids", Case.Insensitive, scalar);
     }
 
     [Fact]
