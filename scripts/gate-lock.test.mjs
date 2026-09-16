@@ -231,3 +231,71 @@ describe('telling a wedged holder from a slow one', () => {
     }
   });
 });
+
+// Two full runs were destroyed by this and neither reported anything wrong: another worktree's
+// build rewrote the `.dll` files a run was executing, hours in, and the run carried on and produced
+// a verdict describing a mixture of two builds. It was only ever visible afterwards, by noticing
+// the test *total* disagreed with neighbouring runs. So the guard has to be the thing that notices.
+describe('assemblies swapped under a run', () => {
+  const project = (name) => {
+    const root = join(scratch, name);
+    const bin = join(root, 'bin', 'Debug', 'net10.0');
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(root, `${name}.csproj`), '<Project />');
+    writeFileSync(join(bin, 'Suite.dll'), 'build one');
+    return { root, csproj: join(root, `${name}.csproj`), dll: join(bin, 'Suite.dll') };
+  };
+
+  it('is caught, killed, and reported void rather than passed off as a verdict', () => {
+    const dir = freshDir('swap');
+    const result = join(scratch, 'result-swap.json');
+    const p = project('Swapped');
+    // The command outlives the first check, so the rewrite lands mid-run exactly as a sibling
+    // worktree's build does.
+    const r = spawnSync(
+      process.execPath,
+      [script, 'run', '--label', 'swap', '--result', result, '--',
+        process.execPath, '-e', `setTimeout(() => {}, 4000); require('fs').writeFileSync(${JSON.stringify(p.dll)}, 'build two')`],
+      {
+        env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir, GATE_LOCK_ASSEMBLY_CHECK_MS: '150' },
+        cwd: p.root,
+        encoding: 'utf8',
+      },
+    );
+
+    const verdict = JSON.parse(readFileSync(result, 'utf8'));
+    assert.equal(verdict.verdict, 'void', 'a run whose assemblies changed is not a verdict');
+    assert.match(verdict.verdictReason, /assemblies changed/);
+    assert.equal(verdict.assemblySwap.file, p.dll);
+    assert.notEqual(r.status, 0, 'a void run must not exit 0, or a caller checking only the status reads a pass');
+    assert.match(r.stderr, /GATE RUN VOID/, 'it must say so where somebody watching would see it');
+    assert.match(r.stderr, new RegExp('Suite\\.dll'), 'the message must name the file');
+    assert.equal(existsSync(dir), false, 'the lock is still released');
+  });
+
+  // The twin: without this, a guard that flagged every run would pass the test above and make the
+  // gate useless.
+  it('an untouched run is not flagged, and says which tree it described', () => {
+    const dir = freshDir('no-swap');
+    const result = join(scratch, 'result-no-swap.json');
+    const p = project('Untouched');
+    const r = spawnSync(
+      process.execPath,
+      [script, 'run', '--result', result, '--', process.execPath, '-e', 'setTimeout(() => {}, 500)'],
+      {
+        env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir, GATE_LOCK_ASSEMBLY_CHECK_MS: '100' },
+        cwd: p.root,
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(r.status, 0);
+    const verdict = JSON.parse(readFileSync(result, 'utf8'));
+    // `verdict` already carries red/green/inconclusive from the runner's own summary; `void` joins
+    // that vocabulary rather than adding a second field, so the check is that it is NOT void.
+    assert.notEqual(verdict.verdict, 'void');
+    assert.equal(verdict.assemblySwap, undefined);
+    // "Which checkout did this verdict describe" could not be answered about any run of 2026-09-16
+    // without reading /proc.
+    assert.equal(verdict.cwd, p.root);
+  });
+});
