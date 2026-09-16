@@ -96,6 +96,36 @@ public sealed class FeatureProtection(SilexGisDbContext db, IAccessService acces
     /// a deleted protected root still refuses; protection is most-restrictive until purge.
     /// </remarks>
     /// <summary>
+    /// Of a batch of rows, the ids the caller may place exactly — given each row's stored
+    /// protection flag, so the expensive walk runs only over the rows that could fail it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The narrowing is an optimisation and never the verdict, and the distinction is the whole
+    /// reason this has a home: the flag is a cheap column that says a row <i>might</i> be
+    /// withheld, and the walk is what decides whether it is. Re-admitting on the walk's answer
+    /// alone would drop every unprotected row, because the walk was never asked about them; the
+    /// re-admission therefore consults the flag again. Written out per route, that subtlety is one
+    /// inverted condition away from either leaking every protected row or withholding every
+    /// ordinary one, and both look plausible in a diff.
+    /// </para>
+    /// <para>
+    /// Rows are described by a flag and an id rather than by an entity, so a caller can pass a
+    /// projection it has already narrowed rather than loading features it does not otherwise want.
+    /// </para>
+    /// </remarks>
+    public async Task<HashSet<Guid>> PlaceableIdsAsync(
+        AccessContext? ctx,
+        IReadOnlyCollection<(Guid Id, bool IsProtected)> rows,
+        CancellationToken ct = default)
+    {
+        var walked = await ExactViewIdsAsync(
+            ctx, [.. rows.Where(r => r.IsProtected).Select(r => r.Id)], ct);
+
+        return [.. rows.Where(r => !r.IsProtected || walked.Contains(r.Id)).Select(r => r.Id)];
+    }
+
+    /// <summary>
     /// Whether a caller may scope a question by this feature — the same rule as
     /// <see cref="ScopeGeometryAsync"/>, for the callers that need the answer and not the shape.
     /// </summary>

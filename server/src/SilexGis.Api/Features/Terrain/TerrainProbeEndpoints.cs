@@ -276,14 +276,14 @@ public static class TerrainProbeEndpoints
             .Select(f => new Row(f.Id, f.IsProtectedEffective, f.Geom!))
             .ToListAsync(ct);
 
-        // Only the rows the stored flag marks as protected are put to the access walk: the flag is
-        // a column and the walk is the expensive half. The narrowing is a cheap column and never
-        // the verdict — the re-admission below asks the flag again, not the walk's answer.
-        var exact = await protection.ExactViewIdsAsync(
-            ctx, [.. rows.Where(r => r.IsProtectedEffective).Select(r => r.FeatureId)], ct);
+        // The stored flag narrows which rows go to the access walk, and the walk decides; the
+        // shared rule keeps those two roles apart, since re-admitting on the walk's answer alone
+        // would drop every unprotected row it was never asked about.
+        var exact = await protection.PlaceableIdsAsync(
+            ctx, [.. rows.Select(r => (r.FeatureId, r.IsProtectedEffective))], ct);
 
         var placeable = rows
-            .Where(r => !r.IsProtectedEffective || exact.Contains(r.FeatureId))
+            .Where(r => exact.Contains(r.FeatureId))
             .ToDictionary(r => r.FeatureId);
 
         // Answered in the order the caller asked, so a client can walk its own list. What it cannot

@@ -1021,16 +1021,17 @@ public static class MapEndpoints
         var typesById = types.ToDictionary(t => t.Id);
 
         // Only protected rows need the per-row exact-view evaluation; unprotected rows are
-        // exact by definition (no protected root exists to veto).
-        var exactViewIds = await protection.ExactViewIdsAsync(
-            ctx, rows.Where(r => r.IsProtectedEffective).Select(r => r.Id).ToList(), ct);
+        // exact by definition (no protected root exists to veto). The shared rule keeps the
+        // narrowing and the verdict apart.
+        var placeableIds = await protection.PlaceableIdsAsync(
+            ctx, [.. rows.Select(r => (r.Id, r.IsProtectedEffective))], ct);
 
         var gridMeters = accessOptions.Value.LocationGridMeters;
         var features = new List<GeoFeature>(rows.Count);
         foreach (var row in rows)
         {
             var type = row.FeatureTypeId is { } tid ? typesById.GetValueOrDefault(tid) : null;
-            var exact = !row.IsProtectedEffective || exactViewIds.Contains(row.Id);
+            var exact = placeableIds.Contains(row.Id);
             var properties = new Dictionary<string, object?>
             {
                 ["id"] = row.Id,
@@ -1133,8 +1134,8 @@ public static class MapEndpoints
             return FeatureCollection.Of([]);
         }
 
-        var exactViewIds = await protection.ExactViewIdsAsync(
-            ctx, rows.Where(r => r.IsProtectedEffective).Select(r => r.Id).ToList(), ct);
+        var placeableIds = await protection.PlaceableIdsAsync(
+            ctx, [.. rows.Select(r => (r.Id, r.IsProtectedEffective))], ct);
 
         // Cave names resolve through the visibility filter: an entrance readable through
         // its own grant must not disclose the name of a cave the caller cannot read.
@@ -1147,7 +1148,7 @@ public static class MapEndpoints
 
         var features = rows.Select(row =>
         {
-            var exact = !row.IsProtectedEffective || exactViewIds.Contains(row.Id);
+            var exact = placeableIds.Contains(row.Id);
             var point = (Point)row.Geom!;
             var geom = exact ? point : LocationProtection.Snap(point, gridMeters);
             var caveName = caveNames.GetValueOrDefault(row.CaveId);
