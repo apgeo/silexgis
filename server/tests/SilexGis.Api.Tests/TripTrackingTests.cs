@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
@@ -138,6 +139,11 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         // earlier event claims a place — the displayed position falls back to nothing.
         corrected.GetProperty("lastKind").GetString().ShouldBe("note");
         corrected.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        TimeOf(corrected, "positionRecordedAt").ShouldBeNull();
+        // Deleting a report re-folds the standing too, and this one still has the entry that put
+        // them underground: losing the place they were at is not losing the fact they are inside.
+        corrected.GetProperty("in").GetBoolean().ShouldBeTrue();
+        corrected.GetProperty("out").GetBoolean().ShouldBeFalse();
     }
 
     [Fact]
@@ -226,6 +232,8 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         mine.GetProperty("positionsWithheld").GetBoolean().ShouldBeFalse();
         mine.GetProperty("participants").EnumerateArray().Single()
             .GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        TimeOf(mine.GetProperty("participants").EnumerateArray().Single(), "positionRecordedAt")
+            .ShouldNotBeNull("the placer gets the station and the hour it was reported at");
         mine.GetProperty("referenceStationName").GetString().ShouldBe("cave.ent.0");
         mine.GetProperty("depthFilter").GetArrayLength().ShouldBe(1);
 
@@ -237,7 +245,17 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         var folded = theirs.GetProperty("participants").EnumerateArray().Single();
         folded.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
         folded.GetProperty("depthM").ValueKind.ShouldBe(JsonValueKind.Null);
+        // The hour the position was reported at goes with the station, so that nothing downstream
+        // can put an age on a place it was refused. The two assertions under it are the honest
+        // bound on what that buys: the last-heard time and the kind of the last report are both
+        // still sent, deliberately, because a reader who may not learn the place is still meant to
+        // learn that somebody was heard from and when. This null is consistency, not a secret.
+        TimeOf(folded, "positionRecordedAt").ShouldBeNull();
         folded.GetProperty("lastKind").GetString().ShouldBe("atStation");
+        TimeOf(folded, "lastRecordedAt").ShouldNotBeNull();
+        // What is likewise not withheld is that somebody is underground: the reader keeps the fact
+        // this surface exists for, and learns no place from it.
+        folded.GetProperty("in").GetBoolean().ShouldBeTrue();
         theirs.GetProperty("referenceStationName").ValueKind.ShouldBe(JsonValueKind.Null);
         theirs.GetProperty("surveyModelId").ValueKind.ShouldBe(JsonValueKind.Null);
         theirs.GetProperty("depthFilter").GetArrayLength().ShouldBe(0);
@@ -302,8 +320,208 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         }
         var orphaned = await StateAsync(owner, trip);
         orphaned.GetProperty("positionsWithheld").GetBoolean().ShouldBeTrue();
-        orphaned.GetProperty("participants").EnumerateArray().Single()
-            .GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        var withheld = orphaned.GetProperty("participants").EnumerateArray().Single();
+        withheld.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        // Fail closed on the whole position, its hour included — the time is withheld on exactly
+        // the branch the station is, so there is no anchor state in which one survives the other.
+        TimeOf(withheld, "positionRecordedAt").ShouldBeNull();
+    }
+
+    // ---- standing, and the age of a place ---------------------------------------------------
+
+    /// <summary>
+    /// Standing follows the last report that spoke to it, and a note never speaks.
+    /// </summary>
+    /// <remarks>
+    /// Every caver here is a twin of another: the one whose note follows an exit against the one
+    /// whose note follows an entry, and the one whose only word is a note against the same person
+    /// once they have gone in. A test that only showed the note leaving somebody out would pass on
+    /// a server that had simply stopped reading reports at all — the pairs are what say the fold
+    /// still moves when something that speaks to presence arrives.
+    /// </remarks>
+    [Fact]
+    public async Task A_note_moves_nobody_between_standings_in_either_direction()
+    {
+        var (trip, cavers) = await CreateTripAsync("Standing", guests: 4);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Everybody but the first goes in; word about the first arrives before the party sets off.
+        await ReportAsync(trip, new { caverIds = new[] { cavers[0] }, kind = "note", note = "will be late" }, At(8, 0));
+        await ReportAsync(trip, new { caverIds = new[] { cavers[1], cavers[2], cavers[3] }, kind = "entered" }, At(9, 0));
+        await ReportAsync(trip, new { caverIds = new[] { cavers[1] }, kind = "note", note = "asked for rope" }, At(9, 5));
+        await ReportAsync(trip, new { caverIds = new[] { cavers[2], cavers[3] }, kind = "exited" }, At(17, 0));
+        await ReportAsync(trip, new { caverIds = new[] { cavers[2] }, kind = "note", note = "got a lift home" }, At(17, 5));
+
+        var state = await StateAsync(owner, trip);
+
+        // Nothing has placed the first one or said they went anywhere. Neither in nor out is a
+        // state of its own: somebody still in the car park must not be counted underground.
+        var waiting = Participant(state, cavers[0]);
+        waiting.GetProperty("lastKind").GetString().ShouldBe("note");
+        TimeOf(waiting, "lastRecordedAt").ShouldBe(At(8, 0));
+        waiting.GetProperty("in").GetBoolean().ShouldBeFalse();
+        waiting.GetProperty("out").GetBoolean().ShouldBeFalse();
+
+        // A note about somebody underground leaves them underground.
+        var inside = Participant(state, cavers[1]);
+        inside.GetProperty("lastKind").GetString().ShouldBe("note");
+        inside.GetProperty("in").GetBoolean().ShouldBeTrue();
+        inside.GetProperty("out").GetBoolean().ShouldBeFalse();
+
+        // And a note about somebody already out leaves them out. The assertion on lastKind is
+        // load-bearing: without it this would pass on a server where the note never landed.
+        var home = Participant(state, cavers[2]);
+        home.GetProperty("lastKind").GetString().ShouldBe("note");
+        TimeOf(home, "lastRecordedAt").ShouldBe(At(17, 5));
+        home.GetProperty("out").GetBoolean().ShouldBeTrue();
+        home.GetProperty("in").GetBoolean().ShouldBeFalse();
+
+        // The control nobody wrote a note about: the exit itself still works.
+        var plainlyOut = Participant(state, cavers[3]);
+        plainlyOut.GetProperty("lastKind").GetString().ShouldBe("exited");
+        plainlyOut.GetProperty("out").GetBoolean().ShouldBeTrue();
+
+        // The twin of the first assertion: the moment something that does speak to presence
+        // arrives, the same person moves.
+        await ReportAsync(trip, new { caverIds = new[] { cavers[0] }, kind = "entered" }, At(18, 0));
+        var arrived = Participant(await StateAsync(owner, trip), cavers[0]);
+        arrived.GetProperty("in").GetBoolean().ShouldBeTrue();
+        arrived.GetProperty("out").GetBoolean().ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A station report places somebody nobody recorded entering, and does not undo a recorded
+    /// exit — only a recorded entry does that.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both halves of one decision, so neither can be weakened without the other failing. A place
+    /// has to answer on its own or a party whose station is on the screen reads as never heard
+    /// from; and a place must not answer <em>over</em> an exit, because a report's time is the
+    /// clock at the moment it was typed unless somebody set it, so "last seen at the bottom
+    /// pitch", entered while tidying the log at 12:30, sorts after the 12:00 exit it is describing
+    /// the run-up to. Under the other rule that report alone would move somebody already home back
+    /// into the underground count, on a page their family is watching, with nothing on the page to
+    /// explain it.
+    /// </para>
+    /// <para>
+    /// The last three cavers are the triple that makes it a decision rather than an accident: the
+    /// same exit, then a report claiming a place, a report claiming none, and a recorded entry.
+    /// Only the third moves anybody. If the first moved too the exit would be undoable by
+    /// accident; if the third did not, standing would simply have frozen after the first exit.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_station_report_places_the_unentered_and_only_a_recorded_entry_undoes_an_exit()
+    {
+        var (trip, cavers) = await CreateTripAsync("Presence", guests: 4);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Word arrives by relayed phone call, and what gets relayed first is routinely where a
+        // team is rather than that they went in. Nobody recorded an entry for this one at all.
+        await ReportAsync(
+            trip,
+            new { caverIds = new[] { cavers[0] }, kind = "atStation", stationName = "cave.upper.2" },
+            At(9, 30));
+
+        await ReportAsync(trip, new { caverIds = new[] { cavers[1], cavers[2], cavers[3] }, kind = "entered" }, At(9, 0));
+        await ReportAsync(trip, new { caverIds = new[] { cavers[1], cavers[2], cavers[3] }, kind = "exited" }, At(12, 0));
+
+        var afterExit = await StateAsync(owner, trip);
+
+        // The one nobody recorded an entry for is underground, not unheard-from, and their station
+        // is on the screen beside it.
+        var placed = Participant(afterExit, cavers[0]);
+        placed.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        placed.GetProperty("in").GetBoolean().ShouldBeTrue();
+        placed.GetProperty("out").GetBoolean().ShouldBeFalse();
+
+        // All three of the others are out, which is what the next three reports are measured
+        // against.
+        Participant(afterExit, cavers[1]).GetProperty("out").GetBoolean().ShouldBeTrue();
+        Participant(afterExit, cavers[2]).GetProperty("out").GetBoolean().ShouldBeTrue();
+        Participant(afterExit, cavers[3]).GetProperty("out").GetBoolean().ShouldBeTrue();
+
+        // Retrospective word about where one of them was, typed after they came out and stamped
+        // with the hour it was typed — the ordinary shape of somebody completing a log.
+        await ReportAsync(
+            trip,
+            new { caverIds = new[] { cavers[1] }, kind = "atStation", stationName = "cave.deep.3" },
+            At(12, 30));
+        // The second gets word that claims no place at all, at the same hour.
+        await ReportAsync(trip, new { caverIds = new[] { cavers[2] }, kind = "note", note = "called in" }, At(12, 30));
+        // The third really did go back in, and somebody said so.
+        await ReportAsync(trip, new { caverIds = new[] { cavers[3] }, kind = "entered" }, At(12, 30));
+
+        var afterWord = await StateAsync(owner, trip);
+
+        // The station lands, is shown, and is the freshest place known about them — and they stay
+        // out. Reporting where somebody was is not a claim that they are back underground.
+        var backfilled = Participant(afterWord, cavers[1]);
+        backfilled.GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        TimeOf(backfilled, "positionRecordedAt").ShouldBe(At(12, 30));
+        backfilled.GetProperty("out").GetBoolean().ShouldBeTrue();
+        backfilled.GetProperty("in").GetBoolean().ShouldBeFalse();
+
+        var noted = Participant(afterWord, cavers[2]);
+        noted.GetProperty("lastKind").GetString().ShouldBe("note");
+        noted.GetProperty("out").GetBoolean().ShouldBeTrue();
+        noted.GetProperty("in").GetBoolean().ShouldBeFalse();
+
+        // And the twin without which the two above would pass on a server that had simply stopped
+        // folding after the first exit: saying they went in puts them back in.
+        var wentBackIn = Participant(afterWord, cavers[3]);
+        wentBackIn.GetProperty("in").GetBoolean().ShouldBeTrue();
+        wentBackIn.GetProperty("out").GetBoolean().ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A position carries its own time, and a later report that claims no place does not move it.
+    /// </summary>
+    /// <remarks>
+    /// The twin is the first read: while the station <em>is</em> the latest word, the two times
+    /// agree, so the second read's disagreement is the note arriving and nothing else. Without that
+    /// first half, a server that simply never filled the field in would pass.
+    /// </remarks>
+    [Fact]
+    public async Task A_positions_time_is_its_own_report_and_a_later_note_does_not_age_it()
+    {
+        var (trip, cavers) = await CreateTripAsync("Ages", guests: 2);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await ReportAsync(trip, new { caverIds = cavers, kind = "entered" }, At(9, 0));
+        await ReportAsync(
+            trip,
+            new { caverIds = new[] { cavers[0] }, kind = "atStation", stationName = "cave.upper.2" },
+            At(9, 30));
+
+        // While the station is the latest word about them, the two times are the same report.
+        var fresh = Participant(await StateAsync(owner, trip), cavers[0]);
+        fresh.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        TimeOf(fresh, "lastRecordedAt").ShouldBe(At(9, 30));
+        TimeOf(fresh, "positionRecordedAt").ShouldBe(At(9, 30));
+
+        // Somebody nothing has placed has no position time at all, and still has a last word.
+        var unplaced = Participant(await StateAsync(owner, trip), cavers[1]);
+        unplaced.GetProperty("stationName").ValueKind.ShouldBe(JsonValueKind.Null);
+        TimeOf(unplaced, "positionRecordedAt").ShouldBeNull();
+        TimeOf(unplaced, "lastRecordedAt").ShouldBe(At(9, 0));
+
+        // A note lands four hours later. The station is four hours old and has to keep saying so:
+        // dating it by the note would present a place the party left as one they are at.
+        await ReportAsync(trip, new { caverIds = new[] { cavers[0] }, kind = "note", note = "asked for rope" }, At(13, 30));
+
+        var aged = Participant(await StateAsync(owner, trip), cavers[0]);
+        aged.GetProperty("lastKind").GetString().ShouldBe("note");
+        aged.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+        TimeOf(aged, "lastRecordedAt").ShouldBe(At(13, 30));
+        TimeOf(aged, "positionRecordedAt").ShouldBe(At(9, 30));
     }
 
     // ---- refusals that keep the log honest -------------------------------------------------
@@ -497,6 +715,33 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
 
     private static Task<HttpResponseMessage> PostEventAsync(HttpClient client, Guid trip, object body) =>
         client.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", body);
+
+    /// <summary>
+    /// The trip's own day. Reports are folded in the order the <em>reporter</em> gave, not the
+    /// order they were typed, so a test about that order has to state its own times rather than
+    /// lean on how fast it posts.
+    /// </summary>
+    private static DateTimeOffset At(int hour, int minute) =>
+        new(2026, 9, 12, hour, minute, 0, TimeSpan.Zero);
+
+    /// <summary>One report, stamped with the hour the reporter gave, asserted to have landed.</summary>
+    private async Task ReportAsync(Guid trip, object body, DateTimeOffset recordedAt)
+    {
+        var json = JsonSerializer.SerializeToNode(body)!.AsObject();
+        json["recordedAt"] = recordedAt.ToString("O");
+        var response = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", json);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+    }
+
+    private static JsonElement Participant(JsonElement state, Guid caverId) =>
+        state.GetProperty("participants").EnumerateArray()
+            .Single(p => p.GetProperty("caverId").GetGuid() == caverId);
+
+    /// <summary>A nullable instant off the wire — null is a real answer on every time this slice sends.</summary>
+    private static DateTimeOffset? TimeOf(JsonElement element, string property) =>
+        element.GetProperty(property).ValueKind == JsonValueKind.Null
+            ? null
+            : element.GetProperty(property).GetDateTimeOffset();
 
     private static async Task<JsonElement> StateAsync(HttpClient client, Guid trip)
     {
