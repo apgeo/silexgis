@@ -15,11 +15,31 @@ let answer: { data?: PublicTripEnvelope; isPending: boolean; error: unknown } = 
 };
 let askedFor: string | undefined;
 
+/**
+ * Every read this page made that an anonymous caller could not actually perform.
+ *
+ * <b>Stubbed and recorded rather than left out of the mock.</b> Leaving them out would also fail
+ * the suite — as a module error naming a missing export, which says nothing about why this page may
+ * not have it. A stub that answers like a real query and writes its name down instead fails the
+ * test below with the rule itself: this page is read by somebody holding one token who is refused
+ * every other address in the installation, so a request to one of these answers 401 where no
+ * console is being watched, and the page then draws exactly what it would have drawn anyway.
+ */
+let reachedBeyondTheEnvelope: string[] = [];
+const authenticatedOnly = (name: string) => () => {
+  reachedBeyondTheEnvelope.push(name);
+  return { data: undefined, isPending: false, error: null };
+};
+
 vi.mock('../../api/hooks.ts', () => ({
   usePublicTrip: (token: string | undefined) => {
     askedFor = token;
     return answer;
   },
+  // The route a station's pictures are read from, and the one this page is likeliest to grow a
+  // reach for: the signed-in surfaces draw pictures over this very model.
+  useResLinksForTarget: authenticatedOnly('useResLinksForTarget'),
+  useSurveyModel: authenticatedOnly('useSurveyModel'),
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -35,6 +55,8 @@ let given:
       height?: number | string;
       trackedCavers?: readonly TrackedCaver[];
       crsLookup?: (code: string) => Promise<string | null>;
+      /** Absent on this surface; see the test that says why. */
+      stationMedia?: unknown;
     }
   | undefined;
 let mounts = 0;
@@ -99,6 +121,7 @@ beforeEach(() => {
   given = undefined;
   mounts = 0;
   narrow = false;
+  reachedBeyondTheEnvelope = [];
 });
 
 afterEach(cleanup);
@@ -265,6 +288,28 @@ describe('the drawing on a followed page', () => {
     render(<PublicTripPage />);
 
     expect(given?.fileName).toBe('trip.3d');
+  });
+
+  /**
+   * Station pictures: this page shows none, and the way it shows none is by asking for none.
+   *
+   * <b>The failure being guarded against is a silent one.</b> The signed-in surfaces draw a strip
+   * of photographs over the stations of this same model, read from the model's links — and that
+   * route takes an account. A page that copied the signed-in wiring here would fire a request that
+   * answers 401, bury it in a query nobody inspects, and render a model with no strips: identical,
+   * pixel for pixel, to a cave whose stations genuinely have no photographs. Nothing would ever
+   * report it. So the assertion is about the request, not about the picture.
+   *
+   * <b>And no half-promise.</b> An empty `stationMedia` map would be the viewer being told this
+   * surface shows pictures; the prop's absence is what says it has none to show.
+   */
+  it('reaches for no station pictures, because a visitor cannot read the links they come from', () => {
+    ready({ model });
+    render(<PublicTripPage />);
+
+    expect(screen.getByTestId('viewer')).toBeTruthy();
+    expect(reachedBeyondTheEnvelope).toEqual([]);
+    expect(given!.stationMedia).toBeUndefined();
   });
 
   it('resolves the coordinate system out of the envelope, never over the network', async () => {

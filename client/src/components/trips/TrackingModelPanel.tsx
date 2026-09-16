@@ -16,6 +16,7 @@ import type { PickedModelPart } from '../../caveview/modelParts.ts';
 import { trackedCaversFrom } from '../../caveview/trackedCavers.ts';
 import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
 import { trackedCaversAt } from '../../caveview/trackingReplay.ts';
+import { useStationMedia } from '../../caveview/useStationMedia.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
@@ -204,6 +205,19 @@ export default function TrackingModelPanel({
   // several requests on a long trip, and this tab is opened routinely by somebody who wants to
   // record that the party went in and nothing else.
   const log = useTripTrackingEventLog(tripLogId, open && replaying);
+
+  /**
+   * The photographs linked to this model's stations, shown over the model where they were taken.
+   *
+   * <b>Gated on the model being open, for the same reason the model itself is.</b> This tab is
+   * opened routinely by somebody who only wants to record that the party went in, and the pictures
+   * are worth exactly nothing until there is a model on screen to draw them over — so the request
+   * is not made until the panel is opened, and stops being made when it is closed again.
+   *
+   * The same source the cave's own survey viewer reads, rather than a second reading of it: what a
+   * photograph is anchored to, and how far a reader may reach for it, are one rule and have one home.
+   */
+  const stationMedia = useStationMedia(model?.id, open);
 
   const names = useMemo(
     () => new Map(participants.map((person) => [person.caverId, person.name])),
@@ -403,6 +417,7 @@ export default function TrackingModelPanel({
             // The viewer's own controls: this is a model shown to be read rather than one shown
             // beside chrome competing for the same corner. All but one of them — see above.
             toolbar={{ buttons: toolbarButtons }}
+            stationMedia={stationMedia}
           />
           {canRecord && (
             <TrackingReportDialog

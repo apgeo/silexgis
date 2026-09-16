@@ -51,7 +51,11 @@ export type CaveViewerEvent =
   // What the viewer reports instead of the one above when markers share a station and are
   // drawn as one. A panel that listens for only the first is silent for a party standing
   // together, which is most of the time a party is anywhere.
-  | 'liveMarkerCluster';
+  | 'liveMarkerCluster'
+  // A thumbnail in a station's strip was clicked, before the viewer shows the picture itself. The
+  // event carries `entry` — the very object the strip was built from — and `handled`, which a host
+  // that opens its own viewer on the picture sets to suppress the viewer's in-model popup.
+  | 'mediaOpen';
 
 /**
  * How a station or a named part of a survey is addressed: the dotted path the viewer itself
@@ -70,6 +74,16 @@ export interface CaveViewMediaEntry {
   url: string;
   thumbnailUrl?: string;
   caption?: string;
+  /**
+   * Which document this picture is, for a host that opens its own viewer on it.
+   *
+   * <b>Carried through the viewer rather than looked up again on the way back.</b> The viewer hands
+   * the clicked entry back on its `mediaOpen` event as the same object it was given, so anything
+   * put here arrives with the click; the alternative is matching a URL against the map that built
+   * it, which would be a second derivation of an identity already known. Ignored by the viewer
+   * itself, which reads only the three fields above.
+   */
+  documentId?: string;
 }
 
 /**
@@ -122,7 +136,14 @@ export interface CaveViewFocusOptions {
   highlight?: boolean;
   /**
    * Shows the station's own popup, and with it the strip of pictures a pointer resting on the
-   * station would have opened. The one way to that strip that does not need a pointer that hovers.
+   * station would have opened.
+   *
+   * <b>Not what a tap needs, which is the correction this comment carries.</b> It used to say this
+   * was the one way to that strip without a pointer that can hover, and a tap was answered by
+   * focusing the station to reach it — which flies the camera. The viewer reports a tapped station
+   * exactly as it reports a hovered one and draws the strip where the station stands, so this
+   * option is for showing a strip at a station nobody pointed at: one arrived at from a list or a
+   * link, where the camera is moving anyway.
    */
   popup?: boolean;
 }

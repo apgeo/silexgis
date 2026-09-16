@@ -961,44 +961,53 @@ describe('CaveViewPanel', () => {
   });
 
   /**
-   * The strip of pictures is opened by a pointer coming to rest on a station, and a finger cannot
-   * do that: a stationary tap moves no pointer, so on a touch screen the strip is unreachable
-   * however large its thumbnails are. The tap that picks the station opens it instead.
+   * A tap on a station is answered by the pick and by nothing else.
+   *
+   * <b>It used to fly the camera, and the reasoning for that turned out to be wrong.</b> The
+   * argument was that the strip is a hover, that a finger cannot hover, and that focusing the
+   * station — which centres the camera on it — was therefore the only way to reach it. Driven
+   * against the vendored bundle on a 286px surface: a stationary tap on a station dispatched
+   * `station` and then `stationHover` with `pointerType` touch, and the strip was drawn at the
+   * station where it stood, with nothing having called `focusStation`; a tap on empty space took it
+   * off again. So the move bought a strip that was already there, and it cost the most on the one
+   * surface where a tap means something else — the tracking tab, where somebody taps the station
+   * the party is at and then reaches for "Record here" while the model slides out from under them.
    */
-  describe('station pictures where no pointer can hover', () => {
+  describe('a tap on a station', () => {
     /** The station object the viewer hands over with a click — it names itself with `name()`. */
     const station = { name: () => 'p.g.7' };
     const tap = (pointerType: string, node: unknown = station) =>
       act(() => emit('station', { node, mouseEvent: { pointerType } }));
 
-    it('opens a station’s pictures from the tap that picked it', async () => {
-      await renderReady({ stationMedia: media() });
-
-      tap('touch');
-
-      // Focusing the station is what shows the strip without a pointer, and it centres the
-      // station — which is also what keeps the strip on screen, since it is drawn only while its
-      // station is in view.
-      expect(focusStation).toHaveBeenCalledWith('p.g.7', { popup: true });
-    });
-
-    it('takes them off again on a second tap, the only dismissal a finger has', async () => {
+    it('leaves the camera where the reader left it, pictures or no pictures', async () => {
       await renderReady({ stationMedia: media() });
       setStationMedia.mockClear();
 
       tap('touch');
       tap('touch');
 
-      // Clearing the source and putting it straight back is what removes the strip itself; the
-      // source returns so the next tap still has pictures to find.
-      expect(clearStationMedia).toHaveBeenCalledTimes(1);
-      expect(setStationMedia).toHaveBeenCalledTimes(1);
-      expect(focusStation).toHaveBeenCalledTimes(1);
+      expect(focusStation).not.toHaveBeenCalled();
+      // Nor is the source taken away and handed back, which is how a second tap used to dismiss a
+      // strip this panel had opened. The viewer takes its own off when a finger lands elsewhere.
+      expect(clearStationMedia).not.toHaveBeenCalled();
+      expect(setStationMedia).not.toHaveBeenCalled();
+    });
+
+    it('still names what was picked, which is what a report is recorded against', async () => {
+      const onPartPick = vi.fn();
+      await renderReady({ stationMedia: media(), onPartPick });
+
+      tap('touch');
+
+      // The offer the tracking tab raises from a press, unchanged: what went is the camera move
+      // that used to happen beside it.
+      expect(onPartPick).toHaveBeenCalledWith(
+        expect.objectContaining({ anchorKind: 'modelStation', anchor: { station: 'p.g.7' } }),
+      );
+      expect(focusStation).not.toHaveBeenCalled();
     });
 
     it('leaves a mouse click meaning what it meant', async () => {
-      // A mouse opens the strip by resting on the station. Flying the camera on every click as
-      // well would take over the ordinary way of looking around a model.
       await renderReady({ stationMedia: media() });
 
       tap('mouse');
@@ -1006,21 +1015,151 @@ describe('CaveViewPanel', () => {
       expect(focusStation).not.toHaveBeenCalled();
       expect(clearStationMedia).not.toHaveBeenCalled();
     });
+  });
 
-    it('does not move the camera for a station that has no pictures', async () => {
+  /**
+   * Clicking a thumbnail opens the application's own picture viewer rather than the viewer's.
+   *
+   * The viewer's fallback draws the picture into the model at the station, which is the right
+   * answer for a host with nowhere better to put it. This application has somewhere better: a
+   * photograph of a pitch head is worth zooming, panning and reading a caption on, and none of
+   * that is possible in a small square floating inside a line drawing.
+   */
+  describe('opening a picture from the strip', () => {
+    const entry = {
+      url: 'http://files.local/photo?size=1200',
+      thumbnailUrl: 'http://files.local/photo?size=160',
+      caption: 'Sala mare',
+      documentId: 'photo-1',
+    };
+
+    it('opens the picture viewer on the thumbnail that was clicked, and takes the click', async () => {
       await renderReady({ stationMedia: media() });
 
-      tap('touch', { name: () => 'p.g.9' });
+      const event: { entry: typeof entry; handled?: boolean } = { entry };
+      act(() => emit('mediaOpen', event));
 
-      expect(focusStation).not.toHaveBeenCalled();
+      // Claimed, so the viewer does not also draw its own popup into the model behind this one.
+      expect(event.handled).toBe(true);
+      const shown = await screen.findByAltText('Sala mare');
+      expect(shown.getAttribute('src')).toBe(entry.url);
     });
 
-    it('does nothing at all when the panel was given no pictures', async () => {
-      await renderReady();
+    it('offers no address for the stored bytes, because it was never handed one', async () => {
+      const { container } = await renderReady({ stationMedia: media() });
 
-      tap('touch');
+      act(() => emit('mediaOpen', { entry }));
+      await screen.findByAltText('Sala mare');
 
-      expect(focusStation).not.toHaveBeenCalled();
+      // The protection rule where a reader could actually act on it. The strip's entries are
+      // renderings derived from a published thumbnail URL precisely so that a reader who may not
+      // be told where a photograph was taken never receives the file that says so — so nothing
+      // this opens may carry an address for the original, and the download control has to refuse
+      // itself rather than quietly reach for one.
+      for (const element of Array.from(container.querySelectorAll('[href], [src]'))) {
+        const url = element.getAttribute('href') ?? element.getAttribute('src') ?? '';
+        expect(url).not.toContain('/content');
+      }
+    });
+
+    it('leaves a malformed entry to the viewer rather than claiming the click and dropping it', async () => {
+      await renderReady({ stationMedia: media() });
+
+      const event: { entry: { url: string }; handled?: boolean } = { entry: { url: '' } };
+      act(() => emit('mediaOpen', event));
+
+      // Unclaimed: the viewer still does whatever it would have done. Claiming a click and then
+      // declining to show anything is a thumbnail that silently does nothing.
+      expect(event.handled).toBeUndefined();
+    });
+
+    /**
+     * A station's other pictures, and where the picture viewer is drawn.
+     *
+     * Both are the same measurement in the end: the strip is held inside the model surface, so on a
+     * phone it shows two thumbnails across and cuts off what follows — and the viewer that opens
+     * from it is a sheet that a model covering the screen paints straight over.
+     */
+    describe('a station with several pictures', () => {
+      const station = { name: () => 'p.g.7' };
+      const strip = [
+        { url: 'http://files.local/one?size=1200', caption: 'One', documentId: 'photo-1' },
+        { url: 'http://files.local/two?size=1200', caption: 'Two', documentId: 'photo-2' },
+        { url: 'http://files.local/three?size=1200', caption: 'Three', documentId: 'photo-3' },
+      ];
+      const stripMedia = () => new Map([['p.g.7', strip]]);
+
+      it('opens the whole set at the picture that was clicked', async () => {
+        await renderReady({ stationMedia: stripMedia() });
+
+        act(() => emit('mediaOpen', { entry: strip[1], station }));
+
+        expect((await screen.findByAltText('Two')).getAttribute('src')).toBe(strip[1].url);
+        // Moving on is how the pictures the strip had no room to draw are seen at all: it is
+        // bounded by the model it is drawn over, and on a phone that is two thumbnails across.
+        fireEvent.click(screen.getByLabelText('Next'));
+        expect((await screen.findByAltText('Three')).getAttribute('src')).toBe(strip[2].url);
+      });
+
+      it('opens only what was clicked when the station cannot be named', async () => {
+        await renderReady({ stationMedia: stripMedia() });
+
+        // No station on the event: a viewer that named nothing still opens the picture that was
+        // pressed, rather than an empty sheet.
+        act(() => emit('mediaOpen', { entry: strip[1] }));
+
+        expect(await screen.findByAltText('Two')).toBeInTheDocument();
+        fireEvent.click(screen.getByLabelText('Next'));
+        // One picture wraps to itself rather than arrowing into somebody else's station.
+        expect(await screen.findByAltText('Two')).toBeInTheDocument();
+      });
+
+      it('draws the picture inside the model while the model is covering the screen', async () => {
+        await renderReady({ stationMedia: stripMedia() });
+        const surface = screen.getByTestId('caveview-container');
+        // The viewer's fullscreen button puts *its own container* into the browser's top layer,
+        // which paints over the whole document: a sheet that is a sibling of it is not drawn at
+        // all, and the thumbnail would answer with nothing — having also suppressed the viewer's
+        // own popup on the way.
+        Object.defineProperty(document, 'fullscreenElement', {
+          configurable: true,
+          get: () => surface,
+        });
+        try {
+          act(() => emit('mediaOpen', { entry: strip[0], station }));
+
+          expect(surface.contains(await screen.findByTestId('lightbox'))).toBe(true);
+        } finally {
+          Object.defineProperty(document, 'fullscreenElement', {
+            configurable: true,
+            get: () => null,
+          });
+        }
+      });
+
+      it('does the same where the request was refused and only the class covers the screen', async () => {
+        await renderReady({ stationMedia: stripMedia() });
+        const surface = screen.getByTestId('caveview-container');
+        // What happens inside an embedded frame, which is how this viewer is read on somebody
+        // else's page: the fullscreen request is refused, no `fullscreenchange` is raised, and the
+        // surface is pinned over the screen by the class the viewer adds — above this sheet.
+        surface.classList.add('toggle-fullscreen');
+
+        act(() => emit('mediaOpen', { entry: strip[0], station }));
+
+        expect(surface.contains(await screen.findByTestId('lightbox'))).toBe(true);
+      });
+
+      it('leaves it in the panel while the model is one card among others', async () => {
+        await renderReady({ stationMedia: stripMedia() });
+        const surface = screen.getByTestId('caveview-container');
+
+        act(() => emit('mediaOpen', { entry: strip[0], station }));
+
+        // Inside the surface it would be clipped to the card and scrolled away with it; outside
+        // it, the fixed sheet covers the window, which is what a picture viewer is.
+        expect(surface.contains(await screen.findByTestId('lightbox'))).toBe(false);
+      });
     });
   });
 });

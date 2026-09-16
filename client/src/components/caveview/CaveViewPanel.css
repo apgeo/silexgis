@@ -10,10 +10,19 @@
   position: relative;
 }
 
-/* A toolbar button is 28px and a media thumbnail 64px by default, both of which are sizes for a
-   cursor. Under a finger the toolbar gets the forty pixels the rest of this application gives a
-   touch target, and the thumbnails grow with it — a strip is scrolled and tapped, and 64px is
-   below what a finger hits reliably.
+/* Under a finger the toolbar gets the forty pixels the rest of this application gives a touch
+   target, rather than the 44px the viewer would otherwise use: one number for a touch target
+   across the product is worth more than four pixels on this one control.
+
+   <b>The media strip is deliberately NOT sized here, and that is a correction.</b> This block used
+   to grow the thumbnails to 80px "because the default is 64px, which is below what a finger hits
+   reliably" — true of the default for a *mouse*, and the viewer never applies that one to a finger.
+   It sizes the strip on the pointer itself, exactly as this rule does and for the reason stated in
+   its own documentation (a phone held sideways is wider than a small laptop, so the question is the
+   pointer and not the width): 64px for a fine pointer, 88px for a coarse one, the thumbnail being
+   also the area tapped. So the override was not enlarging the target, it was shrinking it from 88
+   to 80 — and because a property that is set wins for *both* pointers, writing one here at all is
+   how the strip stops answering the pointer. Leaving it unset is what keeps that rule in one place.
 
    Set on the viewer's own container rather than on the panel because only that element goes
    fullscreen, and the toolbar is moved inside it for as long as that lasts: a custom property set
@@ -21,7 +30,6 @@
 @media (hover: none), (pointer: coarse) {
   .caveview-panel-surface {
     --cv-toolbar-button-size: 40px;
-    --cv-media-thumbnail-size: 80px;
     /* The shading chooser, which the viewer reserves 160px for on a coarse pointer.
 
        That reservation is room the toolbar has none of. The bar wraps rather than overflowing, so
@@ -66,6 +74,39 @@
    surface so nothing decides the shape of a toolbar somebody else placed. */
 .caveview-panel-surface .cv-toolbar {
   width: max-content !important;
+}
+
+/* <b>A station's pictures are kept inside the model they are drawn over.</b>
+
+   The strip is a plain flex row that does not wrap, and the viewer places it by centring it on the
+   station and then pulling it back inside the left and right edges — which can only be done when it
+   is narrower than the model surface. It is not, quickly: the thumbnails are 88px under a finger, so
+   three of them need 296px and the tracking panel on a 360px phone gives the model 286px. Past that
+   the clamp gives up, pins the strip at the left edge and lets the remainder run off the right one,
+   where the viewer's own `overflow: hidden` clips it away. Measured at exactly that: with three
+   pictures on one station at 286px the third thumbnail is laid out from 201 to 289, and a reader is
+   never told it exists — the strip takes no pointer events but on its thumbnails and the container
+   takes no scroll gesture, so there is nothing to drag it into view with either.
+
+   Wrapping is what it should have done. The viewer measures the strip after laying it out and
+   positions it from those measurements, so a strip that has wrapped to two rows is placed correctly
+   without it knowing anything has changed; the same three pictures then read two-and-one inside the
+   surface. The two maxima are the same rule in the other axis — a wrapped strip grows downwards, and
+   a block of pictures taller than the model would run off the bottom exactly as it used to run off
+   the side. Sixteen pixels is the strip's own padding, kept clear of the surface's edges.
+
+   `overflow: hidden` is what a station with more pictures than the surface can hold then does: the
+   rows that fit are drawn, the next is cut off at the strip's own edge rather than drawn over the
+   model outside it. A reader who opens any of the visible ones sees the rest in the picture viewer,
+   which is where a set larger than the strip is actually read.
+
+   Nothing here is `!important`: the viewer writes the strip's geometry as inline styles but writes
+   neither of these properties, so this is simply the only rule that sets them. */
+.caveview-panel-surface .cv-media-strip {
+  flex-wrap: wrap;
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 16px);
+  overflow: hidden;
 }
 
 /* <b>Below 768px the viewer's own stylesheet takes the whole screen, and this panel is not a page.</b>

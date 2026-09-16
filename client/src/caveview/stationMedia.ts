@@ -28,6 +28,23 @@ const FULL_SIZE = 1200;
 /** The rendering shown in the strip; the strip's thumbnails are 64px by default. */
 const STRIP_SIZE = 160;
 
+/**
+ * How many pictures one station is handed over with.
+ *
+ * <b>Because the strip fetches every one of them, and the screen shows a handful.</b> The viewer
+ * builds a thumbnail for each entry and sets its source as the strip is drawn, so a station that
+ * somebody has linked forty photographs to is forty requests every time a finger lands on it — on
+ * the tracking tab, which is read on a phone on a hillside. What can be seen of them is much less:
+ * measured on a 286px-wide model surface, the width a 360px phone leaves this panel, a wrapped
+ * strip of coarse-pointer thumbnails shows two across and rather under three rows down.
+ *
+ * Twelve is chosen as what a fine pointer fits on a single row of a desk-width model, so on the
+ * screen where the room exists the bound is never what decides; where it does decide, it is bounding
+ * a block of pictures that was already larger than the model it is drawn over. Whoever wants all of
+ * them is looking at a document list rather than at a line drawing.
+ */
+const MAX_PER_STATION = 12;
+
 /** Whether a member anchors its link to a station of the model on screen. */
 function stationOf(member: ResLinkMember, surveyModelId: string): string | null {
   if (
@@ -62,6 +79,9 @@ function pictureOf(member: ResLinkMember): CaveViewMediaEntry | null {
     url: thumbnailAtSize(display.thumbnailUrl, FULL_SIZE),
     thumbnailUrl: thumbnailAtSize(display.thumbnailUrl, STRIP_SIZE),
     caption: display.title,
+    // Which document this is, so a host opening its own viewer on the clicked thumbnail knows what
+    // it is showing. It is the member's target — the photograph itself — and not the link's.
+    documentId: member.targetId,
   };
 }
 
@@ -97,6 +117,9 @@ export function stationMediaFromLinks(
     for (const station of stations) {
       const entries = media.get(station) ?? [];
       for (const picture of pictures) {
+        if (entries.length >= MAX_PER_STATION) {
+          break;
+        }
         // The same photograph can reach one station through two links — it is linked to the
         // station and to the passage it stands in — and the strip would then show it twice.
         if (!entries.some((entry) => entry.url === picture.url)) {
@@ -115,10 +138,10 @@ export function stationMediaFromLinks(
 /**
  * What one station has, asked of either kind of source.
  *
- * Wanted because a tap has to know whether there is a strip to show before it asks for one: with no
- * pointer to hover, the strip is opened by focusing the station, and that also flies the camera to
- * it — so asking at a station with nothing to show would answer a tap by moving the view for
- * nothing. A Map is keyed by the station's dotted path; a function is asked about the station
+ * Wanted because a thumbnail that is clicked is one of a set, and the picture viewer it opens shows
+ * the set: the strip is bounded by the model surface it is drawn over — two thumbnails across on a
+ * phone — so the pictures past what fits are reached by opening one of the ones that do and moving
+ * on from it. A Map is keyed by the station's dotted path; a function is asked about the station
  * itself, which is the object the viewer hands over with the click.
  */
 export function mediaForStation(

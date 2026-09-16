@@ -252,6 +252,15 @@ export default function PublicTripPage() {
               trackedCavers={cavers}
               crsLookup={crsLookup}
               toolbar
+              // No `stationMedia`, and it is deliberate rather than an omission. A station's
+              // pictures are read from the model's links, and that route takes an account — the
+              // visitor holding this one token is refused it, as they are refused every other
+              // address here. So the hook the signed-in surfaces share must not be reached for
+              // from this page: it would fire a request that answers 401 where no console is being
+              // watched, and then draw precisely what a cave with no pictures draws, which is a
+              // gap nobody would ever see reported. The published envelope is the only thing this
+              // page can read and it carries no pictures today; the day it does, the map is built
+              // from it beside the other derivation rather than inside this file.
             />
           </div>
         )}
