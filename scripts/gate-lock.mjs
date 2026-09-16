@@ -15,6 +15,11 @@
 //   node scripts/gate-lock.mjs release
 //   node scripts/gate-lock.mjs run [--label <text>] [--result <file>] -- <command> [args...]
 //
+// A `run` also fingerprints the test assemblies it is about to execute and re-checks them while it
+// goes. If another worktree's build overwrites them mid-run the run is killed, the result file says
+// `verdict: "void"`, and it exits 75 — because a verdict assembled from two builds proves nothing in
+// either direction, and the failure is otherwise silent for as long as the suite takes.
+//
 // `run` is the normal form: take the lock (waiting in line by default), run the command with
 // inherited stdio, write a small JSON result file when it ends (so a detached caller can
 // collect the verdict later), release, and exit with the command's exit code. `acquire` with
@@ -24,14 +29,19 @@
 // SILEXGIS_GATE_LOCK_DIR — it must name the same place for every worktree that shares the
 // machine, which the default already does.
 
-import { mkdirSync, rmSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, rmSync, readFileSync, readdirSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { hostname, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import process from 'node:process';
 
 /** How much of a run's output is kept to find the summary in. */
+/**
+ * How often a run re-checks that nobody has rebuilt the assemblies it is executing. Overridable
+ * only so the guard's own test can drive it; a minute is right for a suite measured in hours.
+ */
+const AssemblyCheckMs = Number(process.env.GATE_LOCK_ASSEMBLY_CHECK_MS || 60_000);
 const OutputTailBytes = 64 * 1024;
 
 /**
@@ -366,6 +376,86 @@ async function main() {
     process.exit(3);
   }
 
+
+/**
+ * The assemblies a run is about to test, fingerprinted so nobody can swap them out from under it.
+ *
+ * Two full runs were destroyed this way before this existed, and neither reported anything wrong:
+ * a run takes the lock, starts executing, and hours later another worktree's build rewrites the
+ * very `.dll` files being executed. The run continues and produces a verdict that describes a
+ * mixture of two builds — a red that proves no defect and a green that proves no absence. The tell
+ * was only ever visible afterwards, by comparing the test *total* against neighbouring runs.
+ *
+ * So the fingerprint is taken at acquire time and re-checked while the run is in flight. What
+ * matters is that it fails LOUDLY and EARLY: the failure mode this replaces was silent for
+ * fifteen and twenty-four hours respectively, while every health probe reported a healthy,
+ * hard-working suite.
+ */
+function outputDirsFor(command, cwd) {
+  // `dotnet test <path>` is the shape every caller uses; the assemblies live under that project's
+  // bin/. Anything else falls back to the working directory, which over-collects rather than
+  // under-collects — a false alarm costs a re-run, a miss costs a day.
+  const target = command.find((a) => a.endsWith('.csproj') || a.endsWith('.slnx') || a.endsWith('.sln'));
+  const base = target ? dirname(resolve(cwd, target)) : cwd;
+  const bin = join(base, 'bin');
+  return existsSync(bin) ? [bin] : [];
+}
+
+function fingerprint(dirs) {
+  const seen = [];
+  const walk = (d) => {
+    let entries;
+    try {
+      entries = readdirSync(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = join(d, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (e.name.endsWith('.dll')) {
+        try {
+          const st = statSync(full);
+          seen.push({ file: full, mtimeMs: st.mtimeMs, size: st.size });
+        } catch {
+          /* vanished between readdir and stat: treated as a change on the next pass */
+        }
+      }
+    }
+  };
+  for (const d of dirs) walk(d);
+  seen.sort((a, b) => (a.file < b.file ? -1 : 1));
+  return seen;
+}
+
+/** The first assembly that differs, described so the message can name it and both times. */
+function firstChange(before, after) {
+  const now = new Map(after.map((f) => [f.file, f]));
+  for (const was of before) {
+    const is = now.get(was.file);
+    if (!is) return { file: was.file, was, is: null };
+    if (is.mtimeMs !== was.mtimeMs || is.size !== was.size) return { file: was.file, was, is };
+  }
+  return null;
+}
+
+function reportSwap(change, startedAt) {
+  const when = (ms) => new Date(ms).toISOString();
+  console.error('');
+  console.error('!! GATE RUN VOID — the assemblies changed while this run was executing them.');
+  console.error(`!!   file:            ${change.file}`);
+  console.error(`!!   run started:     ${startedAt.toISOString()}`);
+  console.error(`!!   assembly was:    ${when(change.was.mtimeMs)} (${change.was.size} bytes)`);
+  console.error(
+    change.is
+      ? `!!   assembly now:    ${when(change.is.mtimeMs)} (${change.is.size} bytes)`
+      : '!!   assembly now:    deleted',
+  );
+  console.error('!! Whatever this run reports describes a mixture of builds and proves nothing in');
+  console.error('!! either direction. Re-run it from a tree nobody else builds in.');
+  console.error('');
+}
+
   if (cmd === 'run') {
     const label = take('--label');
     const resultFile = take('--result');
@@ -378,6 +468,12 @@ async function main() {
 
     await acquireWaiting(dir, label);
     const startedAt = new Date();
+
+    // Fingerprint after the lock, before the first test: anything built while we queued is fine,
+    // anything built after this line is somebody overwriting the run in progress.
+    const watchedDirs = outputDirsFor(command, process.cwd());
+    const baseline = fingerprint(watchedDirs);
+    let swap = null;
 
     // The child's output is teed rather than inherited, so this can read the runner's own summary
     // line on the way past. Nothing about what the caller sees changes.
@@ -397,6 +493,20 @@ async function main() {
     process.on('SIGINT', forward);
     process.on('SIGTERM', forward);
 
+    // Checked while the run is in flight rather than only at the end, because the point is to stop
+    // burning the machine's long pole on an answer that cannot be used.
+    const sentry =
+      baseline.length > 0
+        ? setInterval(() => {
+            const change = firstChange(baseline, fingerprint(watchedDirs));
+            if (!change) return;
+            swap = change;
+            reportSwap(change, startedAt);
+            clearInterval(sentry);
+            child.kill('SIGTERM');
+          }, AssemblyCheckMs)
+        : null;
+
     const exitCode = await new Promise((resolve) => {
       child.on('close', (code, signal) => resolve(code ?? (signal ? 128 : 1)));
       child.on('error', (e) => {
@@ -405,7 +515,16 @@ async function main() {
       });
     });
 
+    if (sentry) clearInterval(sentry);
     const endedAt = new Date();
+    // A swap in the last few seconds would otherwise slip past the interval and be reported green.
+    if (!swap && baseline.length > 0) {
+      const change = firstChange(baseline, fingerprint(watchedDirs));
+      if (change) {
+        swap = change;
+        reportSwap(change, startedAt);
+      }
+    }
     if (resultFile) {
       const counts = summarise(tail);
       writeFileSync(
@@ -414,12 +533,22 @@ async function main() {
           {
             label: label || '',
             command: command.join(' '),
+            cwd: process.cwd(),
             exitCode,
             ...counts,
             startedAt: startedAt.toISOString(),
             endedAt: endedAt.toISOString(),
             durationSeconds: Math.round((endedAt - startedAt) / 1000),
             host: hostname(),
+            // Present and true only when the assemblies changed under the run. A reader who sees
+            // this must discard every other field: they describe a mixture of builds.
+            ...(swap
+              ? {
+                  verdict: 'void',
+                  verdictReason: `assemblies changed under the run (${swap.file})`,
+                  assemblySwap: swap,
+                }
+              : {}),
           },
           null,
           2,
@@ -427,7 +556,9 @@ async function main() {
       );
     }
     release(dir);
-    process.exit(exitCode);
+    // A void run must not exit 0: a caller that only checks the status code would otherwise read a
+    // mixture of builds as a pass.
+    process.exit(swap ? 75 : exitCode);
   }
 
   console.error('usage: gate-lock.mjs status [--probe] | acquire [--no-wait] [--label X] | release | steal --pid N [--force] | run [--label X] [--result F] -- cmd...');
