@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Net.Sockets;
+using DotNet.Testcontainers.Containers;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -60,9 +62,64 @@ public sealed class PostgresFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var maintenance = await EnsureTemplateAsync();
-        await ExecuteAsync(
-            maintenance, $"CREATE DATABASE \"{databaseName}\" TEMPLATE \"{TemplateDatabase}\"");
+        try
+        {
+            await ExecuteAsync(
+                maintenance, $"CREATE DATABASE \"{databaseName}\" TEMPLATE \"{TemplateDatabase}\"");
+        }
+        // PostgresException is deliberately excluded, and it derives from NpgsqlException so the
+        // order matters: a server that answers with an error is a server that is there, and
+        // reporting "the database has gone" over a missing template or a duplicate name would
+        // bury the real fault under a confident wrong answer. Only a connection that cannot be
+        // made or cannot be read counts.
+        catch (Exception ex) when (
+            ex is not PostgresException && ex is NpgsqlException or IOException or SocketException)
+        {
+            throw DatabaseHasGone(ex);
+        }
+
         ConnectionString = WithDatabase(maintenance, databaseName);
+    }
+
+    /// <summary>
+    /// Says once, in words, that the database has been taken away — rather than letting every
+    /// remaining class discover it one socket at a time.
+    ///
+    /// <para>
+    /// A container that disappears mid-run is not hypothetical here: it has happened three times,
+    /// by three different routes — finalised by the garbage collector when nothing rooted it,
+    /// removed by a Testcontainers reaper while several sessions ran suites at once, and killed
+    /// with the process group that launched it. Each time the visible result was the same, and
+    /// useless: every test still to run threw <c>SocketException</c> or
+    /// <c>EndOfStreamException</c> from wherever it happened to be, filling a log of tens of
+    /// thousands of lines that named the database in none of them. One run produced 1847 failures
+    /// and 5.6 MB of stack traces for a cause that fits on one line.
+    /// </para>
+    /// <para>
+    /// This does not make the suite survive it — nothing can, the database is gone — but a class
+    /// that has not started yet now fails with the reason instead of the symptom, and those are
+    /// the overwhelming majority.
+    /// </para>
+    /// </summary>
+    private static InvalidOperationException DatabaseHasGone(Exception cause)
+    {
+        // Deliberately not asked of the container object: IContainer.State is whatever the last
+        // inspect returned, so a container removed underneath the process still reports Running
+        // and a check against it says nothing. What is known for certain is that this fixture
+        // could not reach the server, and at this point in a class's life that is the same thing.
+        var state = liveContainer is null ? "never started" : $"last seen {liveContainer.State}";
+        return new InvalidOperationException(
+            "THE TEST DATABASE IS UNREACHABLE — this is an environment failure, not a test "
+                + $"failure. The container was {state}, and this class could not open a connection "
+                + "to it for ninety seconds of retrying. Every class that has not yet started will "
+                + "fail here for the same reason; the ones already running will fail wherever they "
+                + "happened to be, on a socket, naming nothing. Re-run, and do not investigate the "
+                + "individual failures — they are all one event. "
+                + "A reset that clears on retry is ordinary here and is handled silently: the "
+                + "postmaster accepts serially and eight classes building a host per test overflow "
+                + "its accept queue. This message means the retries ran out, so look at whether "
+                + "the container is still there and what else on the machine was competing for it.",
+            cause);
     }
 
     public async Task DisposeAsync()
@@ -189,15 +246,75 @@ public sealed class PostgresFixture : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Stops the container the process started, at process exit, because the reaper that would
+    /// otherwise do it is switched off — see <see cref="TestHostDefaults"/> for why.
+    /// </summary>
+    internal static void StopContainer()
+    {
+        var container = Interlocked.Exchange(ref liveContainer, null);
+        if (container is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // Synchronous on purpose: process exit does not wait for anything this does not make
+            // it wait for, and a container left running is a worse outcome than a slow exit.
+            container.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Exiting is not the moment to fail. A container that outlives this is removed by the
+            // same prune that removes any other leftover.
+        }
+    }
+
     private static string WithDatabase(string connectionString, string database) =>
         new NpgsqlConnectionStringBuilder(connectionString) { Database = database }.ConnectionString;
 
+    /// <summary>
+    /// Runs one statement, retrying a connection the server reset rather than refused.
+    ///
+    /// <para>
+    /// Opening a connection is not reliable here and the reason is rate rather than capacity.
+    /// Every test builds its own application host, every host opens its own pool, and eight
+    /// classes do it at once: the postmaster accepts serially, its accept queue overflows, and the
+    /// kernel resets the connections that did not fit. It arrives as
+    /// <c>SocketException: Connection reset by peer</c> from inside
+    /// <c>NpgsqlConnector.SetupEncryption</c> — before authentication, which is why the server
+    /// never says "too many clients" and its log shows nothing wrong. Measured: 295 of 393 tests
+    /// in one run, against a container that was still running when the run ended.
+    /// </para>
+    /// <para>
+    /// A reset at that point means the server was busy, not broken, so the answer is to ask again.
+    /// Anything the server answers — a real SQL error — is not retried and not disguised.
+    /// </para>
+    /// </summary>
     private static async Task ExecuteAsync(string connectionString, string sql)
     {
-        await using var connection = new NpgsqlConnection(connectionString);
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(sql, connection) { CommandTimeout = 300 };
-        await command.ExecuteNonQueryAsync();
+        var deadline = DateTime.UtcNow.AddSeconds(90);
+        var delay = 50;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await using var connection = new NpgsqlConnection(connectionString);
+                await connection.OpenAsync();
+                await using var command = new NpgsqlCommand(sql, connection) { CommandTimeout = 300 };
+                await command.ExecuteNonQueryAsync();
+                return;
+            }
+            catch (Exception ex) when (
+                ex is not PostgresException
+                && ex is NpgsqlException or IOException or SocketException
+                && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(delay);
+                delay = Math.Min(delay * 2, 1000);
+            }
+        }
     }
 }
 

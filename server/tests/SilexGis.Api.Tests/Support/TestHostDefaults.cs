@@ -25,4 +25,32 @@ internal static class TestHostDefaults
     [ModuleInitializer]
     internal static void DisableConfigurationReload() =>
         Environment.SetEnvironmentVariable("DOTNET_hostBuilder__reloadConfigOnChange", "false");
+
+    /// <summary>
+    /// Takes the Testcontainers reaper out of the run, and takes responsibility for the container
+    /// instead.
+    ///
+    /// <para>
+    /// Ryuk removes a session's containers ten seconds after its client connection stops
+    /// answering. That is a sound default for a suite that finishes in a minute on an idle
+    /// machine, and a poor one here: this suite builds a host per test across eight threads on a
+    /// box that routinely carries other people's suites, and a keepalive starved past ten seconds
+    /// costs the whole run its database. It went four times: the visible result was a container
+    /// removed — not stopped, removed — mid-run, and every remaining test failing on a socket. An
+    /// unlabelled container started beside one of those runs was untouched, so the removal follows
+    /// the Testcontainers label rather than the machine being short of anything.
+    /// </para>
+    /// <para>
+    /// With the reaper gone nothing else would ever stop the container, so this stops it at
+    /// process exit. A run killed outright still leaves one behind — one per killed run, named
+    /// like any Testcontainers container and removed by the usual prune — which is the price of
+    /// not having a watchdog that can shoot the run it is guarding.
+    /// </para>
+    /// </summary>
+    [ModuleInitializer]
+    internal static void OwnTheContainerRatherThanTheReaper()
+    {
+        Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true");
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => PostgresFixture.StopContainer();
+    }
 }
