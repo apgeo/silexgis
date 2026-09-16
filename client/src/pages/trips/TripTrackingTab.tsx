@@ -44,6 +44,10 @@ import {
 } from '../../components/trips/trackingWatch.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+// The position's age is worded by the followed page's own rule, called rather than copied — the
+// same reason the standing and the "last heard" age above are. A coordinator and a family read the
+// same position, and two roundings of one gap would have them disagreeing about it.
+import { positionAgeInWords } from '../public/publicTripParty.ts';
 import './TripTrackingTab.css';
 
 /** How many reports the log shows without being asked for more. */
@@ -64,7 +68,13 @@ const RECENT_EVENTS = 20;
  * **A position is the latest report that claimed a place, and the last report is whatever came
  * last.** A note or an exit says something happened, not where — so the two columns disagree on
  * purpose, and a surface that folded them together would move somebody back to an entrance because
- * their last word was a radio check.
+ * their last word was a radio check. <b>Their two ages disagree for the same reason and are drawn
+ * as two.</b> The place carries the moment it was reported and the "last heard" column carries the
+ * moment of the last word of any kind: a station heard four hours ago under a last word eight
+ * minutes old is not a station eight minutes old, and until the place was dated from its own
+ * report that is exactly what this table said. The gap between the two is information — it is what
+ * tells a coordinator that nobody has said where a party is since noon although somebody has said
+ * *something* since — so the two are never collapsed into one figure or one label.
  *
  * **A wrong report is deleted, never edited.** What is on the log is what somebody said at a
  * moment; rewriting one in place would leave a record indistinguishable from one nobody corrected.
@@ -283,7 +293,7 @@ export default function TripTrackingTab({
       .join(' · ');
 
   /**
-   * One person's last known place.
+   * One person's last known place, and the moment that placed them there where there is one.
    *
    * Nothing at all is drawn for somebody nobody has reported yet — there is no position to
    * withhold from anybody, so saying "withheld" there would invent a secret.
@@ -294,15 +304,64 @@ export default function TripTrackingTab({
    * co-ordinator, five minutes after the party went in, that the page is hiding every position on
    * it. A station or a depth report always carries a place, so an empty one is a withholding and
    * can be nothing else, and that is the only case said as a fact.
+   *
+   * <b>Only the branch that draws a place hands back a moment, and that is the whole guard.</b> A
+   * withheld position and one nobody ever reported arrive identically — the server sends no moment
+   * for either, deliberately, because which of the two it is is itself something a reader without
+   * the right to place the cave may not learn. Answering the moment here rather than beside the
+   * drawing means an absence cannot acquire an age by anything written later: there is no moment
+   * in scope to draw. What is refused above all is the obvious repair — filling the gap from the
+   * last word — which is the very sentence this whole change exists to stop the table saying.
    */
-  const positionOf = (participant: TrackingParticipant) => {
+  const positionOf = (
+    participant: TrackingParticipant,
+  ): { shown: ReactNode; placedAt: string | null } => {
     if (participant.stationName !== null || participant.depthM !== null) {
-      return place(participant.stationName, participant.depthM);
+      return {
+        shown: place(participant.stationName, participant.depthM),
+        placedAt: participant.positionRecordedAt,
+      };
     }
     if (participant.lastRecordedAt === null || !data.positionsWithheld) {
-      return '—';
+      return { shown: '—', placedAt: null };
     }
-    return withheldTag(participant.lastKind === 'atStation' || participant.lastKind === 'atDepth');
+    return {
+      shown: withheldTag(
+        participant.lastKind === 'atStation' || participant.lastKind === 'atDepth',
+      ),
+      placedAt: null,
+    };
+  };
+
+  /**
+   * The "where" cell: the place, with how long ago it was reported under it.
+   *
+   * <b>Under the place rather than in a column of its own, and worded rather than bare.</b> The age
+   * belongs to the place — it is the answer to "how old is this station", not to a fifth question —
+   * so it is drawn inside the same cell, where it cannot be read against the wrong heading. And it
+   * says "reported" rather than standing as a bare figure: two bare ages one column apart, under
+   * "Where" and under "Last heard", are two numbers a tired reader at four in the morning will
+   * eventually read as the same fact. The exact moment stays on hover, as it does for the last
+   * word, for whoever wants the clock rather than the gap.
+   */
+  const positionCell = (participant: TrackingParticipant) => {
+    const { shown, placedAt } = positionOf(participant);
+    const since = positionAgeInWords(placedAt, now, i18n.language);
+    return (
+      <>
+        {shown}
+        {since !== null && (
+          <Typography.Text
+            type="secondary"
+            className="tracking-position-age"
+            title={when(placedAt)}
+            data-testid={`trip-tracking-position-age-${participant.caverId}`}
+          >
+            {t('trips.tracking.positionSince', { since })}
+          </Typography.Text>
+        )}
+      </>
+    );
   };
 
   /**
@@ -646,7 +705,7 @@ export default function TripTrackingTab({
                           {fact(t('trips.tracking.columnTeam'), teamOf(row.teamId))}
                           {fact(t('trips.tracking.columnLastKind'), kindOf(row.lastKind, row.out))}
                           {fact(t('trips.tracking.columnLastHeard'), lastHeard(row))}
-                          {fact(t('trips.tracking.columnPosition'), positionOf(row))}
+                          {fact(t('trips.tracking.columnPosition'), positionCell(row))}
                         </div>
                       </div>
                     ),
@@ -679,9 +738,10 @@ export default function TripTrackingTab({
                     render: (kind: TrackingParticipant['lastKind'], row) => kindOf(kind, row.out),
                   },
                   {
-                    // Named for the last word rather than for the position beside it, because the
-                    // moment this read carries is the moment of the last report of any kind — see
-                    // the one function that derives it.
+                    // Named for the last word and carrying the age of the last word. The position
+                    // beside it carries its own, inside its own cell — the two answer different
+                    // questions and a column heading that covered both would be the wrong sentence
+                    // rather than a missing one.
                     title: t('trips.tracking.columnLastHeard'),
                     key: 'lastHeard',
                     render: (_value, row) => lastHeard(row),
@@ -689,7 +749,7 @@ export default function TripTrackingTab({
                   {
                     title: t('trips.tracking.columnPosition'),
                     key: 'position',
-                    render: (_value, row) => positionOf(row),
+                    render: (_value, row) => positionCell(row),
                   },
                 ]
           }

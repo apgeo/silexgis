@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import '../../i18n';
 import type { PublicTripEnvelope, PublicTripParticipant } from '../../api/hooks.ts';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
@@ -81,6 +81,7 @@ function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTrip
     stationName: null,
     depthM: null,
     lastRecordedAt: null,
+    positionRecordedAt: null,
     in: false,
     out: false,
     ...overrides,
@@ -268,6 +269,132 @@ describe('a trip followed by somebody with no account', () => {
     render(<PublicTripPage />);
 
     expect(screen.queryByTestId('public-trip-stale')).toBeNull();
+  });
+});
+
+/**
+ * <b>How old the place is, on the page a family reads.</b>
+ *
+ * The same defect the coordinator's screen had, in front of the reader least able to question it:
+ * a station reported at nine and a radio check at five to noon gave one age, the newer one, drawn
+ * against the station. Somebody at home reading "p.g.7, five minutes ago" concludes the party was
+ * at p.g.7 five minutes ago. Nobody said that.
+ */
+describe('how old a followed position is', () => {
+  /** Noon, so the station below is three hours old and the note five minutes. */
+  const AT_NOON = Date.parse('2026-09-14T12:00:00Z');
+  let clock: MockInstance<typeof Date.now>;
+
+  beforeEach(() => {
+    clock = vi.spyOn(Date, 'now').mockReturnValue(AT_NOON);
+  });
+
+  // Restored one by one rather than through a blanket restore, which would also reset the module
+  // mocks this file is built on.
+  afterEach(() => clock.mockRestore());
+
+  /** Ana, placed at nine and heard from at five to noon. */
+  const placedAtNine = () =>
+    participant({
+      ordinal: 1,
+      label: 'Ana',
+      teamId: TEAM_A,
+      stationName: 'p.g.7',
+      in: true,
+      lastRecordedAt: '2026-09-14T11:55:00Z',
+      positionRecordedAt: '2026-09-14T09:00:00Z',
+    });
+
+  it('dates the station from the report that placed her, not from the later word', () => {
+    ready({ participants: [placedAtNine()] });
+    render(<PublicTripPage />);
+
+    expect(screen.getByTestId('public-trip-position-age-1')).toHaveTextContent(
+      'Reported 3 hours ago',
+    );
+    // The assertion this page exists to make true: the note five minutes old did not re-date the
+    // place. Both halves, so it cannot pass by the age having disappeared.
+    expect(screen.getByTestId('public-trip-position-age-1')).not.toHaveTextContent(
+      '5 minutes ago',
+    );
+  });
+
+  /**
+   * Two facts, two labels, and they are allowed to disagree. "Last heard" answers whether word is
+   * getting out of the cave at all; the position's age answers whether anybody has said where the
+   * party is. A family watching for the second one must not be shown the first in its place.
+   */
+  it('keeps the last word and the position as two ages under two labels', () => {
+    ready({ participants: [placedAtNine()] });
+    render(<PublicTripPage />);
+
+    const card = screen.getByTestId('public-trip-caver-1');
+    expect(within(card).getByText('Last reported at')).toBeInTheDocument();
+    expect(within(card).getByText('Last heard')).toBeInTheDocument();
+    expect(within(card).getByText('5 minutes ago')).toBeInTheDocument();
+    expect(screen.getByTestId('public-trip-position-age-1')).toHaveTextContent('3 hours ago');
+    // The exact moment stays for whoever wants a clock rather than a gap.
+    expect(screen.getByTestId('public-trip-position-age-1')).toHaveAttribute(
+      'title',
+      expect.stringContaining('2026'),
+    );
+  });
+
+  /**
+   * <b>Silence keeps no age here either, and a withheld position least of all.</b> A position
+   * nobody reported and one this page may not carry arrive identically — with no moment — and
+   * filling that gap from the last word would tell a stranger a position was reported at a moment
+   * nobody reported one.
+   */
+  it('gives a position the envelope did not date no age at all', () => {
+    ready({
+      positionsWithheld: true,
+      participants: [
+        placedAtNine(),
+        // Reported, not placed, on a trip that withholds: "not shown, or not reported".
+        participant({ ordinal: 2, in: true, lastRecordedAt: '2026-09-14T11:50:00Z' }),
+        // Nobody has said a word about this one at all.
+        participant({ ordinal: 3 }),
+      ],
+    });
+    render(<PublicTripPage />);
+
+    expect(screen.queryByTestId('public-trip-position-age-2')).toBeNull();
+    expect(screen.queryByTestId('public-trip-position-age-3')).toBeNull();
+    // The positive twins: the withholding is still said in words, the unreported position still
+    // says so, and the one place that was reported still carries its age.
+    expect(screen.getByTestId('public-trip-position-withheld')).toBeInTheDocument();
+    expect(screen.getByTestId('public-trip-caver-3')).toHaveTextContent('No position reported');
+    expect(screen.getByTestId('public-trip-position-age-1')).toHaveTextContent('3 hours ago');
+  });
+
+  /**
+   * The same refusal where a moment arrives beside an absence.
+   *
+   * The envelope sends no moment for a position it will not disclose — but the age is drawn beside
+   * the place rather than off the participant, and this pins that. A page that dated a withheld
+   * position would tell a stranger that a position exists and when it was reported, which is half
+   * of what was being kept back.
+   */
+  it('draws no age beside a withheld position even if the envelope carries one', () => {
+    ready({
+      positionsWithheld: true,
+      participants: [
+        participant({
+          ordinal: 2,
+          in: true,
+          lastRecordedAt: '2026-09-14T11:50:00Z',
+          positionRecordedAt: '2026-09-14T09:00:00Z',
+        }),
+        placedAtNine(),
+      ],
+    });
+    render(<PublicTripPage />);
+
+    expect(screen.queryByTestId('public-trip-position-age-2')).toBeNull();
+    expect(screen.getByTestId('public-trip-position-withheld')).toBeInTheDocument();
+    // The twin: an age is still drawn where a place was.
+    expect(screen.getByTestId('public-trip-position-age-1')).toBeInTheDocument();
   });
 });
 

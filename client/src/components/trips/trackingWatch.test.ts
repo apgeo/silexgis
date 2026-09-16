@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
+import type { TrackingParticipant } from '../../api/hooks.ts';
 import {
   lastHeardAtIso,
   lastHeardInWords,
@@ -9,12 +10,35 @@ import {
 
 const NOON = Date.parse('2026-09-16T12:00:00Z');
 
-/** Somebody reported at a station, and neither out nor silent. */
-const heard = { lastKind: 'atStation', out: false } as const;
+/**
+ * One row of the watch as the read actually sends it.
+ *
+ * Whole participants rather than the two flags the functions ask for, and that is the point of the
+ * factory: the tests below can then put a report kind on a row that disagrees with the standing
+ * beside it, which is the only way to show that the kind is no longer being read.
+ */
+function participant(overrides: Partial<TrackingParticipant> = {}): TrackingParticipant {
+  return {
+    caverId: 'caver-1',
+    teamId: null,
+    lastKind: 'entered',
+    lastRecordedAt: '2026-09-16T09:00:00Z',
+    positionRecordedAt: null,
+    stationName: null,
+    depthM: null,
+    in: true,
+    out: false,
+    label: null,
+    ...overrides,
+  };
+}
+
+/** Somebody the server says is underground. */
+const heard = participant({ lastKind: 'atStation', in: true, out: false });
 /** Somebody reported out. */
-const outside = { lastKind: 'exited', out: true } as const;
+const outside = participant({ lastKind: 'exited', in: false, out: true });
 /** Somebody nobody has said a single word about — no report of any kind exists. */
-const silent = { lastKind: null, out: false } as const;
+const silent = participant({ lastKind: null, lastRecordedAt: null, in: false, out: false });
 
 describe('where somebody on a watch stands', () => {
   /**
@@ -30,43 +54,46 @@ describe('where somebody on a watch stands', () => {
   });
 
   /**
-   * <b>Read from what the last report *was*, never from whether one exists.</b> The two questions
-   * are different — "has anybody said anything at all" and "has anybody said they went in" — and
-   * the type of this function is what now pins which one is asked: there is no moment on it to
-   * mistake for an answer. Each kind that states a standing is checked separately, because "it
-   * came out right for a station" says nothing about what an entry does.
+   * <b>The standing is the server's, and this is the test that says so.</b> Each row here carries
+   * a report kind that the client's old fold would have read one way and the server's answer the
+   * other, and every one of them is answered by the server's answer:
+   *
+   * - a station report on somebody nobody has stated a standing for. The fold read any kind but an
+   *   exit as "inside", so a station made them underground; the domain rule says a station raises
+   *   *unheard* to underground and states nothing on its own, and a row that arrives with `in`
+   *   false is a row nothing has placed.
+   * - a note on somebody who has not been placed — "no answer from Maria", the commonest thing a
+   *   relayed phone call carries. The fold drew them as a caver in a cave. They are not.
+   * - a note on somebody who *has* been placed, which the fold got right for the wrong reason and
+   *   which must keep coming out right.
+   * - an entry that the server has since overturned, where reading the kind would put somebody
+   *   back inside a cave they were reported out of.
+   *
+   * Written as whole rows on purpose: the kind is present, it disagrees, and it is ignored.
    */
-  it('reads each kind of report for what it says about where somebody is', () => {
-    expect(trackingStandingOf({ lastKind: 'entered', out: false })).toBe('underground');
-    expect(trackingStandingOf({ lastKind: 'atStation', out: false })).toBe('underground');
-    expect(trackingStandingOf({ lastKind: 'atDepth', out: false })).toBe('underground');
-    expect(trackingStandingOf({ lastKind: 'exited', out: true })).toBe('out');
-    expect(trackingStandingOf({ lastKind: null, out: false })).toBe('unheard');
-  });
-
-  /**
-   * <b>The one case this client cannot answer, pinned on purpose so that changing it is a
-   * decision.</b> A note says something happened, not where and not whether, so the standing it
-   * leaves behind is whatever came before it — which a single report cannot show. Read as
-   * underground here: a party that went in at nine and radioed "all fine" at eleven has a note as
-   * its last word, and calling *them* "not heard from" would report a party demonstrably in a cave
-   * as one that may never have set off. The cost is the other way round and is real — somebody
-   * whose only report is a note about not reaching them is drawn as underground — and it is
-   * removed, not reduced, when the read carries the server's own fold.
-   */
-  it('reads a note as leaving somebody where they were, which it can only assume', () => {
-    expect(trackingStandingOf({ lastKind: 'note', out: false })).toBe('underground');
-    // And the twin that keeps the assumption from swallowing the state it is nearest to: a note is
-    // assumed, no report at all is known, and the two must not arrive at the same answer.
-    expect(trackingStandingOf({ lastKind: null, out: false })).toBe('unheard');
+  it('reads the standing the read carries rather than the kind of the last report', () => {
+    expect(trackingStandingOf(participant({ lastKind: 'atStation', in: false, out: false }))).toBe(
+      'unheard',
+    );
+    expect(trackingStandingOf(participant({ lastKind: 'note', in: false, out: false }))).toBe(
+      'unheard',
+    );
+    expect(trackingStandingOf(participant({ lastKind: 'note', in: true, out: false }))).toBe(
+      'underground',
+    );
+    expect(trackingStandingOf(participant({ lastKind: 'entered', in: false, out: true }))).toBe(
+      'out',
+    );
   });
 
   // Out is a statement somebody made and it outranks the rest: a report that says nothing about a
   // place must not move somebody back into a cave they have already left.
   it('reads out as out whatever else the row carries', () => {
-    expect(trackingStandingOf({ lastKind: null, out: true })).toBe('out');
-    expect(trackingStandingOf({ lastKind: 'note', out: true })).toBe('out');
-    expect(trackingStandingOf({ lastKind: 'atStation', out: true })).toBe('out');
+    expect(trackingStandingOf(participant({ lastKind: null, in: false, out: true }))).toBe('out');
+    expect(trackingStandingOf(participant({ lastKind: 'note', in: true, out: true }))).toBe('out');
+    expect(trackingStandingOf(participant({ lastKind: 'atStation', in: true, out: true }))).toBe(
+      'out',
+    );
   });
 });
 
@@ -87,21 +114,25 @@ describe('how the party divides', () => {
    * The count and the row have to be made the same way. Two readings of the same party — one for
    * the tag beside a name, one for the figure above the table — is how a watch ends up saying "2
    * underground" over three blue tags, and the reader cannot tell which of the two is lying.
+   *
+   * The party is the one from the test above: two of these rows carry a kind that disagrees with
+   * their standing, so a counter that went back to folding kinds would come out at 3 underground
+   * and 0 unheard over the same four rows.
    */
-  it('divides the party exactly as the rows are tagged, kind for kind', () => {
+  it('divides the party exactly as the rows are tagged, row for row', () => {
     const party = [
-      { lastKind: 'entered', out: false },
-      { lastKind: 'note', out: false },
-      { lastKind: 'exited', out: true },
-      { lastKind: null, out: false },
-    ] as const;
+      participant({ lastKind: 'entered', in: true, out: false }),
+      participant({ lastKind: 'note', in: true, out: false }),
+      participant({ lastKind: 'atStation', in: false, out: false }),
+      participant({ lastKind: 'exited', in: false, out: true }),
+    ];
 
     expect(trackingStandings(party)).toEqual({ underground: 2, out: 1, unheard: 1 });
     expect(party.map((person) => trackingStandingOf(person))).toEqual([
       'underground',
       'underground',
-      'out',
       'unheard',
+      'out',
     ]);
   });
 
@@ -127,16 +158,25 @@ describe('how the party divides', () => {
 
 describe('how old the last word is', () => {
   /**
-   * The moment this read carries is the moment of the last report of *any* kind. It is not the
-   * moment the position beside it was reported, and this test pins which of the two is being
-   * answered: a row whose last word is a note is aged from the note, not from the station that
-   * was reported hours earlier.
+   * The moment this function carries is the moment of the last report of *any* kind. It is not the
+   * moment the position beside it was reported, and this pins which of the two is answered: a row
+   * whose last word is a note is aged from the note, not from the station reported hours earlier.
+   * The row below carries both moments, so an implementation that reached for the wrong one has a
+   * wrong one to reach for.
    */
-  it('ages a row from its last word and from nothing else', () => {
-    const noteAtEleven = { lastRecordedAt: '2026-09-16T11:00:00Z' };
+  it('ages a row from its last word and never from its position', () => {
+    const notedAtEleven = participant({
+      lastKind: 'note',
+      lastRecordedAt: '2026-09-16T11:00:00Z',
+      positionRecordedAt: '2026-09-16T08:00:00Z',
+      stationName: 'p.g.7',
+    });
 
-    expect(lastHeardAtIso(noteAtEleven)).toBe('2026-09-16T11:00:00Z');
-    expect(lastHeardInWords(noteAtEleven, NOON, 'en')).toBe('1 hour ago');
+    expect(lastHeardAtIso(notedAtEleven)).toBe('2026-09-16T11:00:00Z');
+    expect(lastHeardInWords(notedAtEleven, NOON, 'en')).toBe('1 hour ago');
+    // And the twin, so the assertion above is about which field is read rather than about the
+    // wording: the position's own moment is four hours older and is what the place is dated from.
+    expect(lastHeardInWords(notedAtEleven, NOON, 'en')).not.toBe('4 hours ago');
   });
 
   it('says how long ago rather than at what time', () => {

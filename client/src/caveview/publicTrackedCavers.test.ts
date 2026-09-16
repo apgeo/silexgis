@@ -14,6 +14,7 @@ function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTrip
     stationName: null,
     depthM: null,
     lastRecordedAt: null,
+    positionRecordedAt: null,
     in: false,
     out: false,
     ...overrides,
@@ -151,6 +152,58 @@ describe('a published trip, folded into people a model can draw', () => {
     for (const caver of cavers) {
       expect(caver.position).toEqual({ kind: 'withheld', certain: false });
     }
+  });
+
+  it('dates a followed position from the report that placed somebody', () => {
+    // <b>The envelope carries the position's own moment now, and this page reads it.</b> It used
+    // to carry only the last word, so every followed position was as old as the last thing anybody
+    // said about that person — a station reported at 09:00 under a radio check at 11:00 was drawn
+    // as an 11:00 position, on the page a family reads while deciding whether a party is overdue.
+    const cavers = publicTrackedCavers(
+      envelope({
+        participants: [
+          participant({
+            stationName: 'p.g.7',
+            lastRecordedAt: '2026-09-14T11:00:00Z',
+            positionRecordedAt: '2026-09-14T09:00:00Z',
+          }),
+        ],
+      }),
+      unnamed,
+    );
+
+    expect(cavers[0].positionAt).toBe('2026-09-14T09:00:00Z');
+    // The twin, on the same row: the two moments stay two. A fold that had started copying one
+    // into the other would pass the line above and fail here.
+    expect(cavers[0].lastRecordedAt).toBe('2026-09-14T11:00:00Z');
+  });
+
+  it('leaves a followed position undated where the envelope dated none', () => {
+    // A position nobody reported and one that was kept back arrive identically — with no moment —
+    // and neither may borrow the last word's. The row below has a last word an hour old and no
+    // position at all: an age drawn from it would say a station was reported when none was.
+    const cavers = publicTrackedCavers(
+      envelope({
+        positionsWithheld: true,
+        participants: [participant({ lastRecordedAt: '2026-09-14T11:00:00Z' })],
+      }),
+      unnamed,
+    );
+
+    expect(cavers[0].positionAt).toBeNull();
+    expect(cavers[0].position).toEqual({ kind: 'withheld', certain: false });
+    // The twin: a row the envelope did date is dated, so the null above is a refusal to invent
+    // rather than a fold that never reads the field.
+    expect(
+      publicTrackedCavers(
+        envelope({
+          participants: [
+            participant({ stationName: 'p.g.7', positionRecordedAt: '2026-09-14T09:00:00Z' }),
+          ],
+        }),
+        unnamed,
+      )[0].positionAt,
+    ).toBe('2026-09-14T09:00:00Z');
   });
 
   it('reports no entry time, rather than guessing one', () => {

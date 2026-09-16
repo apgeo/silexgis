@@ -77,6 +77,22 @@
   margin-bottom: 8px;
 }
 
+/* ---- How old the place in the cell above it is.
+
+   <b>Its own line under the place, in both layouts, and that is what `block` is for here.</b> The
+   colour is the library's secondary — said in the component, so it answers in either theme — and
+   the only thing decided here is that the age drops below the station rather than running on after
+   it. On a phone it would otherwise widen the row it is in, and a station name plus an age on one
+   line is the pair most easily read as one string.
+
+   No text alignment of its own: in the table it starts where the cell's text starts, in the
+   stacked row it ends where the row's answers end. Both are inherited, which is what keeps the age
+   attached to the place it dates rather than sitting under a different edge from it. */
+.tracking-position-age {
+  display: block;
+  font-size: 12px;
+}
+
 @media (hover: none), (pointer: coarse) {
   .tracking-table .ant-table-selection-column {
     position: relative;

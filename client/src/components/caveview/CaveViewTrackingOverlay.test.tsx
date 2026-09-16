@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
 import CaveViewTrackingOverlay, { type TrackedPlace } from './CaveViewTrackingOverlay.tsx';
 
@@ -110,6 +110,125 @@ describe('CaveViewTrackingOverlay', () => {
 
     expect(screen.getByTestId('caveview-row-out-b')).toHaveTextContent('Out');
     expect(screen.queryByTestId('caveview-row-out-a')).toBeNull();
+  });
+
+  /**
+   * <b>The card carries two moments, and they answer different questions.</b> "Last update" moves
+   * whenever anybody says anything at all about somebody — a radio check, a note, coming out — and
+   * none of those says where they are. The place on the card keeps the moment of the report that
+   * named it. A card that showed only the first dated a station heard at nine as five minutes old,
+   * on the surface somebody reads while deciding whether a team is overdue.
+   */
+  it('dates the place on the card from the report that named it, not from the last word', () => {
+    render(
+      <Harness
+        cavers={[
+          caver({
+            position: { kind: 'station', station: 'pestera.galerie.7' },
+            lastRecordedAt: '2026-09-12T11:55:00Z',
+            positionAt: '2026-09-12T09:00:00Z',
+          }),
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+    const positionAt = screen.getByTestId('caveview-caver-card-position-at');
+
+    // Written out in the reader's own locale, so the moment is compared rather than the wording:
+    // the row carries the report that placed somebody at nine and not the word that arrived at
+    // five to twelve.
+    expect(positionAt.textContent).toBe(
+      new Date('2026-09-12T09:00:00Z').toLocaleString(i18n.language),
+    );
+    expect(positionAt.textContent).not.toBe(
+      new Date('2026-09-12T11:55:00Z').toLocaleString(i18n.language),
+    );
+    // The twins: the last word is still on the card under its own label, so the two moments are
+    // drawn as two rather than one replacing the other.
+    expect(screen.getByTestId('caveview-caver-card-last-heard').textContent).toBe(
+      new Date('2026-09-12T11:55:00Z').toLocaleString(i18n.language),
+    );
+    expect(screen.getByTestId('caveview-caver-card')).toHaveTextContent('Position reported');
+  });
+
+  /**
+   * <b>Which moment a reader binds to the station is decided by the label and by what is next to
+   * it, and this card was getting both wrong.</b> The row carrying the last word said "Last update"
+   * — the phrasing that reads as "this is how current the thing beside it is" — and it sat
+   * immediately above the station. So a coordinator opening a marker read `Last update 11:55` on
+   * the line over `pestera.galerie.7`, which is the exact sentence the position's own moment was
+   * added to stop the card saying, in the place they look to decide whether a team is overdue.
+   *
+   * Two things close it and both are asserted here: the row is named for what it actually is, in
+   * the words the tracking tab and the followed page already use for it, and it is drawn below the
+   * place-and-its-moment pair rather than above the place. Neither is cosmetic — a label is what a
+   * reader is told the number means, and adjacency is what they believe when the two disagree.
+   */
+  it('names the last word for what it is and keeps it away from the station it does not date', () => {
+    render(
+      <Harness
+        cavers={[
+          caver({
+            position: { kind: 'station', station: 'pestera.galerie.7' },
+            lastRecordedAt: '2026-09-12T11:55:00Z',
+            positionAt: '2026-09-12T09:00:00Z',
+          }),
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+    const card = screen.getByTestId('caveview-caver-card');
+
+    // The wording the other two surfaces use for this moment, and not the one that reads as dating
+    // whatever is beside it.
+    expect(card).toHaveTextContent('Last heard');
+    expect(card).not.toHaveTextContent('Last update');
+
+    // And the order, read off the rendered card rather than assumed: the place, then the moment
+    // that placed it, then the last word under both. What must never come back is the last word
+    // sitting between "Went in" and the station.
+    const labels = Array.from(
+      card.querySelectorAll('.caveview-tracking-card-label'),
+      (node) => node.textContent,
+    );
+    expect(labels.indexOf('Position')).toBeLessThan(labels.indexOf('Position reported'));
+    expect(labels.indexOf('Position reported')).toBeLessThan(labels.indexOf('Last heard'));
+  });
+
+  /**
+   * <b>A withheld position gets no moment, whatever the watch carries.</b> A replay reads the very
+   * report whose place was removed, so it knows when that report was made — and printing it would
+   * tell a reader that a position exists and when it was reported, which is half of what was being
+   * kept from them. The row is drawn and says nothing, exactly as silence is drawn everywhere else.
+   */
+  it('gives a withheld position no moment, even when the watch knows one', () => {
+    render(
+      <Harness
+        cavers={[
+          caver({
+            position: { kind: 'withheld', certain: true },
+            lastRecordedAt: '2026-09-12T11:55:00Z',
+            positionAt: '2026-09-12T09:00:00Z',
+          }),
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+
+    expect(screen.getByTestId('caveview-caver-card-position-at')).toHaveTextContent('—');
+    // And the twin, so this cannot pass by the row never saying anything: a place that was drawn
+    // is dated.
+    cleanup();
+    render(
+      <Harness
+        cavers={[caver({ positionAt: '2026-09-12T09:00:00Z', lastRecordedAt: '2026-09-12T11:55:00Z' })]}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+    expect(screen.getByTestId('caveview-caver-card-position-at')).not.toHaveTextContent('—');
   });
 
   it('says why a position is missing where there is room to say it', () => {

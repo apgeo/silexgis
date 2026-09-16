@@ -33,6 +33,7 @@ import {
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
+import { instantOf } from '../../pages/public/publicTripParty.ts';
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Lightbox from '../gallery/Lightbox.tsx';
@@ -238,11 +239,60 @@ interface MarkerLineOptions {
   t: TFunction;
   language: string;
   showTimes: boolean;
+  /**
+   * The reader's own calendar day, as their locale writes one — what a printed moment is compared
+   * against to decide whether it needs a date saying with it. A string rather than an instant on
+   * purpose: it changes once, at midnight, so every dependency list that carries it re-registers
+   * the labels then and at no other moment, where a live clock would rebuild every collapsed
+   * marker on the model every time the watch polled.
+   */
+  today: string;
+}
+
+/**
+ * A reported moment as a marker prints it: the clock alone for something from today, the date
+ * said with it for anything older.
+ *
+ * <b>The moment on a marker became a much older one and the label did not change with it.</b> What
+ * used to be printed here was the last word about somebody, which on a live watch a radio check
+ * refreshes every few minutes — so a bare clock was unambiguous in practice, because the moment
+ * was always from the last half hour. This now prints the position's own moment, which is
+ * routinely hours older and on an overnight trip is routinely from yesterday. A party placed at
+ * ten past ten at night and heard from through the night would draw at seven the next morning as
+ * "Ana · 22:10", which reads as tonight: the reader deciding whether that team is overdue would
+ * get the number right and the day wrong, with nothing on the label to say which.
+ *
+ * <b>Said as a date rather than as a gap, which is the other way it could have been said.</b> The
+ * tab and the followed page word this moment as "reported 4 hours ago", and those surfaces
+ * re-render on a clock. A marker does not: the viewer is asked for a label only when a marker is
+ * added, slid or removed, so a gap printed on one would be composed once and then stand unchanged
+ * while it aged — "an hour ago" still on the model eight hours later, which is worse than the
+ * ambiguity it would have replaced. A date is true whenever it is read.
+ */
+function markerClock(at: number, language: string, today: string): string {
+  const moment = new Date(at);
+  return moment.toLocaleDateString(language) === today
+    ? moment.toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })
+    : moment.toLocaleString(language, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 }
 
 /**
  * One person as a label reads them: their name, the time beside it where that was asked for, and
  * whether they have come out.
+ *
+ * <b>The time is the moment the position was reported, and it has to be.</b> A marker is a station,
+ * drawn at a place on the model, and a time printed against it is read as when that person was
+ * there — so the moment of somebody's *last word* beside their station is a sentence nobody meant
+ * to write: a party placed at noon that radioed "all fine" at four would be drawn at noon's station
+ * under four o'clock's clock, and a reader deciding whether a team is overdue would take the place
+ * to be four hours fresher than it is. Somebody with no dated position carries no time at all here
+ * rather than borrowing their last word's — a marker is only ever drawn for a station that was
+ * reported, so in practice that is the withheld and the unreadable, and both stay silent.
  *
  * <b>One spelling for a marker drawn alone and for a line of a group's label.</b> Which of the two
  * somebody appears as is the viewer's decision, taken from whether anybody else resolved to the
@@ -260,12 +310,20 @@ interface MarkerLineOptions {
  * rebuilt on every render would have to be named in that effect's dependencies, which would redraw
  * every marker on every render of the page around it.
  */
-function markerLine(caver: TrackedCaver, { t, language, showTimes }: MarkerLineOptions): string {
+function markerLine(
+  caver: TrackedCaver,
+  { t, language, showTimes, today }: MarkerLineOptions,
+): string {
+  // Read through the shared rule rather than compared to null, because null is only one of the
+  // three ways this moment goes missing and the other two reach a formatter that does not refuse
+  // them: a field a server never wrote and a string that will not parse both print, on a marker
+  // beside somebody's name, the words "Invalid Date".
+  const at = instantOf(caver.positionAt);
   const named =
-    showTimes && caver.lastRecordedAt !== null
+    showTimes && at !== null
       ? t('caveview.tracking.markerNameTime', {
           name: caver.name,
-          when: new Date(caver.lastRecordedAt).toLocaleTimeString(language),
+          when: markerClock(at, language, today),
         })
       : caver.name;
   return caver.out ? t('caveview.tracking.markerNameOut', { name: named }) : named;
@@ -302,6 +360,18 @@ export default function CaveViewPanel({
   /** Set when a link named a part of the survey this model turned out not to hold. */
   const [missingPart, setMissingPart] = useState(false);
   const [showMarkerTimes, setShowMarkerTimes] = useState(false);
+  /**
+   * The day it is where this is being read, which is what decides whether a moment on a marker
+   * needs a date said with it.
+   *
+   * <b>A day and not a clock, and that is the whole reason this is cheap.</b> Read at render, so
+   * it follows the reader's own midnight rather than a fixed point captured when the panel opened —
+   * but its *value* changes only once a day, so the two dependency lists that carry it re-register
+   * the labels at midnight and are untouched by the thirty-second poll in between. Keying the same
+   * question on a live clock would rebuild every collapsed marker on the model twice a minute, for
+   * a label that had not changed.
+   */
+  const today = new Date().toLocaleDateString(i18n.language);
   /**
    * Whether the markers say who they are, rather than only where somebody is.
    *
@@ -426,7 +496,7 @@ export default function CaveViewPanel({
       return null;
     }
     const title = sharedTeamTitle(members);
-    const line = { t, language: i18n.language, showTimes: showMarkerTimes };
+    const line = { t, language: i18n.language, showTimes: showMarkerTimes, today };
     return [
       ...(title === null ? [] : [title]),
       ...undergroundFirst(members).map((member) => markerLine(member, line)),
@@ -598,13 +668,20 @@ export default function CaveViewPanel({
   const clusterLabelKey = JSON.stringify([
     showMarkerTimes,
     i18n.language,
+    // The other thing a printed moment is composed against: a position from before midnight stops
+    // being from today while nothing about the watch changes, and the label has to gain its date
+    // at that moment rather than at the next report. Changes once a day and so costs one rebuild.
+    today,
     (trackedCavers ?? []).map((caver) => [
       caver.caverId,
       caver.name,
       caver.teamId,
       caver.teamTitle,
       caver.out,
-      showMarkerTimes ? caver.lastRecordedAt : null,
+      // The moment the label actually prints — see the line the labels are composed by. Keyed on
+      // the same field, so a poll that moves somebody's last word without moving their position
+      // re-registers nothing and rebuilds no collapsed marker.
+      showMarkerTimes ? caver.positionAt : null,
     ]),
   ]);
 
@@ -637,7 +714,7 @@ export default function CaveViewPanel({
     const wanted = new Map<string, DrawnMarker>();
     // Built here rather than shared with the cluster label above, so that everything this effect
     // composes a label from is also something it is re-run for.
-    const line = { t, language: i18n.language, showTimes: showMarkerTimes };
+    const line = { t, language: i18n.language, showTimes: showMarkerTimes, today };
     for (const caver of trackedCavers ?? []) {
       if (caver.position.kind !== 'station') {
         // No marker is invented for a position nobody reported or one that was withheld: there
@@ -685,7 +762,7 @@ export default function CaveViewPanel({
     }
 
     drawnMarkersRef.current = wanted;
-  }, [trackedCavers, showMarkerTimes, status, t, i18n.language]);
+  }, [trackedCavers, showMarkerTimes, status, t, i18n.language, today]);
 
   // ---- Whether the markers say who they are ----
   //

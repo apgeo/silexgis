@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../i18n';
+import i18n from '../../i18n';
 import { CAVEVIEW_HOME, type Cv2Namespace } from '../../caveview/loadCaveView.ts';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
@@ -211,8 +211,46 @@ afterEach(() => {
   cleanup();
   resetViewControlsForTests();
   vi.unstubAllGlobals();
+  // Set by the tests that assert what a marker prints: what day it is decides whether the label
+  // says one, so those run against a fixed clock rather than against whichever day this suite is
+  // run on. Put back here so nothing else in the file inherits it.
+  vi.useRealTimers();
   window.CV2 = undefined;
 });
+
+/**
+ * The day the fixtures below were reported on, as the reader's clock would read it.
+ *
+ * Every watch in this file is dated 2026-09-12, so a test about a same-day label has to be run on
+ * that day and one about an older label on a later one. Left to the real clock both assertions
+ * would mean whatever today happened to be, and the pair that matters most — a time from last
+ * night against the same time today — could not be written at all.
+ */
+const REPORTED_DAY = '2026-09-12T12:00:00Z';
+
+/**
+ * The clock a marker prints for a moment from the day it is being read on.
+ *
+ * Composed by the same formatter the label is, so what these tests pin is *which moment* was
+ * printed rather than how the reader's locale spells one — the labels are asserted in whatever
+ * language this suite happens to be initialised in.
+ */
+const clockOn = (iso: string) =>
+  new Date(iso).toLocaleTimeString(i18n.language, { hour: '2-digit', minute: '2-digit' });
+
+/** A moment in September 2026 as the reader's own clock reads it, wherever this suite is run. */
+const localMoment = (day: number, hour: number, minute: number) =>
+  new Date(2026, 8, day, hour, minute);
+
+/**
+ * The same caver as read from a server that never wrote the position's moment — the property
+ * absent rather than null, which no type in this client admits is possible and every read from
+ * such a server produces.
+ */
+const withoutPositionAt = (base: TrackedCaver): TrackedCaver => {
+  const { positionAt: _absent, ...rest } = base;
+  return rest as TrackedCaver;
+};
 
 describe('CaveViewPanel', () => {
   it('constructs the viewer with the versioned home and a CRS lookup function', async () => {
@@ -436,6 +474,10 @@ describe('CaveViewPanel', () => {
       // have company at their station, which is a difference the reader neither asked for nor
       // can see. Both read off the label now, and taking it off is a move rather than the
       // add-again dance a sublabel needed, because every option is given on every call.
+      //
+      // Run on the day the fixture was reported, so what is asserted is that a time appears at all
+      // rather than which spelling of one a label from another day would take.
+      vi.setSystemTime(new Date(REPORTED_DAY));
       await renderReady({ trackedCavers: [caver()] });
 
       fireEvent.click(screen.getByTestId('caveview-tracking-times'));
@@ -453,6 +495,126 @@ describe('CaveViewPanel', () => {
         expect.objectContaining({ label: 'Ana' }),
       );
       expect(addLiveMarker).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * <b>The time on a marker is the moment the position was reported, and it has to be.</b> A
+     * marker is a station: a clock printed against it is read as when that person was there. Ana
+     * was placed at p.g.7 at nine and radioed "all fine" at five to twelve — the label used to
+     * carry the second of those, so a station three hours old was drawn under a five-minute-old
+     * time on the surface somebody reads while deciding whether a team is overdue.
+     */
+    it('puts the time the position was reported on the label, not the last word', async () => {
+      vi.setSystemTime(new Date(REPORTED_DAY));
+      await renderReady({
+        trackedCavers: [
+          caver({
+            lastRecordedAt: '2026-09-12T11:55:00Z',
+            positionAt: '2026-09-12T09:00:00Z',
+          }),
+        ],
+      });
+
+      fireEvent.click(screen.getByTestId('caveview-tracking-times'));
+      const label = moveLiveMarker.mock.calls.at(-1)![2] as { label: string };
+
+      // Compared against the clock the label is composed in, so this pins which moment was
+      // printed rather than anything about the reader's locale.
+      expect(label.label).toBe(`Ana · ${clockOn('2026-09-12T09:00:00Z')}`);
+      expect(label.label).not.toContain(clockOn('2026-09-12T11:55:00Z'));
+    });
+
+    /**
+     * <b>A bare clock beside a name used to be unambiguous and is not any more, and the change is
+     * what made it so.</b> The moment printed here was the last word about somebody — refreshed by
+     * every radio check, so in practice always from the last few minutes, and "22:10" could only
+     * mean tonight. It is now the position's own moment, which the rest of this change exists
+     * because it is routinely hours older and on an overnight trip is from yesterday. A party
+     * placed at ten past ten at night and heard from through the night would draw at seven the next
+     * morning as "Ana · 22:10": the right number and the wrong day, on the surface somebody reads
+     * while deciding whether that team is overdue.
+     *
+     * The pair is the whole test. The same clock time, reported on two different days, must not
+     * produce the same label — which is precisely what it did before, and is a thing no assertion
+     * about one label alone can catch.
+     */
+    it('says which day a position is from once it is not from today', async () => {
+      // Built from local components rather than from UTC text, because what "today" means here is
+      // the reader's own midnight: 22:10 UTC is already tomorrow in some of the time zones this
+      // suite runs in, and a fixture written as UTC would be testing the machine's offset.
+      const lastNightAt = localMoment(12, 22, 10);
+      const tonightAt = localMoment(13, 22, 10);
+
+      vi.setSystemTime(localMoment(13, 7, 0));
+      await renderReady({ trackedCavers: [caver({ positionAt: lastNightAt.toISOString() })] });
+      fireEvent.click(screen.getByTestId('caveview-tracking-times'));
+      const lastNight = (moveLiveMarker.mock.calls.at(-1)![2] as { label: string }).label;
+
+      // The same clock time, reported tonight instead: these are the two readings a bare clock
+      // could not tell apart, and they were the same string before this change.
+      cleanup();
+      vi.setSystemTime(localMoment(13, 23, 30));
+      await renderReady({ trackedCavers: [caver({ positionAt: tonightAt.toISOString() })] });
+      fireEvent.click(screen.getByTestId('caveview-tracking-times'));
+      const tonight = (moveLiveMarker.mock.calls.at(-1)![2] as { label: string }).label;
+
+      expect(lastNight).not.toBe(tonight);
+      // And the positive halves, so this cannot pass by the label having become unreadable: the
+      // older one carries the day it was reported on, and today's is still the bare clock a reader
+      // glancing at a live model wants.
+      expect(lastNight).toContain(
+        lastNightAt.toLocaleString(i18n.language, {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      );
+      expect(tonight).toBe(`Ana · ${clockOn(tonightAt.toISOString())}`);
+    });
+
+    /**
+     * <b>The three ways a moment goes missing, on the surface that says the least about it.</b> A
+     * marker whose moment is absent, never written by the server, or unparsable reaches
+     * `toLocaleTimeString`, which does not refuse any of them — it returns the words "Invalid
+     * Date", and the model draws them beside somebody's name as though that were a report. Only
+     * the first of the three was guarded, and it is the only one of the three that a type error
+     * would ever have caught.
+     */
+    it('prints no time at all for a moment it cannot read, rather than the words Invalid Date', async () => {
+      vi.setSystemTime(new Date(REPORTED_DAY));
+      await renderReady({
+        trackedCavers: [
+          caver({ caverId: 'a', name: 'Ana', positionAt: null }),
+          // What a read answered by anything that never wrote the field actually produces: not a
+          // null, but no property at all. Built by taking the key off rather than by setting it to
+          // undefined, because the factory above — like any code written against the generated
+          // type, which declares this field required — folds an undefined back into null and would
+          // quietly test the case that was already guarded.
+          withoutPositionAt(caver({ caverId: 'b', name: 'Bogdan' })),
+          caver({ caverId: 'c', name: 'Cora', positionAt: 'not-a-date' }),
+          caver({ caverId: 'd', name: 'Dana', positionAt: '2026-09-12T09:00:00Z' }),
+        ],
+      });
+
+      fireEvent.click(screen.getByTestId('caveview-tracking-times'));
+
+      // What each marker says *now*, which is after the switch was turned on — the add calls that
+      // drew them before that carry a label with no time in it and would answer this question with
+      // a pass whatever the code did.
+      const drawn = new Map<string, string>();
+      for (const call of [...addLiveMarker.mock.calls, ...moveLiveMarker.mock.calls]) {
+        drawn.set(call[0] as string, (call[2] as { label: string }).label);
+      }
+
+      // Named one at a time so the three ways a moment goes missing are three assertions: an
+      // absent one, one a server never wrote, and one that will not parse.
+      expect(drawn.get('a')).toBe('Ana');
+      expect(drawn.get('b')).toBe('Bogdan');
+      expect(drawn.get('c')).toBe('Cora');
+      // The twin: a moment that reads is still printed, so the three above are silent about a
+      // missing moment rather than about the switch having stopped working.
+      expect(drawn.get('d')).toBe(`Dana · ${clockOn('2026-09-12T09:00:00Z')}`);
     });
 
     it('opens a caver’s card when the pointer rests on their marker', async () => {
@@ -537,14 +699,23 @@ describe('CaveViewPanel', () => {
       expect(label).not.toContain('Bogdan');
     });
 
-    it('puts the time beside each name where the last update was asked for', async () => {
+    it('puts the time each position was reported beside each name, where that was asked for', async () => {
       // The switch beside this one, honoured for a group, and honoured the same way for somebody
       // standing alone: a collapsed marker has no hover line to put a time on, so inline is the
       // only spelling that can be the same on both sides of a party gathering at one station.
+      //
+      // Bogdan's two moments disagree — placed at half past ten, heard from at five to twelve —
+      // so the line that names him also says which of them a collapsed label prints.
+      vi.setSystemTime(new Date(REPORTED_DAY));
       await renderReady({
         trackedCavers: [
           caver({ caverId: 'a', name: 'Ana' }),
-          caver({ caverId: 'b', name: 'Bogdan', lastRecordedAt: '2026-09-12T10:30:00Z' }),
+          caver({
+            caverId: 'b',
+            name: 'Bogdan',
+            lastRecordedAt: '2026-09-12T11:55:00Z',
+            positionAt: '2026-09-12T10:30:00Z',
+          }),
         ],
       });
 
@@ -553,7 +724,9 @@ describe('CaveViewPanel', () => {
       const label = clusterLabel('a', 'b')!;
       expect(label[0]).toBe('Team A');
       expect(label[1]).toMatch(/^Ana · \d/);
-      expect(label[2]).toMatch(/^Bogdan · \d/);
+      expect(label[2]).toBe(`Bogdan · ${clockOn('2026-09-12T10:30:00Z')}`);
+      // And not the moment of his last word, which is the pair this label used to print.
+      expect(label[2]).not.toContain(clockOn('2026-09-12T11:55:00Z'));
     });
 
     /**

@@ -360,15 +360,58 @@ export default function CaveViewTrackingOverlay({
           </div>
           <div className="caveview-tracking-card-row">
             <span className="caveview-tracking-card-label">
-              {t('caveview.tracking.cardLastUpdate')}
-            </span>
-            <span className="caveview-tracking-card-value">{when(open.lastRecordedAt)}</span>
-          </div>
-          <div className="caveview-tracking-card-row">
-            <span className="caveview-tracking-card-label">
               {t('caveview.tracking.cardPosition')}
             </span>
             <span className="caveview-tracking-card-value">{fullPlace(open.position)}</span>
+          </div>
+          {/* <b>When the place above was reported, which is not the same question as the row under
+              it.</b> The last word moves whenever anybody says anything at all about somebody — a
+              radio check, a note, coming out — and none of those says where they are. The station
+              keeps the moment of the report that named it, and the two are routinely hours apart: a
+              card that showed only the first would date a station heard at noon as eight minutes
+              old, on the surface somebody reads while deciding whether a team is overdue.
+
+              <b>The pair is adjacent and the other moment is below both, which is the layout doing
+              the work the wording cannot do alone.</b> A time drawn immediately above a station is
+              read as dating it whatever its label says, so the moment that dates nothing sits at
+              the foot of the card rather than over the place — and the two rows that do belong
+              together, the place and the moment that placed it, are neighbours.
+
+              A moment is taken only where a place was actually drawn. A position nobody reported
+              and one this reader may not be told both read as silence here, and neither is filled
+              in from the last word — the repair that would put this defect straight back. */}
+          <div className="caveview-tracking-card-row">
+            <span className="caveview-tracking-card-label">
+              {t('caveview.tracking.cardPositionAt')}
+            </span>
+            <span
+              className="caveview-tracking-card-value"
+              data-testid="caveview-caver-card-position-at"
+            >
+              {when(
+                open.position.kind === 'station' || open.position.kind === 'depth'
+                  ? open.positionAt
+                  : null,
+              )}
+            </span>
+          </div>
+          {/* <b>The last word, named for what it is rather than for being the latest thing.</b>
+              "Last update" is the phrasing a reader binds to whatever is beside it, and what was
+              beside it was the station — so the card kept saying, in the one place a coordinator
+              looks to check how fresh a position is, the very sentence the position's own moment
+              exists to stop. It is worded here as the tab and the followed page word it, because
+              those two and this card are three drawings of one watch and a reader who moves between
+              them should not have to work out that three labels mean one thing. */}
+          <div className="caveview-tracking-card-row">
+            <span className="caveview-tracking-card-label">
+              {t('caveview.tracking.cardLastHeard')}
+            </span>
+            <span
+              className="caveview-tracking-card-value"
+              data-testid="caveview-caver-card-last-heard"
+            >
+              {when(open.lastRecordedAt)}
+            </span>
           </div>
           {open.position.kind === 'withheld' && (
             <Typography.Text type="secondary" style={{ fontSize: 11 }}>

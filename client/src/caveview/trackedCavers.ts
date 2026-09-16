@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TrackingState } from '../api/hooks.ts';
+// What "no moment" means is one rule with one home, and this is a caller of it rather than a
+// second copy: an absent moment, a field a server never wrote and a string that will not parse all
+// have to answer the same way here, where they decide which member speaks for a team, as they do
+// where a moment is turned into words for a reader.
+import { instantOf } from '../pages/public/publicTripParty.ts';
 
 /**
  * Folding a trip's watch into the people a survey model can draw.
@@ -61,10 +66,15 @@ export interface TrackedCaver {
    * station came from are routinely not the same report. `lastRecordedAt` is the first; this is the
    * second, and anything comparing two people's *positions* has to compare these.
    *
-   * Null means the source could not say. The folded watch carries only the kind of the latest
-   * report, so a caver whose latest is a note has a station of unknown age — known only to be no
-   * newer than `lastRecordedAt`. A replay reads the very report that placed somebody and always
-   * knows; a published trip carries no kinds at all and never does.
+   * Null means nothing placed this person, and it is also what a position kept from this reader
+   * arrives as — the two are deliberately indistinguishable, because which of them it is is itself
+   * something a reader without the right to place the cave may not learn. So an absence here is
+   * never filled in from `lastRecordedAt`: dating a station from a later word that named no place
+   * is the one wrong answer this field exists to prevent.
+   *
+   * Every source knows it now. The folded watch carries the position's own moment, the replay
+   * reads the very report that placed somebody, and a published trip carries the same moment on
+   * its envelope.
    */
   positionAt: string | null;
   /** When this person went in, as whoever mounts the panel records it. */
@@ -117,13 +127,13 @@ export function trackedCaversFrom(
         participant.teamId === null ? null : (teamTitles.get(participant.teamId) ?? null),
       position: positionOf(participant, tracking.positionsWithheld),
       lastRecordedAt: participant.lastRecordedAt,
-      // Known only where the latest report is the one that carried the place. The watch folds a
-      // position and a time out of different reports — the place from the last report that named
-      // one, the time from the last report of any kind — so the two agree only when the latest
-      // report was itself a position. After a note or a "come out", the station is older than the
-      // time beside it by an amount the watch does not carry, and saying so is what stops the
-      // comparison next door reading it as fresh.
-      positionAt: positionCarryingKind(participant.lastKind) ? participant.lastRecordedAt : null,
+      // The position's own moment, as the watch now folds it. This used to be guessed from the
+      // kind of the latest report — known only where that report was itself a position, and null
+      // after every note — because the read carried one time per person and it was the time of the
+      // last word. It carries both now, so a station reported at noon under a radio check made at
+      // four is dated noon rather than being unknown, and the comparison next door can rank it
+      // against a colleague's genuinely newer station instead of giving up.
+      positionAt: participant.positionRecordedAt,
       enteredAt: identity.enteredAt ?? null,
       out: participant.out,
     };
@@ -251,15 +261,6 @@ export function undergroundFirst(members: readonly TrackedCaver[]): TrackedCaver
   return [...members.filter((member) => !member.out), ...members.filter((member) => member.out)];
 }
 
-/** An instant that can be compared, or null where the string was absent or unreadable. */
-function instantOf(value: string | null): number | null {
-  if (value === null) {
-    return null;
-  }
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 /** Whoever of these spoke last, ties keeping the earlier member — which is roster order. */
 function newestOf(
   members: readonly TrackedCaver[],
@@ -303,13 +304,15 @@ function newestOf(
  * last thing known about them, and is what a search would start from — so this is an order of
  * preference and not a filter.
  *
- * <b>And the time compared is the time of the position, not of the latest report.</b> The folded
- * watch carries one time per person, taken from their last report of any kind, while their station
- * comes from the last report that named one. A radio note moves the first and not the second, so
- * comparing those times would let somebody whose only recent word was "we are fine" define where the
- * team is standing, against a colleague's genuinely newer station. Where nobody on the team carries
- * a positioned time — a published trip carries no report kinds, so none of its members ever does —
- * the latest report of any kind is the best that can be had and is used rather than giving up.
+ * <b>And the time compared is the time of the position, not of the latest report.</b> Every person
+ * carries two moments: the last thing anybody said about them, and the report that put them where
+ * they are drawn. A radio note moves the first and not the second, so comparing those would let
+ * somebody whose only recent word was "we are fine" define where the team is standing, against a
+ * colleague's genuinely newer station. Where nobody on the team carries a position that can be
+ * dated at all — a place drawn with no moment, or one stamped with an instant that will not parse —
+ * the latest report of any kind is the best that can be had and is used rather than giving up. That
+ * is a last resort for ranking members against each other and never an age drawn on a screen: an
+ * undated position is shown as an undated position everywhere a reader can see one.
  */
 export function teamStation(members: readonly TrackedCaver[]): string | null {
   const placed = members.filter((member) => member.position.kind === 'station');

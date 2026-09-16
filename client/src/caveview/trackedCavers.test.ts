@@ -18,8 +18,12 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     teamId: 'team-1',
     lastKind: 'atStation',
     lastRecordedAt: '2026-09-12T09:00:00Z',
+    // The ordinary case: the last thing this person said was where they were, so the two moments
+    // agree. Every test that needs them to disagree says both.
+    positionRecordedAt: '2026-09-12T09:00:00Z',
     stationName: 'p.g.7',
     depthM: null,
+    in: true,
     out: false,
     // What a published page would caption this person with. Nothing on a signed-in surface reads
     // it — those show the roster's own name — so null here, which is also its ordinary value.
@@ -70,20 +74,58 @@ describe('trackedCaversFrom', () => {
     ]);
   });
 
-  it('dates a position only where the latest report is the one that carried it', () => {
-    // The watch folds a place and a time out of different reports: the place from the last report
-    // that named one, the time from the last report of any kind. After a note or a "come out" the
-    // station is older than the time beside it by an amount the watch does not carry — so the age
-    // is given as unknown rather than as the time of a report that placed nobody.
+  it('dates a position from the report that placed somebody, whatever came after it', () => {
+    // The watch carries both moments now: the place from the last report that named one, and that
+    // report's own time beside the time of the last word of any kind. So a station reported at
+    // 09:00 keeps 09:00 after a radio note at 11:00 — where the fold used to answer "unknown"
+    // for every kind that carries no place, which left the comparison next door ranking people
+    // by when they last spoke.
     const dated = (lastKind: TrackingParticipant['lastKind']) =>
-      trackedCaversFrom(state({ participants: [participant({ lastKind })] }), roster, MODEL)[0]
-        .positionAt;
+      trackedCaversFrom(
+        state({
+          participants: [
+            participant({
+              lastKind,
+              lastRecordedAt: '2026-09-12T11:00:00Z',
+              positionRecordedAt: '2026-09-12T09:00:00Z',
+            }),
+          ],
+        }),
+        roster,
+        MODEL,
+      )[0];
 
-    expect(dated('atStation')).toBe('2026-09-12T09:00:00Z');
-    expect(dated('atDepth')).toBe('2026-09-12T09:00:00Z');
-    for (const silent of ['note', 'entered', 'exited'] as const) {
-      expect(dated(silent), silent).toBeNull();
+    for (const kind of ['atStation', 'atDepth', 'note', 'entered', 'exited'] as const) {
+      expect(dated(kind).positionAt, kind).toBe('2026-09-12T09:00:00Z');
+      // The twin, on the same row: the other moment is still the other moment. A fold that had
+      // simply started copying the last word into both would pass the line above and fail here.
+      expect(dated(kind).lastRecordedAt, kind).toBe('2026-09-12T11:00:00Z');
     }
+  });
+
+  it('leaves an undated position undated rather than borrowing the last word', () => {
+    // Nothing has placed this person, or a position exists and this reader may not be told it —
+    // the read sends no moment for either, deliberately, and the two are not to be told apart.
+    // Filling that gap from `lastRecordedAt` is the defect this field exists to prevent: it would
+    // date a station from a report that named no station.
+    const undated = trackedCaversFrom(
+      state({
+        participants: [
+          participant({
+            lastKind: 'note',
+            lastRecordedAt: '2026-09-12T11:00:00Z',
+            positionRecordedAt: null,
+          }),
+        ],
+      }),
+      roster,
+      MODEL,
+    )[0];
+
+    expect(undated.positionAt).toBeNull();
+    // And the twin: the last word is still carried, so the null above is a refusal to substitute
+    // rather than a fold that lost both moments.
+    expect(undated.lastRecordedAt).toBe('2026-09-12T11:00:00Z');
   });
 
   it('says a withheld position was withheld, as strongly as it is actually known', () => {
@@ -92,7 +134,7 @@ describe('trackedCaversFrom', () => {
     const certain = trackedCaversFrom(
       state({
         positionsWithheld: true,
-        participants: [participant({ stationName: null, lastKind: 'atStation' })],
+        participants: [participant({ stationName: null, lastKind: 'atStation', positionRecordedAt: null })],
       }),
       roster,
       MODEL,
@@ -104,7 +146,7 @@ describe('trackedCaversFrom', () => {
     const maybe = trackedCaversFrom(
       state({
         positionsWithheld: true,
-        participants: [participant({ stationName: null, lastKind: 'note' })],
+        participants: [participant({ stationName: null, lastKind: 'note', positionRecordedAt: null })],
       }),
       roster,
       MODEL,
@@ -118,7 +160,15 @@ describe('trackedCaversFrom', () => {
     const nobodyReported = trackedCaversFrom(
       state({
         positionsWithheld: true,
-        participants: [participant({ stationName: null, lastKind: null, lastRecordedAt: null })],
+        participants: [
+          participant({
+            stationName: null,
+            lastKind: null,
+            lastRecordedAt: null,
+            positionRecordedAt: null,
+            in: false,
+          }),
+        ],
       }),
       roster,
       MODEL,
@@ -405,15 +455,15 @@ describe('teamStation', () => {
   it('compares when a position was reported, not when somebody last spoke', () => {
     // A radio note moves the latest report and moves nobody. The member who said "we are fine" at
     // 14:30 was last placed at 13:00; their colleague's station is genuinely newer at 13:50, and
-    // that is the team's place. `positionAt: null` is how the watch says it cannot date a station —
-    // which is what it says for anybody whose latest report carried no place.
+    // that is the team's place — read off the moments the positions themselves carry, so the
+    // talker's newer word cannot speak for where the team is standing.
     expect(
       teamStation([
         caver({
           caverId: 'talker',
           position: { kind: 'station', station: 'p.42' },
           lastRecordedAt: '2026-09-12T14:30:00Z',
-          positionAt: null,
+          positionAt: '2026-09-12T13:00:00Z',
         }),
         caver({
           caverId: 'mover',
@@ -425,9 +475,12 @@ describe('teamStation', () => {
   });
 
   it('falls back to the latest report where no position on the team can be dated', () => {
-    // A published trip carries no report kinds, so none of its members ever has a dated position.
-    // Giving up there would leave every team on a followed trip with no place at all, when the
-    // times beside them are the best answer available and are usually the right one.
+    // A last resort, and it is about ranking members against each other rather than about drawing
+    // an age: where no position on the team carries a moment at all — a place sent without one, or
+    // one stamped with an instant that will not parse — giving up would leave the team with no
+    // place, when the times beside them are the best answer available and are usually the right
+    // one. Nothing here reaches a reader as the age of a station; the surfaces draw an undated
+    // position as undated.
     expect(
       teamStation([
         caver({

@@ -87,7 +87,39 @@ export function partyByTeam<T extends Pick<PublicTripParticipant, 'teamId'>>(
  * hours and fifty minutes old would be a page under-reporting a silence.
  */
 export function sinceInWords(iso: string, now: number, language: string): string {
-  const seconds = Math.round((new Date(iso).getTime() - now) / 1000);
+  return gapInWords(new Date(iso).getTime(), now, language);
+}
+
+/**
+ * A reported moment as something that can be compared and worded, or null where there is no
+ * moment to be had.
+ *
+ * <b>There are three ways a moment can be missing and only one of them looks like it.</b> The
+ * explicit `null` the server sends for a position nobody reported is the obvious one. A field a
+ * server predating it never wrote arrives as `undefined`, which is not `null` and passes every
+ * `=== null` guard ever written. And a string that will not parse — a clock nobody set, a value
+ * mangled in transit — arrives looking like a moment and is `NaN` the instant anything reads it.
+ * All three mean the same thing to a reader, which is that nobody said when, so all three answer
+ * the same way here.
+ *
+ * <b>Why this is a shared function rather than a guard at each site.</b> What `NaN` does next
+ * depends entirely on who receives it: `Intl.RelativeTimeFormat` throws — taking a followed page
+ * down to its error boundary, so a family watching a trip sees no party at all rather than one
+ * undated position — while `toLocaleTimeString` quietly returns the words "Invalid Date" and draws
+ * them on a marker beside somebody's name. Neither is a failure a reader could act on, and a rule
+ * spelled once cannot be remembered at one site and forgotten at the next.
+ */
+export function instantOf(value: string | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** The gap between an instant and now, in the reader's language — the one rounding rule. */
+function gapInWords(instant: number, now: number, language: string): string {
+  const seconds = Math.round((instant - now) / 1000);
   const format = new Intl.RelativeTimeFormat(language, { numeric: 'auto' });
   const magnitude = Math.abs(seconds);
   if (magnitude < 60) {
@@ -100,4 +132,43 @@ export function sinceInWords(iso: string, now: number, language: string): string
     return format.format(Math.trunc(seconds / 3600), 'hour');
   }
   return format.format(Math.trunc(seconds / 86_400), 'day');
+}
+
+/**
+ * How long ago the report that actually placed somebody was made, or null where nothing placed
+ * them.
+ *
+ * <b>Two different moments live on a participant and this is the second one.</b> The last word
+ * about somebody — a radio note, an exit, "no answer from Maria" — moves `lastRecordedAt` and
+ * says nothing about where they are. The station beside it came from the last report that claimed
+ * a place, and it can be hours older: a party reported at p.g.7 at noon and radioing "all fine" at
+ * four has a position four hours old and a last word eight minutes old. Dating the station with
+ * the second of those was the defect this exists to close, so this function reads the position's
+ * own moment and there is deliberately nothing else it can read.
+ *
+ * <b>Silence stays silence, and the signature is how.</b> A position that was never reported and
+ * one this reader may not be told apart arrive identically — as no moment at all — and neither may
+ * acquire an age: every set of words for it ("just now", "0 minutes ago", a date in 1970) is a
+ * report nobody made. What is taken here is therefore the moment itself rather than a participant,
+ * so that a caller whose position resolution produced no place has nothing to hand over. A
+ * withheld position cannot be dated by mistake, because the only branch that carries a moment is
+ * the branch that drew a place.
+ *
+ * <b>And all three spellings of "no moment" are refused, not just the one the types admit to.</b>
+ * The generated client declares this field required, so an absent one is `undefined` rather than
+ * `null` and a guard written against `null` alone lets it through — into a formatter that throws,
+ * out of render, and down to the error boundary: a followed page showing a family no party at all
+ * because one position had no time on it. See {@link instantOf}, which is where the three are
+ * named and where the only copy of that rule lives.
+ *
+ * The gap is worded by the same rule as every other gap on these two pages — called, never
+ * copied — so a coordinator and a family reading the same position round it the same way.
+ */
+export function positionAgeInWords(
+  positionRecordedAt: string | null | undefined,
+  now: number,
+  language: string,
+): string | null {
+  const at = instantOf(positionRecordedAt);
+  return at === null ? null : gapInWords(at, now, language);
 }

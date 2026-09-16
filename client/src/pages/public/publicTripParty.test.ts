@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import type { PublicTripParticipant } from '../../api/hooks.ts';
-import { partyByTeam, partyStandings, sinceInWords, standingOf } from './publicTripParty.ts';
+import {
+  instantOf,
+  partyByTeam,
+  partyStandings,
+  positionAgeInWords,
+  sinceInWords,
+  standingOf,
+} from './publicTripParty.ts';
 
 const TEAM_A = '11111111-1111-1111-1111-111111111111';
 const TEAM_B = '22222222-2222-2222-2222-222222222222';
@@ -15,6 +22,7 @@ function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTrip
     stationName: null,
     depthM: null,
     lastRecordedAt: null,
+    positionRecordedAt: null,
     in: false,
     out: false,
     ...overrides,
@@ -98,5 +106,93 @@ describe('how long ago the last word was', () => {
 
   it('is written in the language the page is being read in', () => {
     expect(sinceInWords('2026-09-14T11:58:00Z', now, 'ro')).toMatch(/2 minute/);
+  });
+});
+
+describe('how long ago a position was reported', () => {
+  const now = Date.parse('2026-09-14T12:00:00Z');
+
+  /**
+   * The position's own moment, worded by the same rule as every other gap on these pages. Read
+   * together with the row above: the two ages are rounded identically, so a coordinator and a
+   * family looking at one station cannot be told it is two different ages.
+   */
+  it('words the moment it is given, exactly as the last word is worded', () => {
+    expect(positionAgeInWords('2026-09-14T08:00:00Z', now, 'en')).toBe('4 hours ago');
+    expect(positionAgeInWords('2026-09-14T08:00:00Z', now, 'en')).toBe(
+      sinceInWords('2026-09-14T08:00:00Z', now, 'en'),
+    );
+    expect(positionAgeInWords('2026-09-14T11:58:00Z', now, 'ro')).toMatch(/2 minute/);
+  });
+
+  /**
+   * <b>Silence stays silence, and there is nothing to fall back to.</b> A position nobody reported
+   * and one this reader may not be told arrive identically — as no moment — and the answer for
+   * both is no age at all. The caller draws that as it likes; what cannot happen is words.
+   *
+   * The signature is the other half of the guard and is why this test can only be written this
+   * way: there is no participant here to read a second field off, so "fill the gap from the last
+   * word" is not an implementation this function could have. The surfaces prove the same thing
+   * about the field they hand over — see the two pages' own tests.
+   */
+  it('gives an unreported position no age, and no borrowed one', () => {
+    expect(positionAgeInWords(null, now, 'en')).toBeNull();
+    // The twin: a moment that exists is turned into words, so the null above is about absence
+    // rather than about this function never answering.
+    expect(positionAgeInWords('2026-09-14T08:00:00Z', now, 'en')).not.toBeNull();
+  });
+
+  /**
+   * <b>Three ways a moment goes missing and only one of them is spelled `null`.</b> The generated
+   * client declares this field required, so a read answered by anything that does not write it —
+   * a server built before the field, a payload trimmed in transit — arrives as `undefined`, which
+   * is not `null` and passes any guard written against `null` alone. A string that will not parse
+   * arrives looking like a moment and is `NaN` the instant it is read.
+   *
+   * <b>What made this worth a test is where the failure lands.</b> `Intl.RelativeTimeFormat`
+   * throws on a non-finite value rather than returning anything, so the words are not merely wrong:
+   * the throw leaves render, and the followed page a family is watching is replaced wholesale by
+   * the application's error boundary. One undated position, and nobody can see the party at all.
+   */
+  it('reads an absent and an unreadable moment as the silence they are, not as a crash', () => {
+    expect(positionAgeInWords(undefined, now, 'en')).toBeNull();
+    expect(positionAgeInWords('not-a-date', now, 'en')).toBeNull();
+    expect(positionAgeInWords('', now, 'en')).toBeNull();
+    // And the twin, so none of the above passes by way of this function having stopped answering:
+    // a moment that reads is still turned into words.
+    expect(positionAgeInWords('2026-09-14T08:00:00Z', now, 'en')).toBe('4 hours ago');
+  });
+});
+
+/**
+ * The rule the two above are built on, asked directly.
+ *
+ * Worth its own tests because it is now the single home of "there is no moment here", read from
+ * both pages, from the marker labels on the model and from the arithmetic that decides which
+ * member of a team speaks for its position — and each of those does something different and
+ * equally unhelpful with a `NaN` that reaches it.
+ */
+describe('reading a reported moment', () => {
+  it('answers a comparable instant for a moment that reads', () => {
+    expect(instantOf('2026-09-14T08:00:00Z')).toBe(Date.parse('2026-09-14T08:00:00Z'));
+  });
+
+  it('answers no instant for each of the ways a moment can be missing', () => {
+    expect(instantOf(null)).toBeNull();
+    expect(instantOf(undefined)).toBeNull();
+    expect(instantOf('not-a-date')).toBeNull();
+    expect(instantOf('')).toBeNull();
+  });
+
+  /**
+   * The property the callers actually depend on: whatever comes back is either null or a number
+   * arithmetic and the formatters can be handed. `NaN` is the one answer that would pass a
+   * `!== null` check and then break everything downstream of it.
+   */
+  it('never answers a number that is not one', () => {
+    for (const value of [null, undefined, 'not-a-date', '', '2026-09-14T08:00:00Z']) {
+      const at = instantOf(value);
+      expect(at === null || Number.isFinite(at)).toBe(true);
+    }
   });
 });

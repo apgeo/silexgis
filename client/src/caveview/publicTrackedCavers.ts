@@ -47,10 +47,13 @@ export function publicTrackedCavers(
     teamTitle: participant.teamId === null ? null : (teamTitles.get(participant.teamId) ?? null),
     position: positionOf(participant, envelope.positionsWithheld),
     lastRecordedAt: participant.lastRecordedAt,
-    // Never known here, for the same reason a withholding can only be said as the weaker claim: the
-    // envelope carries no report kinds, so there is nothing to say whether the time beside somebody
-    // is the time their station was reported or the time of a later word that named no place.
-    positionAt: null,
+    // The position's own moment, which the envelope now carries. It used to be null here on the
+    // grounds that nothing in the envelope could say whether the time beside somebody dated their
+    // station or a later word that named no place — so every followed team fell back to comparing
+    // last words, and every place on this page was as old as the last thing anybody said. The
+    // envelope answers that question itself now, and null here means what it means everywhere
+    // else: nothing placed this person, or this reader may not be told where.
+    positionAt: participant.positionRecordedAt,
     // Not on the envelope, and not invented from the trip's own start: the moment somebody went
     // in survives only on the report log, which a follower is not sent. The card says "—" rather
     // than a time that would be a guess presented as a record.

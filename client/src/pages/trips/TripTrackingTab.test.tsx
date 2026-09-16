@@ -84,8 +84,10 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         teamId: null,
         lastKind: 'atStation',
         lastRecordedAt: '2026-09-12T07:00:00Z',
+        positionRecordedAt: '2026-09-12T07:00:00Z',
         stationName: 'P12',
         depthM: 84,
+        in: true,
         out: false,
         label: null,
       },
@@ -94,8 +96,10 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         teamId: null,
         lastKind: 'entered',
         lastRecordedAt: '2026-09-12T06:30:00Z',
+        positionRecordedAt: null,
         stationName: null,
         depthM: null,
+        in: true,
         out: false,
         label: null,
       },
@@ -173,10 +177,12 @@ describe('TripTrackingTab', () => {
             teamId: null,
             lastKind: 'atStation',
             lastRecordedAt: '2026-09-12T07:00:00Z',
+            positionRecordedAt: null,
             // Reported at a station, and the station kept back — the shape the server sends to a
             // reader without the right to place the cave.
             stationName: null,
             depthM: null,
+            in: true,
             out: false,
             label: null,
           },
@@ -211,8 +217,10 @@ describe('TripTrackingTab', () => {
             teamId: null,
             lastKind: 'atDepth',
             lastRecordedAt: '2026-09-12T07:00:00Z',
+            positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            in: true,
             out: false,
             label: null,
           },
@@ -221,8 +229,10 @@ describe('TripTrackingTab', () => {
             teamId: null,
             lastKind: null,
             lastRecordedAt: null,
+            positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            in: false,
             out: false,
             label: null,
           },
@@ -256,8 +266,10 @@ describe('TripTrackingTab', () => {
             // Went in, and nothing since: there is no position on the server to keep back.
             lastKind: 'entered',
             lastRecordedAt: '2026-09-12T06:30:00Z',
+            positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            in: true,
             out: false,
             label: null,
           },
@@ -268,8 +280,10 @@ describe('TripTrackingTab', () => {
             // withholding — and that one is still said outright.
             lastKind: 'atStation',
             lastRecordedAt: '2026-09-12T07:00:00Z',
+            positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            in: true,
             out: false,
             label: null,
           },
@@ -543,8 +557,10 @@ describe('TripTrackingTab', () => {
               teamId: null,
               lastKind: 'atStation',
               lastRecordedAt: '2026-09-12T07:00:00Z',
+              positionRecordedAt: null,
               stationName: null,
               depthM: null,
+              in: true,
               out: false,
               label: null,
             },
@@ -1048,8 +1064,10 @@ describe('TripTrackingTab', () => {
             teamId: null,
             lastKind: 'atStation',
             lastRecordedAt: '2026-09-12T07:00:00Z',
+            positionRecordedAt: '2026-09-12T07:00:00Z',
             stationName: 'P12',
             depthM: null,
+            in: true,
             out: false,
             label: null,
           },
@@ -1058,8 +1076,10 @@ describe('TripTrackingTab', () => {
             teamId: null,
             lastKind: 'exited',
             lastRecordedAt: '2026-09-12T09:30:00Z',
+            positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            in: false,
             out: true,
             label: null,
           },
@@ -1069,8 +1089,10 @@ describe('TripTrackingTab', () => {
             teamId: null,
             lastKind: null,
             lastRecordedAt: null,
+            positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            in: false,
             out: false,
             label: null,
           },
@@ -1167,6 +1189,201 @@ describe('TripTrackingTab', () => {
   });
 
   /**
+   * <b>How old the place is, which is a different question from how long ago somebody spoke.</b>
+   *
+   * The defect, in the shape it happens: a team is reported at P12 at seven, and at five to ten the
+   * radio carries "all fine, coming out in an hour". The second report says nothing about where
+   * anybody is — but it was the only moment this table had, so the station from seven o'clock was
+   * drawn against a timestamp five minutes old, and a coordinator deciding whether that team is
+   * overdue read a three-hour-old position as fresh.
+   */
+  describe('how old the place is', () => {
+    /** Ten o'clock again, so the station below is three hours old and the note five minutes. */
+    const AT_TEN = Date.parse('2026-09-12T10:00:00Z');
+
+    /**
+     * Ana, placed at seven and heard from at five to ten; Bogdan, whose position was kept from
+     * this reader; Carmen, whom nothing has placed at all.
+     */
+    function party(positionsWithheld = false) {
+      return state({
+        positionsWithheld,
+        participants: [
+          {
+            caverId: ANA,
+            teamId: null,
+            // The last word is a note — it carries no place, which is exactly why the two moments
+            // on this row are three hours apart.
+            lastKind: 'note',
+            lastRecordedAt: '2026-09-12T09:55:00Z',
+            positionRecordedAt: '2026-09-12T07:00:00Z',
+            stationName: 'P12',
+            depthM: null,
+            in: true,
+            out: false,
+            label: null,
+          },
+          {
+            caverId: BOGDAN,
+            teamId: null,
+            // A station report with no station on it: a withholding, and the server sends no
+            // moment for it either — the position's age is as much of it as the place.
+            lastKind: 'atStation',
+            lastRecordedAt: '2026-09-12T09:40:00Z',
+            positionRecordedAt: null,
+            stationName: null,
+            depthM: null,
+            in: true,
+            out: false,
+            label: null,
+          },
+          {
+            caverId: CARMEN,
+            teamId: null,
+            lastKind: 'entered',
+            lastRecordedAt: '2026-09-12T06:30:00Z',
+            positionRecordedAt: null,
+            stationName: null,
+            depthM: null,
+            in: true,
+            out: false,
+            label: null,
+          },
+        ],
+      });
+    }
+
+    let clock: MockInstance<typeof Date.now>;
+
+    beforeEach(() => {
+      clock = vi.spyOn(Date, 'now').mockReturnValue(AT_TEN);
+      trackingQuery.mockReturnValue({
+        data: party(),
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+    });
+
+    afterEach(() => clock.mockRestore());
+
+    it('dates the station from the report that placed somebody, not from a later note', () => {
+      show(false);
+
+      expect(screen.getByTestId(`trip-tracking-position-age-${ANA}`)).toHaveTextContent(
+        'Reported 3 hours ago',
+      );
+      // The assertion the whole change is: the note that arrived five minutes ago did not re-date
+      // the station. Said as a refusal *and* as the number that replaced it, so it cannot pass by
+      // the age having gone missing altogether.
+      expect(screen.getByTestId(`trip-tracking-position-age-${ANA}`)).not.toHaveTextContent(
+        '5 minutes ago',
+      );
+    });
+
+    /**
+     * <b>Two ages, two facts, two labels — never one.</b> Somebody heard from five minutes ago and
+     * last placed three hours ago is the row a coordinator has to read as two things: word is
+     * getting through, and nobody has said where they are since seven. Collapsing those into one
+     * figure would have to lie about whichever of them it dropped.
+     */
+    it('keeps the last word and the position as two ages that can disagree', () => {
+      show(false);
+      const table = screen.getByTestId('trip-tracking-participants');
+
+      expect(within(table).getByText('5 minutes ago')).toBeTruthy();
+      expect(screen.getByTestId(`trip-tracking-position-age-${ANA}`)).toHaveTextContent(
+        '3 hours ago',
+      );
+      // Under the headings that name them, so neither age can be read against the other's
+      // question. Asked for as a set: a table told to keep its own overflow clones every column
+      // title into a hidden measure row, so one heading is two nodes.
+      expect(within(table).getAllByText('Last heard').length).toBeGreaterThan(0);
+      expect(within(table).getAllByText('Where').length).toBeGreaterThan(0);
+      // And the exact moment of the position is kept for whoever wants the clock rather than the
+      // gap — the same arrangement the last word has.
+      expect(screen.getByTestId(`trip-tracking-position-age-${ANA}`)).toHaveAttribute(
+        'title',
+        expect.stringContaining('2026'),
+      );
+    });
+
+    it('says both of them on a phone, where the fields are stacked down the row', () => {
+      narrow = true;
+      show(false);
+      const table = screen.getByTestId('trip-tracking-participants');
+
+      expect(screen.getByTestId(`trip-tracking-position-age-${ANA}`)).toHaveTextContent(
+        'Reported 3 hours ago',
+      );
+      expect(within(table).getByText('5 minutes ago')).toBeTruthy();
+    });
+
+    /**
+     * <b>Silence keeps no age, and a withheld position least of all.</b> Nothing placed Carmen, and
+     * Bogdan's position is one this reader may not be told — the read carries no moment for either,
+     * deliberately, because which of the two it is is itself something that cannot be disclosed.
+     * The one repair that must never be made is filling that gap from the last word: both of them
+     * were heard from within the hour, and an age drawn from that would say a position was reported
+     * when none was — or would date a position somebody may not learn.
+     */
+    it('gives a position nobody drew no age, withheld or never reported', () => {
+      trackingQuery.mockReturnValue({
+        data: party(true),
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show(false);
+
+      expect(screen.queryByTestId(`trip-tracking-position-age-${BOGDAN}`)).toBeNull();
+      expect(screen.queryByTestId(`trip-tracking-position-age-${CARMEN}`)).toBeNull();
+      // The positive twins. The withholding is still said in words where the place would be, so
+      // the absence above is an age that is missing and not a row that has gone quiet; and the one
+      // person who was placed still carries hers, so this cannot pass by never drawing an age.
+      expect(screen.getByTestId('trip-tracking-position-withheld')).toBeTruthy();
+      expect(screen.getByTestId(`trip-tracking-position-age-${ANA}`)).toHaveTextContent(
+        '3 hours ago',
+      );
+    });
+
+    /**
+     * The same refusal where the moment does arrive beside an absence.
+     *
+     * A withheld position and one nobody reported are indistinguishable by design, so the read
+     * sends no moment for either — but the age is drawn beside the place rather than off the row,
+     * and this is what pins that. A future read that sent a moment for a position it would not
+     * disclose must not be able to date the withholding with it: the reader would learn that a
+     * position exists and when it was reported, which is half of what was being kept from them.
+     */
+    it('draws no age beside a withheld position even if the read carries one', () => {
+      const withheldButDated = party(true);
+      trackingQuery.mockReturnValue({
+        data: {
+          ...withheldButDated,
+          participants: withheldButDated.participants.map((person) =>
+            person.caverId === BOGDAN
+              ? { ...person, positionRecordedAt: '2026-09-12T07:00:00Z' }
+              : person,
+          ),
+        },
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show(false);
+
+      expect(screen.queryByTestId(`trip-tracking-position-age-${BOGDAN}`)).toBeNull();
+      expect(screen.getByTestId('trip-tracking-position-withheld')).toBeTruthy();
+      // The twin again: an age is still drawn where a place was.
+      expect(screen.getByTestId(`trip-tracking-position-age-${ANA}`)).toBeTruthy();
+    });
+  });
+
+  /**
    * <b>The one thing that keeps a named person off a public page, and it had no user interface at
    * all.</b> The route existed, the generated client carried it, and nothing in the application
    * called it — while the installation's own setting publishes real names, so every member of every
@@ -1182,8 +1399,10 @@ describe('TripTrackingTab', () => {
               teamId: null,
               lastKind: 'entered',
               lastRecordedAt: '2026-09-12T06:30:00Z',
+              positionRecordedAt: null,
               stationName: null,
               depthM: null,
+              in: true,
               out: false,
               // Asked to be kept off the page, and this is the record of it.
               label: 'A club member',
@@ -1193,8 +1412,10 @@ describe('TripTrackingTab', () => {
               teamId: null,
               lastKind: 'entered',
               lastRecordedAt: '2026-09-12T06:30:00Z',
+              positionRecordedAt: null,
               stationName: null,
               depthM: null,
+              in: true,
               out: false,
               label: null,
             },
@@ -1314,8 +1535,10 @@ describe('TripTrackingTab', () => {
               teamId: null,
               lastKind: 'entered',
               lastRecordedAt: '2026-09-12T06:30:00Z',
+              positionRecordedAt: null,
               stationName: null,
               depthM: null,
+              in: true,
               out: false,
               label: 'A club member',
             },

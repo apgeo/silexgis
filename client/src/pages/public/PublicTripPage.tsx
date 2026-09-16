@@ -9,7 +9,13 @@ import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
-import { partyByTeam, partyStandings, sinceInWords, standingOf } from './publicTripParty.ts';
+import {
+  partyByTeam,
+  partyStandings,
+  positionAgeInWords,
+  sinceInWords,
+  standingOf,
+} from './publicTripParty.ts';
 import './PublicTripPage.css';
 
 /**
@@ -131,26 +137,72 @@ export default function PublicTripPage() {
   const when = (value: string | null) =>
     value === null ? '—' : new Date(value).toLocaleString(i18n.language);
 
-  /** Where somebody was last reported, said as strongly as this page is actually told it. */
-  const place = (participant: PublicTripParticipant): ReactNode => {
+  /**
+   * Where somebody was last reported, said as strongly as this page is actually told it, and the
+   * moment that placed them there where there is one.
+   *
+   * <b>Only the branches that draw a place carry a moment.</b> A position nobody reported and one
+   * this page may not be told arrive the same way — with no moment at all — and neither may gain
+   * an age from anything written later, because there is no age in scope where no place was drawn.
+   * The one repair that must never be made is filling that gap from the last word, which would
+   * date a station from a radio note made hours after it.
+   */
+  const positionOf = (
+    participant: PublicTripParticipant,
+  ): { shown: ReactNode; placedAt: string | null } => {
     if (participant.stationName !== null && participant.stationName.length > 0) {
-      return participant.stationName;
+      return { shown: participant.stationName, placedAt: participant.positionRecordedAt };
     }
     if (participant.depthM !== null) {
-      return t('trips.metres', { value: participant.depthM });
+      return {
+        shown: t('trips.metres', { value: participant.depthM }),
+        placedAt: participant.positionRecordedAt,
+      };
     }
     // The absence that can only be a withholding cannot be identified on this surface — the
     // envelope carries no report kind — so the weaker of the two phrasings is the only one used
     // here. Over-claiming would tell a stranger something is being kept from them at the moment
     // a party has merely not set off.
     if (participant.lastRecordedAt !== null && data.positionsWithheld) {
-      return (
-        <Tag icon={<EyeInvisibleOutlined />} data-testid="public-trip-position-withheld">
-          {t('publicTrip.positionMaybeWithheld')}
-        </Tag>
-      );
+      return {
+        shown: (
+          <Tag icon={<EyeInvisibleOutlined />} data-testid="public-trip-position-withheld">
+            {t('publicTrip.positionMaybeWithheld')}
+          </Tag>
+        ),
+        placedAt: null,
+      };
     }
-    return t('publicTrip.positionUnreported');
+    return { shown: t('publicTrip.positionUnreported'), placedAt: null };
+  };
+
+  /**
+   * The place, with how long ago it was reported under it.
+   *
+   * <b>Two ages on this card and they must not read as one.</b> A family follows this page to know
+   * whether the party has moved, and "last heard" answers something else entirely — a radio check
+   * saying everyone is fine moves it and moves nobody. So the position keeps its own age, inside
+   * its own fact, worded rather than bare: a number under "Last reported at" and another under
+   * "Last heard" would be two figures on a phone screen that somebody worried is reading quickly.
+   */
+  const positionFact = (participant: PublicTripParticipant): ReactNode => {
+    const { shown, placedAt } = positionOf(participant);
+    const since = positionAgeInWords(placedAt, now, i18n.language);
+    return (
+      <>
+        {shown}
+        {since !== null && (
+          <Typography.Text
+            type="secondary"
+            className="public-trip-position-age"
+            title={when(placedAt)}
+            data-testid={`public-trip-position-age-${participant.ordinal}`}
+          >
+            {t('publicTrip.positionSince', { since })}
+          </Typography.Text>
+        )}
+      </>
+    );
   };
 
   const standingTag = (participant: PublicTripParticipant) => {
@@ -286,7 +338,10 @@ export default function PublicTripPage() {
                       {standingTag(participant)}
                     </div>
                     <div className="public-trip-person-facts">
-                      {fact(t('publicTrip.columnPosition'), place(participant))}
+                      {fact(t('publicTrip.columnPosition'), positionFact(participant))}
+                      {/* The other moment, kept as its own fact under its own label: this one
+                          moves when anybody says anything at all about somebody, including a note
+                          that says nothing about where they are. */}
                       {fact(
                         t('publicTrip.columnLastHeard'),
                         participant.lastRecordedAt === null ? (

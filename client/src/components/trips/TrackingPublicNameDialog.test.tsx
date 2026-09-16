@@ -24,8 +24,10 @@ function participant(label: string | null): TrackingParticipant {
     teamId: null,
     lastKind: 'entered',
     lastRecordedAt: '2026-09-16T09:00:00Z',
+    positionRecordedAt: null,
     stationName: null,
     depthM: null,
+    in: true,
     out: false,
     label,
   };

@@ -111,8 +111,11 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
         teamId: 'team-1',
         lastKind: 'atStation',
         lastRecordedAt: '2026-09-12T07:00:00Z',
+        // The station report is itself the latest one here, so the two moments agree.
+        positionRecordedAt: '2026-09-12T07:00:00Z',
         stationName: 'p.g.7',
         depthM: null,
+        in: true,
         out: false,
       },
     ],
@@ -245,8 +248,11 @@ describe('TrackingModelPanel', () => {
             teamId: null,
             lastKind: 'atStation',
             lastRecordedAt: '2026-09-12T07:00:00Z',
+            // A withheld position carries no moment either — the read sends neither.
+            positionRecordedAt: null,
             stationName: null,
             depthM: null,
+            in: true,
             out: false,
           },
         ],

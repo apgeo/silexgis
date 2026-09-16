@@ -46,6 +46,7 @@ function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTrip
     stationName: null,
     depthM: null,
     lastRecordedAt: null,
+    positionRecordedAt: null,
     in: false,
     out: false,
     ...overrides,

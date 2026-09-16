@@ -152,6 +152,15 @@
   overflow-wrap: anywhere;
 }
 
+/* How old the position above it is — its own line under the place, never running on after it.
+   At 360px the two facts stand side by side in one grid row, so an age that shared a line with a
+   station name would be the pair most easily read as one string; and the label size is the fact
+   label's, so the age reads as belonging to the place rather than as a second answer. */
+.public-trip-position-age {
+  display: block;
+  font-size: 0.72rem;
+}
+
 .public-trip-foot {
   padding: 12px;
   text-align: center;
