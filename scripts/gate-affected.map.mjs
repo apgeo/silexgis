@@ -116,6 +116,7 @@ export const groups = {
   users: [
     'AuthFlowTests', 'CredentialRevocationTests', 'EmailVerificationTests', 'ExternalAuthTests',
     'MfaAndRateLimitTests', 'ProfileVisibilityTests', 'TestLoginTests', 'TwoFactorChannelTests',
+    'UserAdministrationTests',
   ],
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
@@ -354,7 +355,7 @@ export const crossCutting = {
  'TripImportSessionTests', 'TripInvitationTests', 'TripOrganizingGroupGuardTests',
  'TripParticipantRoleVocabularyTests', 'TripPromotionTests', 'TripReportDocumentTests',
  'TripReportTemplateTests', 'TripStatisticsTests', 'TripTrackingPublicationTests',
- 'TripTrackingTests', 'TripTypeVocabularyTests', 'UiDefaultsTests',
+ 'TripTrackingTests', 'TripTypeVocabularyTests', 'UiDefaultsTests', 'UserAdministrationTests',
  'UploadDestinationTests',
   ],
   locationClasses: [
