@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
+using Npgsql;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
@@ -78,6 +79,11 @@ public sealed class ImportCommitService(
 
     /// <summary>Cave type an imported cave gets when no rule said otherwise.</summary>
     private const string DefaultCaveTypeCode = "cave";
+
+    /// <summary>
+    /// The batch's primary key, which doubles as the idempotency key of a queued confirmation.
+    /// </summary>
+    private const string BatchPrimaryKey = "pk_import_batches";
 
     public async Task<ImportCommitResult> CommitAsync(
         Geofile geofile,
@@ -200,7 +206,25 @@ public sealed class ImportCommitService(
 
         db.ImportBatches.Add(batch);
         db.ImportBatchItems.AddRange(items);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (batchId is not null && IsDuplicateBatchId(e))
+        {
+            // Somebody else is already inside this confirmation and got there first. The batch id
+            // came from whoever queued the work, so it is an idempotency key: a second runner
+            // finding it taken has not failed, it has arrived late, and the objects it was about
+            // to create are the ones already being created under that id.
+            //
+            // The read a few lines into the handler cannot answer this on its own — it is taken
+            // outside the transaction that creates the batch, so both runners pass it while
+            // neither can see the other's uncommitted row. The unique index is the only thing that
+            // sees both, which is why the decision is taken here, off the error it raises, rather
+            // than off a check that can be overtaken.
+            await transaction.RollbackAsync(ct);
+            return await ExistingBatchAsync(batchId.Value, ct);
+        }
 
         // Now that every row of the batch is in, the state derived from the hierarchy is computed
         // once over all of them — including the protection each one inherits, which is why this
@@ -217,6 +241,41 @@ public sealed class ImportCommitService(
         await transaction.CommitAsync(ct);
 
         return new ImportCommitResult(batch, failures);
+    }
+
+    /// <summary>
+    /// Whether a failed save is this confirmation's own id being taken by another runner of the
+    /// same confirmation, rather than any other write that happens to reach the database as a
+    /// conflict. Only the batch's own key counts: a duplicate anywhere else in the same save is a
+    /// real failure and must still be reported as one.
+    /// </summary>
+    private static bool IsDuplicateBatchId(DbUpdateException e) =>
+        e.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } violation
+        && violation.ConstraintName == BatchPrimaryKey;
+
+    /// <summary>
+    /// The batch another runner of this confirmation created, read back as this one's answer.
+    /// </summary>
+    /// <remarks>
+    /// Read outside a transaction of our own and untracked, because the rows this context still
+    /// holds are the ones that lost — clearing them is what stops a later save on the same context
+    /// replaying an insert the database has already refused once.
+    /// </remarks>
+    private async Task<ImportCommitResult> ExistingBatchAsync(Guid batchId, CancellationToken ct)
+    {
+        db.ChangeTracker.Clear();
+
+        var existing = await db.ImportBatches.AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == batchId, ct)
+            ?? throw new ImportCommitException(
+                "import.batch_conflict",
+                $"The confirmation's own id ({batchId}) is already taken by a batch that cannot be read back.");
+
+        var failures = existing.Failures is null
+            ? []
+            : ImportJson.Deserialize<List<ImportFailure>>(existing.Failures) ?? [];
+
+        return new ImportCommitResult(existing, failures);
     }
 
     /// <summary>
