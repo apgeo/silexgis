@@ -1,25 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { CompressOutlined, ExpandOutlined, PushpinOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Flex, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   surveyModelReadableByViewer,
   useSurveyModel,
+  useTripMomentPictureLinks,
   useTripTrackingEventLog,
   type TrackingEvent,
   type TrackingState,
   type TripParticipant,
 } from '../../api/hooks.ts';
 import CaveViewPanel from '../caveview/CaveViewPanel.tsx';
-import type { PickedModelPart } from '../../caveview/modelParts.ts';
+import type { CaveViewMediaEntry } from '../../caveview/loadCaveView.ts';
+import { pathOf, type PickedModelPart } from '../../caveview/modelParts.ts';
 import { trackedCaversFrom } from '../../caveview/trackedCavers.ts';
 import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
-import { trackedCaversAt } from '../../caveview/trackingReplay.ts';
+import {
+  placedPicturesAt,
+  replayPictures,
+  trackedCaversAt,
+} from '../../caveview/trackingReplay.ts';
 import { useStationMedia } from '../../caveview/useStationMedia.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import TrackingPicturesDialog from './TrackingPicturesDialog.tsx';
 import TrackingReplayBar from './TrackingReplayBar.tsx';
 import TrackingReportDialog from './TrackingReportDialog.tsx';
 
@@ -191,6 +198,8 @@ export default function TrackingModelPanel({
   const [replaying, setReplaying] = useState(false);
   /** The moment being replayed, or null while there is no replay or none has been settled on. */
   const [replayAt, setReplayAt] = useState<number | null>(null);
+  /** The moment the picture dialog is attaching to, or null while it is closed. */
+  const [attachingAt, setAttachingAt] = useState<number | null>(null);
   const { data: model } = useSurveyModel(tracking.surveyModelId ?? undefined);
 
   // The set the panel would have been given, less the one control that would hide the rest of the
@@ -288,6 +297,94 @@ export default function TrackingModelPanel({
     [tracking.participants, nameOf],
   );
 
+  /**
+   * The photographs hung on this trip's own moments.
+   *
+   * <b>A different thing from the station strip above, and the difference is what makes it
+   * possible at all.</b> A station picture says "this was taken here" and shows on every replay of
+   * every trip through this cave; a moment picture says "this was taken at 14:05 of this trip", and
+   * where that is, is folded out of the log at read time — which is why a correction that deletes a
+   * report and re-enters it destroys nothing.
+   *
+   * Read through the trip's links, gated on the model being open exactly as the station strip is.
+   */
+  const pictureLinks = useTripMomentPictureLinks(tripLogId, open);
+  const momentPictures = useMemo(
+    () => replayPictures(pictureLinks.data?.items ?? [], tripLogId),
+    [pictureLinks.data, tripLogId],
+  );
+
+  /**
+   * Which station each moment picture is drawn at.
+   *
+   * A picture is hung at the position of the caver it is about, folded from the very reports the
+   * party's own markers are folded from — so a reader who was refused a position has no marker for
+   * one to hang on, and the picture stays on the timeline strip where it says a time and no place.
+   * A picture about nobody in particular is never placed: a party that has split is in two places,
+   * and "the party's station" is not something a derivation may invent.
+   *
+   * <b>Where the picture is drawn is folded at the picture's own moment, not at the instant on the
+   * scrubber</b>, which is why this hands the whole log down rather than the party as it stands at
+   * `replayAt` — the derivation's own note says why, and it is the difference between a photograph
+   * at the pitch head and the same photograph following its subject into the sump.
+   */
+  const placedPictures = useMemo(() => {
+    if (!replaying || replayAt === null || log.data === undefined) {
+      return new Map<string, CaveViewMediaEntry[]>();
+    }
+    return placedPicturesAt(momentPictures, log.data, replayAt, model?.id);
+  }, [replaying, replayAt, log.data, momentPictures, model?.id]);
+
+  /**
+   * What the viewer is told about a station's pictures — a <b>function</b>, and one whose identity
+   * never changes.
+   *
+   * <b>Handing the viewer a different source tears down its hover listeners and closes an open
+   * strip.</b> A replay re-derives the placed pictures on every tick of its clock, five times a
+   * second, so a map rebuilt per moment would be a new source per tick: a reader who had tapped a
+   * station would watch the photographs vanish under their thumb having touched nothing. So the
+   * source is a stable closure over refs, read at the instant the pointer arrives.
+   */
+  const stationMediaRef = useRef(stationMedia);
+  stationMediaRef.current = stationMedia;
+  const placedRef = useRef(placedPictures);
+  placedRef.current = placedPictures;
+  const mediaSource = useCallback((station: unknown) => {
+    const path = pathOf(station);
+    if (path === null) {
+      return null;
+    }
+    const held = stationMediaRef.current.get(path) ?? [];
+    const placed = placedRef.current.get(path) ?? [];
+    return [...held, ...placed];
+  }, []);
+
+  /**
+   * The survey this watch is armed on is no longer on this server — somebody deleted it.
+   *
+   * <b>Said, rather than drawn as nothing.</b> Every other reason this panel does not appear is a
+   * reason a co-ordinator can wait out or ignore: a model still being read finishes, a model this
+   * reader may not open is a permission they either have or do not. This one is neither. The watch
+   * goes on saying "Armed", goes on taking entries, exits and notes, and can place nobody — and
+   * with the panel simply absent there is nothing on the page that says why the party and the
+   * station control have gone, which on a rescue surface is the failure worth spending a box on.
+   *
+   * Placed above the other refusals because the model genuinely cannot be fetched in this state,
+   * so the check below would swallow it into the same silence as everything else.
+   */
+  if (tracking.surveyModelMissing) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        style={{ marginBottom: 16 }}
+        data-testid="trip-tracking-model-missing"
+        message={t('trips.tracking.modelMissingTitle')}
+        description={t('trips.tracking.modelMissingBody')}
+      />
+    );
+  }
+
   if (model === undefined || model.status !== 'ready' || !surveyModelReadableByViewer(model)) {
     return null;
   }
@@ -315,6 +412,7 @@ export default function TrackingModelPanel({
       setLarge(false);
       setPicked(null);
       setRecording(null);
+      setAttachingAt(null);
     }
     setOpen(!open);
   };
@@ -374,6 +472,11 @@ export default function TrackingModelPanel({
             at={replayAt}
             onAtChange={setReplayAt}
             nameOf={nameOf}
+            pictures={momentPictures}
+            // Offered to whoever may write the log, and to nobody else. Unlike recording a report
+            // this is not gated on the watch still being armed: the act it exists for happens after
+            // the party is out, when somebody empties a memory card and turns the log into a report.
+            onAttachHere={canEdit ? (moment) => setAttachingAt(moment) : undefined}
           />
           {/* <b>The press names a station and offers to record there; it does not open a dialog by
               itself.</b> Looking around a model means pressing things, and a form that appeared on
@@ -417,7 +520,10 @@ export default function TrackingModelPanel({
             // The viewer's own controls: this is a model shown to be read rather than one shown
             // beside chrome competing for the same corner. All but one of them — see above.
             toolbar={{ buttons: toolbarButtons }}
-            stationMedia={stationMedia}
+            // A function rather than the map, so that scrubbing — which re-derives the placed
+            // pictures five times a second — never hands the viewer a different source and never
+            // closes a strip somebody is looking at.
+            stationMedia={mediaSource}
           />
           {canRecord && (
             <TrackingReportDialog
@@ -432,6 +538,16 @@ export default function TrackingModelPanel({
                 setPicked(null);
                 onRecorded();
               }}
+            />
+          )}
+          {canEdit && attachingAt !== null && (
+            <TrackingPicturesDialog
+              open
+              tripLogId={tripLogId}
+              defaultAt={attachingAt}
+              defaultCaverId={selectedCaverIds[0] ?? null}
+              cavers={dialogCavers}
+              onClose={() => setAttachingAt(null)}
             />
           )}
         </>

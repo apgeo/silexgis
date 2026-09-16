@@ -272,6 +272,10 @@ export const queryKeys = {
   // last segment is a word rather than a narrowing, which no narrowing can collide with.
   tripTrackingEventLog: (id: string) => ['trip-logs', 'tracking-events', id, 'log'] as const,
   tripTrackingShares: (id: string) => ['trip-logs', 'tracking-shares', id] as const,
+  // What one depth means in one trip's cave. The depth is part of the key because it is the whole
+  // of the question — two depths are two questions, not one answer going stale.
+  tripTrackingDepth: (id: string, depthM: number) =>
+    ['trip-logs', 'tracking-depth', id, depthM] as const,
   // A published trip is held under its token and not under the trip, because the page that reads
   // it has no trip id and must never be given one: the token is the whole of a follower's claim,
   // and a key naming the trip would be this browser holding an identifier the page was not sent.
@@ -7226,6 +7230,15 @@ export type TrackingEvent = components['schemas']['TrackingEventDto'];
 export type TrackingEventWrite = components['schemas']['TrackingEventRequest'];
 export type TrackingConfigWrite = components['schemas']['TrackingConfigRequest'];
 export type TrackingDepthCandidate = components['schemas']['TrackingDepthCandidateDto'];
+export type TrackingPictureInput = components['schemas']['TrackingPictureInput'];
+export type TrackingPictureResult = components['schemas']['TrackingPictureResultDto'];
+
+/**
+ * How many of a trip's links are read when looking for pictures on its moments. The same bound the
+ * links panel and the survey viewer's station strip use — a trip carries tens of links, and a
+ * surface that paged them would show half a replay's photographs with nothing to say it had.
+ */
+const RESLINK_PAGE_MAX = 200;
 
 /**
  * What a report can say, in the order somebody underground would say it: in, then where, then
@@ -7448,6 +7461,15 @@ export function useSetTripTracking() {
       void queryClient.invalidateQueries({
         queryKey: ['trip-logs', 'tracking-events', variables.tripLogId],
       });
+      // And every held answer about what a depth means in this cave, because this write is the one
+      // act that changes it. The model, the datum and the filter are all settled here, and each of
+      // them moves every station's depth at once: an answer worked out under the old configuration
+      // and still drawn under the new one is a distance measured somewhere else, on the surface
+      // that says where a party is. Reached by prefix so every depth anybody has asked about goes,
+      // not merely the one in front of them.
+      void queryClient.invalidateQueries({
+        queryKey: ['trip-logs', 'tracking-depth', variables.tripLogId],
+      });
       // Handed back rather than started and forgotten, as on the trip's own writes: the next
       // configuration change is checked against the version this one produced, and only a read
       // records a version. Without the wait, a second save a moment later is refused as a
@@ -7621,33 +7643,196 @@ export function useDeleteTrackingEvent() {
 }
 
 /**
+ * The photographs hung on this trip's moments.
+ *
+ * <b>Read through the general link route, not through a route of its own, and that is the design
+ * rather than a shortcut.</b> What is stored is an ordinary link relating the trip <em>at an
+ * instant</em> to a photograph, so the one read that already resolves members, withholds the
+ * unreadable ones and mints a renderings-only URL for the rest answers this too. A second read
+ * would be a second protection surface to keep in step with the first.
+ *
+ * Narrowed to the documenting relation because that is the relation these are written under; the
+ * derivation then keeps only the members anchored to a moment, so a document linked to the trip as
+ * a whole — a report, a permit — is not mistaken for a picture of a moment.
+ */
+export function useTripMomentPictureLinks(tripLogId: string | undefined, enabled = true) {
+  return useResLinksForTarget(
+    'tripLog',
+    tripLogId ?? '',
+    { relation: 'documents', pageSize: RESLINK_PAGE_MAX },
+    enabled && tripLogId !== undefined,
+  );
+}
+
+/**
+ * Hangs photographs on the moments they were taken at — a memory card at a time.
+ *
+ * Bulk because that is the act. Nobody uploads from underground, so these arrive days later when
+ * somebody empties a card, which is thirty pictures at thirty instants read off the files
+ * themselves. The answer names what landed and what was refused; a photograph the caller may not
+ * read is in neither list, because a refusal naming it would confirm it exists.
+ */
+export function useAttachTrackingPictures() {
+  const invalidate = useInvalidateTripMomentPictures();
+  return useMutation({
+    mutationFn: ({ tripLogId, items }: { tripLogId: string; items: TrackingPictureInput[] }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/pictures', {
+          params: { path: { tripLogId } },
+          body: { items },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/** Takes one photograph off the moment it was hung on. */
+export function useDetachTrackingPicture() {
+  const invalidate = useInvalidateTripMomentPictures();
+  return useMutation({
+    mutationFn: ({ tripLogId, memberId }: { tripLogId: string; memberId: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/trip-logs/{tripLogId}/tracking/pictures/{memberId}', {
+          params: { path: { tripLogId, memberId } },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * What a write of these has to refresh: the trip's links, under every page shape anybody asked for
+ * them with. The prefix is the entity, so a panel reading them with a different page size is
+ * refreshed too — the alternative is a strip that keeps showing a photograph somebody has just
+ * taken off it.
+ */
+function useInvalidateTripMomentPictures() {
+  const queryClient = useQueryClient();
+  return (tripLogId: string) =>
+    void queryClient.invalidateQueries({ queryKey: ['reslinks', 'for-target', 'tripLog', tripLogId] });
+}
+
+/**
+ * How long an answer about what a depth means is worth keeping.
+ *
+ * <b>Long, and kept honest by being thrown away on purpose rather than by expiring.</b> What the
+ * answer depends on is the trip's model, datum and filter, and the one thing that changes those is
+ * a configuration write — which this client makes, and which drops every held answer for the trip
+ * as it lands. A clock is the wrong instrument for that: short enough to catch a change promptly
+ * and it re-asks constantly for nothing, long enough to be quiet and it is still a window in which
+ * a stale answer is drawn. Invalidation closes the window outright, so the clock is left only to
+ * bound how long a change made by *another* coordinator's browser goes unnoticed here.
+ *
+ * Five minutes is that bound. It matters on a remount — somebody leaving this tab and coming back —
+ * and nowhere else, because a mounted screen does not re-ask an unchanged question.
+ */
+const TRACKING_DEPTH_STALE_MS = 5 * 60_000;
+
+/**
+ * Everything the two readings below have in common, written once because they are one question
+ * asked from two places and must not drift into two answers.
+ *
+ * <b>Never re-asked because a window regained focus.</b> TanStack's default is to refetch on focus,
+ * which is right for a figure that moves on its own and wrong for this one: what a depth means in a
+ * cave does not change because somebody alt-tabbed back to the watch. On a live callout this screen
+ * is left and returned to constantly, and with a log of twenty distinct depths the default would
+ * fire twenty full station-table reads every time — on a cave that may hold tens of thousands of
+ * stations, and for an answer that is already correct. What genuinely changes the answer is the
+ * configuration write, and that is handled where it happens.
+ *
+ * <b>And no `retry` of its own, which is the fix rather than an omission.</b> These reads used to
+ * override the shared policy with `retry: false`, on the reasoning that the expected failure is a
+ * settled one — no model, no datum, a cave this account may not be told the position of — that
+ * repeating would only delay. True of those, and wrong about the failure that matters: a 500 or a
+ * connection dropped mid-callout is the case where one unanswered question leaves a coordinator
+ * looking at a card that cannot warn them, and refusing to ask again turns a blip into a silence
+ * that lasts as long as the held answer does. The shared policy already draws exactly that
+ * distinction — settled refusals are not repeated, everything else is — so the right thing here is
+ * to stop overriding it.
+ */
+const trackingDepthQueryOptions = {
+  staleTime: TRACKING_DEPTH_STALE_MS,
+  refetchOnWindowFocus: false,
+} as const;
+
+/**
  * Which stations a depth could mean, best match first, under the trip's own filter and datum.
  *
- * A read in everything but its method: it writes nothing and is asked as a question with a body,
- * so it is a mutation here rather than a query — the person filling the form asks it when they
- * have a number worth asking about, and holding an answer under a key would only mean a stale
- * preview after the configuration moved.
+ * <b>This is the only place the client learns what a depth resolves to, and it is deliberately not
+ * a rule written here.</b> What "nearest" means — which altitude is the datum, which spellings of a
+ * station name a filter matches, how the ties break — lives in one place on the server, and a
+ * second opinion computed in a browser would drift from it silently and be believed. So everything
+ * on this side that needs a candidate or the distance to it asks this.
  *
- * Worth showing before recording rather than after: a depth resolves to whichever station is
- * nearest, and "nearest" over a filter somebody set a week ago is exactly the decision a person
+ * A read in everything but its HTTP method: it writes nothing, and is a POST only because the
+ * question travels in a body. Held under a key so that the warning drawn while somebody types a
+ * depth, the list of stations that depth could mean, and the log rows already carrying that depth
+ * are one answer rather than three requests. The whole list is asked for rather than only the
+ * nearest, because the same answer serves the warning, which needs the first of them, and the
+ * list somebody picks a station out of, which needs all — one question, not two.
+ *
+ * Worth asking before recording rather than after: a depth resolves to whichever station is
+ * nearest with no tolerance under it at all, so a depth nothing in the cave is near still lands
+ * somewhere, and "nearest" over a filter somebody set a week ago is exactly the decision a person
  * wants to see made before it becomes the position on the log.
  */
-export function useResolveTrackingDepth() {
-  return useMutation({
-    mutationFn: ({
-      tripLogId,
-      depthM,
-      take,
-    }: {
-      tripLogId: string;
-      depthM: number;
-      take?: number;
-    }) =>
+export function useTrackingDepthReading(
+  tripLogId: string | undefined,
+  depthM: number | null | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.tripTrackingDepth(tripLogId ?? '', depthM ?? 0),
+    queryFn: () =>
       unwrap(
         api.POST('/api/v1/trip-logs/{tripLogId}/tracking/resolve-depth', {
-          params: { path: { tripLogId } },
-          body: { depthM, take: take ?? null },
+          params: { path: { tripLogId: tripLogId! } },
+          body: { depthM: depthM!, take: null },
         }),
+      ),
+    enabled: !!tripLogId && depthM !== null && depthM !== undefined && enabled,
+    ...trackingDepthQueryOptions,
+  });
+}
+
+/**
+ * The same question asked about every depth already on the log, so a row can say how far the
+ * station it records sits from the depth that was reported.
+ *
+ * <b>One query per distinct depth rather than one per row.</b> A party reported at 120 m is several
+ * rows carrying one number, and the answer is a property of the number and the trip, not of the
+ * row — so the rows share a cache entry and a long log of one depth costs one request. Depths
+ * nobody typed are never asked about: only a depth report carries one, and the caller narrows even
+ * those to the ones it could honestly measure.
+ *
+ * <b>Sharing a key with the reading above is the point of the two being written this way.</b> The
+ * depth somebody is typing into the report card is usually a depth already on the log — a party
+ * moves together and is reported together — so the card's warning and the rows' marks come out of
+ * one held answer rather than one request each.
+ */
+export function useTrackingDepthReadings(
+  tripLogId: string | undefined,
+  depths: readonly number[],
+  enabled = true,
+) {
+  return useQueries({
+    queries: depths.map((depthM) => ({
+      queryKey: queryKeys.tripTrackingDepth(tripLogId ?? '', depthM),
+      queryFn: () =>
+        unwrap(
+          api.POST('/api/v1/trip-logs/{tripLogId}/tracking/resolve-depth', {
+            params: { path: { tripLogId: tripLogId! } },
+            body: { depthM, take: null },
+          }),
+        ),
+      enabled: !!tripLogId && enabled,
+      ...trackingDepthQueryOptions,
+    })),
+    combine: (results) =>
+      new Map(
+        results.flatMap((result, index) =>
+          result.data ? ([[depths[index], result.data]] as [number, TrackingDepthCandidate[]][]) : [],
+        ),
       ),
   });
 }

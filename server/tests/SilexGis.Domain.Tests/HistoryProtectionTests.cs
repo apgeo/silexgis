@@ -230,6 +230,43 @@ public class HistoryProtectionTests
         shown.Changes.ContainsKey("Note").ShouldBeTrue();
     }
 
+    /// <summary>
+    /// A membership anchored to a moment of a tracked trip goes through the same door, without a
+    /// line being added for it — which is a property of hanging the picture on a link rather than
+    /// on the report row, not luck. The anchor is already in the membership's sensitive list (a
+    /// payload can quote what it anchors to), so a moment travels to a reader of an unguarded
+    /// timeline and is named as redacted, never silently dropped, in a guarded one.
+    /// </summary>
+    [Fact]
+    public void A_moment_anchor_on_a_membership_is_redacted_by_name_in_a_guarded_timeline()
+    {
+        var moment = "2026-09-12T14:05:00.0000000Z";
+        (string, string?, string?)[] props =
+        [
+            ("ResLinkId", null, Guid.NewGuid().ToString()),
+            ("EntityType", null, "TripLog"),
+            ("AnchorKind", null, "TripMoment"),
+            ("Anchor", null, $$"""{"at":"{{moment}}"}"""),
+            ("SortOrder", null, "0"),
+        ];
+
+        var hidden = HistoryProtection.Redact(
+            "ResLinkMember", Changes(props), governingHidden: true, NoLinkHidden,
+            associationHidden: false, mayWriteSubject: false, peopleHidden: false,
+            memberHidden: NoMemberHidden);
+        hidden.Redacted.ShouldContain("Anchor");
+        hidden.Changes!.ToJsonString().ShouldNotContain(moment);
+        // The event survives it: a membership changed, and when, is activity metadata.
+        hidden.Changes.ContainsKey("AnchorKind").ShouldBeTrue();
+
+        var shown = HistoryProtection.Redact(
+            "ResLinkMember", Changes(props), governingHidden: false, NoLinkHidden,
+            associationHidden: false, mayWriteSubject: false, peopleHidden: false,
+            memberHidden: NoMemberHidden);
+        shown.Redacted.ShouldBeEmpty();
+        shown.Changes!.ToJsonString().ShouldContain(moment);
+    }
+
     [Fact]
     public void A_trips_account_of_what_went_wrong_is_only_in_the_timeline_of_somebody_who_may_change_it()
     {

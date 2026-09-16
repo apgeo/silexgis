@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { TrackingEvent, TrackingState } from '../api/hooks.ts';
+import type { ResLink, ResLinkMember, TrackingEvent, TrackingState } from '../api/hooks.ts';
+import type { CaveViewMediaEntry } from './loadCaveView.ts';
+import { placeOnModel } from './drawableOn.ts';
+import { pictureOf } from './stationMedia.ts';
 import type { TrackedCaver, TrackedCaverPosition } from './trackedCavers.ts';
 
 /**
@@ -27,9 +30,13 @@ import type { TrackedCaver, TrackedCaverPosition } from './trackedCavers.ts';
  * nowhere to draw, listed as withheld — never a guess, and never an absence, because an absence
  * reads as nobody knowing where somebody is when the truth is that *this reader* is not being told.
  *
- * **A report measured in another survey is not drawn on this one.** Station names mean whatever the
- * model they were measured in says they mean, so a trip whose survey was changed part-way through
- * has reports that name places this model cannot hold. They are passed over rather than drawn.
+ * **A report measured in another survey is not drawn on this one, and is said rather than passed
+ * over.** Station names mean whatever the model they were measured in says they mean, so a trip
+ * whose survey was changed part-way through has reports that name places this model cannot hold.
+ * Such a report used to be skipped, which left the earlier place standing or, far more often —
+ * because the reports naming the old survey are the *older* ones — left the person reading as
+ * somebody nobody had reported at all. It now takes effect as a place that exists and cannot be
+ * shown here, which is what it is.
  */
 
 /** A report with its instant resolved once, so the scan below never re-parses a date. */
@@ -43,6 +50,17 @@ export interface ReplayWindow {
   from: number;
   to: number;
 }
+
+/**
+ * How far outside the trip's own stretch a photograph may drag the scrubber — see
+ * {@link replayWindow}, which is where the reasoning lives.
+ *
+ * A day, because a day is the scale a camera clock is actually wrong by: the wrong hour, the wrong
+ * time zone, the date rolled over at midnight. Beyond that the number is not a clock that drifted
+ * but one that was never set, and treating it as part of the trip destroys the replay of everything
+ * that was.
+ */
+const PICTURE_WIDENING_MS = 24 * 60 * 60_000;
 
 /** A report carrying words, placed on the replay's clock. */
 export interface ReplayNote {
@@ -98,14 +116,33 @@ function datedEvents(events: readonly TrackingEvent[]): DatedEvent[] {
  * Null when there is nothing to scrub: a watch that was never armed, or one armed and closed in the
  * same instant with nothing on its log.
  *
+ * It is widened by the pictures too, and that is not tidiness. A picture carries the moment its
+ * camera says it was taken, which is a clock nobody synchronised against anything underground — so
+ * one routinely lands minutes or hours outside the stretch the reports cover. A window that did not
+ * hold it would leave a photograph on this trip that the scrubber cannot be dragged to, and the
+ * reader would have no way to tell that from a photograph that is not there.
+ *
+ * <b>But only so far, and the bound is what keeps one bad file from destroying the whole replay.</b>
+ * A camera whose battery died reports 1970 or 2000, not "an hour out" — and the server accepts it,
+ * deliberately, because refusing would throw away the one record of a photograph over a number the
+ * person attaching it can fix afterwards. Widened without a bound, one such file makes the window
+ * decades long: the handle then moves in steps of weeks, every real report collapses onto one end
+ * of the rail, and nothing on screen says why the trip can no longer be replayed at all. So a
+ * picture drags the window by at most {@link PICTURE_WIDENING_MS}, measured from the stretch the
+ * reports themselves cover, and one further out than that is left off the rail rather than allowed
+ * to size it. Nothing is lost by that: the trip's own list of photographs shows every one of them
+ * with the moment it claims, which is where a wrong clock is actually visible as a wrong clock.
+ *
  * @param openedAt the moment the replay was opened, which is where a live trip's window ends. Taken
  *   from the caller rather than read here so the end of the window does not creep forward under the
  *   handle somebody is dragging.
+ * @param pictures the pictures hung on this trip's moments, or nothing where none have been read.
  */
 export function replayWindow(
   tracking: Pick<TrackingState, 'armedAt' | 'closedAt'>,
   events: readonly TrackingEvent[],
   openedAt: number,
+  pictures: readonly ReplayPicture[] = [],
 ): ReplayWindow | null {
   const armed = tracking.armedAt === null ? Number.NaN : Date.parse(tracking.armedAt);
   if (!Number.isFinite(armed)) {
@@ -118,6 +155,22 @@ export function replayWindow(
   for (const { at } of datedEvents(events)) {
     from = Math.min(from, at);
     to = Math.max(to, at);
+  }
+  // Measured against the reports' own stretch and fixed before the loop, so that one picture a day
+  // early cannot become the anchor a second one is allowed a day beyond — which is how a bound
+  // applied to a moving window ends up bounding nothing.
+  const earliest = from - PICTURE_WIDENING_MS;
+  const latest = to + PICTURE_WIDENING_MS;
+  for (const picture of pictures) {
+    if (!Number.isFinite(picture.at)) {
+      continue;
+    }
+    if (picture.at >= earliest) {
+      from = Math.min(from, picture.at);
+    }
+    if (picture.at <= latest) {
+      to = Math.max(to, picture.at);
+    }
   }
   return to > from ? { from, to } : null;
 }
@@ -132,9 +185,10 @@ export function replayWindow(
  * A note carries no position and never places anybody: that is the report's other fields' business,
  * and the derivation below reads them and not this.
  *
- * <b>Pictures are not here, and are not invented.</b> A report carries no attachment on the server
- * today, so there is nothing to hang on a mark and no schema to guess at. When the log grows one,
- * this is where a mark learns about it.
+ * <b>Pictures are not here, and are not a property of a report.</b> They hang on the trip at an
+ * instant rather than on any report row — see <see cref="replayPictures"/> — so they are derived
+ * from the trip's links and not from this log, and they survive a report being deleted and
+ * re-recorded, which is what a correction is.
  */
 export function replayNotes(
   events: readonly TrackingEvent[],
@@ -179,6 +233,261 @@ export function noteAfter(notes: readonly ReplayNote[], at: number): ReplayNote 
   return notes.find((note) => note.at > at) ?? null;
 }
 
+// ---- pictures on the trip's moments -------------------------------------------------------
+
+/**
+ * A photograph belonging to one moment of the trip, placed on the replay's clock.
+ *
+ * `caverId` is who the moment is about, and null where it is about the party. That difference
+ * decides whether the picture is ever drawn on the model: see {@link replayPictures}.
+ */
+export interface ReplayPicture {
+  at: number;
+  caverId: string | null;
+  documentId: string;
+  /**
+   * The membership row this picture is hung by — what a detach names.
+   *
+   * The membership and not the document: the same photograph can hang on two moments of one trip,
+   * and taking it off the 14:05 one has to leave the 15:40 one alone.
+   */
+  memberId: string;
+  entry: CaveViewMediaEntry;
+}
+
+/**
+ * How many pictures one moment is handed over with — the same bound, for the same reason, as a
+ * station's strip: every thumbnail in a strip is a request, and this is read on a phone on a
+ * hillside.
+ */
+const MAX_PER_MOMENT = 12;
+
+/**
+ * The instant a member anchors its link to on this trip, or null when it anchors to something else.
+ *
+ * <b>The moment has to be what the link is about — its main member — and that is the same rule the
+ * write and the detach hold to.</b> Anyone who may read two things may relate them through the
+ * general link route and choose which of them is the subject, so a link can mention a moment of
+ * this trip while being about a document: it is curated by that document's writers, this trip's
+ * write path will not extend it and its detach route will not touch it. Reading it here as a
+ * picture of this trip's moment would put a photograph on the trip's own strip with a control
+ * beside it that is refused — three surfaces disagreeing about what a picture on a moment is. Such
+ * a link is still on the trip's links panel, which is where an association somebody authored by
+ * hand belongs.
+ */
+function momentOf(member: ResLinkMember, tripLogId: string): number | null {
+  if (
+    member.targetType !== 'tripLog'
+    || member.targetId !== tripLogId
+    || member.anchorKind !== 'tripMoment'
+    || !member.isMain
+  ) {
+    return null;
+  }
+  // The payload is withheld from a reader who may not read the target and arrives as null; a
+  // picture placed at a guessed moment is the failure this shape exists to avoid.
+  const anchor = (typeof member.anchor === 'object' && member.anchor !== null ? member.anchor : {}) as Record<
+    string,
+    unknown
+  >;
+  const at = anchor.at;
+  if (typeof at !== 'string') {
+    return null;
+  }
+  const parsed = Date.parse(at);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * The photographs hung on this trip's moments, oldest first, read out of the links the trip has.
+ *
+ * <b>There is no picture-per-report table, and none is invented here — nor could there be one.</b>
+ * The log is append-only and a correction is a deletion followed by a fresh report with a new id,
+ * so an attachment keyed to a report would be destroyed by somebody fixing a typo in a time. What
+ * is stored instead is a link relating the trip *at an instant* to the photograph, which no
+ * correction touches; where the picture is drawn is folded out of the corrected log at read time by
+ * the very code that draws the party.
+ *
+ * <b>A picture with a caver hangs at that caver's position; one with none is timeline-only and is
+ * never placed.</b> A party that has split is in two places at once, so "the party's station" is
+ * not a thing a derivation may invent — it would put a photograph somewhere nobody was, drawn with
+ * exactly the confidence of one that is right.
+ *
+ * A link holding several moments and several pictures puts all of its pictures on all of its
+ * moments, for the reason the station strip gives: what a link says is that these things belong
+ * together, and it names no pairing inside itself for this to read one out of.
+ */
+export function replayPictures(
+  links: readonly ResLink[],
+  tripLogId: string,
+): ReplayPicture[] {
+  const pictures: ReplayPicture[] = [];
+  const seen = new Set<string>();
+
+  for (const link of links) {
+    const moments: number[] = [];
+    let subject: string | null = null;
+    let subjects = 0;
+    const entries: { documentId: string; memberId: string; entry: CaveViewMediaEntry }[] = [];
+
+    for (const member of link.members) {
+      const at = momentOf(member, tripLogId);
+      if (at !== null) {
+        moments.push(at);
+        continue;
+      }
+      if (member.targetType === 'caver') {
+        // Exactly one, or none: a link naming two people says the moment is about both, and
+        // drawing the picture at one of their positions would be a choice nothing authorised.
+        subjects += 1;
+        subject = member.targetId;
+        continue;
+      }
+      const entry = pictureOf(member);
+      if (entry !== null) {
+        entries.push({ documentId: member.targetId, memberId: member.id, entry });
+      }
+    }
+
+    const caverId = subjects === 1 ? subject : null;
+    for (const at of moments) {
+      let placed = pictures.filter((picture) => picture.at === at).length;
+      for (const { documentId, memberId, entry } of entries) {
+        if (placed >= MAX_PER_MOMENT) {
+          break;
+        }
+        // The same photograph can reach one moment through two links — somebody attached it and
+        // somebody else attached it again — and the strip would then show it twice.
+        const identity = `${at} ${documentId}`;
+        if (seen.has(identity)) {
+          continue;
+        }
+        seen.add(identity);
+        pictures.push({ at, caverId, documentId, memberId, entry });
+        placed += 1;
+      }
+    }
+  }
+
+  return pictures.sort((left, right) => left.at - right.at);
+}
+
+/**
+ * The pictures in force at a moment: those of the latest moment at or before it, or none yet.
+ *
+ * Shaped exactly like {@link noteAt}, and for the same reason. A scrubber stops at a thousand
+ * places across a window that is hours long, so it never lands on an instant a camera recorded;
+ * "in force" is what makes a picture reachable at all, and it is the same reading the note beside
+ * it already has.
+ */
+export function picturesAt(pictures: readonly ReplayPicture[], at: number): ReplayPicture[] {
+  let moment: number | null = null;
+  for (const picture of pictures) {
+    if (picture.at > at) {
+      break;
+    }
+    moment = picture.at;
+  }
+  return moment === null ? [] : pictures.filter((picture) => picture.at === moment);
+}
+
+/** The moment before this one that carries pictures, for a reader stepping back. Strictly before. */
+export function picturesBefore(pictures: readonly ReplayPicture[], at: number): ReplayPicture | null {
+  let found: ReplayPicture | null = null;
+  for (const picture of pictures) {
+    if (picture.at >= at) {
+      break;
+    }
+    found = picture;
+  }
+  return found;
+}
+
+/** The next moment carrying pictures, for a reader stepping forward. Strictly after. */
+export function picturesAfter(pictures: readonly ReplayPicture[], at: number): ReplayPicture | null {
+  return pictures.find((picture) => picture.at > at) ?? null;
+}
+
+/**
+ * Where the pictures in force at a moment are drawn on the model, by the station they hang under.
+ *
+ * <b>Each one is placed where its subject was when it was taken, never where they are at the
+ * instant on the scrubber, and the difference is the whole correctness of this function.</b> A
+ * picture stays in force until the next one — it has to, or a scrubber that stops at a thousand
+ * places across a day would never land on a camera's instant and no photograph would ever be
+ * reachable — so at 15:30 the picture in force can easily be the one taken at 14:05. Folding the
+ * log at 15:30 to place it draws a photograph of the upper series at whatever station its subject
+ * has since been reported at, following them down the cave as the replay plays, with exactly the
+ * confidence of a picture that is in the right place. That is the one failure this whole surface
+ * says it refuses: putting a photograph somewhere nobody was.
+ *
+ * So the log is folded at the picture's own moment. Once per distinct moment rather than once per
+ * picture — a memory card lands several on one instant — and only for the moments actually in
+ * force, so scrubbing costs one fold and not one per photograph on the trip.
+ *
+ * A picture about nobody in particular is never placed: a party that has split is in two places at
+ * once, and "the party's station" is not something a derivation may invent. A picture whose subject
+ * had no position then — nobody had reported them yet, or the report's place was withheld from this
+ * reader, or it was measured in another survey — is not placed either, and for the same reason:
+ * there is no station under which it could be drawn that would be true.
+ *
+ * @param events the <b>whole</b> log, which is what the positions are folded out of.
+ * @param at the instant being replayed, as epoch milliseconds.
+ * @param surveyModelId the model being drawn, or undefined when the panel does not know it — in
+ *   which case nothing is placed at all, exactly as the party's own markers are not.
+ */
+export function placedPicturesAt(
+  pictures: readonly ReplayPicture[],
+  events: readonly TrackingEvent[],
+  at: number,
+  surveyModelId: string | undefined,
+): Map<string, CaveViewMediaEntry[]> {
+  const byStation = new Map<string, CaveViewMediaEntry[]>();
+  if (surveyModelId === undefined || !Number.isFinite(at)) {
+    return byStation;
+  }
+
+  const folds = new Map<number, Map<string, TrackedCaverPosition>>();
+  for (const picture of picturesAt(pictures, at)) {
+    if (picture.caverId === null) {
+      continue;
+    }
+    let fold = folds.get(picture.at);
+    if (fold === undefined) {
+      fold = positionsAt(events, picture.at, surveyModelId);
+      folds.set(picture.at, fold);
+    }
+    const position = fold.get(picture.caverId);
+    if (position === undefined || position.kind !== 'station') {
+      continue;
+    }
+    byStation.set(position.station, [...(byStation.get(position.station) ?? []), picture.entry]);
+  }
+  return byStation;
+}
+
+/**
+ * Where everybody who had been placed by a moment stood at it, as the same folded positions the
+ * party's own markers are drawn from.
+ *
+ * Only the people a report had actually placed by then are in it — somebody nobody had reported
+ * yet, or whose reports this reader is not being told the places of, is simply absent, and a caller
+ * reading an absence must say nothing rather than guess.
+ */
+function positionsAt(
+  events: readonly TrackingEvent[],
+  at: number,
+  surveyModelId: string,
+): Map<string, TrackedCaverPosition> {
+  const positions = new Map<string, TrackedCaverPosition>();
+  for (const [caverId, history] of historiesAt(events, at, surveyModelId)) {
+    if (history.position !== null) {
+      positions.set(caverId, history.position);
+    }
+  }
+  return positions;
+}
+
 /**
  * Everybody on the watch, as they stood at one instant.
  *
@@ -209,18 +518,61 @@ export function trackedCaversAt(
   nameOf: (caverId: string) => string,
   surveyModelId: string | undefined,
 ): TrackedCaver[] {
-  if (
-    surveyModelId === undefined
-    || tracking.surveyModelId === null
-    || tracking.surveyModelId !== surveyModelId
-    || !Number.isFinite(at)
-  ) {
+  // A panel that does not know its own model can compare no report against it, and an instant that
+  // is not a number names no moment. Which survey the *watch* currently points at is deliberately
+  // not asked here: every report carries the survey it was made in, the scan below tests each one,
+  // and a watch re-pointed mid-trip is precisely the case where those two answers differ.
+  if (surveyModelId === undefined || !Number.isFinite(at)) {
     return [];
   }
 
   const teamTitles = new Map(tracking.teams.map((team) => [team.id, team.title]));
-  const histories = new Map<string, CaverHistory>();
+  const histories = historiesAt(events, at, surveyModelId);
 
+  return tracking.participants.map((participant) => {
+    const history = histories.get(participant.caverId);
+    // The team a report carried at the time, and nothing else.
+    //
+    // There is deliberately no falling back to the label the watch itself holds, because that
+    // label is not a roster field: the server folds it out of this same log, as the team named on
+    // the caver's *latest* team-bearing report. So at any moment where no report has named a team
+    // yet, the watch's label is either nothing at all or a team the caver is put in later — and a
+    // fallback to it could therefore only ever draw a caver in a team they did not belong to at
+    // the moment on screen, which is the anachronism this whole surface exists to remove.
+    // Somebody no report has labelled yet is shown with no team, which is what was known then.
+    const teamId = history?.teamId ?? null;
+    return {
+      caverId: participant.caverId,
+      name: nameOf(participant.caverId),
+      teamId,
+      teamTitle: teamId === null ? null : (teamTitles.get(teamId) ?? null),
+      position: history?.position ?? unplaced(history !== undefined, tracking.positionsWithheld),
+      lastRecordedAt: history?.lastRecordedAt ?? null,
+      positionAt: history?.positionAt ?? null,
+      enteredAt: history?.enteredAt ?? null,
+      out: history?.out ?? false,
+    };
+  });
+}
+
+/**
+ * What every caver's reports up to a moment add up to, keyed by caver.
+ *
+ * <b>One fold, two readers.</b> The party's markers are drawn from it and so is the station a
+ * photograph of a moment hangs under, and those two must be the same arithmetic: a picture placed
+ * by a second reading of the log would sooner or later disagree with the marker standing beside it
+ * about where somebody was, and neither surface would say which of them was lying.
+ *
+ * Nobody the log has not mentioned by this moment appears here at all — what to say about them is
+ * a question about the watch's roster rather than about the reports, and it is answered by the
+ * caller that has the roster.
+ */
+function historiesAt(
+  events: readonly TrackingEvent[],
+  at: number,
+  surveyModelId: string,
+): Map<string, CaverHistory> {
+  const histories = new Map<string, CaverHistory>();
   for (const { at: when, event } of datedEvents(events)) {
     if (when > at) {
       break;
@@ -253,31 +605,7 @@ export function trackedCaversAt(
     }
     histories.set(event.caverId, history);
   }
-
-  return tracking.participants.map((participant) => {
-    const history = histories.get(participant.caverId);
-    // The team a report carried at the time, and nothing else.
-    //
-    // There is deliberately no falling back to the label the watch itself holds, because that
-    // label is not a roster field: the server folds it out of this same log, as the team named on
-    // the caver's *latest* team-bearing report. So at any moment where no report has named a team
-    // yet, the watch's label is either nothing at all or a team the caver is put in later — and a
-    // fallback to it could therefore only ever draw a caver in a team they did not belong to at
-    // the moment on screen, which is the anachronism this whole surface exists to remove.
-    // Somebody no report has labelled yet is shown with no team, which is what was known then.
-    const teamId = history?.teamId ?? null;
-    return {
-      caverId: participant.caverId,
-      name: nameOf(participant.caverId),
-      teamId,
-      teamTitle: teamId === null ? null : (teamTitles.get(teamId) ?? null),
-      position: history?.position ?? unplaced(history !== undefined, tracking.positionsWithheld),
-      lastRecordedAt: history?.lastRecordedAt ?? null,
-      positionAt: history?.positionAt ?? null,
-      enteredAt: history?.enteredAt ?? null,
-      out: history?.out ?? false,
-    };
-  });
+  return histories;
 }
 
 /**
@@ -294,22 +622,25 @@ function placeReported(
   if (event.kind !== 'atStation' && event.kind !== 'atDepth') {
     return null;
   }
-  // Measured in another survey: the name means a place in another cave, and drawing it here would
-  // be a confident claim about where somebody is, made from a name that happens to collide. A model
-  // id that is absent is not another model — it is the withholding the next lines say out loud.
-  if (event.surveyModelId !== null && event.surveyModelId !== surveyModelId) {
-    return null;
+  // Whether this report claims a place, and whether that place belongs to the model being drawn,
+  // are one question with one home — the same one the live watch asks. It used to be written out
+  // here, and the copy read a report whose model id is absent as a withholding and drew its
+  // station anyway. That shape is not a withholding: deleting a survey nulls the model on every
+  // row that named it while leaving the station name standing, so what the copy drew was an old
+  // survey's station placed confidently on the model that replaced it.
+  const place = placeOnModel(
+    {
+      stationName: event.stationName,
+      depthM: event.depthEnteredM,
+      surveyModelId: event.surveyModelId,
+    },
+    surveyModelId,
+  );
+  if (place !== null) {
+    return place;
   }
-  if (event.stationName !== null && event.stationName.length > 0) {
-    return { kind: 'station', station: event.stationName };
-  }
-  // A depth is a position and is not a station: it is somewhere on a line the model does not draw,
-  // so it is said rather than placed at a station it might not be at.
-  if (event.depthEnteredM !== null) {
-    return { kind: 'depth', depthM: event.depthEnteredM };
-  }
-  // A report of this kind always carries a place. Arriving without one, it was kept from this
-  // reader, and there is no second reading of it.
+  // A report of this kind always carries a place. Arriving without one — no station, no depth —
+  // it was kept from this reader, and there is no second reading of it.
   return { kind: 'withheld', certain: true };
 }
 

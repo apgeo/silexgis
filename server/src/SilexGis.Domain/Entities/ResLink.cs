@@ -74,6 +74,24 @@ public enum AnchorKind : short
     /// <summary>An inclusive, forward waypoint span. Payload
     /// <c>{fromIndex, toIndex, fromName?, toName?}</c>.</summary>
     WaypointRange = 13,
+
+    /// <summary>
+    /// A moment of a tracked trip, as an absolute instant. Payload <c>{at}</c> — ISO-8601
+    /// with an offset.
+    /// <para>
+    /// Absolute rather than an offset from the watch being armed, for two reasons that both
+    /// bite. A watch re-arms — a party that turns out to still be underground puts a closed
+    /// watch back on — so an origin to measure an offset from is not a fixed point of the
+    /// trip. And the instants this addresses come off a camera clock, which knows nothing
+    /// about when anybody armed anything.
+    /// </para>
+    /// <para>
+    /// Deliberately not <see cref="TimePoint"/>, whose documented meaning is seconds into a
+    /// media file: one stored value carrying two meanings is exactly what the append-only
+    /// note above exists to prevent, and that kind's validator refuses an instant anyway.
+    /// </para>
+    /// </summary>
+    TripMoment = 14,
 }
 
 /// <summary>

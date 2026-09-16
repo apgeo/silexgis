@@ -39,6 +39,7 @@ const allAnchorKinds: Record<AnchorKind, true> = {
   modelPoint: true,
   waypoint: true,
   waypointRange: true,
+  tripMoment: true,
 };
 
 function member(overrides: Partial<ResLinkMember> = {}): ResLinkMember {
@@ -173,6 +174,17 @@ describe('anchor summaries', () => {
     expect(anchorSummary('waypointRange', { fromIndex: 4, toIndex: 9 }, t)).toBe('waypoints 4–9');
     expect(anchorSummary('textRange', { start: 1, end: 9, quote: 'x' }, t)).toBe('quote');
     expect(anchorSummary('textRange', { page: 2, start: 1, end: 9, quote: 'x' }, t)).toBe('quote, p. 2');
+    // A moment of a trip reads as a time, in the reader's own locale rather than as the UTC string
+    // the payload stores — a chip quoting Z time is one nobody can compare against the log beside
+    // it. The exact wording is the locale's business, so what is asserted is that it is a moment
+    // and not the generic fallback.
+    const moment = anchorSummary('tripMoment', { at: '2026-09-12T14:05:00Z' }, t);
+    expect(moment).not.toBe('part');
+    expect(moment).toContain('26');
+    // A payload that names no readable instant — withheld, or written by a newer server — falls
+    // back rather than showing "Invalid Date".
+    expect(anchorSummary('tripMoment', { at: 'sometime' }, t)).toBe('part');
+    expect(anchorSummary('tripMoment', { t: 42 }, t)).toBe('part');
   });
 
   it('never leaves a lookup key or an exception in a chip', () => {
@@ -300,9 +312,11 @@ describe('relation phrasing', () => {
       'modelSurveyRange',
     ]);
     expect(admittedAnchorKinds('geofile')).toEqual(['whole', 'waypoint', 'waypointRange']);
+    // A trip's one addressable part is a moment of it — not a place, because where the party was
+    // at a moment is folded out of a log that a correction rewrites.
+    expect(admittedAnchorKinds('tripLog')).toEqual(['whole', 'tripMoment']);
     // Types with no parts, and a type this client has never heard of, all link whole.
     for (const type of [
-      'tripLog',
       'caver',
       'cavingGroup',
       'mapView',

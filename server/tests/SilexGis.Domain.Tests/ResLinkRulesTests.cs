@@ -121,6 +121,36 @@ public class ResLinkRulesTests
         AdmitsAnchor(type, AnchorKind.Waypoint).ShouldBeFalse();
     }
 
+    /// <summary>
+    /// The one part of a trip a link can address is a moment of it. Each refusal below is the
+    /// near miss somebody would reach for instead: a media offset in seconds, a station of a
+    /// model, a page. The whole-resource anchor is asserted beside them, because a matrix row
+    /// that refused everything would pass every negative here and hang no pictures at all.
+    /// </summary>
+    [Theory]
+    [InlineData(AnchorKind.Whole, true)]
+    [InlineData(AnchorKind.TripMoment, true)]
+    [InlineData(AnchorKind.TimePoint, false)]
+    [InlineData(AnchorKind.TimeRange, false)]
+    [InlineData(AnchorKind.ModelStation, false)]
+    [InlineData(AnchorKind.Page, false)]
+    public void Trips_admit_a_moment_of_themselves_and_nothing_else(AnchorKind kind, bool admitted) =>
+        AdmitsAnchor(AttachedEntityType.TripLog, kind).ShouldBe(admitted);
+
+    /// <summary>A moment is a moment of a trip, and of nothing else that can join a link.</summary>
+    [Theory]
+    [InlineData(AttachedEntityType.Document)]
+    [InlineData(AttachedEntityType.SurveyModel)]
+    [InlineData(AttachedEntityType.Geofile)]
+    [InlineData(AttachedEntityType.Caver)]
+    public void Only_a_trip_admits_a_trip_moment(AttachedEntityType type)
+    {
+        AdmitsAnchor(type, AnchorKind.TripMoment).ShouldBeFalse();
+        // The positive twin, so the refusal above is a decision about the kind rather than a type
+        // that admits nothing.
+        AdmitsAnchor(type, AnchorKind.Whole).ShouldBeTrue();
+    }
+
     // ---- anchor payloads ----------------------------------------------------------
 
     [Fact]
@@ -182,6 +212,71 @@ public class ResLinkRulesTests
     [InlineData("""{"toPage": 2}""", false)]
     public void Page_ranges_are_forward_and_positive(string payload, bool valid) =>
         (AnchorPayloadProblem(AnchorKind.PageRange, payload) is null).ShouldBe(valid);
+
+    /// <summary>
+    /// A moment names one instant, as a string anything can read back as a moment on the clock.
+    /// The refusals are the shapes that would be stored happily and then place nothing: a number
+    /// (which is what the media-offset kind takes, and is the mistake this kind exists to avoid),
+    /// a date with no time in it to place, and free text.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"at": "2026-09-12T14:05:00Z"}""", true)]
+    [InlineData("""{"at": "2026-09-12T16:05:00+02:00"}""", true)]
+    [InlineData("""{"at": "2026-09-12T14:05:00.1234567Z"}""", true)]
+    [InlineData("""{"at": 1789012345}""", false)]
+    [InlineData("""{"at": "yesterday afternoon"}""", false)]
+    [InlineData("""{"at": ""}""", false)]
+    [InlineData("""{"at": null}""", false)]
+    [InlineData("""{"t": 42}""", false)]
+    [InlineData("{}", false)]
+    public void A_trip_moment_names_one_readable_instant(string payload, bool valid) =>
+        (AnchorPayloadProblem(AnchorKind.TripMoment, payload) is null).ShouldBe(valid);
+
+    [Fact]
+    public void A_trip_moment_requires_a_payload()
+    {
+        AnchorPayloadProblem(AnchorKind.TripMoment, null).ShouldNotBeNull();
+        // Its twin: the same kind with a well-formed payload is accepted, so the refusal above is
+        // about the missing payload and not about the kind being unknown here.
+        AnchorPayloadProblem(AnchorKind.TripMoment, """{"at": "2026-09-12T14:05:00Z"}""").ShouldBeNull();
+    }
+
+    /// <summary>
+    /// The composite write check, for the member the tracking write actually builds. Asserted
+    /// through <c>MemberProblem</c> rather than through the two halves alone, because that is the
+    /// gate the write passes through and it is where an anchor-kind matrix row and a payload rule
+    /// that disagreed would show up.
+    /// </summary>
+    [Fact]
+    public void A_trip_anchored_to_a_moment_is_a_valid_member()
+    {
+        MemberProblem(new MemberShape(
+            null, AttachedEntityType.TripLog, SomeId,
+            AnchorKind.TripMoment, """{"at": "2026-09-12T14:05:00Z"}""")).ShouldBeNull();
+
+        // A pin names the file an anchor was measured against, which a moment was not.
+        MemberProblem(new MemberShape(
+            null, AttachedEntityType.TripLog, SomeId,
+            AnchorKind.TripMoment, """{"at": "2026-09-12T14:05:00Z"}""", SomeId))
+            .ShouldBe(AnchorFileInvalidCode);
+
+        MemberProblem(new MemberShape(
+            null, AttachedEntityType.Document, SomeId,
+            AnchorKind.TripMoment, """{"at": "2026-09-12T14:05:00Z"}"""))
+            .ShouldBe(InvalidAnchorKindCode);
+    }
+
+    /// <summary>
+    /// A timestamp is not a coordinate, so a picture hung on a moment never re-withholds the
+    /// feature members standing beside it. Stated with its twin: the kinds that <em>do</em> put
+    /// coordinates in front of a reader still do.
+    /// </summary>
+    [Fact]
+    public void A_moment_addresses_no_coordinates()
+    {
+        AnchorAddressesCoordinates(AnchorKind.TripMoment).ShouldBeFalse();
+        AnchorAddressesCoordinates(AnchorKind.Waypoint).ShouldBeTrue();
+    }
 
     /// <summary>
     /// A region is measured in fractions of the picture as it is drawn, so 1 is its far edge and

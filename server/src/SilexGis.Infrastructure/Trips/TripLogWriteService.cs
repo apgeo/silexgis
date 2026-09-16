@@ -203,6 +203,23 @@ public sealed class TripLogWriteService(
         // would show on every named cave's links panel as a relation to the other caves, and no
         // later edit of it would be accepted.
         //
+        // A link anchored to a *moment* of this trip goes whole for the same reason, and the
+        // reason is worth stating because the relation it is written under is not a trip role and
+        // would otherwise slip past the rule above. Such a link says "at 14:05 of this trip", and
+        // the two other things it names are a photograph and, usually, the caver the moment was
+        // about — related to each other by nothing at all once the instant they share has gone.
+        // Left behind it is worse than an orphan: a directed link whose distinguished member has
+        // been deleted, which the link rules refuse to accept any later edit of, and which renders
+        // on that caver's own links panel as a photograph documenting a person — an association
+        // nobody ever made, assembled by a delete.
+        //
+        // Only where the moment is the link's *main* member, which is the shape a picture on a
+        // moment is written in. A link that merely mentions a moment of this trip while being
+        // about something else — a document, say, which is what its main member names — is an
+        // association somebody authored deliberately, whose subject outlives this trip and whose
+        // curator can still edit it. That one keeps whatever it still relates, under the rule
+        // below, exactly like any other link the trip merely joined.
+        //
         // A link of any other kind the trip merely joined keeps whatever it still relates, and
         // goes only when one member is left: an association with one end is a thing no surface
         // offers and no delete path would ever reach again. Remaining members cascade with it.
@@ -217,11 +234,20 @@ public sealed class TripLogWriteService(
                 && l.RelationTypeId != null && roleIds.Contains(l.RelationTypeId.Value))
             .Select(l => l.Id)
             .ToListAsync(ct);
+        var momentLinkIds = await db.ResLinkMembers
+            .Where(m => m.EntityType == AttachedEntityType.TripLog
+                && m.EntityId == trip.Id
+                && m.AnchorKind == AnchorKind.TripMoment
+                && m.IsMain)
+            .Select(m => m.ResLinkId)
+            .Distinct()
+            .ToListAsync(ct);
         await db.ResLinkMembers
             .Where(m => m.EntityType == AttachedEntityType.TripLog && m.EntityId == trip.Id)
             .ExecuteDeleteAsync(ct);
         await db.ResLinks
             .Where(l => roleLinkIds.Contains(l.Id)
+                || momentLinkIds.Contains(l.Id)
                 || (linkIds.Contains(l.Id) && db.ResLinkMembers.Count(m => m.ResLinkId == l.Id) < 2))
             .ExecuteDeleteAsync(ct);
         db.TripLogs.Remove(trip);

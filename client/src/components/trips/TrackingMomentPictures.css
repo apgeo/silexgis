@@ -1,0 +1,22 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The trip's photographs as a list of moments — the surface that needs no survey model. Layout
+   only: the sizes come from the theme's own controls, and nothing here paints a colour, so the
+   panel reads the same in both themes without a second set of rules to keep in step. */
+
+.tracking-moment-picture {
+  /* A figure is a block with a browser default margin that would put a gutter between every
+     thumbnail on top of the flex gap already between them. */
+  margin: 0;
+  max-width: 160px;
+}
+
+.tracking-moment-picture-image {
+  display: block;
+  /* Square and cropped, so a column of portraits and landscapes is still a grid rather than a
+     ragged edge. The width is the strip rendering's own — asking the server for a larger one to
+     draw it smaller would spend a phone's data on pixels nobody sees. */
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 4px;
+}

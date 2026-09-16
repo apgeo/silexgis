@@ -5,6 +5,7 @@ import {
   HistoryOutlined,
   LeftOutlined,
   PauseOutlined,
+  PictureOutlined,
   RightOutlined,
 } from '@ant-design/icons';
 import { Alert, Button, ConfigProvider, Flex, Segmented, Slider, Spin, Typography } from 'antd';
@@ -14,8 +15,10 @@ import {
   noteAfter,
   noteAt,
   noteBefore,
+  picturesAt,
   replayNotes,
   replayWindow,
+  type ReplayPicture,
 } from '../../caveview/trackingReplay.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
@@ -38,6 +41,15 @@ export interface TrackingReplayBarProps {
   onAtChange(at: number): void;
   /** What the trip's roster calls a caver, for the name against a note. */
   nameOf(caverId: string): string;
+  /**
+   * The photographs hung on this trip's moments, oldest first. They widen the window as well as
+   * marking it: a camera's clock is nobody's clock, so a picture routinely falls outside the
+   * stretch the reports cover, and a scrubber that could not reach it would be a replay with a
+   * photograph missing from it.
+   */
+  pictures?: readonly ReplayPicture[];
+  /** Offers to hang a picture on the moment on screen, where the reader may write to the log. */
+  onAttachHere?(at: number): void;
 }
 
 /**
@@ -100,6 +112,8 @@ export default function TrackingReplayBar({
   at,
   onAtChange,
   nameOf,
+  pictures = [],
+  onAttachHere,
 }: TrackingReplayBarProps) {
   const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
@@ -112,8 +126,8 @@ export default function TrackingReplayBar({
   const [openedAt, setOpenedAt] = useState(() => Date.now());
 
   const span = useMemo(
-    () => (events === undefined ? null : replayWindow(tracking, events, openedAt)),
-    [tracking, events, openedAt],
+    () => (events === undefined ? null : replayWindow(tracking, events, openedAt, pictures)),
+    [tracking, events, openedAt, pictures],
   );
   const notes = useMemo(
     () => (events === undefined || span === null ? [] : replayNotes(events, span)),
@@ -127,8 +141,25 @@ export default function TrackingReplayBar({
       // below, which are labelled, reachable from a keyboard and sized for a finger.
       built[note.at] = { label: <span className="tracking-replay-mark" aria-hidden="true" /> };
     }
+    for (const picture of pictures) {
+      // Only the ones the rail actually covers. The window holds every picture whose clock is
+      // plausibly this trip's, and deliberately refuses to stretch itself around one whose camera
+      // clock was never set — a mark for such a picture would be drawn off the end of the rail,
+      // where it is a dot the handle can never be brought to. The trip's own list of photographs
+      // is where every one of them is reachable, whatever its file claims.
+      if (span === null || picture.at < span.from || picture.at > span.to) {
+        continue;
+      }
+      // A moment carrying both words and a photograph gets the picture's mark, because the picture
+      // is the rarer thing and the one a reader is scrubbing to find. The note is still read out
+      // under the rail when the handle lands there, so nothing is lost by the mark saying the less
+      // common of the two.
+      built[picture.at] = {
+        label: <span className="tracking-replay-mark tracking-replay-mark-picture" aria-hidden="true" />,
+      };
+    }
     return built;
-  }, [notes]);
+  }, [notes, pictures, span]);
 
   // Held still across renders on purpose: a fresh object here is a fresh theme five times a second
   // while the replay plays, and every one of those has the whole slider's styles derived again.
@@ -276,6 +307,10 @@ export default function TrackingReplayBar({
   const moment = at ?? span.from;
   const step = Math.max(1, Math.round((span.to - span.from) / SCRUB_STEPS));
   const standing = noteAt(notes, moment);
+  // The pictures in force at this moment — the same reading the note has, for the same reason: a
+  // scrubber stops at a thousand places across a window hours long and never lands on the instant
+  // a camera recorded.
+  const shown = picturesAt(pictures, moment);
   const previous = noteBefore(notes, moment);
   const next = noteAfter(notes, moment);
 
@@ -384,6 +419,41 @@ export default function TrackingReplayBar({
             onClick={() => next !== null && scrubTo(next.at)}
             data-testid="trip-tracking-replay-note-next"
           />
+        </Flex>
+      )}
+
+      {/* The photographs of the moment on screen, and the offer to add one to it.
+          <b>Drawn here rather than on the model, and both of them deliberately.</b> A picture of a
+          moment belongs to a time, and the party's own places are what the model draws; a
+          photograph taken by somebody whose position nobody reported has no station to hang under
+          and would simply never appear. This strip shows every one of them. */}
+      {(shown.length > 0 || onAttachHere !== undefined) && (
+        <Flex gap="small" align="center" wrap className="tracking-replay-pictures">
+          {shown.map((picture) => (
+            <a
+              key={`${picture.at}-${picture.documentId}`}
+              href={picture.entry.url}
+              target="_blank"
+              rel="noreferrer"
+              data-testid="trip-tracking-replay-picture"
+            >
+              <img
+                src={picture.entry.thumbnailUrl ?? picture.entry.url}
+                alt={picture.entry.caption ?? t('trips.tracking.pictures.thumbnailAlt')}
+                className="tracking-replay-picture"
+              />
+            </a>
+          ))}
+          {onAttachHere !== undefined && (
+            <Button
+              size={controlSize}
+              icon={<PictureOutlined />}
+              onClick={() => onAttachHere(moment)}
+              data-testid="trip-tracking-replay-attach-picture"
+            >
+              {t('trips.tracking.pictures.attachHere')}
+            </Button>
+          )}
         </Flex>
       )}
     </div>

@@ -26,6 +26,10 @@ let logAskedFor: { tripLogId: string | undefined; enabled: boolean } | undefined
 let links: unknown[] = [];
 let linksAskedFor: { targetType: string; targetId: string; enabled: boolean } | undefined;
 
+/** The trip's links — where a picture hung on one of its moments lives — and what was asked. */
+let momentLinks: unknown[] = [];
+let momentLinksAskedFor: { tripLogId: string | undefined; enabled: boolean } | undefined;
+
 /** The one call that writes a report, whichever surface filled it in. */
 const recordEvents = vi.fn();
 
@@ -50,6 +54,17 @@ vi.mock('../../api/hooks.ts', () => ({
     linksAskedFor = { targetType, targetId, enabled };
     return { data: enabled ? { items: links } : undefined, isPending: !enabled, error: null };
   },
+  /**
+   * The trip's own links, which is where a picture hung on a moment lives. Recorded the same way
+   * the model's are: whether it is asked for at all before the model is opened is the property,
+   * for the same reason — this tab is opened to record that a party went in.
+   */
+  useTripMomentPictureLinks: (tripLogId: string | undefined, enabled: boolean) => {
+    momentLinksAskedFor = { tripLogId, enabled };
+    return { data: enabled ? { items: momentLinks } : undefined, isPending: !enabled, error: null };
+  },
+  usePhotos: () => ({ data: { items: [] }, isPending: false }),
+  useAttachTrackingPictures: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 // The viewer itself is a three.js bundle holding a drawing context. What it is handed is the
@@ -62,10 +77,23 @@ interface GivenProps {
   onPartPick?: (part: PickedModelPart) => void;
   /** Which of the viewer's own controls this panel asks for — see the test that reads it. */
   toolbar?: boolean | { buttons?: readonly string[] };
-  /** The station pictures handed to the viewer, keyed by the station's dotted path. */
-  stationMedia?: ReadonlyMap<string, readonly { url: string }[]>;
+  /**
+   * Where the viewer reads a station's pictures from. A function rather than a map, because this
+   * panel's answer moves as a replay is scrubbed and the viewer must not be handed a new source
+   * five times a second — see the test that holds its identity still.
+   */
+  stationMedia?: (station: unknown) => readonly { url: string }[] | null;
 }
 let given: GivenProps | undefined;
+
+/**
+ * What the viewer would draw at one station, asked the way the viewer asks: with a station object,
+ * not a path. The viewer hands over its own node and the source reads the path off it, so a test
+ * that looked the path up itself would be exercising a lookup nothing performs.
+ */
+function mediaAt(path: string): readonly { url: string }[] {
+  return given!.stationMedia?.({ name: () => path }) ?? [];
+}
 vi.mock('../caveview/CaveViewPanel.tsx', () => ({
   default: (props: GivenProps) => {
     given = props;
@@ -95,15 +123,27 @@ function model(overrides: Partial<SurveyModelInfo> = {}): SurveyModelInfo {
   } as unknown as SurveyModelInfo;
 }
 
+/**
+ * An ordinary armed watch: one person, reported at a station of the very model this panel shows.
+ *
+ * <b>Written out in full and deliberately not cast.</b> It used to end `as TrackingState`, and the
+ * cast is what let it go on compiling after the watch started carrying the survey each position
+ * was measured against. With that field missing, every comparison against the model on screen was
+ * a comparison against `undefined` — so this fixture, which is the plainest possible watch, folded
+ * its whole party onto "reported on another survey". A fixture that cannot be told apart from the
+ * answer a real server gives is the only kind worth asserting against.
+ */
 function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
   return {
     state: 'armed',
     surveyModelId: MODEL,
+    surveyModelMissing: false,
     referenceStationName: null,
     depthFilter: [],
     armedAt: '2026-09-12T06:00:00Z',
     closedAt: null,
     positionsWithheld: false,
+    publishesRealNames: false,
     teams: [{ id: 'team-1', title: 'Team A' }],
     participants: [
       {
@@ -115,12 +155,15 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
         positionRecordedAt: '2026-09-12T07:00:00Z',
         stationName: 'p.g.7',
         depthM: null,
+        // Measured in the model the panel is showing, which is what makes this the ordinary case.
+        positionSurveyModelId: MODEL,
+        label: null,
         in: true,
         out: false,
       },
     ],
     ...overrides,
-  } as TrackingState;
+  };
 }
 
 const roster: TripParticipant[] = [
@@ -189,6 +232,8 @@ beforeEach(() => {
   logAskedFor = undefined;
   links = [];
   linksAskedFor = undefined;
+  momentLinks = [];
+  momentLinksAskedFor = undefined;
   narrow = false;
   coarse = false;
   onRecorded.mockReset();
@@ -304,8 +349,10 @@ describe('TrackingModelPanel', () => {
       show(tracking(), []);
 
       // The tab is drawn, the model is not. Asking here would spend a request on a hillside for
-      // pictures that have nowhere to be drawn.
+      // pictures that have nowhere to be drawn — and that holds for both readings of "picture on
+      // the model": the ones anchored to a station, and the ones hung on a moment of this trip.
       expect(linksAskedFor).toMatchObject({ enabled: false });
+      expect(momentLinksAskedFor).toMatchObject({ enabled: false });
 
       fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
 
@@ -316,6 +363,9 @@ describe('TrackingModelPanel', () => {
         targetId: MODEL,
         enabled: true,
       });
+      // The moment pictures are asked about the trip, not about the model — the whole point of
+      // hanging them there is that they outlive the survey the party was placed in.
+      expect(momentLinksAskedFor).toEqual({ tripLogId: 'trip-1', enabled: true });
     });
 
     it('stops asking again when the model is closed', () => {
@@ -334,12 +384,12 @@ describe('TrackingModelPanel', () => {
       show(tracking(), []);
       fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
 
-      const media = given!.stationMedia;
-      expect(media?.get('p.g.7')).toHaveLength(1);
+      const shown = mediaAt('p.g.7');
+      expect(shown).toHaveLength(1);
       // Derived from the published thumbnail URL, token and all — never the stored bytes. The
       // same rule the survey viewer's strip is built by, because it is the same derivation.
-      expect(media?.get('p.g.7')?.[0].url).toContain('/thumb');
-      expect(media?.get('p.g.7')?.[0].url).not.toContain('/content');
+      expect(shown[0].url).toContain('/thumb');
+      expect(shown[0].url).not.toContain('/content');
     });
 
     it('shows no strip at a station nothing is linked to', () => {
@@ -347,9 +397,9 @@ describe('TrackingModelPanel', () => {
       show(tracking(), []);
       fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
 
-      // A station with no pictures is absent from the map rather than present and empty, which is
-      // what the viewer reads as "draw no strip here".
-      expect(given!.stationMedia?.get('p.g.9')).toBeUndefined();
+      // Nothing at a station nothing is linked to, which is what the viewer reads as "draw no
+      // strip here" — its positive twin is the assertion above.
+      expect(mediaAt('p.g.9')).toHaveLength(0);
     });
 
     it('still shows the model when nothing is linked to any station', () => {
@@ -357,10 +407,145 @@ describe('TrackingModelPanel', () => {
       show(tracking(), []);
       fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
 
-      // An empty map, not a missing prop: its presence is what says this surface shows pictures at
+      // A source, not a missing prop: its presence is what says this surface shows pictures at
       // all, and a cave nobody has photographed yet is not a cave whose model should be withheld.
-      expect(given!.stationMedia?.size).toBe(0);
+      expect(given!.stationMedia).toBeTypeOf('function');
+      expect(mediaAt('p.g.7')).toHaveLength(0);
       expect(screen.getByTestId('viewer')).toBeTruthy();
+    });
+
+    /**
+     * The source is a function whose identity never changes, and that is load-bearing rather than
+     * a style choice: a replay re-derives which pictures stand at which station on every tick of
+     * its clock, and the viewer drops its hover listeners and closes an open strip whenever it is
+     * handed a different source. A reader who had tapped a station would watch the photographs
+     * vanish under their thumb having touched nothing.
+     */
+    it('never hands the viewer a different picture source once it has one', async () => {
+      links = [linkWithPhoto('p.g.7')];
+      log = [
+        {
+          id: 'e1',
+          caverId: ANA,
+          teamId: null,
+          kind: 'atStation',
+          surveyModelId: MODEL,
+          stationName: 'p.g.7',
+          depthEnteredM: null,
+          note: null,
+          recordedAt: '2026-09-12T09:00:00Z',
+        } as TrackingEvent,
+      ];
+      show(tracking(), []);
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      const first = given!.stationMedia;
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('trip-tracking-replay-open'));
+      });
+      await waitFor(() => expect(screen.getByTestId('trip-tracking-replay')).toBeTruthy());
+
+      expect(given!.stationMedia).toBe(first);
+    });
+
+    /**
+     * A picture hung on a moment of the trip, as the write actually stores it: the trip anchored
+     * to the instant as the main member, the caver it is about, and the photograph.
+     */
+    const momentLink = (at: string, caverId: string | null, photo = 'photo-moment') => ({
+      id: `moment-${at}`,
+      members: [
+        {
+          id: `trip-${at}`,
+          targetType: 'tripLog',
+          targetId: 'trip-1',
+          isMain: true,
+          anchorKind: 'tripMoment',
+          anchor: { at },
+          display: null,
+        },
+        ...(caverId === null
+          ? []
+          : [
+              {
+                id: `caver-${at}`,
+                targetType: 'caver',
+                targetId: caverId,
+                anchorKind: 'whole',
+                anchor: null,
+                display: null,
+              },
+            ]),
+        {
+          id: photo,
+          targetType: 'document',
+          targetId: photo,
+          anchorKind: 'whole',
+          anchor: null,
+          display: {
+            title: 'La capul puțului',
+            thumbnailUrl: `http://files.local/${photo}/thumb?token=abc`,
+            mediaType: 'image/jpeg',
+          },
+        },
+      ],
+    });
+
+    /**
+     * <b>A position this reader was not told cannot acquire one by having a photograph.</b> The
+     * server withholds the station from a caller who may not place the cave — a station report
+     * arrives with no station at all — and the picture hung on that moment still travels, exactly
+     * as the note on the same report does. What must not happen is the picture being drawn under a
+     * station anyway, which would hand back the very thing the withholding kept.
+     *
+     * Both halves are driven here, because a negative that passes because nothing was ever placed
+     * proves nothing at all.
+     */
+    it('draws a moment picture at a reported station and never at a withheld one', async () => {
+      const armed = '2026-09-12T06:00:00Z';
+      momentLinks = [momentLink(armed, ANA)];
+
+      // Positive half: the place was reported, so the photograph hangs under it.
+      log = [atStation(ANA, armed, 'p.g.7')];
+      show(tracking({ armedAt: armed }), []);
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('trip-tracking-replay-open'));
+      });
+      await waitFor(() => expect(mediaAt('p.g.7')).toHaveLength(1));
+
+      cleanup();
+
+      // Negative half: the same picture, the same instant, the same caver — read by somebody the
+      // station was kept from, which is a station report arriving with no station and no model.
+      log = [
+        {
+          ...atStation(ANA, armed, 'p.g.7'),
+          stationName: null,
+          surveyModelId: null,
+        } as TrackingEvent,
+      ];
+      show(
+        tracking({
+          armedAt: armed,
+          positionsWithheld: true,
+          participants: [
+            {
+              ...tracking().participants[0],
+              stationName: null,
+              positionSurveyModelId: null,
+            },
+          ],
+        }),
+        [],
+      );
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('trip-tracking-replay-open'));
+      });
+      await waitFor(() => expect(screen.getByTestId('trip-tracking-replay')).toBeTruthy());
+
+      expect(mediaAt('p.g.7')).toHaveLength(0);
     });
   });
 

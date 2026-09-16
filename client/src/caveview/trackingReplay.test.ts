@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import type { TrackingEvent, TrackingState } from '../api/hooks.ts';
+import type { ResLink, ResLinkMember, TrackingEvent, TrackingState } from '../api/hooks.ts';
 import {
   noteAfter,
   noteAt,
   noteBefore,
+  picturesAt,
+  placedPicturesAt,
   replayNotes,
+  replayPictures,
   replayWindow,
   trackedCaversAt,
+  type ReplayPicture,
 } from './trackingReplay.ts';
 
 const MODEL = 'model-1';
+const TRIP = 'trip-1';
 const OTHER_MODEL = 'model-2';
 const ANA = 'caver-ana';
 const BOGDAN = 'caver-bogdan';
@@ -30,6 +35,8 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
       { id: 'team-1', title: 'Echipa 1' },
       { id: 'team-2', title: 'Echipa 2' },
     ],
+    publishesRealNames: true,
+    surveyModelMissing: false,
     participants: [
       {
         caverId: ANA,
@@ -39,13 +46,20 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         teamId: null,
         lastKind: 'atStation',
         lastRecordedAt: '2026-09-12T10:00:00Z',
+        positionRecordedAt: '2026-09-12T10:00:00Z',
         stationName: 'p.g.9',
         depthM: null,
+        // The watch's own fold, which this module never reads — it replays the log — but which a
+        // real answer always carries. Written out because the cast that used to stand here let a
+        // required field go missing from a fixture and take a whole party off the model.
+        positionSurveyModelId: MODEL,
+        label: null,
+        in: true,
         out: false,
       },
     ],
     ...overrides,
-  } as TrackingState;
+  };
 }
 
 /**
@@ -238,7 +252,7 @@ describe('trackedCaversAt', () => {
     expect(caver.positionAt).toBe('2026-09-12T08:40:00Z');
   });
 
-  it('draws nobody from a report measured in another survey', () => {
+  it('says a report measured in another survey rather than drawing it or passing it over', () => {
     const log = newestFirst([
       event({ recordedAt: '2026-09-12T08:40:00Z', stationName: 'p.g.3' }),
       event({
@@ -248,15 +262,86 @@ describe('trackedCaversAt', () => {
       }),
     ]);
 
-    // The later report names a place in another cave. It is passed over rather than drawn here.
+    // Before the second report, the first one is drawn: the rule is about which survey a place was
+    // measured in, not a refusal to place anybody once a survey has been changed.
     expect(
-      trackedCaversAt(state(), log, at('2026-09-12T09:30:00Z'), nameOf, MODEL)[0].position,
+      trackedCaversAt(state(), log, at('2026-09-12T09:00:00Z'), nameOf, MODEL)[0].position,
     ).toEqual({ kind: 'station', station: 'p.g.3' });
 
-    // And a watch resolved against another model draws nobody at all, exactly as the live path.
-    expect(trackedCaversAt(state({ surveyModelId: OTHER_MODEL }), log, 0, nameOf, MODEL)).toEqual([]);
-    expect(trackedCaversAt(state({ surveyModelId: null }), log, 0, nameOf, MODEL)).toEqual([]);
+    // After it, the latest word about this person is a place in another survey. It takes effect as
+    // a place that cannot be shown here — never as the older station, which would draw somebody
+    // where they were an hour ago as if nothing newer had been heard.
+    const later = trackedCaversAt(state(), log, at('2026-09-12T09:30:00Z'), nameOf, MODEL)[0];
+    expect(later.position).toEqual({ kind: 'otherModel' });
+    expect(later.position).not.toEqual({ kind: 'unreported' });
+
+    // The live fold and the replay now agree, which is the whole point of the change: a watch
+    // re-pointed at a corrected survey used to make the replay refuse a report the live view drew.
+    expect(
+      trackedCaversAt(
+        state({ surveyModelId: OTHER_MODEL }),
+        newestFirst([
+          event({ recordedAt: '2026-09-12T08:40:00Z', stationName: 'p.g.3' }),
+        ]),
+        at('2026-09-12T09:30:00Z'),
+        nameOf,
+        MODEL,
+      )[0].position,
+    ).toEqual({ kind: 'station', station: 'p.g.3' });
+
+    // A panel that does not know its own survey can compare nothing and places nobody.
     expect(trackedCaversAt(state(), log, 0, nameOf, undefined)).toEqual([]);
+  });
+
+  /**
+   * The shape a deleted survey leaves on the log, which used to be read as a withholding and drawn
+   * anyway.
+   *
+   * Removing a survey model nulls the model on every report that named it and leaves the station
+   * name exactly where it was, so "no model, but a station" is not a corrupt row and not a
+   * withholding — it is the ordinary record of a place measured in a survey that is no longer
+   * here. Drawn on whatever survey the watch was pointed at afterwards, it puts a person at
+   * whichever node of the new geometry happens to carry that name.
+   */
+  it('refuses to draw a station whose survey has been deleted, and still says it exists', () => {
+    const gone = newestFirst([
+      event({ recordedAt: '2026-09-12T08:40:00Z', stationName: 'p.g.3', surveyModelId: null }),
+    ]);
+    const caver = trackedCaversAt(state(), gone, at('2026-09-12T09:30:00Z'), nameOf, MODEL)[0];
+    expect(caver.position).toEqual({ kind: 'otherModel' });
+    // Never as the station itself, which is the marker this repairs, and never as an absence,
+    // which would say nobody had reported where this person is.
+    expect(caver.position).not.toEqual({ kind: 'station', station: 'p.g.3' });
+    expect(caver.position).not.toEqual({ kind: 'unreported' });
+
+    // The twin, so this is a rule about the survey and not about station reports in general: the
+    // same report naming the survey on screen is still drawn at its station.
+    const kept = newestFirst([
+      event({ recordedAt: '2026-09-12T08:40:00Z', stationName: 'p.g.3', surveyModelId: MODEL }),
+    ]);
+    expect(
+      trackedCaversAt(state(), kept, at('2026-09-12T09:30:00Z'), nameOf, MODEL)[0].position,
+    ).toEqual({ kind: 'station', station: 'p.g.3' });
+
+    // And the withholding keeps its own reading: a station report stripped of everything — its
+    // station, its depth and its model — is a position this reader may not be told, which is a
+    // different sentence from a place that cannot be drawn here.
+    const withheld = newestFirst([
+      event({
+        recordedAt: '2026-09-12T08:40:00Z',
+        stationName: null,
+        surveyModelId: null,
+      }),
+    ]);
+    expect(
+      trackedCaversAt(
+        state({ positionsWithheld: true }),
+        withheld,
+        at('2026-09-12T09:30:00Z'),
+        nameOf,
+        MODEL,
+      )[0].position,
+    ).toEqual({ kind: 'withheld', certain: true });
   });
 
   it('names every caver on the watch at every moment, whatever the log says', () => {
@@ -271,6 +356,7 @@ describe('trackedCaversAt', () => {
           positionRecordedAt: null,
           stationName: null,
           depthM: null,
+          positionSurveyModelId: null,
           in: false,
           out: false,
           label: null,
@@ -415,5 +501,321 @@ describe('the notes a replay can land on', () => {
     expect(noteBefore(notes, at('2026-09-12T08:30:00Z'))).toBeNull();
     expect(noteAfter(notes, at('2026-09-12T08:30:00Z'))?.note).toBe('rigging the pitch');
     expect(noteAfter(notes, at('2026-09-12T09:30:00Z'))).toBeNull();
+  });
+});
+
+describe('replayPictures', () => {
+  const PICTURE = 'doc-picture';
+  const OTHER_PICTURE = 'doc-other';
+
+  function member(overrides: Partial<ResLinkMember>): ResLinkMember {
+    return {
+      id: `member-${sequence++}`,
+      targetType: 'document',
+      targetId: PICTURE,
+      isMain: false,
+      sortOrder: 0,
+      note: null,
+      anchorKind: 'whole',
+      anchor: null,
+      anchorFileId: null,
+      anchorState: 'exact',
+      display: null,
+      ...overrides,
+    } as ResLinkMember;
+  }
+
+  /** A moment member: the trip, anchored to an instant — the shape the write actually stores. */
+  const moment = (iso: string, tripLogId = TRIP) =>
+    member({
+      targetType: 'tripLog',
+      targetId: tripLogId,
+      isMain: true,
+      anchorKind: 'tripMoment',
+      anchor: { at: iso } as unknown as ResLinkMember['anchor'],
+    });
+
+  /** A photograph the caller may read: a display the server was willing to fill in. */
+  const picture = (documentId = PICTURE) =>
+    member({
+      targetType: 'document',
+      targetId: documentId,
+      display: {
+        title: 'At the pitch head',
+        subtitle: null,
+        route: null,
+        thumbnailUrl: `/api/v1/files/${documentId}/thumbnail?size=480&token=abc`,
+        path: null,
+        mediaType: 'image/jpeg',
+      } as unknown as ResLinkMember['display'],
+    });
+
+  const subject = (caverId: string) => member({ targetType: 'caver', targetId: caverId });
+
+  const link = (members: ResLinkMember[]): ResLink =>
+    ({
+      id: `link-${sequence++}`,
+      shortCode: 'abcd1234',
+      relationType: null,
+      description: null,
+      createdBy: null,
+      createdAt: '2026-09-12T18:00:00Z',
+      updatedAt: '2026-09-12T18:00:00Z',
+      mayEdit: true,
+      members,
+    }) as ResLink;
+
+  it('reads a photograph off the moment and the caver its link names', () => {
+    const pictures = replayPictures(
+      [link([moment('2026-09-12T09:05:00Z'), subject(ANA), picture()])],
+      TRIP,
+    );
+
+    expect(pictures).toHaveLength(1);
+    expect(pictures[0].at).toBe(at('2026-09-12T09:05:00Z'));
+    expect(pictures[0].caverId).toBe(ANA);
+    expect(pictures[0].documentId).toBe(PICTURE);
+    // Both widths come off the one signed URL the server minted; nothing reaches for an original.
+    expect(pictures[0].entry.url).toContain('token=abc');
+    expect(pictures[0].entry.thumbnailUrl).toContain('token=abc');
+  });
+
+  /**
+   * A link that mentions a moment of this trip while being about something else is not a picture
+   * on this trip's moment. Anyone who may read two things may relate them through the general link
+   * route and choose the subject, and such a link is curated by whoever may write <em>that</em>
+   * subject: this trip's write path will not extend it and its detach route will not touch it. Read
+   * here it would appear on the trip's own strip with a control beside it that is refused.
+   */
+  it('ignores a link that merely mentions a moment while being about something else', () => {
+    const mentioned = member({
+      targetType: 'tripLog',
+      targetId: TRIP,
+      isMain: false,
+      anchorKind: 'tripMoment',
+      anchor: { at: '2026-09-12T09:05:00Z' } as unknown as ResLinkMember['anchor'],
+    });
+    expect(replayPictures([link([mentioned, picture()])], TRIP)).toEqual([]);
+
+    // The positive twin: the same instant, the same photograph, in the shape this feature writes.
+    expect(
+      replayPictures([link([moment('2026-09-12T09:05:00Z'), picture()])], TRIP),
+    ).toHaveLength(1);
+  });
+
+  it('ignores a moment of another trip, and a photograph the caller may not read', () => {
+    // Negative half: a link naming a different trip's moment, and a member with no display at all
+    // — which is exactly the shape a withheld photograph arrives in.
+    expect(
+      replayPictures([link([moment('2026-09-12T09:05:00Z', 'another-trip'), picture()])], TRIP),
+    ).toEqual([]);
+    expect(
+      replayPictures(
+        [link([moment('2026-09-12T09:05:00Z'), member({ targetType: 'document', display: null })])],
+        TRIP,
+      ),
+    ).toEqual([]);
+
+    // Positive half, so neither refusal above is a derivation that finds nothing at all.
+    expect(replayPictures([link([moment('2026-09-12T09:05:00Z'), picture()])], TRIP)).toHaveLength(1);
+  });
+
+  it('shows the same photograph once however many links put it on one moment', () => {
+    const pictures = replayPictures(
+      [
+        link([moment('2026-09-12T09:05:00Z'), picture()]),
+        link([moment('2026-09-12T09:05:00Z'), picture()]),
+        link([moment('2026-09-12T09:05:00Z'), picture(OTHER_PICTURE)]),
+      ],
+      TRIP,
+    );
+    expect(pictures.map((p) => p.documentId)).toEqual([PICTURE, OTHER_PICTURE]);
+  });
+
+  it('orders them oldest first, whatever order the links arrived in', () => {
+    const pictures = replayPictures(
+      [
+        link([moment('2026-09-12T11:00:00Z'), picture(OTHER_PICTURE)]),
+        link([moment('2026-09-12T09:00:00Z'), picture()]),
+      ],
+      TRIP,
+    );
+    expect(pictures.map((p) => p.at)).toEqual([
+      at('2026-09-12T09:00:00Z'),
+      at('2026-09-12T11:00:00Z'),
+    ]);
+  });
+
+  it('names no caver when the link names two, because neither of them is the answer', () => {
+    const pictures = replayPictures(
+      [link([moment('2026-09-12T09:05:00Z'), subject(ANA), subject(BOGDAN), picture()])],
+      TRIP,
+    );
+    expect(pictures[0].caverId).toBeNull();
+  });
+});
+
+describe('picturesAt and where a picture is drawn', () => {
+  const pictures: ReplayPicture[] = [
+    {
+      at: at('2026-09-12T09:00:00Z'),
+      caverId: ANA,
+      documentId: 'doc-1',
+      memberId: 'member-1',
+      entry: { url: 'u1', thumbnailUrl: 't1' },
+    },
+    {
+      at: at('2026-09-12T09:00:00Z'),
+      caverId: ANA,
+      documentId: 'doc-2',
+      memberId: 'member-2',
+      entry: { url: 'u2', thumbnailUrl: 't2' },
+    },
+    {
+      at: at('2026-09-12T11:00:00Z'),
+      caverId: null,
+      documentId: 'doc-3',
+      memberId: 'member-3',
+      entry: { url: 'u3', thumbnailUrl: 't3' },
+    },
+  ];
+
+  /** Ana at the pitch head at nine, and in the sump an hour and a half later. */
+  const log = newestFirst([
+    event({ recordedAt: '2026-09-12T09:00:00Z', stationName: 'cave.upper.2' }),
+    event({ recordedAt: '2026-09-12T10:30:00Z', stationName: 'cave.sump.1' }),
+  ]);
+
+  it('holds the pictures of the latest moment at or before the instant', () => {
+    // The scrubber stops at a thousand places across hours and never lands on a camera's instant,
+    // so "in force" is what makes a picture reachable at all — the same reading a note has.
+    expect(picturesAt(pictures, at('2026-09-12T08:00:00Z'))).toEqual([]);
+    expect(picturesAt(pictures, at('2026-09-12T09:30:00Z')).map((p) => p.documentId)).toEqual([
+      'doc-1',
+      'doc-2',
+    ]);
+    expect(picturesAt(pictures, at('2026-09-12T09:00:00Z'))).toHaveLength(2);
+    expect(picturesAt(pictures, at('2026-09-12T12:00:00Z')).map((p) => p.documentId)).toEqual([
+      'doc-3',
+    ]);
+  });
+
+  it('places a picture about somebody and never one about nobody in particular', () => {
+    // Positive half: a picture naming a caver is drawn at the station that caver was reported at.
+    const placed = placedPicturesAt(pictures, log, at('2026-09-12T09:30:00Z'), MODEL);
+    expect([...placed.keys()]).toEqual(['cave.upper.2']);
+    expect(placed.get('cave.upper.2')).toHaveLength(2);
+
+    // Negative half, and the rule that matters: a party that has split is in two places, so a
+    // picture about nobody in particular is never drawn on the model at all.
+    expect(placedPicturesAt(pictures, log, at('2026-09-12T12:00:00Z'), MODEL).size).toBe(0);
+    expect(picturesAt(pictures, at('2026-09-12T12:00:00Z'))).toHaveLength(1);
+  });
+
+  /**
+   * <b>The rule this function exists to get right.</b> A picture stays in force until the next one
+   * — it has to, or a scrubber stopping at a thousand places across a day would never land on a
+   * camera's instant — so at half past ten the picture in force is still the one taken at nine.
+   * Folding the log at half past ten to place it draws a photograph of the pitch head in the sump,
+   * and goes on moving it down the cave as the replay plays, with exactly the confidence of a
+   * picture that is in the right place.
+   */
+  it('draws a picture where its subject was when it was taken, not where they are now', () => {
+    // Ana is in the sump at this instant — the party's own marker is there, and the test below
+    // asserts it, so this is a claim about the fold rather than about a fixture that never moved.
+    expect(
+      trackedCaversAt(state(), log, at('2026-09-12T10:45:00Z'), nameOf, MODEL)[0].position,
+    ).toEqual({ kind: 'station', station: 'cave.sump.1' });
+
+    const placed = placedPicturesAt(pictures, log, at('2026-09-12T10:45:00Z'), MODEL);
+    expect([...placed.keys()]).toEqual(['cave.upper.2']);
+    expect(placed.get('cave.sump.1')).toBeUndefined();
+  });
+
+  /**
+   * A reader who may not place the cave is refused every position on the watch, and a photograph
+   * must not hand one back by appearing under a station. The decision is here rather than on the
+   * panel so it is one line with one test rather than a condition a refactor can quietly drop.
+   */
+  it('draws no picture for a position this reader was not told', () => {
+    // A station report stripped of its place is a withholding and can be nothing else.
+    const withheld = newestFirst([
+      event({ recordedAt: '2026-09-12T09:00:00Z', stationName: null, surveyModelId: null }),
+    ]);
+    expect(placedPicturesAt(pictures, withheld, at('2026-09-12T09:30:00Z'), MODEL).size).toBe(0);
+    // …and the picture is still on the trip, on the strip that says a time and no place.
+    expect(picturesAt(pictures, at('2026-09-12T09:30:00Z'))).toHaveLength(2);
+
+    // The positive twin: the same picture, the same instant, the same caver — with the place this
+    // reader was allowed to be told.
+    expect([...placedPicturesAt(pictures, log, at('2026-09-12T09:30:00Z'), MODEL).keys()]).toEqual([
+      'cave.upper.2',
+    ]);
+
+    // And two more absences with the same twin: nobody had reported this person yet when the
+    // camera fired, and a panel that does not know which survey it is drawing.
+    expect(placedPicturesAt(pictures, [], at('2026-09-12T09:30:00Z'), MODEL).size).toBe(0);
+    expect(placedPicturesAt(pictures, log, at('2026-09-12T09:30:00Z'), undefined).size).toBe(0);
+  });
+
+  it('widens the window so a picture off the end of the log can still be reached', () => {
+    const reports = newestFirst([
+      event({ recordedAt: '2026-09-12T09:00:00Z', stationName: 'p.g.3' }),
+    ]);
+    const late: ReplayPicture[] = [
+      {
+        at: at('2026-09-12T23:30:00Z'),
+        caverId: ANA,
+        documentId: 'doc-late',
+        memberId: 'member-late',
+        entry: { url: 'u', thumbnailUrl: 't' },
+      },
+    ];
+    const tracking = state({ armedAt: '2026-09-12T08:00:00Z', closedAt: '2026-09-12T12:00:00Z' });
+
+    // Without the pictures the window ends when the watch was closed — which is the twin that
+    // makes the widening below a decision rather than an accident.
+    expect(replayWindow(tracking, reports, at('2026-09-12T12:00:00Z'))?.to).toBe(
+      at('2026-09-12T12:00:00Z'),
+    );
+    expect(replayWindow(tracking, reports, at('2026-09-12T12:00:00Z'), late)?.to).toBe(
+      at('2026-09-12T23:30:00Z'),
+    );
+  });
+
+  /**
+   * <b>And no further, which is what keeps one dead camera battery from destroying the replay.</b>
+   * A camera whose clock was never set reports 1970 or 2000, and the server accepts it on purpose
+   * — refusing would throw away the record of a photograph over a number somebody can correct
+   * afterwards. Widened without a bound, one such file makes the window decades long: the handle
+   * then moves in steps of weeks and every real report collapses onto one end of the rail, with
+   * nothing on screen to say why the trip can no longer be replayed at all.
+   */
+  it('refuses to be stretched by a camera clock that was never set', () => {
+    const reports = newestFirst([
+      event({ recordedAt: '2026-09-12T09:00:00Z', stationName: 'p.g.3' }),
+    ]);
+    const tracking = state({ armedAt: '2026-09-12T08:00:00Z', closedAt: '2026-09-12T12:00:00Z' });
+    const picture = (iso: string): ReplayPicture[] => [
+      {
+        at: at(iso),
+        caverId: ANA,
+        documentId: 'doc-clock',
+        memberId: 'member-clock',
+        entry: { url: 'u', thumbnailUrl: 't' },
+      },
+    ];
+
+    const ancient = replayWindow(tracking, reports, at('2026-09-12T12:00:00Z'), picture('1970-01-01T00:00:00Z'));
+    expect(ancient?.from).toBe(at('2026-09-12T08:00:00Z'));
+    expect(ancient?.to).toBe(at('2026-09-12T12:00:00Z'));
+
+    // The positive twin, and the reason the bound is a day rather than nothing: a clock out by the
+    // wrong hour, or by a time zone, or rolled over midnight, is a clock that drifted — and its
+    // picture still has to be reachable on the rail.
+    expect(replayWindow(tracking, reports, at('2026-09-12T12:00:00Z'), picture('2026-09-11T23:00:00Z'))?.from)
+      .toBe(at('2026-09-11T23:00:00Z'));
+    expect(replayWindow(tracking, reports, at('2026-09-12T12:00:00Z'), picture('2026-09-13T11:00:00Z'))?.to)
+      .toBe(at('2026-09-13T11:00:00Z'));
   });
 });

@@ -139,6 +139,12 @@ public static class ResLinkRules
                 or AnchorKind.ModelStationRange or AnchorKind.ModelSurvey or AnchorKind.ModelSurveyRange,
             AttachedEntityType.Geofile => kind is AnchorKind.Whole or AnchorKind.Waypoint
                 or AnchorKind.WaypointRange,
+            // A trip takes a moment of itself. The part of a trip a link can address is not a
+            // place — the log is the only record of where the party was at a given instant, and
+            // it is re-read on every replay — so the anchor names the instant and lets the fold
+            // answer the place. That is what keeps a picture alive across a correction: a
+            // correction deletes an event row and re-records it, and this anchor names neither.
+            AttachedEntityType.TripLog => kind is AnchorKind.Whole or AnchorKind.TripMoment,
             _ => kind == AnchorKind.Whole,
         };
     }
@@ -207,6 +213,7 @@ public static class ResLinkRules
                     ForwardIntPairProblem(root, "fromIndex", "toIndex", min: 0)
                     ?? StringProblem(root, "fromName", required: false)
                     ?? StringProblem(root, "toName", required: false),
+                AnchorKind.TripMoment => InstantProblem(root, TripMomentAnchor.AtField),
                 _ => $"unknown anchor kind {(short)kind}",
             };
         }
@@ -656,6 +663,34 @@ public static class ResLinkRules
         }
 
         return value <= max ? null : $"'{name}' must be at most {max}";
+    }
+
+    /// <summary>
+    /// A required instant: a JSON string that round-trips as a moment on the clock, with its
+    /// offset carried. Checked by parsing rather than by pattern, because the value has to be
+    /// readable as a moment for anything downstream to place it — a shape test would accept a
+    /// string nothing can fold a log to, and the failure would be a picture that silently never
+    /// appears rather than a refusal anybody sees.
+    /// </summary>
+    private static string? InstantProblem(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var element))
+        {
+            return $"'{name}' is required";
+        }
+
+        if (element.ValueKind != JsonValueKind.String)
+        {
+            return $"'{name}' must be an ISO-8601 instant";
+        }
+
+        return DateTimeOffset.TryParse(
+            element.GetString(),
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind,
+            out _)
+            ? null
+            : $"'{name}' must be an ISO-8601 instant";
     }
 
     /// <summary>Identity-bearing string: when required, it must be present and

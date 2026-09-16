@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
-import { DeleteOutlined, EditOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
+import { useMemo, useState } from 'react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EyeInvisibleOutlined,
+  PictureOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
 import {
   Alert,
   App,
@@ -20,14 +26,19 @@ import { useTranslation } from 'react-i18next';
 import { isSettledRefusal } from '../../api/client.ts';
 import {
   useDeleteTrackingEvent,
+  useTrackingDepthReadings,
+  useTripMomentPictureLinks,
   useTripTracking,
   useTripTrackingEvents,
   type TrackingEvent,
   type TrackingParticipant,
   type TripLogInfo,
 } from '../../api/hooks.ts';
+import { replayPictures } from '../../caveview/trackingReplay.ts';
 import TrackingConfigCard from '../../components/trips/TrackingConfigCard.tsx';
 import TrackingModelPanel from '../../components/trips/TrackingModelPanel.tsx';
+import TrackingMomentPictures from '../../components/trips/TrackingMomentPictures.tsx';
+import TrackingPicturesDialog from '../../components/trips/TrackingPicturesDialog.tsx';
 import TrackingPublicNameDialog from '../../components/trips/TrackingPublicNameDialog.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
 import TrackingSharePanel from '../../components/trips/TrackingSharePanel.tsx';
@@ -35,6 +46,10 @@ import {
   trackingProblemMessage,
   trackingReadRefusalMessage,
 } from '../../components/trips/trackingProblems.ts';
+import {
+  recordedDepthGap,
+  type TrackingDepthGap,
+} from '../../components/trips/trackingDepthGap.ts';
 import { publicNamingOf } from '../../components/trips/trackingPublicName.ts';
 import {
   lastHeardInWords,
@@ -42,6 +57,7 @@ import {
   trackingStandings,
   type TrackingStanding,
 } from '../../components/trips/trackingWatch.ts';
+import { drawableOn } from '../../caveview/drawableOn.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 // The position's age is worded by the followed page's own rule, called rather than copied — the
@@ -106,6 +122,16 @@ export default function TripTrackingTab({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** Whose caption on the published page is being set, or null while nobody's is. */
   const [naming, setNaming] = useState<TrackingParticipant | null>(null);
+  /**
+   * The moment photographs are being hung on, and who they are about, or null while nothing is.
+   *
+   * <b>A moment and a subject, never a report.</b> The offer on a log row opens this at the instant
+   * that row was reported at — which is the natural way to say "the party was at the pitch head
+   * then, here is the photograph" — and what is stored is that instant. Deleting the row it was
+   * read off changes nothing about the picture, which is the whole design; the row is a convenient
+   * clock and not the thing being attached to.
+   */
+  const [attaching, setAttaching] = useState<{ at: number; caverId: string | null } | null>(null);
 
   /**
    * Whether the server has answered this read for good, rather than failing to answer it.
@@ -121,6 +147,81 @@ export default function TripTrackingTab({
    * policy already uses, called rather than written a second time.
    */
   const refused = isSettledRefusal(error);
+
+  /**
+   * Every depth anybody typed that this screen could measure, each one once.
+   *
+   * <b>Collected here because a reported depth and the station it was recorded at are two facts,
+   * and only one of them is on the answer.</b> What a row carries is the station the server
+   * resolved to and the number somebody typed; how far apart those two are is nowhere in the
+   * record, by decision — no residual is stored — so the screen works it out when it draws it.
+   *
+   * <b>Narrowed to reports made against the model the watch is on now</b>, which is not an
+   * optimisation: a depth measured against a datum that has since been replaced is not a depth in
+   * the model in use, so re-resolving it answers a question about a different cave. Those rows are
+   * never measured, so their numbers are never asked for either — a request whose answer could only
+   * be discarded is a request not worth making.
+   *
+   * Deduplicated because the answer is a property of the number and the trip rather than of the
+   * row: a party of six reported at 120 m is six rows carrying one question. Sorted so the list is
+   * stable between renders rather than reshuffling with the log, and bounded by what the log itself
+   * is bounded by — one page of recent reports, plus the party, which is a couple of dozen numbers
+   * at the very worst and usually a handful.
+   */
+  const askedDepths = useMemo(() => {
+    const watchModelId = data?.surveyModelId ?? null;
+    const typed = new Set<number>();
+    if (watchModelId !== null) {
+      for (const participant of data?.participants ?? []) {
+        if (participant.depthM !== null && participant.positionSurveyModelId === watchModelId) {
+          typed.add(participant.depthM);
+        }
+      }
+      for (const row of events.data?.items ?? []) {
+        if (row.depthEnteredM !== null && row.surveyModelId === watchModelId) {
+          typed.add(row.depthEnteredM);
+        }
+      }
+    }
+    return [...typed].sort((a, b) => a - b);
+  }, [data?.surveyModelId, data?.participants, events.data?.items]);
+
+  /**
+   * What each of those depths means, asked of the server that resolves them.
+   *
+   * <b>Asked rather than worked out here, and that is not a style preference.</b> Which altitude a
+   * depth is measured from, which spellings of a station name the trip's filter matches, how ties
+   * break — all of that is one rule with one home, and a browser that re-derived it would be a
+   * second opinion that drifts silently and is believed. So the client asks the same question the
+   * preview beside the report form asks, and reads the distance off the answer.
+   *
+   * Only where the question can be answered: resolving a depth needs a model, and the route is
+   * open to accounts that may write to this log. A reader without that sees the two facts side by
+   * side and labelled — which is the part that was actually misleading — and no distance between
+   * them.
+   */
+  const depthReadings = useTrackingDepthReadings(
+    trip.id,
+    askedDepths,
+    canEdit && data?.surveyModelId != null,
+  );
+
+  /**
+   * The photographs hung on this trip's moments.
+   *
+   * <b>Read on the tab rather than inside the survey panel, and that is the fix rather than a
+   * convenience.</b> A moment picture belongs to an instant of this trip and not to a place in a
+   * cave, so everything about it — that it exists, when it was taken, who it is about — is legible
+   * to a reader with no model on screen, and to one who may read the trip but may never be told
+   * where the cave is. Asked for only where there is something to ask about: a trip nobody ever
+   * watched has no moments, so it can have no pictures on them and the request would be spent
+   * learning that.
+   */
+  const pictureLinks = useTripMomentPictureLinks(trip.id, data?.armedAt != null);
+  const momentPictures = useMemo(
+    () => replayPictures(pictureLinks.data?.items ?? [], trip.id),
+    [pictureLinks.data, trip.id],
+  );
 
   if (isPending) {
     return <Skeleton active />;
@@ -163,6 +264,29 @@ export default function TripTrackingTab({
   // with itself about how long it has been.
   const now = Date.now();
   const standings = trackingStandings(data.participants);
+
+  /**
+   * The latest moment anybody was reported at, off the page of reports this tab is holding.
+   *
+   * The largest rather than the first: reports are listed by the moment they were <em>said</em>,
+   * which a coordinator can backdate, and only the largest is the latest whatever the page's order
+   * turns out to be. Null on a watch that has been armed and has heard nothing yet.
+   */
+  const lastReportAt = (events.data?.items ?? []).reduce<number | null>((latest, row) => {
+    const at = Date.parse(row.recordedAt);
+    return Number.isFinite(at) && (latest === null || at > latest) ? at : latest;
+  }, null);
+
+  /**
+   * Where the photographs card opens its dialog when no particular report was pressed.
+   *
+   * A camera's own file usually says when each picture was taken and that is what gets stored, so
+   * this is only the fallback for the ones whose file says nothing — and "some time during this
+   * trip" is a better guess for those than "now", which is whenever somebody happened to sit down
+   * with the memory card.
+   */
+  const defaultPictureMoment =
+    lastReportAt ?? (data.armedAt === null ? now : Date.parse(data.armedAt));
 
   /**
    * How long ago somebody was last heard from, with the clock time kept for whoever wants it.
@@ -287,10 +411,116 @@ export default function TripTrackingTab({
     </Tooltip>
   );
 
-  const place = (stationName: string | null, depthM: number | null) =>
-    [stationName, depthM === null ? null : t('trips.metres', { value: depthM })]
-      .filter(Boolean)
-      .join(' · ');
+  /**
+   * A place that was reported and was not measured in the survey this watch now uses.
+   *
+   * <b>The name stays on screen and is marked, rather than being taken off it.</b> This table is
+   * the coordinator's own record of what was said: `cave.deep.3` is a true account of a report
+   * somebody made, and blanking it would hide the trip's history from the person keeping it. What
+   * is not true is that it says where this person is *now* — a station path means whatever the
+   * survey it was measured in says it means, so the same path in the corrected survey may be
+   * another chamber or nowhere at all. Unmarked, with a freshness age under it, the cell reads as
+   * a current place on the survey in use, which is the sentence this mark exists to prevent.
+   *
+   * <b>Marked here as well as on the model, because this is the surface that is actually read.</b>
+   * The 3D panel says it too, and says it well — but it is opened deliberately and costs a model
+   * download, while this table is the first thing on the tab and is where somebody looks to answer
+   * "where is everybody". One of the two saying so is not enough.
+   *
+   * It covers the report whose survey has been deleted for the same reason and by the same rule:
+   * the station outlives the survey it was measured in, so it names a place nothing on this server
+   * can resolve any more.
+   */
+  const otherModelTag = (caverId: string) => (
+    <Tooltip title={t('trips.tracking.positionOtherModelDetail')}>
+      <Tag
+        color="warning"
+        icon={<WarningOutlined />}
+        className="tracking-position-other-model"
+        data-testid={`trip-tracking-position-other-model-${caverId}`}
+      >
+        {t('trips.tracking.positionOtherModel')}
+      </Tag>
+    </Tooltip>
+  );
+
+  /**
+   * How far the station a depth was recorded at sits from the depth itself, where that is knowable.
+   *
+   * The model each report was made against is carried through rather than assumed, because the
+   * watch can be re-pointed while the party is underground and the rule that decides whether a
+   * stored place is still comparable lives in one place beside its reasoning.
+   */
+  const gapOf = (report: {
+    stationName: string | null;
+    askedDepthM: number | null;
+    surveyModelId: string | null;
+  }): TrackingDepthGap | null =>
+    recordedDepthGap(
+      report,
+      data?.surveyModelId ?? null,
+      report.askedDepthM === null ? undefined : depthReadings.get(report.askedDepthM),
+    );
+
+  /**
+   * A place, drawn as the two different facts it is made of.
+   *
+   * <b>This used to be one string with a middle dot in it, and the dot was the defect.</b> A depth
+   * report carries two numbers that are not two readings of one thing: the station the server
+   * resolved to, which is what is stored and what the model draws, and the depth somebody typed,
+   * which is what was asked for. Joined, they read as one description — "P3 · 120 m" says that P3
+   * is at 120 m. Nothing guarantees it. Resolution takes whichever station of the trip's filter is
+   * nearest with no tolerance beneath it, so a coordinator who types 1200 for 120 against a 140 m
+   * cave gets the bottom of the system, and the row then says that station is at 1200 m. It is not;
+   * it is 1060 m away from it, and the joined row is the sentence that hides that.
+   *
+   * So the two are drawn as two. The station stands as the answer, because it is what was recorded
+   * and what everything downstream acts on; the depth goes underneath it, in words that say it is
+   * what was reported rather than what it came out as.
+   *
+   * <b>And the distance between them is said only when it is worth saying.</b> A party reported at
+   * 120 m and placed at a station 0.4 m away needs no remark — the survey simply has no station at
+   * exactly 120 m, which is the ordinary case, and a row that cried wolf on every depth report
+   * would teach a coordinator to read past the one that mattered. What counts as far enough is a
+   * caving judgement and lives in one place, next to its reasoning.
+   */
+  const place = (stationName: string | null, depthM: number | null, gap: TrackingDepthGap | null) => {
+    if (depthM === null) {
+      return stationName;
+    }
+    return (
+      <>
+        {/* An element of its own rather than a loose text node, so that the station is something a
+            reader — and a test — can point at as one thing separate from the depth beside it. */}
+        <span className="tracking-position-station">{stationName}</span>
+        {/* Never on the same line as the station, in either layout. The whole failure being
+            repaired is two numbers reading as one fact, and a phone would wrap them back together
+            the moment a station name got long. */}
+        <Typography.Text type="secondary" className="tracking-position-asked">
+          {t('trips.tracking.positionAsked', { depth: depthM })}
+        </Typography.Text>
+        {gap?.wide === true && (
+          <Tooltip
+            title={t('trips.tracking.positionGapDetail', {
+              asked: Math.abs(depthM),
+              station: gap.stationName,
+              depth: gap.stationDepthM,
+              gap: gap.gapM,
+            })}
+          >
+            <Tag
+              color="warning"
+              icon={<WarningOutlined />}
+              className="tracking-position-gap"
+              data-testid="trip-tracking-position-gap"
+            >
+              {t('trips.tracking.positionGap', { gap: gap.gapM })}
+            </Tag>
+          </Tooltip>
+        )}
+      </>
+    );
+  };
 
   /**
    * One person's last known place, and the moment that placed them there where there is one.
@@ -317,8 +547,24 @@ export default function TripTrackingTab({
     participant: TrackingParticipant,
   ): { shown: ReactNode; placedAt: string | null } => {
     if (participant.stationName !== null || participant.depthM !== null) {
+      const shown = place(
+        participant.stationName,
+        participant.depthM,
+        gapOf({
+          stationName: participant.stationName,
+          askedDepthM: participant.depthM,
+          surveyModelId: participant.positionSurveyModelId,
+        }),
+      );
       return {
-        shown: place(participant.stationName, participant.depthM),
+        shown: drawableOn(participant.positionSurveyModelId, data.surveyModelId) ? (
+          shown
+        ) : (
+          <>
+            {shown}
+            {otherModelTag(participant.caverId)}
+          </>
+        ),
         placedAt: participant.positionRecordedAt,
       };
     }
@@ -371,7 +617,15 @@ export default function TripTrackingTab({
    */
   const eventPlace = (row: TrackingEvent) => {
     if (row.stationName !== null || row.depthEnteredM !== null) {
-      return place(row.stationName, row.depthEnteredM);
+      return place(
+        row.stationName,
+        row.depthEnteredM,
+        gapOf({
+          stationName: row.stationName,
+          askedDepthM: row.depthEnteredM,
+          surveyModelId: row.surveyModelId,
+        }),
+      );
     }
     return row.kind === 'atStation' || row.kind === 'atDepth' ? withheldTag(true) : '—';
   };
@@ -446,6 +700,36 @@ export default function TripTrackingTab({
       />
     </Popconfirm>
   );
+
+  /**
+   * The offer to hang photographs on the moment one report was made at.
+   *
+   * <b>On the log row because the log is where a trip is turned into a report.</b> Somebody
+   * emptying a memory card a week later reads down the rows — "here is where we were at 14:05" —
+   * and this is the one press between that row and the photographs of it. It carries the row's
+   * caver across as the subject, since a report is about somebody and the picture beside it almost
+   * always is too.
+   *
+   * <b>What it attaches to is the instant, not the row.</b> The row supplies a clock and nothing
+   * else: deleting it — which is how this log is corrected — leaves the photographs exactly where
+   * they are.
+   */
+  const attachControl = (row: TrackingEvent) => {
+    const at = Date.parse(row.recordedAt);
+    if (!Number.isFinite(at)) {
+      return null;
+    }
+    return (
+      <Button
+        type="text"
+        size={controlSize}
+        icon={<PictureOutlined />}
+        aria-label={t('trips.tracking.pictures.attachAtReport')}
+        onClick={() => setAttaching({ at, caverId: row.caverId })}
+        data-testid={`trip-tracking-event-picture-${row.id}`}
+      />
+    );
+  };
 
   /**
    * What the published page calls somebody, and the way to change it — one cell, in both layouts.
@@ -849,6 +1133,7 @@ export default function TripTrackingTab({
                               column was the last of six, so on a phone it began 457px past the
                               right edge of a scroller 364px wide — the only way to take a wrong
                               report off a log nothing can edit, three screens sideways. */}
+                          {canEdit && attachControl(row)}
                           {canEdit && deleteControl(row)}
                         </div>
                         <div className="tracking-stacked-facts">
@@ -897,7 +1182,12 @@ export default function TripTrackingTab({
                         {
                           title: '',
                           key: 'actions',
-                          render: (_value: unknown, row: TrackingEvent) => deleteControl(row),
+                          render: (_value: unknown, row: TrackingEvent) => (
+                            <Flex gap={4} align="center">
+                              {attachControl(row)}
+                              {deleteControl(row)}
+                            </Flex>
+                          ),
                         },
                       ]
                     : []),
@@ -905,6 +1195,44 @@ export default function TripTrackingTab({
           }
         />
       </div>
+
+      {/* The trip's photographs, under the log they belong beside and outside the survey panel
+          entirely — see the panel's own note for why that placement is the point of it. Offered
+          only for a trip that was actually watched: a moment of a trip nobody watched is not a
+          thing, and an empty card promising one would be an invitation to nothing. */}
+      {data.armedAt !== null && (
+        <TrackingMomentPictures
+          tripLogId={trip.id}
+          pictures={momentPictures}
+          loading={pictureLinks.isPending}
+          failed={pictureLinks.error != null}
+          canEdit={canEdit}
+          nameOf={named}
+          // The moment this opens at is the last word on the log, falling back to when the watch
+          // was armed — see where that is worked out. The subject is whoever is ticked on the
+          // table above, offered rather than imposed: the dialog asks, and its chooser is where
+          // the answer is actually settled.
+          onAttach={() =>
+            setAttaching({ at: defaultPictureMoment, caverId: [...selected][0] ?? null })
+          }
+        />
+      )}
+
+      {/* Mounted only while something is being attached, so the dialog's fields start from the
+          moment that was actually pressed rather than from the last one. */}
+      {canEdit && attaching !== null && (
+        <TrackingPicturesDialog
+          open
+          tripLogId={trip.id}
+          defaultAt={attaching.at}
+          defaultCaverId={attaching.caverId}
+          cavers={trip.participants.map((person) => ({
+            caverId: person.caverId,
+            name: person.name,
+          }))}
+          onClose={() => setAttaching(null)}
+        />
+      )}
     </Space>
   );
 }

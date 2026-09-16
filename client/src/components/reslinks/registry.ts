@@ -336,6 +336,23 @@ const anchorKinds: Record<AnchorKind, AnchorKindEntry> = {
     editor: null,
     validate: null,
   },
+  tripMoment: {
+    // The instant in the reader's own locale, because that is the only form of it anybody can act
+    // on: the payload is stored in UTC and a chip quoting Z time would be a chip nobody could
+    // compare against the log beside it.
+    summary: (anchor, t) => {
+      const at = text(anchor, 'at');
+      const parsed = at === null ? Number.NaN : Date.parse(at);
+      return Number.isFinite(parsed)
+        ? t('resLinks.anchors.tripMoment', { at: new Date(parsed) })
+        : t('resLinks.anchors.part');
+    },
+    // No editor: a moment of a trip is composed where the trip's own log is on screen, with the
+    // instant prefilled off the picture or off the report, and a bare date-time box in the general
+    // links panel would be a worse way to say the same thing than the one that already exists.
+    editor: null,
+    validate: null,
+  },
 };
 
 /**
@@ -384,7 +401,7 @@ const admittedAnchors: Record<ResLinkTargetType, readonly AnchorKind[]> = {
     'timeRange',
     'modelPoint',
   ],
-  tripLog: ['whole'],
+  tripLog: ['whole', 'tripMoment'],
   caver: ['whole'],
   cavingGroup: ['whole'],
   mapView: ['whole'],

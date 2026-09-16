@@ -59,6 +59,32 @@
   display: block;
 }
 
+/* A moment carrying a photograph is marked differently from one carrying only words, and by shape
+   rather than by colour alone: the two marks sit on one rail a few pixels apart, and a reader who
+   cannot tell two hues apart would otherwise be looking at one kind of dot. */
+.tracking-replay-mark-picture {
+  width: 8px;
+  height: 8px;
+  margin-top: -1px;
+  border: 2px solid currentcolor;
+  border-radius: 1px;
+}
+
+/* The strip of photographs belonging to the moment on screen. Wraps rather than scrolls: it sits
+   above a model that owns every gesture beginning inside it, and a horizontally-scrolling row
+   directly over that surface is two drags competing for one finger. */
+.tracking-replay-pictures {
+  min-width: 0;
+}
+
+.tracking-replay-picture {
+  display: block;
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
 .tracking-replay-note-text {
   flex: 1;
   min-width: 0;
