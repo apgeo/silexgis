@@ -20,6 +20,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { isConcurrencyConflict } from '../../api/client.ts';
 import {
+  surveyModelCanPlaceACaver,
+  surveyModelPlacingObstacle,
   useCaveNames,
   useCreateTrackingTeam,
   useDeleteTrackingTeam,
@@ -27,6 +29,7 @@ import {
   useSetTripTracking,
   useSurveyModelsForCaves,
   type TrackingState,
+  type TripCalloutState,
 } from '../../api/hooks.ts';
 import { placeOnModel } from '../../caveview/drawableOn.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
@@ -57,6 +60,17 @@ interface Props {
   caveIds: readonly string[];
   tracking: TrackingState;
   canEdit: boolean;
+  /**
+   * Whether this trip has an arrangement to notice that its party has not come back.
+   *
+   * <b>Read, never written.</b> Tracking and the callout are two separate arrangements and this
+   * card changes only one of them; the other is here so that what this card says about it can be
+   * true. A statement that sends somebody to "the callout, arranged higher up this trip" is a
+   * statement that a callout has been arranged, and on a trip with none it points at a panel that
+   * drew nothing — which is a scope statement introducing a second imaginary safety net in the act
+   * of retiring the first.
+   */
+  calloutState: TripCalloutState;
   /** Re-read the watch — called when the server says this panel is holding a stale version. */
   onStale: () => void;
 }
@@ -85,6 +99,7 @@ export default function TrackingConfigCard({
   caveIds,
   tracking,
   canEdit,
+  calloutState,
   onStale,
 }: Props) {
   const { t, i18n } = useTranslation();
@@ -320,6 +335,112 @@ export default function TrackingConfigCard({
     );
 
   /**
+   * The surveys this watch may actually be pointed at.
+   *
+   * <b>A survey with no stations is not a choice, it is a trap.</b> The cave's list holds every
+   * file ever uploaded to it, whatever became of the upload — a reading that failed stays on the
+   * list with its name and its date, looking exactly like one that worked. Offered here it can be
+   * chosen and armed in two presses, and the result is a watch that says tracking is on, accepts
+   * every report anybody relays, and can place nobody on anything, for as long as the party is
+   * underground. Failed readings are not exotic enough to leave to chance: most survey files that
+   * arrive in this application do not import cleanly.
+   *
+   * <b>Narrowed here rather than in the request.</b> The same list answers the cave page, which
+   * has to show a failed reading — that is where somebody sees it failed and uploads it again —
+   * and the 3D scene, which chooses a wall mesh this would exclude. What is narrow is the question
+   * this control asks, so this is where the narrowing belongs.
+   */
+  const placeable = useMemo(() => models.data.filter(surveyModelCanPlaceACaver), [models.data]);
+
+  /**
+   * The survey this watch is on, and — if nobody can be placed on it — which of the three reasons
+   * that is.
+   *
+   * <b>Hiding such a survey from the chooser does not unpoint a watch that is already on one</b> —
+   * armed before this rule existed, or armed on a reading that has since been replaced by one that
+   * failed. Silence there is the worse half of the same failure: the model panel draws nothing, the
+   * party never appears, and every report still reports successfully, so the surface that is wrong
+   * is the one showing no sign of it.
+   *
+   * <b>The reason is carried, not flattened to a yes.</b> Three different surveys cannot be placed
+   * on and the server refuses none of them: a wall mesh, whose conversion may have gone perfectly;
+   * a reading still queued or running; a reading that failed. Answered with one sentence, the two
+   * that are not a failure are told their import did not come through — one of them about a file
+   * that will never hold a station however often it is imported, the other about a job that is
+   * running as the sentence is read.
+   *
+   * Read out of the list this card already holds rather than asked for separately, and deliberately
+   * quiet in the two cases that are not this one: while the list is still arriving nothing is known
+   * yet, and a survey that is absent from the list is either deleted — which says so in its own
+   * words beside the state — or withheld from this reader, who is told about the configuration at
+   * all only in the terms the withholding allows.
+   */
+  const watchedModel =
+    tracking.surveyModelId === null || models.isPending
+      ? undefined
+      : models.data.find((model) => model.id === tracking.surveyModelId);
+  const armedModelObstacle =
+    watchedModel === undefined ? null : surveyModelPlacingObstacle(watchedModel);
+
+  /**
+   * What the chooser offers, plus the survey the watch is on when that one is not among them.
+   *
+   * <b>A chooser that does not hold the value it is showing shows the value raw.</b> The control
+   * looks its selection up among its options to find a label and falls back to the value itself
+   * when there is none — so narrowing the list to the placeable surveys turned the Survey field of
+   * exactly the watches this change exists to rescue into a bare identifier. That lands on the one
+   * co-ordinator who has just been told the survey cannot place anybody and has opened this form
+   * because of it: the field naming the survey becomes a hex string, and the obvious response to a
+   * hex string in a clearable field is to press the cross, which un-points the watch on the next
+   * save.
+   *
+   * So the survey stays named and stays marked with why it cannot be used, and is offered as
+   * something already chosen rather than as something choosable — the narrowing is kept, since the
+   * point of it is that this is not a choice anybody should be able to make afresh.
+   */
+  const modelLabel = (model: { name: string; caveId: string }) =>
+    caveNames.get(model.caveId) ? `${model.name} · ${caveNames.get(model.caveId)}` : model.name;
+  const modelOptions: { value: string; label: string; disabled?: boolean }[] = [
+    ...(watchedModel !== undefined && armedModelObstacle !== null
+      ? [
+          {
+            value: watchedModel.id,
+            label: `${modelLabel(watchedModel)} — ${t(
+              `trips.tracking.modelObstacleOption.${armedModelObstacle}`,
+            )}`,
+            disabled: true,
+          },
+        ]
+      : []),
+    ...placeable.map((model) => ({ value: model.id, label: modelLabel(model) })),
+  ];
+
+  /**
+   * Whether the trip has a callout arranged, as this card is allowed to know it.
+   *
+   * The same two states the callout panel itself draws for, read the same way. Nothing here
+   * arranges or changes one — this decides only which of two true sentences the scope statement
+   * says, because "the callout, arranged higher up this trip" is a claim, and on a trip whose
+   * callout is `none` the thing it points at rendered nothing at all for a reader who may not
+   * edit, and a button rather than an arrangement for one who may.
+   */
+  const calloutArranged =
+    calloutState === 'armed' || calloutState === 'overdue' || calloutState === 'stoodDown';
+
+  /**
+   * Why the chooser has nothing in it, when the cave has surveys and none of them can carry a
+   * position.
+   *
+   * <b>Waiting fixes one of these and never fixes the other, so they cannot share a sentence.</b>
+   * A cave whose readings are still running has a chooser that will fill itself in within
+   * seconds — the list polls while anything on it is unsettled — and telling its owner to import
+   * the files again sends them to undo a job that was about to finish. A cave whose readings are
+   * a wall mesh and a failure has a chooser that will stay empty until somebody acts.
+   */
+  const chooserEmptyAndWaiting =
+    models.data.some((model) => surveyModelPlacingObstacle(model) === 'stillReading');
+
+  /**
    * Whether saving the form as it now stands would throw the depth datum and the station filter
    * away — asked of the form whenever a field on it changes.
    *
@@ -373,6 +494,21 @@ export default function TrackingConfigCard({
               {t('trips.tracking.modelMissingTag')}
             </Tag>
           )}
+          {/* Beside the state for the same reason the one above it is: the state is the word that
+              is wrong. A watch pointed at a survey with no stations is on, is taking reports, and
+              is placing nobody, and the only place a reader meets that claim is here.
+
+              Coloured by whether waiting fixes it: a reading still running is a normal moment in
+              the life of an upload and goes on to place people by itself, so it is drawn as a
+              remark rather than as a fault. */}
+          {armedModelObstacle !== null && (
+            <Tag
+              color={armedModelObstacle === 'stillReading' ? 'processing' : 'error'}
+              data-testid="trip-tracking-model-unplaceable-tag"
+            >
+              {t(`trips.tracking.modelObstacleTag.${armedModelObstacle}`)}
+            </Tag>
+          )}
         </Descriptions.Item>
         {tracking.armedAt && (
           <Descriptions.Item label={t('trips.tracking.armedAt')}>
@@ -386,9 +522,55 @@ export default function TrackingConfigCard({
         )}
       </Descriptions>
 
+      {/* <b>What this watch is, said where the watch is turned on.</b>
+          Tracking keeps a record of where each person was last reported. It watches no clock and
+          raises no alarm, and the product's thing that does — the callout — is a separate
+          arrangement that starting a watch neither makes nor asks about. In a caving application,
+          a live list of people underground reads as a safety net whatever it is called, so a club
+          could run a whole watch on a party that nothing in this installation will ever notice is
+          missing.
+
+          Stated for every reader and in both states rather than only to the person arming, and
+          rather than only while a watch is on: whoever is reading a live watch is entitled to
+          know what it is doing on their behalf, and the moment the claim has to be right is the
+          moment before somebody relies on it. Info rather than warning, deliberately — nothing is
+          wrong here, and a page that alarms about its own ordinary state teaches people to read
+          past its alarms. */}
+      <Alert
+        type="info"
+        showIcon
+        title={t('trips.tracking.scopeTitle')}
+        description={
+          /* The second half of this — where the thing that *does* raise an alarm lives — is a
+             claim about this trip, not a general fact, so it is said in whichever of the two forms
+             is true here. Pointing an unprotected reader at "the callout, arranged higher up this
+             trip" on a trip that has none sends them to a panel that drew nothing, and retires one
+             imaginary safety net by inventing another. */
+          calloutArranged
+            ? t('trips.tracking.scopeBodyWithCallout')
+            : t('trips.tracking.scopeBodyNoCallout')
+        }
+        style={{ marginBottom: 12 }}
+        data-testid="trip-tracking-scope"
+      />
+
       {/* Outside the editing block on purpose: whoever is reading this watch needs to know that
           the places on it were measured against a different survey, whether or not they are the
           person who may change one. */}
+      {armedModelObstacle !== null && (
+        <Alert
+          /* A reading still running is not a fault and is not drawn as one: it is the ordinary
+             middle of an upload, it ends by itself, and the only thing worth saying is that
+             nobody can be placed until it does. The other two need somebody to act. */
+          type={armedModelObstacle === 'stillReading' ? 'info' : 'error'}
+          showIcon
+          title={t(`trips.tracking.modelObstacleTitle.${armedModelObstacle}`)}
+          description={t(`trips.tracking.modelObstacleBody.${armedModelObstacle}`)}
+          style={{ marginBottom: 12 }}
+          data-testid="trip-tracking-model-unplaceable"
+        />
+      )}
+
       {positionsOnOtherModel && (
         <Alert
           type="warning"
@@ -454,14 +636,34 @@ export default function TrackingConfigCard({
                   loading={models.isPending}
                   placeholder={t('trips.tracking.surveyModelPlaceholder')}
                   data-testid="trip-tracking-model"
-                  options={models.data.map((model) => ({
-                    value: model.id,
-                    label: caveNames.get(model.caveId)
-                      ? `${model.name} · ${caveNames.get(model.caveId)}`
-                      : model.name,
-                  }))}
+                  options={modelOptions}
                 />
               </Form.Item>
+              {/* <b>An empty chooser has to say why it is empty.</b> Narrowing the list to the
+                  surveys somebody can actually be placed on turns a cave whose readings all failed
+                  from a list of useless choices into no choices at all — and an empty dropdown over
+                  the words "Choose a survey" reads as a cave with no surveys, which is a different
+                  problem with a different answer. This is the case where the cave has files and not
+                  one of them was read right through, which is answered by importing one again, not
+                  by uploading a first. */}
+              {!models.isPending && models.data.length > 0 && placeable.length === 0 && (
+                <Alert
+                  type={chooserEmptyAndWaiting ? 'info' : 'warning'}
+                  showIcon
+                  title={
+                    chooserEmptyAndWaiting
+                      ? t('trips.tracking.noPlaceableModelStillReadingTitle')
+                      : t('trips.tracking.noPlaceableModelTitle')
+                  }
+                  description={
+                    chooserEmptyAndWaiting
+                      ? t('trips.tracking.noPlaceableModelStillReadingBody')
+                      : t('trips.tracking.noPlaceableModelBody')
+                  }
+                  style={{ marginBottom: 12 }}
+                  data-testid="trip-tracking-no-placeable-model"
+                />
+              )}
               {modelSwapClearsDatum && (
                 <Alert
                   type="warning"
@@ -495,6 +697,30 @@ export default function TrackingConfigCard({
               </Form.Item>
             </Form>
           </ConfigProvider>
+
+          {/* <b>The same truth again, in one line, under the finger that is about to act.</b> The
+              box above states what a watch is; this states what pressing this button does not do,
+              at the only moment the distinction can still change what somebody does about it. Said
+              only while there is no watch on, because that is when this button is the one that
+              starts one — once tracking is running, repeating it beside Save would be noise beneath
+              a box that has already said it.
+
+              On a phone the box above is several screens away by the time this button is reached,
+              which is the whole reason a line here is not a duplicate. */}
+          {!armed && (
+            <Typography.Paragraph
+              type="secondary"
+              style={{ marginBottom: 8 }}
+              data-testid="trip-tracking-arm-scope"
+            >
+              {/* Which of the two is true here, for the same reason the box above chooses: told
+                  "set a callout on this trip as well" on a trip that already has one, a
+                  co-ordinator goes to arrange a second arrangement that does not exist. */}
+              {calloutArranged
+                ? t('trips.tracking.scopeAtArmingWithCallout')
+                : t('trips.tracking.scopeAtArming')}
+            </Typography.Paragraph>
+          )}
 
           <Flex gap="small" wrap style={{ marginBottom: 16 }}>
             <Button

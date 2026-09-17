@@ -32,7 +32,7 @@ const detachPicture = vi.fn();
  */
 const pictureDialogProps = vi.fn();
 
-vi.mock('../../api/hooks.ts', () => ({
+vi.mock('../../api/hooks.ts', async () => ({
   TRACKING_EVENT_KINDS: ['entered', 'atStation', 'atDepth', 'note', 'exited'],
   useTripTracking: () => trackingQuery(),
   useTripTrackingEvents: () => eventsQuery(),
@@ -66,6 +66,18 @@ vi.mock('../../api/hooks.ts', () => ({
   useAttachTrackingPictures: () => ({ mutate: vi.fn(), isPending: false }),
   usePhotos: () => ({ data: { items: [] }, isPending: false }),
   surveyModelReadableByViewer: (m: { format: string }) => m.format === 'lox' || m.format === 'survex3d',
+  // Which surveys anybody can be placed on — the setup card this tab mounts narrows its chooser by
+  // it. Taken from the module rather than restated, so this tab cannot go on passing against a rule
+  // that has moved underneath it.
+  surveyModelCanPlaceACaver: (
+    await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts')
+  ).surveyModelCanPlaceACaver,
+  // And which of the three reasons it is, when it cannot — same reasoning, and the same module:
+  // the card names the reason in the sentence it prints, so a stub here would let it print any
+  // reason at all and still pass.
+  surveyModelPlacingObstacle: (
+    await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts')
+  ).surveyModelPlacingObstacle,
   // Publishing the trip: this tab mounts the card that offers it, and what the card does has its
   // own tests. Nothing here has published anything, so the list is empty and neither write is
   // reached.
@@ -170,6 +182,10 @@ function trip(overrides: Partial<TripLogInfo> = {}): TripLogInfo {
     id: 'trip-1',
     title: 'Digging weekend',
     caveIds: [],
+    // Whether the trip has an arrangement to notice the party has not come back. Stated on the
+    // fixture rather than left off, because the setup card this tab mounts says out loud whether
+    // one exists — and `none` is the case that statement most has to get right.
+    calloutState: 'none',
     participants: [
       { caverId: ANA, name: 'Ana Popescu' },
       { caverId: BOGDAN, name: 'Bogdan Ilie' },
@@ -179,10 +195,10 @@ function trip(overrides: Partial<TripLogInfo> = {}): TripLogInfo {
   } as unknown as TripLogInfo;
 }
 
-function show(canEdit = true) {
+function show(canEdit = true, on: TripLogInfo = trip()) {
   return render(
     <App>
-      <TripTrackingTab trip={trip()} canEdit={canEdit} />
+      <TripTrackingTab trip={on} canEdit={canEdit} />
     </App>,
   );
 }
@@ -2346,6 +2362,35 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
 
       expect(screen.getByTestId(`trip-tracking-position-other-model-${ANA}`)).toBeTruthy();
       expect(screen.queryByTestId(`trip-tracking-position-not-on-model-${ANA}`)).toBeNull();
+    });
+  });
+
+  /**
+   * What this tab says about the *trip*, as opposed to about the watch.
+   *
+   * The setup card states plainly that tracking raises no alarm and names the callout as the thing
+   * that does. That second half is a claim about this trip — a trip with no callout arranged has
+   * nothing higher up the page to point at, and for a reader who may not edit the trip the callout
+   * panel renders nothing whatsoever. So the card is told which it is, and this is the wiring that
+   * tells it; the card's own file proves what it then says.
+   */
+  describe('the callout the card is allowed to name', () => {
+    it('tells the setup card when the trip has a callout arranged', () => {
+      show(true, trip({ calloutState: 'armed' }));
+
+      expect(screen.getByTestId('trip-tracking-scope')).toHaveTextContent(
+        /callout arranged for this trip/i,
+      );
+    });
+
+    // The twin, and the case the statement was wrong about before: a trip with no callout is said
+    // to have none rather than being pointed at one.
+    it('tells it when the trip has none, rather than leaving it to assume one', () => {
+      show(true, trip({ calloutState: 'none' }));
+
+      expect(screen.getByTestId('trip-tracking-scope')).toHaveTextContent(
+        /no callout is arranged for this trip/i,
+      );
     });
   });
 });

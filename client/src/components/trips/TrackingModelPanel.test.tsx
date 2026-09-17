@@ -903,4 +903,61 @@ describe('TrackingModelPanel', () => {
     show();
     expect(screen.queryByTestId('trip-tracking-model-panel')).toBeNull();
   });
+
+  /**
+   * A reading that failed is not the same absence as a reading still running, and used to be drawn
+   * as though it were — this panel simply was not there.
+   *
+   * The difference is that waiting fixes one and never fixes the other. A failed reading holds no
+   * stations and never will, so the watch stays on, goes on accepting every report relayed to it,
+   * and places nobody — while the surface that should be showing where the party is shows nothing
+   * and gives no reason. That is the one absence on this panel worth spending a box on.
+   */
+  it('says a failed survey cannot place anybody rather than drawing nothing', () => {
+    held = model({ status: 'failed' });
+    show();
+
+    expect(screen.getByTestId('trip-tracking-model-unreadable')).toHaveTextContent(
+      /holds no stations/i,
+    );
+  });
+
+  /**
+   * And says it in its own words. The setup card at the top of this tab states the same fault at
+   * length, because it owns the chooser that answers it — and this panel is mounted on the same
+   * tab, so a box repeating that headline, that body and that remedy word for word puts the
+   * identical red alert on one screen twice. Two copies of a warning are read as one piece of
+   * noise and skipped together, which is the failure this whole surface is meant to avoid.
+   *
+   * So: what is wrong *here* — there is nothing to draw — and a pointer to where the remedy lives,
+   * rather than the remedy repeated.
+   */
+  it('leaves the remedy to the setup card rather than printing it a second time', () => {
+    held = model({ status: 'failed' });
+    show();
+
+    const said = screen.getByTestId('trip-tracking-model-unreadable');
+    expect(said).toHaveTextContent(/no drawing to show/i);
+    expect(said).toHaveTextContent(/tracking setup at the top of this tab/i);
+    expect(said).not.toHaveTextContent(/import that survey again/i);
+    expect(said).not.toHaveTextContent(/choose another survey above/i);
+  });
+
+  // The twin, and the reason the case above had to be split out rather than widened: a reading
+  // still running does finish, so it is left to finish in silence exactly as before.
+  it('says nothing of the kind about a survey still being read', () => {
+    held = model({ status: 'processing' });
+    show();
+
+    expect(screen.queryByTestId('trip-tracking-model-unreadable')).toBeNull();
+  });
+
+  // And the positive twin of both: a survey read right through draws the model, with no box at all.
+  it('draws the model, and says none of it, when the survey was read through', () => {
+    held = model();
+    show();
+
+    expect(screen.getByTestId('trip-tracking-model-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('trip-tracking-model-unreadable')).toBeNull();
+  });
 });

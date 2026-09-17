@@ -1083,20 +1083,80 @@ export function surveyModelReadableByViewer(model: { format: SurveyModelInfo['fo
 }
 
 /**
+ * Whether this survey has stations behind it, and so whether anybody can be put on a place in it.
+ *
+ * <b>Stations are the whole of it.</b> A tracked position is the name of a station, resolved
+ * against the rows the server stored when it read the file — so a survey with no stored stations
+ * is one on which no report can ever claim a place. Exactly one thing writes those rows, and it
+ * runs only for a line plot that was read right through: a wall mesh is turned into a picture and
+ * never yields a station, and a reading that was queued, is running, or failed has stored none.
+ * A failed reading is the case worth naming, because it is the one that looks finished: the survey
+ * is listed, it has a name and a date, and it holds nothing.
+ *
+ * <b>One home, because three surfaces ask it</b> — which surveys a watch may be pointed at, whether
+ * the watch already on screen can place anybody, and whether the model panel has something to draw.
+ * Answered differently in any of them and the application offers a survey it will then refuse to
+ * place anybody on, which is the failure this exists to prevent.
+ *
+ * <b>What it cannot see.</b> The answer is inferred from the status and the format, because that is
+ * what the survey list carries — a reading that finished but found nothing still says "ready", and
+ * would pass here. Closing that gap means the server stating the station count on the survey it
+ * describes; until it does, this is the honest answer rather than a guaranteed one.
+ */
+export function surveyModelCanPlaceACaver(model: {
+  status: SurveyModelInfo['status'];
+  format: SurveyModelInfo['format'];
+}): boolean {
+  return surveyModelPlacingObstacle(model) === null;
+}
+
+/**
+ * The three reasons a survey holds no stations, told apart — because the answer to each is a
+ * different act.
+ *
+ * <b>"No stations" is one fact with three causes, and a surface that names only the loudest one
+ * lies about the other two.</b> A file of cave walls converted perfectly and will never hold a
+ * station however many times it is imported; a reading still queued or running holds none *yet*
+ * and holds some the moment it finishes; a reading that failed holds none and never will unless
+ * the file is put through again. Told "its import did not come through", the owner of the first
+ * re-imports a mesh forever and the owner of the second acts on a job that was about to succeed.
+ * Waiting fixes exactly one of the three, and re-importing fixes exactly one of the three.
+ *
+ * <b>Format before status, because format is the permanent half.</b> A wall mesh whose conversion
+ * failed is still a wall mesh: re-reading it cannot produce a station, so the advice that fits it
+ * is "choose a line plot", not "import it again".
+ *
+ * The question above is answered out of this one rather than beside it, so the list a chooser
+ * narrows and the sentence a card prints can never disagree about a single model.
+ */
+export type SurveyModelPlacingObstacle = 'notALinePlot' | 'stillReading' | 'importFailed';
+
+export function surveyModelPlacingObstacle(model: {
+  status: SurveyModelInfo['status'];
+  format: SurveyModelInfo['format'];
+}): SurveyModelPlacingObstacle | null {
+  if (!surveyModelReadableByViewer(model)) return 'notALinePlot';
+  if (surveyModelUnsettled(model.status)) return 'stillReading';
+  if (model.status === 'failed') return 'importFailed';
+  return null;
+}
+
+/**
  * Whether any of a cave's uploaded surveys can have produced a measured passage network.
  *
- * Only a line plot whose reading finished has stations and shots behind it; a wall mesh has no
- * network, and a reading still queued or failed left nothing stored. A cave with none of those is
- * the ordinary case — most caves have never had a survey file uploaded at all — and asking the
- * server about its network anyway is a request that is certain to be refused. That refusal is not
- * free: the browser reports every failed request to its console, so a panel that asked regardless
- * would put an error on the console of every cave page in the application, drowning the real ones
- * in an expected one.
+ * The same question as the one above asked of a whole cave, and deliberately answered by it: a
+ * measured network and a placeable station are both the stations-and-shots the server stored when
+ * it read a line plot, so two spellings of the rule would be two chances to disagree. A cave with
+ * none of those is the ordinary case — most caves have never had a survey file uploaded at all —
+ * and asking the server about its network anyway is a request that is certain to be refused. That
+ * refusal is not free: the browser reports every failed request to its console, so a panel that
+ * asked regardless would put an error on the console of every cave page in the application,
+ * drowning the real ones in an expected one.
  */
 export function caveHasMeasurableSurvey(
   models: { status: SurveyModelInfo['status']; format: SurveyModelInfo['format'] }[] | undefined,
 ): boolean {
-  return (models ?? []).some((model) => model.status === 'ready' && surveyModelReadableByViewer(model));
+  return (models ?? []).some(surveyModelCanPlaceACaver);
 }
 
 /**
@@ -1217,6 +1277,14 @@ export function useSurveyModelsForCaves(caveIds: readonly string[]) {
       queryFn: () =>
         unwrap(api.GET('/api/v1/caves/{caveId}/survey-models', { params: { path: { caveId } } })),
       staleTime: 5 * 60_000,
+      // Watched while anything on the list is still being read, exactly as the single-cave list
+      // is, and for a sharper reason here. The surface this feeds narrows its chooser to the
+      // surveys somebody can actually be placed on, so a reading still running is not merely
+      // drawn as unfinished — it is absent. Without this the ordinary order of work, upload the
+      // survey and then go and set the watch up, meets an empty chooser and keeps meeting one
+      // after the job has finished, until the answer happens to go stale minutes later.
+      refetchInterval: (query: { state: { data?: SurveyModelInfo[] } }) =>
+        surveyModelPollInterval(query.state.data),
     })),
     combine: (results) => ({
       data: results.flatMap((result) => result.data ?? []),

@@ -878,6 +878,12 @@ export default function TripTrackingTab({
         caveIds={trip.caveIds}
         tracking={data}
         canEdit={canEdit}
+        // Whether this trip has an arrangement to notice the party has not come back. Handed down
+        // to be read, never written: the card states plainly that a watch raises no alarm and
+        // names the callout as the thing that does, and that sentence has to be true of this trip
+        // rather than of the product — on a trip with no callout arranged it would otherwise send
+        // a reader up the page to a panel that drew nothing.
+        calloutState={trip.calloutState}
         onStale={() => void refetch()}
       />
 

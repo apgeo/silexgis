@@ -1342,6 +1342,37 @@
       "modelMissingTag": "Survey deleted",
       "modelMissingTitle": "The survey this watch is on has been deleted",
       "modelMissingBody": "Tracking is still armed and still takes entries, exits and notes, but nobody can be placed: the survey model it was armed on is no longer on this server. Choose another survey for this trip to start placing people again. Reports already on the log keep the survey they were made against and are not moved.",
+      "scopeTitle": "Tracking records reports; it does not raise an alarm",
+      "scopeBodyWithCallout": "This is a record of where each person was last reported, kept as word reaches you. It watches no clock: if the party does not come out, nothing here will notice and nobody will be told. The callout arranged for this trip, higher up this page, is the separate thing that holds an alarm time and raises the alarm once it passes.",
+      "scopeBodyNoCallout": "This is a record of where each person was last reported, kept as word reaches you. It watches no clock: if the party does not come out, nothing here will notice and nobody will be told. No callout is arranged for this trip either — a callout is the separate arrangement that holds an alarm time and raises the alarm once it passes, and it is set on the trip itself rather than here.",
+      "scopeAtArming": "Starting tracking does not arrange a callout, and this trip has none. If somebody should be alerted when this party is overdue, arrange a callout on this trip as well.",
+      "scopeAtArmingWithCallout": "Starting tracking does not change the callout already arranged for this trip. Tracking records where people were reported; the callout is what raises the alarm.",
+      "modelObstacleTag": {
+        "notALinePlot": "No stations: cave walls",
+        "stillReading": "No stations yet",
+        "importFailed": "No stations: import failed"
+      },
+      "modelObstacleTitle": {
+        "notALinePlot": "Nobody can be placed on a file of cave walls",
+        "stillReading": "Nobody can be placed yet — this survey is still being read",
+        "importFailed": "Nobody can be placed on this survey"
+      },
+      "modelObstacleBody": {
+        "notALinePlot": "The survey this watch is on is a file of cave walls. It holds no stations — a wall mesh is turned into a picture and never yields one, so importing it again will not change that. A reported place is the name of a station, so no report can claim one here and nobody will appear on the drawing. Choose a line plot above instead. Entries, exits and notes go on being recorded as usual.",
+        "stillReading": "The survey this watch is on is still being read, so it holds no stations yet and nobody can be placed on it. A reported place is the name of a station. Nothing needs doing: once the reading finishes, places can be reported as usual. Entries, exits and notes are recorded throughout.",
+        "importFailed": "The survey this watch is on holds no stations — its import did not come through. A reported place is the name of a station, so no report can claim one here and nobody will appear on the drawing. Import that survey again from the cave's page, or choose another survey above. Entries, exits and notes go on being recorded as usual."
+      },
+      "modelObstacleOption": {
+        "notALinePlot": "cave walls, no stations",
+        "stillReading": "still being read",
+        "importFailed": "import did not come through"
+      },
+      "modelNothingToDrawTitle": "There is no drawing to show",
+      "modelNothingToDrawBody": "The survey this watch is on holds no stations, so there is nothing to draw and nobody can be placed on it. The tracking setup at the top of this tab says what to do about it. Entries, exits and notes are unaffected.",
+      "noPlaceableModelTitle": "None of this cave's surveys can be used here",
+      "noPlaceableModelBody": "A reported place is the name of a station, and none of the surveys uploaded to this cave holds any: each is either a file of cave walls, which has no stations, or a file whose import did not come through. Import one again from the cave's page, then choose it here.",
+      "noPlaceableModelStillReadingTitle": "This cave's surveys are still being read",
+      "noPlaceableModelStillReadingBody": "A reported place is the name of a station, and a survey holds none until it has been read right through. At least one of this cave's surveys is still being read; it will appear in the list here as soon as it finishes. Nothing needs doing in the meantime.",
       "positionsOnOtherModelTitle": "Some places were reported on a different survey",
       "positionsOnOtherModelBody": "This watch now uses a different survey model than the one those reports were made against. A station name means whatever the survey it was measured in says it means, so those places are not drawn on the survey in use — they are marked as reported on another survey instead of being moved onto it. Report a place again to put somebody on the survey now in use.",
       "positionOtherModel": "On another survey",

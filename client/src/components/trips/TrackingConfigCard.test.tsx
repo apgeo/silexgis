@@ -3,29 +3,58 @@ import { App } from 'antd';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
-import type { TrackingState } from '../../api/hooks.ts';
+import type { TrackingState, TripCalloutState } from '../../api/hooks.ts';
 
 const MODEL = '44444444-4444-4444-4444-444444444444';
 /** The corrected survey a watch gets re-pointed at while the party is underground. */
 const OTHER_MODEL = '55555555-5555-5555-5555-555555555555';
+/** A survey whose import failed: on the cave's list, with a name and a date, holding no stations. */
+const FAILED_MODEL = '66666666-6666-6666-6666-666666666666';
+
+/**
+ * A survey as the cave's list describes one — a line plot read right through, unless said
+ * otherwise. The two every other test in this file uses are exactly that.
+ */
+const survey = (id: string, name: string, overrides: Record<string, string> = {}) => ({
+  id,
+  caveId: 'cave-1',
+  name,
+  status: 'ready',
+  format: 'survex3d',
+  ...overrides,
+});
+
+/**
+ * What the cave's survey list answers, set per test. Held in a variable rather than baked into the
+ * mock for the same reason `coarse` below is: the cases worth proving are lists this card has to
+ * narrow, and narrowing is only provable against a list that has something in it to leave out.
+ */
+let models: ReturnType<typeof survey>[] = [];
+let modelsPending = false;
 
 const setTracking = vi.fn();
 const createTeam = vi.fn();
 const renameTeam = vi.fn();
 const deleteTeam = vi.fn();
 
-vi.mock('../../api/hooks.ts', () => ({
+vi.mock('../../api/hooks.ts', async () => ({
+  // The rule that decides whether anybody can be put on a survey comes from the module itself
+  // rather than being restated here. Stubbed, this file would prove the card asks *a* question and
+  // prove nothing about the answer — and the answer is the whole of the change.
+  surveyModelCanPlaceACaver: (
+    await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts')
+  ).surveyModelCanPlaceACaver,
+  // And which of the three reasons it is, when it cannot — same reasoning, and the same module:
+  // the card names the reason in the sentence it prints, so a stub here would let it print any
+  // reason at all and still pass.
+  surveyModelPlacingObstacle: (
+    await vi.importActual<typeof import('../../api/hooks.ts')>('../../api/hooks.ts')
+  ).surveyModelPlacingObstacle,
   useSetTripTracking: () => ({ mutateAsync: setTracking, isPending: false }),
   useCreateTrackingTeam: () => ({ mutateAsync: createTeam, isPending: false }),
   useRenameTrackingTeam: () => ({ mutateAsync: renameTeam, isPending: false }),
   useDeleteTrackingTeam: () => ({ mutateAsync: deleteTeam, isPending: false }),
-  useSurveyModelsForCaves: () => ({
-    data: [
-      { id: MODEL, caveId: 'cave-1', name: 'Main survey' },
-      { id: OTHER_MODEL, caveId: 'cave-1', name: 'Corrected survey' },
-    ],
-    isPending: false,
-  }),
+  useSurveyModelsForCaves: () => ({ data: models, isPending: modelsPending }),
   useCaveNames: () => new Map<string, string>(),
 }));
 
@@ -54,7 +83,19 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
   };
 }
 
-function show(tracking: TrackingState = state(), canEdit = true) {
+/**
+ * The card as the trip tab mounts it.
+ *
+ * The callout is a parameter rather than a constant because it is a claim this card makes about
+ * the trip: "the callout arranged for this trip" is only true of a trip that has one. `none` is
+ * the default deliberately — a trip with no callout arranged is the case the scope statement was
+ * most wrong about, so it is the case every other test in this file is read against.
+ */
+function show(
+  tracking: TrackingState = state(),
+  canEdit = true,
+  calloutState: TripCalloutState = 'none',
+) {
   return render(
     <App>
       <TrackingConfigCard
@@ -62,6 +103,7 @@ function show(tracking: TrackingState = state(), canEdit = true) {
         caveIds={['cave-1']}
         tracking={tracking}
         canEdit={canEdit}
+        calloutState={calloutState}
         onStale={() => {}}
       />
     </App>,
@@ -74,6 +116,8 @@ beforeEach(() => {
   renameTeam.mockReset().mockResolvedValue({ id: 'team-1', title: 'Team B' });
   deleteTeam.mockReset().mockResolvedValue(undefined);
   coarse = false;
+  models = [survey(MODEL, 'Main survey'), survey(OTHER_MODEL, 'Corrected survey')];
+  modelsPending = false;
 });
 
 afterEach(cleanup);
@@ -470,6 +514,365 @@ describe('TrackingConfigCard', () => {
       // Still the small link buttons the chip was designed around.
       expect(screen.getByTestId('trip-tracking-team-rename-team-1')).toHaveClass('ant-btn-sm');
       expect(screen.getByTestId('trip-tracking-team-delete-team-1')).toHaveClass('ant-btn-sm');
+    });
+  });
+
+  /**
+   * What this surface claims to be, which until now it did not say at all.
+   *
+   * A live list of people underground, in a caving application, reads as a safety net. This one is
+   * not: it is connected to the overdue callout by nothing, so a club can run a whole watch on a
+   * party that nothing in the installation will ever notice is missing. The card is where somebody
+   * turns a watch on, so the card is where the scope has to be stated.
+   */
+  describe('what a watch is, and what it is not', () => {
+    it('states that it records reports and raises no alarm, and names the thing that does', () => {
+      show();
+
+      const said = screen.getByTestId('trip-tracking-scope');
+      // The claim itself, not merely a box in the right place: a banner that said something else
+      // would pass a test that only asked whether a banner was rendered.
+      expect(said).toHaveTextContent(/does not raise an alarm/i);
+      expect(said).toHaveTextContent(/nothing here will notice and nobody will be told/i);
+      // And where to go for the thing that does, because a scope statement with no destination
+      // tells somebody they are unprotected and leaves them there.
+      expect(said).toHaveTextContent(/callout/i);
+    });
+
+    /**
+     * Said twice on purpose, and this is the half that earns it. On a phone the box above is
+     * several screens up by the time a thumb reaches the button, so the moment of the act is the
+     * one moment the distinction can still change what somebody does.
+     */
+    it('says it again under the button that starts a watch', () => {
+      show(state({ state: 'off', armedAt: null }));
+
+      expect(screen.getByTestId('trip-tracking-arm-scope')).toHaveTextContent(
+        /does not arrange a callout/i,
+      );
+    });
+
+    // The twin of the above: once a watch is running, that button is not the one that starts one,
+    // and repeating the line beside Save would be noise under a box that has already said it.
+    it('does not repeat itself beside Save once a watch is running', () => {
+      show();
+
+      expect(screen.queryByTestId('trip-tracking-arm-scope')).not.toBeInTheDocument();
+      // The standing statement is still there — the line went, the claim did not.
+      expect(screen.getByTestId('trip-tracking-scope')).toBeInTheDocument();
+    });
+
+    // Whoever is reading a live watch is entitled to know what it is doing on their behalf, whether
+    // or not they are the person who may change it.
+    it('states it to a reader who may not edit the watch at all', () => {
+      show(state(), false);
+
+      expect(screen.getByTestId('trip-tracking-scope')).toHaveTextContent(/does not raise an alarm/i);
+    });
+
+    /**
+     * And the half of that statement that is a claim about *this trip* rather than about the
+     * product: where the thing that does raise an alarm is.
+     *
+     * A callout is arranged on the trip, not here, and plenty of trips have none. Told "the
+     * callout arranged for this trip, higher up this page", a reader of a trip without one is sent
+     * to a panel that rendered nothing — and for a reader who may not edit the trip it renders
+     * nothing at all, so there is literally nothing up there to find. Retiring one imaginary safety
+     * net by naming a second is the one thing this statement must not do.
+     */
+    it('names the callout only when the trip has one arranged', () => {
+      show(state(), true, 'armed');
+
+      expect(screen.getByTestId('trip-tracking-scope')).toHaveTextContent(
+        /callout arranged for this trip/i,
+      );
+    });
+
+    // A callout that has been stood down was still arranged, and the panel that holds it is still
+    // drawn — so it is still there to be pointed at.
+    it('counts a callout that was stood down as one the trip has', () => {
+      show(state(), true, 'stoodDown');
+
+      expect(screen.getByTestId('trip-tracking-scope')).toHaveTextContent(
+        /callout arranged for this trip/i,
+      );
+    });
+
+    // The twin, and the case the statement was wrong about: says the trip has none, rather than
+    // pointing up the page at one.
+    it('says a trip with no callout has none, instead of pointing at one', () => {
+      show(state(), true, 'none');
+
+      const said = screen.getByTestId('trip-tracking-scope');
+      expect(said).toHaveTextContent(/no callout is arranged for this trip/i);
+      expect(said).not.toHaveTextContent(/the callout arranged for this trip/i);
+    });
+
+    /**
+     * The reader this matters most to. With no callout arranged and no right to edit the trip, the
+     * callout panel higher up the page renders nothing whatsoever — so a sentence sending them
+     * there sends them to blank page.
+     */
+    it('tells a reader who may not edit that this trip has no callout', () => {
+      show(state(), false, 'none');
+
+      const said = screen.getByTestId('trip-tracking-scope');
+      expect(said).toHaveTextContent(/no callout is arranged for this trip/i);
+      expect(said).not.toHaveTextContent(/the callout arranged for this trip/i);
+    });
+
+    // The line under the arming button carries the act, so it too has to know whether the act has
+    // already been done.
+    it('offers to arrange a callout under the arming button when the trip has none', () => {
+      show(state({ state: 'off', armedAt: null }), true, 'none');
+
+      expect(screen.getByTestId('trip-tracking-arm-scope')).toHaveTextContent(
+        /arrange a callout on this trip as well/i,
+      );
+    });
+
+    // The twin: nobody is sent to arrange a second callout beside the one that is already there.
+    it('does not send somebody to arrange a callout the trip already has', () => {
+      show(state({ state: 'off', armedAt: null }), true, 'armed');
+
+      const line = screen.getByTestId('trip-tracking-arm-scope');
+      expect(line).toHaveTextContent(/does not change the callout already arranged/i);
+      expect(line).not.toHaveTextContent(/as well/i);
+    });
+  });
+
+  /**
+   * A watch cannot be armed over a survey nobody can be placed on.
+   *
+   * A reported place is the name of a station. A survey whose import failed holds none, so a watch
+   * pointed at one accepts every report and places nobody, for as long as the party is underground —
+   * and it is on the cave's list looking exactly like one that worked.
+   */
+  describe('surveys nobody can be placed on', () => {
+    it('leaves a survey whose import failed out of the chooser, and keeps the ones that worked', async () => {
+      models = [
+        survey(MODEL, 'Main survey'),
+        survey(FAILED_MODEL, 'Half-imported survey', { status: 'failed' }),
+      ];
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      const model = within(screen.getByTestId('trip-tracking-model')).getByRole('combobox');
+      await act(async () => {
+        fireEvent.mouseDown(model);
+      });
+
+      // The positive half, and it is not decoration: a filter that dropped everything would pass
+      // the absence below on its own.
+      expect(await screen.findByTitle('Main survey')).toBeInTheDocument();
+      expect(screen.queryByTitle('Half-imported survey')).not.toBeInTheDocument();
+    });
+
+    // The same rule, the other reason a survey holds no stations. A file of cave walls is turned
+    // into a picture and never yields a station, so it can no more carry a position than a failed
+    // import can.
+    it('leaves a file of cave walls out of the chooser too', async () => {
+      models = [
+        survey(MODEL, 'Main survey'),
+        survey(FAILED_MODEL, 'Cave walls', { format: 'stl' }),
+      ];
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      const model = within(screen.getByTestId('trip-tracking-model')).getByRole('combobox');
+      await act(async () => {
+        fireEvent.mouseDown(model);
+      });
+
+      expect(await screen.findByTitle('Main survey')).toBeInTheDocument();
+      expect(screen.queryByTitle('Cave walls')).not.toBeInTheDocument();
+    });
+
+    /**
+     * Hiding a survey from the chooser does not unpoint a watch already on one — armed before this
+     * rule existed, or armed on a reading since replaced by one that failed. Silence there is the
+     * worse half of the same failure: nothing is drawn, the party never appears, and every report
+     * still succeeds.
+     */
+    it('says so beside the state when the watch is already on one', () => {
+      models = [survey(FAILED_MODEL, 'Half-imported survey', { status: 'failed' })];
+      show(state({ surveyModelId: FAILED_MODEL }));
+
+      expect(screen.getByTestId('trip-tracking-model-unplaceable-tag')).toBeInTheDocument();
+      expect(screen.getByTestId('trip-tracking-model-unplaceable')).toHaveTextContent(
+        /holds no stations/i,
+      );
+    });
+
+    /**
+     * Three different surveys hold no stations and the server refuses none of them, so one
+     * sentence cannot cover all three — and the sentence that was covering all three was the one
+     * about a failed import.
+     *
+     * <b>A file of cave walls converted perfectly.</b> Told its import did not come through and to
+     * import it again, its owner re-imports a mesh, gets a mesh, and gets no station — for ever,
+     * because a wall mesh never yields one. The advice that fits it is to choose a line plot.
+     */
+    it('tells a watch on a file of cave walls that it is cave walls, not that an import failed', () => {
+      models = [survey(FAILED_MODEL, 'Cave walls', { format: 'stl' })];
+      show(state({ surveyModelId: FAILED_MODEL }));
+
+      const said = screen.getByTestId('trip-tracking-model-unplaceable');
+      expect(said).toHaveTextContent(/file of cave walls/i);
+      expect(said).not.toHaveTextContent(/import did not come through/i);
+      expect(said).not.toHaveTextContent(/import that survey again/i);
+    });
+
+    /**
+     * And a reading still running has not failed — it is a job in progress, and waiting is the
+     * whole of what it needs. Told an import did not come through while the import is running is
+     * the same statement made false by the clock.
+     */
+    it('tells a watch on a survey still being read to wait, not that an import failed', () => {
+      models = [survey(FAILED_MODEL, 'Arriving survey', { status: 'processing' })];
+      show(state({ surveyModelId: FAILED_MODEL }));
+
+      const said = screen.getByTestId('trip-tracking-model-unplaceable');
+      expect(said).toHaveTextContent(/still being read/i);
+      expect(said).not.toHaveTextContent(/import did not come through/i);
+      expect(said).not.toHaveTextContent(/import that survey again/i);
+    });
+
+    // The twin that keeps the two above from being a way of never saying anything: the survey that
+    // really did fail is still told exactly that, and still told the act that answers it.
+    it('tells a watch on a failed import exactly that, and what to do about it', () => {
+      models = [survey(FAILED_MODEL, 'Half-imported survey', { status: 'failed' })];
+      show(state({ surveyModelId: FAILED_MODEL }));
+
+      const said = screen.getByTestId('trip-tracking-model-unplaceable');
+      expect(said).toHaveTextContent(/import did not come through/i);
+      expect(said).toHaveTextContent(/import that survey again/i);
+    });
+
+    /**
+     * What the Survey field shows once the survey it holds is no longer among the things offered.
+     *
+     * The chooser looks its own value up among its options to find a label and falls back to the
+     * value itself when it finds none — so narrowing the list turned this field into a bare
+     * identifier on exactly the watches this change exists to rescue. The co-ordinator who opens
+     * this form does so because they have just been told the survey cannot place anybody; the field
+     * naming that survey must name it.
+     */
+    it('still names the survey the watch is on, though it is no longer offered', () => {
+      models = [
+        survey(MODEL, 'Main survey'),
+        survey(FAILED_MODEL, 'Half-imported survey', { status: 'failed' }),
+      ];
+      show(state({ surveyModelId: FAILED_MODEL }));
+
+      const field = screen.getByTestId('trip-tracking-model');
+      expect(field).toHaveTextContent('Half-imported survey');
+      expect(field).not.toHaveTextContent(FAILED_MODEL);
+    });
+
+    // And it says why it cannot be used, where it is read — otherwise it is a name in a chooser
+    // that looks exactly like a working choice.
+    it('marks that survey in the field with the reason it cannot be used', () => {
+      models = [survey(FAILED_MODEL, 'Half-imported survey', { status: 'failed' })];
+      show(state({ surveyModelId: FAILED_MODEL }));
+
+      expect(screen.getByTestId('trip-tracking-model')).toHaveTextContent(
+        /import did not come through/i,
+      );
+    });
+
+    /**
+     * Named, but not on offer. The narrowing is the whole point of the change, so the survey the
+     * watch is stuck on must not become choosable again by being put back in the list to carry
+     * its name.
+     */
+    it('does not offer that survey as a choice anybody can make afresh', async () => {
+      models = [
+        survey(MODEL, 'Main survey'),
+        survey(FAILED_MODEL, 'Half-imported survey', { status: 'failed' }),
+      ];
+      show(state({ surveyModelId: FAILED_MODEL }));
+
+      const model = within(screen.getByTestId('trip-tracking-model')).getByRole('combobox');
+      await act(async () => {
+        fireEvent.mouseDown(model);
+      });
+
+      // Asked by the name the chooser announces rather than by the text it paints: what decides
+      // whether this row can be taken is what the control tells the person reading it, and the
+      // painted row carries only the identifier.
+      const stuck = await screen.findByRole('option', { name: /Half-imported survey/ });
+      const usable = await screen.findByRole('option', { name: 'Main survey' });
+      expect(stuck).toHaveAttribute('aria-disabled', 'true');
+      // The positive twin, without which a chooser that disabled everything would pass.
+      expect(usable).not.toHaveAttribute('aria-disabled', 'true');
+    });
+
+    /**
+     * An empty chooser over a cave whose readings are still running is a chooser that fills itself
+     * in — the list keeps asking while anything on it is unsettled. Telling its owner the imports
+     * failed sends them to re-queue a job that was about to finish.
+     */
+    it('says the chooser will fill itself in when a survey is still being read', () => {
+      models = [survey(FAILED_MODEL, 'Arriving survey', { status: 'pending' })];
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      const said = screen.getByTestId('trip-tracking-no-placeable-model');
+      expect(said).toHaveTextContent(/still being read/i);
+      expect(said).not.toHaveTextContent(/import did not come through/i);
+    });
+
+    // The twin: a watch on a survey that was read right through says none of it.
+    it('says none of that when the watch is on a survey that was read through', () => {
+      show();
+
+      expect(screen.queryByTestId('trip-tracking-model-unplaceable-tag')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('trip-tracking-model-unplaceable')).not.toBeInTheDocument();
+    });
+
+    /**
+     * Nothing is known about a survey until its list arrives. Claiming this one in the meantime
+     * would put "nobody can be placed" on screen for every watch on every first render, which is
+     * the way a true warning gets trained out of people.
+     */
+    it('claims nothing while the survey list is still arriving', () => {
+      models = [];
+      modelsPending = true;
+      show(state({ surveyModelId: FAILED_MODEL }));
+
+      expect(screen.queryByTestId('trip-tracking-model-unplaceable-tag')).not.toBeInTheDocument();
+    });
+
+    /**
+     * Narrowing the chooser turns a cave whose readings all failed into no choices at all, and an
+     * empty dropdown under "Choose a survey" reads as a cave with no surveys — a different problem
+     * with a different answer.
+     */
+    it('says why the chooser is empty when every survey of the cave failed', () => {
+      models = [survey(FAILED_MODEL, 'Half-imported survey', { status: 'failed' })];
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      expect(screen.getByTestId('trip-tracking-no-placeable-model')).toHaveTextContent(
+        /import did not come through/i,
+      );
+    });
+
+    // The twin: a cave with one usable survey has a working chooser and is told nothing.
+    it('says nothing about an empty chooser when a usable survey is there', () => {
+      models = [
+        survey(MODEL, 'Main survey'),
+        survey(FAILED_MODEL, 'Half-imported survey', { status: 'failed' }),
+      ];
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      expect(screen.queryByTestId('trip-tracking-no-placeable-model')).not.toBeInTheDocument();
+    });
+
+    // A cave with nothing uploaded at all is the ordinary case, not a fault, and the existing help
+    // text under the chooser already covers it.
+    it('says nothing about an empty chooser when the cave has no surveys at all', () => {
+      models = [];
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      expect(screen.queryByTestId('trip-tracking-no-placeable-model')).not.toBeInTheDocument();
     });
   });
 

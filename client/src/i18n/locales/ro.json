@@ -1342,6 +1342,37 @@
       "modelMissingTag": "Ridicare ștearsă",
       "modelMissingTitle": "Ridicarea pe care este armată această urmărire a fost ștearsă",
       "modelMissingBody": "Urmărirea este în continuare armată și primește în continuare intrări, ieșiri și note, dar nimeni nu poate fi plasat: modelul topo pe care a fost armată nu mai există pe acest server. Alege altă ridicare pentru această tură ca să poți plasa iar oameni. Rapoartele deja din jurnal păstrează ridicarea față de care au fost făcute și nu sunt mutate.",
+      "scopeTitle": "Urmărirea înregistrează rapoarte; nu dă alarma",
+      "scopeBodyWithCallout": "Aici se ține evidența locului în care a fost raportat ultima dată fiecare om, pe măsură ce ajunge vestea. Nu se uită la ceas: dacă echipa nu iese, nimic de aici nu observă și nimeni nu este anunțat. Apelul de urgență stabilit pentru această tură, mai sus în pagină, este lucrul separat care ține ora alarmei și dă alarma când aceasta trece.",
+      "scopeBodyNoCallout": "Aici se ține evidența locului în care a fost raportat ultima dată fiecare om, pe măsură ce ajunge vestea. Nu se uită la ceas: dacă echipa nu iese, nimic de aici nu observă și nimeni nu este anunțat. Pentru această tură nu este stabilit niciun apel de urgență — apelul de urgență este aranjamentul separat care ține ora alarmei și dă alarma când aceasta trece, iar el se stabilește pe tură, nu aici.",
+      "scopeAtArming": "Pornirea urmăririi nu stabilește un apel de urgență, iar această tură nu are niciunul. Dacă cineva trebuie anunțat când echipa întârzie, stabilește și un apel de urgență pentru această tură.",
+      "scopeAtArmingWithCallout": "Pornirea urmăririi nu schimbă apelul de urgență deja stabilit pentru această tură. Urmărirea înregistrează unde au fost raportați oamenii; apelul de urgență este cel care dă alarma.",
+      "modelObstacleTag": {
+        "notALinePlot": "Fără stații: doar pereți",
+        "stillReading": "Încă fără stații",
+        "importFailed": "Fără stații: import eșuat"
+      },
+      "modelObstacleTitle": {
+        "notALinePlot": "Nimeni nu poate fi plasat pe un fișier cu pereții peșterii",
+        "stillReading": "Deocamdată nu poate fi plasat nimeni — ridicarea este încă în curs de citire",
+        "importFailed": "Nimeni nu poate fi plasat pe această ridicare"
+      },
+      "modelObstacleBody": {
+        "notALinePlot": "Ridicarea pe care merge această urmărire este un fișier cu pereții peșterii. Nu conține nicio stație — un fișier de pereți este transformat într-o imagine și nu produce niciodată stații, așa că un nou import nu schimbă nimic. Un loc raportat este numele unei stații, așa că niciun raport nu poate revendica unul aici și nimeni nu va apărea pe desen. Alege mai sus o ridicare care este plan de linii. Intrările, ieșirile și notele se înregistrează în continuare ca de obicei.",
+        "stillReading": "Ridicarea pe care merge această urmărire este încă în curs de citire, așa că deocamdată nu conține stații și nimeni nu poate fi plasat pe ea. Un loc raportat este numele unei stații. Nu trebuie făcut nimic: când citirea se termină, locurile pot fi raportate ca de obicei. Intrările, ieșirile și notele se înregistrează între timp.",
+        "importFailed": "Ridicarea pe care merge această urmărire nu conține nicio stație — importul ei nu a reușit. Un loc raportat este numele unei stații, așa că niciun raport nu poate revendica unul aici și nimeni nu va apărea pe desen. Importă din nou ridicarea din pagina peșterii sau alege altă ridicare mai sus. Intrările, ieșirile și notele se înregistrează în continuare ca de obicei."
+      },
+      "modelObstacleOption": {
+        "notALinePlot": "pereți de peșteră, fără stații",
+        "stillReading": "încă în curs de citire",
+        "importFailed": "importul nu a reușit"
+      },
+      "modelNothingToDrawTitle": "Nu există niciun desen de arătat",
+      "modelNothingToDrawBody": "Ridicarea pe care merge această urmărire nu conține nicio stație, așa că nu este nimic de desenat și nimeni nu poate fi plasat pe ea. Ce se poate face scrie în configurarea urmăririi, în partea de sus a acestei file. Intrările, ieșirile și notele nu sunt afectate.",
+      "noPlaceableModelTitle": "Nicio ridicare a acestei peșteri nu poate fi folosită aici",
+      "noPlaceableModelBody": "Un loc raportat este numele unei stații, iar niciuna dintre ridicările încărcate pentru această peșteră nu conține stații: fiecare este fie un fișier cu pereții peșterii, care nu are stații, fie un fișier al cărui import nu a reușit. Importă din nou una din pagina peșterii, apoi alege-o aici.",
+      "noPlaceableModelStillReadingTitle": "Ridicările acestei peșteri sunt încă în curs de citire",
+      "noPlaceableModelStillReadingBody": "Un loc raportat este numele unei stații, iar o ridicare nu conține stații până nu este citită în întregime. Cel puțin una dintre ridicările acestei peșteri este încă în curs de citire; va apărea în lista de aici imediat ce se termină. Între timp nu trebuie făcut nimic.",
       "positionsOnOtherModelTitle": "Unele locuri au fost raportate pe altă ridicare",
       "positionsOnOtherModelBody": "Această urmărire folosește acum alt model topo decât cel față de care au fost făcute acele rapoarte. Un nume de stație înseamnă ceea ce spune ridicarea în care a fost măsurat, așa că acele locuri nu se desenează pe ridicarea în uz — sunt marcate ca raportate pe altă ridicare, nu mutate pe ea. Raportează din nou un loc ca să pui pe cineva pe ridicarea folosită acum.",
       "positionOtherModel": "Pe altă ridicare",

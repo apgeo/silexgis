@@ -402,6 +402,38 @@ export default function TrackingModelPanel({
     );
   }
 
+  /**
+   * The survey this watch is on was read and the reading failed — so it holds no stations, and
+   * nobody can be drawn on it.
+   *
+   * <b>Split out of the silence below, because it is not the same kind of absence.</b> The check
+   * that follows treats every reason this panel cannot draw as one a co-ordinator waits out or
+   * shrugs at, and for a reading still queued or running that is true — it finishes. A failed
+   * reading never finishes. It sits in the survey list looking finished, the watch stays on and
+   * goes on accepting reports, and this panel simply is not there, so the page that should be
+   * showing where the party is shows nothing and says nothing about why.
+   *
+   * <b>Says what is missing here, and sends the remedy to where the remedy is.</b> The setup card
+   * at the top of this tab states the same fault at length, because it owns the chooser that
+   * answers it — and the two are far apart on a phone, so the drawing's own place must not simply
+   * be blank. What it must also not be is the identical red box a second time: a headline, a body
+   * and a remedy repeated word for word on one screen is how a co-ordinator learns to skip both.
+   * So this one is short, it is about the drawing rather than about the watch, and it points up
+   * rather than restating what is up there.
+   */
+  if (model !== undefined && model.status === 'failed') {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        style={{ marginBottom: 16 }}
+        data-testid="trip-tracking-model-unreadable"
+        title={t('trips.tracking.modelNothingToDrawTitle')}
+        description={t('trips.tracking.modelNothingToDrawBody')}
+      />
+    );
+  }
+
   if (model === undefined || model.status !== 'ready' || !surveyModelReadableByViewer(model)) {
     return null;
   }
