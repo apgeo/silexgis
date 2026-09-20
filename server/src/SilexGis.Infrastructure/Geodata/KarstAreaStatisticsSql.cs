@@ -65,23 +65,11 @@ public static class KarstAreaStatisticsSql
 {
     /// <summary>
     /// The declared-containment predicate every statement here shares: under the area, not the area
-    /// itself, and not deleted.
-    ///
-    /// <para>
-    /// Written as array containment — <c>ancestor_ids @&gt; ARRAY[id]</c> — and not as
-    /// <c>id = ANY(ancestor_ids)</c>, which reads identically and plans nothing like it. The GIN
-    /// index on that column serves the containment operators with the column on the left; a scalar
-    /// compared against <c>ANY</c> of it is not rewritten into an indexable form, so the same
-    /// predicate spelled the other way is a sequential scan of every feature in the installation,
-    /// five times over per request. There is a test that asserts the plan, because the difference
-    /// is invisible in the result.
-    /// </para>
+    /// itself, and not deleted. The containment half comes from the shared fragment, which is where
+    /// the reason for its exact spelling lives.
     /// </summary>
-    private const string InArea = """
-        f.deleted_at IS NULL
-          AND f.ancestor_ids @> ARRAY[@ka_area_id]::uuid[]
-          AND f.id <> @ka_area_id
-        """;
+    private static readonly string InArea =
+        "f.deleted_at IS NULL\n          AND " + ContainmentSql.StrictlyUnder("ka_area_id");
 
     public static async Task<KarstAreaTotalsRow> TotalsAsync(
         SilexGisDbContext db,
@@ -292,7 +280,7 @@ public static class KarstAreaStatisticsSql
             WHERE f.kind = {(short)FeatureKind.Cave}
               AND f.deleted_at IS NULL
               AND f.geom IS NOT NULL
-              AND NOT (f.ancestor_ids @> ARRAY[@ka_area_id]::uuid[])
+              AND NOT ({ContainmentSql.Under("ka_area_id")})
               AND f.geom && area.geom
               AND ST_Intersects(f.geom, area.geom)
               AND {visibleSql}

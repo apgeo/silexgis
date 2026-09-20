@@ -103,7 +103,7 @@ public static class DolineAxisSql
                     WHERE f.deleted_at IS NULL
                       AND f.geom IS NOT NULL
                       AND ST_Dimension(f.geom) = 2
-                      AND @da_area_id = ANY(f.ancestor_ids)
+                      AND {ContainmentSql.Under("da_area_id")}
                       -- The containment closure holds a row for the area itself. An area is a
                       -- boundary somebody drew round a district; it is not one of the depressions
                       -- inside it, and measuring its own long axis would put the shape of the

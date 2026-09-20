@@ -83,8 +83,16 @@ public class Feature : IProtectedEntity, ITimestamped, IAuditable
 
     /// <summary>
     /// Derived: this feature's id plus every ancestor id over all paths of the containment
-    /// DAG. The flat context visibility/protection/cascade queries splice as
-    /// <c>= ANY(ancestor_ids)</c> — read paths never recurse.
+    /// DAG, so read paths never recurse.
+    ///
+    /// <para>
+    /// A query asking "is this feature under that one" spells it as array containment with this
+    /// column on the left, which the index on it serves; the scalar-against-ANY spelling returns
+    /// the same rows and cannot use the index at all. That rule and its reason have one home, and
+    /// statements interpolate the fragment from there rather than writing either spelling out.
+    /// (The access fragments, which compare this array against a column of another table rather
+    /// than against one id, are a different shape and not that rule.)
+    /// </para>
     /// </summary>
     public Guid[] AncestorIds { get; set; } = [];
 

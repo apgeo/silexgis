@@ -158,7 +158,7 @@ public static class StructureLineSql
                   AND f.geom IS NOT NULL
                   AND ST_Dimension(f.geom) = 1
                   AND f.feature_type_id = @sl_type_id
-                  AND @sl_area_id = ANY(f.ancestor_ids)
+                  AND {ContainmentSql.Under("sl_area_id")}
                   AND {visibleSql}
                   AND {exactSql}
                 ORDER BY f.id
@@ -196,7 +196,7 @@ public static class StructureLineSql
                 SELECT ST_Collect(ST_Force2D(f.geom)) AS g,
                        ST_Y(ST_Centroid(ST_Collect(ST_Force2D(f.geom)))) AS lat
                 FROM features f
-                WHERE @sl_cave_id = ANY(f.ancestor_ids)
+                WHERE {ContainmentSql.Under("sl_cave_id")}
                   AND f.deleted_at IS NULL
                   AND f.geom IS NOT NULL
                   AND (f.id = @sl_cave_id OR NOT f.is_protected_effective)

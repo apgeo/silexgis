@@ -2,6 +2,7 @@
 using Dapper;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 
 namespace SilexGis.Infrastructure.Statistics;
@@ -107,10 +108,9 @@ public static class RegistryStatisticsSql
         {
             parameters.Add("rs_area_id", areaId);
 
-            // The area is its own ancestor in the stored closure, so it is excluded explicitly or a
-            // karst area would count as one of the caves inside itself.
-            clauses.Add("f.ancestor_ids @> ARRAY[@rs_area_id]::uuid[]");
-            clauses.Add("f.id <> @rs_area_id");
+            // Declared containment, in the one spelling the ancestry index can serve — including
+            // the self-exclusion, since the closure holds every feature as its own ancestor.
+            clauses.Add(ContainmentSql.StrictlyUnder("rs_area_id"));
         }
 
         if (scope.CaveTypeId is { } caveTypeId)
