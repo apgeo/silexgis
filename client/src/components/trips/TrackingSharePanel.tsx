@@ -22,6 +22,17 @@ interface Props {
    * rather than asked for again, because the page around this panel has already read it.
    */
   publishesRealNames: boolean;
+  /**
+   * Whether a link opens the page at this moment — the server's own answer, from the trip's read.
+   *
+   * <b>Not the same question as "is there an unrevoked row", which is all this panel can see.</b>
+   * A publication also ends when the watch closes (the ordinary way nearly every real one ends),
+   * when the grace after that closing runs out, and when the trip's cave stops being publishable.
+   * None of those is a fact about a row, all of them are facts about the trip, and one of them is
+   * measured by an installation setting this panel is never sent. So the answer is read once,
+   * where the rule lives, and passed in.
+   */
+  published: boolean;
 }
 
 /**
@@ -35,10 +46,16 @@ interface Props {
  * to show, with the warning that this is the only moment, and both are still on screen while
  * whoever pressed the button pastes them somewhere.
  *
- * <b>Revoking is the way a publication ends</b>, and it is always available: a link is a capability
- * and taking it back is the only thing that ends one, since the read has no caller to re-check.
- * The other half — a cave that gains protection after the fact — is the server's, decided again on
- * every read and needing nobody to remember anything.
+ * <b>A publication ends on its own, and revoking is how it ends early.</b> Taking a link back is
+ * always available and is immediate; what it cannot do is reach the copy of the token already
+ * sitting in a club's article, which is indexed and archived and outlives anybody remembering it is
+ * there. So the server ends a publication without being asked — when the watch closes, and in any
+ * case when the link's own window runs out — and both of those are said here, beside the address,
+ * because whoever pastes it into a website is the one person who needs to know the page will stop.
+ * The remaining half — a cave that gains protection after the fact — is the server's too, decided
+ * again on every read and needing nobody to remember anything. Which is why the list below says,
+ * per link, whether it is opening anything <em>now</em> rather than only when it was made and when
+ * it runs out: a publication that ends without being ended leaves its rows exactly where they were.
  *
  * <b>Whether the page will name people is said here, in words, before the button is pressed and
  * again when the address appears.</b> The people named are not the person pressing the button —
@@ -52,6 +69,7 @@ export default function TrackingSharePanel({
   tripTitle,
   canEdit,
   publishesRealNames,
+  published,
 }: Props) {
   const { t, i18n } = useTranslation();
   const { message } = App.useApp();
@@ -70,7 +88,12 @@ export default function TrackingSharePanel({
    * is no recovering from getting that wrong: the server stores a hash, so a token cleared before
    * it was pasted anywhere is gone, and the administrator has to mint a third.
    */
-  const [minted, setMinted] = useState<{ id: string; token: string } | null>(null);
+  const [minted, setMinted] = useState<{
+    id: string;
+    token: string;
+    /** When this address stops working, which is part of what was just handed out. */
+    expiresAt: string;
+  } | null>(null);
 
   if (!canEdit) {
     return null;
@@ -114,7 +137,7 @@ export default function TrackingSharePanel({
   const onMint = async () => {
     try {
       const created = await mint.mutateAsync({ tripLogId });
-      setMinted({ id: created.id, token: created.token });
+      setMinted({ id: created.id, token: created.token, expiresAt: created.expiresAt });
     } catch (error) {
       message.error(trackingProblemMessage(error, t));
     }
@@ -134,7 +157,36 @@ export default function TrackingSharePanel({
     }
   };
 
-  const live = (shares.data ?? []).filter((share) => share.revokedAt === null);
+  // A link that was taken back, or one that has run out, is no longer a link at all and is not
+  // listed. Lapsing is decided from the same instant for every row, so the list cannot disagree
+  // with itself halfway down.
+  const asOf = Date.now();
+  const lapsed = (share: { expiresAt: string }) => Date.parse(share.expiresAt) <= asOf;
+  const standing = (shares.data ?? []).filter(
+    (share) => share.revokedAt === null && !lapsed(share),
+  );
+
+  // <b>Whether a standing link actually opens the page is the server's answer, and this is the one
+  // account an administrator has of what is published.</b> A row that read "Live" after the watch
+  // closed — which is how nearly every real publication ends, not an edge case — would be this
+  // surface telling somebody the trip is published, with a date two weeks out, while every follower
+  // gets a 404. It cannot be worked out from the row: the watch's state, the grace after it closes
+  // and the cave's own refusal are all facts about the trip, and `published` is the read that
+  // already asks them through the rule itself.
+  //
+  // One boolean is enough and is exact, because the trip-wide half is shared by every row: while
+  // some link opens the page, "unrevoked and inside its window" is the whole of what remains to ask
+  // of a row; and when none does, none of these opens one either.
+  //
+  // A dormant row is still drawn, with its button. A closed watch can be armed again and a
+  // protection can be lifted, so such a link is not dead — it is exactly the one an administrator
+  // may want to take back before it starts answering again, and a hidden row cannot be revoked.
+  //
+  // Two whole calls rather than one over a chosen key: the check that every key the code asks for
+  // exists reads them out of the source text, and a key assembled at the call is one it cannot see.
+  const status = published
+    ? t('trips.tracking.publish.statusActive')
+    : t('trips.tracking.publish.statusDormant');
 
   // Anything but an explicit "no" is worded as the disclosing case. A server that did not answer
   // the question — an older build, a read that has not landed — leaves an administrator warned
@@ -165,6 +217,14 @@ export default function TrackingSharePanel({
         {t('trips.tracking.publish.explain')}
       </Typography.Paragraph>
 
+      {/* That a link ends by itself, said before anybody presses the button rather than discovered
+          when a page stops answering. It is also the answer to the objection this panel used to
+          invite — "what happens to the block I pasted into our website last spring" — and the
+          honest answer is that it stops, which is the point. */}
+      <Typography.Paragraph type="secondary" data-testid="trip-tracking-publish-ends">
+        {t('trips.tracking.publish.ends')}
+      </Typography.Paragraph>
+
       {/* Not `type="secondary"` like the paragraph above it: this one is the disclosure, and it is
           the sentence somebody has to have read before they hand the address to a club's website. */}
       <Typography.Paragraph data-testid="trip-tracking-publish-names">
@@ -173,7 +233,14 @@ export default function TrackingSharePanel({
             call is a key that check cannot see. */}
         {namesShown
           ? t('trips.tracking.publish.namesShown')
-          : t('trips.tracking.publish.namesHidden')}
+          : t('trips.tracking.publish.namesHidden')}{' '}
+        {/* Beside the disclosure rather than anywhere else, because it is the other half of it: the
+            people this names are not the person reading, and they are now told at the moment it
+            happens. Whoever is about to publish should know that before they do it, not be
+            surprised by a colleague's reply. */}
+        <span data-testid="trip-tracking-publish-tells-party">
+          {t('trips.tracking.publish.tellsParty')}
+        </span>
       </Typography.Paragraph>
 
       {minted !== null && (
@@ -190,6 +257,14 @@ export default function TrackingSharePanel({
                 {namesShown
                   ? t('trips.tracking.publish.mintedNamesShown')
                   : t('trips.tracking.publish.mintedNamesHidden')}
+              </Typography.Text>
+              {/* Said at the moment there is an address to paste, because the date is part of what
+                  is being handed over: somebody putting this into an article has to be able to
+                  write "this link works until …" beside it, and this response is the only place
+                  that answer exists. Worded as an outer bound rather than a promise — closing the
+                  watch ends the page sooner, which is the ordinary way a publication ends. */}
+              <Typography.Text data-testid="trip-tracking-publish-minted-expires">
+                {t('trips.tracking.publish.mintedExpires', { when: when(minted.expiresAt) })}
               </Typography.Text>
 
               <div>
@@ -252,11 +327,11 @@ export default function TrackingSharePanel({
       <div style={{ marginTop: 12 }} data-testid="trip-tracking-publish-list">
         {shares.error != null ? (
           <Alert type="error" showIcon title={t('trips.tracking.publish.listUnavailable')} />
-        ) : live.length === 0 ? (
+        ) : standing.length === 0 ? (
           <Typography.Text type="secondary">{t('trips.tracking.publish.none')}</Typography.Text>
         ) : (
           <Flex vertical gap={8}>
-            {live.map((share) => (
+            {standing.map((share) => (
               <Flex
                 key={share.id}
                 gap={8}
@@ -266,9 +341,31 @@ export default function TrackingSharePanel({
                 data-testid={`trip-tracking-publish-share-${share.id}`}
               >
                 <Flex gap={8} align="center" wrap style={{ minWidth: 0 }}>
-                  <Tag color="blue">{t('trips.tracking.publish.statusActive')}</Tag>
+                  <Tag
+                    color={published ? 'blue' : 'default'}
+                    data-testid={`trip-tracking-publish-status-${share.id}`}
+                  >
+                    {status}
+                  </Tag>
                   <Typography.Text type="secondary">
                     {t('trips.tracking.publish.createdAt', { when: when(share.createdAt) })}
+                  </Typography.Text>
+                  {/* When it ends, on the row rather than only on the mint: the address itself is
+                      shown once and never again, so this list is the only place an administrator
+                      can come back to and find out how long the trip stays published.
+
+                      And when nothing is open, the same date said the other way round. "Works
+                      until the 28th" is false the moment the watch closes, and it is false in the
+                      direction that matters — somebody reading it believes a page is answering. The
+                      date is still worth printing, because it is when this link stops being one
+                      that could start working again. */}
+                  <Typography.Text
+                    type="secondary"
+                    data-testid={`trip-tracking-publish-expires-${share.id}`}
+                  >
+                    {published
+                      ? t('trips.tracking.publish.expiresAt', { when: when(share.expiresAt) })
+                      : t('trips.tracking.publish.dormantUntil', { when: when(share.expiresAt) })}
                   </Typography.Text>
                 </Flex>
                 <Popconfirm

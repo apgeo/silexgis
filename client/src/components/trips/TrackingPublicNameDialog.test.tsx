@@ -31,6 +31,7 @@ function participant(label: string | null): TrackingParticipant {
     in: true,
     out: false,
     label,
+    publishedAs: null,
   };
 }
 

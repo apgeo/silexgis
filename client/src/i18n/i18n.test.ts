@@ -135,6 +135,7 @@ const notificationCategories: Record<NotificationCategoryName, true> = {
   cavingGroupMembership: true,
   permissionGranted: true,
   tripParticipation: true,
+  tripPublished: true,
   jobCompleted: true,
   securityAlerts: true,
   tripPlanning: true,

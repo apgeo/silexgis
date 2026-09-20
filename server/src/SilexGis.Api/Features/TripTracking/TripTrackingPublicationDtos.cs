@@ -9,14 +9,32 @@ namespace SilexGis.Api.Features.TripTracking;
 /// Mint response — the only moment the plaintext token exists in a response. It is never stored
 /// (only its hash is), so it cannot be shown again; whoever minted it must copy it now.
 /// </summary>
-public sealed record TripTrackingShareCreatedDto(Guid Id, string Token, DateTimeOffset CreatedAt);
+/// <param name="ExpiresAt">
+/// When this link stops opening the page whatever else happens. Returned with the token because it
+/// is part of what was just handed out: whoever is about to paste an address into a club's article
+/// has to be able to write "this link works until …" beside it, and this is the only response that
+/// can tell them. A publication usually ends earlier than this — closing the watch gets there first
+/// — so it is an outer bound rather than a promise about how long the page will answer.
+/// </param>
+public sealed record TripTrackingShareCreatedDto(
+    Guid Id,
+    string Token,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset ExpiresAt);
 
 /// <summary>Publication-link metadata for the managing list — deliberately token-free.</summary>
+/// <param name="ExpiresAt">
+/// When this link lapses. Carried so the list can say which of a trip's links is still live without
+/// the reader doing arithmetic, and so that a link that ended on its own is visibly distinguishable
+/// <em>here</em> from one somebody revoked — which is a distinction the administrator may see and
+/// a follower may not.
+/// </param>
 public sealed record TripTrackingShareDto(
     Guid Id,
     Guid CreatedBy,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? RevokedAt);
+    DateTimeOffset? RevokedAt,
+    DateTimeOffset ExpiresAt);
 
 // ---- the published page ----
 

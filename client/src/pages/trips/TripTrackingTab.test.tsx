@@ -144,6 +144,10 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     // What the published page would call the party. The panel that mints a link words its notice
     // from this, so the fixture states it rather than leaving the surface to guess.
     publishesRealNames: true,
+    // Not published. The pair travels together — "published" and "until when" are one answer —
+    // and a test about a published trip says both.
+    publishedAt: null,
+    publishedUntil: null,
     teams: [],
     participants: [
       {
@@ -158,6 +162,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         in: true,
         out: false,
         label: null,
+        publishedAs: null,
       },
       {
         caverId: BOGDAN,
@@ -171,6 +176,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         in: true,
         out: false,
         label: null,
+        publishedAs: null,
       },
     ],
     ...overrides,
@@ -264,6 +270,7 @@ describe('TripTrackingTab', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
         ],
       }),
@@ -303,6 +310,7 @@ describe('TripTrackingTab', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
           {
             caverId: CARMEN,
@@ -316,6 +324,7 @@ describe('TripTrackingTab', () => {
             in: false,
             out: false,
             label: null,
+            publishedAs: null,
           },
         ],
       }),
@@ -354,6 +363,7 @@ describe('TripTrackingTab', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
           {
             caverId: BOGDAN,
@@ -369,6 +379,7 @@ describe('TripTrackingTab', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
         ],
       }),
@@ -650,6 +661,7 @@ describe('TripTrackingTab', () => {
               in: true,
               out: false,
               label: null,
+              publishedAs: null,
             },
           ],
         }),
@@ -1158,6 +1170,7 @@ describe('TripTrackingTab', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
           {
             caverId: BOGDAN,
@@ -1171,6 +1184,7 @@ describe('TripTrackingTab', () => {
             in: false,
             out: true,
             label: null,
+            publishedAs: null,
           },
           {
             // Nobody has said a single word about her. This is the row the whole change is for.
@@ -1185,6 +1199,7 @@ describe('TripTrackingTab', () => {
             in: false,
             out: false,
             label: null,
+            publishedAs: null,
           },
         ],
       });
@@ -1313,6 +1328,7 @@ describe('TripTrackingTab', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
           {
             caverId: BOGDAN,
@@ -1328,6 +1344,7 @@ describe('TripTrackingTab', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
           {
             caverId: CARMEN,
@@ -1341,6 +1358,7 @@ describe('TripTrackingTab', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
         ],
       });
@@ -1482,7 +1500,104 @@ describe('TripTrackingTab', () => {
    * called it — while the installation's own setting publishes real names, so every member of every
    * followed trip is named and this is their only opt-out.
    */
+  /**
+   * That the trip is published, to everybody who can read it.
+   *
+   * <b>The gap this closes.</b> The panel that lists follow links is drawn only for somebody who
+   * may run the watch, and the tracking state carried no fact about publication at all — so a caver
+   * whose real name was on a page on the internet, by the installation's default and by somebody
+   * else's decision, had no surface anywhere that would admit it. Asserted through the read-only
+   * view, because that is the reader the gap was about.
+   */
+  describe('that the trip is published', () => {
+    it('tells a reader who cannot publish that a link is open, and says until when', () => {
+      trackingQuery.mockReturnValue({
+        data: state({
+          publishedAt: '2026-09-14T10:00:00Z',
+          publishedUntil: '2026-10-01T10:00:00Z',
+        }),
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show(false);
+
+      expect(screen.getByTestId('trip-tracking-published')).toBeInTheDocument();
+      expect(screen.getByTestId('trip-tracking-published-since')).toHaveTextContent(
+        /anybody holding the link can open a page/,
+      );
+      expect(screen.getByTestId('trip-tracking-published-until')).toHaveTextContent(
+        /stops working on/,
+      );
+      // And it hands over no way to open it: the token is the whole of a follower's claim and
+      // exists in one response, so a surface shown to every reader of the trip must report the
+      // publication without becoming a second copy of the capability.
+      expect(screen.getByTestId('trip-tracking-published').textContent).not.toContain('/shared/');
+    });
+
+    it('says nothing at all about an unpublished trip', () => {
+      // The twin. Without it the assertion above passes against a banner that is always drawn, and
+      // a banner that is always drawn says nothing — which is the state this replaced.
+      trackingQuery.mockReturnValue({
+        data: state(),
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show(false);
+
+      expect(screen.queryByTestId('trip-tracking-published')).toBeNull();
+    });
+  });
+
   describe('what the published page calls each person', () => {
+    /**
+     * The exact string, when the server sends one.
+     *
+     * <b>This column's whole job is to answer "what will a follow link print for me", and the
+     * signed-in name is not that answer.</b> Every other screen here calls somebody by the display
+     * name their account chose; a published page prints the name the club's roster holds, and the
+     * two part company the moment a member sets one. A reader deciding whether to ask for a caption
+     * is reading this cell, so it shows what the page prints rather than what the rest of the
+     * application calls them.
+     */
+    it("shows the server's published name where it differs from the signed-in one", () => {
+      trackingQuery.mockReturnValue({
+        data: state({
+          participants: [
+            {
+              caverId: ANA,
+              teamId: null,
+              lastKind: 'entered',
+              lastRecordedAt: '2026-09-12T06:30:00Z',
+              positionRecordedAt: null,
+              stationName: null,
+              depthM: null,
+              positionSurveyModelId: null,
+              in: true,
+              out: false,
+              label: null,
+              // The roster's own name for her, which is what a follow link prints. The trip fixture
+              // calls her "Ana Popescu" everywhere else, so the two strings are different on
+              // purpose and only one of them can be being read.
+              publishedAs: 'Ana Maria Popescu',
+            },
+          ],
+        }),
+        isPending: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+      show(false);
+
+      expect(screen.getByTestId(`trip-tracking-public-name-${ANA}`)).toHaveTextContent(
+        'Ana Maria Popescu',
+      );
+    });
+
     it('says what the page will call somebody, per person, before a link is minted', () => {
       trackingQuery.mockReturnValue({
         data: state({
@@ -1500,6 +1615,7 @@ describe('TripTrackingTab', () => {
               out: false,
               // Asked to be kept off the page, and this is the record of it.
               label: 'A club member',
+              publishedAs: null,
             },
             {
               caverId: BOGDAN,
@@ -1513,6 +1629,7 @@ describe('TripTrackingTab', () => {
               in: true,
               out: false,
               label: null,
+              publishedAs: null,
             },
           ],
         }),
@@ -1637,6 +1754,7 @@ describe('TripTrackingTab', () => {
               in: true,
               out: false,
               label: 'A club member',
+              publishedAs: null,
             },
           ],
         }),
@@ -1908,6 +2026,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
         ],
       }),
@@ -2147,6 +2266,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
           {
             caverId: BOGDAN,
@@ -2162,6 +2282,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
         ],
       });
@@ -2210,6 +2331,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               in: true,
               out: false,
               label: null,
+              publishedAs: null,
             },
           ],
         }),
@@ -2254,6 +2376,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
           {
             caverId: BOGDAN,
@@ -2267,6 +2390,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
             in: true,
             out: false,
             label: null,
+            publishedAs: null,
           },
         ],
       });
@@ -2349,6 +2473,7 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
               in: true,
               out: false,
               label: null,
+              publishedAs: null,
             },
           ],
         }),

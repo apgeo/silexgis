@@ -78,7 +78,7 @@ public sealed class AnonymousSurfaceTests(PostgresFixture postgres) : IDisposabl
         ("GET", "/api/v1/shared/features/{token}", "a link somebody chose to hand out; the token is the credential"),
         ("GET", "/api/v1/shared/views/{token:guid}", "a link somebody chose to hand out; the token is the credential"),
         ("GET", "/api/v1/public/albums/{token}", "a link somebody chose to hand out; the token is the credential"),
-        ("GET", "/api/v1/public/trips/{token}", "a link somebody chose to hand out so a party underground can be followed; the token is the credential, minting one takes the right to share the trip's cave, and a cave with protected coordinates is refused publication outright rather than published with less in it — re-decided on every read, save for a delivery URL already handed out, which lives out its own short lifetime"),
+        ("GET", "/api/v1/public/trips/{token}", "a link somebody chose to hand out so a party underground can be followed; the token is the credential, minting one takes the right to share the trip's cave, and a cave with protected coordinates is refused publication outright rather than published with less in it — re-decided on every read, along with whether the link is still a link at all (revoked, lapsed, or its watch closed, all answering as an unknown token does), save for a delivery URL already handed out, which lives out its own short lifetime"),
 
         // Published deliberately, with the response shaped so that reaching it discloses nothing else.
         ("GET", "/api/v1/public/photos", "pictures an administrator published, carrying no position"),

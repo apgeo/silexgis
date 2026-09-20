@@ -31,6 +31,10 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     // What a published page would caption this person with. Nothing on a signed-in surface reads
     // it — those show the roster's own name — so null here, which is also its ordinary value.
     label: null,
+    // What a published page would print for this person: the caption where somebody typed one,
+    // otherwise the roster's own name where the installation publishes names. Null is the
+    // ordinary value here and means the page would call them by their place in the party.
+    publishedAs: null,
     ...overrides,
   };
 }
@@ -46,6 +50,10 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     closedAt: null,
     positionsWithheld: false,
     publishesRealNames: true,
+    // Not published. The pair travels together — "published" and "until when" are one answer —
+    // and a test about a published trip says both.
+    publishedAt: null,
+    publishedUntil: null,
     teams: [{ id: 'team-1', title: 'Echipa 1' }],
     participants: [participant()],
     ...overrides,

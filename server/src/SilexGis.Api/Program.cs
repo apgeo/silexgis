@@ -6,8 +6,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Serilog;
+using Serilog.Events;
 using SilexGis.Api.Auth;
 using SilexGis.Api.Common;
+using SilexGis.Api.Diagnostics;
 using Microsoft.AspNetCore.DataProtection;
 using SilexGis.Api.Features.About;
 using SilexGis.Api.Features.Admin;
@@ -69,6 +71,11 @@ using SilexGis.Infrastructure.Identity;
 using SilexGis.Infrastructure.Persistence;
 
 Log.Logger = new LoggerConfiguration()
+    // On the bootstrap logger as well as on the configured one, and that is not belt and braces:
+    // `preserveStaticLogger` below leaves this logger in place as `Log.Logger`, and the request
+    // log is written through it — so an enricher added only to the configured logger never sees
+    // the one event that carries a live credential by design.
+    .Enrich.With(new CredentialScrubbingEnricher())
     .WriteTo.Console()
     .CreateBootstrapLogger();
 
@@ -87,7 +94,15 @@ try
     // specific lines do not honour Serilog:MinimumLevel or any non-console sink configured later.
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
-        .ReadFrom.Services(services), preserveStaticLogger: true);
+        .ReadFrom.Services(services)
+        // Some of this application's addresses are the whole of a caller's claim — a follow link
+        // for a published trip, a share token, a signed delivery URL — so an unscrubbed request
+        // log is a list of live credentials. Applied as an enricher rather than by wording the
+        // request-logging template around the path, because the path is attached to the event as a
+        // property whether or not a template renders it: a text sink would look clean while a JSON
+        // sink went on writing the token. Added after the configured enrichers so it is the last
+        // word on the property, whatever an installation's own configuration put there.
+        .Enrich.With(new CredentialScrubbingEnricher()), preserveStaticLogger: true);
 
     // Contract hygiene: enums as strings; strict numbers — the web
     // default (AllowReadingFromString) would advertise every numeric as "number | string"
@@ -179,6 +194,10 @@ try
 builder.Services.AddScoped<GroupAnnouncementThrottle>();
     builder.Services.AddScoped<IAccessContextAccessor, AccessContextAccessor>();
     builder.Services.AddScoped<SilexGis.Infrastructure.Trips.ITripRosterAnnouncer, SilexGis.Api.Features.TripLogs.TripRosterAnnouncer>();
+    // Told when a follow link is minted, so the people a published page names are not the last
+    // to know. Registered concretely: it is called from one place and substituted by nothing, so an
+    // interface would be ceremony rather than a seam.
+    builder.Services.AddScoped<SilexGis.Api.Features.TripTracking.TripPublicationAnnouncer>();
     // One resolver per resource-link target world; the directory is what the link
     // surface fans out through for display, the picker feed and the authoring floor.
     builder.Services.AddScoped<IResLinkTargetResolver, FeatureTargetResolver>();
@@ -244,7 +263,24 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
 
     app.UseExceptionHandler();
     app.UseStatusCodePages();
-    app.UseSerilogRequestLogging();
+    // The completion line names the address the request was made to, and on this application some
+    // of those addresses are the whole of a caller's claim — a published trip's follow link, a
+    // share token. Replacing the property here rather than wording it out of the message template
+    // is the difference that matters: the path is attached to the event whether or not a template
+    // renders it, so a template that simply did not mention it would look clean in the console and
+    // go on writing the token in a field of any structured sink an installation adds.
+    //
+    // Everything else the default writes is kept exactly as it was — the method, the status and the
+    // elapsed time — so this is the same line it always was with the credential replaced by a short
+    // handle that can be matched back to the share row. See CredentialUrlScrubber.
+    app.UseSerilogRequestLogging(options =>
+        options.GetMessageTemplateProperties = (context, path, elapsedMs, statusCode) =>
+        [
+            new LogEventProperty("RequestMethod", new ScalarValue(context.Request.Method)),
+            new LogEventProperty("RequestPath", new ScalarValue(CredentialUrlScrubber.Scrub(path))),
+            new LogEventProperty("StatusCode", new ScalarValue(statusCode)),
+            new LogEventProperty("Elapsed", new ScalarValue(elapsedMs)),
+        ]);
 
     app.UseAuthentication();
     app.UseAuthorization();

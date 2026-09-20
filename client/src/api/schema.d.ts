@@ -21454,7 +21454,7 @@ export interface components {
             isProtected: boolean;
         };
         /** @enum {unknown} */
-        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | null;
+        NotificationCategory: "cavingGroupMembership" | "permissionGranted" | "tripParticipation" | "jobCompleted" | "securityAlerts" | "tripPlanning" | "tripCallout" | "commentReply" | "commentOnMine" | "groupAnnouncement" | "tripPublished" | null;
         NotificationCategoryDto: {
             category: components["schemas"]["NotificationCategory"];
             reachesNobody: boolean;
@@ -23978,6 +23978,7 @@ export interface components {
             in: boolean;
             out: boolean;
             label: null | string;
+            publishedAs: null | string;
         };
         TrackingParticipantLabelDto: {
             /** Format: uuid */
@@ -24034,6 +24035,10 @@ export interface components {
             closedAt: null | string;
             positionsWithheld: boolean;
             publishesRealNames: boolean;
+            /** Format: date-time */
+            publishedAt: null | string;
+            /** Format: date-time */
+            publishedUntil: null | string;
             teams: components["schemas"]["TrackingTeamDto"][];
             participants: components["schemas"]["TrackingParticipantDto"][];
         };
@@ -24697,6 +24702,8 @@ export interface components {
             token: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
         };
         TripTrackingShareDto: {
             /** Format: uuid */
@@ -24707,6 +24714,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             revokedAt: null | string;
+            /** Format: date-time */
+            expiresAt: string;
         };
         /** @enum {unknown} */
         TripTrackingState: "off" | "armed" | "closed";

@@ -77,6 +77,10 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
     closedAt: null,
     positionsWithheld: false,
     publishesRealNames: true,
+    // Not published. The pair travels together — "published" and "until when" are one answer —
+    // and a test about a published trip says both.
+    publishedAt: null,
+    publishedUntil: null,
     teams: [],
     participants: [],
     ...overrides,
@@ -251,6 +255,7 @@ describe('TrackingConfigCard', () => {
       in: true,
       out: false,
       label: null,
+      publishedAs: null,
     };
 
     const { unmount } = show(

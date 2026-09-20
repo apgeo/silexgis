@@ -65,6 +65,33 @@ public enum NotificationCategory : short
     /// whose fan-out has to be bounded rather than merely correct.
     /// </summary>
     GroupAnnouncement = 9,
+
+    /// <summary>
+    /// A trip this person is on was published: somebody minted a link that opens a page about it
+    /// needing no account.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A category of its own rather than a second use of <see cref="TripParticipation"/>, because a
+    /// preference is per category and those two are not the same question. Being added to a roster
+    /// is club administration, and somebody who muted it has said they do not care about roster
+    /// churn; they have not said anything about their real name being put in front of the internet
+    /// by an installation whose default is to publish it. Folding the two together would let the
+    /// first choice silently make the second.
+    /// </para>
+    /// <para>
+    /// <b>And it is the reader's own choice to mute, unlike the two that cannot be.</b> Those two
+    /// are unmutable for reasons that do not hold here: a security alert because an attacker
+    /// holding a session would otherwise silence the warning about the account they are taking
+    /// over, and an overdue alarm because it exists to be heard when nobody is answering. Neither
+    /// has an analogue here — there is no adversary who benefits from this being quiet, and the
+    /// only person a mute affects is the one who chose it. A club that publishes every trip would
+    /// otherwise send a member a message they cannot stop, which is a real cost paid by the same
+    /// people this category exists to serve. What remains unmutable is the trip's own page, which
+    /// says a trip is published to everybody who can read it and needs nobody's preference.
+    /// </para>
+    /// </remarks>
+    TripPublished = 10,
 }
 
 /// <summary>
@@ -208,6 +235,11 @@ public static class NotificationCategories
         NotificationCategory.CavingGroupMembership => InboxAndMail,
         NotificationCategory.PermissionGranted => InboxAndMail,
         NotificationCategory.TripParticipation => InboxAndMail,
+        // Not a text message, whatever the subject's weight. This reports something that has just
+        // been made permanent enough to be archived; it is not an hour-critical thing somebody
+        // needs while standing outside a cave with no data, which is the only argument this
+        // application accepts for spending an operator's money per recipient.
+        NotificationCategory.TripPublished => InboxAndMail,
         NotificationCategory.JobCompleted => InboxAndMail,
         NotificationCategory.SecurityAlerts => InboxAndMail,
         NotificationCategory.TripPlanning => InboxAndMail,

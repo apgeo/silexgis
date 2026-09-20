@@ -175,6 +175,61 @@ to the `https://` address. Allow request bodies at least as large as
 IIS's `maxAllowedContentLength` both default well below that, and an upload refused at the
 proxy fails with an error the application never sees and cannot explain.
 
+**And turn off — or scrub — its access log.** Some of this application's addresses *are* the
+password. A published trip is followed at `/shared/trips/<token>`, and the survey drawing and the
+photographs on that page are fetched with a signed `token=` in the query. Whoever holds the link
+holds the page; there is nothing else to prove. Every common proxy logs the full request URI and
+the `Referer` by default, so a proxy in front of SilexGIS writes one live credential per line, once
+a minute per follower, into the file you tail and the one that ends up attached to a support
+request.
+
+The `web` service does not: both shipped nginx configurations define their own log format that
+replaces the credential with `[redacted]` in the request and in the referer, keeping the method,
+the route, the status, the size and the timing. A proxy you run in front of it is outside that and
+has to be configured yourself.
+
+**Two credentials have to come out, and the filter everybody reaches for takes out only one of
+them.** Every proxy offers something that rewrites named query parameters, so the signed `token=`
+is the easy half — and the address this section opens with, `/shared/trips/<token>`, carries its
+credential in the *path*, where a query filter never looks. That failure is silent in the worst
+way: `[redacted]` starts appearing in your log and reads like success, while the follow link goes
+on being written out in full beside it, once a minute per follower. Both halves have to go, in the
+request line and in the `Referer` header:
+
+- **the one path segment after** `/shared/trips/`, `/api/v1/public/trips/`,
+  `/api/v1/shared/features/`, `/api/v1/shared/views/` or `/api/v1/public/albums/` — up to the next
+  `/`, `?` or `#` and no further, so that a trailing slash and a sub-path such as
+  `…/<token>/cover` are covered too; keeping what follows is what leaves the line useful.
+- **the value of every `token=` parameter** in the query — every one, not the first.
+
+In nginx that is a `log_format` of your own: copy the `map` blocks out of
+`deploy/nginx/silexgis.conf`, which are written to be lifted. In Caddy one filter does both halves,
+because its `regexp` filter replaces every match:
+
+```
+log {
+    format filter {
+        wrap console
+        fields {
+            request>uri regexp "(/(?:shared/trips|api/v1/public/trips|api/v1/shared/features|api/v1/shared/views|api/v1/public/albums)/)[^/?#]+|([?&]token=)[^&]*" "$1$2[redacted]"
+            request>headers>Referer regexp "(/(?:shared/trips|api/v1/public/trips|api/v1/shared/features|api/v1/shared/views|api/v1/public/albums)/)[^/?#]+|([?&]token=)[^&]*" "$1$2[redacted]"
+        }
+    }
+}
+```
+
+The pattern has two alternatives — a path prefix and a query parameter — which is why the
+replacement names both groups: whichever alternative did not match contributes nothing. Check it
+with one request rather than trusting it: ask for `/shared/trips/anything/embed?token=anything` and
+read the line it wrote. **If your proxy cannot rewrite the path, turn its access log off for this
+site** rather than keeping one you believe is scrubbed.
+
+Two things this does not reach, either here or in the shipped configuration. A proxy's *error* log
+quotes the request line it failed on, so an upstream timeout can still write a token into it — that
+is one of the reasons follow links now expire on their own. And a token pasted into your club's own
+article is in that article's HTML, which is indexed and archived; `noindex` on the SilexGIS page
+does not cover the page that frames it.
+
 ## Encryption at rest
 
 **SilexGIS does not encrypt anything it stores.** Uploaded files, the thumbnails and page

@@ -1480,7 +1480,8 @@
         "versionMismatch": "Altcineva a schimbat această urmărire în timp ce lucrai la ea. Pagina a fost citită din nou; uită-te la ea înainte să salvezi.",
         "shareNotFound": "Acel link de urmărire nu mai există — s-ar putea să îl fi retras deja cineva.",
         "publicationRefusedCave": "Publicarea acestei ture predă ridicarea topografică a peșterii, iar asta cere dreptul de a partaja peștera. Cere-l celui care se ocupă de ea.",
-        "publicationRefusedProtected": "Peștera acestei ture are coordonate protejate, așa că tura nu poate fi publicată deloc. O pagină publicată spune unde se află echipa în peșteră, iar o variantă care ascunde poziția nu există."
+        "publicationRefusedProtected": "Peștera acestei ture are coordonate protejate, așa că tura nu poate fi publicată deloc. O pagină publicată spune unde se află echipa în peșteră, iar o variantă care ascunde poziția nu există.",
+        "publicationNotArmed": "Un link de urmărire deschide pagina doar cât timp urmărirea este pornită. Porniți urmărirea, apoi publicați tura."
       },
       "publish": {
         "title": "Publică această tură",
@@ -1502,11 +1503,23 @@
         "copyFailed": "Browserul nu a lăsat pagina să scrie în clipboard. Textul este selectat — copiază-l manual.",
         "none": "Această tură nu este publicată. Nimeni nu o poate urmări fără cont.",
         "statusActive": "Activ",
+        "statusDormant": "Inactiv",
+        "dormantUntil": "Acest link nu deschide nimic acum. Pagina răspunde doar cât timp urmărirea este pornită și cât timp peștera turei poate fi publicată — dacă asta se schimbă la loc, linkul funcționează din nou până la {{when}}.",
         "createdAt": "Creat la {{when}}",
         "revoke": "Retrage-l",
         "revokeConfirm": "Retragi acest link de urmărire? Oricine îl are nu va mai putea deschide pagina.",
         "revoked": "Linkul de urmărire a fost retras.",
-        "listUnavailable": "Linkurile de urmărire ale acestei ture nu au putut fi citite."
+        "listUnavailable": "Linkurile de urmărire ale acestei ture nu au putut fi citite.",
+        "expiresAt": "Funcționează până la {{when}}",
+        "ends": "Un link de urmărire se încheie singur. Nu mai funcționează după închiderea urmăririi și, în orice caz, după data de mai jos — astfel încât o adresă rămasă într-un articol vechi să nu arate echipa la nesfârșit. Retragerea îl încheie imediat.",
+        "mintedExpires": "Această adresă nu mai funcționează după {{when}}, sau mai devreme dacă închideți urmărirea.",
+        "tellsParty": "Toți participanții la această tură care au cont sunt anunțați că a fost publicată."
+      },
+      "published": {
+        "title": "Această tură este publicată",
+        "since": "Din {{when}}, oricine are linkul poate deschide o pagină despre această tură fără cont. Pagina arată cine a fost în tură, cum îi numește pe fiecare și unde a fost raportat ultima dată fiecare.",
+        "until": "Linkul nu mai funcționează după {{when}}, sau mai devreme dacă urmărirea este închisă.",
+        "whereToLook": "Lista de mai jos arată cum numește pagina fiecare persoană din această tură, inclusiv pe dumneavoastră. O etichetă pusă cuiva este ceea ce tipărește pagina în locul numelui."
       },
       "publicName": {
         "column": "Pe pagina publică",
@@ -2482,6 +2495,7 @@
         "cavingGroupMembership": "Schimbări în grupurile de speologie",
         "permissionGranted": "Cineva îmi dă acces la ceva",
         "tripParticipation": "Sunt adăugat la o tură",
+        "tripPublished": "O tură la care particip a fost publicată ca pagină pe care o poate citi oricine are linkul",
         "tripPlanning": "Sunt invitat la o tură, se schimbă o tură la care particip, o tură are nevoie de un acces pe care îl pot acorda sau se apropie o tură ori un eveniment de club la care am răspuns",
         "commentReply": "Cineva răspunde la un comentariu scris de mine",
         "commentOnMine": "Cineva comentează la ceva ce îmi aparține",
@@ -2809,6 +2823,7 @@
       "name_notify_caving_group_removed": "Scos dintr-un grup speologic",
       "name_notify_permission_granted": "Acces primit la o înregistrare",
       "name_notify_trip_participation": "Trecut într-un raport de tură",
+      "name_notify_trip_published": "O tură a fost publicată ca pagină publică",
       "name_notify_trip_plan_invitation": "Invitat la o tură planificată",
       "name_notify_trip_plan_changed": "O tură planificată s-a schimbat",
       "name_notify_trip_plan_cancelled": "O tură planificată a fost anulată",

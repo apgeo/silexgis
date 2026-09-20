@@ -12,6 +12,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Profiles;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
@@ -364,6 +365,308 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     }
 
     /// <summary>
+    /// A link with an end, and the end is not a distinguishable answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Until this existed a follow link ended in exactly one way — somebody revoking it — and that
+    /// is the one remedy the workflow does not actually cover: the paste-in block puts the token
+    /// into a club's own article, which is indexed and archived, so an address handed over in March
+    /// is still fetchable in November from a page nobody has edited since. The expiry needs nobody
+    /// to remember anything.
+    /// </para>
+    /// <para>
+    /// The live link beside the lapsed one is what makes this a test of the window rather than of
+    /// the route 404ing: the two rows differ in one column. And the refusal is compared against an
+    /// invented token's, because an answer that said "expired" would tell a stranger holding a
+    /// guess that their guess was once real.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_lapsed_link_answers_exactly_as_an_invented_one_while_a_live_link_opens()
+    {
+        var trip = await TrackedTripAsync("A link that ends", locationProtected: false);
+        var doomed = await PublishAsync(trip.Trip);
+        var kept = await PublishAsync(trip.Trip);
+
+        // Both open while both are inside their window. Without this the assertion below proves
+        // only that the route can 404.
+        (await anonymous.GetAsync(Follow(doomed.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await anonymous.GetAsync(Follow(kept.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await ExpireAsync(doomed.Id, DateTimeOffset.UtcNow.AddMinutes(-1));
+
+        var lapsed = await anonymous.GetAsync(Follow(doomed.Token));
+        var unknown = await anonymous.GetAsync(Follow("Zm9yZ2VkLXRva2VuLXRoYXQtd2FzLW5ldmVyLW1pbnRlZA"));
+
+        lapsed.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await RefusalShapeAsync(lapsed)).ShouldBe(
+            await RefusalShapeAsync(unknown),
+            "a lapsed link must be indistinguishable from one that never existed");
+
+        // Per link, not per trip: the other one is inside its own window and untouched.
+        (await anonymous.GetAsync(Follow(kept.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The mint says when the link ends, and the managing list goes on saying it.
+    /// </summary>
+    /// <remarks>
+    /// The token exists in one response and can never be shown again, so the mint is the only
+    /// moment somebody pasting an address into an article can be told how long it will answer — and
+    /// the list is the only place they can come back to and find out afterwards. Both are asserted
+    /// against the same instant, because two surfaces disagreeing about when a publication ends
+    /// would be worse than neither saying.
+    /// </remarks>
+    [Fact]
+    public async Task The_mint_and_the_list_say_the_same_end()
+    {
+        var trip = await TrackedTripAsync("Published until", locationProtected: false);
+
+        var minted = await owner.PostAsync(Shares(trip.Trip), null);
+        minted.StatusCode.ShouldBe(HttpStatusCode.Created, await minted.Content.ReadAsStringAsync());
+        var expiresAt = (await BodyAsync(minted)).GetProperty("expiresAt").GetDateTimeOffset();
+
+        // A real end rather than a placeholder, and inside the configured window rather than at
+        // some far horizon: an expiry ten years out is not an expiry.
+        expiresAt.ShouldBeGreaterThan(DateTimeOffset.UtcNow);
+        expiresAt.ShouldBeLessThan(DateTimeOffset.UtcNow.AddDays(60));
+
+        var listed = await owner.GetAsync(Shares(trip.Trip));
+        listed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var row = JsonDocument.Parse(await listed.Content.ReadAsStringAsync()).RootElement
+            .EnumerateArray().Single();
+        row.GetProperty("expiresAt").GetDateTimeOffset().ShouldBe(expiresAt);
+        // And the list still carries no token, which is the thing it must never start doing.
+        row.EnumerateObject().Select(m => m.Name).ShouldNotContain("token");
+    }
+
+    /// <summary>
+    /// Closing the watch closes the page, after a window in which it can still say the party is out.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two hosts over one database, and only the grace setting differs between them — so what is
+    /// being read is the window rather than the fact that the watch was closed. The same token, the
+    /// same rows, two answers.
+    /// </para>
+    /// <para>
+    /// The grace window is the half that is easy to argue away: the instant a coordinator closes
+    /// the watch is the instant the page has its most important thing to say, to the people who
+    /// have been refreshing it all evening. A page that went dark then would look exactly like the
+    /// party having stopped being reported.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Closing_the_watch_leaves_a_grace_window_and_an_installation_may_have_none()
+    {
+        var trip = await TrackedTripAsync("Everybody out", locationProtected: false);
+        var share = await PublishAsync(trip.Trip);
+
+        (await PutConfigAsync(owner, trip.Trip, new { state = "closed" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Still answering, and still answering with the party — which is the whole point of the
+        // window rather than merely of the status code.
+        var final = await FollowAsync(share.Token);
+        final.GetProperty("state").GetString().ShouldBe("closed");
+        final.GetProperty("participants").GetArrayLength().ShouldBeGreaterThan(0);
+
+        using var noGrace = NoGraceFactory();
+        using var strangerElsewhere = noGrace.CreateClient();
+        var refused = await strangerElsewhere.GetAsync(Follow(share.Token));
+        refused.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await RefusalShapeAsync(refused)).ShouldBe(
+            await RefusalShapeAsync(
+                await strangerElsewhere.GetAsync(Follow("Zm9yZ2VkLXRva2VuLXRoYXQtd2FzLW5ldmVyLW1pbnRlZA"))),
+            "a link whose watch has closed must be indistinguishable from one that never existed");
+    }
+
+    /// <summary>
+    /// A watch that is not running is not published, and minting says so rather than handing over
+    /// an address that opens nothing.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_takes_a_running_watch_and_refuses_one_that_is_not()
+    {
+        var trip = await TrackedTripAsync("Stood down", locationProtected: false);
+
+        // The positive half first, so the refusal below cannot be the trip simply being
+        // unpublishable for some other reason.
+        (await owner.PostAsync(Shares(trip.Trip), null)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        (await PutConfigAsync(owner, trip.Trip, new { state = "closed" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var refused = await owner.PostAsync(Shares(trip.Trip), null);
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await RefusalShapeAsync(refused)).ShouldContain("tracking.publication_refused_not_armed");
+    }
+
+    /// <summary>
+    /// A member of the party who cannot publish can still learn that the trip is published.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The gap this closes: the list of links takes write access to the trip, the tracking state
+    /// carried no fact about publication, and nothing told anybody — so somebody whose real name
+    /// was on a public page, by this installation's default, had no way at all to find out.
+    /// </para>
+    /// <para>
+    /// Asserted through a reader who cannot write the trip, and paired in both directions: before
+    /// anything is published the same reader is told nothing, and after the link is taken back they
+    /// are told nothing again. A field that always answered would be no better than the silence it
+    /// replaced. And the read is checked for carrying no token, because the fact must not become a
+    /// second copy of the capability.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_trips_own_read_says_it_is_published_to_somebody_who_cannot_publish_it()
+    {
+        var trip = await TrackedTripAsync("Told at last", locationProtected: false);
+
+        var before = await StateAsync(reader, trip.Trip);
+        before.GetProperty("publishedAt").ValueKind.ShouldBe(JsonValueKind.Null);
+        before.GetProperty("publishedUntil").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var share = await PublishAsync(trip.Trip);
+
+        // The reader may not even list the links, which is the surface this one exists beside.
+        (await reader.GetAsync(Shares(trip.Trip))).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        var published = await StateAsync(reader, trip.Trip);
+        published.GetProperty("publishedAt").ValueKind.ShouldBe(JsonValueKind.String);
+        published.GetProperty("publishedUntil").GetDateTimeOffset()
+            .ShouldBeGreaterThan(DateTimeOffset.UtcNow);
+        published.ToString().ShouldNotContain(share.Token);
+
+        (await RevokeAsync(trip.Trip, share.Id)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var after = await StateAsync(reader, trip.Trip);
+        after.GetProperty("publishedAt").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// The trip's own read tells each participant what the published page calls them, in the same
+    /// words the page uses.
+    /// </summary>
+    /// <remarks>
+    /// Read off both surfaces in one test and compared, because the value of the field is that it
+    /// is the page's answer and not an approximation of it: a signed-in surface that said "a place
+    /// in the party" about somebody the page names would be worse than saying nothing. The captions
+    /// are what let the two be lined up at all — the published envelope carries no caver id, by
+    /// design.
+    /// </remarks>
+    [Fact]
+    public async Task The_trips_own_read_says_what_the_published_page_calls_each_person()
+    {
+        var trip = await TrackedTripAsync("Named where they can see it", locationProtected: false, guests: 2);
+        await CaptionAsync(trip.Trip, trip.Cavers[0], "The trip leader");
+        var share = await PublishAsync(trip.Trip);
+
+        var signedIn = await StateAsync(owner, trip.Trip);
+        var page = await FollowAsync(share.Token);
+
+        var told = signedIn.GetProperty("participants").EnumerateArray()
+            .ToDictionary(
+                p => p.GetProperty("caverId").GetGuid(),
+                p => p.GetProperty("publishedAs").ValueKind == JsonValueKind.Null
+                    ? null
+                    : p.GetProperty("publishedAs").GetString());
+
+        // The captioned one, by the id that was captioned: the caption is what the page prints, and
+        // it is what the reader is told.
+        told[trip.Cavers[0]].ShouldBe("The trip leader");
+        Member(page, "The trip leader").GetProperty("label").GetString().ShouldBe("The trip leader");
+
+        // And the whole answer, compared as a set against the page's own. Deliberately not by
+        // position: the helper hands back cavers ordered by id and the names it invented in the
+        // order it invented them, so a test that lined the two lists up would be right about half
+        // the time and would fail on the other half with nothing to say why.
+        //
+        // This is also the stronger claim. What matters is not that some name arrived but that the
+        // two surfaces say the same thing about the same party — the signed-in read cannot be
+        // approximating the page, because a follower is looking at the second list and a member is
+        // reading the first.
+        told.Values.Order(StringComparer.Ordinal).ShouldBe(Labels(page).Order(StringComparer.Ordinal));
+
+        // And the uncaptioned half really is the roster's own name rather than an echo of the
+        // caption column: of the two people on this trip the page names one by the caption and the
+        // other by a name the trip was built with.
+        var named = told.Values.OfType<string>().ToList();
+        named.Count.ShouldBe(2);
+        named.ShouldContain("The trip leader");
+        named.ShouldContain(name => trip.Names.Contains(name));
+    }
+
+    /// <summary>
+    /// An installation that publishes nobody's name tells them that too.
+    /// </summary>
+    /// <remarks>
+    /// The twin of the test above, and the one that proves the field runs the published page's rule
+    /// rather than reading the roster: same rows, same trip, one setting different, and the answer
+    /// on the signed-in read changes with it.
+    /// </remarks>
+    [Fact]
+    public async Task Where_no_names_are_published_the_read_says_the_page_will_name_nobody()
+    {
+        var trip = await TrackedTripAsync("Numbered party", locationProtected: false);
+        (await StateAsync(owner, trip.Trip)).GetProperty("participants").EnumerateArray()
+            .ShouldAllBe(p => p.GetProperty("publishedAs").ValueKind == JsonValueKind.String);
+
+        using var namesOff = NamesOffFactory();
+        using var quiet = await AuthHelper.BearerClientAsync(namesOff, ownerEmail);
+
+        (await StateAsync(quiet, trip.Trip)).GetProperty("participants").EnumerateArray()
+            .ShouldAllBe(p => p.GetProperty("publishedAs").ValueKind == JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// The people a published page names are told that it exists.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The trip's own page says a trip is published and cannot be muted, but it only helps somebody
+    /// who goes and looks — and nobody opens a trip they were on last week to check whether
+    /// something changed about it. A publication is an event with a moment, so the thing that
+    /// matches it is a message sent at that moment.
+    /// </para>
+    /// <para>
+    /// Both directions in one test. Nothing is queued at all for a trip nobody published — which is
+    /// what keeps this from passing against a build that notified on every trip write — and after
+    /// the link is minted the recipients are exactly the one roster member who holds an account.
+    /// Asserted as an equality rather than as "contains", because the two ways this goes wrong are
+    /// telling nobody and telling everybody, and only an equality catches the second: the trip's
+    /// other participant is a guest with no account and must be reached by nothing, and no account
+    /// off the roster may be reached at all.
+    /// </para>
+    /// <para>
+    /// That the person who published is not told is the shared recipient rule's doing and is tested
+    /// where that rule lives; it is deliberately not claimed here, because the account that
+    /// publishes in this test is not on the trip's roster and an assertion about it would read as a
+    /// proof while being true for the wrong reason.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task Publishing_tells_the_party_and_reaches_nobody_else()
+    {
+        var memberEmail = $"pub-member-{Guid.NewGuid():N}"[..24] + "@t.local";
+        var memberUserId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, memberEmail);
+        var memberCaver = await CaverOfUserAsync(memberUserId);
+
+        var trip = await TrackedTripAsync(
+            "Somebody should know", locationProtected: false, memberCaver: memberCaver);
+
+        // Nothing has been published, so nothing has been said. Without this the assertion below
+        // would pass against a server that queued a notice on every trip write.
+        (await PublishedNoticesAsync(trip.Trip)).ShouldBeEmpty();
+
+        _ = await PublishAsync(trip.Trip);
+
+        (await PublishedNoticesAsync(trip.Trip)).ShouldBe([memberUserId]);
+    }
+
+    /// <summary>
     /// A follower is told the party's names — the roster's own, which is what this installation
     /// publishes by default — and still nothing that identifies anybody beyond that.
     /// </summary>
@@ -609,6 +912,55 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         // the cave's state now, and remembers no verdict of its own.
         await SetLocationProtectedAsync(trip.Cave, false);
         (await anonymous.GetAsync(Follow(token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The trip's own read stops calling the trip published at the moment the cave does.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Two answers about one page, which have to move together — and for a while only one of
+    /// them moved.</b> The published read refuses on three grounds: the link's own window, the
+    /// watch, and the cave. The trip's read consulted the window alone, so a cave protected after a
+    /// link had been handed out left every follower with a 404 while the tab the trip is
+    /// administered from went on drawing "this trip is published … anybody holding the link can
+    /// open a page about this trip". A participant who read that banner and asked for a caption
+    /// would have been acting on a page that no longer existed.
+    /// </para>
+    /// <para>
+    /// Read from both surfaces at the same instant, so what is pinned is that they agree rather
+    /// than that either says something in particular. Both directions, because the refusal is taken
+    /// again on every read and written down nowhere: published, then not, then published again once
+    /// the protection comes off, with the link never revoked and never re-minted.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_trips_own_read_stops_saying_published_when_the_cave_refuses()
+    {
+        var trip = await TrackedTripAsync("Published until protected", locationProtected: false);
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        (await anonymous.GetAsync(Follow(token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var published = await StateAsync(reader, trip.Trip);
+        published.GetProperty("publishedAt").ValueKind.ShouldBe(JsonValueKind.String);
+        published.GetProperty("publishedUntil").ValueKind.ShouldBe(JsonValueKind.String);
+
+        await SetLocationProtectedAsync(trip.Cave, true);
+
+        (await anonymous.GetAsync(Follow(token))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var refused = await StateAsync(reader, trip.Trip);
+        refused.GetProperty("publishedAt").ValueKind.ShouldBe(JsonValueKind.Null,
+            "the page answers nothing, so the trip's own read must not call the trip published");
+        // Together, because "published" and "until" are one answer: an until with no since would
+        // put a date on a publication this read has just denied.
+        refused.GetProperty("publishedUntil").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        await SetLocationProtectedAsync(trip.Cave, false);
+
+        (await anonymous.GetAsync(Follow(token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await StateAsync(reader, trip.Trip)).GetProperty("publishedAt").ValueKind
+            .ShouldBe(JsonValueKind.String,
+                "the refusal is re-decided on every read, so lifting it publishes the trip again");
     }
 
     /// <summary>
@@ -1201,6 +1553,74 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
     }
 
     // ---- plumbing --------------------------------------------------------------------------
+
+    /// <summary>
+    /// Backdates one link's own end, which is the only part of the window a test cannot reach
+    /// through the API: the expiry is fixed at mint and deliberately never extended or shortened
+    /// by anything a caller can do.
+    /// </summary>
+    /// <remarks>
+    /// Written straight into the column because it is a plain recorded fact with nothing derived
+    /// from it — unlike protection, where writing the root by hand leaves the effective column
+    /// stale and makes a test pass whether or not the rule works. Here the value is read on every
+    /// request and compared against the clock, so a row written this way is exactly a row that was
+    /// minted that long ago.
+    /// </remarks>
+    private async Task ExpireAsync(Guid shareId, DateTimeOffset at)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var share = await db.TripTrackingShares.SingleAsync(s => s.Id == shareId);
+        share.ExpiresAt = at;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A second host over the same database, run by an operator who has chosen no grace window
+    /// after a watch closes.
+    /// </summary>
+    /// <remarks>
+    /// The same device as the names-off host above, and for the same reason: the window is read
+    /// where the request is answered rather than stored anywhere, so this is how one token gets two
+    /// answers with the trip, the share and the watch being the very same rows. The alternative —
+    /// backdating the close — would also work and would prove less, because it could not tell a
+    /// window being applied from a window of zero.
+    /// </remarks>
+    private SilexGisApiFactory NoGraceFactory()
+    {
+        var settings = HostSettings();
+        settings["TripTracking:ShareGraceAfterClose"] = "00:00:00";
+        return new SilexGisApiFactory(connectionString, settings, JobWorkers.RemoveFrom);
+    }
+
+    /// <summary>The caver row an account was given when it was created.</summary>
+    private async Task<Guid> CaverOfUserAsync(Guid userId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Cavers.AsNoTracking().Where(c => c.UserId == userId).Select(c => c.Id).SingleAsync();
+    }
+
+    /// <summary>
+    /// Who has been told that this trip was published, read off the notification rows themselves.
+    /// </summary>
+    /// <remarks>
+    /// The row's existence is the in-app notice and is what the delivery pass later reads, so this
+    /// is the whole of what "somebody was told" means at the moment the mint commits. Narrowed by
+    /// template key as well as by target, because a trip collects notices for several reasons and a
+    /// test that counted all of them would pass on the strength of the roster announcement.
+    /// </remarks>
+    private async Task<List<Guid>> PublishedNoticesAsync(Guid tripLogId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.Notifications.AsNoTracking()
+            .Where(n => n.TemplateKey == MessageTemplateCatalog.NotifyTripPublished
+                && n.TargetKind == NotificationTargetKind.TripLog
+                && n.TargetId == tripLogId)
+            .Select(n => n.RecipientUserId)
+            .ToListAsync();
+    }
 
     private static string Shares(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/shares";
 

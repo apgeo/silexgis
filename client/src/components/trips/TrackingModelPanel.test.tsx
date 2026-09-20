@@ -151,6 +151,10 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
     closedAt: null,
     positionsWithheld: false,
     publishesRealNames: false,
+    // Not published. The pair travels together — "published" and "until when" are one answer —
+    // and a test about a published trip says both.
+    publishedAt: null,
+    publishedUntil: null,
     teams: [{ id: 'team-1', title: 'Team A' }],
     participants: [
       {
@@ -167,6 +171,7 @@ function tracking(overrides: Partial<TrackingState> = {}): TrackingState {
         label: null,
         in: true,
         out: false,
+        publishedAs: null,
       },
     ],
     ...overrides,

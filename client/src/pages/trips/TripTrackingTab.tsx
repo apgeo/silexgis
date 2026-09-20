@@ -388,7 +388,14 @@ export default function TripTrackingTab({
     if (kind === 'realName') {
       return (
         <Tooltip title={t('trips.tracking.publicName.realNameDetail')}>
-          <span data-testid={testId}>{named(participant.caverId)}</span>
+          {/* The server's own answer where it has one, and this table's name for the person only as
+              a fallback for a build that does not send it. They differ exactly where a member has
+              chosen a display name: every signed-in screen calls them by it and the published page
+              prints the roster's name. Preferring the server's here is what makes this cell the
+              answer to "what will a follow link print" rather than an approximation of it — and the
+              answer has to be exact, because somebody reading it is deciding whether to ask for a
+              caption. */}
+          <span data-testid={testId}>{participant.publishedAs ?? named(participant.caverId)}</span>
         </Tooltip>
       );
     }
@@ -887,6 +894,49 @@ export default function TripTrackingTab({
         onStale={() => void refetch()}
       />
 
+      {/* <b>That this trip is published, to everybody who can read the trip.</b>
+          Deliberately outside the publishing panel below, which is drawn only for somebody who may
+          run the watch: until this existed, a caver whose real name was on a public page — by the
+          installation's default, decided by somebody else — had no way at all to find out. The
+          list of follow links takes write access and carries tokens; this is the fact and none of
+          the capability, which is why it names no address and offers no way to open one.
+
+          Drawn as a warning rather than as information, and the colour is the argument: this is
+          the state in which what the rows below say about people is readable by anybody holding a
+          link, and a reader who skims past it has missed the one thing on this tab that is about
+          them rather than about the trip. */}
+      {data.publishedAt != null && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t('trips.tracking.published.title')}
+          data-testid="trip-tracking-published"
+          description={
+            <Flex vertical gap={4} style={{ marginTop: 4 }}>
+              <span data-testid="trip-tracking-published-since">
+                {t('trips.tracking.published.since', { when: when(data.publishedAt) })}
+              </span>
+              {/* Said only when the server answered it. The two arrive together, so this is not a
+                  case that happens — but a date rendered from a missing value would read as a real
+                  promise about when the page stops, which is the one sentence here that must not be
+                  invented. */}
+              {data.publishedUntil != null && (
+                <span data-testid="trip-tracking-published-until">
+                  {t('trips.tracking.published.until', { when: when(data.publishedUntil) })}
+                </span>
+              )}
+              {/* Points at the column that already answers "and what does it call me", rather than
+                  answering it again here for one reader: this tab does not know which row is the
+                  person reading, and the list names everybody including them. */}
+              <span data-testid="trip-tracking-published-where">
+                {t('trips.tracking.published.whereToLook')}
+              </span>
+            </Flex>
+          }
+        />
+      )}
+
       {/* Under the setup rather than at the foot of the tab: publishing is a decision about the
           watch as it is configured — which cave, which survey — and the card above it is where
           that configuration is read. A link handed out before a model is chosen is refused. */}
@@ -897,6 +947,11 @@ export default function TripTrackingTab({
         // What the published page will call the party, which is the installation's setting and
         // arrives on the trip's own read rather than being asked for a second time.
         publishesRealNames={data.publishesRealNames}
+        // Whether anything is published at this moment — the same answer the banner above is drawn
+        // from, so the panel's rows and that banner cannot say different things about one trip. The
+        // list of links cannot work this out for itself: a publication also ends when the watch
+        // closes and when the cave stops being publishable, and neither is written on a row.
+        published={data.publishedAt != null}
       />
 
       <div>

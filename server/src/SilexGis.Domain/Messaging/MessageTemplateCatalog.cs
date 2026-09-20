@@ -83,6 +83,22 @@ public static class MessageTemplateCatalog
 
     public const string NotifyTripParticipation = "notify.trip-participation";
 
+    /// <summary>
+    /// A trip somebody is on has been published: a link now opens a page about it that needs no
+    /// account.
+    /// </summary>
+    /// <remarks>
+    /// It names the trip and its date and points at the trip, and — like the trip-planning
+    /// messages and for the same reason — no cave: where a cave is remains readable by fewer people
+    /// than a trip's roster, and a message is as much an outbound copy of that as anything the API
+    /// returns. It also deliberately does not say what the published page calls this reader. That
+    /// answer changes — a caption can be typed a minute later, the installation's setting can be
+    /// turned off — and a placeholder frozen into a queued message would go on asserting whatever
+    /// was true when the link was minted. The message is the alert; the trip's own page is where
+    /// the live answer is, which is why the link is the last line.
+    /// </remarks>
+    public const string NotifyTripPublished = "notify.trip-published";
+
     // A trip being planned. All four name the trip and its date and nothing else: the places a
     // trip is about are readable by fewer people than its roster, and a message is as much an
     // outbound copy of that as anything the API returns.
@@ -564,6 +580,46 @@ public static class MessageTemplateCatalog
                     Bună ziua {displayName},
 
                     {actorName} v-a trecut ca participant la {tripTitle} în data de {tripDate}:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+            }),
+
+        new(
+            NotifyTripPublished,
+            MessageChannel.Email,
+            "A trip someone is on was published as a page anybody with the link can read.",
+            [AppName, DisplayName, ActorName, "tripTitle", "tripDate", "url", UnsubscribeUrl],
+            new Dictionary<string, MessageTemplateText>
+            {
+                ["en"] = new(
+                    "The trip {tripTitle} has been published",
+                    """
+                    Hello {displayName},
+
+                    {actorName} published the trip {tripTitle} of {tripDate} on {appName}. Anyone
+                    holding the link can now open a page showing who was on the trip, what the page
+                    calls each of them, and where each was last reported — without an account.
+
+                    Open the trip to see what the page calls you, and until when the link works:
+
+                    {url}
+
+                    {unsubscribeUrl}
+                    """),
+                ["ro"] = new(
+                    "Tura {tripTitle} a fost publicată",
+                    """
+                    Bună ziua {displayName},
+
+                    {actorName} a publicat tura {tripTitle} din {tripDate} pe {appName}. Oricine are
+                    linkul poate deschide acum o pagină care arată cine a fost în tură, cum îi
+                    numește pagina pe fiecare și unde a fost raportat ultima dată fiecare — fără cont.
+
+                    Deschideți tura pentru a vedea cum vă numește pagina și până când funcționează
+                    linkul:
 
                     {url}
 

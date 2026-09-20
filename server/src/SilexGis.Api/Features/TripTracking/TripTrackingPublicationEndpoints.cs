@@ -23,10 +23,30 @@ namespace SilexGis.Api.Features.TripTracking;
 /// <remarks>
 /// <para>
 /// The link is a capability and nothing else — 32 random bytes, base64url, stored only as a
-/// SHA-256 and shown once at mint, revocable. Malformed, unknown, revoked, and pointing at a
-/// trip that may no longer be published all answer one identical 404: the token is the whole of
-/// a follower's claim, so nothing about its validity may be distinguishable, and a refusal that
-/// said which of those it was would be an answer about which tokens exist.
+/// SHA-256 and shown once at mint, revocable. Malformed, unknown, revoked, lapsed, belonging to a
+/// watch that has closed, and pointing at a trip that may no longer be published all answer one
+/// identical 404: the token is the whole of a follower's claim, so nothing about its validity may
+/// be distinguishable, and a refusal that said which of those it was would be an answer about
+/// which tokens exist. In particular there is deliberately no "expired" answer — it would tell a
+/// stranger holding a guess that their guess was once real.
+/// </para>
+/// <para>
+/// <b>A publication ends without anybody remembering to end it.</b> Revoking is immediate and
+/// still the only way to end one early, but it was for a long time the <em>only</em> way, and it
+/// does not cover what this feature actually does: the paste-in block puts the token into a club's
+/// own article, which is indexable and archivable, so the address outlives whoever wrote the
+/// article caring about it. Three things now end a publication and the earliest wins — the watch
+/// closing (with a short grace window, because the moment a party comes out is the moment the page
+/// most needs to say so), an expiry fixed at mint, and revocation. The rule and the argument for
+/// each part live in <see cref="TripPublicationWindow"/>, and it is asked again on every read
+/// exactly as the protection refusal is.
+/// </para>
+/// <para>
+/// <b>And the people named are told.</b> An installation publishes real names by default, and the
+/// people that names are not the person who pressed the button. So the trip's own read now says
+/// whether it is published and what the page calls each of them — to anybody who may read the trip,
+/// needing no preference and no write access — and a notice goes to each of them when a link is
+/// minted. See <see cref="TripPublicationAnnouncer"/>.
 /// </para>
 /// <para>
 /// <b>A trip whose cave is protected is not published at all.</b> Not blurred, not partial —
@@ -105,7 +125,8 @@ public static class TripTrackingPublicationEndpoints
 
     private static async Task<Results<Created<TripTrackingShareCreatedDto>, ProblemHttpResult>> MintAsync(
         Guid tripLogId, SilexGisDbContext db, IAccessService access, FeatureProtection protection,
-        IAccessContextAccessor accessAccessor, CancellationToken ct)
+        IAccessContextAccessor accessAccessor, IOptions<TripTrackingOptions> options,
+        TripPublicationAnnouncer announcer, TimeProvider clock, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
@@ -116,6 +137,19 @@ public static class TripTrackingPublicationEndpoints
 
         if (await PublicationRefusalAsync(db, access, protection, ctx!, tripLogId, ct) is { } refused) return refused;
 
+        // A link is only worth minting for a watch that is running. The published read answers
+        // nothing for a watch that is off or closed — that is what ends a publication without
+        // anybody remembering to — so minting one here would hand somebody an address that has
+        // never worked and will not start working when they paste it into an article. Refused at
+        // the moment of the decision instead, where there is somebody to tell.
+        var tracking = await db.TripTrackings.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
+        if (tracking?.State is not TripTrackingState.Armed)
+        {
+            return ApiProblems.Conflict("tracking.publication_refused_not_armed",
+                "A follow link opens a page only while the watch is running, so arm it before publishing.");
+        }
+
         // 32 random bytes, base64url-encoded, become the URL token; only its SHA-256 is stored,
         // so a database leak cannot resurrect live links and the token cannot be shown again.
         var token = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
@@ -124,13 +158,23 @@ public static class TripTrackingPublicationEndpoints
             TripLogId = tripLogId,
             TokenHash = HashToken(token),
             CreatedBy = ctx!.UserId,
+            // Fixed here and never extended by a read. What governs it — and why an expiry is only
+            // one of three things that end a publication — is argued where the rule lives.
+            ExpiresAt = TripPublicationWindow.ExpiresAtFor(
+                clock.GetUtcNow(), trip!.TripDate, trip.TripDateEnd, options.Value.ShareLifetime),
         };
         db.TripTrackingShares.Add(share);
+
+        // Queued before the save that commits the link, so nobody is told about a publication that
+        // did not happen — and so that the people whose names this puts on the internet are told at
+        // the moment it happens rather than never.
+        await announcer.AnnounceAsync(trip, ct);
+
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Created(
             $"/api/v1/trip-logs/{tripLogId}/tracking/shares/{share.Id}",
-            new TripTrackingShareCreatedDto(share.Id, token, share.CreatedAt));
+            new TripTrackingShareCreatedDto(share.Id, token, share.CreatedAt, share.ExpiresAt));
     }
 
     private static async Task<Results<Ok<List<TripTrackingShareDto>>, ProblemHttpResult>> ListAsync(
@@ -147,7 +191,7 @@ public static class TripTrackingPublicationEndpoints
         var items = await db.TripTrackingShares.AsNoTracking()
             .Where(s => s.TripLogId == tripLogId)
             .OrderByDescending(s => s.CreatedAt)
-            .Select(s => new TripTrackingShareDto(s.Id, s.CreatedBy, s.CreatedAt, s.RevokedAt))
+            .Select(s => new TripTrackingShareDto(s.Id, s.CreatedBy, s.CreatedAt, s.RevokedAt, s.ExpiresAt))
             .ToListAsync(ct);
         return TypedResults.Ok(items);
     }
@@ -181,7 +225,8 @@ public static class TripTrackingPublicationEndpoints
 
     private static async Task<Results<Ok<PublicTripTrackingEnvelopeDto>, ProblemHttpResult>> FollowAsync(
         string token, SilexGisDbContext db, FeatureProtection protection, ICrsRegistry crs,
-        IFileAccessTokenService tokens, IOptions<TripTrackingOptions> options, CancellationToken ct)
+        IFileAccessTokenService tokens, IOptions<TripTrackingOptions> options, TimeProvider clock,
+        CancellationToken ct)
     {
         if (string.IsNullOrEmpty(token) || token.Length > TripTrackingRules.MaxShareTokenLength)
         {
@@ -190,7 +235,7 @@ public static class TripTrackingPublicationEndpoints
 
         var hash = HashToken(token);
         var share = await db.TripTrackingShares.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.TokenHash == hash && s.RevokedAt == null, ct);
+            .FirstOrDefaultAsync(s => s.TokenHash == hash, ct);
         if (share is null) return ApiProblems.NotFound(NotFoundCode);
 
         var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == share.TripLogId, ct);
@@ -198,6 +243,21 @@ public static class TripTrackingPublicationEndpoints
 
         var tracking = await db.TripTrackings.AsNoTracking()
             .FirstOrDefaultAsync(t => t.TripLogId == trip.Id, ct);
+
+        // Whether this link is still a link, asked here rather than remembered anywhere. Revoked,
+        // lapsed, and pointing at a watch that has closed or was never armed are four different
+        // stories and one answer — the same 404 an invented token gets, built above and reused
+        // below without a branch of its own, because a refusal that distinguished them would tell
+        // somebody holding a guess that their guess was once real. The rule itself, and the
+        // argument for it being three things rather than one, live in Domain.
+        var open = tracking is not null && TripPublicationWindow.IsOpen(
+            clock.GetUtcNow(),
+            share.RevokedAt,
+            share.ExpiresAt,
+            tracking.State,
+            tracking.ClosedAt,
+            options.Value.ShareGraceAfterClose);
+        if (!open) return ApiProblems.NotFound(NotFoundCode);
 
         // The refusal, taken again. A cave that was open when the link was minted and is
         // protected now closes the page, and so does a configuration that has lost the cave it
@@ -351,8 +411,15 @@ public static class TripTrackingPublicationEndpoints
     /// hole on the page is worse than the ordinal it would replace, and the difference between
     /// "unnamed" and "named badly" is one a follower cannot see.
     /// </para>
+    /// <para>
+    /// <b>Reachable from the signed-in read, and that is the point of it being one function.</b>
+    /// The trip's own tracking read tells each participant what the published page calls them, and
+    /// it has to be the same answer rather than a second implementation of the same three rules —
+    /// a surface that told somebody they would appear as a place in the party while the page named
+    /// them would be worse than saying nothing.
+    /// </para>
     /// </remarks>
-    private static string? NameFor(
+    internal static string? NameFor(
         Guid caverId, Dictionary<Guid, string> labels, Dictionary<Guid, string> rosterNames)
     {
         if (labels.TryGetValue(caverId, out var label) && !string.IsNullOrWhiteSpace(label))

@@ -147,7 +147,7 @@ public static class TripTrackingEndpoints
     private static async Task<Results<Ok<TrackingStateDto>, ProblemHttpResult>> GetAsync(
         Guid tripLogId, HttpContext http, SilexGisDbContext db, IAccessService access,
         FeatureProtection protection, IAccessContextAccessor accessAccessor,
-        IOptions<TripTrackingOptions> options, CancellationToken ct)
+        IOptions<TripTrackingOptions> options, TimeProvider clock, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null) return ApiProblems.NotFound("trip_log.not_found");
@@ -195,6 +195,61 @@ public static class TripTrackingEndpoints
         var modelMissing = tracking?.SurveyModelId is { } armedOn
             && !await db.SurveyModels.AsNoTracking().AnyAsync(m => m.Id == armedOn, ct);
 
+        // Whether this trip is published, for a caller who may read it but not run it — the fact a
+        // member of the party previously had no way to learn. The list of links takes write access
+        // and carries tokens; this is the fact and none of the capability.
+        //
+        // Asked through the same rules the published read answers with, at this instant, rather than
+        // by looking for an unrevoked row: a link whose watch has closed or whose window has passed
+        // opens nothing, and reporting it here as a publication would make this surface disagree
+        // with the page it is describing.
+        var now = clock.GetUtcNow();
+        var openShares = (await db.TripTrackingShares.AsNoTracking()
+                .Where(share => share.TripLogId == tripLogId)
+                .Select(share => new { share.CreatedAt, share.RevokedAt, share.ExpiresAt })
+                .ToListAsync(ct))
+            .Where(share => tracking is not null && TripPublicationWindow.IsOpen(
+                now, share.RevokedAt, share.ExpiresAt, tracking.State, tracking.ClosedAt,
+                options.Value.ShareGraceAfterClose))
+            .ToList();
+
+        // <b>And the cave's own refusal, which is the other half of what the page decides and was
+        // for a while the half this read did not ask.</b> A follow link opens nothing for a trip
+        // anchored to a position-protected cave, or to a cave the configuration has lost — both
+        // refused on every request rather than remembered — so a link that is inside its window can
+        // still be a link that answers 404. Left out, this surface went on reporting a publication
+        // that had stopped existing: a participant would read "this trip is published" and ask for
+        // a caption on a page nobody can open, and the tab's warning banner would stand over a
+        // trip nothing public names. Asked of the cave and not of this caller, exactly as the
+        // published read asks it, so that the answer is about the page rather than about who is
+        // reading — and asked only when a link is otherwise open, so the ordinary read of an
+        // unpublished trip costs no query for it.
+        var publishable = openShares.Count > 0
+            && tracking!.CaveFeatureId is { } publishedCave
+            && (await TrackingWithholding.PublishableCaveIdsAsync(db, protection, [publishedCave], ct))
+                .Contains(publishedCave);
+
+        // First minted and last to lapse: since when the trip has been readable without an account,
+        // and when it stops. Nulls together, because "published" and "until" are one answer.
+        DateTimeOffset? publishedAt = publishable ? openShares.Min(s => s.CreatedAt) : null;
+        DateTimeOffset? publishedUntil = publishable ? openShares.Max(s => s.ExpiresAt) : null;
+
+        // What a published page would call each of them, answered by the rule the published page
+        // itself runs rather than by a second reading of the same three conditions. Read here for
+        // every caller who may read the trip, because the question "what does a follow link print
+        // for me" is asked before anybody publishes as well as after.
+        //
+        // The roster's own names, exactly as the published read takes them and for the same reason:
+        // what a club publishes about a trip is the name the trip records, not the display name an
+        // account happened to choose. Skipped entirely where the installation publishes no names,
+        // so a server configured not to disclose them does not read them either.
+        var publishedNames = options.Value.PublishRealNames
+            ? await db.Cavers.AsNoTracking()
+                .Where(c => rosterCavers.Contains(c.Id))
+                .Select(c => new { c.Id, c.FullName })
+                .ToDictionaryAsync(c => c.Id, c => c.FullName, ct)
+            : [];
+
         var withheldAny = configHasVocabulary && !configOpen;
         var byCaver = events.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
         var participants = new List<TrackingParticipantDto>();
@@ -234,7 +289,11 @@ public static class TripTrackingEndpoints
                 positionOpen ? lastPositioned?.SurveyModelId : null,
                 standing == TripStanding.Underground,
                 standing == TripStanding.Out,
-                labels.GetValueOrDefault(caverId)));
+                labels.GetValueOrDefault(caverId),
+                // One rule, two surfaces. Calling the published read's own function is what keeps
+                // this from telling somebody they appear as a place in the party while the page
+                // names them.
+                TripTrackingPublicationEndpoints.NameFor(caverId, labels, publishedNames)));
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
@@ -253,6 +312,8 @@ public static class TripTrackingEndpoints
             // Said on every read of the trip rather than only when a link is minted: the panel that
             // publishes has to word what the page will show before anybody presses the button.
             options.Value.PublishRealNames,
+            publishedAt,
+            publishedUntil,
             [.. teams.Select(t => new TrackingTeamDto(t.Id, t.Title))],
             participants));
     }
@@ -303,7 +364,7 @@ public static class TripTrackingEndpoints
     private static async Task<Results<Ok<TrackingStateDto>, ProblemHttpResult>> PutConfigAsync(
         Guid tripLogId, TrackingConfigRequest request, HttpContext http, SilexGisDbContext db,
         IAccessService access, FeatureProtection protection, IAccessContextAccessor accessAccessor,
-        IOptions<TripTrackingOptions> options, CancellationToken ct)
+        IOptions<TripTrackingOptions> options, TimeProvider clock, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
@@ -449,7 +510,7 @@ public static class TripTrackingEndpoints
             return ApiProblems.Conflict("tracking.concurrent_write", "Another tracking write landed first — reload and retry.");
         }
 
-        return await GetAsync(tripLogId, http, db, access, protection, accessAccessor, options, ct);
+        return await GetAsync(tripLogId, http, db, access, protection, accessAccessor, options, clock, ct);
     }
 
     private static async Task<Results<Ok<TrackingTeamDto>, ProblemHttpResult>> CreateTeamAsync(

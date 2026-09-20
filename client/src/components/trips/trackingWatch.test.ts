@@ -30,6 +30,10 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     in: true,
     out: false,
     label: null,
+    // What a published page would print for this person: the caption where somebody typed one,
+    // otherwise the roster's own name where the installation publishes names. Null is the
+    // ordinary value here and means the page would call them by their place in the party.
+    publishedAs: null,
     ...overrides,
   };
 }

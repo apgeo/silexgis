@@ -21,6 +21,7 @@ const everyCategory: Record<NotificationCategoryName, true> = {
   cavingGroupMembership: true,
   permissionGranted: true,
   tripParticipation: true,
+  tripPublished: true,
   tripPlanning: true,
   tripCallout: true,
   jobCompleted: true,

@@ -36,6 +36,10 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
       { id: 'team-2', title: 'Echipa 2' },
     ],
     publishesRealNames: true,
+    // Not published. The pair travels together — "published" and "until when" are one answer —
+    // and a test about a published trip says both.
+    publishedAt: null,
+    publishedUntil: null,
     surveyModelMissing: false,
     participants: [
       {
@@ -56,6 +60,7 @@ function state(overrides: Partial<TrackingState> = {}): TrackingState {
         label: null,
         in: true,
         out: false,
+        publishedAs: null,
       },
     ],
     ...overrides,
@@ -360,6 +365,7 @@ describe('trackedCaversAt', () => {
           in: false,
           out: false,
           label: null,
+          publishedAs: null,
         },
       ],
     });

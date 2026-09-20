@@ -1480,7 +1480,8 @@
         "versionMismatch": "Somebody else changed this tracking while you were working on it. The page has been read again; look at it before saving.",
         "shareNotFound": "That follow link is no longer there — somebody may have taken it back already.",
         "publicationRefusedCave": "Publishing this trip hands over its cave's survey drawing, and that takes the right to share the cave. Ask whoever looks after it.",
-        "publicationRefusedProtected": "This trip's cave has protected coordinates, so the trip cannot be published at all. A published page says where the party is inside the cave, and there is no version of that which withholds the position."
+        "publicationRefusedProtected": "This trip's cave has protected coordinates, so the trip cannot be published at all. A published page says where the party is inside the cave, and there is no version of that which withholds the position.",
+        "publicationNotArmed": "A follow link opens a page only while the watch is running. Arm the watch, then publish the trip."
       },
       "publish": {
         "title": "Publish this trip",
@@ -1502,11 +1503,23 @@
         "copyFailed": "This browser would not let the page write to the clipboard. The text is selected — copy it by hand.",
         "none": "This trip is not published. Nobody can follow it without an account.",
         "statusActive": "Live",
+    "statusDormant": "Not open",
+    "dormantUntil": "This link opens nothing at the moment. The page answers only while the watch is running and while the trip’s cave may be published — if that changes back, this link works again until {{when}}.",
         "createdAt": "Created {{when}}",
         "revoke": "Take it back",
         "revokeConfirm": "Take this follow link back? Anybody holding it stops being able to open the page.",
         "revoked": "The follow link has been taken back.",
-        "listUnavailable": "This trip's follow links could not be read."
+        "listUnavailable": "This trip's follow links could not be read.",
+        "expiresAt": "Works until {{when}}",
+        "ends": "A follow link ends on its own. It stops working when the watch is closed, and in any case on the date below — so an address left in an old article does not go on showing the party for ever. Taking it back ends it at once.",
+        "mintedExpires": "This address stops working on {{when}}, or sooner when you close the watch.",
+        "tellsParty": "Everybody on this trip who has an account is told that it has been published."
+      },
+      "published": {
+        "title": "This trip is published",
+        "since": "Since {{when}}, anybody holding the link can open a page about this trip without an account. It shows who was on the trip, what the page calls each of them, and where each was last reported.",
+        "until": "The link stops working on {{when}}, or sooner when the watch is closed.",
+        "whereToLook": "The list below shows what the page calls each person on this trip, including you. A caption set on somebody is what the page prints for them instead."
       },
       "publicName": {
         "column": "On the public page",
@@ -2482,6 +2495,7 @@
         "cavingGroupMembership": "Caving group membership changes",
         "permissionGranted": "Someone shares something with me",
         "tripParticipation": "I am added to a trip",
+        "tripPublished": "A trip I am on was published as a page anybody with the link can read",
         "tripPlanning": "I am invited to a trip, a trip I am on changes, a trip needs access I can grant, or a trip or club event I answered about is coming up",
         "commentReply": "Someone replies to a comment I wrote",
         "commentOnMine": "Someone comments on something of mine",
@@ -2809,6 +2823,7 @@
       "name_notify_caving_group_removed": "Removed from a caving group",
       "name_notify_permission_granted": "Given access to a record",
       "name_notify_trip_participation": "Listed on a trip report",
+      "name_notify_trip_published": "A trip was published as a public page",
       "name_notify_trip_plan_invitation": "Invited to a planned trip",
       "name_notify_trip_plan_changed": "A planned trip changed",
       "name_notify_trip_plan_cancelled": "A planned trip was called off",

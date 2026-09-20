@@ -104,7 +104,45 @@ public sealed record TrackingParticipantDto(
     /// every row. A caption is what the page shows whichever way that setting is set.
     /// </para>
     /// </summary>
-    string? Label);
+    string? Label,
+    /// <summary>
+    /// The string a published page would print for this person right now, or null where it would
+    /// print none and call them by their place in the party.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The server's own answer rather than something a surface derives.</b> A caver whose real
+    /// name is on a public page has to be able to find out, and the only honest way to tell them is
+    /// to run the very rule the published page runs — the caption first, then the roster's own
+    /// name where this installation publishes names, then nothing — against the very rows it reads.
+    /// A second implementation on the client would be free to disagree with the page it is
+    /// describing, and the one direction it must never be wrong in is saying "a place in the party"
+    /// about somebody the page names.
+    /// </para>
+    /// <para>
+    /// It is what the page <em>would</em> print, whether or not a link exists. Said unconditionally
+    /// because the question is asked before anybody publishes: whoever is about to press the button
+    /// has to read what it will disclose, and somebody already on a published page has to be able
+    /// to read what it is disclosing. Whether a page exists is <c>publishedAt</c> on the trip.
+    /// </para>
+    /// <para>
+    /// Deliberately the roster's name and not this account's display name, which is what every
+    /// other signed-in surface calls the same person. The two part company the moment a member
+    /// chooses a display name, and this field's whole job is to answer "what will a follow link
+    /// print" — so it answers with the published string even where that differs from the one beside
+    /// it on the screen.
+    /// </para>
+    /// <para>
+    /// <b>That difference is not a widening, and the reason is worth stating rather than assuming.</b>
+    /// A caver's roster name is readable by any signed-in caller by design — it is the label every
+    /// attribution row needs, and the roster's own protection rule says so; what the shared resolver
+    /// does with an account's chosen label is prefer it so that one person is not shown under two
+    /// names on one page, which is a consistency rule and never a protection. So this field
+    /// discloses nothing a signed-in caller could not already read, and it is sent to a narrower
+    /// set than that: only to somebody who may read this trip.
+    /// </para>
+    /// </remarks>
+    string? PublishedAs);
 
 public sealed record TrackingStateDto(
     TripTrackingState State,
@@ -147,6 +185,49 @@ public sealed record TrackingStateDto(
     /// </para>
     /// </summary>
     bool PublishesRealNames,
+    /// <summary>
+    /// When this trip was first published by a link that still opens the page, or null when no link
+    /// does.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The fact a member could not previously learn at all.</b> The list of follow links takes
+    /// write access, so somebody who is merely on the trip could not see that one had been minted;
+    /// the tracking state said nothing about it; and nothing told them. Their real name could be on
+    /// a page on the internet, by the installation's default, with no surface anywhere admitting
+    /// it. This is that surface, and it follows the trip's own readability and nothing else — a
+    /// caller who may read the trip may know whether the trip is published.
+    /// </para>
+    /// <para>
+    /// <b>It carries no token and no link count, and neither is an oversight.</b> A token is the
+    /// whole of a follower's claim and exists in exactly one response; a page that showed one to
+    /// every reader of the trip would be handing out the capability rather than reporting it. What
+    /// a person needs to know is that a page exists, since when, and until when — not how to open
+    /// it.
+    /// </para>
+    /// <para>
+    /// Computed from the same rules the published read answers with, asked at this instant rather
+    /// than stored: a link whose watch has closed or whose window has passed is not a publication
+    /// any more, and reporting it as one would have this surface disagree with the page itself.
+    /// <b>The cave's refusal is one of those rules, not a separate question</b> — a trip whose cave
+    /// has since been position-protected, or whose watch has lost the cave it was anchored to, is
+    /// refused to every follower while its links sit unrevoked and inside their window, so a
+    /// reading that consulted the window alone would report a publication that opens nothing.
+    /// </para>
+    /// </remarks>
+    DateTimeOffset? PublishedAt,
+    /// <summary>
+    /// When the last still-open link lapses, or null when none is open.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the answer, and the one that makes the first half actionable: "this trip
+    /// is published" is a different thing to be told depending on whether it stops on Thursday or
+    /// in two weeks. The latest of the open links, because that is when the trip actually stops
+    /// being published — an earlier one lapsing changes nothing while another is live. It is an
+    /// outer bound rather than a promise: closing the watch ends the publication sooner, and
+    /// revoking ends it at once.
+    /// </remarks>
+    DateTimeOffset? PublishedUntil,
     IReadOnlyList<TrackingTeamDto> Teams,
     IReadOnlyList<TrackingParticipantDto> Participants);
 

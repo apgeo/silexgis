@@ -8039,10 +8039,16 @@ export function publicTripPollInterval(trip: PublicTripEnvelope | undefined) {
 /**
  * A published trip as somebody holding its link sees it.
  *
- * Every unusable token — malformed, unknown, revoked, a cave that has since been protected, a
- * trip that is gone — answers one identical 404, so there is exactly one failure to render and no
- * second reading of it to attempt. `retryQuery` already declines to retry a 4xx, so that answer
- * settles at once instead of holding a stranger on a spinner for seven seconds.
+ * Every unusable token — malformed, unknown, revoked, lapsed, belonging to a watch that has been
+ * closed, a cave that has since been protected, a trip that is gone — answers one identical 404,
+ * so there is exactly one failure to render and no second reading of it to attempt. `retryQuery`
+ * already declines to retry a 4xx, so that answer settles at once instead of holding a stranger on
+ * a spinner for seven seconds.
+ *
+ * <b>A publication now ends on its own, and this page needs no change for it.</b> That is the
+ * point of every ending answering as an unknown token does: a link that ran out while somebody had
+ * the page open, and one that was never real, arrive here as the same thing and are drawn as the
+ * same thing. Nothing here may tell the two apart, and nothing here tries.
  *
  * Kept fresh while the watch is armed, and afterwards only for as long as something in the answer
  * goes stale on its own — which is the signed URL behind every published photograph, and nothing
