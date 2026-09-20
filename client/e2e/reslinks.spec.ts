@@ -112,8 +112,37 @@ async function pickOption(page: Page, select: Locator, label: string | RegExp) {
   await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0);
 }
 
-/** Picks an existing item in the record-a-link dialog by typing part of its name. */
+/**
+ * Picks an existing item in the record-a-link dialog by typing part of its name.
+ *
+ * The dialog draws one of two controls depending on which kind is being linked, and they are not
+ * interchangeable to a test. Four kinds — a feature, a document, a trip and a map view — are
+ * answerable by the filter model and get the object selector, which is a search box over a list of
+ * rows. The remaining five are still the search this dialog always had, an antd `Select`. Both
+ * carry the same accessible name, "Item", which is what made the breakage quiet: the selector's
+ * box is an `Input` and so a **textbox**, while the old control is a **combobox**, so a lookup by
+ * the combobox role stopped matching for the converted kinds and matched nothing at all rather
+ * than matching the wrong thing.
+ *
+ * So the selector is addressed by the test ids it emits rather than by role, and the old control
+ * is kept as the fallback for the kinds that have not moved. When the remaining five become
+ * worlds this second branch goes, along with the one in the component.
+ */
 async function pickExistingItem(page: Page, dialog: Locator, name: string, query: string) {
+  const selector = dialog.getByTestId('reslink-target-picker');
+
+  if (await selector.count()) {
+    await dialog.getByTestId('reslink-target-picker-input').fill(query);
+    // The list is fetched, so the row is waited for rather than assumed to be there already; the
+    // control asks for nothing until two characters are typed.
+    const row = dialog
+      .getByTestId('reslink-target-picker-row')
+      .filter({ hasText: name });
+    await expect(row.first()).toBeVisible({ timeout: 15_000 });
+    await row.first().click();
+    return;
+  }
+
   await dialog.getByRole('combobox', { name: 'Item', exact: true }).click();
   await page.keyboard.type(query);
   const suggestion = page.locator('.ant-select-item-option').filter({ hasText: name });
@@ -466,9 +495,24 @@ test('a trip log takes part in links from its own page', async ({ page }) => {
   // A trip of this run's own, so the section's count is a fact about this trip alone.
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByLabel('Title', { exact: true }).fill(title);
+  // Scoped to the dialog, and named by a pattern rather than a string. Two things bite here and
+  // only the first is obvious: the trip listing behind the dialog carries a sortable column header
+  // that also announces itself as "Title", so a bare label lookup matches two elements and refuses
+  // to act on either; and the field's own accessible name is "* Title", because the required
+  // marker is part of the label text rather than decoration beside it. Matching "Title" exactly
+  // therefore swaps one failure for another — two elements becomes none.
+  await page
+    .getByRole('dialog', { name: 'New trip log' })
+    .getByRole('textbox', { name: /^\*?\s*Title$/ })
+    .fill(title);
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+
+  // A trip keeps its links behind their own tab, unlike a feature page where the dock carries
+  // them beside everything else. The button that records one does not exist until that tab is
+  // open, so going straight for it waits out the timeout against a page that is perfectly
+  // healthy — which is what this test did.
+  await page.getByRole('tab', { name: 'Links', exact: true }).click();
 
   // A trip is documented by things, which is a relation that reads one way — the trip is
   // the end it reads from, because that is the page the link is being recorded on.
