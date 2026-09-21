@@ -2308,6 +2308,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/trips/{token}/past": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Past trips of this link's cave: the ones that were published and are now over, newest first. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicPastTripListDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/trips/{token}/past/{tripLogId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One past trip of this link's cave, played back: the party by their place in it and where each was reported over time. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicPastTrackDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -22426,6 +22503,58 @@ export interface components {
             title: string;
             description: null | string;
             photos: components["schemas"]["PublicPhotoDto"][];
+        };
+        PublicPastTrackDto: {
+            title: string;
+            /** Format: date */
+            tripDate: string;
+            /** Format: date */
+            tripDateEnd: null | string;
+            /** Format: date-time */
+            armedAt: null | string;
+            /** Format: date-time */
+            closedAt: null | string;
+            positionsWithheld: boolean;
+            trackTruncated: boolean;
+            model: null | components["schemas"]["PublicTripSurveyModelDto"];
+            teams: components["schemas"]["PublicTripTeamDto"][];
+            participants: components["schemas"]["PublicPastTrackParticipantDto"][];
+        };
+        PublicPastTrackFixDto: {
+            /** Format: date-time */
+            recordedAt: string;
+            /** Format: uuid */
+            teamId: null | string;
+            stationName: null | string;
+            /** Format: double */
+            depthM: null | number;
+            positionOnOtherModel: boolean;
+            in: boolean;
+            out: boolean;
+        };
+        PublicPastTrackParticipantDto: {
+            /** Format: int32 */
+            ordinal: number;
+            label: null | string;
+            track: components["schemas"]["PublicPastTrackFixDto"][];
+        };
+        PublicPastTripDto: {
+            /** Format: uuid */
+            tripLogId: string;
+            title: string;
+            /** Format: date */
+            tripDate: string;
+            /** Format: date */
+            tripDateEnd: null | string;
+            /** Format: date-time */
+            closedAt: null | string;
+            /** Format: int32 */
+            participantCount: number;
+            playable: boolean;
+        };
+        PublicPastTripListDto: {
+            trips: components["schemas"]["PublicPastTripDto"][];
+            more: boolean;
         };
         PublicPhotoDto: {
             /** Format: uuid */

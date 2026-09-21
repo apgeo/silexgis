@@ -83,12 +83,35 @@ public static class TripPublicationWindow
     public static DateTimeOffset ExpiresAtFor(
         DateTimeOffset now, DateOnly tripDate, DateOnly? tripDateEnd, TimeSpan lifetime)
     {
-        var lastDay = tripDateEnd is { } end && end > tripDate ? end : tripDate;
-        var afterTheTrip = new DateTimeOffset(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var afterTheTrip = EndOfTrip(tripDate, tripDateEnd);
 
         // Whichever is later, so a link minted after the trip still gets its whole window and one
         // minted before the trip gets a window measured from the end of it.
         return (afterTheTrip > now ? afterTheTrip : now) + lifetime;
+    }
+
+    /// <summary>
+    /// The instant a trip is over: midnight UTC after its last planned day.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Extracted rather than spelled twice because two different windows now count from it — the
+    /// expiry a link is minted with, and how long the trip stays readable as a past track — and
+    /// two readings of "when was the trip over" that drifted by a day would be invisible in both.
+    /// </para>
+    /// <para>
+    /// The dates carry no time zone; they are the days a club wrote down, so the end of the last
+    /// one is read as midnight UTC after it. Approximate by at most a day either way, which is
+    /// immaterial against windows measured in weeks and is the only reading that does not invent a
+    /// time zone the trip never recorded. A recorded end earlier than the start is nonsense
+    /// somebody typed and is ignored rather than obeyed — reading it literally would shorten a
+    /// window on the strength of a typing mistake.
+    /// </para>
+    /// </remarks>
+    public static DateTimeOffset EndOfTrip(DateOnly tripDate, DateOnly? tripDateEnd)
+    {
+        var lastDay = tripDateEnd is { } end && end > tripDate ? end : tripDate;
+        return new DateTimeOffset(lastDay.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
     }
 
     /// <summary>

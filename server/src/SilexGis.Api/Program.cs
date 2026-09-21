@@ -189,6 +189,11 @@ try
         .BindConfiguration(SyncOptions.SectionName);
     builder.Services.AddOptions<TripTrackingOptions>()
         .BindConfiguration(TripTrackingOptions.SectionName);
+    // Bound beside the live tracking settings and deliberately in a section of its own: these
+    // govern the second of a published trip's two lifetimes — how long it stays readable after it
+    // is over — and one class holding both would leave a careless read between them.
+    builder.Services.AddOptions<TripPastTrackOptions>()
+        .BindConfiguration(TripPastTrackOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<AdminTestSendThrottle>();
 builder.Services.AddScoped<GroupAnnouncementThrottle>();
@@ -384,6 +389,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTripTrackingEndpoints();
     api.MapTripTrackingPictureEndpoints();
     api.MapTripTrackingPublicationEndpoints();
+    api.MapTripPastTrackEndpoints();
     api.MapTripChecklistEndpoints();
     api.MapChecklistEndpoints();
     api.MapExpeditionEndpoints();

@@ -108,7 +108,12 @@ public static class TripTrackingPublicationEndpoints
     /// on purpose: the surfaces are different and a client that can tell them apart can say
     /// something useful, while a follower still cannot tell why this one failed.
     /// </summary>
-    private const string NotFoundCode = "tracking.share_not_found";
+    /// <remarks>
+    /// Shared with the past-track routes rather than copied, and they add no code of their own: a
+    /// refusal that told "your token is bad" apart from "that past trip is gone" would be an answer
+    /// about which trips exist and which tokens were once real.
+    /// </remarks>
+    internal const string NotFoundCode = "tracking.share_not_found";
 
     /// <summary>
     /// The caller may run this trip but may not hand its cave to the internet.
@@ -250,6 +255,14 @@ public static class TripTrackingPublicationEndpoints
         // below without a branch of its own, because a refusal that distinguished them would tell
         // somebody holding a guess that their guess was once real. The rule itself, and the
         // argument for it being three things rather than one, live in Domain.
+        //
+        // This is the LIVE window, and it governs this route alone. The past-track routes beside
+        // it ask a second, longer window — see TripPastTrackWindow — because the archive of trips
+        // that are already over was asked for so that it can be read over time, and gating it on
+        // this window would make it reachable only while some party of that cave happened to be
+        // underground. Nothing there widens this: a link outside both windows answers exactly what
+        // an invented one answers, so neither route tells a stranger that a token was once real.
+        // Do not "unify" the two gates — they are two deliberate lifetimes, not an inconsistency.
         var open = tracking is not null && TripPublicationWindow.IsOpen(
             clock.GetUtcNow(),
             share.RevokedAt,
@@ -273,15 +286,7 @@ public static class TripTrackingPublicationEndpoints
             .Where(p => p.TripLogId == trip.Id)
             .ToDictionaryAsync(p => p.CaverId, p => p.DisplayLabel, ct);
 
-        // Roster order, not caver id: the ordinal a follower sees is a number somebody could read
-        // back over the phone, so it has to survive the roster gaining a name mid-trip. Ordering
-        // by the row the person was first written on does that — a later arrival takes the next
-        // number and nobody already on the page is renumbered.
-        var roster = await db.TripLogParticipants.AsNoTracking()
-            .Where(p => p.TripLogId == trip.Id)
-            .GroupBy(p => p.CaverId)
-            .Select(g => new { CaverId = g.Key, FirstRowId = g.Min(p => p.Id) })
-            .ToListAsync(ct);
+        var roster = await RosterOrderAsync(db, trip.Id, ct);
 
         // The roster's own name for each of them, where this installation publishes names at all.
         //
@@ -305,10 +310,9 @@ public static class TripTrackingPublicationEndpoints
         // every member who never chose a display name — a name-shaped string that identifies
         // nobody, on the page whose whole point is naming people. The control that does travel to
         // this page is the caption below, which an administrator sets per trip.
-        var rosterIds = roster.Select(r => r.CaverId).ToList();
         var names = options.Value.PublishRealNames
             ? await db.Cavers.AsNoTracking()
-                .Where(c => rosterIds.Contains(c.Id))
+                .Where(c => roster.Contains(c.Id))
                 .Select(c => new { c.Id, c.FullName })
                 .ToDictionaryAsync(c => c.Id, c => c.FullName, ct)
             : [];
@@ -332,10 +336,10 @@ public static class TripTrackingPublicationEndpoints
         var participants = new List<PublicTripParticipantDto>();
         var withheldAny = false;
         var ordinal = 0;
-        foreach (var member in roster.OrderBy(r => r.FirstRowId))
+        foreach (var caverId in roster)
         {
             ordinal++;
-            byCaver.TryGetValue(member.CaverId, out var own);
+            byCaver.TryGetValue(caverId, out var own);
             var last = own?.Count > 0 ? own[^1] : null;
             var lastPositioned = own?.LastOrDefault(TrackingWithholding.HasPosition);
             var lastTeamed = own?.LastOrDefault(e => e.TeamId is not null);
@@ -365,7 +369,7 @@ public static class TripTrackingPublicationEndpoints
             var standing = TripTrackingRules.StandingOf(own);
             participants.Add(new PublicTripParticipantDto(
                 ordinal,
-                NameFor(member.CaverId, labels, names),
+                NameFor(caverId, labels, names),
                 lastTeamed?.TeamId,
                 shown?.ViewerStationName,
                 shown?.DepthEnteredM,
@@ -374,6 +378,16 @@ public static class TripTrackingPublicationEndpoints
                 // is kept back the time that would date it is kept back with it. It rides the
                 // other-survey refusal too — an hour beside no place is a place the reader dates
                 // from whatever is nearest, which on this page is a station measured elsewhere.
+                //
+                // Note what this is and is not, because the past-track playback next door keeps
+                // the hour of a report whose place it withholds and that looks like a
+                // contradiction. It is not: the field above — when this person was last heard
+                // from — is sent unconditionally here too, and it is usually this very instant,
+                // the last report being usually the positioned one. What is withheld is the
+                // second instant *labelled as the shown position's*, because this page draws one
+                // station per person and a bare hour printed beside it dates that station. The
+                // playback has no such pairing: a row there is one report, carrying its own hour
+                // beside its own null station. The argument in full is at the point it emits.
                 shown?.RecordedAt,
                 PositionOnOtherModel: elsewhere,
                 In: standing == TripStanding.Underground,
@@ -391,6 +405,35 @@ public static class TripTrackingPublicationEndpoints
             await ModelAsync(db, protection, crs, tokens, tracking.SurveyModelId, configCave, ct),
             [.. teams.Select(t => new PublicTripTeamDto(t.Id, t.Title))],
             participants));
+    }
+
+    /// <summary>
+    /// The party in the order a published page numbers them: one entry per person, ordered by the
+    /// roster row they were first written on, so their place in the list is their ordinal minus one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Roster order, not caver id: the ordinal a follower sees is a number somebody could read back
+    /// over the phone, so it has to survive the roster gaining a name mid-trip. Ordering by the row
+    /// the person was first written on does that — a later arrival takes the next number and nobody
+    /// already on the page is renumbered.
+    /// </para>
+    /// <para>
+    /// <b>One derivation, called by both public surfaces.</b> The live page and the past-track
+    /// playback number the same party, and a second copy of this is how "Caver 3" comes to mean two
+    /// different people on two pages about the same trip — with nothing on either page able to say
+    /// which of them is meant.
+    /// </para>
+    /// </remarks>
+    internal static async Task<List<Guid>> RosterOrderAsync(
+        SilexGisDbContext db, Guid tripLogId, CancellationToken ct)
+    {
+        var rows = await db.TripLogParticipants.AsNoTracking()
+            .Where(p => p.TripLogId == tripLogId)
+            .GroupBy(p => p.CaverId)
+            .Select(g => new { CaverId = g.Key, FirstRowId = g.Min(p => p.Id) })
+            .ToListAsync(ct);
+        return [.. rows.OrderBy(r => r.FirstRowId).Select(r => r.CaverId)];
     }
 
     /// <summary>
@@ -441,7 +484,7 @@ public static class TripTrackingPublicationEndpoints
     /// useful as its own bytes — which is exactly why a protected cave may not be published at
     /// all rather than published without its drawing.
     /// </remarks>
-    private static async Task<PublicTripSurveyModelDto?> ModelAsync(
+    internal static async Task<PublicTripSurveyModelDto?> ModelAsync(
         SilexGisDbContext db, FeatureProtection protection, ICrsRegistry crs,
         IFileAccessTokenService tokens, Guid? surveyModelId, Guid configCave, CancellationToken ct)
     {
@@ -806,7 +849,7 @@ public static class TripTrackingPublicationEndpoints
     }
 
     /// <summary>SHA-256 of the URL token, base64url — the stored/looked-up form; the plaintext never persists.</summary>
-    private static string HashToken(string token) =>
+    internal static string HashToken(string token) =>
         Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
     /// <summary>
