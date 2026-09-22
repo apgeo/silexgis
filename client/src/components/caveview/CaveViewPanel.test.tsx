@@ -74,6 +74,8 @@ const setStationMedia = vi.fn();
 const clearStationMedia = vi.fn();
 const toolbarDispose = vi.fn();
 let lastToolbar: { container: unknown; options: unknown } | undefined;
+/** What the fake survey holds for enumeration; null fakes a build without the method. */
+let enumerableStations: string[] | null = [];
 
 /**
  * Every viewer built, newest last.
@@ -115,6 +117,15 @@ class FakeViewer {
   setLiveMarkerClusterLabel = setLiveMarkerClusterLabel;
   setStationMedia = setStationMedia;
   clearStationMedia = clearStationMedia;
+  // Bound per instance exactly as the panel reads it, and absent — as an older vendored
+  // build would have it — when the test says so.
+  forEachStation = enumerableStations === null
+    ? undefined
+    : (visit: (station: unknown) => void) => {
+        for (const station of enumerableStations ?? []) {
+          visit({ name: () => station });
+        }
+      };
 }
 
 class FakeUi {
@@ -229,6 +240,7 @@ beforeEach(() => {
   lastToolbar = undefined;
   axes.narrow = false;
   axes.coarse = false;
+  enumerableStations = [];
   vi.clearAllMocks();
   focusStation.mockResolvedValue({});
   focusSurvey.mockResolvedValue(undefined);
@@ -1568,5 +1580,27 @@ describe('CaveViewPanel', () => {
         expect(surface.contains(await screen.findByTestId('lightbox'))).toBe(false);
       });
     });
+  });
+});
+
+describe('the station index', () => {
+  it('announces every station of the parsed drawing, and an empty index while loading', async () => {
+    enumerableStations = ['p.g.7', 'p.g.8', 'cave.deep.3'];
+    const onStationsLoaded = vi.fn();
+    await renderReady({ onStationsLoaded });
+
+    // The load began with the honest empty claim, and the parsed survey answered for
+    // itself when it arrived — in the viewer's own spelling, the one anchors store.
+    expect(onStationsLoaded).toHaveBeenNthCalledWith(1, []);
+    expect(onStationsLoaded).toHaveBeenLastCalledWith(['p.g.7', 'p.g.8', 'cave.deep.3']);
+  });
+
+  it('a viewer build without station enumeration costs an empty index, never a crash', async () => {
+    enumerableStations = null;
+    const onStationsLoaded = vi.fn();
+    await renderReady({ onStationsLoaded });
+
+    // Loading still completed (renderReady waited for it); the index is simply empty.
+    expect(onStationsLoaded).toHaveBeenLastCalledWith([]);
   });
 });

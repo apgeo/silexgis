@@ -31,6 +31,16 @@ export interface RasterMapDeclaration {
    */
   title: string | null;
   createdAt: string;
+  /** The link's free-text description, carried so a view-kind change can PATCH the link
+   * without clearing words somebody wrote on it. */
+  description: string | null;
+  /**
+   * Whether this caller may amend or delete the declaration — the server's curation
+   * answer off the link itself, which is what gates re-kinding and undeclaring. The main
+   * member is the document, so in practice this is "may write the map document", plus
+   * the creator and full administrators.
+   */
+  mayEdit: boolean;
 }
 
 /** The anchors the model member of a declaration may carry: the whole model, or a coverage
@@ -80,6 +90,8 @@ export function rasterMapsFromLinks(
       viewKind: viewKindOf(code),
       title: documentMember.display?.title ?? null,
       createdAt: link.createdAt,
+      description: link.description ?? null,
+      mayEdit: link.mayEdit,
     });
   }
 

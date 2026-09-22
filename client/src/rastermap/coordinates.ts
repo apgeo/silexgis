@@ -33,3 +33,21 @@ export function toMapCoordinate(
 ): [number, number] {
   return [fraction.x * size.width, size.height - fraction.y * size.height];
 }
+
+/**
+ * An OL coordinate on the drawn image as a stored fraction pair — the exact inverse of
+ * {@link toMapCoordinate}, so a pin placed by clicking reads back at the click.
+ *
+ * Null when the coordinate lies outside the picture: OL lets a click land in the padding
+ * around the extent, and the stored frame admits only 0–1 — the server refuses anything
+ * else. Clamping such a click to the nearest edge would store a place nobody pointed at,
+ * so it is refused here instead and the caller places nothing.
+ */
+export function fromMapCoordinate(
+  coordinate: readonly number[],
+  size: ImageSize,
+): { x: number; y: number } | null {
+  const x = coordinate[0] / size.width;
+  const y = (size.height - coordinate[1]) / size.height;
+  return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
+}

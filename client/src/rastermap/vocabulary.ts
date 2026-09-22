@@ -38,3 +38,17 @@ export function isMapViewCode(code: string): code is MapViewCode {
 export function viewKindOf(code: MapViewCode): MapViewKind {
   return VIEW_KIND_BY_CODE[code];
 }
+
+const CODE_BY_VIEW_KIND: Record<MapViewKind, MapViewCode> = {
+  plan: 'map-plan-of',
+  profile: 'map-profile-of',
+  other: 'map-other-of',
+};
+
+/** The relation code that states a view kind — what declaring or re-kinding a map writes. */
+export function codeOfViewKind(kind: MapViewKind): MapViewCode {
+  return CODE_BY_VIEW_KIND[kind];
+}
+
+/** The three view kinds in the order every chooser offers them — the tab-strip order. */
+export const MAP_VIEW_KINDS: readonly MapViewKind[] = ['plan', 'profile', 'other'];

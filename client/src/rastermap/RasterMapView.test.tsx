@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import Map from 'ol/Map';
+import Observable from 'ol/Observable';
 import View from 'ol/View';
 import type Point from 'ol/geom/Point';
 import VectorSource from 'ol/source/Vector';
@@ -27,7 +28,35 @@ class FakeImage {
   }
 }
 
-const MARKER = { station: 'p.g.7', x: 0.25, y: 0.25, linkId: 'link-1', memberId: 'member-1' };
+const MARKER = {
+  station: 'p.g.7',
+  x: 0.25,
+  y: 0.25,
+  linkId: 'link-1',
+  memberId: 'member-1',
+  mayEdit: true,
+};
+
+/**
+ * `on` is copied off the protected `onInternal` in the Observable constructor, so the
+ * spy has to stand there (before any map is built) to see every listener registration —
+ * reached through an unknown-cast because the protection is a compile-time courtesy the
+ * test deliberately walks past.
+ */
+const observableInternals = Observable.prototype as unknown as {
+  onInternal: (type: string, listener: (event: unknown) => unknown) => unknown;
+};
+
+/** The singleclick listener the built map holds, driven directly with a synthetic event. */
+function singleclickHandler(): (event: { coordinate: number[] }) => void {
+  const spy = vi.mocked(observableInternals.onInternal);
+  const call = spy.mock.calls.find(([type]) => type === 'singleclick');
+  if (call === undefined) {
+    throw new Error('no singleclick listener was attached');
+  }
+  const listener = call[1];
+  return (event) => listener(event);
+}
 
 /** Every point feature handed to any vector source, with its style read back. */
 function drawnPoints(): { coordinate: number[]; label: string | undefined }[] {
@@ -49,6 +78,7 @@ beforeEach(() => {
   vi.spyOn(View.prototype, 'fit').mockImplementation(() => undefined);
   vi.spyOn(Map.prototype, 'updateSize');
   vi.spyOn(Map.prototype, 'dispose');
+  vi.spyOn(observableInternals, 'onInternal');
 });
 
 afterEach(() => {
@@ -134,5 +164,104 @@ describe('RasterMapView', () => {
 
     await waitFor(() => expect(screen.getByTestId('rastermap-missing')).toBeInTheDocument());
     expect(View.prototype.fit).not.toHaveBeenCalled();
+  });
+});
+
+describe('authoring clicks', () => {
+  it('answers a placement click in stored fractions — the same frame the pins are stored in', async () => {
+    const onMapClick = vi.fn();
+    render(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[]}
+        active
+        onMapClick={onMapClick}
+      />,
+    );
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+
+    // A click at OL [1000, 750] on the 4000×1000 picture is a quarter across and — the
+    // flip — a quarter DOWN in the stored frame. This is the write-side twin of the
+    // marker-drawing assertion above: place at the click, read back at the click.
+    singleclickHandler()({ coordinate: [1000, 750] });
+    expect(onMapClick).toHaveBeenCalledWith({ x: 0.25, y: 0.25 });
+  });
+
+  it('refuses a click outside the picture rather than pinning an edge nobody pointed at', async () => {
+    const onMapClick = vi.fn();
+    render(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[]}
+        active
+        onMapClick={onMapClick}
+      />,
+    );
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+
+    singleclickHandler()({ coordinate: [-50, 500] });
+    expect(onMapClick).not.toHaveBeenCalled();
+  });
+
+  it('sends a click that lands on a marker to the marker handler, not the placement one', async () => {
+    const onMapClick = vi.fn();
+    const onMarkerClick = vi.fn();
+    render(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[MARKER]}
+        active
+        onMapClick={onMapClick}
+        onMarkerClick={onMarkerClick}
+      />,
+    );
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+
+    // Dead on the marker's drawn coordinate (the flip applied): the marker answers,
+    // and the click point rides along in stored fractions — here the marker's own.
+    singleclickHandler()({ coordinate: [1000, 750] });
+    expect(onMarkerClick).toHaveBeenCalledWith(MARKER, { x: 0.25, y: 0.25 });
+    expect(onMapClick).not.toHaveBeenCalled();
+
+    // …and far from it, the sheet answers: the split is position, not registration order.
+    singleclickHandler()({ coordinate: [3000, 200] });
+    expect(onMapClick).toHaveBeenCalledWith({ x: 0.75, y: 0.8 });
+  });
+
+  it('a click inside a marker halo still reports where the click itself landed', async () => {
+    const onMarkerClick = vi.fn();
+    render(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[MARKER]}
+        active
+        onMarkerClick={onMarkerClick}
+      />,
+    );
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+
+    // Near the marker, not on it: within tolerance the marker answers, but the reported
+    // point is the click's own fractions — a caller placing a *different* station there
+    // must get the spot the author aimed at, never the neighbor's stored point.
+    singleclickHandler()({ coordinate: [1004, 752] });
+    expect(onMarkerClick).toHaveBeenCalledWith(MARKER, {
+      x: 1004 / IMAGE.width,
+      y: (IMAGE.height - 752) / IMAGE.height,
+    });
+  });
+
+  it('a read-only mount ignores clicks entirely and shows no writing cursor', async () => {
+    render(
+      <RasterMapView imageUrl="http://files.local/map" alt="Sheet A" markers={[MARKER]} active />,
+    );
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+
+    // The listener is attached but answers nobody — there is nobody to answer.
+    expect(() => singleclickHandler()({ coordinate: [1000, 750] })).not.toThrow();
+    expect(screen.getByTestId('rastermap-map').style.cursor).toBe('');
   });
 });

@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import type { ResLink, ResLinkMember } from '../api/hooks.ts';
-import { mapPinsFromLinks, stationMarkers, supersededPointCount } from './mapPoints.ts';
+import {
+  mapPinsFromLinks,
+  newestPinForStation,
+  stationMarkers,
+  supersededPointCount,
+  supersededPointPins,
+} from './mapPoints.ts';
 
 const MODEL = 'model-1';
 const DOC = 'doc-1';
@@ -170,6 +176,7 @@ describe('stationMarkers', () => {
         y: 0.75,
         linkId: pins[0].linkId,
         memberId: pins[0].memberId,
+        mayEdit: true,
       },
     ]);
   });
@@ -276,5 +283,91 @@ describe('supersededPointCount', () => {
     );
 
     expect(supersededPointCount(pins, FILE)).toBe(1);
+  });
+});
+
+describe('mayEdit carried off the link', () => {
+  it('rides from the link through the pin to the marker, both ways', () => {
+    const editable = link([pointMember(0.2, 0.2), stationMember('p.g.7')]);
+    const readOnly = {
+      ...link([pointMember(0.6, 0.6, { id: 'other' }), stationMember('p.g.8')]),
+      mayEdit: false,
+    } as ResLink;
+    const pins = mapPinsFromLinks([editable, readOnly], MODEL, DOC);
+
+    expect(pins.find((p) => p.station === 'p.g.7')?.mayEdit).toBe(true);
+    expect(pins.find((p) => p.station === 'p.g.8')?.mayEdit).toBe(false);
+    const markers = stationMarkers(pins, FILE);
+    expect(markers.find((m) => m.station === 'p.g.7')?.mayEdit).toBe(true);
+    expect(markers.find((m) => m.station === 'p.g.8')?.mayEdit).toBe(false);
+  });
+});
+
+describe('newestPinForStation', () => {
+  it('answers the standing pin whatever file it was measured against', () => {
+    // A pin stranded on an older scan still occupies its station on this map: the
+    // duplicate warning must fire for it, offering a rewrite rather than a double.
+    const pins = mapPinsFromLinks(
+      [link([pointMember(0.2, 0.2, { anchorFileId: 'file-0' }), stationMember('p.g.7')])],
+      MODEL,
+      DOC,
+    );
+    expect(newestPinForStation(pins, 'p.g.7')?.anchorFileId).toBe('file-0');
+  });
+
+  it('picks the same newest pin the marker fold would show', () => {
+    const pins = mapPinsFromLinks(
+      [
+        link([pointMember(0.1, 0.1), stationMember('p.g.7')], 'map-station-point', {
+          createdAt: '2026-09-01T10:00:00Z',
+        }),
+        link([pointMember(0.9, 0.9), stationMember('p.g.7')], 'map-station-point', {
+          createdAt: '2026-09-02T10:00:00Z',
+        }),
+      ],
+      MODEL,
+      DOC,
+    );
+    const standing = newestPinForStation(pins, 'p.g.7');
+    expect(standing?.createdAt).toBe('2026-09-02T10:00:00Z');
+    // The agreement is the point: the marker on screen and the pin a correction rewrites
+    // are the same link, or the user corrects one pin while looking at another.
+    expect(stationMarkers(pins, FILE)[0].linkId).toBe(standing?.linkId);
+  });
+
+  it('does not answer a region-shaped link, and answers null for an unpinned station', () => {
+    const rect = member({
+      id: 'rect-member',
+      anchorKind: 'imageRegion',
+      anchor: { shape: 'rect', x: 0.1, y: 0.1, w: 0.2, h: 0.2 } as unknown as ResLinkMember['anchor'],
+      anchorFileId: FILE,
+    });
+    const pins = mapPinsFromLinks([link([rect, stationMember('p.g.7')])], MODEL, DOC);
+    expect(newestPinForStation(pins, 'p.g.7')).toBeNull();
+    expect(newestPinForStation([], 'p.g.9')).toBeNull();
+  });
+});
+
+describe('supersededPointPins', () => {
+  it('lists exactly the point pins the count counts, sorted by station', () => {
+    const pins = mapPinsFromLinks(
+      [
+        link([pointMember(0.2, 0.2), stationMember('p.g.7')]),
+        link([pointMember(0.6, 0.6, { id: 'b', anchorFileId: 'file-0' }), stationMember('p.g.9')]),
+        link([pointMember(0.4, 0.4, { id: 'a', anchorFileId: 'file-0' }), stationMember('p.g.8')]),
+      ],
+      MODEL,
+      DOC,
+    );
+
+    const listed = supersededPointPins(pins, FILE);
+    expect(listed.map((p) => p.station)).toEqual(['p.g.8', 'p.g.9']);
+    // The list and the count are two readings of one rule, and must never disagree.
+    expect(listed).toHaveLength(supersededPointCount(pins, FILE));
+  });
+
+  it('lists nothing when every pin is measured against the file on screen', () => {
+    const pins = mapPinsFromLinks([link([pointMember(), stationMember('p.g.7')])], MODEL, DOC);
+    expect(supersededPointPins(pins, FILE)).toEqual([]);
   });
 });

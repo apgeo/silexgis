@@ -39,6 +39,9 @@ const PHONE_ONLY_SPECS = [
   /(^|\/)mobile\.spec\.ts$/,
   /(^|\/)scene3d-mobile\.spec\.ts$/,
   /(^|\/)mobile-ios\.spec\.ts$/,
+  // Authoring raster-map points by finger: the coarse pointer is the axis under test,
+  // and only the phone profile provides one.
+  /(^|\/)rastermap-mobile\.spec\.ts$/,
   // The link somebody sends a family while a party is underground. Phone-only rather than
   // desktop-too because the phone IS the case: this is the one surface of this application whose
   // reader holds no account and is not a caver, and its layout is designed at 360px.
@@ -82,7 +85,7 @@ export default defineConfig({
       // covered at all. Spelled out rather than left to `mobile\.spec\.ts` matching it by accident.
       name: 'mobile-android',
       use: { ...devices['Pixel 7'] },
-      testMatch: /(mobile|scene3d-mobile)\.spec\.ts/,
+      testMatch: /(mobile|scene3d-mobile|rastermap-mobile)\.spec\.ts/,
     },
     {
       // The same phone turned sideways: 863x360 CSS px, touch enabled, coarse pointer.

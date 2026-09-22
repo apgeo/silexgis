@@ -246,6 +246,13 @@ export interface CaveViewer {
   /** Pictures shown over the model for the station under the pointer. */
   setStationMedia(source: CaveViewStationMediaSource): void;
   clearStationMedia(): void;
+  /**
+   * Visits every station of the loaded survey, handing each over as the same public
+   * station object a click reports — so `pathOf` reads its name the same way. Only
+   * meaningful once a survey is loaded; optional because it is the newest addition to
+   * the vendored bundle and a build without it should cost an empty index, not a crash.
+   */
+  forEachStation?(visit: (station: unknown) => void): void;
 }
 
 /**

@@ -126,6 +126,17 @@ export interface CaveViewPanelProps {
    */
   onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
   /**
+   * Told every station of the drawing once it is parsed — the index a station typeahead
+   * offers, in the viewer's own spelling, the same one every anchor stores.
+   *
+   * Answered from the loaded survey when it arrives, and with an empty list as a new
+   * load begins: like the unplaced-stations answer above, a claim about a drawing is
+   * only true while that drawing is the one on screen. An empty answer is also what a
+   * vendored viewer build without station enumeration produces — the caller's list is
+   * simply empty, and picking in the 3D pane still works.
+   */
+  onStationsLoaded?: (stations: readonly string[]) => void;
+  /**
    * Opts into the viewer's own row of controls, placed over the model.
    *
    * `true` takes the default buttons, which are chosen by how much room there is across *and* by
@@ -367,6 +378,7 @@ export default function CaveViewPanel({
   surveyModelId,
   trackedCavers,
   onUnplacedStationsChange,
+  onStationsLoaded,
   toolbar = false,
   stationMedia,
   crsLookup,
@@ -489,6 +501,8 @@ export default function CaveViewPanel({
   onEntrancePickRef.current = onEntrancePick;
   const onPartPickRef = useRef(onPartPick);
   onPartPickRef.current = onPartPick;
+  const onStationsLoadedRef = useRef(onStationsLoaded);
+  onStationsLoadedRef.current = onStationsLoaded;
   // The listener that answers a tap is attached once with the viewer, and what it has to show can
   // arrive long afterwards.
   const stationMediaRef = useRef(stationMedia);
@@ -560,6 +574,9 @@ export default function CaveViewPanel({
     // visible and most wrong. This is also the one moment the answer may shrink: a station name is
     // missing from a *drawing*, so what is learned about one survey is worth nothing about another.
     setUnplacedStations(noStationsMissing);
+    // The station index is a claim about the survey being taken off the screen; the one
+    // arriving answers for itself when it is parsed.
+    onStationsLoadedRef.current?.([]);
     // A picture opened from the model on screen belongs to that model. A second survey file loaded
     // under it would leave a photograph of another cave's pitch head sitting over the new one.
     setOpenedPictures(null);
@@ -579,7 +596,25 @@ export default function CaveViewPanel({
         crsLookup: crsLookupRef.current ?? makeCrsLookup(),
       });
       viewer.addEventListener('newCave', () => {
-        if (!disposed) setStatus('ready');
+        if (disposed) return;
+        setStatus('ready');
+        // The parsed survey is the only thing that knows its stations; asked here, once,
+        // the moment it exists. A build that cannot enumerate them (or a survey that
+        // refuses) costs an empty index, never a broken viewer.
+        if (onStationsLoadedRef.current !== undefined) {
+          const stations: string[] = [];
+          try {
+            viewer.forEachStation?.((station) => {
+              const path = pathOf(station);
+              if (path !== null) {
+                stations.push(path);
+              }
+            });
+          } catch {
+            stations.length = 0;
+          }
+          onStationsLoadedRef.current(stations);
+        }
       });
       viewer.addEventListener('entrance', (event) => {
         const name = (event as { displayName?: unknown }).displayName;

@@ -34,6 +34,13 @@ export interface MapPin {
   /** The file the region's fractions were measured against. */
   anchorFileId: string;
   createdAt: string;
+  /**
+   * Whether this caller may amend or delete the pin's link — the server's own curation
+   * answer carried off the link, so every correcting control (move, delete, re-place)
+   * offers exactly the writes the server would accept. Advisory like its source: the
+   * write path re-decides under the link's row lock.
+   */
+  mayEdit: boolean;
 }
 
 /** One drawable marker: a station at a point of the picture on screen, in fractions. */
@@ -43,6 +50,9 @@ export interface MapStationMarker {
   y: number;
   linkId: string;
   memberId: string;
+  /** Carried from the pin, so a marker pressed in an authoring surface knows whether
+   * move and delete may honestly be offered. */
+  mayEdit: boolean;
 }
 
 /** Whether a member anchors its link to a station of the model on screen, and which. */
@@ -116,6 +126,7 @@ export function mapPinsFromLinks(
           region: regionMember.region,
           anchorFileId: regionMember.anchorFileId,
           createdAt: link.createdAt,
+          mayEdit: link.mayEdit,
         });
       }
     }
@@ -140,11 +151,7 @@ export function stationMarkers(pins: readonly MapPin[], fileId: string): MapStat
       continue;
     }
     const held = byStation.get(pin.station);
-    if (
-      held === undefined
-      || pin.createdAt > held.createdAt
-      || (pin.createdAt === held.createdAt && pin.linkId > held.linkId)
-    ) {
+    if (held === undefined || newerPin(pin, held)) {
       byStation.set(pin.station, pin);
     }
   }
@@ -156,6 +163,7 @@ export function stationMarkers(pins: readonly MapPin[], fileId: string): MapStat
       y: (pin.region as { y: number }).y,
       linkId: pin.linkId,
       memberId: pin.memberId,
+      mayEdit: pin.mayEdit,
     }))
     .sort((a, b) => a.station.localeCompare(b.station));
 }
@@ -169,4 +177,51 @@ export function stationMarkers(pins: readonly MapPin[], fileId: string): MapStat
  */
 export function supersededPointCount(pins: readonly MapPin[], fileId: string): number {
   return pins.filter((pin) => pin.region.shape === 'point' && pin.anchorFileId !== fileId).length;
+}
+
+/**
+ * The one "newest wins" rule, stated once: later creation wins, and the link id breaks a
+ * same-instant tie so two readers of the same duplicates agree on which one is the pin.
+ */
+function newerPin(candidate: MapPin, held: MapPin): boolean {
+  return (
+    candidate.createdAt > held.createdAt
+    || (candidate.createdAt === held.createdAt && candidate.linkId > held.linkId)
+  );
+}
+
+/**
+ * The pin a station already holds on this map, on whatever file it was measured against —
+ * the fact the duplicate warning turns on. Deliberately not filtered to the file on
+ * screen: a pin measured against an older scan is still this station's pin on this map,
+ * and writing a second link beside it is exactly the duplicate the warning exists to stop
+ * — the honest correction is rewriting the one that is there. Newest wins here for the
+ * same reason it wins in the marker fold: what the correction acts on must be what the
+ * marker would show.
+ */
+export function newestPinForStation(pins: readonly MapPin[], station: string): MapPin | null {
+  let newest: MapPin | null = null;
+  for (const pin of pins) {
+    if (pin.region.shape !== 'point' || pin.station !== station) {
+      continue;
+    }
+    if (newest === null || newerPin(pin, newest)) {
+      newest = pin;
+    }
+  }
+  return newest;
+}
+
+/**
+ * The point pins measured against some other file of this document, each one a candidate
+ * for re-placing on the scan now on screen. The count next door stays the read surface's
+ * honest summary; this is the authoring surface's work list, and it names stations only —
+ * which file each was measured against is version-history information (the server already
+ * withholds those ids from callers the document keeps out of history), so the list must
+ * not need it and does not carry it beyond the write.
+ */
+export function supersededPointPins(pins: readonly MapPin[], fileId: string): MapPin[] {
+  return pins
+    .filter((pin) => pin.region.shape === 'point' && pin.anchorFileId !== fileId)
+    .sort((a, b) => a.station.localeCompare(b.station) || a.linkId.localeCompare(b.linkId));
 }

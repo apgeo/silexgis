@@ -14,7 +14,8 @@ import { useTranslation } from 'react-i18next';
 import { shortNameOf } from '../caveview/modelParts.ts';
 import { rasterMapPalette as palette } from '../map/markerPalette.ts';
 import { coarsePointer } from '../map/pointer.ts';
-import { imageExtent, toMapCoordinate, type ImageSize } from './coordinates.ts';
+import { markerHit } from './authoring.ts';
+import { fromMapCoordinate, imageExtent, toMapCoordinate, type ImageSize } from './coordinates.ts';
 import type { MapStationMarker } from './mapPoints.ts';
 
 interface Props {
@@ -36,6 +37,22 @@ interface Props {
   active: boolean;
   height?: number | string;
   testId?: string;
+  /**
+   * Answers a click on the sheet itself with the clicked point in stored fractions —
+   * the authoring surfaces' placement click. A click outside the picture answers
+   * nothing (the conversion refuses it), and a click that lands on a marker goes to
+   * `onMarkerClick` instead. Absent on every read-only mount, where a click means
+   * nothing and the map stays a picture.
+   */
+  onMapClick?: (at: { x: number; y: number }) => void;
+  /**
+   * Answers a click that lands on a drawn marker, within the pointer's own tolerance —
+   * bigger for a finger, exactly as the marker itself draws bigger for one. The second
+   * argument is where the click itself landed, in stored fractions, so a caller for whom
+   * the marker is merely *near* the intended spot can still honor the click; null when
+   * the click sat inside the tolerance halo but outside the picture.
+   */
+  onMarkerClick?: (marker: MapStationMarker, at: { x: number; y: number } | null) => void;
 }
 
 /**
@@ -58,6 +75,8 @@ export default function RasterMapView({
   active,
   height = '70vh',
   testId = 'rastermap',
+  onMapClick,
+  onMarkerClick,
 }: Props) {
   const { t } = useTranslation();
   const target = useRef<HTMLDivElement | null>(null);
@@ -65,6 +84,13 @@ export default function RasterMapView({
   const markerSource = useRef(new VectorSource<Feature<Point>>());
   const [size, setSize] = useState<ImageSize | null>(null);
   const [failed, setFailed] = useState(false);
+
+  // The click listener is attached once, when the map is built, and what a click means
+  // changes with every render — arming, disarming, fresh markers — so everything it
+  // reads rides refs. Naming any of it in a rebuild would tear down the map (and the
+  // reader's pan) to change a callback.
+  const clickState = useRef({ onMapClick, onMarkerClick, markers, size });
+  clickState.current = { onMapClick, onMarkerClick, markers, size };
 
   const teardown = () => {
     map.current?.setTarget(undefined);
@@ -132,6 +158,27 @@ export default function RasterMapView({
       view: new View({ projection, center: [size.width / 2, size.height / 2], zoom: 1 }),
     });
     instance.getView().fit(extent, { padding: [16, 16, 16, 16] });
+    // `singleclick` rather than `click`, so ending a pan or a pinch places nothing.
+    instance.on('singleclick', (event) => {
+      const now = clickState.current;
+      if (now.size === null || (now.onMapClick === undefined && now.onMarkerClick === undefined)) {
+        return;
+      }
+      const coordinate = (event as { coordinate: number[] }).coordinate;
+      // The same hit generosity the OL interactions give a finger: the pointer is the
+      // size it is, whatever the stored point is.
+      const tolerance = coarsePointer() ? 12 : 6;
+      const resolution = instance.getView().getResolution() ?? 1;
+      const hit = markerHit(now.markers, now.size, coordinate, resolution, tolerance);
+      const at = fromMapCoordinate(coordinate, now.size);
+      if (hit !== null && now.onMarkerClick !== undefined) {
+        now.onMarkerClick(hit, at);
+        return;
+      }
+      if (at !== null) {
+        now.onMapClick?.(at);
+      }
+    });
     map.current = instance;
     drawMarkers();
   };
@@ -206,7 +253,13 @@ export default function RasterMapView({
       role="img"
       aria-label={alt}
       data-testid={`${testId}-map`}
-      style={{ height, width: '100%', touchAction: 'none' }}
+      style={{
+        height,
+        width: '100%',
+        touchAction: 'none',
+        // The one visual admission that a click now writes: the placement cursor.
+        cursor: onMapClick === undefined ? undefined : 'crosshair',
+      }}
     />
   );
 }

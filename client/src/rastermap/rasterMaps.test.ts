@@ -216,3 +216,25 @@ describe('rasterMapsFromLinks', () => {
     expect(maps.map((m) => m.title)).toEqual(['Alpha sheet', 'Zed sheet', 'Profile']);
   });
 });
+
+describe('authoring facts carried on the declaration', () => {
+  it('carries the curation answer and the description off the link, both ways', () => {
+    const editable = link([documentMember('doc-1'), modelMember()], 'map-plan-of');
+    const readOnly = {
+      ...link([documentMember('doc-2'), modelMember()], 'map-profile-of'),
+      mayEdit: false,
+      description: 'northern branch only',
+    } as ResLink;
+
+    const maps = rasterMapsFromLinks([editable, readOnly], MODEL);
+
+    const plan = maps.find((m) => m.viewKind === 'plan');
+    const profile = maps.find((m) => m.viewKind === 'profile');
+    // The curation answer gates re-kinding and undeclaring; the description rides along
+    // so a view-kind PATCH does not clear words somebody wrote on the link.
+    expect(plan?.mayEdit).toBe(true);
+    expect(plan?.description).toBeNull();
+    expect(profile?.mayEdit).toBe(false);
+    expect(profile?.description).toBe('northern branch only');
+  });
+});
