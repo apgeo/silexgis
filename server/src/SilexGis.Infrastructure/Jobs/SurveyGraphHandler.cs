@@ -76,7 +76,16 @@ public sealed class SurveyGraphHandler(
                 model.Anchor?.Y,
                 model.AnchorHeightM ?? 0);
 
-            var extraction = extractor.Extract(parsed, model.Id, declaration);
+            // Which legs are shots at the passage wall, settled once for everything below. The
+            // extraction works this out for itself as well — it has to, or a caller that is not
+            // this job gets a different answer — but the graph the cave's morphometrics are
+            // computed over is built from the parsed file rather than from the extracted rows, and
+            // it decides what is passage by asking each leg's flags. On a file whose exporter set
+            // no wall-shot flags, that graph would otherwise take every wall point for a dead end
+            // of the cave and report the shape of the drawing instead of the shape of the cave.
+            var file = SurveyWallShots.Flagged(parsed);
+
+            var extraction = extractor.Extract(file, model.Id, declaration);
 
             // Measured before the transaction opens, not inside it. The length is answered by
             // PostGIS over a raw command on this context's own connection, and a read that has
@@ -90,7 +99,7 @@ public sealed class SurveyGraphHandler(
             // connection idle, which an installation that sets a timeout on idle transactions
             // kills outright. A file with no network at all is measured as nothing.
             var topology = SurveyTopologyAnalyzer.Measure(
-                CenterlineGraph.Build(parsed), model.Id, DateTime.UtcNow);
+                CenterlineGraph.Build(file), model.Id, DateTime.UtcNow);
 
             // Clearing what a previous read left behind and writing what this one found are one
             // change to the survey, so they are one transaction. Without it a read that fails on
@@ -134,6 +143,7 @@ public sealed class SurveyGraphHandler(
                 model.AppliedRotationDeg = extraction.AppliedRotationDeg;
                 model.DroppedShotCount = extraction.DroppedShotCount;
                 model.MergedStationCount = extraction.MergedStationCount;
+                model.AnonymousStationCount = extraction.AnonymousStationCount;
                 // Written on every reading, including back to null: a file replaced by one whose
                 // root survey is named differently must not keep the old name, because that name is
                 // what tells a stored station name from the way the viewer addresses the same
@@ -164,13 +174,21 @@ public sealed class SurveyGraphHandler(
     ///
     /// <para>
     /// Everything the failed read had staged is thrown away first. The exception may well have come
-    /// out of the save that would have written those rows — a file whose station names collide
-    /// reaches the database before anything notices — and a failed save leaves its entities pending,
-    /// so writing the failure through the same change tracker would re-send the identical failing
-    /// statements and throw again. The model would then never be recorded as failed at all: it
+    /// out of the save that would have written those rows, and a failed save leaves its entities
+    /// pending, so writing the failure through the same change tracker would re-send the identical
+    /// failing statements and throw again. The model would then never be recorded as failed at all: it
     /// would sit as still being read for ever, be picked up again on every restart, and be polled
     /// by whoever uploaded it for just as long. The row carrying the failure is re-read rather than
     /// reused, so what is written is the failure and not half of an abandoned reading.
+    /// </para>
+    ///
+    /// <para>
+    /// The case this was written for — a file whose station names collide, refused by the unique
+    /// index out of the save itself — is now settled before the save and arrives here as a reason
+    /// the uploader can act on rather than as a constraint violation. This still runs for it, but
+    /// what it writes is no longer the blank sentence. What the paragraph above still guards is the
+    /// general shape: anything that fails at the save, for a reason nobody has anticipated, must
+    /// leave the model saying it failed rather than saying it is still being read.
     /// </para>
     /// </summary>
     private async Task RecordFailureAsync(Guid surveyModelId, string reason)
@@ -320,9 +338,16 @@ public sealed class SurveyGraphHandler(
         Lines(extraction.Shots);
 
     /// <summary>
-    /// The legs that are passage: everything the file did not flag as a splay. Surface and
+    /// The legs that are passage: everything not marked as a shot at the wall. Surface and
     /// duplicate legs stay, because they are passage that was walked — one is above ground and
     /// one was surveyed twice, and both are drawn.
+    ///
+    /// <para>
+    /// The mark is this application's reading of the file and not the file's own bit, which is what
+    /// makes the paragraph on <see cref="MeasureAsync"/> true of every file rather than of the ones
+    /// whose exporter was thorough. An exporter that flags nothing still writes its wall shots at
+    /// points it declined to name, and those legs are marked on the way in.
+    /// </para>
     /// </summary>
     private static MultiLineString Traverse(SurveyGraphExtraction extraction) =>
         Lines(extraction.Shots.Where(s => (s.Flags & SurveyShotFlags.Splay) == 0));

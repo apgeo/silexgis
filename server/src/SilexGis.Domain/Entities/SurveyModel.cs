@@ -142,6 +142,22 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     public int? MergedStationCount { get; set; }
 
     /// <summary>
+    /// How many of the file's station records were its "there is no station here" placeholder — the
+    /// far end of a shot at the passage wall — and so became no row; null before a line-plot model
+    /// has been read, and zero for a file that fired no wall shots.
+    ///
+    /// <para>
+    /// Recorded for the same reason as the two counts above, and more loudly: on a whole-system
+    /// export these outnumber the real stations by ten to one, so a station count read without this
+    /// beside it looks like a reading that mislaid most of the cave. They are not stations — nobody
+    /// named them, nobody can type them, and the viewer that draws the model gives them no
+    /// addressable name at all — but they are legs that were surveyed, and every one of them is
+    /// still stored as a leg.
+    /// </para>
+    /// </summary>
+    public int? AnonymousStationCount { get; set; }
+
+    /// <summary>
     /// The name of the file's root survey, where the format has a survey tree and the root is
     /// named; null otherwise, and null before a line-plot model has been read.
     ///

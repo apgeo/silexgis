@@ -169,4 +169,51 @@ public class SurveyStationNamesTests
         SurveyStationNames.ViewerName(SurveyModelFormat.Lox, Root, "cave.cave.3").ShouldBe("cave.3");
         SurveyStationNames.StoredName(SurveyModelFormat.Lox, Root, "cave.3").ShouldBe("cave.cave.3");
     }
+
+    [Theory]
+    [InlineData("-")]
+    [InlineData(".")]
+    public void The_survey_languages_two_ways_of_saying_there_is_no_station_here_are_known_as_such(
+        string placeholder)
+    {
+        // Both, and not only the first. A rule that knew the dash alone would still refuse most
+        // real surveys: of thirteen measured files that could not be read at all, five carried no
+        // dash whatsoever and were full of the full stop instead, and five more carried both.
+        SurveyStationNames.IsAnonymousPoint(placeholder).ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("A")]
+    [InlineData("1")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData(".1")]
+    [InlineData("1.0")]
+    [InlineData("--")]
+    [InlineData("..")]
+    [InlineData("-.")]
+    [InlineData("BH_Surface.1.0")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void A_station_somebody_actually_named_is_not_one_of_them(string? realName)
+    {
+        // The positive twin, and the reason the comparison is against the whole name rather than a
+        // first character. Real station names beginning with a full stop or a dash exist — one
+        // measured survey names thousands of stations in the shape "1.0" — and a leading-punctuation
+        // rule would quietly stop storing every one of them while looking like it had fixed
+        // something. Doubling the character is a name too: the placeholder is one character, whole.
+        SurveyStationNames.IsAnonymousPoint(realName).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void The_placeholder_is_the_leaf_name_and_never_the_qualified_one()
+    {
+        // What a placeholder becomes once the survey path is in front of it — which is exactly the
+        // string a whole survey's wall shots used to arrive at the station table under, one row per
+        // wall shot, all spelled the same. Asked of that string the answer is no, because by then
+        // it is no longer the file's token: the question belongs at the leaf, before qualifying,
+        // and stating it here is what stops the check drifting to the wrong end of the name.
+        SurveyStationNames.IsAnonymousPoint("cave.entrance.-").ShouldBeFalse();
+        SurveyStationNames.IsAnonymousPoint("cave.entrance.").ShouldBeFalse();
+    }
 }

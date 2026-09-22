@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916194128_SurveyAnonymousStationCount")]
+    partial class SurveyAnonymousStationCount
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -6785,6 +6788,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("RecordedByUserId")
                         .HasDatabaseName("ix_trip_position_events_recorded_by_user_id");
 
+                    b.HasIndex("SurveyModelId")
+                        .HasDatabaseName("ix_trip_position_events_survey_model_id");
+
                     b.HasIndex("TeamId")
                         .HasDatabaseName("ix_trip_position_events_team_id");
 
@@ -6928,6 +6934,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("CaveFeatureId")
                         .HasDatabaseName("ix_trip_tracking_cave_feature_id");
 
+                    b.HasIndex("SurveyModelId")
+                        .HasDatabaseName("ix_trip_tracking_survey_model_id");
+
                     b.ToTable("trip_tracking", (string)null);
                 });
 
@@ -6985,10 +6994,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.Property<Guid>("CreatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
 
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone")
@@ -9149,6 +9154,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_trip_position_events_users_recorded_by_user_id");
 
+                    b.HasOne("SilexGis.Domain.Entities.SurveyModel", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyModelId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_trip_position_events_survey_models_survey_model_id");
+
                     b.HasOne("SilexGis.Domain.Entities.TripTeam", null)
                         .WithMany()
                         .HasForeignKey("TeamId")
@@ -9180,6 +9191,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasForeignKey("CaveFeatureId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_trip_tracking_features_cave_feature_id");
+
+                    b.HasOne("SilexGis.Domain.Entities.SurveyModel", null)
+                        .WithMany()
+                        .HasForeignKey("SurveyModelId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_trip_tracking_survey_models_survey_model_id");
 
                     b.HasOne("SilexGis.Domain.Entities.TripLog", null)
                         .WithOne()

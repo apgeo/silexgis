@@ -255,14 +255,12 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixtur
     }
 
     [Fact]
-    public async Task A_reading_the_database_refuses_leaves_the_survey_recorded_as_failed()
+    public async Task A_survey_that_names_two_stations_the_same_says_so_in_words_and_stores_nothing()
     {
         var caveId = await CreateCaveAsync(locationProtected: false);
 
         // A file this application cannot store: two different stations under one name, which the
-        // station rows refuse because the name is what identifies them. The point is not the
-        // collision — it is that the refusal arrives from the save, after a whole reading has been
-        // staged, which is the one moment where recording the failure can itself fail.
+        // station rows refuse because the name is what identifies them.
         var modelId = await UploadLocalLoxAsync(caveId, CollidingStationNames());
         await RunQueuedGraphJobAsync(modelId, expectFailure: true);
 
@@ -271,13 +269,84 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixtur
         var failed = await GetModelAsync(owner, modelId);
         failed.GetProperty("status").GetString().ShouldBe("failed", failed.ToString());
 
-        // In our words, not the database's: nothing the uploader did produced this, so they are
-        // told what is theirs to know and no more.
-        failed.GetProperty("processingError").GetString().ShouldBe("The survey could not be read.");
+        // What this test used to assert here was "The survey could not be read." — the sentence
+        // kept for faults that are ours, which told the one person who could do anything about this
+        // file nothing whatsoever about it. The reason now names what is wrong, counts it and says
+        // what to do, while still naming no station: this text is shown wherever the survey model
+        // is, and a station name on a location-protected cave is part of what this application
+        // exists to keep.
+        var reason = failed.GetProperty("processingError").GetString().ShouldNotBeNull();
+        reason.ShouldContain("one station name");
+        reason.ShouldContain("2 stations in all");
+        reason.ShouldContain("re-export");
 
-        // And nothing half-written survives the attempt.
+        // And nothing half-written survives the attempt. The refusal is raised before the save now
+        // rather than by the unique index out of it, so this also says the reading stopped where it
+        // meant to instead of part-way through writing tens of thousands of rows.
         (await CountRowsAsync(modelId)).ShouldBe((Stations: 0, Shots: 0));
         (await CenterlinesOfAsync(caveId)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_real_therion_survey_is_read_into_the_stations_somebody_named()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var modelId = await UploadLocalLoxAsync(caveId, TherionWallShotFixture());
+        await RunQueuedGraphJobAsync(modelId);
+
+        // The whole point: a compiled Therion survey of the ordinary kind reaches the end of the
+        // reading. Files shaped like this one used to fail every time, ending with no stations at
+        // all and nothing shown to whoever uploaded it but "the survey could not be read".
+        var ready = await GetModelAsync(owner, modelId);
+        ready.GetProperty("status").GetString().ShouldBe("ready", ready.ToString());
+
+        var rows = await CountRowsAsync(modelId);
+
+        // The 98 stations a surveyor named, and every one of the 245 legs the file drew. The file's
+        // other 186 station records are the survey language's "there is no station here", which is
+        // why the first number is not 284 — and why that difference is recorded rather than left
+        // for somebody to find.
+        rows.Stations.ShouldBe(98);
+        rows.Shots.ShouldBe(245);
+
+        // Asserted on the response and not in the database, because a count that only the database
+        // knows explains nothing to the person looking at the survey. 284 records arrived, 98 are
+        // rows, and this is the whole of the difference: read together they account for the file,
+        // which is the point of publishing it. Whoever uploaded this would otherwise see a station
+        // count a third the size of their survey and nothing anywhere saying why.
+        ready.GetProperty("anonymousStationCount").GetInt32().ShouldBe(186);
+        (98 + 186).ShouldBe(284);
+
+        // Three legs join the network nowhere, and none of them is a wall shot. They are an artefact
+        // of cutting this fixture out of a larger export: nine of its stations stand exactly where
+        // another already stood and become one node, and a leg between two of those has the same
+        // station at both ends. What matters is the order of magnitude — before wall shots were
+        // understood as wall shots, their far ends are precisely the records that are no longer
+        // stations, so every one of the 186 would have landed here and this would read 189.
+        ready.GetProperty("droppedShotCount").GetInt32().ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_survey_whose_exporter_flagged_no_wall_shots_still_publishes_its_passage_length()
+    {
+        var caveId = await CreateCaveAsync(locationProtected: false);
+        var modelId = await UploadLocalLoxAsync(caveId, TherionWallShotFixture());
+        await RunQueuedGraphJobAsync(modelId);
+
+        var centerline = (await CenterlinesOfAsync(caveId)).ShouldHaveSingleItem();
+        var lengthM = centerline.GetProperty("lengthM").GetDecimal();
+
+        // This file draws 421 m of line and found 205 m of passage; measured in plan, which is how
+        // a published length is measured here, that is 316 m drawn against 177 m of passage. And it
+        // flags not one of its legs as a wall shot — the common case rather than a broken export:
+        // six of eighteen measured files, the public demo survey of the viewer this application
+        // embeds among them, flag nothing at all.
+        //
+        // A published length is read as how much cave was found. Measured over everything drawn
+        // this survey would be published at nearly twice its size, the demo survey at 67.8 km for
+        // 31.7 km of passage, and one measured file at forty-two times. The range below is wide
+        // enough not to fail on a change of projection and far too narrow to admit 316.
+        lengthM.ShouldBeInRange(170m, 185m);
     }
 
     [Fact]
@@ -525,6 +594,45 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixtur
 
     private static byte[] Survex3dFixture() =>
         File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "P8_Master.3d"));
+
+    /// <summary>
+    /// A real compiled Therion survey, small enough to keep beside the tests.
+    ///
+    /// <para>
+    /// <b>Where it comes from.</b> It is one branch of the Cheddar system export published as the
+    /// demo survey of the 3D viewer this application embeds — nine surveys and their two ancestors,
+    /// the stations belonging to them, and the legs whose ends are both among those stations, read
+    /// with the format's own reader and written back out with the format's own writer. Nothing was
+    /// edited: it is 38 kB of the same file, which is why it still has the things that matter — an
+    /// unnamed root survey with named surveys beneath it, 186 of the survey language's placeholders
+    /// for "there is no station here", and an exporter that flags none of its 245 legs as a wall
+    /// shot despite firing them at points it declined to name.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>What it cannot cover, and where that is covered instead.</b> The survey language has two
+    /// spellings of that placeholder, a lone <c>-</c> and a lone <c>.</c>, and this file has only
+    /// the first: 186 dashes and not one full stop. Nor could any file cut out of this export have
+    /// one — the whole 23,419-station original is 16,169 dashes and zero full stops. The full stop
+    /// is not a rarity to be shrugged at: of eighteen compiled surveys measured, ten carry full
+    /// stops and four of those carry no dash whatsoever. Thirteen of the eighteen were unreadable
+    /// before this; a rule that recognised the dash alone would still leave ten of them unreadable,
+    /// while every test in this file went on passing. What holds that line is the unit fixture,
+    /// which writes three of
+    /// each spelling through this same format's own writer and reads them back — see
+    /// <c>SurveyGraphExtractorTests.The_points_a_survey_declined_to_name_are_not_stations_and_are_counted_as_such</c>,
+    /// whose count of 6 is 3 if either spelling stops being recognised. Do not weaken that fixture
+    /// on the belief that a real file here covers the same ground; this one covers half of it.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Why not the whole export.</b> Nine megabytes and twenty-three thousand stations is not a
+    /// fixture, it is a benchmark; the branch reproduces the properties this file is here for at 284
+    /// station records. What it cannot show is scale, and scale is not what was wrong.
+    /// </para>
+    /// </summary>
+    private static byte[] TherionWallShotFixture() =>
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Cheddar-Whitebeam.lox"));
 
     private static MultipartFormDataContent BuildForm(string fileName, byte[] bytes)
     {
