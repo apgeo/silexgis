@@ -40,10 +40,23 @@ vi.mock('../../api/hooks.ts', () => ({
   // reach for: the signed-in surfaces draw pictures over this very model.
   useResLinksForTarget: authenticatedOnly('useResLinksForTarget'),
   useSurveyModel: authenticatedOnly('useSurveyModel'),
+  // The archive, stubbed as never having answered: this file is about the live page, and whether
+  // the archive is read at all — and when — is proved in the file that is about the archive.
+  usePublicPastTrips: (_token: string | undefined, enabled: boolean) => ({
+    data: undefined,
+    isPending: enabled,
+    isError: false,
+  }),
+  usePublicPastTrack: (_token: string | undefined, tripLogId: string | undefined) => ({
+    data: undefined,
+    isPending: tripLogId !== undefined,
+    isError: false,
+  }),
 }));
 
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ token: 'follow-token' }),
+  useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));
 
 // The viewer is a three.js bundle holding a drawing context; what it is handed is the point. The

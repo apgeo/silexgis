@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   CaretRightOutlined,
   HistoryOutlined,
@@ -20,6 +20,11 @@ import {
   replayWindow,
   type ReplayPicture,
 } from '../../caveview/trackingReplay.ts';
+import {
+  COARSE_SLIDER,
+  REPLAY_SPEEDS,
+  useReplayClock,
+} from '../../caveview/useReplayClock.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import './TrackingReplayBar.css';
@@ -51,36 +56,6 @@ export interface TrackingReplayBarProps {
   /** Offers to hang a picture on the moment on screen, where the reader may write to the log. */
   onAttachHere?(at: number): void;
 }
-
-/**
- * How fast the virtual clock runs against the real one. One is the trip as it happened, which is
- * the only honest anchor and useless for watching; the rest are what makes a day underground
- * something a reader can sit through — at three hundred, eight hours takes a minute and a half.
- */
-const SPEEDS = [1, 10, 60, 300] as const;
-const DEFAULT_SPEED = 60;
-
-/** How often the clock advances while playing. Five steps a second; the markers slide between them. */
-const TICK_MS = 200;
-
-/** How many places the handle can stop at across the window, whatever the window's length. */
-const SCRUB_STEPS = 1000;
-
-/**
- * What a finger needs, chosen on the pointer and not on the width: a phone in landscape is wide
- * enough for the desk layout and still has nothing on it that can hit the ten-pixel handle antd
- * draws by default. Given as component tokens rather than as rules pushed into the stylesheet
- * because every other measurement of the control — where the handle sits on the rail, where a mark
- * sits in it, how tall the strip the rail is tapped in ends up — is derived from these by antd, and
- * a stylesheet that moved one of them by hand would move it out of that arithmetic. The *grab* area
- * around the handle is the one thing the stylesheet does add, since no token describes it.
- */
-const COARSE_SLIDER = {
-  handleSize: 20,
-  handleSizeHover: 22,
-  railSize: 6,
-  dotSize: 8,
-};
 
 /**
  * The trip, played back over its own log.
@@ -118,8 +93,6 @@ export default function TrackingReplayBar({
   const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
   const coarse = useCoarsePointer();
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState<number>(DEFAULT_SPEED);
   // Where a live trip's window ends. Taken once, when the replay is opened, rather than read on
   // every render: an end that crept forward with the real clock would move under the handle
   // somebody is dragging, and would make the last second of a live trip unreachable by definition.
@@ -168,18 +141,14 @@ export default function TrackingReplayBar({
     [coarse],
   );
 
-  // Read by the clock's own timer, which must not be rebuilt every time the moment moves — that
-  // would restart the interval five times a second and make the playback rate the render rate.
-  const atRef = useRef(at);
-  atRef.current = at;
+  // The clock itself, shared with the published archive's own replay: one engine, two strips.
+  const transport = useReplayClock({ span, at, onAtChange, engaged });
 
   // The window a live trip is replayed over ends when somebody asked for the replay, not when the
   // model was opened — those can be hours apart on a tab left standing.
   useEffect(() => {
     if (engaged) {
       setOpenedAt(Date.now());
-    } else {
-      setPlaying(false);
     }
   }, [engaged]);
 
@@ -189,28 +158,6 @@ export default function TrackingReplayBar({
       onAtChange(span.from);
     }
   }, [engaged, at, span, onAtChange]);
-
-  useEffect(() => {
-    if (!playing || !engaged || span === null) {
-      return;
-    }
-    const timer = setInterval(() => {
-      const now = atRef.current ?? span.from;
-      // Stopped at the end rather than wrapped: the end of a live trip is the present moment, and
-      // sliding from it back to the entrance would read as the party going in again.
-      const next = Math.min(now + TICK_MS * speed, span.to);
-      // Moved on before it is announced, not after. The ref is otherwise only refreshed when a
-      // render delivers the new moment back, and a browser that batches two ticks into one render
-      // would hand the second tick the moment the first one started from — a clock that loses time
-      // exactly when the machine is busiest.
-      atRef.current = next;
-      onAtChange(next);
-      if (next >= span.to) {
-        setPlaying(false);
-      }
-    }, TICK_MS);
-    return () => clearInterval(timer);
-  }, [playing, engaged, span, speed, onAtChange]);
 
   // A watch that was never armed has no stretch of time to play, so nothing is offered for one.
   if (tracking.armedAt === null) {
@@ -305,7 +252,6 @@ export default function TrackingReplayBar({
   }
 
   const moment = at ?? span.from;
-  const step = Math.max(1, Math.round((span.to - span.from) / SCRUB_STEPS));
   const standing = noteAt(notes, moment);
   // The pictures in force at this moment — the same reading the note has, for the same reason: a
   // scrubber stops at a thousand places across a window hours long and never lands on the instant
@@ -323,32 +269,15 @@ export default function TrackingReplayBar({
         : { dateStyle: 'short', timeStyle: 'short' },
     );
 
-  const onPlay = () => {
-    if (playing) {
-      setPlaying(false);
-      return;
-    }
-    // Pressing play at the end starts the trip again rather than doing nothing visible.
-    if (moment >= span.to) {
-      onAtChange(span.from);
-    }
-    setPlaying(true);
-  };
-
-  const scrubTo = (value: number) => {
-    setPlaying(false);
-    onAtChange(value);
-  };
-
   return (
     <div className="tracking-replay" data-testid="trip-tracking-replay">
       <Flex gap="small" align="center" wrap>
         <Button
           type="primary"
           size={controlSize}
-          icon={playing ? <PauseOutlined /> : <CaretRightOutlined />}
-          aria-label={t(playing ? 'trips.tracking.replay.pause' : 'trips.tracking.replay.play')}
-          onClick={onPlay}
+          icon={transport.playing ? <PauseOutlined /> : <CaretRightOutlined />}
+          aria-label={t(transport.playing ? 'trips.tracking.replay.pause' : 'trips.tracking.replay.play')}
+          onClick={transport.toggle}
           data-testid="trip-tracking-replay-play"
         />
         <Typography.Text strong data-testid="trip-tracking-replay-clock">
@@ -356,9 +285,9 @@ export default function TrackingReplayBar({
         </Typography.Text>
         <Segmented
           size={controlSize}
-          value={speed}
-          onChange={(value) => setSpeed(Number(value))}
-          options={SPEEDS.map((value) => ({
+          value={transport.speed}
+          onChange={(value) => transport.setSpeed(Number(value))}
+          options={REPLAY_SPEEDS.map((value) => ({
             value,
             label: t('trips.tracking.replay.speed', { value }),
           }))}
@@ -376,10 +305,10 @@ export default function TrackingReplayBar({
           <Slider
             min={span.from}
             max={span.to}
-            step={step}
+            step={transport.step}
             value={moment}
             marks={marks}
-            onChange={scrubTo}
+            onChange={transport.scrubTo}
             tooltip={{ formatter: (value) => (typeof value === 'number' ? clock(value) : '') }}
             // Named on the handle rather than on the control: the handle is the element that
             // carries the slider role, and a label on the wrapper reaches nothing.
@@ -395,7 +324,7 @@ export default function TrackingReplayBar({
             icon={<LeftOutlined />}
             disabled={previous === null}
             aria-label={t('trips.tracking.replay.notePrevious')}
-            onClick={() => previous !== null && scrubTo(previous.at)}
+            onClick={() => previous !== null && transport.scrubTo(previous.at)}
             data-testid="trip-tracking-replay-note-previous"
           />
           <Typography.Text
@@ -416,7 +345,7 @@ export default function TrackingReplayBar({
             icon={<RightOutlined />}
             disabled={next === null}
             aria-label={t('trips.tracking.replay.noteNext')}
-            onClick={() => next !== null && scrubTo(next.at)}
+            onClick={() => next !== null && transport.scrubTo(next.at)}
             data-testid="trip-tracking-replay-note-next"
           />
         </Flex>

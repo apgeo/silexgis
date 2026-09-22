@@ -25,6 +25,16 @@ vi.mock('../../api/hooks.ts', () => ({
   usePublicTrip: () => answer,
   useResLinksForTarget: authenticatedOnly('useResLinksForTarget'),
   useSurveyModel: authenticatedOnly('useSurveyModel'),
+  usePublicPastTrips: (_token: string | undefined, enabled: boolean) => ({
+    data: undefined,
+    isPending: enabled,
+    isError: false,
+  }),
+  usePublicPastTrack: (_token: string | undefined, tripLogId: string | undefined) => ({
+    data: undefined,
+    isPending: tripLogId !== undefined,
+    isError: false,
+  }),
 }));
 vi.mock('react-router-dom', () => ({ useParams: () => ({ token: 'follow-token' }) }));
 

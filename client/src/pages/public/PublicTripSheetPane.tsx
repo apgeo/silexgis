@@ -30,6 +30,15 @@ interface Props {
   height?: number | string;
   /** The follow token — the page's identity, which is what the pinned URL resets on. */
   token: string | undefined;
+  /**
+   * The station a replay is keeping the camera on, when one is following a team or a caver.
+   *
+   * <b>Yields to the reader's own press, and that order is the whole of it.</b> Somebody who has
+   * pressed a row in the list beside this sheet has said where they want to look, and a replay's
+   * follow re-aiming over them every time the party moves would take the sheet away from them
+   * while they are reading it. A follow is what decides the view until a reader decides otherwise.
+   */
+  followStation?: string | null;
 }
 
 /**
@@ -55,7 +64,14 @@ interface Props {
  * sheet's own fourth state, "no point on this map". A withholding is never converted into a
  * sheet absence, and an absence never into a guess.
  */
-export default function PublicTripSheetPane({ sheet, cavers, active, height, token }: Props) {
+export default function PublicTripSheetPane({
+  sheet,
+  cavers,
+  active,
+  height,
+  token,
+  followStation = null,
+}: Props) {
   const { t, i18n } = useTranslation();
   // The same defaults every drawing opens with: names on, times asked for. Per pane, as
   // every surface's own switches are — the switch takes text off this drawing only.
@@ -91,14 +107,22 @@ export default function PublicTripSheetPane({ sheet, cavers, active, height, tok
     [placed, showLabels, showTimes, t, i18n.language, today],
   );
 
-  /** Where the overlay's pressed row can be shown on this sheet, or null when nowhere. */
+  /**
+   * Where this sheet is looking: the row a reader pressed, or the station a replay is following.
+   *
+   * <b>A station with no point on this sheet is nowhere to look, and answers null.</b> That is the
+   * sheet's own fourth state — the survey holds the station perfectly well and nobody has defined a
+   * point for it on this scan — and a view flown at a guess would be this application claiming a
+   * measurement nobody made.
+   */
   const focus = useMemo(() => {
-    if (shownPlace === null) {
+    const station = shownPlace?.station ?? followStation;
+    if (station === null || station === undefined) {
       return null;
     }
-    const pin = sheet.markers.find((marker) => marker.station === shownPlace.station);
+    const pin = sheet.markers.find((marker) => marker.station === station);
     return pin === undefined ? null : { x: pin.x, y: pin.y };
-  }, [shownPlace, sheet.markers]);
+  }, [shownPlace, followStation, sheet.markers]);
 
   /** A press on a caver's dot opens their card — the same card, from the same overlay. */
   const onCaverPressed = (marker: SheetCaverMarker) => {

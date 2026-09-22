@@ -212,6 +212,15 @@
   text-align: center;
 }
 
+/* The space where a chosen past trip's drawing will be, while it is being read or after it could
+   not be. Empty on purpose: the strip below it is already saying which of those it is, and a second
+   sentence in the middle of the box would be the frame talking about a drawing it has not been
+   given. It takes the height so the strip keeps its place along the bottom edge. */
+.public-trip-embed-pending {
+  flex: 1;
+  min-height: 0;
+}
+
 /* The tab strip inside the embed's frame. The frame's height is the snippet's choice and the
    library's tabs size to content, so the chain from frame to drawing is spelled out: the strip
    is a column, the body takes what the bar leaves, and each pane fills it. Scoped to the embed
@@ -243,4 +252,204 @@
    it from reading as part of the host page's chrome. */
 .public-trip-embed-tabs .ant-tabs-nav {
   margin: 0 8px;
+}
+
+/* ---- the cave's past: the picker, the banner and the transport ------------------------------
+ *
+ * Designed at 360px like everything above it, and with one extra constraint the rest of this page
+ * does not have: the same components are drawn inside an iframe that a club chose the size of, and
+ * which is routinely 260px tall. So every measurement below is either a token or a share, and the
+ * compact variant subtracts rather than re-lays-out — two layouts for one control is how the two
+ * surfaces come to disagree about what a reader is looking at.
+ */
+
+.public-trip-past {
+  border-top: 1px solid var(--silexgis-public-border);
+  padding-top: 4px;
+}
+
+.public-trip-past-label {
+  font-weight: 600;
+}
+
+.public-past-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* A row is a control, so it is a button — reachable from a keyboard, announced as pressable, and
+   with a target a thumb can land on. The height floor is the project's touch target rather than a
+   number chosen here; `text-align: start` and the reset of the button's own font are what stop a
+   native button from centring a cave's name and shrinking it. */
+.public-past-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--silexgis-public-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.public-past-row:hover:not(:disabled),
+.public-past-row:focus-visible {
+  border-color: var(--silexgis-public-accent);
+}
+
+/* A trip with nothing to play is still a row of the club's history: it is shown, it is not
+   pressable, and the tag beside it says why in words. Dimming alone would read on a phone as a
+   rendering that had not finished. */
+.public-past-row:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.public-past-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.public-past-row-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.public-past-row-when {
+  font-size: 0.78rem;
+}
+
+/* The tag never shrinks and never wraps: it is the half of the row that says whether pressing it
+   does anything, and a cave with a long name must not squeeze it to nothing. */
+.public-past-row-mark {
+  flex: none;
+  margin-inline-end: 0;
+}
+
+.public-past-more {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.78rem;
+}
+
+.public-past-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.public-past-banner-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.public-past-banner-action {
+  margin-top: 2px;
+}
+
+/* The scrubber's track, which has to be draggable on a page that also scrolls. `pan-y` hands the
+   browser the axis it scrolls on and keeps the axis this scrubs on; without it the page either
+   cannot be scrolled past the strip or steals the drag meant to move the handle. */
+.public-past-scrub {
+  padding: 0 6px;
+}
+
+.public-past-scrub .ant-slider-track,
+.public-past-scrub .ant-slider-rail,
+.public-past-scrub .ant-slider-handle {
+  touch-action: pan-y;
+}
+
+/* The grab area around the handle, which no antd token describes — the handle a finger has to
+   land on is bigger than the dot a reader sees. */
+.public-past-scrub .ant-slider-handle::before {
+  inset-inline-start: -8px;
+  inset-block-start: -8px;
+  width: calc(100% + 16px);
+  height: calc(100% + 16px);
+}
+
+.public-past-mark {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentcolor;
+  opacity: 0.55;
+}
+
+.public-past-follow {
+  min-width: 140px;
+  max-width: 100%;
+}
+
+/* ---- the same controls inside somebody else's article --------------------------------------- */
+
+/* The frame becomes a column the moment it carries a strip: the drawing takes what is left and
+   the strip keeps its own height, rather than the strip being drawn over the viewer's toolbar. */
+.public-trip-embed {
+  display: flex;
+  flex-direction: column;
+}
+
+.public-trip-embed-tabs {
+  flex: 1;
+  min-height: 0;
+}
+
+.public-trip-embed-strip {
+  flex: none;
+  padding: 4px 8px 6px;
+  border-top: 1px solid var(--silexgis-public-border);
+}
+
+/* The banner and the transport in a box that may be 260px tall: the type comes down, the gaps
+   close, and the strip is allowed to scroll inside itself rather than push the drawing out of an
+   article. Nothing is removed — what the strip says is the whole reason it is there. */
+.public-past-bar-compact {
+  flex: none;
+  gap: 4px;
+  max-height: 55%;
+  overflow-y: auto;
+  padding: 4px 8px 6px;
+  border-top: 1px solid var(--silexgis-public-border);
+  font-size: 0.8rem;
+}
+
+.public-past-bar-compact .public-past-banner {
+  padding-block: 4px;
+}
+
+/* An outline costing no height at all, so that a reader who scrolled past the strip still cannot
+   mistake a past trip for a live one. Inset, so it is drawn inside the frame's own box rather than
+   over the article's text around it. */
+.public-trip-embed-past {
+  outline: 2px solid var(--silexgis-public-warning);
+  outline-offset: -2px;
+}
+
+/* The archive's sheet belongs to the frame, not to the host page: without this it would be
+   positioned against the browser's viewport and drawn over somebody's article. */
+.public-past-drawer {
+  position: absolute;
+}
+
+@media (min-width: 760px) {
+  .public-past-row {
+    min-height: 40px;
+  }
 }

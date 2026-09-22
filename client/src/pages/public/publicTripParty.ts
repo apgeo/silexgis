@@ -172,3 +172,34 @@ export function positionAgeInWords(
   const at = instantOf(positionRecordedAt);
   return at === null ? null : gapInWords(at, now, language);
 }
+
+/**
+ * A calendar date, in the reader's language, without inventing a time of day for it.
+ *
+ * <b>Read as UTC on purpose.</b> A trip date is a calendar day and carries no hour; handing
+ * `new Date('2026-09-14')` to a formatter in a timezone west of Greenwich prints the 13th, which is
+ * a page telling a club its trip was a day earlier than it was.
+ */
+export function formatTripDate(value: string, language: string): string {
+  const parts = value.split('-').map(Number);
+  const date = new Date(Date.UTC(parts[0], (parts[1] ?? 1) - 1, parts[2] ?? 1));
+  return date.toLocaleDateString(language, { timeZone: 'UTC', dateStyle: 'medium' });
+}
+
+/**
+ * When a trip was, as one or two dates — the line under a title, and the line on a row of the
+ * archive's picker, said the same way in both places.
+ *
+ * A single date where the trip began and ended on one day, or where nothing recorded an end: a
+ * range whose two halves are the same reads as a mistake, and repeating one date twice says less
+ * than printing it once.
+ */
+export function tripDateRange(
+  tripDate: string,
+  tripDateEnd: string | null,
+  language: string,
+): string {
+  return tripDateEnd === null || tripDateEnd === tripDate
+    ? formatTripDate(tripDate, language)
+    : `${formatTripDate(tripDate, language)} – ${formatTripDate(tripDateEnd, language)}`;
+}

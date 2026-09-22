@@ -39,10 +39,18 @@ import type { TrackedCaver, TrackedCaverPosition } from './trackedCavers.ts';
  * shown here, which is what it is.
  */
 
-/** A report with its instant resolved once, so the scan below never re-parses a date. */
-interface DatedEvent {
+/**
+ * A report with its instant resolved once, so the scan below never re-parses a date.
+ *
+ * Generic in the row, because two different logs are dated by this one function. The signed-in log
+ * is a flat list of {@link TrackingEvent}; a published trip's past track is the same reports keyed
+ * by a place in the party and carrying no ids at all. Only `recordedAt` is read here, and the row
+ * comes back out unchanged — so a caller reading a note off it still gets a note, and the one
+ * spelling of "which instant is this, and is it readable" serves both surfaces.
+ */
+interface DatedRow<T> {
   at: number;
-  event: TrackingEvent;
+  event: T;
 }
 
 /** The stretch of the trip a replay can be scrubbed over, as epoch milliseconds. */
@@ -92,8 +100,8 @@ interface CaverHistory {
  * A report whose time cannot be read is left out: there is no instant to place it at, and placing
  * it anywhere would move somebody at a moment nothing says they moved.
  */
-function datedEvents(events: readonly TrackingEvent[]): DatedEvent[] {
-  const dated: DatedEvent[] = [];
+function datedEvents<T extends { recordedAt: string }>(events: readonly T[]): DatedRow<T>[] {
+  const dated: DatedRow<T>[] = [];
   for (let index = events.length - 1; index >= 0; index--) {
     const event = events[index];
     const at = Date.parse(event.recordedAt);
@@ -140,7 +148,7 @@ function datedEvents(events: readonly TrackingEvent[]): DatedEvent[] {
  */
 export function replayWindow(
   tracking: Pick<TrackingState, 'armedAt' | 'closedAt'>,
-  events: readonly TrackingEvent[],
+  events: readonly { recordedAt: string }[],
   openedAt: number,
   pictures: readonly ReplayPicture[] = [],
 ): ReplayWindow | null {

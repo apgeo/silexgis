@@ -17,6 +17,13 @@ import { defineConfig, devices } from '@playwright/test';
 // editing a link somebody else recorded, has no other cover, and a skipped test reads as a
 // green run.
 //
+// One flow needs the archive of past trips to be reachable, and a closed trip only leaves the live
+// window after the installation's grace — two days by default. That spec therefore wants the API
+// started with SILEXGIS__TripTracking__ShareGraceAfterClose=00:00:00, which is an ordinary operator
+// setting and not a test hook. It fails rather than skipping without it, and says so in the failure:
+// the alternative is a spec that sleeps for two days or reaches into the database to move a
+// timestamp, and a skipped test reads as a green run.
+//
 // SILEXGIS_DEV_PORT moves the whole run — the dev server Vite starts and the address the
 // browser is pointed at — so a second checkout can be exercised against its own API and
 // database. It is the same variable the dev server reads, and it must be set together with

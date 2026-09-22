@@ -1,11 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { EyeInvisibleOutlined, QuestionCircleOutlined, WarningOutlined } from '@ant-design/icons';
-import { Alert, Card, Flex, Result, Skeleton, Spin, Tabs, Tag, Typography, theme } from 'antd';
+import {
+  EyeInvisibleOutlined,
+  HistoryOutlined,
+  QuestionCircleOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
+import { Alert, Card, Collapse, Flex, Result, Skeleton, Spin, Tabs, Tag, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
-import { usePublicTrip, type PublicTripParticipant } from '../../api/hooks.ts';
-import CaveViewPanel from '../../components/caveview/CaveViewPanel.tsx';
+import { useParams, useSearchParams } from 'react-router-dom';
+import {
+  usePublicPastTrips,
+  usePublicTrip,
+  type PublicTripParticipant,
+} from '../../api/hooks.ts';
+import CaveViewPanel, {
+  type CaveViewFocusRequest,
+} from '../../components/caveview/CaveViewPanel.tsx';
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
@@ -13,14 +24,20 @@ import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { usePublishedSheets } from '../../rastermap/publishedSheets.ts';
 import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
+import { followedStation } from './pastTrackReplay.ts';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
+import PublicPastBar from './PublicPastBar.tsx';
+import PublicPastTripList from './PublicPastTripList.tsx';
 import {
   partyByTeam,
   partyStandings,
   positionAgeInWords,
   sinceInWords,
   standingOf,
+  tripDateRange,
 } from './publicTripParty.ts';
+import { usePastTripPlayback } from './usePastTripPlayback.ts';
+import { readPastLink, writePastLink } from './pastTripLink.ts';
 import './PublicTripPage.css';
 
 /**
@@ -62,11 +79,52 @@ export default function PublicTripPage() {
   const { token: antdToken } = theme.useToken();
   const { data, isPending, error } = usePublicTrip(token);
 
+  /**
+   * The cave's past, and which of it this reader has asked to see.
+   *
+   * Reads nothing until a trip is chosen — see the hook, where the reason that is a rule rather
+   * than a tuning is written down.
+   */
+  const past = usePastTripPlayback(token);
+  const [search, setSearch] = useSearchParams();
+
+  /**
+   * What the page is actually showing: the party now, or a past trip wound back to a moment.
+   *
+   * <b>One shape, and that is what keeps this honest.</b> A moment of a past trip is folded into
+   * the very envelope the live read produces, so everything below — the standings, the teams, the
+   * four reasons a place cannot be drawn, the markers, the sheets, the pictures — is the same code
+   * drawing the same shape. There is no second set of rules for the past to fall out of step with.
+   *
+   * <b>Undefined while a chosen track is still in flight, and deliberately not the live party.</b>
+   * Falling back would draw the party who are underground right now under a banner saying this is
+   * the past, which is the one sentence this whole feature must never produce.
+   */
+  const view = past.engaged ? (past.envelope ?? undefined) : data;
+
+  // A link in somebody's prose, opened in a fresh tab: the address carries which past trip to play
+  // and, where it says so, whom to keep the camera on and where to start. Applied when the address
+  // changes and never afterwards, so a reader who presses "back to now" is not sent straight back
+  // into the past by their own URL.
+  const openPast = past.open;
+  useEffect(() => {
+    const asked = readPastLink(search);
+    if (asked !== null) {
+      openPast(asked.tripLogId, { at: asked.at, follow: asked.follow });
+    }
+  }, [search, openPast]);
+
   // The address the viewer is given: held still while it is the same survey, replaced when the
   // survey itself changes. Both halves matter and the reasoning for each lives with the rule,
   // beside the page that shares it.
-  const model = data?.model ?? null;
-  const pinnedModelUrl = usePinnedModelUrl(model?.modelUrl, token);
+  const model = view?.model ?? null;
+  // Pinned per drawing rather than per token, because the past is a second drawing reached from
+  // the same address: a past trip's survey is its own, often a superseded one, and a pin held
+  // across the switch would draw one survey's geometry under another survey's station names.
+  const pinnedModelUrl = usePinnedModelUrl(
+    model?.modelUrl,
+    past.tripLogId === null ? token : `${token}:${past.tripLogId}`,
+  );
 
   // The tab a link opens in says which trip it is. Worth doing here and nowhere else in this
   // application: everything else is opened from inside a workspace whose tab is already named,
@@ -120,11 +178,63 @@ export default function PublicTripPage() {
 
   const cavers = useMemo(
     () =>
-      data === undefined
+      view === undefined
         ? []
-        : publicTrackedCavers(data, (ordinal) => t('publicTrip.caverOrdinal', { ordinal })),
-    [data, t],
+        : publicTrackedCavers(view, (ordinal) => t('publicTrip.caverOrdinal', { ordinal })),
+    [view, t],
   );
+
+  /**
+   * Keeping the camera on a followed team or caver as the replay plays.
+   *
+   * <b>Asked for when the station changes and at no other time.</b> A request on every tick would
+   * take the model away from a reader who has turned it to look at something else, five times a
+   * second; a request when the followed party actually moves is the thing that was asked for. A
+   * moment where the follow has nowhere honest to point — nobody reported yet, a place withheld, a
+   * place measured on another survey — asks for nothing at all rather than guessing.
+   */
+  const followStation = followedStation(cavers, past.follow);
+  const [focusRequest, setFocusRequest] = useState<CaveViewFocusRequest | undefined>();
+  useEffect(() => {
+    if (followStation !== null) {
+      setFocusRequest({ kind: 'station', ref: followStation });
+    }
+  }, [followStation]);
+
+  /**
+   * Whether the archive section stands open, and therefore whether its list has been read at all.
+   *
+   * Opened by a reader, and opened for them when a link brought them here already playing something
+   * — arriving in the past with the list that produced it shut would leave no visible way back to
+   * the other trips of the cave.
+   */
+  const [pastOpen, setPastOpen] = useState(false);
+  useEffect(() => {
+    if (past.engaged) {
+      setPastOpen(true);
+    }
+  }, [past.engaged]);
+  const pastTrips = usePublicPastTrips(token, pastOpen);
+
+  /** Choosing a trip: play it, and write it into the address so the view can be sent to somebody. */
+  const play = (tripLogId: string) => {
+    past.open(tripLogId, { follow: null });
+    setSearch(writePastLink(search, tripLogId, null), { replace: true });
+  };
+
+  /**
+   * Leaving the past, address included.
+   *
+   * <b>The address has to be cleared with the view, not after it.</b> A reader who presses the way
+   * back and then copies what is in the bar would otherwise be sending somebody a link into a past
+   * trip while believing they were sending the live page — the address would still name a trip the
+   * page had stopped showing. `replace` rather than a new entry: leaving a replay is not a place in
+   * the reader's history to go back to.
+   */
+  const leavePast = () => {
+    past.backToNow();
+    setSearch(writePastLink(search, null, null), { replace: true });
+  };
 
   /**
    * The stations the drawing on this page turns out not to hold.
@@ -156,9 +266,15 @@ export default function PublicTripPage() {
 
   // Antd's tokens reach the stylesheet as custom properties on the page's own root, so the
   // rules below stay readable and the colours still come from the one place they are decided.
+  // Antd's tokens reach the stylesheet as custom properties on the page's own root, so the rules
+  // there stay readable and the colours still come from the one place they are decided.
   const palette = {
     '--silexgis-public-bg': antdToken.colorBgContainer,
     '--silexgis-public-border': antdToken.colorBorderSecondary,
+    '--silexgis-public-accent': antdToken.colorPrimary,
+    // What the past is marked in, so the one signal that costs no height on a small frame reads
+    // the same as the banner that costs one.
+    '--silexgis-public-warning': antdToken.colorWarning,
   } as CSSProperties;
 
   if (isPending) {
@@ -194,9 +310,18 @@ export default function PublicTripPage() {
     );
   }
 
-  const counts = partyStandings(data.participants);
-  const groups = partyByTeam(data.participants, data.teams);
-  const now = Date.now();
+  const counts = partyStandings(view?.participants ?? []);
+  const groups = partyByTeam(view?.participants ?? [], view?.teams ?? []);
+  /**
+   * What "ago" is measured from.
+   *
+   * The wall clock while the live party is on screen, because that is the question a family is
+   * asking. The moment on the scrubber while a past trip is playing, because there the question is
+   * how long the party had been out of contact <em>then</em> — measured against today it would say
+   * "6 years ago" of every position on a trip from 2019, which is true, useless, and identical for
+   * the first report and the last.
+   */
+  const now = past.engaged ? (past.at ?? Date.now()) : Date.now();
 
   const when = (value: string | null) =>
     value === null ? '—' : new Date(value).toLocaleString(i18n.language);
@@ -276,7 +401,7 @@ export default function PublicTripPage() {
     // envelope carries no report kind — so the weaker of the two phrasings is the only one used
     // here. Over-claiming would tell a stranger something is being kept from them at the moment
     // a party has merely not set off.
-    if (participant.lastRecordedAt !== null && data.positionsWithheld) {
+    if (participant.lastRecordedAt !== null && view?.positionsWithheld === true) {
       return {
         shown: (
           <Tag icon={<EyeInvisibleOutlined />} data-testid="public-trip-position-withheld">
@@ -339,43 +464,77 @@ export default function PublicTripPage() {
     </div>
   );
 
+  /**
+   * Whose title and state the header prints — and nobody's while a chosen past trip is still
+   * being read, or could not be.
+   *
+   * <b>Falling back to the live trip here is the same mistake the body was fixed for.</b> While a
+   * track is in flight the banner below already reads "You are looking at a past trip — Reading
+   * this trip…"; a header that went on printing the link's own trip would set the live title and
+   * its blue "underground now" tag directly under that sentence, and a reader on a slow connection
+   * — or one who followed a link to a trip that has since passed this installation's retention,
+   * where the state is permanent — would be told at once that a party is underground and that this
+   * is the past. So the header says what it honestly has: that this is a past trip, without a name
+   * for it until the name arrives. The browser tab keeps the link's own trip, because the tab is
+   * the link.
+   */
+  const head = view ?? (past.engaged ? null : data);
   const dates =
-    data.tripDateEnd === null || data.tripDateEnd === data.tripDate
-      ? formatDate(data.tripDate, i18n.language)
-      : `${formatDate(data.tripDate, i18n.language)} – ${formatDate(data.tripDateEnd, i18n.language)}`;
+    head === null ? null : tripDateRange(head.tripDate, head.tripDateEnd, i18n.language);
 
   return (
     <div className="public-trip" style={palette} data-testid="public-trip">
+      {/* The title and the dates are of whatever is on screen — a past trip has its own, and a
+          header still naming the live one over a replay of another trip would be the page telling
+          two stories at once. The tab keeps the link's own trip, because the tab is the link. */}
       <header className="public-trip-head">
         <h1 className="public-trip-title" data-testid="public-trip-title">
-          {data.title}
+          {head === null ? t('publicTrip.past.unknownTrip') : head.title}
         </h1>
-        <div className="public-trip-subtitle">
-          <Typography.Text type="secondary">{dates}</Typography.Text>
-          <Tag
-            color={data.state === 'armed' ? 'blue' : 'default'}
-            data-testid={`public-trip-state-${data.state}`}
-          >
-            {t(`publicTrip.state.${data.state}`)}
-          </Tag>
-        </div>
+        {/* The dates and the standing belong to a trip; with no trip in hand there is neither to
+            print, and a state tag is the one thing on this page that must never be guessed. */}
+        {head !== null && (
+          <div className="public-trip-subtitle">
+            <Typography.Text type="secondary">{dates}</Typography.Text>
+            <Tag
+              color={head.state === 'armed' ? 'blue' : 'default'}
+              data-testid={`public-trip-state-${head.state}`}
+            >
+              {t(`publicTrip.state.${head.state}`)}
+            </Tag>
+          </div>
+        )}
       </header>
 
       <main className="public-trip-body">
-        <div className="public-trip-standing" data-testid="public-trip-counts">
-          {(['underground', 'out', 'unheard'] as const).map((standing) => (
-            <div className="public-trip-standing-cell" key={standing}>
-              <span className="public-trip-standing-count" data-testid={`public-trip-count-${standing}`}>
-                {counts[standing]}
-              </span>
-              <Typography.Text type="secondary" className="public-trip-standing-label">
-                {t(`publicTrip.standing.${standing}`)}
-              </Typography.Text>
-            </div>
-          ))}
-        </div>
+        {/* First thing under the title, and it stays there for as long as the past is on screen. */}
+        {past.engaged && (
+          <PublicPastBar
+            playback={{ ...past, backToNow: leavePast }}
+            liveState={data.state}
+            cavers={cavers}
+          />
+        )}
 
-        {error != null && (
+        {view !== undefined && (
+          <div className="public-trip-standing" data-testid="public-trip-counts">
+            {(['underground', 'out', 'unheard'] as const).map((standing) => (
+              <div className="public-trip-standing-cell" key={standing}>
+                <span className="public-trip-standing-count" data-testid={`public-trip-count-${standing}`}>
+                  {counts[standing]}
+                </span>
+                <Typography.Text type="secondary" className="public-trip-standing-label">
+                  {t(`publicTrip.standing.${standing}`)}
+                </Typography.Text>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* A poll that failed is a fact about the live read, so it is said while the live read is
+            what is on screen. A reader watching a trip from 2019 does not need to be told that
+            this minute's refresh of a different trip did not land. */}
+        {error != null && !past.engaged && (
           <Alert
             type="warning"
             showIcon
@@ -385,7 +544,9 @@ export default function PublicTripPage() {
           />
         )}
 
-        {data.state !== 'armed' && (
+        {/* Superseded by the past banner while one is up: two notices saying "this is finished"
+            would compete, and only one of them says which trip. */}
+        {data.state !== 'armed' && !past.engaged && (
           <Alert
             type="info"
             showIcon
@@ -395,7 +556,7 @@ export default function PublicTripPage() {
           />
         )}
 
-        {data.positionsWithheld && (
+        {view?.positionsWithheld === true && (
           <Alert
             type="info"
             showIcon
@@ -416,7 +577,7 @@ export default function PublicTripPage() {
             against and is not true of the one installed: `title` is the prop and `message` is the
             deprecated spelling of it, which this alert was announcing on the console of every
             phone that opened a trip with a place on another survey. */}
-        {data.participants.some((participant) => participant.positionOnOtherModel) && (
+        {view?.participants.some((participant) => participant.positionOnOtherModel) === true && (
           <Alert
             type="info"
             showIcon
@@ -431,7 +592,7 @@ export default function PublicTripPage() {
             once for the page as well as beside each name, for the same reason its neighbour above
             is — the mark beside a name is a label, and a reader waiting for a party to come out
             needs to be told that a place the drawing cannot show is not a place nobody knows. */}
-        {data.participants.some(offModel) && (
+        {view?.participants.some(offModel) === true && (
           <Alert
             type="warning"
             showIcon
@@ -470,6 +631,8 @@ export default function PublicTripPage() {
                       height={`min(${narrow ? 300 : 440}px, 60dvh)`}
                       trackedCavers={cavers}
                       crsLookup={crsLookup}
+                      // Where a followed team or caver is, when a replay is keeping up with one.
+                      focusRequest={focusRequest}
                       toolbar
                       // The pictures come from the envelope and from nothing else. The hook the signed-in
                       // surfaces share reads the model's links, and that route takes an account — the
@@ -502,6 +665,9 @@ export default function PublicTripPage() {
                         active={activeTab === sheet.key}
                         height={`min(${narrow ? 300 : 440}px, 60dvh)`}
                         token={token}
+                        // The sheets follow the same team the 3D scene does: one replay, two
+                        // drawings, and a reader switching tabs finds the same party in view.
+                        followStation={followStation}
                       />
                     </Suspense>
                   ),
@@ -511,6 +677,7 @@ export default function PublicTripPage() {
           </div>
         )}
 
+        {view !== undefined && (
         <section data-testid="public-trip-party">
           {groups.map((group) => (
             <div key={group.teamId ?? 'no-team'}>
@@ -553,6 +720,42 @@ export default function PublicTripPage() {
             </div>
           ))}
         </section>
+        )}
+
+        {/* The archive, at the bottom and shut until it is asked for.
+            <b>Shut for a reason and not for tidiness.</b> This page is opened by families while a
+            party is underground, on phones, in numbers nobody can see, and its one job is to say
+            whether they are out. Reading a cave's whole history on every one of those opens would
+            double the cost of the cheapest surface here to answer a question nobody asked — so the
+            list is fetched on the press that opens the section, and a reader who never presses it
+            costs exactly what they cost before this existed. */}
+        <section className="public-trip-past" data-testid="public-trip-past">
+          <Collapse
+            ghost
+            activeKey={pastOpen ? ['past'] : []}
+            onChange={(keys) => setPastOpen(keys.length > 0)}
+            items={[
+              {
+                key: 'past',
+                label: (
+                  <span className="public-trip-past-label">
+                    <HistoryOutlined /> {t('publicTrip.past.sectionTitle')}
+                  </span>
+                ),
+                children: (
+                  <PublicPastTripList
+                    trips={pastTrips.data?.trips}
+                    more={pastTrips.data?.more ?? false}
+                    loading={pastTrips.isPending}
+                    failed={pastTrips.isError}
+                    playingId={past.tripLogId}
+                    onPlay={play}
+                  />
+                ),
+              },
+            ]}
+          />
+        </section>
       </main>
 
       <footer className="public-trip-foot">
@@ -562,9 +765,3 @@ export default function PublicTripPage() {
   );
 }
 
-/** A calendar date, in the reader's language, without inventing a time of day for it. */
-function formatDate(value: string, language: string): string {
-  const parts = value.split('-').map(Number);
-  const date = new Date(Date.UTC(parts[0], (parts[1] ?? 1) - 1, parts[2] ?? 1));
-  return date.toLocaleDateString(language, { timeZone: 'UTC', dateStyle: 'medium' });
-}

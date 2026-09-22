@@ -280,6 +280,13 @@ export const queryKeys = {
   // it has no trip id and must never be given one: the token is the whole of a follower's claim,
   // and a key naming the trip would be this browser holding an identifier the page was not sent.
   publicTrip: (token: string) => ['public-trips', token] as const,
+  // The same reasoning one line up, applied to the two archive reads: both are held under the
+  // token, because the token is the only identity the page holding them has. The trip id in the
+  // second key is one the list itself handed over — a visitor who never opened the picker holds
+  // none — so it names a row already disclosed rather than an identifier this browser was given.
+  publicPastTrips: (token: string) => ['public-trips', token, 'past'] as const,
+  publicPastTrack: (token: string, tripLogId: string) =>
+    ['public-trips', token, 'past', tripLogId] as const,
   checklists: ['checklists'] as const,
   checklist: (id: string) => ['checklists', 'detail', id] as const,
   tripReportTemplates: ['trip-report-templates'] as const,
@@ -8084,6 +8091,68 @@ export function usePublicTrip(token: string | undefined) {
     refetchInterval: (query) => publicTripPollInterval(query.state.data),
   });
 }
+
+// ---- the past trips of the same cave, for somebody holding one published link ----
+
+export type PublicPastTripList = components['schemas']['PublicPastTripListDto'];
+export type PublicPastTrip = components['schemas']['PublicPastTripDto'];
+export type PublicPastTrack = components['schemas']['PublicPastTrackDto'];
+export type PublicPastTrackParticipant = components['schemas']['PublicPastTrackParticipantDto'];
+export type PublicPastTrackFix = components['schemas']['PublicPastTrackFixDto'];
+
+/**
+ * The past trips of this link's cave — the archive behind a published page.
+ *
+ * <b>Asked for only when somebody asks for it, and that is a rule rather than a tuning.</b> The
+ * page this hangs off is opened by families while a party is underground, on phones, in numbers
+ * nobody can see; its one job is to say whether the party is out. Reading a cave's history on
+ * every one of those opens would double the traffic of the surface that must stay cheapest, to
+ * answer a question nobody asked. So the picker fetches on the press that opens it and the caller
+ * holds the gate — which is also what makes the embed's cost unchanged for an article whose reader
+ * never opens the list.
+ *
+ * Read once and not polled. An archive of finished trips does not change while somebody is looking
+ * at it, and this list carries no signed URL to go stale: what it holds is a title, two dates and
+ * two numbers.
+ */
+export function usePublicPastTrips(token: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.publicPastTrips(token ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/public/trips/{token}/past', { params: { path: { token: token! } } })),
+    enabled: !!token && enabled,
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * One past trip of this link's cave, played back.
+ *
+ * <b>Never fetched until a visitor has chosen a trip.</b> `tripLogId` undefined is the whole of the
+ * gate: a page that has not been asked to play anything makes no request, so the archive costs a
+ * follower nothing until they ask for it. The weight is the reason — this answer carries the whole
+ * log of a party's movements and the survey they were measured on, where the list above carries
+ * two dates.
+ *
+ * Read once per trip and not polled, for the reason the list is not. A finished trip's track does
+ * not change. Its model's delivery URL does expire, but the survey file behind it is fetched the
+ * moment the viewer is handed the address, which is the moment this answer lands — so there is no
+ * later spend for a poll to keep alive, unlike the station pictures on the live envelope.
+ */
+export function usePublicPastTrack(token: string | undefined, tripLogId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.publicPastTrack(token ?? '', tripLogId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/public/trips/{token}/past/{tripLogId}', {
+          params: { path: { token: token!, tripLogId: tripLogId! } },
+        }),
+      ),
+    enabled: !!token && !!tripLogId,
+    staleTime: Infinity,
+  });
+}
+
 
 export type CalendarEntry = components['schemas']['CalendarEntryDto'];
 export type CalendarResult = components['schemas']['CalendarResultDto'];

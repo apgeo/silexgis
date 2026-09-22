@@ -62,10 +62,34 @@ export function publicTrackedCavers(
   }));
 }
 
-function positionOf(
-  participant: PublicTripParticipant,
-  positionsWithheld: boolean,
-): TrackedCaverPosition {
+/**
+ * A place exactly as a public surface is told it — the shape both published reads share.
+ *
+ * The live envelope says it once per person, for where they are now; a past track says it once per
+ * report, for where somebody was then. The three fields are the same three fields in both, because
+ * the server decides the same question before either leaves it: whether a place was reported, and
+ * whether it belongs to the survey being handed over.
+ */
+export interface PublicReportedPlace {
+  stationName: string | null;
+  depthM: number | null;
+  positionOnOtherModel: boolean;
+}
+
+/**
+ * What one public row says about a place, or null where it claims none.
+ *
+ * <b>One home for the rule, because two public surfaces now read it.</b> The followed page asks it
+ * of a participant and the archive's playback asks it of every report on a track; a second spelling
+ * would be two pages of the same installation disagreeing about whether a station was reported —
+ * and the wrong half of that disagreement says nobody knows where somebody was.
+ *
+ * <b>Null is "no place was claimed" and never "a place that cannot be shown".</b> A report measured
+ * on another survey is a place that exists, and it is answered as `otherModel` so the caller can
+ * say so. What null leaves to the caller is the one judgement that differs by surface: how strongly
+ * an absence may be stated — see {@link publicUnplacedPosition}.
+ */
+export function publicPlaceReported(row: PublicReportedPlace): TrackedCaverPosition | null {
   // Measured in a survey other than the one this page draws, and the server has already taken the
   // station and the depth off the row — so this bit is the only thing that tells the difference
   // between "a place is known and cannot be shown here" and "nobody has reported one". Read first,
@@ -74,17 +98,30 @@ function positionOf(
   // <b>Decided on the server, not here.</b> The signed-in fold compares two ids because it is given
   // both; a follower is given neither, deliberately — which survey a report was measured in is a
   // fact about the cave's surveying and no part of what a page like this hands out.
-  if (participant.positionOnOtherModel) {
+  if (row.positionOnOtherModel) {
     return { kind: 'otherModel' };
   }
-  if (participant.stationName !== null && participant.stationName.length > 0) {
-    return { kind: 'station', station: participant.stationName };
+  if (row.stationName !== null && row.stationName.length > 0) {
+    return { kind: 'station', station: row.stationName };
   }
   // A depth is a position and is not a station: somewhere on a line the model does not draw, so
   // it is said in words rather than placed at a station it might not be at.
-  if (participant.depthM !== null) {
-    return { kind: 'depth', depthM: participant.depthM };
+  if (row.depthM !== null) {
+    return { kind: 'depth', depthM: row.depthM };
   }
+  return null;
+}
+
+function positionOf(
+  participant: PublicTripParticipant,
+  positionsWithheld: boolean,
+): TrackedCaverPosition {
+  const place = publicPlaceReported(participant);
+  if (place !== null) {
+    return place;
+  }
+  // Nothing has been said about this person at all, so there is no position to keep from anybody
+  // and calling it a withholding would invent a secret.
   if (participant.lastRecordedAt === null || !positionsWithheld) {
     return { kind: 'unreported' };
   }
