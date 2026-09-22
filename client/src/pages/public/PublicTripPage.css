@@ -211,3 +211,36 @@
   padding: 16px;
   text-align: center;
 }
+
+/* The tab strip inside the embed's frame. The frame's height is the snippet's choice and the
+   library's tabs size to content, so the chain from frame to drawing is spelled out: the strip
+   is a column, the body takes what the bar leaves, and each pane fills it. Scoped to the embed
+   — the followed page's strip sits above a fixed-height drawing and needs none of this.
+
+   The inner class names are antd 6's (`-body-holder`/`-body`, with one `-content` element per
+   pane); antd 5 spelled the same structure `-content-holder`/`-content`/`-tabpane`, and both
+   spellings are kept so a library upgrade degrades to a squashed frame visibly caught by the
+   embed e2e rather than silently by nobody. */
+.public-trip-embed-tabs {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.public-trip-embed-tabs .ant-tabs-body-holder,
+.public-trip-embed-tabs .ant-tabs-content-holder {
+  flex: 1;
+  min-height: 0;
+}
+
+.public-trip-embed-tabs .ant-tabs-body,
+.public-trip-embed-tabs .ant-tabs-content,
+.public-trip-embed-tabs .ant-tabs-tabpane {
+  height: 100%;
+}
+
+/* The bar sits inside the frame over the article's own margins; a little breathing room keeps
+   it from reading as part of the host page's chrome. */
+.public-trip-embed-tabs .ant-tabs-nav {
+  margin: 0 8px;
+}

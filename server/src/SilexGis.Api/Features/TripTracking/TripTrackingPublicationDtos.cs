@@ -103,6 +103,26 @@ public sealed record PublicTripTrackingEnvelopeDto(
 /// internet in order to serve one page. A list in this response widens it by nothing at all.
 /// </para>
 /// </param>
+/// <param name="RasterMaps">
+/// The scanned map sheets declared on this model, each with the station points defined on the
+/// rendering being served — the drawings a followed page shows the party on beside the 3D one.
+/// Empty is the ordinary answer: most models have no scanned maps declared, and a page given
+/// none shows the 3D drawing exactly as it always has.
+/// <para>
+/// Carried in the envelope for the reason <paramref name="Proj4"/> and <paramref name="Pictures"/>
+/// are: the route the signed-in surfaces read a model's map links from takes an account, and
+/// opening it — or any enumerable route over what is linked to a model — would widen the anonymous
+/// surface for every caller on the internet in order to serve one page. A list in this response
+/// widens it by nothing at all.
+/// </para>
+/// <para>
+/// <b>Provisional pending a publication-consent decision, by owner instruction (2026-09-22).</b>
+/// Which declared maps and points a trip's publication covers is a protection question the owner
+/// has deferred; until it is decided, every map declared on the published model travels, gated
+/// only by what this surface already enforces — the whole-page refusal for a protected cave,
+/// the link-level guard on links naming guarded features, and renderings-only delivery.
+/// </para>
+/// </param>
 public sealed record PublicTripSurveyModelDto(
     SurveyModelFormat Format,
     string ModelUrl,
@@ -112,7 +132,68 @@ public sealed record PublicTripSurveyModelDto(
     double? AnchorHeightM,
     int? SourceEpsg,
     string? Proj4,
-    IReadOnlyList<PublicTripStationPictureDto> Pictures);
+    IReadOnlyList<PublicTripStationPictureDto> Pictures,
+    IReadOnlyList<PublicTripRasterMapDto> RasterMaps);
+
+/// <summary>
+/// The view a published map sheet declares itself to be — its seeded relation code read out,
+/// spelled as the envelope's own vocabulary so this shape cannot come to carry a code the
+/// page never meant to publish.
+/// </summary>
+public enum PublicTripMapViewKind
+{
+    Plan,
+    Profile,
+    Other,
+}
+
+/// <summary>
+/// One scanned map sheet a followed page draws the party on.
+/// </summary>
+/// <remarks>
+/// A map is a document whose current file is an image, declared the plan/profile/other view of
+/// the survey model by a link under a seeded code; this is that declaration read back for a
+/// caller who can read no links. Everything a sheet needs is resolved here — which rendering,
+/// which points — because the envelope is the one thing a visitor can read, and a page that
+/// filtered or resolved on the client would be trusting the one party this surface exists not
+/// to trust.
+/// </remarks>
+/// <param name="Title">
+/// The map document's title, or null where it has none. A map is titled by its document — the
+/// same one name every signed-in surface shows — and the tab a follower presses has to say
+/// which sheet it opens.
+/// </param>
+/// <param name="ImageUrl">
+/// A short-lived signed URL for a <em>rendering</em> of the map image, and deliberately never
+/// for the upload — the exact reach the station pictures above are minted with, for the same
+/// reason: a scan's own bytes carry whatever its file format recorded, and the rendering is
+/// produced by this application with every metadata profile stripped. The width in the URL is
+/// a starting point; a viewer re-points the same URL at another offered width, spending the
+/// token it was handed rather than asking for a second one.
+/// </param>
+/// <param name="Points">
+/// The station points defined on the very rendering <paramref name="ImageUrl"/> serves. Points
+/// measured against a superseded scan of the same document are resolved out here, server-side:
+/// fractions of last year's scan mean nothing on this year's, and an anonymous page has no
+/// version history to ask. One point per station — where duplicates exist the newest pin wins,
+/// the same rule the signed-in fold applies — so two surfaces showing one map cannot disagree
+/// about where a station sits on it.
+/// </param>
+public sealed record PublicTripRasterMapDto(
+    string? Title,
+    PublicTripMapViewKind ViewKind,
+    string ImageUrl,
+    IReadOnlyList<PublicTripMapPointDto> Points);
+
+/// <summary>
+/// One station's point on one published map sheet: the station spelled the way the anchor
+/// stores it (the viewer's own spelling, passed through exactly as the pictures' station is),
+/// at fractions 0–1 of the drawn picture with the origin at its top-left.
+/// </summary>
+public sealed record PublicTripMapPointDto(
+    string Station,
+    double X,
+    double Y);
 
 /// <summary>
 /// One photograph a followed page shows at one station of the drawing.

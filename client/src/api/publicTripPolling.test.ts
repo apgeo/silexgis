@@ -2,18 +2,24 @@
 import { describe, expect, it } from 'vitest';
 import { publicTripPollInterval, type PublicTripEnvelope, type TripTrackingState } from './hooks.ts';
 
-/** A published trip as the query holds it, said only in the two parts this decision reads. */
-const published = (state: TripTrackingState, pictures = 0): PublicTripEnvelope =>
+/** A published trip as the query holds it, said only in the parts this decision reads. */
+const published = (state: TripTrackingState, pictures = 0, maps = 0): PublicTripEnvelope =>
   ({
     state,
     model:
-      pictures === 0
+      pictures === 0 && maps === 0
         ? null
         : {
             pictures: Array.from({ length: pictures }, (_, i) => ({
               stationName: `p.g.${i}`,
               thumbnailUrl: `/api/v1/files/f${i}/thumbnail?size=480&token=sig`,
               caption: null,
+            })),
+            rasterMaps: Array.from({ length: maps }, (_, i) => ({
+              title: `Sheet ${i}`,
+              viewKind: 'plan',
+              imageUrl: `/api/v1/files/m${i}/thumbnail?size=1200&token=sig`,
+              points: [],
             })),
           },
   }) as PublicTripEnvelope;
@@ -58,6 +64,22 @@ describe('how a published trip is kept fresh', () => {
     // The twin, and the ordinary case: a club that has published no photographs has nothing that
     // expires, so its page is read once and the tab goes quiet for good.
     expect(publicTripPollInterval(published('closed', 0))).toBe(false);
+  });
+
+  /**
+   * The map sheets go stale the same way and are kept fresh by the same read — sharper,
+   * even: a sheet's picture is fetched when its tab is first opened, which on an article
+   * about a finished trip is however long after the page loaded the reader took to scroll
+   * there. One interval, deliberately not a second scheme.
+   */
+  it('keeps asking for a closed trip that carries map sheets, at the picture rate', () => {
+    const withMaps = publicTripPollInterval(published('closed', 0, 1));
+
+    expect(withMaps).toBe(publicTripPollInterval(published('closed', 1)));
+
+    // The twin: with neither kind of signed URL in the envelope, nothing expires and the
+    // page is read once — a model alone is not what keeps a tab asking.
+    expect(publicTripPollInterval(published('closed', 0, 0))).toBe(false);
   });
 
   it('keeps the live interval for an armed trip, pictures or not', () => {

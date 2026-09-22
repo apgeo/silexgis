@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { EyeInvisibleOutlined, QuestionCircleOutlined, WarningOutlined } from '@ant-design/icons';
-import { Alert, Card, Flex, Result, Spin, Tag, Typography, theme } from 'antd';
+import { Alert, Card, Flex, Result, Skeleton, Spin, Tabs, Tag, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { usePublicTrip, type PublicTripParticipant } from '../../api/hooks.ts';
@@ -11,6 +11,8 @@ import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTra
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import { usePublishedSheets } from '../../rastermap/publishedSheets.ts';
+import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import {
   partyByTeam,
@@ -20,6 +22,16 @@ import {
   standingOf,
 } from './publicTripParty.ts';
 import './PublicTripPage.css';
+
+/**
+ * Loaded when a trip actually carries sheets, not with the page: the sheet pane pulls in
+ * OpenLayers, which nothing else on the public bundle needs, and the ordinary published trip
+ * has no maps — its readers should not download a map engine to watch a party on a 3D drawing.
+ */
+const PublicTripSheetPane = lazy(() => import('./PublicTripSheetPane.tsx'));
+
+/** The 3D pane's tab key — every sheet's key is derived from a URL and cannot collide with it. */
+const TAB_3D = '3d';
 
 /**
  * A tracked trip as somebody without an account follows it.
@@ -86,6 +98,25 @@ export default function PublicTripPage() {
    * them.
    */
   const stationMedia = usePublishedStationMedia(model?.pictures);
+
+  /**
+   * The scanned map sheets the envelope carried, one tab each beside the 3D drawing.
+   *
+   * Kept as one array while it is the same sheets and restamped with each poll's fresh
+   * signatures — the pictures' arrangement, in the module the two public pages share — so a
+   * minute's poll neither rebuilds the tab strip nor reloads a sheet somebody is reading,
+   * while a tab first opened late still fetches its picture on a live signature.
+   */
+  const sheets = usePublishedSheets(model?.rasterMaps);
+  const [activeTab, setActiveTab] = useState(TAB_3D);
+
+  // A tab whose sheet left the envelope cannot stay active: the pane it named is gone from
+  // the strip, and a Tabs left pointing at nothing shows nothing.
+  useEffect(() => {
+    if (activeTab !== TAB_3D && !sheets.some((sheet) => sheet.key === activeTab)) {
+      setActiveTab(TAB_3D);
+    }
+  }, [sheets, activeTab]);
 
   const cavers = useMemo(
     () =>
@@ -412,28 +443,70 @@ export default function PublicTripPage() {
 
         {model !== null && pinnedModelUrl !== null && (
           <div className="public-trip-model">
-            <CaveViewPanel
-              fileUrl={pinnedModelUrl}
-              fileName={unnamedViewerFileName(model.format)}
-              // Which stations the viewer could not place a marker at, so the list of people
-              // below this one says it in words. The list is the half read on a phone.
-              onUnplacedStationsChange={setUnplacedStations}
-              // The same share of the screen the signed-in panel reserves, and for the same
-              // reason: the viewer takes every gesture that begins inside it, so it must never
-              // be the only thing under a thumb. dvh because a phone's address bar collapses.
-              height={`min(${narrow ? 300 : 440}px, 60dvh)`}
-              trackedCavers={cavers}
-              crsLookup={crsLookup}
-              toolbar
-              // The pictures come from the envelope and from nothing else. The hook the signed-in
-              // surfaces share reads the model's links, and that route takes an account — the
-              // visitor holding this one token is refused it, as they are refused every other
-              // address here — so reaching for it would fire a request that answers 401 where no
-              // console is being watched, and then draw exactly what a cave with no pictures
-              // draws. What the server sends is already decided: only photographs somebody
-              // published, with URLs that reach a rendering and never an upload. Nothing is
-              // filtered on the way through, because nothing here could be trusted to.
-              stationMedia={stationMedia}
+            {/* The drawing strip: the 3D scene, and one tab per sheet the envelope carried.
+                With no sheets the bar is hidden while the Tabs element itself stays in the
+                tree, so the 3D pane keeps its identity — its parsed model and its WebGL
+                context — across the moment a poll first brings a declaration in. Inactive
+                panes stay mounted (antd's default): a sheet's picture is fetched when its tab
+                is first opened and a tab switch never refetches anything. */}
+            <Tabs
+              activeKey={sheets.length === 0 ? TAB_3D : activeTab}
+              onChange={setActiveTab}
+              tabBarStyle={sheets.length === 0 ? { display: 'none' } : undefined}
+              items={[
+                {
+                  key: TAB_3D,
+                  label: t('rastermap.tab3d'),
+                  children: (
+                    <CaveViewPanel
+                      fileUrl={pinnedModelUrl}
+                      fileName={unnamedViewerFileName(model.format)}
+                      // Which stations the viewer could not place a marker at, so the list of people
+                      // below this one says it in words. The list is the half read on a phone.
+                      onUnplacedStationsChange={setUnplacedStations}
+                      // The same share of the screen the signed-in panel reserves, and for the same
+                      // reason: the viewer takes every gesture that begins inside it, so it must never
+                      // be the only thing under a thumb. dvh because a phone's address bar collapses.
+                      height={`min(${narrow ? 300 : 440}px, 60dvh)`}
+                      trackedCavers={cavers}
+                      crsLookup={crsLookup}
+                      toolbar
+                      // The pictures come from the envelope and from nothing else. The hook the signed-in
+                      // surfaces share reads the model's links, and that route takes an account — the
+                      // visitor holding this one token is refused it, as they are refused every other
+                      // address here — so reaching for it would fire a request that answers 401 where no
+                      // console is being watched, and then draw exactly what a cave with no pictures
+                      // draws. What the server sends is already decided: only photographs somebody
+                      // published, with URLs that reach a rendering and never an upload. Nothing is
+                      // filtered on the way through, because nothing here could be trusted to.
+                      stationMedia={stationMedia}
+                    />
+                  ),
+                },
+                ...sheets.map((sheet) => ({
+                  key: sheet.key,
+                  label: (
+                    <span>
+                      {VIEW_KIND_ICONS[sheet.viewKind]} {sheet.title ?? t('rastermap.untitledMap')}
+                    </span>
+                  ),
+                  children: (
+                    // The pane and its map engine arrive when a sheet does; the skeleton is
+                    // the moment between pressing a first map tab and the chunk landing.
+                    <Suspense fallback={<Skeleton active />}>
+                      <PublicTripSheetPane
+                        sheet={sheet}
+                        // The same fold the 3D pane draws, so the two drawings can never
+                        // disagree about the party they are both showing.
+                        cavers={cavers}
+                        active={activeTab === sheet.key}
+                        height={`min(${narrow ? 300 : 440}px, 60dvh)`}
+                        token={token}
+                      />
+                    </Suspense>
+                  ),
+                })),
+              ]}
             />
           </div>
         )}

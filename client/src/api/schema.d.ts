@@ -22574,6 +22574,15 @@ export interface components {
         PublicQrDto: {
             instanceName: string;
         };
+        PublicTripMapPointDto: {
+            station: string;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+        };
+        /** @enum {unknown} */
+        PublicTripMapViewKind: "plan" | "profile" | "other";
         PublicTripParticipantDto: {
             /** Format: int32 */
             ordinal: number;
@@ -22590,6 +22599,12 @@ export interface components {
             positionOnOtherModel: boolean;
             in: boolean;
             out: boolean;
+        };
+        PublicTripRasterMapDto: {
+            title: null | string;
+            viewKind: components["schemas"]["PublicTripMapViewKind"];
+            imageUrl: string;
+            points: components["schemas"]["PublicTripMapPointDto"][];
         };
         PublicTripStationPictureDto: {
             stationName: string;
@@ -22610,6 +22625,7 @@ export interface components {
             sourceEpsg: null | number;
             proj4: null | string;
             pictures: components["schemas"]["PublicTripStationPictureDto"][];
+            rasterMaps: components["schemas"]["PublicTripRasterMapDto"][];
         };
         PublicTripTeamDto: {
             /** Format: uuid */

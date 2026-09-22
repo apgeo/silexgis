@@ -7925,6 +7925,17 @@ export type PublicTripModel = components['schemas']['PublicTripSurveyModelDto'];
 export type PublicTripStationPicture = components['schemas']['PublicTripStationPictureDto'];
 
 /**
+ * One scanned map sheet a published trip draws its party on, points resolved and all.
+ *
+ * Like the pictures above, this is the only shape a map reaches a public surface in: the
+ * envelope carries the rendering's signed URL and the station points already filtered to that
+ * very rendering, because the routes the signed-in folds read links from answer only to an
+ * account. There is deliberately no document id, no link id and no version history here — a
+ * public page draws what it was sent and derives nothing further.
+ */
+export type PublicTripRasterMap = components['schemas']['PublicTripRasterMapDto'];
+
+/**
  * The trip's follow links — when each was minted, by whom, and whether it has been taken back.
  *
  * Deliberately carries no token. A token exists in one response, the one that minted it, and is
@@ -8015,6 +8026,11 @@ const PUBLIC_TRACKING_POLL_MS = 60_000;
  * keep it modest: the query only asks this of a trip whose envelope actually carried photographs,
  * and an interval does not fire for a tab nobody is looking at — a backgrounded article costs
  * nothing until it is looked at again, which is itself a moment that re-reads.
+ *
+ * The map sheets ride the same interval for the same reason: a sheet's image URL is the same
+ * kind of signed address, spent even later — a map tab's picture is fetched when the tab is
+ * first opened, which on an article about a finished trip can be an hour after the page was.
+ * One interval, not a second scheme; a trip carrying either kind of URL keeps reading.
  */
 const PUBLIC_PICTURE_REFRESH_MS = 7 * 60_000;
 
@@ -8032,8 +8048,12 @@ export function publicTripPollInterval(trip: PublicTripEnvelope | undefined) {
     return PUBLIC_TRACKING_POLL_MS;
   }
   // A finished trip with nothing to keep alive is asked about no more, which is the ordinary case:
-  // most installations publish no photographs at all, and for those this page reads exactly once.
-  return (trip?.model?.pictures.length ?? 0) > 0 ? PUBLIC_PICTURE_REFRESH_MS : (false as const);
+  // most installations publish no photographs and declare no maps, and for those this page reads
+  // exactly once. Either kind of signed URL in the envelope is something that goes stale on its
+  // own, and both are refreshed by the one re-read.
+  return (trip?.model?.pictures.length ?? 0) > 0 || (trip?.model?.rasterMaps?.length ?? 0) > 0
+    ? PUBLIC_PICTURE_REFRESH_MS
+    : (false as const);
 }
 
 /**

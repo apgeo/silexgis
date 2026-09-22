@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Flex, Spin, Typography, theme } from 'antd';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
+import { Flex, Skeleton, Spin, Tabs, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { usePublicTrip } from '../../api/hooks.ts';
@@ -11,6 +20,8 @@ import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
+import { usePublishedSheets } from '../../rastermap/publishedSheets.ts';
+import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import {
   EMBED_CHANNEL,
@@ -20,6 +31,16 @@ import {
   type EmbedReadyMessage,
 } from './publicTripEmbed.ts';
 import './PublicTripPage.css';
+
+/**
+ * Loaded when a trip actually carries sheets, exactly as on the page next door: the pane
+ * pulls in OpenLayers, and an article's iframe about a mapless trip should not download a
+ * map engine to show a 3D drawing.
+ */
+const PublicTripSheetPane = lazy(() => import('./PublicTripSheetPane.tsx'));
+
+/** The 3D pane's tab key — every sheet's key is derived from a URL and cannot collide with it. */
+const TAB_3D = '3d';
 
 /**
  * The same published trip as a viewer and nothing else, for an iframe on somebody's website.
@@ -86,6 +107,23 @@ export default function PublicTripEmbedPage() {
   // by a reader who scrolls to the drawing when they get to it, so its picture URLs are the ones
   // most likely to be spent long after they were minted.
   const stationMedia = usePublishedStationMedia(model?.pictures);
+
+  /**
+   * The sheets, restamped across re-reads exactly as on the page next door — sharper here
+   * for the same reason the pictures' case is: an embed sits inside an article about a trip
+   * that may be long over, and its map tab is opened when the reader gets to it, so the
+   * signature it spends is the one the latest poll restamped, not the one the page loaded
+   * with.
+   */
+  const sheets = usePublishedSheets(model?.rasterMaps);
+  const [activeTab, setActiveTab] = useState(TAB_3D);
+
+  // A tab whose sheet left the envelope cannot stay active.
+  useEffect(() => {
+    if (activeTab !== TAB_3D && !sheets.some((sheet) => sheet.key === activeTab)) {
+      setActiveTab(TAB_3D);
+    }
+  }, [sheets, activeTab]);
 
   /**
    * The party as the framing document is told it: a place, a name, a station or nothing, and which
@@ -246,6 +284,9 @@ export default function PublicTripEmbedPage() {
         ref: station,
         onSettled: (found: boolean) => settled(found),
       });
+      // The camera being flown is the 3D pane's; an answer performed behind a sheet tab
+      // would read as a link that did nothing, so the strip turns to the drawing that moved.
+      setActiveTab(TAB_3D);
     };
 
     window.addEventListener('message', onMessage);
@@ -290,24 +331,65 @@ export default function PublicTripEmbedPage() {
 
   return (
     <div className="public-trip-embed" style={palette} data-testid="public-trip-embed">
-      <CaveViewPanel
-        fileUrl={pinnedModelUrl}
-        fileName={unnamedViewerFileName(model.format)}
-        // The one mount where the whole height is right: this document IS the frame, its size was
-        // chosen by whoever pasted the snippet, and the page that scrolls is theirs.
-        height="100%"
-        trackedCavers={cavers}
-        // The one thing this frame learns for itself. The list of people that would have said it is
-        // the article around the frame, so it leaves here on the message instead.
-        onUnplacedStationsChange={setUnplacedStations}
-        crsLookup={crsLookup}
-        focusRequest={focusRequest}
-        toolbar
-        // From the envelope, exactly as on the page next door and through the same derivation. The
-        // links a station's pictures are otherwise read from answer only to an account, and this
-        // document is served to a stranger on somebody else's website — so what is drawn here is
-        // what the server decided may be published, and this file decides nothing further.
-        stationMedia={stationMedia}
+      {/* The strip inside the frame: the 3D drawing and one tab per sheet, the bar hidden
+          while there are no sheets so a mapless trip's frame is exactly the viewer it always
+          was. Panes fill whatever box the snippet gave the frame; inactive ones stay mounted
+          behind display:none, so switching costs no reload and no reparse. */}
+      <Tabs
+        className="public-trip-embed-tabs"
+        activeKey={sheets.length === 0 ? TAB_3D : activeTab}
+        onChange={setActiveTab}
+        tabBarStyle={sheets.length === 0 ? { display: 'none' } : undefined}
+        items={[
+          {
+            key: TAB_3D,
+            label: t('rastermap.tab3d'),
+            children: (
+              <CaveViewPanel
+                fileUrl={pinnedModelUrl}
+                fileName={unnamedViewerFileName(model.format)}
+                // The one mount where the whole height is right: this document IS the frame, its
+                // size was chosen by whoever pasted the snippet, and the page that scrolls is
+                // theirs.
+                height="100%"
+                trackedCavers={cavers}
+                // The one thing this frame learns for itself. The list of people that would have
+                // said it is the article around the frame, so it leaves here on the message
+                // instead.
+                onUnplacedStationsChange={setUnplacedStations}
+                crsLookup={crsLookup}
+                focusRequest={focusRequest}
+                toolbar
+                // From the envelope, exactly as on the page next door and through the same
+                // derivation. The links a station's pictures are otherwise read from answer only
+                // to an account, and this document is served to a stranger on somebody else's
+                // website — so what is drawn here is what the server decided may be published,
+                // and this file decides nothing further.
+                stationMedia={stationMedia}
+              />
+            ),
+          },
+          ...sheets.map((sheet) => ({
+            key: sheet.key,
+            label: (
+              <span>
+                {VIEW_KIND_ICONS[sheet.viewKind]} {sheet.title ?? t('rastermap.untitledMap')}
+              </span>
+            ),
+            children: (
+              <Suspense fallback={<Skeleton active />}>
+                <PublicTripSheetPane
+                  sheet={sheet}
+                  // The same fold the 3D pane draws — one party, two drawings, no disagreement.
+                  cavers={cavers}
+                  active={activeTab === sheet.key}
+                  height="100%"
+                  token={token}
+                />
+              </Suspense>
+            ),
+          })),
+        ]}
       />
     </div>
   );

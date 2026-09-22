@@ -73,6 +73,20 @@ vi.mock('../../components/caveview/CaveViewPanel.tsx', () => ({
 let narrow = false;
 vi.mock('../../hooks/useIsMobile.ts', () => ({ useIsMobile: () => narrow }));
 
+/**
+ * The sheet pane is faked at its contract, exactly as the viewer above is: it pulls in the map
+ * engine, and what this page owes it — which sheet, which party, whether its tab is the one on
+ * screen — is the whole of what these tests read back. It is also lazy-loaded by the page, so
+ * the tests that press its tab await its arrival the way a reader does.
+ */
+let sheetPane: { sheet?: { key: string; title: string | null }; active?: boolean; cavers?: readonly TrackedCaver[] } | undefined;
+vi.mock('./PublicTripSheetPane.tsx', () => ({
+  default: (props: NonNullable<typeof sheetPane>) => {
+    sheetPane = props;
+    return <div data-testid="sheet-pane" data-active={String(props.active)} />;
+  },
+}));
+
 const { default: PublicTripPage } = await import('./PublicTripPage.tsx');
 
 function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTripParticipant {
@@ -126,6 +140,7 @@ beforeEach(() => {
   mounts = 0;
   narrow = false;
   reachedBeyondTheEnvelope = [];
+  sheetPane = undefined;
 });
 
 afterEach(cleanup);
@@ -461,6 +476,7 @@ describe('the drawing on a followed page', () => {
     sourceEpsg: 31700,
     proj4: '+proj=sterea +lat_0=46',
     pictures: [],
+    rasterMaps: [],
   };
 
   /** One published photograph, as the envelope hands it over: a rendering URL and nothing else. */
@@ -703,5 +719,62 @@ describe('the drawing on a followed page', () => {
 
     expect(screen.queryByTestId('viewer')).toBeNull();
     expect(mounts).toBe(0);
+  });
+
+  /** One sheet as the envelope hands it over, points resolved to the very rendering named. */
+  const rasterMap = (title = 'Plan sheet') => ({
+    title,
+    viewKind: 'plan' as const,
+    imageUrl: '/api/v1/files/sheet-1/thumbnail?size=1200&token=sig',
+    points: [{ station: 'p.g.7', x: 0.25, y: 0.75 }],
+  });
+
+  /**
+   * The ordinary trip has no sheets, and its page must be exactly the page that existed before
+   * sheets did: the drawing, no strip. The bar is hidden rather than the Tabs left out so the
+   * viewer keeps its identity across the moment a poll first brings a declaration in — but
+   * what a reader can see and press is the same nothing either way.
+   */
+  it('shows no tab strip for a trip with no sheets', () => {
+    ready({ model });
+    render(<PublicTripPage />);
+
+    expect(screen.getByTestId('viewer')).toBeTruthy();
+    expect(screen.queryByRole('tab')).toBeNull();
+    expect(screen.queryByTestId('sheet-pane')).toBeNull();
+  });
+
+  /**
+   * With sheets, the strip appears beside the 3D drawing — and the sheet's pane arrives only
+   * when its tab is pressed: the pane carries the map engine, and no sheet is fetched for a
+   * tab nobody opened.
+   */
+  it('offers one tab per sheet and mounts a sheet only when its tab is opened', async () => {
+    ready({ model: { ...model, rasterMaps: [rasterMap()] } });
+    render(<PublicTripPage />);
+
+    // The strip names both drawings; the 3D pane is the one on screen and the sheet is not
+    // mounted at all yet.
+    expect(screen.getByRole('tab', { name: '3D' })).toBeInTheDocument();
+    const mapTab = screen.getByRole('tab', { name: /Plan sheet/ });
+    const viewerBefore = screen.getByTestId('viewer');
+    expect(screen.queryByTestId('sheet-pane')).toBeNull();
+
+    act(() => {
+      mapTab.click();
+    });
+
+    // The pane arrives (it is lazy), is the active one, and is handed the same party the 3D
+    // pane draws — one fold, two drawings.
+    expect(await screen.findByTestId('sheet-pane')).toHaveAttribute('data-active', 'true');
+    expect(sheetPane?.sheet?.title).toBe('Plan sheet');
+    expect(sheetPane?.cavers?.map((caver) => caver.caverId)).toEqual(['1', '2', '3', '4']);
+    // The 3D pane was hidden, never unmounted: the same DOM node is still in the tree, so
+    // its parsed model and its drawing context survive the switch — the whole reason the
+    // strip keeps inactive panes mounted.
+    expect(screen.getByTestId('viewer')).toBe(viewerBefore);
+
+    // And nothing about sheets reached beyond the envelope: no route answers a stranger.
+    expect(reachedBeyondTheEnvelope).toEqual([]);
   });
 });

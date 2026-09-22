@@ -36,6 +36,15 @@ vi.mock('../../components/caveview/CaveViewPanel.tsx', () => ({
   },
 }));
 
+/** The sheet pane, faked at its contract like the viewer: it carries the map engine. */
+let sheetPane: Record<string, unknown> | undefined;
+vi.mock('./PublicTripSheetPane.tsx', () => ({
+  default: (props: Record<string, unknown>) => {
+    sheetPane = props;
+    return <div data-testid="sheet-pane" data-active={String(props.active)} />;
+  },
+}));
+
 const { default: PublicTripEmbedPage } = await import('./PublicTripEmbedPage.tsx');
 
 function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTripParticipant {
@@ -64,6 +73,7 @@ const model = {
   sourceEpsg: 31700,
   proj4: '+proj=sterea',
   pictures: [],
+  rasterMaps: [],
 };
 
 /** One published photograph, as the envelope hands it over: a rendering URL and nothing else. */
@@ -149,6 +159,7 @@ const focus = (kind: string, ref: string) => ({
 beforeEach(() => {
   answer = { data: envelope(), isPending: false, error: null };
   given = undefined;
+  sheetPane = undefined;
   reachedBeyondTheEnvelope = [];
 });
 
@@ -602,5 +613,82 @@ describe('the conversation with the page that framed it', () => {
       target: { kind: 'station', ref: 'p.g.7' },
     });
     expect(sent.at(-1)?.origin).toBe(HOST);
+  });
+
+  it('shows no tab strip while the trip carries no sheets — the frame is the viewer it always was', () => {
+    render(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('viewer')).toBeInTheDocument();
+    expect(screen.queryByRole('tab')).toBeNull();
+    expect(screen.queryByTestId('sheet-pane')).toBeNull();
+  });
+
+  it('offers the sheets as tabs inside the frame, mounted only when opened', async () => {
+    answer = {
+      data: envelope({
+        model: {
+          ...model,
+          rasterMaps: [
+            {
+              title: 'Plan sheet',
+              viewKind: 'plan',
+              imageUrl: '/api/v1/files/sheet-1/thumbnail?size=1200&token=sig',
+              points: [{ station: 'p.g.7', x: 0.25, y: 0.75 }],
+            },
+          ],
+        },
+      }),
+      isPending: false,
+      error: null,
+    };
+    render(<PublicTripEmbedPage />);
+
+    expect(screen.getByRole('tab', { name: '3D' })).toBeInTheDocument();
+    expect(screen.queryByTestId('sheet-pane')).toBeNull();
+
+    act(() => {
+      screen.getByRole('tab', { name: /Plan sheet/ }).click();
+    });
+
+    expect(await screen.findByTestId('sheet-pane')).toHaveAttribute('data-active', 'true');
+    // The frame's whole box cascades down: the pane is given the height the snippet chose.
+    expect(sheetPane?.height).toBe('100%');
+    // The viewer was hidden, never unmounted.
+    expect(screen.getByTestId('viewer')).toBeInTheDocument();
+    expect(reachedBeyondTheEnvelope).toEqual([]);
+  });
+
+  it('returns the strip to the 3D drawing when the article asks for a place', async () => {
+    // The camera being flown is the 3D pane's: an answer performed behind a sheet tab would
+    // read, from the article, as a link that did nothing.
+    answer = {
+      data: envelope({
+        model: {
+          ...model,
+          rasterMaps: [
+            {
+              title: 'Plan sheet',
+              viewKind: 'plan',
+              imageUrl: '/api/v1/files/sheet-1/thumbnail?size=1200&token=sig',
+              points: [],
+            },
+          ],
+        },
+      }),
+      isPending: false,
+      error: null,
+    };
+    const { parent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+
+    act(() => {
+      screen.getByRole('tab', { name: /Plan sheet/ }).click();
+    });
+    expect(await screen.findByTestId('sheet-pane')).toHaveAttribute('data-active', 'true');
+
+    deliver(parent, HOST, focus('station', 'p.g.7'));
+
+    expect(given?.focusRequest).toMatchObject({ kind: 'station', ref: 'p.g.7' });
+    expect(screen.getByTestId('sheet-pane')).toHaveAttribute('data-active', 'false');
   });
 });

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.ResLinks;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
@@ -505,7 +506,11 @@ public static class TripTrackingPublicationEndpoints
             // Built on this branch and no other: the model in hand is a model of the very cave
             // the publication decision was taken about, so a picture hung on one of its stations
             // is hung inside a cave that has already been established to carry no protection.
-            await StationPicturesAsync(db, protection, tokens, model.Id, ct));
+            await StationPicturesAsync(db, protection, tokens, model.Id, ct),
+            // On the same branch for the same reason: a sheet declared on this model is a
+            // drawing of a cave already established to carry no protection, re-decided on
+            // every read exactly as the envelope itself is.
+            await RasterMapsAsync(db, protection, tokens, model.Id, ct));
     }
 
     // ---- the pictures a follower is shown ----------------------------------------------------
@@ -728,7 +733,7 @@ public static class TripTrackingPublicationEndpoints
 
                     pictures.Add(new PublicTripStationPictureDto(
                         station,
-                        ThumbnailUrl(tokens, row.FileId),
+                        ThumbnailUrl(tokens, row.FileId, PublishedPictureSize),
                         string.IsNullOrWhiteSpace(row.Caption) ? NullIfBlank(row.Title) : row.Caption));
                     perStation[station] = perStation.GetValueOrDefault(station) + 1;
                 }
@@ -796,6 +801,296 @@ public static class TripTrackingPublicationEndpoints
 
     private static string? NullIfBlank(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
+
+    // ---- the map sheets a follower is shown --------------------------------------------------
+
+    /// <summary>
+    /// How many of a model's newest map-declaration links are read. Far above what any real
+    /// cave declares — the strip that shows these fits a handful of tabs — and a window
+    /// rather than an unbounded read because everything on this surface is answered to
+    /// strangers: the cost of the answer must not be a fact the caller controls.
+    /// </summary>
+    private const int MaxMapLinks = 50;
+
+    /// <summary>
+    /// How many sheets the envelope carries, applied after the deterministic sort so the
+    /// sheets that survive are the ones every surface lists first.
+    /// </summary>
+    private const int MaxMaps = 12;
+
+    /// <summary>
+    /// How many of a model's newest station-point links are read. Newest-first for the
+    /// reason the picture window is: the signed-in fold reads the same end, so what a
+    /// heavily-pinned model loses is the oldest pins on both surfaces — and the newest-wins
+    /// duplicate rule below makes the newest end the meaningful one.
+    /// </summary>
+    private const int MaxMapPointLinks = 1000;
+
+    /// <summary>
+    /// The width map sheets are published at — the largest rendering the thumbnail route
+    /// offers, because a map is read rather than glanced at: station labels and passage
+    /// names on a scanned plan are exactly what a follower zooms into.
+    /// </summary>
+    private const int PublishedMapSize = 1200;
+
+    /// <summary>
+    /// The scanned map sheets a followed page draws the party on, with their station points.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>There is no map table and none is invented here.</b> "This image is the plan view
+    /// of this model" is a link under a seeded map-of code with the document as main member,
+    /// and "this point on the image is station S" is a link under the seeded pin code pairing
+    /// an image-region point with a model station — authored in the survey viewer, read back
+    /// here the same shape the signed-in folds read. Code AND structure are both required,
+    /// exactly as those folds require them: the code alone must not turn a mislabeled link
+    /// into a sheet, and structure alone must not promote a casual annotation into one.
+    /// </para>
+    /// <para>
+    /// <b>Everything the signed-in fold resolves per reader is resolved here per nothing.</b>
+    /// A signed-in pane matches each pin's measured-against file to the rendering on screen
+    /// and counts the rest as superseded; an anonymous page has no version history to ask, so
+    /// only pins measured against the very file being served travel, and the superseded ones
+    /// are simply absent — a count of them is version-history information this envelope does
+    /// not carry. Duplicate pins fold newest-wins under the same tie-break the client fold
+    /// uses, so the two kinds of surface never disagree about where a station sits.
+    /// </para>
+    /// <para>
+    /// <b>The gates are the surface's own, none invented and none skipped.</b> This runs only
+    /// inside the branch that already refused a protected cave the whole page, re-decided per
+    /// read; each link passes the same link-level guard the pictures pass, so a declaration
+    /// or a pin whose link names a guarded feature publishes nothing; and every URL minted
+    /// here opens a rendering and never the upload — <see cref="FileDelivery.DerivativesOnly"/>
+    /// unconditionally, the station-pictures reach, because a scan's own bytes carry whatever
+    /// its format recorded. Which maps a publication <em>ought</em> to cover is a consent
+    /// question the owner has deferred (2026-09-22); until it is decided this list is the
+    /// declared maps of the published model, provisional by instruction.
+    /// </para>
+    /// </remarks>
+    private static async Task<IReadOnlyList<PublicTripRasterMapDto>> RasterMapsAsync(
+        SilexGisDbContext db, FeatureProtection protection, IFileAccessTokenService tokens,
+        Guid surveyModelId, CancellationToken ct)
+    {
+        // The seeded vocabulary rows, by id, because links store the id. The seeder guarantees
+        // them on every installation; a database missing one yields no sheets of that kind
+        // rather than an error a stranger can provoke.
+        var codes = ResLinkRelationTypeSeeds.MapViewCodes
+            .Append(ResLinkRelationTypeSeeds.MapStationPointCode).ToArray();
+        var relations = await db.ResLinkRelationTypes.AsNoTracking()
+            .Where(r => codes.Contains(r.Code))
+            .Select(r => new { r.Id, r.Code })
+            .ToListAsync(ct);
+        var codeOf = relations.ToDictionary(r => r.Id, r => r.Code);
+        var declarationTypeIds = relations
+            .Where(r => r.Code != ResLinkRelationTypeSeeds.MapStationPointCode)
+            .Select(r => r.Id).ToArray();
+        var pinTypeId = relations
+            .Where(r => r.Code == ResLinkRelationTypeSeeds.MapStationPointCode)
+            .Select(r => (long?)r.Id).FirstOrDefault();
+        if (declarationTypeIds.Length == 0) return [];
+
+        var namesThisModel = db.ResLinkMembers.AsNoTracking()
+            .Where(m => m.EntityType == AttachedEntityType.SurveyModel && m.EntityId == surveyModelId);
+
+        var declarations = await db.ResLinks.AsNoTracking()
+            .Where(l => l.RelationTypeId != null
+                && declarationTypeIds.Contains(l.RelationTypeId!.Value)
+                && namesThisModel.Any(m => m.ResLinkId == l.Id))
+            .OrderByDescending(l => l.CreatedAt).ThenByDescending(l => l.Id)
+            .Take(MaxMapLinks)
+            .Select(l => new { l.Id, l.RelationTypeId, l.CreatedAt })
+            .ToListAsync(ct);
+        if (declarations.Count == 0) return [];
+
+        var pinLinkRows = await db.ResLinks.AsNoTracking()
+            .Where(l => pinTypeId != null && l.RelationTypeId == pinTypeId
+                && namesThisModel.Any(m => m.ResLinkId == l.Id))
+            .OrderByDescending(l => l.CreatedAt).ThenByDescending(l => l.Id)
+            .Take(MaxMapPointLinks)
+            .Select(l => new { l.Id, l.CreatedAt })
+            .ToListAsync(ct);
+
+        var linkIds = declarations.Select(d => d.Id).Concat(pinLinkRows.Select(p => p.Id)).ToList();
+        var members = await db.ResLinkMembers.AsNoTracking()
+            .Where(m => linkIds.Contains(m.ResLinkId))
+            .OrderBy(m => m.ResLinkId).ThenBy(m => m.SortOrder).ThenBy(m => m.Id)
+            .ToListAsync(ct);
+        var byLink = members.GroupBy(m => m.ResLinkId).ToDictionary(g => g.Key, g => g.ToList());
+
+        // The same link-level gate the pictures pass, computed the same way: every feature any
+        // of these links names — directly, or through a survey-model member resolved to its
+        // cave — has to be affirmatively unguarded, and anything the sets cannot account for
+        // fails closed. The rule's home and its reasoning are on the pictures above.
+        var namedModelIds = members
+            .Where(m => m.EntityType == AttachedEntityType.SurveyModel && m.EntityId != null)
+            .Select(m => m.EntityId!.Value).Distinct().ToList();
+        var caveOfModel = await db.SurveyModels.AsNoTracking()
+            .Where(m => namedModelIds.Contains(m.Id))
+            .Select(m => new { m.Id, m.CaveFeatureId })
+            .ToDictionaryAsync(m => m.Id, m => m.CaveFeatureId, ct);
+        var namedFeatureIds = members
+            .Select(m => m.FeatureId)
+            .OfType<Guid>()
+            .Concat(caveOfModel.Values)
+            .Distinct()
+            .ToList();
+        var unguarded = await TrackingWithholding.UnguardedFeatureIdsAsync(db, protection, namedFeatureIds, ct);
+
+        // The structural half of each declaration, mirroring the signed-in fold: a
+        // whole-document member (the image) and this model under a coverage-shaped anchor —
+        // the whole model, or a "this sheet is the northern branch" statement. A map-of link
+        // onto some other model is that model's map; one with no document declares nothing
+        // drawable; a member anchored to a single station is not how coverage is declared.
+        var candidates = new List<(Guid LinkId, string Code, DateTimeOffset CreatedAt, Guid DocumentId)>();
+        foreach (var declaration in declarations)
+        {
+            var own = byLink.GetValueOrDefault(declaration.Id) ?? [];
+            if (!LinkIsUnguarded(own, caveOfModel, unguarded)) continue;
+            var covers = own.Any(m => m.EntityType == AttachedEntityType.SurveyModel
+                && m.EntityId == surveyModelId
+                && m.AnchorKind is AnchorKind.Whole or AnchorKind.ModelSurvey or AnchorKind.ModelStationRange);
+            var document = own.FirstOrDefault(m => m.EntityType == AttachedEntityType.Document
+                && m.EntityId != null && m.AnchorKind == AnchorKind.Whole);
+            if (!covers || document is null) continue;
+            candidates.Add((declaration.Id, codeOf[declaration.RelationTypeId!.Value],
+                declaration.CreatedAt, document.EntityId!.Value));
+        }
+        if (candidates.Count == 0) return [];
+
+        // What each declared document is now: its current version's image file and its title —
+        // the same join the published pictures use, because a replaced scan is published as its
+        // replacement, and a document whose current file is not an image is a tab that cannot
+        // draw and is left out rather than published broken.
+        var documentIds = candidates.Select(c => c.DocumentId).Distinct().ToList();
+        var images = await (from document in db.Documents.AsNoTracking()
+                            where documentIds.Contains(document.Id)
+                            join version in db.DocumentVersions.AsNoTracking() on document.Id equals version.DocumentId
+                            where version.IsCurrent
+                            join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
+                            where file.Kind == FileKind.Image
+                            orderby file.CreatedAt, file.Id
+                            select new { document.Id, document.Title, FileId = file.Id })
+            .ToListAsync(ct);
+        var imageOf = images.GroupBy(row => row.Id).ToDictionary(g => g.Key, g => g.First());
+
+        // Every point defined on any declared document, folded newest-wins per (document,
+        // station) under the exact tie-break the client fold uses — creation instant, then the
+        // link id's string form, ordinally — so both kinds of surface pick the same duplicate.
+        // Only point-shaped payloads measured against the file being served survive: regions
+        // are reserved for a future approximate-area variant and never host a marker, and a
+        // pin measured against a superseded scan is absent here rather than drawn mislocated.
+        var newestPin = new Dictionary<(Guid Document, string Station),
+            (DateTimeOffset CreatedAt, string LinkId, double X, double Y)>();
+        foreach (var pin in pinLinkRows)
+        {
+            var own = byLink.GetValueOrDefault(pin.Id) ?? [];
+            if (!LinkIsUnguarded(own, caveOfModel, unguarded)) continue;
+            var stations = own
+                .Where(m => m.EntityType == AttachedEntityType.SurveyModel
+                    && m.EntityId == surveyModelId
+                    && m.AnchorKind == AnchorKind.ModelStation)
+                .Select(m => StationOf(m.Anchor))
+                .OfType<string>()
+                .ToList();
+            if (stations.Count == 0) continue;
+
+            foreach (var member in own)
+            {
+                if (member.EntityType != AttachedEntityType.Document
+                    || member.EntityId is not { } documentId
+                    || member.AnchorKind != AnchorKind.ImageRegion
+                    || member.AnchorFileId is not { } measuredAgainst
+                    || !imageOf.TryGetValue(documentId, out var image)
+                    || measuredAgainst != image.FileId
+                    || PointOf(member.Anchor) is not { } point)
+                {
+                    continue;
+                }
+                foreach (var station in stations)
+                {
+                    var key = (documentId, station);
+                    var claim = (pin.CreatedAt, LinkId: pin.Id.ToString(), point.X, point.Y);
+                    if (!newestPin.TryGetValue(key, out var held)
+                        || claim.CreatedAt > held.CreatedAt
+                        || (claim.CreatedAt == held.CreatedAt
+                            && string.CompareOrdinal(claim.LinkId, held.LinkId) > 0))
+                    {
+                        newestPin[key] = claim;
+                    }
+                }
+            }
+        }
+
+        // One tab per (document, view): the same declaration stated twice is one sheet, and
+        // the newest statement of it wins — which the newest-first window already ordered.
+        var seen = new HashSet<(Guid Document, string Code)>();
+        var maps = new List<(string? Title, string Code, DateTimeOffset CreatedAt, Guid LinkId, Guid DocumentId, Guid FileId)>();
+        foreach (var candidate in candidates)
+        {
+            if (!imageOf.TryGetValue(candidate.DocumentId, out var image)) continue;
+            if (!seen.Add((candidate.DocumentId, candidate.Code))) continue;
+            maps.Add((NullIfBlank(image.Title), candidate.Code, candidate.CreatedAt,
+                candidate.LinkId, candidate.DocumentId, image.FileId));
+        }
+
+        // The tab-strip order every surface sorts by: plan before profile before other, then
+        // title, then age — deterministic without a stored ordering, because links have none.
+        return maps
+            .OrderBy(map => (int)ViewKindOf(map.Code))
+            .ThenBy(map => map.Title ?? "", StringComparer.Ordinal)
+            .ThenBy(map => map.CreatedAt)
+            .ThenBy(map => map.LinkId)
+            .Take(MaxMaps)
+            .Select(map => new PublicTripRasterMapDto(
+                map.Title,
+                ViewKindOf(map.Code),
+                ThumbnailUrl(tokens, map.FileId, PublishedMapSize),
+                [.. newestPin
+                    .Where(entry => entry.Key.Document == map.DocumentId)
+                    .OrderBy(entry => entry.Key.Station, StringComparer.Ordinal)
+                    .Select(entry => new PublicTripMapPointDto(entry.Key.Station, entry.Value.X, entry.Value.Y))]))
+            .ToList();
+    }
+
+    /// <summary>The envelope's spelling of a seeded map-of code — the code read out, nothing more.</summary>
+    private static PublicTripMapViewKind ViewKindOf(string code) =>
+        code == ResLinkRelationTypeSeeds.MapPlanOfCode ? PublicTripMapViewKind.Plan
+        : code == ResLinkRelationTypeSeeds.MapProfileOfCode ? PublicTripMapViewKind.Profile
+        : PublicTripMapViewKind.Other;
+
+    /// <summary>
+    /// The point an image-region anchor stores, or null for any other shape or an unreadable
+    /// payload. Fractions outside 0–1 — which the write path refuses, but this reads rows and
+    /// not requests — anchor nothing rather than a marker off the picture.
+    /// </summary>
+    private static (double X, double Y)? PointOf(string? anchor)
+    {
+        if (string.IsNullOrEmpty(anchor)) return null;
+        try
+        {
+            using var payload = JsonDocument.Parse(anchor);
+            if (payload.RootElement.ValueKind != JsonValueKind.Object) return null;
+            if (!payload.RootElement.TryGetProperty("shape", out var shape)
+                || shape.ValueKind != JsonValueKind.String
+                || shape.GetString() != "point")
+            {
+                return null;
+            }
+            if (!payload.RootElement.TryGetProperty("x", out var x) || x.ValueKind != JsonValueKind.Number
+                || !payload.RootElement.TryGetProperty("y", out var y) || y.ValueKind != JsonValueKind.Number)
+            {
+                return null;
+            }
+            var point = (X: x.GetDouble(), Y: y.GetDouble());
+            return point is { X: >= 0 and <= 1, Y: >= 0 and <= 1 } ? point : null;
+        }
+        catch (JsonException)
+        {
+            // A payload this build cannot read defines nothing it can draw — the same answer
+            // the station reader next door gives.
+            return null;
+        }
+    }
 
     // ---- shared ----------------------------------------------------------------------------
 
@@ -880,7 +1175,7 @@ public static class TripTrackingPublicationEndpoints
     /// a stranger can reach by nothing at all.
     /// </para>
     /// </remarks>
-    private static string ThumbnailUrl(IFileAccessTokenService tokens, Guid fileId) =>
-        $"/api/v1/files/{fileId}/thumbnail?size={PublishedPictureSize}"
+    private static string ThumbnailUrl(IFileAccessTokenService tokens, Guid fileId, int size) =>
+        $"/api/v1/files/{fileId}/thumbnail?size={size}"
             + $"&token={Uri.EscapeDataString(tokens.CreateToken(fileId, FileDelivery.DerivativesOnly))}";
 }

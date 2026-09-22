@@ -14,6 +14,7 @@ using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Messaging;
 using SilexGis.Domain.Profiles;
+using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
@@ -1552,6 +1553,164 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         again.GetProperty("positionOnOtherModel").GetBoolean().ShouldBeFalse();
     }
 
+    /// <summary>
+    /// A scanned map declared on the published model travels with its station points, and its
+    /// URL opens a rendering and never the upload.
+    /// </summary>
+    /// <remarks>
+    /// The map is declared and pinned exactly as the survey viewer authors it — a map-of link
+    /// with the document as main member, a pin link pairing an image-region point with a model
+    /// station — because what this proves is that the published page reads back what the
+    /// signed-in surfaces wrote, not a shape invented for the envelope. The reach assertion is
+    /// the same pair the pictures make: the rendering answers a caller carrying nothing, and
+    /// the very same token moved to the content route opens nothing, which is what
+    /// renderings-only means for a scan whose printed margins may carry more than its drawing.
+    /// </remarks>
+    [Fact]
+    public async Task A_declared_map_travels_with_its_points_and_opens_as_a_rendering_only()
+    {
+        var trip = await TrackedTripAsync("Mapped", locationProtected: false);
+        var sheet = await PhotographAsync("sheet");
+        await DeclareMapAsync(sheet.Document, trip.Model);
+        await PinAsync(sheet.Document, sheet.File, trip.Model, "cave.upper.2", 0.25, 0.75);
+
+        var (_, token) = await PublishAsync(trip.Trip);
+        var page = await FollowAsync(token);
+        var map = Maps(page).ShouldHaveSingleItem();
+
+        map.GetProperty("viewKind").GetString().ShouldBe("plan");
+        map.GetProperty("title").GetString().ShouldNotBeNullOrWhiteSpace();
+        var url = map.GetProperty("imageUrl").GetString()!;
+        url.ShouldStartWith($"/api/v1/files/{sheet.File}/thumbnail?");
+        url.ShouldContain("token=");
+
+        var point = map.GetProperty("points").EnumerateArray().ShouldHaveSingleItem();
+        point.GetProperty("station").GetString().ShouldBe("cave.upper.2");
+        point.GetProperty("x").GetDouble().ShouldBe(0.25, 1e-9);
+        point.GetProperty("y").GetDouble().ShouldBe(0.75, 1e-9);
+
+        // The rendering is served to a caller carrying nothing...
+        (await anonymous.GetAsync(url)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        // ...and the same token, moved to the route that hands over the upload, opens nothing.
+        (await anonymous.GetAsync(ContentInsteadOf(url))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        // And nothing on this surface offers the scan's upload in the first place.
+        page.GetRawText().ShouldNotContain($"/api/v1/files/{sheet.File}/content");
+    }
+
+    /// <summary>
+    /// The absence twin: a model with nothing declared answers an empty list, not a missing
+    /// member and not an error — the ordinary state of most models.
+    /// </summary>
+    [Fact]
+    public async Task A_model_with_no_declared_maps_carries_an_empty_list()
+    {
+        var trip = await TrackedTripAsync("Unmapped", locationProtected: false);
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        var model = (await FollowAsync(token)).GetProperty("model");
+        model.GetProperty("rasterMaps").ValueKind.ShouldBe(JsonValueKind.Array);
+        model.GetProperty("rasterMaps").GetArrayLength().ShouldBe(0);
+    }
+
+    /// <summary>
+    /// Which points travel is decided against the very file being served: a pin measured on a
+    /// superseded scan is absent rather than drawn mislocated, and duplicate pins fold to the
+    /// newest — the same two rules the signed-in fold applies, proven here on the envelope.
+    /// </summary>
+    /// <remarks>
+    /// Three moves over one map. The point travels while its scan is current; replacing the
+    /// scan re-points the envelope at the new rendering and takes the point with the old one
+    /// (fractions of last year's scan mean nothing on this year's); and pinning the same
+    /// station twice on the new scan publishes the newer of the two claims, deterministically.
+    /// </remarks>
+    [Fact]
+    public async Task A_superseded_pin_is_withheld_and_the_newest_duplicate_wins()
+    {
+        var trip = await TrackedTripAsync("Re-scanned map", locationProtected: false);
+        var sheet = await PhotographAsync("scan-one");
+        await DeclareMapAsync(sheet.Document, trip.Model);
+        await PinAsync(sheet.Document, sheet.File, trip.Model, "cave.upper.2", 0.2, 0.2);
+        var (_, token) = await PublishAsync(trip.Trip);
+
+        // The twin first: on the scan it was measured against, the point is published.
+        Maps(await FollowAsync(token)).ShouldHaveSingleItem()
+            .GetProperty("points").GetArrayLength().ShouldBe(1);
+
+        // A better scan of the same document arrives; the pin was measured on the old one.
+        var replacement = await ReplaceFileAsync(sheet.File);
+        var replaced = Maps(await FollowAsync(token)).ShouldHaveSingleItem();
+        replaced.GetProperty("imageUrl").GetString()!
+            .ShouldStartWith($"/api/v1/files/{replacement}/thumbnail?");
+        replaced.GetProperty("points").GetArrayLength().ShouldBe(0);
+
+        // Re-placed on the new scan, then corrected: create-then-delete is the viewer's move
+        // gesture, so a moment with both duplicates standing is an ordinary state, and what
+        // the page publishes for it is the newest claim.
+        await PinAsync(sheet.Document, replacement, trip.Model, "cave.upper.2", 0.6, 0.6);
+        await PinAsync(sheet.Document, replacement, trip.Model, "cave.upper.2", 0.9, 0.1);
+        var corrected = Maps(await FollowAsync(token)).ShouldHaveSingleItem()
+            .GetProperty("points").EnumerateArray().ShouldHaveSingleItem();
+        corrected.GetProperty("x").GetDouble().ShouldBe(0.9, 1e-9);
+        corrected.GetProperty("y").GetDouble().ShouldBe(0.1, 1e-9);
+    }
+
+    /// <summary>
+    /// A declaration or a pin whose link names a guarded feature publishes nothing, while its
+    /// plainly-linked twin on the same model publishes — the pictures' link-level gate, holding
+    /// on both new kinds of link.
+    /// </summary>
+    /// <remarks>
+    /// The reasoning is the association one, restated for sheets: a link relates everything it
+    /// names, and publishing a drawing (or a printed position on one) under a link that also
+    /// names a guarded cave would stand as a fact about that cave on a page strangers read.
+    /// </remarks>
+    [Fact]
+    public async Task A_map_or_pin_whose_link_names_a_guarded_cave_is_withheld()
+    {
+        var trip = await TrackedTripAsync("Guarded association", locationProtected: false);
+        var guarded = await CreateCaveAsync(locationProtected: true);
+
+        var shown = await PhotographAsync("plain-sheet");
+        await DeclareMapAsync(shown.Document, trip.Model);
+        var kept = await PhotographAsync("entangled-sheet");
+        await DeclareMapAsync(kept.Document, trip.Model, alsoNaming: guarded);
+
+        // On the shown map: a plain pin travels, one whose link names the guarded cave does not.
+        await PinAsync(shown.Document, shown.File, trip.Model, "cave.upper.2", 0.3, 0.3);
+        await PinAsync(shown.Document, shown.File, trip.Model, "cave.deep.3", 0.7, 0.7, alsoNaming: guarded);
+
+        var (_, token) = await PublishAsync(trip.Trip);
+        var page = await FollowAsync(token);
+        var map = Maps(page).ShouldHaveSingleItem();
+        map.GetProperty("imageUrl").GetString()!.ShouldStartWith($"/api/v1/files/{shown.File}/thumbnail?");
+        var point = map.GetProperty("points").EnumerateArray().ShouldHaveSingleItem();
+        point.GetProperty("station").GetString().ShouldBe("cave.upper.2");
+
+        // Nothing anywhere in the envelope names the withheld sheet.
+        page.GetRawText().ShouldNotContain(kept.File.ToString());
+        page.GetRawText().ShouldNotContain(kept.Document.ToString());
+    }
+
+    /// <summary>
+    /// Protecting the cave after the link was handed out closes the page, sheets and all — the
+    /// refusal is the whole envelope, so there is no answer for a map to ride out on.
+    /// </summary>
+    [Fact]
+    public async Task Protecting_the_cave_after_minting_takes_the_maps_with_the_page()
+    {
+        var trip = await TrackedTripAsync("Guarded later, mapped", locationProtected: false);
+        var sheet = await PhotographAsync("late-sheet");
+        await DeclareMapAsync(sheet.Document, trip.Model);
+        var (_, token) = await PublishAsync(trip.Trip);
+        Maps(await FollowAsync(token)).Count.ShouldBe(1);
+
+        await SetLocationProtectedAsync(trip.Cave, true);
+        (await anonymous.GetAsync(Follow(token))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        await SetLocationProtectedAsync(trip.Cave, false);
+        Maps(await FollowAsync(token)).Count.ShouldBe(1);
+    }
+
     // ---- plumbing --------------------------------------------------------------------------
 
     /// <summary>
@@ -2078,6 +2237,103 @@ public sealed class TripTrackingPublicationTests : IAsyncLifetime, IDisposable, 
         (await db.ResLinks.Where(l => ids.Contains(l.Id))
             .ExecuteUpdateAsync(rows => rows.SetProperty(l => l.CreatedAt, earlier)))
             .ShouldBe(count);
+    }
+
+    // ---- maps ------------------------------------------------------------------------------
+
+    private static List<JsonElement> Maps(JsonElement envelope) =>
+        [.. envelope.GetProperty("model").GetProperty("rasterMaps").EnumerateArray()];
+
+    /// <summary>A seeded relation row's id — links store the id, the vocabulary speaks codes.</summary>
+    private async Task<long> RelationTypeIdAsync(string code)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.ResLinkRelationTypes.AsNoTracking()
+            .Where(r => r.Code == code).Select(r => r.Id).SingleAsync();
+    }
+
+    /// <summary>
+    /// "This image is the plan view of that model", authored exactly as the survey viewer
+    /// authors it: a link under a seeded map-of code with the document as the main member.
+    /// <paramref name="alsoNaming"/> adds a feature member, which is how a declaration comes
+    /// to touch a cave the trip is not about.
+    /// </summary>
+    private async Task<Guid> DeclareMapAsync(
+        Guid documentId, Guid surveyModelId,
+        string code = ResLinkRelationTypeSeeds.MapPlanOfCode, Guid? alsoNaming = null)
+    {
+        List<object> members =
+        [
+            new { targetType = "document", targetId = documentId, isMain = true, sortOrder = 0 },
+            new { targetType = "surveyModel", targetId = surveyModelId, isMain = false, sortOrder = 1 },
+        ];
+        if (alsoNaming is { } feature)
+        {
+            members.Add(new { targetType = "feature", targetId = feature, isMain = false, sortOrder = 2 });
+        }
+
+        var response = await owner.PostAsJsonAsync("/api/v1/reslinks", new
+        {
+            relationTypeId = (long?)await RelationTypeIdAsync(code),
+            description = (string?)null,
+            members,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await BodyAsync(response)).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// "This point on the image is that station", authored as the viewer's define-points mode
+    /// writes it: an image-region point in fractions pinned to the file it was measured
+    /// against, paired with a station of the model.
+    /// </summary>
+    private async Task<Guid> PinAsync(
+        Guid documentId, Guid fileId, Guid surveyModelId, string station, double x, double y,
+        Guid? alsoNaming = null)
+    {
+        List<object> members =
+        [
+            new
+            {
+                targetType = "document", targetId = documentId, isMain = true, sortOrder = 0,
+                anchorKind = "imageRegion", anchor = new { shape = "point", x, y },
+                anchorFileId = fileId,
+            },
+            new
+            {
+                targetType = "surveyModel", targetId = surveyModelId, isMain = false, sortOrder = 1,
+                anchorKind = "modelStation", anchor = new { station },
+            },
+        ];
+        if (alsoNaming is { } feature)
+        {
+            members.Add(new { targetType = "feature", targetId = feature, isMain = false, sortOrder = 2 });
+        }
+
+        var response = await owner.PostAsJsonAsync("/api/v1/reslinks", new
+        {
+            relationTypeId = (long?)await RelationTypeIdAsync(ResLinkRelationTypeSeeds.MapStationPointCode),
+            description = (string?)null,
+            members,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await BodyAsync(response)).GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    /// Uploads a new scan of the same document — the real versions route, so the current
+    /// version moves exactly as it moves when a club replaces a map — answering the new
+    /// current file the envelope should now serve.
+    /// </summary>
+    private async Task<Guid> ReplaceFileAsync(Guid fileId)
+    {
+        var content = new ByteArrayContent(PlainJpeg());
+        content.Headers.ContentType = new("image/jpeg");
+        using var form = new MultipartFormDataContent { { content, "file", $"v2-{Guid.NewGuid():N}.jpg" } };
+        var response = await owner.PostAsync($"/api/v1/files/{fileId}/versions", form);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await BodyAsync(response)).GetProperty("id").GetGuid();
     }
 
     private static byte[] PlainJpeg()

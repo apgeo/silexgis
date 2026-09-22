@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ImageMagick;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
@@ -9,6 +10,7 @@ using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.ResLinks;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
@@ -658,7 +660,111 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
         fixes[1].GetProperty("in").GetBoolean().ShouldBeFalse();
     }
 
+    /// <summary>
+    /// The archive's playback hands over the same map sheets the live page does: the model in
+    /// its envelope is built by the very method the live envelope uses, and a past trip
+    /// replays on the sheets exactly as a live one is followed on them.
+    /// </summary>
+    /// <remarks>
+    /// One map, one point, declared and pinned as the survey viewer authors them, read back
+    /// through the past route after the live window has ended. Asserted against the point's own
+    /// values rather than the list's mere presence, because a shared builder is only proven
+    /// shared by carrying the same facts — and the empty-list twin is every other playback test
+    /// in this class, all of whose models declare no maps.
+    /// </remarks>
+    [Fact]
+    public async Task The_past_track_carries_the_same_sheets_the_live_page_does()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var sheet = await UploadSheetAsync();
+        await DeclareMapAsync(sheet.Document, model);
+        await PinAsync(sheet.Document, sheet.File, model, "cave.upper.2", 0.4, 0.6);
+        var past = await PastTripAsync("Mapped and over", cave, model);
+
+        var page = await TrackAsync(past.Token, past.Trip);
+        var map = page.GetProperty("model").GetProperty("rasterMaps")
+            .EnumerateArray().ShouldHaveSingleItem();
+        map.GetProperty("viewKind").GetString().ShouldBe("plan");
+        map.GetProperty("imageUrl").GetString()!
+            .ShouldStartWith($"/api/v1/files/{sheet.File}/thumbnail?");
+        var point = map.GetProperty("points").EnumerateArray().ShouldHaveSingleItem();
+        point.GetProperty("station").GetString().ShouldBe("cave.upper.2");
+        point.GetProperty("x").GetDouble().ShouldBe(0.4, 1e-9);
+        point.GetProperty("y").GetDouble().ShouldBe(0.6, 1e-9);
+    }
+
     // ---- plumbing ----------------------------------------------------------------------------
+
+    /// <summary>An image upload — a map scan can only exist as a document's file.</summary>
+    private async Task<(Guid Document, Guid File)> UploadSheetAsync()
+    {
+        using var image = new MagickImage(MagickColors.SlateGray, 64, 64);
+        var content = new ByteArrayContent(image.ToByteArray(MagickFormat.Jpeg));
+        content.Headers.ContentType = new("image/jpeg");
+        using var form = new MultipartFormDataContent { { content, "file", $"sheet-{Guid.NewGuid():N}.jpg" } };
+        var response = await owner.PostAsync("/api/v1/files/?allowDuplicate=true", form);
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        var fileId = JsonDocument.Parse(await response.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("id").GetGuid();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var file = await db.StoredFiles.AsNoTracking().FirstAsync(f => f.Id == fileId);
+        var version = await db.DocumentVersions.AsNoTracking().FirstAsync(v => v.Id == file.DocumentVersionId);
+        return (version.DocumentId, fileId);
+    }
+
+    /// <summary>The map-of link the survey viewer authors: document main, model covered whole.</summary>
+    private async Task DeclareMapAsync(Guid documentId, Guid surveyModelId)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/reslinks", new
+        {
+            relationTypeId = (long?)await RelationTypeIdAsync(ResLinkRelationTypeSeeds.MapPlanOfCode),
+            description = (string?)null,
+            members = new object[]
+            {
+                new { targetType = "document", targetId = documentId, isMain = true, sortOrder = 0 },
+                new { targetType = "surveyModel", targetId = surveyModelId, isMain = false, sortOrder = 1 },
+            },
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>The pin link the viewer's define-points mode writes: a fraction point on the
+    /// scan, pinned to the file it was measured against, paired with a station.</summary>
+    private async Task PinAsync(
+        Guid documentId, Guid fileId, Guid surveyModelId, string station, double x, double y)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/reslinks", new
+        {
+            relationTypeId = (long?)await RelationTypeIdAsync(ResLinkRelationTypeSeeds.MapStationPointCode),
+            description = (string?)null,
+            members = new object[]
+            {
+                new
+                {
+                    targetType = "document", targetId = documentId, isMain = true, sortOrder = 0,
+                    anchorKind = "imageRegion", anchor = new { shape = "point", x, y },
+                    anchorFileId = fileId,
+                },
+                new
+                {
+                    targetType = "surveyModel", targetId = surveyModelId, isMain = false, sortOrder = 1,
+                    anchorKind = "modelStation", anchor = new { station },
+                },
+            },
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+    }
+
+    private async Task<long> RelationTypeIdAsync(string code)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.ResLinkRelationTypes.AsNoTracking()
+            .Where(r => r.Code == code).Select(r => r.Id).SingleAsync();
+    }
 
     private static string Shares(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/shares";
 

@@ -101,7 +101,16 @@ public static class ResLinkRelationTypeSeeds
     /// <c>map-*</c> code joins the generic link panel, not the map tabs — a designed surface
     /// is built from designed vocabulary.
     /// </summary>
-    public static readonly string[] MapViewCodes = ["map-plan-of", "map-profile-of", "map-other-of"];
+    public static readonly string[] MapViewCodes = [MapPlanOfCode, MapProfileOfCode, MapOtherOfCode];
+
+    /// <summary>The code declaring a document the plan view of a survey model.</summary>
+    public const string MapPlanOfCode = "map-plan-of";
+
+    /// <summary>The code declaring a document the profile view of a survey model.</summary>
+    public const string MapProfileOfCode = "map-profile-of";
+
+    /// <summary>The code declaring a document some other view of a survey model.</summary>
+    public const string MapOtherOfCode = "map-other-of";
 
     /// <summary>
     /// The shipped code claiming that a point on a raster map is a survey station. Kept out
