@@ -971,6 +971,14 @@ export default function CaveViewPanel({
       if (box === undefined) {
         return;
       }
+      // Measured zero is not measured — the rule the image canvas's measure already
+      // applies. A pane hidden behind another tab reports 0×0, and announcing it would
+      // have the viewer resize its drawing buffers to nothing; staying silent leaves the
+      // last real size on record, so reappearing at that same size dispatches nothing
+      // (nothing changed) and reappearing at a new one dispatches once.
+      if (box.width === 0 || box.height === 0) {
+        return;
+      }
       const size = `${Math.round(box.width)}x${Math.round(box.height)}`;
       if (size === dispatchedSizeRef.current) {
         return;

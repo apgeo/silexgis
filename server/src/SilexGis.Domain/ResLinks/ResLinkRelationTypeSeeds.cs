@@ -62,6 +62,20 @@ public static class ResLinkRelationTypeSeeds
         // below it — and only on a fresh installation, so a new database and an upgraded one
         // would disagree about the vocabulary's order with nothing on screen to say why.
         new("text-of", "Text of", true, "Has text"),
+
+        // A raster map of a survey model, by view. Directed with the map document as the main
+        // member, so edit/delete rights follow document write access and the forward name reads
+        // out of the map. The code carries the view kind: a designed vocabulary with zero
+        // behavior attached, exactly the trip-role pattern.
+        new("map-plan-of", "Plan map of", true, "Has plan map"),
+        new("map-profile-of", "Profile map of", true, "Has profile map"),
+        new("map-other-of", "Map of (other view)", true, "Has map (other view)"),
+
+        // A point on a raster map that IS a survey station — a calibration-grade claim, kept
+        // distinct from casual "this region shows the sump" links so the map surfaces never
+        // promote an annotation into a position. Directed with the document member as main, so
+        // whoever may edit the map document may correct its pins.
+        new("map-station-point", "Marks station", true, "Marked on map"),
     ];
 
     /// <summary>
@@ -77,6 +91,24 @@ public static class ResLinkRelationTypeSeeds
     /// </summary>
     public static readonly string[] TripRoleCodes =
         [.. All.Select(s => s.Code).Where(c => c.StartsWith("trip-", StringComparison.Ordinal))];
+
+    /// <summary>
+    /// The shipped codes that declare a document to be a raster map of a survey model, one
+    /// per view kind. Explicit list, NOT prefix-derived: a "map-" prefix rule would swallow
+    /// <see cref="MapStationPointCode"/>, which names a pin rather than a map.
+    ///
+    /// Seeded rows only, as with <see cref="TripRoleCodes"/>: an installation's custom
+    /// <c>map-*</c> code joins the generic link panel, not the map tabs — a designed surface
+    /// is built from designed vocabulary.
+    /// </summary>
+    public static readonly string[] MapViewCodes = ["map-plan-of", "map-profile-of", "map-other-of"];
+
+    /// <summary>
+    /// The shipped code claiming that a point on a raster map is a survey station. Kept out
+    /// of <see cref="MapViewCodes"/> because it names a pin on a map, not a map of a model,
+    /// and the two are consumed by different folds.
+    /// </summary>
+    public const string MapStationPointCode = "map-station-point";
 
     private static readonly HashSet<string> Codes = [.. All.Select(s => s.Code)];
 

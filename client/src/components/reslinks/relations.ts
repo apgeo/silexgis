@@ -36,6 +36,13 @@ export const SEEDED_RELATION_CODES = [
   'trip-searched-not-found',
   'trip-lead',
   'trip-follows-on-from',
+  // A raster map declared on a survey model (the code carries the view kind), and a
+  // point on such a map claimed to be a survey station. The map surfaces fold these out
+  // through their own explicit lists; here they are only worded.
+  'map-plan-of',
+  'map-profile-of',
+  'map-other-of',
+  'map-station-point',
 ] as const;
 
 export type SeededRelationCode = (typeof SEEDED_RELATION_CODES)[number];
@@ -57,6 +64,10 @@ export const DIRECTED_RELATION_CODES: readonly SeededRelationCode[] = [
   'trip-searched-not-found',
   'trip-lead',
   'trip-follows-on-from',
+  'map-plan-of',
+  'map-profile-of',
+  'map-other-of',
+  'map-station-point',
 ];
 
 export function isSeededRelationCode(code: string): code is SeededRelationCode {

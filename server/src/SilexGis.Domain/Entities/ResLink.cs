@@ -30,8 +30,11 @@ public enum AnchorKind : short
     PageRange = 3,
 
     /// <summary>
-    /// A region on an image (or on one page of a paged document), in natural pixels of
-    /// the file the anchor was measured against. Payload
+    /// A region on an image (or on one page of a paged document), in fractions 0–1 of the
+    /// drawn picture's width and height, origin at its top-left, measured against a pinned
+    /// file. Fractions rather than pixels because a picture is served at whatever rendering
+    /// size a reader is entitled to, so a pixel coordinate would mean a different place per
+    /// rendering; the payload rules are the authority on the frame. Payload
     /// <c>{page?, shape: "point"|"rect"|"circle"|"polygon", …}</c> with the shape's own
     /// coordinate fields.
     /// </summary>

@@ -159,6 +159,16 @@ public sealed class PersistenceTests : IDisposable, IClassFixture<PostgresFixtur
             ("trip-searched-not-found", true),
             ("trip-lead", true),
             ("trip-follows-on-from", true),
+
+            // The later arrivals, appended in shipping order: the reading-of relation, then
+            // the raster-map vocabulary. All directed — the map codes deliberately so, because
+            // edit rights on a map declaration and on a station pin follow the main (document)
+            // member, and only a directed relation has one.
+            ("text-of", true),
+            ("map-plan-of", true),
+            ("map-profile-of", true),
+            ("map-other-of", true),
+            ("map-station-point", true),
         ];
         foreach (var (code, directed) in relations)
         {
@@ -226,6 +236,16 @@ public sealed class PersistenceTests : IDisposable, IClassFixture<PostgresFixtur
         tripRoles.Count.ShouldBe(10);
         var expected = lastShippedBefore;
         foreach (var (code, _) in tripRoles)
+        {
+            expected += 10;
+            byCode[code].ShouldBe(expected, code);
+        }
+
+        // Everything appended since, chained in list order off the last trip role rather than
+        // pinned to absolute numbers: the assertion is the append-only rule itself — each later
+        // arrival sorts after every code that shipped before it, and keeps that place forever.
+        string[] appended = ["text-of", "map-plan-of", "map-profile-of", "map-other-of", "map-station-point"];
+        foreach (var code in appended)
         {
             expected += 10;
             byCode[code].ShouldBe(expected, code);

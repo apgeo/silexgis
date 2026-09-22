@@ -87,6 +87,13 @@ vi.mock('../../api/hooks.ts', async () => {
   };
 });
 
+// The same viewer reads the model's links a second way, for the raster-map tabs beside the
+// 3D pane. Nothing here is about maps either, and the real hook wants a QueryClient this
+// harness deliberately does not provide.
+vi.mock('../../rastermap/useRasterMapLinks.ts', () => ({
+  useRasterMapLinks: () => ({ data: undefined }),
+}));
+
 const { default: SurveyModelSection } = await import('./SurveyModelSection.tsx');
 
 /** Where the two new buttons send the reader, recorded rather than followed. */

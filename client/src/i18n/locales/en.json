@@ -1503,8 +1503,8 @@
         "copyFailed": "This browser would not let the page write to the clipboard. The text is selected — copy it by hand.",
         "none": "This trip is not published. Nobody can follow it without an account.",
         "statusActive": "Live",
-    "statusDormant": "Not open",
-    "dormantUntil": "This link opens nothing at the moment. The page answers only while the watch is running and while the trip’s cave may be published — if that changes back, this link works again until {{when}}.",
+        "statusDormant": "Not open",
+        "dormantUntil": "This link opens nothing at the moment. The page answers only while the watch is running and while the trip’s cave may be published — if that changes back, this link works again until {{when}}.",
         "createdAt": "Created {{when}}",
         "revoke": "Take it back",
         "revokeConfirm": "Take this follow link back? Anybody holding it stops being able to open the page.",
@@ -3113,6 +3113,22 @@
       "text-of": {
         "name": "Text of",
         "inverse": "Has text"
+      },
+      "map-plan-of": {
+        "name": "Plan map of",
+        "inverse": "Has plan map"
+      },
+      "map-profile-of": {
+        "name": "Profile map of",
+        "inverse": "Has profile map"
+      },
+      "map-other-of": {
+        "name": "Map of (other view)",
+        "inverse": "Has map (other view)"
+      },
+      "map-station-point": {
+        "name": "Marks station",
+        "inverse": "Marked on map"
       }
     },
     "members": "Members",
@@ -5046,5 +5062,11 @@
       "grottocenter": "Grottocenter",
       "national_cadastre": "National cadastre"
     }
+  },
+  "rastermap": {
+    "tab3d": "3D",
+    "untitledMap": "Untitled map",
+    "imageMissing": "The map image cannot be shown.",
+    "supersededPoints": "Points placed on an older scan of this map: {{count}}"
   }
 }

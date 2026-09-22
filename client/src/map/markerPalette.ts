@@ -129,6 +129,21 @@ export const libraryPhotoPalette = {
   stroke: '#ffffff',
 } as const;
 
+/**
+ * Station points pinned onto a scanned cave map.
+ *
+ * Drawn over paper — a scan is mostly white or sepia with dark ink — so the pin is the
+ * application's own dark teal with a white stroke: a pinned station is a surveyed fact,
+ * not an annotation, and it should read as kin to the entrance dot on the geo map. The
+ * label halo is the near-opaque white the other over-ink labels already use, because a
+ * station name printed over hatching is unreadable without one.
+ */
+export const rasterMapPalette = {
+  station: '#146262',
+  stroke: '#ffffff',
+  labelHalo: 'rgba(255, 255, 255, 0.85)',
+} as const;
+
 /** Where the feature-type symbol images are served from; the server sends the file name only. */
 export function featureSymbolUrl(symbolFile: string): string {
   return `/feature_symbols/${encodeURIComponent(symbolFile)}`;

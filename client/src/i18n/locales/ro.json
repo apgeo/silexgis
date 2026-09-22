@@ -3113,6 +3113,22 @@
       "text-of": {
         "name": "Textul lui",
         "inverse": "Are textul"
+      },
+      "map-plan-of": {
+        "name": "Planul lui",
+        "inverse": "Are planul"
+      },
+      "map-profile-of": {
+        "name": "Profilul lui",
+        "inverse": "Are profilul"
+      },
+      "map-other-of": {
+        "name": "Hartă (altă vedere) a lui",
+        "inverse": "Are hartă (altă vedere)"
+      },
+      "map-station-point": {
+        "name": "Marchează stația",
+        "inverse": "Marcat pe hartă"
       }
     },
     "members": "Elemente",
@@ -5046,5 +5062,11 @@
       "grottocenter": "Grottocenter",
       "national_cadastre": "Cadastru național"
     }
+  },
+  "rastermap": {
+    "tab3d": "3D",
+    "untitledMap": "Hartă fără titlu",
+    "imageMissing": "Imaginea hărții nu poate fi afișată.",
+    "supersededPoints": "Puncte plasate pe o scanare mai veche a acestei hărți: {{count}}"
   }
 }

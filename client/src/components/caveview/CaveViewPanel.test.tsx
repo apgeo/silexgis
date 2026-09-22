@@ -1290,6 +1290,62 @@ describe('CaveViewPanel', () => {
       }
     });
 
+    /**
+     * Measured zero is not measured. The panel now lives inside tab strips that hide the
+     * inactive pane with `display:none`, and a hidden pane reports 0×0 — a statement about
+     * the pane being off screen, not about the viewer's surface. Announcing it would have
+     * the viewer resize its drawing buffers to nothing behind the reader's back.
+     */
+    it('never announces a zero size, and stays quiet when the pane reappears unchanged', async () => {
+      const observers: ResizeObserverCallback[] = [];
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: ResizeObserverCallback) {
+            observers.push(callback);
+          }
+          observe() {}
+          unobserve() {}
+          disconnect() {}
+        },
+      );
+      const resized = vi.fn();
+      window.addEventListener('resize', resized);
+      try {
+        await renderReady();
+        await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+        const report = (width: number, height: number) =>
+          act(() =>
+            observers[0](
+              [{ contentRect: { width, height } } as ResizeObserverEntry],
+              {} as ResizeObserver,
+            ),
+          );
+
+        report(400, 320);
+        expect(resized).toHaveBeenCalledTimes(1);
+
+        // The pane is hidden behind another tab: 0×0 arrives and nothing is announced —
+        // in either axis alone, either, since a flex layout can collapse just one.
+        report(0, 0);
+        report(400, 0);
+        report(0, 320);
+        expect(resized).toHaveBeenCalledTimes(1);
+
+        // Shown again at the size it already had: nothing changed, so nothing is said.
+        report(400, 320);
+        expect(resized).toHaveBeenCalledTimes(1);
+
+        // Hidden again, then shown at a genuinely new size: announced exactly once — the
+        // positive twin that proves the guard skips zero rather than skipping resizes.
+        report(0, 0);
+        report(400, 560);
+        expect(resized).toHaveBeenCalledTimes(2);
+      } finally {
+        window.removeEventListener('resize', resized);
+      }
+    });
+
     it('hands the viewer its station pictures, and asks the loaded viewer for the label that shows them', async () => {
       await renderReady({ stationMedia: media() });
 

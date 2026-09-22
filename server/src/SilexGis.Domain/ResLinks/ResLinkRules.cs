@@ -232,12 +232,12 @@ public static class ResLinkRules
 
     /// <summary>
     /// Whether the anchor kind must pin the file it was measured against.
-    /// <see cref="AnchorKind.ImageRegion"/> coordinates are natural pixels of a
-    /// specific file — without the pin there is no coordinate space, and once the
-    /// document moves to a new version the region would silently apply to different
-    /// content while still reading as exact. The other content anchors survive a
-    /// missing pin (text re-anchors by quote, pages and times address the current
-    /// version), so only the pixel-addressed kind demands one.
+    /// <see cref="AnchorKind.ImageRegion"/> coordinates are fractions of one specific
+    /// file's drawn picture — without the pin there is no picture for them to be
+    /// fractions of, and once the document moves to a new version the region would
+    /// silently apply to different content while still reading as exact. The other
+    /// content anchors survive a missing pin (text re-anchors by quote, pages and times
+    /// address the current version), so only the picture-addressed kind demands one.
     /// </summary>
     public static bool RequiresAnchorFilePin(AnchorKind kind) => kind == AnchorKind.ImageRegion;
 
