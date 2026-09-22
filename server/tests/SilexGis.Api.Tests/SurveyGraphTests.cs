@@ -336,17 +336,18 @@ public sealed class SurveyGraphTests : IAsyncLifetime, IDisposable, IClassFixtur
         var centerline = (await CenterlinesOfAsync(caveId)).ShouldHaveSingleItem();
         var lengthM = centerline.GetProperty("lengthM").GetDecimal();
 
-        // This file draws 421 m of line and found 205 m of passage; measured in plan, which is how
-        // a published length is measured here, that is 316 m drawn against 177 m of passage. And it
-        // flags not one of its legs as a wall shot — the common case rather than a broken export:
-        // six of eighteen measured files, the public demo survey of the viewer this application
-        // embeds among them, flag nothing at all.
+        // This file draws 421 m of line and found 205 m of passage, and it flags not one of its
+        // legs as a wall shot — the common case rather than a broken export: six of eighteen
+        // measured files, the public demo survey of the viewer this application embeds among them,
+        // flag nothing at all.
         //
-        // A published length is read as how much cave was found. Measured over everything drawn
-        // this survey would be published at nearly twice its size, the demo survey at 67.8 km for
-        // 31.7 km of passage, and one measured file at forty-two times. The range below is wide
-        // enough not to fail on a change of projection and far too narrow to admit 316.
-        lengthM.ShouldBeInRange(170m, 185m);
+        // A published length is read as how much cave was found, measured along the passage the
+        // way a survey is measured — the stored line carries its heights, and the database's
+        // spheroidal length uses them (verified against this PostGIS: a 3D line 100.92 m long in
+        // plan with 1000 m of rise measures 1005.08). So the number below is the 205, not the
+        // 316 m the whole drawing covers in plan nor its 421 m of tape. The range is wide enough
+        // not to fail on a change of projection and far too narrow to admit either.
+        lengthM.ShouldBeInRange(195m, 215m);
     }
 
     [Fact]
