@@ -23,8 +23,13 @@ docker compose exec -T db psql -U silexgis -d silexgis \
 gunzip -c "$SRC_ABS/db.sql.gz" | docker compose exec -T db psql -U silexgis -d silexgis
 
 echo "==> Restoring files volume from $SRC_ABS/files.tar.gz"
+# The volume name is <project>_<volume>, and the project is asked of the resolved compose
+# config rather than assumed: on a host running more than one installation the projects differ
+# by COMPOSE_PROJECT_NAME, and a restore that assumed the shipped name would erase the
+# neighbouring installation's uploads.
+PROJECT=$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')
 docker run --rm \
-	-v silexgis_silexgis-files:/data \
+	-v "${PROJECT}_silexgis-files":/data \
 	-v "$SRC_ABS":/backup:ro \
 	alpine sh -c 'rm -rf /data/* && tar xzf /backup/files.tar.gz -C /data'
 

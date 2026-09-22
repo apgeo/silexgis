@@ -17,10 +17,14 @@ echo "==> Database  -> $OUT/db.sql.gz"
 docker compose exec -T db pg_dump -U silexgis -d silexgis | gzip > "$OUT/db.sql.gz"
 
 # The files volume is dumped via a throwaway container so we do not depend on the api
-# container being up. The name is <project>_<volume>; the project is 'silexgis'.
+# container being up. The name is <project>_<volume>, and the project is asked of the resolved
+# compose config rather than assumed: the files ship with `name: silexgis`, but a host running
+# more than one installation distinguishes them with COMPOSE_PROJECT_NAME, and a backup that
+# assumed the shipped name would silently dump the neighbouring installation's uploads.
+PROJECT=$(docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')
 echo "==> Files     -> $OUT/files.tar.gz"
 docker run --rm \
-	-v silexgis_silexgis-files:/data:ro \
+	-v "${PROJECT}_silexgis-files":/data:ro \
 	-v "$OUT_ABS":/backup \
 	alpine tar czf /backup/files.tar.gz -C /data .
 
