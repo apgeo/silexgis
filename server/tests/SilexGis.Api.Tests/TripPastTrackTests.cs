@@ -162,12 +162,19 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
         var overLong = new string('a', 400);
 
         var baseline = await RefusalShapeAsync(await anonymous.GetAsync(PastList(invented)));
-        foreach (var dead in new[] { revoked.Token, overLong, string.Empty })
+        foreach (var dead in new[] { revoked.Token, overLong })
         {
             (await RefusalShapeAsync(await anonymous.GetAsync(PastList(dead)))).ShouldBe(baseline);
             (await RefusalShapeAsync(await anonymous.GetAsync(PastTrack(dead, revoked.Trip))))
                 .ShouldBe(baseline);
         }
+
+        // An empty token is an empty path segment, which routing refuses before any handler runs —
+        // so its body is the framework's, not the problem shape the handler answers with. What is
+        // reachable, and what matters, is that the status is the same 404 and so says nothing.
+        (await anonymous.GetAsync(PastList(string.Empty))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await anonymous.GetAsync(PastTrack(string.Empty, revoked.Trip)))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
 
         // The same answer the live route gives, so the new routes add no distinguishable refusal
         // to the surface.
@@ -394,7 +401,14 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
         // keyed by a place in the party and deliberately carry no caver id, so a caption is the only
         // way a test can say "this row is that person" — and comparing the numbers alone would
         // compare 1,2,3,4 with 1,2,3,4 and prove nothing.
-        foreach (var (caver, index) in trip.Cavers.Select((c, i) => (c, i)))
+        //
+        // Captioned in roster order, read off the participant rows, not in the helper's caver-id
+        // order: the ids come back sorted and the roster does not, so pairing captions with the
+        // sorted list would make the sanity check below fail on an ordering this test never set
+        // out to assert.
+        var roster = await RosterOrderAsync(trip.Trip);
+        roster.ShouldBe(trip.Cavers, ignoreOrder: true);
+        foreach (var (caver, index) in roster.Select((c, i) => (c, i)))
         {
             (await owner.PutAsJsonAsync(
                 $"/api/v1/trip-logs/{trip.Trip}/tracking/participants/{caver}",
@@ -728,6 +742,20 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         return await db.Cavers.AsNoTracking().Where(c => c.Id == caver)
             .Select(c => c.FullName).SingleAsync();
+    }
+
+    /// <summary>
+    /// The party in the order the roster records it: participant rows by their own id, which is
+    /// the order the public pages number people in. Distinct per caver because each guest here is
+    /// one row; a test that gives somebody two roles would need the pages' first-row-per-person
+    /// rule instead.
+    /// </summary>
+    private async Task<List<Guid>> RosterOrderAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.TripLogParticipants.AsNoTracking().Where(p => p.TripLogId == trip)
+            .OrderBy(p => p.Id).Select(p => p.CaverId).ToListAsync();
     }
 
     private async Task ArmAsync(Guid trip, Guid model) =>
