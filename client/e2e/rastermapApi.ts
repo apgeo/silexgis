@@ -25,17 +25,18 @@ export async function bearerToken(page: Page): Promise<string> {
 export async function apiJson(
   page: Page,
   token: string,
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   data?: unknown,
+  headers: Record<string, string> = {},
 ): Promise<unknown> {
   const response = await page.request.fetch(path, {
     method,
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...headers },
     ...(data === undefined ? {} : { data }),
   });
   expect(response.ok(), `${method} ${path} answered ${response.status()}`).toBeTruthy();
-  return response.json();
+  return response.status() === 204 ? undefined : response.json();
 }
 
 /** Uploads a fresh noise PNG — never a real map — answering the file and its document. */

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CompressOutlined, ExpandOutlined, PushpinOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Flex, Typography } from 'antd';
+import { Alert, Button, Card, Flex, Tabs, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   surveyModelReadableByViewer,
@@ -14,7 +14,7 @@ import {
 } from '../../api/hooks.ts';
 import CaveViewPanel from '../caveview/CaveViewPanel.tsx';
 import type { CaveViewMediaEntry } from '../../caveview/loadCaveView.ts';
-import { pathOf, type PickedModelPart } from '../../caveview/modelParts.ts';
+import { partFromStation, pathOf, type PickedModelPart } from '../../caveview/modelParts.ts';
 import { trackedCaversFrom } from '../../caveview/trackedCavers.ts';
 import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
 import {
@@ -26,6 +26,10 @@ import { useStationMedia } from '../../caveview/useStationMedia.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+import RasterMapTrackingPane from '../../rastermap/RasterMapTrackingPane.tsx';
+import { rasterMapsFromLinks } from '../../rastermap/rasterMaps.ts';
+import { useRasterMapLinks } from '../../rastermap/useRasterMapLinks.ts';
+import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import TrackingPicturesDialog from './TrackingPicturesDialog.tsx';
 import TrackingReplayBar from './TrackingReplayBar.tsx';
 import TrackingReportDialog from './TrackingReportDialog.tsx';
@@ -66,6 +70,9 @@ export interface TrackingModelPanelProps {
    */
   onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
 }
+
+/** The key of the one pane of the drawing strip that is not a declared map. */
+const TAB_3D = '3d';
 
 /** Taller than a phone can spare, shorter than a desk screen would waste. */
 const HEIGHT = 460;
@@ -217,6 +224,8 @@ export default function TrackingModelPanel({
   const [replayAt, setReplayAt] = useState<number | null>(null);
   /** The moment the picture dialog is attaching to, or null while it is closed. */
   const [attachingAt, setAttachingAt] = useState<number | null>(null);
+  /** Which drawing is on screen: the 3D scene, or a declared map named by its link id. */
+  const [activeTab, setActiveTab] = useState(TAB_3D);
   const { data: model } = useSurveyModel(tracking.surveyModelId ?? undefined);
 
   // The set the panel would have been given, less the one control that would hide the rest of the
@@ -244,6 +253,28 @@ export default function TrackingModelPanel({
    * photograph is anchored to, and how far a reader may reach for it, are one rule and have one home.
    */
   const stationMedia = useStationMedia(model?.id, open);
+
+  /**
+   * The model's declared raster maps, one tab each beside the 3D scene.
+   *
+   * Gated on the panel being open for exactly the reason the model and its pictures are:
+   * this tab is opened routinely by somebody who only wants to record that the party went
+   * in, and a closed panel has no drawing to hang a map beside — so the link read costs
+   * nothing until the model is asked for, and stops being asked when it is hidden again.
+   */
+  const { data: mapLinks } = useRasterMapLinks(model?.id, open);
+  const maps = useMemo(
+    () => rasterMapsFromLinks(mapLinks ?? [], model?.id ?? ''),
+    [mapLinks, model?.id],
+  );
+
+  // A tab whose map was undeclared while somebody watched cannot stay active: the pane it
+  // named is gone from the strip, and a Tabs left pointing at nothing shows nothing.
+  useEffect(() => {
+    if (activeTab !== TAB_3D && !maps.some((declaration) => declaration.linkId === activeTab)) {
+      setActiveTab(TAB_3D);
+    }
+  }, [maps, activeTab]);
 
   const names = useMemo(
     () => new Map(participants.map((person) => [person.caverId, person.name])),
@@ -450,6 +481,21 @@ export default function TrackingModelPanel({
    */
   const canRecord = canEdit && tracking.state === 'armed';
 
+  /**
+   * A pinned station pressed on a map sheet, raised as the very offer a 3D press raises.
+   *
+   * The pin names a station of this watch's own survey — that is what a pin is — so the
+   * press synthesizes the same picked part the viewer yields and everything downstream
+   * (the alert, the dialog, the one write path) neither knows nor cares which drawing
+   * the press landed on. One offer, outside the strip, governing whichever pane shows.
+   */
+  const pickStation = (station: string) => {
+    const part = partFromStation({ name: station });
+    if (part !== null) {
+      setPicked(part);
+    }
+  };
+
   /** Hiding the model puts the live watch back: a replay of a model nobody is looking at is state. */
   const onToggle = () => {
     if (open) {
@@ -462,6 +508,9 @@ export default function TrackingModelPanel({
       setPicked(null);
       setRecording(null);
       setAttachingAt(null);
+      // The strip opens on the 3D scene, as the panel opens: which map somebody had up
+      // belongs to the model that was on screen, exactly like the size and the offer.
+      setActiveTab(TAB_3D);
     }
     setOpen(!open);
   };
@@ -553,29 +602,74 @@ export default function TrackingModelPanel({
               data-testid="trip-tracking-picked-station"
             />
           )}
-          <CaveViewPanel
-            fileUrl={model.modelUrl}
-            fileName={viewerFileName(model)}
-            height={modelHeight(narrow, large)}
-            surveyModelId={model.id}
-            trackedCavers={shown}
-            // Handed straight through, replay or no replay: what comes back names stations of the
-            // drawing, which is the one thing about this panel a scrubbed moment cannot change.
-            onUnplacedStationsChange={onUnplacedStationsChange}
-            // A leg or a splay names no single place to report from, so it clears the offer rather
-            // than leaving the last station standing under a press that meant something else.
-            onPartPick={
-              canRecord
-                ? (part) => setPicked(part.anchorKind === 'modelStation' ? part : null)
-                : undefined
-            }
-            // The viewer's own controls: this is a model shown to be read rather than one shown
-            // beside chrome competing for the same corner. All but one of them — see above.
-            toolbar={{ buttons: toolbarButtons }}
-            // A function rather than the map, so that scrubbing — which re-derives the placed
-            // pictures five times a second — never hands the viewer a different source and never
-            // closes a strip somebody is looking at.
-            stationMedia={mediaSource}
+          {/* The drawing strip: the 3D scene, and one tab per map declared on this survey.
+              The replay bar above and the offer and dialogs around this element stay outside
+              it on purpose — one replay timeline and one record-here flow govern whichever
+              drawing is showing. The 3D pane is the default and inactive panes stay mounted
+              (antd's default), so switching to a sheet and back finds the viewer exactly
+              where it was, holding its parsed model and its WebGL context. */}
+          <Tabs
+            activeKey={maps.length === 0 ? TAB_3D : activeTab}
+            onChange={setActiveTab}
+            // With no maps declared the strip has nothing to say — this surface authors no
+            // maps — so its bar is hidden while the Tabs element itself stays in the tree,
+            // keeping the 3D pane's identity across the moment declarations arrive.
+            tabBarStyle={maps.length === 0 ? { display: 'none' } : undefined}
+            items={[
+              {
+                key: TAB_3D,
+                label: t('rastermap.tab3d'),
+                children: (
+                  <CaveViewPanel
+                    fileUrl={model.modelUrl}
+                    fileName={viewerFileName(model)}
+                    height={modelHeight(narrow, large)}
+                    surveyModelId={model.id}
+                    trackedCavers={shown}
+                    // Handed straight through, replay or no replay: what comes back names stations of the
+                    // drawing, which is the one thing about this panel a scrubbed moment cannot change.
+                    onUnplacedStationsChange={onUnplacedStationsChange}
+                    // A leg or a splay names no single place to report from, so it clears the offer rather
+                    // than leaving the last station standing under a press that meant something else.
+                    onPartPick={
+                      canRecord
+                        ? (part) => setPicked(part.anchorKind === 'modelStation' ? part : null)
+                        : undefined
+                    }
+                    // The viewer's own controls: this is a model shown to be read rather than one shown
+                    // beside chrome competing for the same corner. All but one of them — see above.
+                    toolbar={{ buttons: toolbarButtons }}
+                    // A function rather than the map, so that scrubbing — which re-derives the placed
+                    // pictures five times a second — never hands the viewer a different source and never
+                    // closes a strip somebody is looking at.
+                    stationMedia={mediaSource}
+                  />
+                ),
+              },
+              ...maps.map((declaration) => ({
+                key: declaration.linkId,
+                label: (
+                  <span>
+                    {VIEW_KIND_ICONS[declaration.viewKind]}{' '}
+                    {declaration.title ?? t('rastermap.untitledMap')}
+                  </span>
+                ),
+                children: (
+                  <RasterMapTrackingPane
+                    declaration={declaration}
+                    links={mapLinks ?? []}
+                    surveyModelId={model.id}
+                    active={open && activeTab === declaration.linkId}
+                    height={modelHeight(narrow, large)}
+                    // The one source of truth for who is where: the same fold the 3D pane
+                    // draws, live or replayed, so the two drawings can never disagree about
+                    // the party they are both showing.
+                    cavers={shown}
+                    onPickStation={canRecord ? pickStation : undefined}
+                  />
+                ),
+              })),
+            ]}
           />
           {canRecord && (
             <TrackingReportDialog

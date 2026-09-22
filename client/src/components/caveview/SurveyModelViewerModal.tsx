@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, App, AutoComplete, Button, Flex, Modal, Space, Tabs, Tooltip } from 'antd';
-import {
-  BorderOutlined,
-  ColumnHeightOutlined,
-  LinkOutlined,
-  PictureOutlined,
-  PlusOutlined,
-} from '@ant-design/icons';
+import { LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { type SurveyModelInfo } from '../../api/hooks.ts';
 import { viewerFileName } from '../../caveview/viewerFileName.ts';
@@ -19,7 +13,7 @@ import DeclareMapModal from '../../rastermap/DeclareMapModal.tsx';
 import RasterMapPane from '../../rastermap/RasterMapPane.tsx';
 import { rasterMapsFromLinks, type RasterMapDeclaration } from '../../rastermap/rasterMaps.ts';
 import { useRasterMapLinks } from '../../rastermap/useRasterMapLinks.ts';
-import type { MapViewKind } from '../../rastermap/vocabulary.ts';
+import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import AddMemberModal from '../reslinks/AddMemberModal.tsx';
 import CaveViewPanel from './CaveViewPanel.tsx';
 
@@ -31,12 +25,6 @@ interface SurveyModelViewerModalProps {
 
 /** The key of the one tab that is not a map. */
 const TAB_3D = '3d';
-
-const VIEW_KIND_ICONS: Record<MapViewKind, ReactNode> = {
-  plan: <BorderOutlined />,
-  profile: <ColumnHeightOutlined />,
-  other: <PictureOutlined />,
-};
 
 /**
  * A survey model over the whole window, mounted by whichever page the viewer asked from.

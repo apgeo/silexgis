@@ -9,7 +9,8 @@ import type Feature from 'ol/Feature';
 import type { Style } from 'ol/style';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../i18n';
-import RasterMapView from './RasterMapView.tsx';
+import type { TrackedCaver } from '../caveview/trackedCavers.ts';
+import RasterMapView, { type SheetCaverDrawnMarker } from './RasterMapView.tsx';
 
 /**
  * The image the component probes for its natural size, faked because jsdom loads nothing.
@@ -35,6 +36,25 @@ const MARKER = {
   linkId: 'link-1',
   memberId: 'member-1',
   mayEdit: true,
+};
+
+const ANA: TrackedCaver = {
+  caverId: 'caver-ana',
+  name: 'Ana Popescu',
+  teamId: null,
+  teamTitle: null,
+  position: { kind: 'station', station: 'p.g.7' },
+  lastRecordedAt: '2026-09-20T10:00:00Z',
+  positionAt: '2026-09-20T10:00:00Z',
+  enteredAt: null,
+  out: false,
+};
+
+/** Ana at MARKER's pin, fanned 16px up — already placed, worded and coloured by the pane. */
+const ANA_DOT: SheetCaverDrawnMarker = {
+  marker: { caver: ANA, station: 'p.g.7', x: 0.25, y: 0.25, offsetPx: [0, 16] },
+  label: 'Ana Popescu',
+  color: '#3ab5b5',
 };
 
 /**
@@ -263,5 +283,130 @@ describe('authoring clicks', () => {
     // The listener is attached but answers nobody — there is nobody to answer.
     expect(() => singleclickHandler()({ coordinate: [1000, 750] })).not.toThrow();
     expect(screen.getByTestId('rastermap-map').style.cursor).toBe('');
+  });
+});
+
+describe('the party on the sheet', () => {
+  it('draws a caver dot at its pin’s geometry, worded with the given line', async () => {
+    render(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[MARKER]}
+        cavers={[ANA_DOT]}
+        active
+      />,
+    );
+
+    // The dot's geometry IS the pin — the fan is style pixels, never a position claim —
+    // so the drawn set is the pin's coordinate twice: once as the point, once as Ana.
+    await waitFor(() =>
+      expect(drawnPoints()).toEqual([
+        { coordinate: [1000, 750], label: '7' },
+        { coordinate: [1000, 750], label: 'Ana Popescu' },
+      ]),
+    );
+  });
+
+  it('says nothing on the dot when the pane sent no words', async () => {
+    render(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[]}
+        cavers={[{ ...ANA_DOT, label: null }]}
+        active
+      />,
+    );
+
+    await waitFor(() =>
+      expect(drawnPoints()).toEqual([{ coordinate: [1000, 750], label: undefined }]),
+    );
+  });
+
+  it('answers a press on the fanned dot with the person, and on the pin with the point', async () => {
+    const onCaverClick = vi.fn();
+    const onMarkerClick = vi.fn();
+    // Pinned so the fan's pixel offset is the same number in map units: the dot is drawn
+    // a fixed 16px from its pin whatever the zoom, and the press math follows the zoom.
+    vi.spyOn(View.prototype, 'getResolution').mockReturnValue(1);
+    render(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[MARKER]}
+        cavers={[ANA_DOT]}
+        active
+        onCaverClick={onCaverClick}
+        onMarkerClick={onMarkerClick}
+      />,
+    );
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+
+    // On the dot as displaced — 16px up from the pin at this resolution — the person
+    // answers, and the pin under the fan does not swallow the press.
+    singleclickHandler()({ coordinate: [1000, 766] });
+    expect(onCaverClick).toHaveBeenCalledWith(ANA_DOT.marker);
+    expect(onMarkerClick).not.toHaveBeenCalled();
+
+    // Dead on the pin itself, outside the dot's reach, the point answers as ever.
+    singleclickHandler()({ coordinate: [1000, 750] });
+    expect(onMarkerClick).toHaveBeenCalledWith(MARKER, { x: 0.25, y: 0.25 });
+    expect(onCaverClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers a press on the dot when the person is the ONLY listener aboard', async () => {
+    // The reader's mount: no placement click, no station press — a viewer without edit
+    // rights, or a coordinator replaying a watch no longer armed, gets neither. The
+    // caver card must still open, so the person's listener alone keeps the press alive.
+    const onCaverClick = vi.fn();
+    vi.spyOn(View.prototype, 'getResolution').mockReturnValue(1);
+    render(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[MARKER]}
+        cavers={[ANA_DOT]}
+        active
+        onCaverClick={onCaverClick}
+      />,
+    );
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+
+    singleclickHandler()({ coordinate: [1000, 766] });
+    expect(onCaverClick).toHaveBeenCalledWith(ANA_DOT.marker);
+
+    // Beside the dot, the press still answers nobody — there is nobody else to answer.
+    singleclickHandler()({ coordinate: [3000, 200] });
+    expect(onCaverClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('glides the view to a focus point, and asks for no flight without one', async () => {
+    const animate = vi.spyOn(View.prototype, 'animate').mockImplementation(() => undefined);
+    const { rerender } = render(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[MARKER]}
+        active
+        focus={null}
+      />,
+    );
+    await waitFor(() => expect(View.prototype.fit).toHaveBeenCalledTimes(1));
+    expect(animate).not.toHaveBeenCalled();
+
+    rerender(
+      <RasterMapView
+        imageUrl="http://files.local/map"
+        alt="Sheet A"
+        markers={[MARKER]}
+        active
+        focus={{ x: 0.25, y: 0.25 }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(animate).toHaveBeenCalledWith({ center: [1000, 750], duration: 300 }),
+    );
   });
 });

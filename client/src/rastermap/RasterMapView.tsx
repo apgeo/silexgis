@@ -15,6 +15,7 @@ import { shortNameOf } from '../caveview/modelParts.ts';
 import { rasterMapPalette as palette } from '../map/markerPalette.ts';
 import { coarsePointer } from '../map/pointer.ts';
 import { markerHit } from './authoring.ts';
+import { sheetCaverHit, type SheetCaverMarker } from './caverPlacement.ts';
 import { fromMapCoordinate, imageExtent, toMapCoordinate, type ImageSize } from './coordinates.ts';
 import type { MapStationMarker } from './mapPoints.ts';
 
@@ -53,6 +54,33 @@ interface Props {
    * the click sat inside the tolerance halo but outside the picture.
    */
   onMarkerClick?: (marker: MapStationMarker, at: { x: number; y: number } | null) => void;
+  /**
+   * The party to draw over the pins — each dot already placed (through a station pin and
+   * no other path; the fold owns that rule), already worded (the label is the same line
+   * the 3D scene prints, or null while the labels switch is off) and already coloured
+   * (underground against out is the palette's distinction, not this component's).
+   * Absent everywhere except the tracking surfaces.
+   */
+  cavers?: readonly SheetCaverDrawnMarker[];
+  /**
+   * Answers a click that lands on a caver's dot, before the pin under it is considered:
+   * the dot is drawn over the pin, so it wins the press for the same reason anything
+   * painted on top does.
+   */
+  onCaverClick?: (marker: SheetCaverMarker) => void;
+  /**
+   * A point of the picture to bring into view — the overlay's press-a-row answer, in
+   * stored fractions. The view glides there when it changes; null asks for nothing.
+   */
+  focus?: { x: number; y: number } | null;
+}
+
+/** One caver dot as the caller composed it: the placement, the words, the colour. */
+export interface SheetCaverDrawnMarker {
+  marker: SheetCaverMarker;
+  /** The line the label prints, or null while labels are off. */
+  label: string | null;
+  color: string;
 }
 
 /**
@@ -77,11 +105,15 @@ export default function RasterMapView({
   testId = 'rastermap',
   onMapClick,
   onMarkerClick,
+  cavers,
+  onCaverClick,
+  focus,
 }: Props) {
   const { t } = useTranslation();
   const target = useRef<HTMLDivElement | null>(null);
   const map = useRef<Map | null>(null);
   const markerSource = useRef(new VectorSource<Feature<Point>>());
+  const caverSource = useRef(new VectorSource<Feature<Point>>());
   const [size, setSize] = useState<ImageSize | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -89,8 +121,8 @@ export default function RasterMapView({
   // changes with every render — arming, disarming, fresh markers — so everything it
   // reads rides refs. Naming any of it in a rebuild would tear down the map (and the
   // reader's pan) to change a callback.
-  const clickState = useRef({ onMapClick, onMarkerClick, markers, size });
-  clickState.current = { onMapClick, onMarkerClick, markers, size };
+  const clickState = useRef({ onMapClick, onMarkerClick, markers, size, cavers, onCaverClick });
+  clickState.current = { onMapClick, onMarkerClick, markers, size, cavers, onCaverClick };
 
   const teardown = () => {
     map.current?.setTarget(undefined);
@@ -154,6 +186,9 @@ export default function RasterMapView({
           source: new ImageStatic({ url: imageUrl, imageExtent: extent, projection }),
         }),
         new VectorLayer({ source: markerSource.current }),
+        // The party above the pins: a caver's dot must never disappear under the very
+        // point that placed it, and a press on the shared spot has to mean the person.
+        new VectorLayer({ source: caverSource.current }),
       ],
       view: new View({ projection, center: [size.width / 2, size.height / 2], zoom: 1 }),
     });
@@ -161,7 +196,15 @@ export default function RasterMapView({
     // `singleclick` rather than `click`, so ending a pan or a pinch places nothing.
     instance.on('singleclick', (event) => {
       const now = clickState.current;
-      if (now.size === null || (now.onMapClick === undefined && now.onMarkerClick === undefined)) {
+      // A mount with no listener of any kind is a picture and stays one — but any one
+      // of the three makes a press meaningful, and a caver's dot answers even where
+      // nothing else does (a reader without edit rights, a replay of a disarmed watch).
+      if (
+        now.size === null ||
+        (now.onMapClick === undefined &&
+          now.onMarkerClick === undefined &&
+          now.onCaverClick === undefined)
+      ) {
         return;
       }
       const coordinate = (event as { coordinate: number[] }).coordinate;
@@ -169,6 +212,22 @@ export default function RasterMapView({
       // size it is, whatever the stored point is.
       const tolerance = coarsePointer() ? 12 : 6;
       const resolution = instance.getView().getResolution() ?? 1;
+      // The party is painted over the pins, so it answers the press first — a dot and
+      // the pin that placed it share a spot by construction, and a press there means
+      // the person, not the point.
+      if (now.onCaverClick !== undefined && now.cavers !== undefined) {
+        const person = sheetCaverHit(
+          now.cavers.map((drawn) => drawn.marker),
+          now.size,
+          coordinate,
+          resolution,
+          tolerance,
+        );
+        if (person !== null) {
+          now.onCaverClick(person);
+          return;
+        }
+      }
       const hit = markerHit(now.markers, now.size, coordinate, resolution, tolerance);
       const at = fromMapCoordinate(coordinate, now.size);
       if (hit !== null && now.onMarkerClick !== undefined) {
@@ -181,6 +240,7 @@ export default function RasterMapView({
     });
     map.current = instance;
     drawMarkers();
+    drawCavers();
   };
 
   const drawMarkers = () => {
@@ -216,6 +276,49 @@ export default function RasterMapView({
     }
   };
 
+  const drawCavers = () => {
+    if (size === null) {
+      return;
+    }
+    caverSource.current.clear();
+    const radius = coarsePointer() ? 9 : 7;
+    for (const drawn of cavers ?? []) {
+      const { marker } = drawn;
+      const feature = new Feature({
+        geometry: new Point(toMapCoordinate(marker, size)),
+      });
+      feature.setId(`caver-${marker.caver.caverId}`);
+      // The fan rides the style, never the geometry: the dot's place on the picture is
+      // the pin's, and only its pixels move aside so a party sharing a pin stays
+      // separately visible and separately pressable. Displacement is y-up, the same
+      // frame the fold computes offsets in; the label follows its dot by the same
+      // offset, drawn in text-offset coordinates (y down).
+      const [dx, dy] = marker.offsetPx;
+      feature.setStyle(
+        new Style({
+          image: new CircleStyle({
+            radius,
+            displacement: [dx, dy],
+            fill: new Fill({ color: drawn.color }),
+            stroke: new Stroke({ color: palette.stroke, width: 2 }),
+          }),
+          text:
+            drawn.label === null
+              ? undefined
+              : new Text({
+                  text: drawn.label,
+                  font: '12px sans-serif',
+                  offsetX: dx,
+                  offsetY: -dy - (radius + 8),
+                  fill: new Fill({ color: drawn.color }),
+                  stroke: new Stroke({ color: palette.labelHalo, width: 3 }),
+                }),
+        }),
+      );
+      caverSource.current.addFeature(feature);
+    }
+  };
+
   const onTargetRef = (el: HTMLDivElement | null) => {
     target.current = el;
     buildMap();
@@ -240,6 +343,25 @@ export default function RasterMapView({
     drawMarkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- drawing reads only these two
   }, [markers, size]);
+
+  // The party, redrawn as the watch is re-read — every half minute while anybody is
+  // underground, which is exactly why this clears and refills a source instead of
+  // rebuilding the map around it.
+  useEffect(() => {
+    drawCavers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- drawing reads only these two
+  }, [cavers, size]);
+
+  // The overlay's press-a-row answer: glide the view to the named point. The zoom is the
+  // reader's own — a row press says "show me where", not "throw away how closely I was
+  // looking".
+  useEffect(() => {
+    if (focus == null || size === null || map.current === null) {
+      return;
+    }
+    map.current.getView().animate({ center: toMapCoordinate(focus, size), duration: 300 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a glide is asked for by the point
+  }, [focus?.x, focus?.y, size]);
 
   if (failed) {
     // A missing image is a real state — the document's file may have been replaced or the

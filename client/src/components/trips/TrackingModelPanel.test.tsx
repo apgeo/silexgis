@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
+import { useEffect } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -101,10 +102,58 @@ let given: GivenProps | undefined;
 function mediaAt(path: string): readonly { url: string }[] {
   return given!.stationMedia?.({ name: () => path }) ?? [];
 }
+/**
+ * Whether the fake viewer was ever torn down. The strip of map tabs beside it exists on
+ * the promise that it never is: the real panel re-fetches and re-parses the whole survey
+ * on a remount and burns a WebGL context doing it, so the counter is the assertion.
+ */
+const viewerLifecycle = { mounts: 0, unmounts: 0 };
 vi.mock('../caveview/CaveViewPanel.tsx', () => ({
-  default: (props: GivenProps) => {
+  default: function FakeCaveViewPanel(props: GivenProps) {
     given = props;
+    useEffect(() => {
+      viewerLifecycle.mounts += 1;
+      return () => {
+        viewerLifecycle.unmounts += 1;
+      };
+    }, []);
     return <div data-testid="viewer" />;
+  },
+}));
+
+/** The model's raster-map links — the drawing strip's source — and what was asked of them. */
+let rasterLinks: unknown[] = [];
+let rasterLinksAskedFor: { surveyModelId: string | undefined; enabled: boolean } | undefined;
+vi.mock('../../rastermap/useRasterMapLinks.ts', () => ({
+  useRasterMapLinks: (surveyModelId: string | undefined, enabled: boolean) => {
+    rasterLinksAskedFor = { surveyModelId, enabled };
+    return { data: enabled ? rasterLinks : undefined };
+  },
+}));
+
+/** What the panel hands one map sheet: the party, its activation, and the press channel. */
+interface FakeSheetPaneProps {
+  declaration: { linkId: string };
+  active: boolean;
+  cavers: readonly TrackedCaver[];
+  onPickStation?: (station: string) => void;
+}
+/** The latest props each mounted sheet pane was given, by declaration link id. */
+const sheetPanes = new Map<string, FakeSheetPaneProps>();
+vi.mock('../../rastermap/RasterMapTrackingPane.tsx', () => ({
+  default: (props: FakeSheetPaneProps) => {
+    sheetPanes.set(props.declaration.linkId, props);
+    return (
+      <div
+        data-testid={`fake-sheet-${props.declaration.linkId}`}
+        data-active={String(props.active)}
+      >
+        <button
+          data-testid={`fake-sheet-press-${props.declaration.linkId}`}
+          onClick={() => props.onPickStation?.('p.g.7')}
+        />
+      </div>
+    );
   },
 }));
 
@@ -183,6 +232,39 @@ const roster: TripParticipant[] = [
   { caverId: BOGDAN, name: 'Bogdan Ilie' },
 ] as unknown as TripParticipant[];
 
+/** A declared map of the watch's model, shaped as the real fold reads it off the links. */
+function mapLink(linkId: string, title: string, code = 'map-plan-of') {
+  return {
+    id: linkId,
+    relationType: { id: 1, code, name: code, directed: true, inverseName: 'x' },
+    description: null,
+    createdAt: '2026-09-01T10:00:00Z',
+    mayEdit: true,
+    members: [
+      {
+        id: `${linkId}-doc`,
+        targetType: 'document',
+        targetId: `${linkId}-document`,
+        isMain: true,
+        anchorKind: 'whole',
+        anchor: null,
+        anchorFileId: null,
+        display: { title, subtitle: null, route: null, thumbnailUrl: null, mediaType: 'image/png' },
+      },
+      {
+        id: `${linkId}-model`,
+        targetType: 'surveyModel',
+        targetId: MODEL,
+        isMain: false,
+        anchorKind: 'whole',
+        anchor: null,
+        anchorFileId: null,
+        display: null,
+      },
+    ],
+  };
+}
+
 const entered = (caverId: string, recordedAt: string): TrackingEvent =>
   ({ id: `e-${caverId}`, caverId, kind: 'entered', recordedAt }) as unknown as TrackingEvent;
 
@@ -251,6 +333,11 @@ beforeEach(() => {
   linksAskedFor = undefined;
   momentLinks = [];
   momentLinksAskedFor = undefined;
+  rasterLinks = [];
+  rasterLinksAskedFor = undefined;
+  sheetPanes.clear();
+  viewerLifecycle.mounts = 0;
+  viewerLifecycle.unmounts = 0;
   narrow = false;
   coarse = false;
   onRecorded.mockReset();
@@ -964,5 +1051,144 @@ describe('TrackingModelPanel', () => {
 
     expect(screen.getByTestId('trip-tracking-model-panel')).toBeInTheDocument();
     expect(screen.queryByTestId('trip-tracking-model-unreadable')).toBeNull();
+  });
+});
+
+/**
+ * The map sheets beside the 3D scene: one tab per declared map, fed the very party the
+ * viewer draws, under the one replay bar and the one record-here flow that stay outside
+ * the strip. The sheet pane itself is faked — its drawing has its own tests — so what is
+ * proved here is the panel's side of the bargain: what it fetches and when, what it hands
+ * each pane, and that the viewer survives every switch.
+ */
+describe('the map sheets beside the 3D scene', () => {
+  it('asks for the map links only while the model is open, like everything else it draws', () => {
+    show();
+
+    // Closed, the read is priced at nothing: this tab is opened routinely by somebody who
+    // only wants to record that the party went in.
+    expect(rasterLinksAskedFor).toEqual({ surveyModelId: MODEL, enabled: false });
+
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    expect(rasterLinksAskedFor).toEqual({ surveyModelId: MODEL, enabled: true });
+
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    expect(rasterLinksAskedFor).toEqual({ surveyModelId: MODEL, enabled: false });
+  });
+
+  it('shows no strip while the model declares no maps, and one tab per map when it does', () => {
+    show();
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    // No maps: the viewer is simply there, with no bar of one tab restating it. The
+    // strip has nothing else to offer here — this surface authors no maps.
+    expect(screen.getByTestId('viewer')).toBeInTheDocument();
+    expect(screen.queryAllByRole('tab')).toHaveLength(0);
+
+    cleanup();
+    rasterLinks = [mapLink('link-a', 'Plan sheet'), mapLink('link-b', 'Profile sheet', 'map-profile-of')];
+    show();
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    expect(screen.getByRole('tab', { name: '3D' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Plan sheet/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Profile sheet/ })).toBeInTheDocument();
+    // A sheet nobody has visited is not even mounted — the pane pays nothing until asked.
+    expect(sheetPanes.size).toBe(0);
+  });
+
+  it('never remounts the viewer across a switch to a sheet and back', () => {
+    rasterLinks = [mapLink('link-a', 'Plan sheet')];
+    show();
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    expect(viewerLifecycle.mounts).toBe(1);
+
+    fireEvent.click(screen.getByRole('tab', { name: /Plan sheet/ }));
+    expect(sheetPanes.get('link-a')?.active).toBe(true);
+    // Hidden, not destroyed: the drawing keeps its parsed model and its context.
+    expect(screen.getByTestId('viewer')).toBeInTheDocument();
+    expect(viewerLifecycle.unmounts).toBe(0);
+
+    fireEvent.click(screen.getByRole('tab', { name: '3D' }));
+    fireEvent.click(screen.getByRole('tab', { name: /Plan sheet/ }));
+    fireEvent.click(screen.getByRole('tab', { name: '3D' }));
+
+    expect(viewerLifecycle.mounts).toBe(1);
+    expect(viewerLifecycle.unmounts).toBe(0);
+    // The sheet also stayed mounted, told it is off screen rather than taken down.
+    expect(sheetPanes.get('link-a')?.active).toBe(false);
+  });
+
+  it('hands the sheet the very party the viewer draws — the replay’s fold included', () => {
+    rasterLinks = [mapLink('link-a', 'Plan sheet')];
+    log = [
+      atStation(ANA, '2026-09-12T06:40:00Z', 'p.g.3'),
+      entered(ANA, '2026-09-12T06:10:00Z'),
+    ];
+    show(tracking(), [entered(ANA, '2026-09-12T06:10:00Z')]);
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    fireEvent.click(screen.getByRole('tab', { name: /Plan sheet/ }));
+
+    // The same array, not an equal one: the sheet consumes the panel's one fold of who
+    // is where, so the two drawings cannot even in principle disagree about the party.
+    expect(sheetPanes.get('link-a')?.cavers).toBe(given!.trackedCavers);
+
+    // Engage the replay and wind it to the end: the party under BOTH drawings is now the
+    // log's answer for that moment — through the same single fold.
+    fireEvent.click(screen.getByTestId('trip-tracking-replay-open'));
+    fireEvent.keyDown(screen.getByRole('slider'), { key: 'End', keyCode: 35 });
+
+    expect(given!.trackedCavers![0].position).toEqual({ kind: 'station', station: 'p.g.3' });
+    expect(sheetPanes.get('link-a')?.cavers).toBe(given!.trackedCavers);
+  });
+
+  it('reopens on the 3D scene after the model was hidden while a sheet was up', () => {
+    rasterLinks = [mapLink('link-a', 'Plan sheet')];
+    show();
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    fireEvent.click(screen.getByRole('tab', { name: /Plan sheet/ }));
+    expect(screen.getByRole('tab', { name: /Plan sheet/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    // Hide and reopen: which sheet was up belonged to the model that was on screen,
+    // exactly like the replay, the size and the standing offer.
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+    expect(screen.getByRole('tab', { name: '3D' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /Plan sheet/ })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+  });
+
+  it('raises the very record-here offer from a pinned station pressed on a sheet', async () => {
+    rasterLinks = [mapLink('link-a', 'Plan sheet')];
+    show();
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    fireEvent.click(screen.getByRole('tab', { name: /Plan sheet/ }));
+
+    fireEvent.click(screen.getByTestId('fake-sheet-press-link-a'));
+
+    // The same alert a 3D press raises, outside the strip so it stands over whichever
+    // pane is showing — and the same dialog behind its button.
+    expect(screen.getByTestId('trip-tracking-picked-station')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('trip-tracking-record-here-open'));
+    await screen.findByTestId('trip-tracking-record-here');
+    // Named with the very station the sheet press handed up.
+    expect(screen.getByTestId('trip-tracking-dialog-station-name')).toHaveTextContent('p.g.7');
+  });
+
+  it('offers no press channel to a reader who cannot record', () => {
+    rasterLinks = [mapLink('link-a', 'Plan sheet')];
+    show(tracking(), [], { canEdit: false });
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    fireEvent.click(screen.getByRole('tab', { name: /Plan sheet/ }));
+
+    // The absence twin of the offer above: the channel itself is withheld, so the sheet
+    // never dresses a pin up as a control whose press would be refused.
+    expect(sheetPanes.get('link-a')?.onPickStation).toBeUndefined();
   });
 });

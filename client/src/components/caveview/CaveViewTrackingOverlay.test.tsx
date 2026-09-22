@@ -29,10 +29,13 @@ const asked: (TrackedPlace | null)[] = [];
 function Harness({
   cavers,
   unplacedStations,
+  drawing,
 }: {
   cavers: readonly TrackedCaver[];
   /** What the viewer answered about this model — the panel's own answer, handed straight down. */
   unplacedStations?: ReadonlySet<string>;
+  /** Which drawing the list stands beside; the wording for an unplaced station follows it. */
+  drawing?: 'model' | 'map';
 }) {
   const [open, setOpen] = useState<string | null>(null);
   const [times, setTimes] = useState(false);
@@ -53,6 +56,7 @@ function Harness({
         asked.push(place);
         setShown(place);
       }}
+      drawing={drawing}
     />
   );
 }
@@ -608,5 +612,49 @@ describe('CaveViewTrackingOverlay', () => {
       fireEvent.click(heading);
       expect(asked).toEqual([]);
     });
+  });
+
+  it('words an unplaced station as the sheet’s own state beside a map, in both languages', async () => {
+    // The same set, different drawing, different sentence: beside a map, an unplaced
+    // station is a point nobody has defined — an ordinary, remediable state — not the
+    // renamed-survey failure the 3D wording describes. One wording over both would
+    // either alarm about a survey that is fine or shrug off one that is broken.
+    render(
+      <Harness
+        cavers={[caver()]}
+        unplacedStations={new Set(['pestera.galerie.7'])}
+        drawing="map"
+      />,
+    );
+
+    expect(screen.getByTestId('caveview-position-not-on-map')).toHaveTextContent(
+      'No point on this map',
+    );
+    expect(screen.queryByTestId('caveview-position-not-on-model')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('caveview-caver-caver-1'));
+    expect(screen.getByTestId('caveview-caver-card-not-on-map')).toHaveTextContent(
+      'this map has no point defined for that station',
+    );
+    expect(screen.queryByTestId('caveview-caver-card-not-on-model')).toBeNull();
+
+    // The Romanian words are their own sentence too, distinct from the other three states.
+    await i18n.changeLanguage('ro');
+    try {
+      expect(screen.getByTestId('caveview-position-not-on-map')).toHaveTextContent(
+        'Fără punct pe această hartă',
+      );
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('keeps the 3D wording where no drawing kind is named — the sheets opted in, nothing else moved', () => {
+    render(<Harness cavers={[caver()]} unplacedStations={new Set(['pestera.galerie.7'])} />);
+
+    expect(screen.getByTestId('caveview-position-not-on-model')).toHaveTextContent(
+      'Not on the drawing',
+    );
+    expect(screen.queryByTestId('caveview-position-not-on-map')).toBeNull();
   });
 });

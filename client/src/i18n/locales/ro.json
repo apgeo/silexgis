@@ -2267,6 +2267,8 @@
       "positionOtherModelDetail": "Cineva chiar a raportat unde se află acest om, dar a fost plasat pe altă ridicare a acestei peșteri decât cea desenată aici. Același nume de stație poate însemna alt loc într-o altă ridicare, așa că nu se desenează niciun marcaj în loc de unul care ar putea fi greșit. Raportul în sine se află în jurnalul turei.",
       "positionNotOnModel": "Nu e pe desen",
       "positionNotOnModelDetail": "Cineva a raportat acest om la {{station}}, chiar pe ridicarea desenată aici — dar acest desen nu are nicio stație cu acel nume, așa că nu are unde să fie marcat. Asta face o ridicare reexportată cu stațiile redenumite fiecărui loc raportat înainte, fără ca nimeni să fi schimbat ceva. Raportul în sine rămâne în jurnalul turei, iar stația de mai sus este ceea ce a spus.",
+      "positionNotOnMap": "Fără punct pe această hartă",
+      "positionNotOnMapDetail": "Cineva a raportat acest om la {{station}}, iar această hartă nu are niciun punct definit pentru acea stație — așa că nu are unde să fie marcat pe această planșă. Ridicarea în sine are stația în continuare, iar vederea 3D îl poate arăta. Definirea unui punct pentru stație pe această hartă, din vizualizatorul de modele, este ceea ce îl aduce pe ea.",
       "positionUnreported": "Nicio poziție raportată"
     }
   },

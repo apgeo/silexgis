@@ -95,6 +95,20 @@ export interface CaveViewTrackingOverlayProps {
   onShow(place: TrackedPlace | null): void;
   /** Lifted clear of a toolbar placed against the same edge. */
   raised?: boolean;
+  /**
+   * Which kind of drawing the list stands beside, deciding the words for a station the
+   * drawing cannot show.
+   *
+   * <b>The two absences are different facts and must not share a sentence.</b> Beside the
+   * 3D model, an unplaced station is one the parsed survey file holds no node for — the
+   * renamed-stations failure. Beside a scanned map sheet, the survey holds the station
+   * perfectly well; what is missing is a point somebody would have had to define on that
+   * sheet — the ordinary state of every partially-pinned map, with an ordinary remedy
+   * (define the point). One wording over both would either alarm a reader about a survey
+   * that is fine or shrug off a survey that is broken. The other three states — withheld,
+   * other survey, unreported — are the same fact on every drawing and keep one wording.
+   */
+  drawing?: 'model' | 'map';
 }
 
 /**
@@ -140,6 +154,7 @@ export default function CaveViewTrackingOverlay({
   shown,
   onShow,
   raised = false,
+  drawing = 'model',
 }: CaveViewTrackingOverlayProps) {
   const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
@@ -186,9 +201,13 @@ export default function CaveViewTrackingOverlay({
     <Tag
       icon={<WarningOutlined />}
       color="warning"
-      data-testid="caveview-position-not-on-model"
+      data-testid={drawing === 'map' ? 'caveview-position-not-on-map' : 'caveview-position-not-on-model'}
     >
-      {t('caveview.tracking.positionNotOnModel')}
+      {t(
+        drawing === 'map'
+          ? 'caveview.tracking.positionNotOnMap'
+          : 'caveview.tracking.positionNotOnModel',
+      )}
     </Tag>
   );
 
@@ -555,9 +574,18 @@ export default function CaveViewTrackingOverlay({
             <Typography.Text
               type="secondary"
               style={{ fontSize: 11 }}
-              data-testid="caveview-caver-card-not-on-model"
+              data-testid={
+                drawing === 'map'
+                  ? 'caveview-caver-card-not-on-map'
+                  : 'caveview-caver-card-not-on-model'
+              }
             >
-              {t('caveview.tracking.positionNotOnModelDetail', { station: open.position.station })}
+              {t(
+                drawing === 'map'
+                  ? 'caveview.tracking.positionNotOnMapDetail'
+                  : 'caveview.tracking.positionNotOnModelDetail',
+                { station: open.position.station },
+              )}
             </Typography.Text>
           )}
         </div>
