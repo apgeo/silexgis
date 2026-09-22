@@ -9,6 +9,7 @@ using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
+using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Infrastructure.Persistence;
@@ -46,6 +47,7 @@ public sealed class TripTrackingPicturesTests : IAsyncLifetime, IDisposable, ICl
     /// at all.
     /// </summary>
     private HttpClient stranger = null!;
+    private Guid ownerUserId;
     private long caveTypeId;
 
     public TripTrackingPicturesTests(PostgresFixture postgres)
@@ -66,7 +68,7 @@ public sealed class TripTrackingPicturesTests : IAsyncLifetime, IDisposable, ICl
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tpic-own-{suffix}@t.local");
+        ownerUserId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tpic-own-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"tpic-read-{suffix}@t.local");
         _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"tpic-str-{suffix}@t.local");
 
@@ -737,8 +739,36 @@ public sealed class TripTrackingPicturesTests : IAsyncLifetime, IDisposable, ICl
         {
             await MakeDocumentReadableAsync(documentId);
         }
+        else if (!ownedByOwner)
+        {
+            // Somebody else's private upload is not yet unreadable to the attacher: the
+            // attacher's Editors membership carries a domain-wide documents read, which is an
+            // explicit entry and so is consulted before any visibility built-in. What makes
+            // this photograph invisible to them is a deny written against the document itself,
+            // which outranks that allow the way any object-level entry does. The second
+            // account still matters — file access always answers yes to the uploader, so a
+            // document the attacher uploaded could never be denied to them this way.
+            await DenyDocumentToAttacherAsync(documentId);
+        }
 
         return new Picture(documentId, fileId);
+    }
+
+    private async Task DenyDocumentToAttacherAsync(Guid documentId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        db.AccessEntries.Add(new AccessEntry
+        {
+            SubjectKind = AccessSubjectKind.User,
+            SubjectId = ownerUserId,
+            Effect = AccessEffect.Deny,
+            Domain = AccessDomain.Documents,
+            Actions = AccessAction.Read,
+            ScopeKind = AccessScopeKind.Object,
+            ScopeId = documentId,
+        });
+        await db.SaveChangesAsync();
     }
 
     /// <summary>A readable document that is not a picture — the one refusal a person can act on.</summary>

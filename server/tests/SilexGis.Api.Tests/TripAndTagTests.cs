@@ -71,11 +71,14 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable, IClassFixture
             leaderRoleId = await db.TripParticipantRoles
                 .Where(r => r.Code == "leader").Select(r => r.Id).FirstAsync();
 
-            // The organizing club is a caving group now, so a trip that names one needs one.
+            // The organizing club is a caving group now, so a trip that names one needs one —
+            // and naming it is reserved to the club's own people, so the owner who names it
+            // below has to be on its roster.
             var cavingGroup = new CavingGroup { Name = $"Trip Club {suffix}", Slug = $"trip-club-{suffix}" };
             db.CavingGroups.Add(cavingGroup);
             await db.SaveChangesAsync();
             cavingGroupId = cavingGroup.Id;
+            await RosterHelper.AddMemberAsync(db, cavingGroupId, ownerId);
         }
 
         owner = await AuthHelper.BearerClientAsync(factory, $"tt-own-{suffix}@t.local");

@@ -87,7 +87,13 @@ public static class TripPublicationWindow
 
         // Whichever is later, so a link minted after the trip still gets its whole window and one
         // minted before the trip gets a window measured from the end of it.
-        return (afterTheTrip > now ? afterTheTrip : now) + lifetime;
+        var expiresAt = (afterTheTrip > now ? afterTheTrip : now) + lifetime;
+
+        // Truncated to whole microseconds, because the instant is stored in a timestamptz column
+        // whose resolution is the microsecond. Minting and reading back must say the same end, so
+        // the sub-microsecond ticks the clock happens to carry are dropped here, at the one place
+        // the instant is decided, rather than rounded away differently on each surface.
+        return expiresAt.AddTicks(-(expiresAt.Ticks % 10));
     }
 
     /// <summary>

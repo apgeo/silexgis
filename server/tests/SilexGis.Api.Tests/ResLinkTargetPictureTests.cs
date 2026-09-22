@@ -354,8 +354,13 @@ public sealed class ResLinkTargetPictureTests : IAsyncLifetime, IDisposable, ICl
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
 
-        var withAccount = await CreateCaverAsync($"Ana Portret {suffix}");
-        await LinkAccountAsync(withAccount, await MyUserIdAsync(owner));
+        // Registration links every account to a roster entry of its own, and an account
+        // belongs to one person at a time — so the person with an account here is the pair
+        // the application itself made, not a second link this test could mint: attaching the
+        // owner's account to a fresh entry is refused as already-linked, and detaching it
+        // first is refused wherever no Full Administrator exists to survive the detach. The
+        // linking act has its own suite; this test is about the portrait.
+        var withAccount = await RosterHelper.CaverIdForAsync(factory, await MyUserIdAsync(owner));
         var avatarFileId = await UploadAvatarAsync();
 
         // The same roster, minus an account: nobody has chosen a picture for this person, and
@@ -468,14 +473,6 @@ public sealed class ResLinkTargetPictureTests : IAsyncLifetime, IDisposable, ICl
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         return JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();
-    }
-
-    /// <summary>Attaches an account to a roster entry — a roster-keeper's act, never the
-    /// account holder's own.</summary>
-    private async Task LinkAccountAsync(Guid caverId, Guid userId)
-    {
-        var response = await keeper.PostAsJsonAsync($"/api/v1/cavers/{caverId}/account-link", new { userId });
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
     private static async Task<Guid> MyUserIdAsync(HttpClient client)
