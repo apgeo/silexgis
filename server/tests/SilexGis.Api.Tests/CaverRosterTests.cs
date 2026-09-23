@@ -86,6 +86,33 @@ public sealed class CaverRosterTests : IAsyncLifetime, IDisposable, IClassFixtur
             .StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
+    /// <summary>
+    /// The contact line on a roster entry is taken as written, whatever it looks like.
+    /// </summary>
+    /// <remarks>
+    /// It is a note the keeper holds about somebody who may well have no account here, and nothing
+    /// is ever sent to it — mail goes to an account's own address. So the only thing a format rule
+    /// could do is refuse what the keeper meant to write down: an address with a comment beside it,
+    /// two of them, a line saying where to ask instead. The empty field is asserted alongside
+    /// because it is the one every form sends and the one a format check refuses most easily.
+    /// </remarks>
+    [Fact]
+    public async Task A_roster_contact_is_written_down_as_given_and_not_checked_for_shape()
+    {
+        var caverId = await CreateCaverAsync($"Ilie Roman {suffix}", email: "ask Vasile at the hut");
+        (await GetCaverAsync(keeper, caverId))
+            .GetProperty("email").GetString().ShouldBe("ask Vasile at the hut");
+
+        var blank = await keeper.PostAsJsonAsync(
+            "/api/v1/cavers/", new { fullName = $"Ana Blank {suffix}", email = "", phone = "", notes = "" });
+        blank.StatusCode.ShouldBe(HttpStatusCode.Created, await blank.Content.ReadAsStringAsync());
+
+        // Length is still a cap, because a column has one.
+        var overlong = await keeper.PostAsJsonAsync(
+            "/api/v1/cavers/", new { fullName = $"Long Mail {suffix}", email = new string('x', 321) });
+        overlong.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     [Fact]
     public async Task A_linked_cavers_contact_follows_the_account_holders_own_settings()
     {

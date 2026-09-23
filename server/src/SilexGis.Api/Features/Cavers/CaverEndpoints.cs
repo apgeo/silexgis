@@ -36,7 +36,12 @@ public sealed class CaverWriteRequestValidator : AbstractValidator<CaverWriteReq
     public CaverWriteRequestValidator()
     {
         RuleFor(x => x.FullName).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.Email).MaximumLength(320).EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.Email));
+        // Length only, deliberately: the address on a roster entry is a contact note somebody
+        // keeps about a person who may have no account here, and nothing is ever sent to it —
+        // mail goes to the account's own address. A format check there only refuses the entry
+        // the keeper actually wanted to write down, and refuses it from a form that offers no
+        // way to see which field was the problem.
+        RuleFor(x => x.Email).MaximumLength(320);
         RuleFor(x => x.Phone).MaximumLength(40);
     }
 }
