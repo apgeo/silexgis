@@ -111,6 +111,50 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
         (await owner.DeleteAsync($"/api/v1/caves/{second}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
     }
 
+    /// <summary>
+    /// A tag a reverse proxy rewrote still names the version it was issued for.
+    /// </summary>
+    /// <remarks>
+    /// The deployment this project ships puts nginx in front of the API with compression on for
+    /// JSON, and nginx appends the coding it applied to the entity tag: the browser is handed
+    /// <c>"1031-gzip"</c> for a row whose version is 1031. It stores that and replays it on the
+    /// next write, which is not compressed and so arrives unmangled — and a literal comparison
+    /// then reports a row that never moved as changed, refusing every edit and every delete made
+    /// through a real installation while passing every test made against the server directly.
+    /// The same happens to a tag a cache downgraded to weak. Both forms are asserted here because
+    /// neither is reachable from a test that talks to Kestrel, which is the whole reason the
+    /// defect shipped.
+    /// </remarks>
+    [Fact]
+    public async Task If_match_accepts_a_tag_a_compressing_proxy_rewrote()
+    {
+        var caveId = await CreateCaveAsync("Proxied Tag Cave v1");
+        var etag = await FeatureETagAsync(caveId);
+
+        var gzipped = await owner.PutWithIfMatchAsync(
+            $"/api/v1/caves/{caveId}", CaveBody("Proxied Tag Cave v2"), InsideQuotes(etag, "-gzip"));
+        gzipped.StatusCode.ShouldBe(HttpStatusCode.OK, await gzipped.Content.ReadAsStringAsync());
+
+        var weak = await owner.PutWithIfMatchAsync(
+            $"/api/v1/caves/{caveId}", CaveBody("Proxied Tag Cave v3"), "W/" + await FeatureETagAsync(caveId));
+        weak.StatusCode.ShouldBe(HttpStatusCode.OK, await weak.Content.ReadAsStringAsync());
+
+        // The suffix is stripped, not ignored: a stale version wearing one is still stale.
+        (await owner.PutWithIfMatchAsync(
+            $"/api/v1/caves/{caveId}", CaveBody("Proxied Tag Cave v4 (lost)"), InsideQuotes(etag, "-gzip")))
+            .StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+
+        // And the delete the report came in about: the page loaded the trip over a compressed
+        // response, so the only tag it has to send is the rewritten one.
+        (await DeleteWithIfMatchAsync(
+            $"/api/v1/caves/{caveId}", InsideQuotes(await FeatureETagAsync(caveId), "-gzip")))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    /// <summary>A tag with a suffix appended inside its quotes, the way nginx rewrites one.</summary>
+    private static string InsideQuotes(string etag, string suffix) =>
+        etag[..^1] + suffix + '"';
+
     [Fact]
     public async Task Entrance_edits_version_on_the_feature_row_and_bump_the_cave_aggregate()
     {
