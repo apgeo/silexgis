@@ -98,6 +98,17 @@ public sealed record PublicPastTripDto(
 /// from, which is a different and much worse statement.
 /// </param>
 public sealed record PublicPastTrackDto(
+    /// <summary>
+    /// The trip this track is of — the same id the caller named to ask for it, answered back so
+    /// that a page folding this into an envelope can carry it there rather than losing it.
+    /// </summary>
+    /// <remarks>
+    /// The list that leads here already disclosed this id, and the caller supplied it in the
+    /// address; saying it again adds no fact. What it buys is that every envelope-shaped answer on
+    /// this surface — followed and replayed alike — is identified the same way, so a page holding
+    /// several of them cannot come to match them by title.
+    /// </remarks>
+    Guid TripLogId,
     string Title,
     DateOnly TripDate,
     DateOnly? TripDateEnd,

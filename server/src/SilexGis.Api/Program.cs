@@ -226,6 +226,11 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // own so that a group scanning labels from behind one connection cannot spend the sign-in
     // allowance of everyone else behind it.
     var qrPermitLimit = builder.Configuration.GetValue("Qr:RateLimitPerMinute", 60);
+    // Cost control on the published-trip surface, which is anonymous, uncached, and backs a whole
+    // envelope folded out of a trip's report log — see PublicTripRateLimits for why it is a window
+    // of its own and why it is not a confidentiality control.
+    var publicTripPermitLimit = builder.Configuration.GetValue(
+        PublicTripRateLimits.ConfigurationKey, PublicTripRateLimits.DefaultPerMinute);
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -245,6 +250,15 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
                 {
                     Window = TimeSpan.FromMinutes(1),
                     PermitLimit = qrPermitLimit,
+                    QueueLimit = 0,
+                }));
+        options.AddPolicy(PublicTripRateLimits.PolicyName, context =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = publicTripPermitLimit,
                     QueueLimit = 0,
                 }));
     });
@@ -390,6 +404,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTripTrackingPictureEndpoints();
     api.MapTripTrackingPublicationEndpoints();
     api.MapTripPastTrackEndpoints();
+    api.MapTripLiveSiblingEndpoints();
     api.MapTripChecklistEndpoints();
     api.MapChecklistEndpoints();
     api.MapExpeditionEndpoints();

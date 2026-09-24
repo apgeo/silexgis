@@ -153,4 +153,58 @@ public static class TripPublicationWindow
             _ => false,
         };
     }
+
+    /// <summary>
+    /// Whether a trip is being followed right now by whoever holds any of its links — asked of a
+    /// trip rather than of one link, which is what a list of a cave's current activity needs.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why this exists beside <see cref="IsOpen"/> rather than inside it.</b> <c>IsOpen</c>
+    /// answers "may the caller in front of me read this trip", and one of its three rules is about
+    /// the caller's own link — whether somebody revoked <em>it</em>. This asks a different question
+    /// with no caller in it: <em>is this trip published and live at all</em>, so that a page opened
+    /// by one link can say which other parties are in the same cave. A link revoked by somebody is
+    /// no answer to that: revoking one of a trip's links does not unpublish the trip, and the trip
+    /// goes on being followable through the others.
+    /// </para>
+    /// <para>
+    /// So the caller's revocation is deliberately absent, and what stands in for the expiry is the
+    /// latest expiry among the links nobody revoked — the same value, read the same way, that
+    /// <see cref="TripPastTrackWindow.IsReadableAsPast"/> already uses to decide whether a trip has
+    /// been published at all. A trip whose every link has been withdrawn has no such expiry and is
+    /// absent from both answers, which is the one behaviour a club would notice if it were wrong:
+    /// withdrawing every link is how a club unpublishes a trip.
+    /// </para>
+    /// <para>
+    /// <b>This and <see cref="TripPastTrackWindow.IsReadableAsPast"/> partition, and that is a
+    /// property worth keeping rather than a coincidence.</b> A published trip is followable while
+    /// this window is open and readable as past once it has shut — never both, because that rule's
+    /// third clause refuses precisely while this one answers, and never neither for as long as the
+    /// retention allows. So the two lists a page reads are disjoint and together complete, and a
+    /// trip moving from one to the other as its grace window runs out is the ordinary course of
+    /// events rather than a gap. A unit test holds the partition; changing either rule without the
+    /// other will fail it, which is the point of writing it down.
+    /// </para>
+    /// <para>
+    /// <b>A closed watch inside its grace window is here, not in the archive</b> — deliberately, and
+    /// it is the case most likely to look wrong to somebody reading a list. The grace window exists
+    /// because "everybody out" is the last thing a followed page has to say, so for those hours the
+    /// trip is still the live thing a reader came for, carrying its own closed state to say so; a
+    /// page that filed it under history the instant the coordinator pressed close would hide the
+    /// only answer the families waiting were waiting for.
+    /// </para>
+    /// </remarks>
+    /// <param name="latestUnrevokedExpiry">
+    /// The latest expiry among this trip's links that nobody has revoked, or null when it was never
+    /// published or every link of it has been withdrawn.
+    /// </param>
+    public static bool IsFollowableByAnyLink(
+        DateTimeOffset now,
+        DateTimeOffset? latestUnrevokedExpiry,
+        TripTrackingState state,
+        DateTimeOffset? closedAt,
+        TimeSpan graceAfterClose) =>
+        latestUnrevokedExpiry is { } expiry
+        && IsOpen(now, revokedAt: null, expiry, state, closedAt, graceAfterClose);
 }

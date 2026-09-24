@@ -61,11 +61,13 @@ public static class TripPastTrackEndpoints
         api.MapGet("/public/trips/{token}/past", ListAsync)
             .WithTags("TripTracking")
             .AllowAnonymous()
+            .RequireRateLimiting(PublicTripRateLimits.PolicyName)
             .WithSummary("Past trips of this link's cave: the ones that were published and are now over, newest first.");
 
         api.MapGet("/public/trips/{token}/past/{tripLogId:guid}", TrackAsync)
             .WithTags("TripTracking")
             .AllowAnonymous()
+            .RequireRateLimiting(PublicTripRateLimits.PolicyName)
             .WithSummary("One past trip of this link's cave, played back: the party by their place in it and where each was reported over time.");
 
         return api;
@@ -102,6 +104,12 @@ public static class TripPastTrackEndpoints
     {
         var now = clock.GetUtcNow();
         var opened = await OpenAsync(token, db, protection, live.Value, past.Value, now, ct);
+        // The archive's own feature switch, applied here rather than inside the shared gate: off,
+        // both these routes answer exactly what an unknown token answers — the feature is not there
+        // rather than there and empty — while the list of parties underground now, which shares the
+        // gate, is deliberately unaffected.
+        if (!past.Value.Enabled) return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+
         if (opened.Refusal is { } refused) return refused;
         var configCave = opened.CaveFeatureId;
 
@@ -231,6 +239,12 @@ public static class TripPastTrackEndpoints
     {
         var now = clock.GetUtcNow();
         var opened = await OpenAsync(token, db, protection, live.Value, past.Value, now, ct);
+        // The archive's own feature switch, applied here rather than inside the shared gate: off,
+        // both these routes answer exactly what an unknown token answers — the feature is not there
+        // rather than there and empty — while the list of parties underground now, which shares the
+        // gate, is deliberately unaffected.
+        if (!past.Value.Enabled) return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+
         if (opened.Refusal is { } refused) return refused;
         var configCave = opened.CaveFeatureId;
 
@@ -379,6 +393,7 @@ public static class TripPastTrackEndpoints
         }
 
         return TypedResults.Ok(new PublicPastTrackDto(
+            trip.Id,
             trip.Title,
             trip.TripDate,
             trip.TripDateEnd,
@@ -423,17 +438,13 @@ public static class TripPastTrackEndpoints
     /// decide about and fails closed.
     /// </para>
     /// </remarks>
-    private static async Task<(Guid CaveFeatureId, ProblemHttpResult? Refusal)> OpenAsync(
+    internal static async Task<OpenedToken> OpenAsync(
         string token, SilexGisDbContext db, FeatureProtection protection,
         TripTrackingOptions live, TripPastTrackOptions past, DateTimeOffset now, CancellationToken ct)
     {
-        var refused = (Guid.Empty, (ProblemHttpResult?)ApiProblems.NotFound(
-            TripTrackingPublicationEndpoints.NotFoundCode));
-
-        // Switched off by the operator: the feature is not there, rather than there and empty. An
-        // empty list would be a different answer from the one a dead token gets, and on this
-        // surface there is exactly one answer.
-        if (!past.Enabled) return refused;
+        var refused = new OpenedToken(
+            Guid.Empty, null, Guid.Empty, false, false,
+            ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode));
 
         if (string.IsNullOrEmpty(token) || token.Length > TripTrackingRules.MaxShareTokenLength)
         {
@@ -457,10 +468,25 @@ public static class TripPastTrackEndpoints
         // link's own expiry still governs the live half of the question, inside the rule.
         var latestUnrevokedExpiry = await LatestUnrevokedExpiryAsync(db, trip.Id, ct);
 
-        var opens = TripPastTrackWindow.OpensThePast(
+        // A revoked link opens nothing at all, and it is asked first because only one of the two
+        // windows below takes a revocation as an argument: the archive's rule is about the trip's
+        // remaining links rather than about this one.
+        if (share.RevokedAt is not null) return refused;
+
+        // The two windows, kept apart rather than folded together, because the routes that share
+        // this gate do not apply the same feature switch to them. Following a party underground is
+        // the core of this surface; reading a club's history is a thing an installation may switch
+        // off, and switching it off must not stop anybody following tonight's party.
+        var liveOpen = TripPublicationWindow.IsOpen(
             now,
             share.RevokedAt,
             share.ExpiresAt,
+            tracking.State,
+            tracking.ClosedAt,
+            live.ShareGraceAfterClose);
+
+        var pastReadable = TripPastTrackWindow.IsReadableAsPast(
+            now,
             tracking.State,
             tracking.ClosedAt,
             latestUnrevokedExpiry,
@@ -468,7 +494,8 @@ public static class TripPastTrackEndpoints
             trip.TripDateEnd,
             live.ShareGraceAfterClose,
             past.Retention);
-        if (!opens) return refused;
+
+        if (!liveOpen && !pastReadable) return refused;
 
         // The publication refusal, taken again and cached nowhere — the same call the live page
         // makes, about the same cave, on every single read.
@@ -476,8 +503,43 @@ public static class TripPastTrackEndpoints
         var publishable = await TrackingWithholding.PublishableCaveIdsAsync(db, protection, [configCave], ct);
         if (!publishable.Contains(configCave)) return refused;
 
-        return (configCave, null);
+        return new OpenedToken(
+            configCave, tracking.SurveyModelId, trip.Id, liveOpen, pastReadable, null);
     }
+
+    /// <summary>
+    /// What a token opened, once every gate on it has been asked.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Shared by both list routes on purpose.</b> "Does this link open this cave's activity at
+    /// all" is one question — the token is real and unrevoked, its watch's cave may still be
+    /// published, and it is inside one of its two windows — and it is asked identically whether the
+    /// caller went on to read the archive or the parties underground now. A second copy of it is
+    /// how one of those routes comes to answer after the other has started refusing.
+    /// </para>
+    /// <para>
+    /// It carries the token's own survey because the list of currently-followed trips draws every
+    /// party on <em>that</em> survey rather than on each trip's own: it is the model the page was
+    /// handed and the only one it has.
+    /// </para>
+    /// </remarks>
+    /// <param name="LiveWindowOpen">
+    /// True while this link still follows its own party — armed, or closed and inside the short
+    /// grace window after "everybody out".
+    /// </param>
+    /// <param name="PastReadable">
+    /// True while this link's own trip has become history and that history is still inside the
+    /// archive's retention. Never true at the same instant as <paramref name="LiveWindowOpen"/>:
+    /// the two rules partition a published trip's life, and a Domain test holds that they do.
+    /// </param>
+    internal sealed record OpenedToken(
+        Guid CaveFeatureId,
+        Guid? SurveyModelId,
+        Guid TripLogId,
+        bool LiveWindowOpen,
+        bool PastReadable,
+        ProblemHttpResult? Refusal);
 
     /// <summary>
     /// The latest expiry among a trip's links that nobody revoked, or null when it was never

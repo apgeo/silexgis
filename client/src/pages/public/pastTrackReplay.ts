@@ -209,6 +209,10 @@ function participantAt(
  */
 export function pastEnvelopeAt(track: PublicPastTrack, at: number): PublicTripEnvelope {
   return {
+    // Carried through rather than dropped, because a page may hold several of these at once — a
+    // replay of one trip beside the parties underground in the same cave now — and matching them by
+    // title is how a page comes to draw the wrong party under the right name.
+    tripLogId: track.tripLogId,
     title: track.title,
     tripDate: track.tripDate,
     tripDateEnd: track.tripDateEnd,

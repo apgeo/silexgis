@@ -2385,6 +2385,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/trips/{token}/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trips of this link's cave being followed right now, each with its party, drawn on this link's survey. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicLiveTripListDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -22504,7 +22542,30 @@ export interface components {
             description: null | string;
             photos: components["schemas"]["PublicPhotoDto"][];
         };
+        PublicLiveTripDto: {
+            /** Format: uuid */
+            tripLogId: string;
+            title: string;
+            /** Format: date */
+            tripDate: string;
+            /** Format: date */
+            tripDateEnd: null | string;
+            state: components["schemas"]["TripTrackingState"];
+            /** Format: date-time */
+            armedAt: null | string;
+            /** Format: date-time */
+            closedAt: null | string;
+            positionsWithheld: boolean;
+            teams: components["schemas"]["PublicTripTeamDto"][];
+            participants: components["schemas"]["PublicTripParticipantDto"][];
+        };
+        PublicLiveTripListDto: {
+            trips: components["schemas"]["PublicLiveTripDto"][];
+            more: boolean;
+        };
         PublicPastTrackDto: {
+            /** Format: uuid */
+            tripLogId: string;
             title: string;
             /** Format: date */
             tripDate: string;
@@ -22633,6 +22694,8 @@ export interface components {
             title: string;
         };
         PublicTripTrackingEnvelopeDto: {
+            /** Format: uuid */
+            tripLogId: string;
             title: string;
             /** Format: date */
             tripDate: string;

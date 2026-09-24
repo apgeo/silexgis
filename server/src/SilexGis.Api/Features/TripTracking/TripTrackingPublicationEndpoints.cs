@@ -99,6 +99,7 @@ public static class TripTrackingPublicationEndpoints
         api.MapGet("/public/trips/{token}", FollowAsync)
             .WithTags("TripTracking")
             .AllowAnonymous()
+            .RequireRateLimiting(PublicTripRateLimits.PolicyName)
             .WithSummary("Follow a published trip: the party, where each of them was last reported, and the survey model to draw it in.");
 
         return api;
@@ -281,13 +282,61 @@ public static class TripTrackingPublicationEndpoints
         var publishable = await TrackingWithholding.PublishableCaveIdsAsync(db, protection, [configCave], ct);
         if (!publishable.Contains(configCave)) return ApiProblems.NotFound(NotFoundCode);
 
+        // The party, folded by the one routine both published reads use. Drawability is decided
+        // against this trip's own survey, which for this route is the survey the envelope hands
+        // over — the list route beside it passes a different one deliberately.
+        var party = await PartyAsync(
+            db, protection, options.Value, trip.Id, tracking.SurveyModelId, configCave, ct);
+
+        return TypedResults.Ok(new PublicTripTrackingEnvelopeDto(
+            trip.Id,
+            trip.Title,
+            trip.TripDate,
+            trip.TripDateEnd,
+            tracking.State,
+            tracking.ArmedAt,
+            tracking.ClosedAt,
+            party.PositionsWithheld,
+            await ModelAsync(db, protection, crs, tokens, tracking.SurveyModelId, configCave, ct),
+            party.Teams,
+            party.Participants));
+    }
+
+
+    /// <summary>
+    /// A party as a published surface tells it: who is on the trip, what each of them is called
+    /// here, which team they were last put in, and where each was last reported — decided against
+    /// one named survey.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Extracted because two routes now fold the same party, and the rules inside it are the
+    /// ones that must not be spelled twice.</b> Whether a position may be shown at all, whether it
+    /// belongs to the survey being drawn, what somebody is called when nobody typed a caption, and
+    /// what their standing is — each of those is a decision about disclosure or about honesty, and a
+    /// second copy of any of them is how one public surface comes to answer what the other refuses.
+    /// </para>
+    /// <para>
+    /// <b><paramref name="drawnOnSurveyModelId"/> is the parameter that earns the extraction.</b>
+    /// The followed route passes the trip's own survey, because the envelope hands that survey over
+    /// and the drawing is of it. The list route passes the survey the <em>token's</em> trip hands
+    /// over, because that is the model the page already has loaded and the only one it can draw on
+    /// — so a sibling trip whose reports were measured elsewhere comes back placeless with
+    /// <c>PositionOnOtherModel</c> set, which is the existing rule about a re-pointed survey applied
+    /// across trips rather than a new one invented for them.
+    /// </para>
+    /// </remarks>
+    internal static async Task<PublicParty> PartyAsync(
+        SilexGisDbContext db, FeatureProtection protection, TripTrackingOptions options,
+        Guid tripLogId, Guid? drawnOnSurveyModelId, Guid configCave, CancellationToken ct)
+    {
         var teams = await db.TripTeams.AsNoTracking()
-            .Where(t => t.TripLogId == trip.Id).OrderBy(t => t.Title).ToListAsync(ct);
+            .Where(t => t.TripLogId == tripLogId).OrderBy(t => t.Title).ToListAsync(ct);
         var labels = await db.TripTrackingParticipants.AsNoTracking()
-            .Where(p => p.TripLogId == trip.Id)
+            .Where(p => p.TripLogId == tripLogId)
             .ToDictionaryAsync(p => p.CaverId, p => p.DisplayLabel, ct);
 
-        var roster = await RosterOrderAsync(db, trip.Id, ct);
+        var roster = await RosterOrderAsync(db, tripLogId, ct);
 
         // The roster's own name for each of them, where this installation publishes names at all.
         //
@@ -311,7 +360,7 @@ public static class TripTrackingPublicationEndpoints
         // every member who never chose a display name — a name-shaped string that identifies
         // nobody, on the page whose whole point is naming people. The control that does travel to
         // this page is the caption below, which an administrator sets per trip.
-        var names = options.Value.PublishRealNames
+        var names = options.PublishRealNames
             ? await db.Cavers.AsNoTracking()
                 .Where(c => roster.Contains(c.Id))
                 .Select(c => new { c.Id, c.FullName })
@@ -321,7 +370,7 @@ public static class TripTrackingPublicationEndpoints
         // A tracked trip's whole event log is small (reports arrive by relayed word, minutes
         // apart) — fold the latest-per-caver in memory, exactly as the signed-in read does.
         var events = await db.TripPositionEvents.AsNoTracking()
-            .Where(e => e.TripLogId == trip.Id)
+            .Where(e => e.TripLogId == tripLogId)
             .OrderBy(e => e.RecordedAt).ThenBy(e => e.CreatedAt).ThenBy(e => e.Id)
             .ToListAsync(ct);
 
@@ -355,7 +404,7 @@ public static class TripTrackingPublicationEndpoints
             // must not be trusted to hide what the server sent, and the row is dropped to the same
             // shape a placeless report has — with the bit below saying that this one is not that.
             var drawable = lastPositioned is null
-                || TripTrackingRules.DrawableOn(lastPositioned.SurveyModelId, tracking.SurveyModelId);
+                || TripTrackingRules.DrawableOn(lastPositioned.SurveyModelId, drawnOnSurveyModelId);
             // Only ever said of a position this reader was allowed in the first place: a withheld
             // row is already an absence, and a second bit explaining that absence would give back
             // exactly what the withholding keeps.
@@ -395,17 +444,10 @@ public static class TripTrackingPublicationEndpoints
                 Out: standing == TripStanding.Out));
         }
 
-        return TypedResults.Ok(new PublicTripTrackingEnvelopeDto(
-            trip.Title,
-            trip.TripDate,
-            trip.TripDateEnd,
-            tracking.State,
-            tracking.ArmedAt,
-            tracking.ClosedAt,
-            withheldAny,
-            await ModelAsync(db, protection, crs, tokens, tracking.SurveyModelId, configCave, ct),
+        return new PublicParty(
             [.. teams.Select(t => new PublicTripTeamDto(t.Id, t.Title))],
-            participants));
+            participants,
+            withheldAny);
     }
 
     /// <summary>

@@ -83,4 +83,41 @@ public sealed class TripTrackingOptions
     /// window cannot push past it.
     /// </remarks>
     public TimeSpan ShareGraceAfterClose { get; set; } = TimeSpan.FromDays(2);
+
+    /// <summary>
+    /// The largest list of concurrently-followed trips this surface will serve however it is
+    /// configured.
+    /// </summary>
+    /// <remarks>
+    /// Lower than the archive's bound, and for a reason that is about cost rather than about
+    /// disclosure: a row of the archive is a title and a headcount, while a row here is a whole
+    /// party with a position each, folded from that trip's own report log. Fifty parties in one cave
+    /// at one moment is already far past anything a club does; a bound an operator cannot raise is
+    /// what keeps an anonymous, unauthenticated read from being asked to fold an unbounded number of
+    /// them.
+    /// </remarks>
+    public const int MaxFollowedListSize = 50;
+
+    /// <summary>
+    /// How many concurrently-followed trips of one cave a list response carries. Clamped to
+    /// <see cref="MaxFollowedListSize"/>.
+    /// </summary>
+    /// <remarks>
+    /// Twenty, because the real number is one or two and the value of a larger default is only that
+    /// a club running an unusually busy camp is not quietly told a lie about who is underground.
+    /// The response says whether there are more and never how many, for the reason the archive list
+    /// gives: how much a club is doing is itself a disclosure.
+    /// </remarks>
+    public int FollowedListSize { get; set; } = 20;
+
+    /// <summary>
+    /// The followed-list size actually served: what the operator asked for, held between one and the
+    /// bound above.
+    /// </summary>
+    /// <remarks>
+    /// Clamped where it is read rather than validated at startup, matching the archive's own
+    /// handling: a mistyped number should serve a sane list rather than refuse to start an
+    /// installation whose live tracking is otherwise working.
+    /// </remarks>
+    public int EffectiveFollowedListSize => Math.Clamp(FollowedListSize, 1, MaxFollowedListSize);
 }

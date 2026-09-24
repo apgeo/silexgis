@@ -58,6 +58,27 @@ public sealed record TripTrackingShareDto(
 /// </para>
 /// </remarks>
 public sealed record PublicTripTrackingEnvelopeDto(
+    /// <summary>
+    /// The trip this envelope is about.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The token's own trip, so this tells its holder nothing they were not already holding</b> —
+    /// which is the whole of the argument for it, and it is the argument the archive list next door
+    /// already makes for the same disclosure. Every other route that takes a trip id requires an
+    /// account and filters by visibility, so the id opens nothing on its own; the token, not the id,
+    /// remains the entire secret.
+    /// </para>
+    /// <para>
+    /// <b>Why a page needs it.</b> A single article may follow several parties in one cave at once,
+    /// each through its own link, and the same trip appears in this shape while it is being followed
+    /// and in the archive list once it is over. Without an id a page can only match the two by
+    /// title — and two trips of one cave may share a title, while one trip's title may be corrected
+    /// mid-watch. Both produce a page that silently draws the wrong party, which is the one failure
+    /// this surface must not have.
+    /// </para>
+    /// </remarks>
+    Guid TripLogId,
     string Title,
     DateOnly TripDate,
     DateOnly? TripDateEnd,
@@ -244,6 +265,25 @@ public sealed record PublicTripStationPictureDto(
     string? Caption);
 
 public sealed record PublicTripTeamDto(Guid Id, string Title);
+
+/// <summary>
+/// A party folded for a published surface — the shape both public reads build their answer from.
+/// </summary>
+/// <remarks>
+/// Not itself a response shape: it is the return of the one routine that decides who is on a trip,
+/// what they are called here, and where each may be shown. It exists so that the two routes cannot
+/// come to disagree about any of that, and so that the withholding flag travels with the rows it is
+/// about rather than being recomputed beside them.
+/// </remarks>
+/// <param name="PositionsWithheld">
+/// True when at least one report placed somebody and its place could not be shown — protection
+/// only, never truncation and never a place measured on another survey, each of which the rows say
+/// for themselves.
+/// </param>
+internal sealed record PublicParty(
+    IReadOnlyList<PublicTripTeamDto> Teams,
+    IReadOnlyList<PublicTripParticipantDto> Participants,
+    bool PositionsWithheld);
 
 /// <summary>
 /// One member of the party as followers see them.
