@@ -40,6 +40,15 @@
  * 2. <b>A depth carries its own sign.</b> `{ kind: 'depth', depthM }` is already negative below an
  *    entrance, so a host that prefixes a minus prints `−-138 m` the first time a real reading
  *    arrives. Render the number as given.
+ * 3. <b>`{ kind: 'depth' }` is unreachable from either published route, and a host should not build
+ *    a screen for it.</b> Traced rather than assumed, because a host has already written wording
+ *    for it that can never appear. The branch needs a row with no station and a depth — and no
+ *    published response produces one. A report given as a depth is resolved to a station when it is
+ *    recorded, so the stored row carries both (a depth that matches no station is refused outright,
+ *    not stored placeless); and where a position is withheld or was measured on another survey,
+ *    both routes drop the station and the depth <em>together</em>, on one flag. The branch is
+ *    defensive and is kept, because the shape is expressible and a future route could answer it —
+ *    but nothing exercises it, so treat any UI hanging off it as untested rather than as working.
  */
 
 // ---- where a report may be drawn -----------------------------------------------------------
