@@ -99,12 +99,13 @@ function show(
   tracking: TrackingState = state(),
   canEdit = true,
   calloutState: TripCalloutState = 'none',
+  caveIds: readonly string[] = ['cave-1'],
 ) {
   return render(
     <App>
       <TrackingConfigCard
         tripLogId="trip-1"
-        caveIds={['cave-1']}
+        caveIds={caveIds}
         tracking={tracking}
         canEdit={canEdit}
         calloutState={calloutState}
@@ -809,6 +810,54 @@ describe('TrackingConfigCard', () => {
       expect(stuck).toHaveAttribute('aria-disabled', 'true');
       // The positive twin, without which a chooser that disabled everything would pass.
       expect(usable).not.toHaveAttribute('aria-disabled', 'true');
+    });
+
+    /**
+     * The emptiness nobody had drawn for, and the one a co-ordinator actually met: a trip that
+     * names no cave.
+     *
+     * There is no survey to offer because there is no cave to offer one from — which the tab used
+     * to answer with an empty dropdown under the words "Choose a survey" and not a word anywhere
+     * about why. The card next to it already reasons that an unexplained empty chooser "reads as a
+     * cave with no surveys, which is a different problem with a different answer"; this is that
+     * same argument applied to the two cases it did not cover.
+     */
+    it('says the trip names no cave, rather than drawing an empty chooser and nothing else', () => {
+      models = [survey(MODEL, 'Main survey')];
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }), true, 'none', []);
+
+      const said = screen.getByTestId('trip-tracking-no-cave-named');
+      expect(said).toHaveTextContent(/does not say which cave/i);
+      // Told apart from its neighbours, because each is answered by a different act: this one is
+      // answered on the trip, not by importing or uploading anything.
+      expect(said).not.toHaveTextContent(/upload/i);
+      expect(screen.queryByTestId('trip-tracking-no-survey-uploaded')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('trip-tracking-no-placeable-model')).not.toBeInTheDocument();
+    });
+
+    /** The twin that proves the notice is about the cave being absent and not about the list. */
+    it('says none of that when the trip does name a cave', () => {
+      models = [survey(MODEL, 'Main survey')];
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      expect(screen.queryByTestId('trip-tracking-no-cave-named')).not.toBeInTheDocument();
+    });
+
+    /**
+     * The adjacent emptiness: the trip names a cave, and nothing has ever been uploaded to it.
+     *
+     * Answered by uploading a first survey, which is precisely the act the "none of them can be
+     * used" notice tells somebody *not* to take — so the two must not share wording.
+     */
+    it('says the cave has no survey uploaded, which is not the same as none being usable', () => {
+      models = [];
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      const said = screen.getByTestId('trip-tracking-no-survey-uploaded');
+      expect(said).toHaveTextContent(/no survey uploaded/i);
+      expect(said).not.toHaveTextContent(/import one again/i);
+      expect(screen.queryByTestId('trip-tracking-no-placeable-model')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('trip-tracking-no-cave-named')).not.toBeInTheDocument();
     });
 
     /**

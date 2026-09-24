@@ -646,6 +646,37 @@ export default function TrackingConfigCard({
                   problem with a different answer. This is the case where the cave has files and not
                   one of them was read right through, which is answered by importing one again, not
                   by uploading a first. */}
+              {/* The two emptinesses above this one, which rendered nothing at all until a
+                  co-ordinator met them. The notice below fires only when the cave HAS surveys and
+                  none of them is usable — so a trip naming no cave, and a cave with no survey
+                  files, both left an empty dropdown under the words "Choose a survey" and no
+                  explanation anywhere on the tab. That is the very failure the comment below
+                  describes and guards against for its own case; these are the adjacent two.
+
+                  They are told apart because the answer to each is a different act, by a different
+                  person, in a different place: name the cave on this trip's own details, or upload
+                  a survey to the cave. Answering either with the other sends somebody to a page
+                  where there is nothing for them to do. */}
+              {!models.isPending && caveIds.length === 0 && (
+                <Alert
+                  type="info"
+                  showIcon
+                  title={t('trips.tracking.noCaveNamedTitle')}
+                  description={t('trips.tracking.noCaveNamedBody')}
+                  style={{ marginBottom: 12 }}
+                  data-testid="trip-tracking-no-cave-named"
+                />
+              )}
+              {!models.isPending && caveIds.length > 0 && models.data.length === 0 && (
+                <Alert
+                  type="info"
+                  showIcon
+                  title={t('trips.tracking.noSurveyUploadedTitle')}
+                  description={t('trips.tracking.noSurveyUploadedBody')}
+                  style={{ marginBottom: 12 }}
+                  data-testid="trip-tracking-no-survey-uploaded"
+                />
+              )}
               {!models.isPending && models.data.length > 0 && placeable.length === 0 && (
                 <Alert
                   type={chooserEmptyAndWaiting ? 'info' : 'warning'}
