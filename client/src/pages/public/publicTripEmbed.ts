@@ -262,14 +262,27 @@ export function parseEmbedInbound(data: unknown): EmbedInbound | null {
   };
 }
 
-/** Every kind this page will act on — the one list, read by the parser and written into the relay. */
+/**
+ * Every kind this page will act on, **in the order a link's attributes are read**.
+ *
+ * <b>The order is contract, not presentation.</b> A link may carry several of these, and the first
+ * one found is what the press is *about*: most specific first, so a link naming both a trip and a
+ * caver is about the caver and the trip is the context it is read in. `trip` and `moment` sit last
+ * because they are modifiers — they qualify any of the kinds above them and mean something on their
+ * own only when nothing above them is present.
+ *
+ * <b>This list and the relay's own copy had drifted.</b> The relay runs as pasted text in somebody
+ * else's page, so it cannot import this one and spells the same list out; `trip` and `moment` were
+ * the wrong way round here, and the test that was supposed to hold them together compared them as
+ * sets rather than as sequences, so it could not see it. The test now asserts the sequence.
+ */
 export const EMBED_FOCUS_KINDS: readonly EmbedFocusKind[] = [
   'station',
   'survey',
   'caver',
   'team',
-  'trip',
   'moment',
+  'trip',
 ];
 
 function shortString(value: unknown): string | null {

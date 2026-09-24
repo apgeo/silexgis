@@ -300,14 +300,37 @@ describe('an article that drives the cave’s past', () => {
     expect(snippet()).toContain('var VERSION = 1;');
   });
 
-  it('keeps the attributes the click handler looks for and the kinds it sends as one list', () => {
+  it('keeps the kinds the relay reads and the kinds this page acts on as one list, in one order', () => {
     // A kind added to the parser and forgotten in the relay's selector is a link that silently
     // behaves as an ordinary link; the relay builds its selector from its own list, and this is
     // what holds that list against the page's.
+    //
+    // <b>Asserted as a sequence, because the order is contract.</b> A link may name several kinds
+    // and the first one found is what the press is about — most specific first, the two modifiers
+    // last. This test used to check only that each word appeared somewhere in the snippet, and
+    // under that check the two lists drifted: `trip` and `moment` sat the other way round in the
+    // exported list for as long as both existed, and nothing could see it. A set comparison cannot
+    // hold an ordered rule.
     const html = snippet();
-    for (const kind of EMBED_FOCUS_KINDS) {
-      expect(html).toContain(`'${kind}'`);
-    }
+    const declared = /var KINDS = \[([^\]]*)\];/.exec(html);
+    expect(declared, 'the relay declares its own list of kinds').not.toBeNull();
+    const relayKinds = declared![1]
+      .split(',')
+      .map((word) => word.trim().replace(/^'|'$/g, ''))
+      .filter((word) => word.length > 0);
+
+    expect(relayKinds).toEqual([...EMBED_FOCUS_KINDS]);
+
+    // And the order itself, written out, so that changing both copies together still has to be a
+    // decision about precedence rather than a rename that happens to agree.
+    expect([...EMBED_FOCUS_KINDS]).toEqual([
+      'station',
+      'survey',
+      'caver',
+      'team',
+      'moment',
+      'trip',
+    ]);
   });
 });
 
