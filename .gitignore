@@ -94,6 +94,11 @@ out
 .nuxt
 dist
 
+# The published-trip fold, built a second time as one file a page with no build step can load.
+# A build artefact like any other: produced by `npm run build:trips`, copied to wherever the
+# consuming page serves its viewer from, and never committed.
+client/dist-trips
+
 # Gatsby files
 .cache/
 # Comment in the public line in if your project uses Gatsby and not Next.js
