@@ -159,6 +159,34 @@ public static class TripTrackingRules
         state != TripTrackingState.Armed || anchoredCave is null || anchoredCave == newCave;
 
     /// <summary>
+    /// Whether a watch in this state may have its log written to at all — a report recorded,
+    /// corrected or taken off it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A closed watch's log is still editable, and that is the whole of this rule.</b> Recording
+    /// used to be allowed only on an armed watch while deleting was allowed on any, which left a
+    /// finished trip in the one state nobody wants: its log could be destroyed and could not be
+    /// repaired. Since the way to correct a report is to put a right one where a wrong one was,
+    /// half of that being refused made the correction path unusable on exactly the trips most
+    /// likely to need it — the ones somebody is writing up afterwards, from notes, days later.
+    /// </para>
+    /// <para>
+    /// <b>Off is refused, and for a different reason from the one it looks like.</b> An off watch is
+    /// not a finished trip, it is a trip nobody is following: it names no survey, so a report
+    /// claiming a station has nothing to resolve that station against and nothing to protect the
+    /// position by. A watch is armed before it is written to, and stays writable once closed.
+    /// </para>
+    /// <para>
+    /// Asked of the state a watch is <em>in</em>, unlike the rule above it, which is asked of the
+    /// state a write would leave it in. Nothing here moves the watch; it only decides whether its
+    /// log may be touched.
+    /// </para>
+    /// </remarks>
+    public static bool MayWriteLog(TripTrackingState state) =>
+        state is TripTrackingState.Armed or TripTrackingState.Closed;
+
+    /// <summary>
     /// Where one member of the party stands, folded from every report about them.
     /// </summary>
     /// <param name="reports">

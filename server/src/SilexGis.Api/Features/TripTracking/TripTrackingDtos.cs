@@ -304,6 +304,32 @@ public sealed class TrackingTeamRequestValidator : AbstractValidator<TrackingTea
     }
 }
 
+/// <summary>
+/// What every report says about a place and a moment, whether it is being written for the first
+/// time or corrected.
+/// </summary>
+/// <remarks>
+/// Declared as a shape both requests carry so the rules over it have one home. The two differ in
+/// exactly one thing — a new report names who it is about and a correction cannot, a report about
+/// somebody else being a different report — and everything else they say is the same, so a second
+/// copy of "a station name belongs to a station report" is a second chance for the two surfaces to
+/// disagree about what a valid report is.
+/// </remarks>
+public interface ITrackingReportFields
+{
+    TripPositionEventKind? Kind { get; }
+
+    string? StationName { get; }
+
+    decimal? DepthM { get; }
+
+    Guid? TeamId { get; }
+
+    string? Note { get; }
+
+    DateTimeOffset? RecordedAt { get; }
+}
+
 public sealed record TrackingEventRequest(
     IReadOnlyList<Guid>? CaverIds,
     TripPositionEventKind? Kind,
@@ -311,30 +337,71 @@ public sealed record TrackingEventRequest(
     decimal? DepthM,
     Guid? TeamId,
     string? Note,
-    DateTimeOffset? RecordedAt);
+    DateTimeOffset? RecordedAt) : ITrackingReportFields;
+
+/// <summary>
+/// A correction to one report already on the log.
+/// </summary>
+/// <remarks>
+/// <b>It names no caver, deliberately.</b> A report about a different person is a different report:
+/// what somebody means by changing its subject is that this one should not exist and another should,
+/// which is a deletion and a new report rather than an edit. Carrying a caver here would be a field
+/// the route is obliged to ignore, and a request shape that demands what it discards is a contract
+/// nobody can read.
+/// </remarks>
+public sealed record TrackingEventEditRequest(
+    TripPositionEventKind? Kind,
+    string? StationName,
+    decimal? DepthM,
+    Guid? TeamId,
+    string? Note,
+    DateTimeOffset? RecordedAt) : ITrackingReportFields;
+
+/// <summary>
+/// The rules over what a report says, applied to whichever request is carrying it.
+/// </summary>
+/// <remarks>
+/// A static over the validator rather than a validator of its own, because FluentValidation's own
+/// composition works within one type and these are two: what is shared is the rules, not a shape
+/// either request could be converted to.
+/// </remarks>
+internal static class TrackingReportFieldRules
+{
+    internal static void Apply<T>(AbstractValidator<T> validator) where T : ITrackingReportFields
+    {
+        validator.RuleFor(x => x.Kind).NotNull().IsInEnum();
+        validator.RuleFor(x => x.Note).MaximumLength(TripTrackingRules.MaxNoteLength);
+
+        // A station name belongs to a station report and a depth to a depth report — a request
+        // carrying the wrong one is a confused caller, not a permissive default.
+        validator.RuleFor(x => x.StationName).NotEmpty().MaximumLength(TripTrackingRules.MaxStationNameLength)
+            .When(x => x.Kind == TripPositionEventKind.AtStation);
+        validator.RuleFor(x => x.StationName).Null()
+            .When(x => x.Kind is not null && x.Kind != TripPositionEventKind.AtStation);
+        validator.RuleFor(x => x.DepthM).NotNull()
+            .When(x => x.Kind == TripPositionEventKind.AtDepth);
+        validator.RuleFor(x => x.DepthM!.Value).InclusiveBetween(-TripTrackingRules.MaxDepthAbsM, TripTrackingRules.MaxDepthAbsM)
+            .When(x => x.DepthM is not null);
+        validator.RuleFor(x => x.DepthM).Null()
+            .When(x => x.Kind is not null && x.Kind != TripPositionEventKind.AtDepth);
+    }
+}
+
+public sealed class TrackingEventEditRequestValidator : AbstractValidator<TrackingEventEditRequest>
+{
+    public TrackingEventEditRequestValidator() => TrackingReportFieldRules.Apply(this);
+}
 
 public sealed class TrackingEventRequestValidator : AbstractValidator<TrackingEventRequest>
 {
     public TrackingEventRequestValidator()
     {
+        // Its own, and the only thing a correction does not say: who the report is about.
         RuleFor(x => x.CaverIds).NotEmpty();
         RuleFor(x => x.CaverIds!.Count).LessThanOrEqualTo(TripTrackingRules.MaxCaversPerWrite)
             .When(x => x.CaverIds is not null);
-        RuleFor(x => x.Kind).NotNull().IsInEnum();
-        RuleFor(x => x.Note).MaximumLength(TripTrackingRules.MaxNoteLength);
 
-        // A station name belongs to a station report and a depth to a depth report — a request
-        // carrying the wrong one is a confused caller, not a permissive default.
-        RuleFor(x => x.StationName).NotEmpty().MaximumLength(TripTrackingRules.MaxStationNameLength)
-            .When(x => x.Kind == TripPositionEventKind.AtStation);
-        RuleFor(x => x.StationName).Null()
-            .When(x => x.Kind is not null && x.Kind != TripPositionEventKind.AtStation);
-        RuleFor(x => x.DepthM).NotNull()
-            .When(x => x.Kind == TripPositionEventKind.AtDepth);
-        RuleFor(x => x.DepthM!.Value).InclusiveBetween(-TripTrackingRules.MaxDepthAbsM, TripTrackingRules.MaxDepthAbsM)
-            .When(x => x.DepthM is not null);
-        RuleFor(x => x.DepthM).Null()
-            .When(x => x.Kind is not null && x.Kind != TripPositionEventKind.AtDepth);
+        TrackingReportFieldRules.Apply(this);
     }
 }
 

@@ -26,6 +26,13 @@ namespace SilexGis.Api.Features.TripTracking;
 /// </summary>
 public static class TripTrackingEndpoints
 {
+    /// <summary>
+    /// Said when a watch's log may not be written to. One wording for recording, correcting and
+    /// removing, because it is one rule and a caller meeting it has the same thing to do about it.
+    /// </summary>
+    private const string LogNotWritable =
+        "A report lands on a watch that is armed or has been closed — arm the watch first.";
+
     public static RouteGroupBuilder MapTripTrackingEndpoints(this RouteGroupBuilder api)
     {
         var tracking = api.MapGroup("/trip-logs/{tripLogId:guid}/tracking").WithTags("TripTracking");
@@ -47,8 +54,10 @@ public static class TripTrackingEndpoints
             .WithSummary("Record one report for one or many cavers at once — never a roster edit.");
         tracking.MapGet("/events", ListEventsAsync)
             .WithSummary("The trip's tracking events, newest first; position fields follow the same withholding as the state read.");
+        tracking.MapPut("/events/{eventId:guid}", UpdateEventAsync).WithValidation<TrackingEventEditRequest>()
+            .WithSummary("Correct one report in place — its moment, its place, its team or its note — keeping the row it was written on.");
         tracking.MapDelete("/events/{eventId:guid}", DeleteEventAsync)
-            .WithSummary("Remove a wrong report; corrections are delete-and-re-enter, never edits.");
+            .WithSummary("Take a report off the log, when what it recorded never happened rather than happened differently.");
         tracking.MapPost("/resolve-depth", ResolveDepthAsync).WithValidation<TrackingResolveDepthRequest>()
             .WithSummary("Preview which stations a depth could mean, under the trip's depth filter.");
 
@@ -636,9 +645,9 @@ public static class TripTrackingEndpoints
         if (refusal is not null) return refusal;
 
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
-        if (tracking is null || tracking.State != TripTrackingState.Armed)
+        if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
         {
-            return ApiProblems.Conflict("tracking.not_armed", "Reports land on armed tracking only.");
+            return ApiProblems.Conflict("tracking.not_writable", LogNotWritable);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -665,53 +674,11 @@ public static class TripTrackingEndpoints
             if (!teamKnown) return ApiProblems.NotFound("tracking.team_not_found");
         }
 
+        var placed = await ResolvePlaceAsync(
+            db, access, protection, ctx!, tracking, request.Kind!.Value,
+            request.StationName, request.DepthM, ct);
+        if (placed.Refusal is { } placeRefused) return placeRefused;
         var kind = request.Kind!.Value;
-        Guid? surveyModelId = null;
-        Guid? caveFeatureId = null;
-        string? stationName = null;
-        decimal? depthEntered = null;
-
-        if (kind is TripPositionEventKind.AtStation or TripPositionEventKind.AtDepth)
-        {
-            if (tracking.SurveyModelId is null)
-            {
-                return ApiProblems.Conflict("tracking.model_missing", "Tracking has no survey model to place cavers in.");
-            }
-            var usable = await UsableModelAsync(db, access, protection, ctx!, tracking.SurveyModelId, ct);
-            if (usable is null) return ApiProblems.Conflict("tracking.model_unavailable",
-                "The survey model does not exist here, or its cave cannot be placed by this account.");
-            surveyModelId = usable.Value.Model.Id;
-            caveFeatureId = usable.Value.Cave.Id;
-
-            if (kind == TripPositionEventKind.AtStation)
-            {
-                // Matched by resolving the name against the model rather than by comparing strings:
-                // the two sides of this application spell one station of a Therion model
-                // differently, so a station pressed on the model is a real station under a name a
-                // string comparison against the survey rows would call unknown.
-                stationName = await ResolveStationAsync(db, usable.Value.Model, request.StationName!, ct);
-                if (stationName is null) return ApiProblems.BadRequest("tracking.station_unknown",
-                    "The station is not one of the chosen model's stations.");
-            }
-            else
-            {
-                var stations = await StationsOfAsync(db, usable.Value.Model, ct);
-                var referenceZ = TrackingDepthResolver.ReferenceZ(stations, tracking.ReferenceStationName);
-                if (referenceZ is null) return ApiProblems.Conflict("tracking.reference_unknown",
-                    "The depth datum cannot be established for the chosen model.");
-                var candidates = TrackingDepthResolver.Resolve(
-                    stations, referenceZ.Value, (double)request.DepthM!.Value, tracking.DepthFilter, take: 1);
-                if (candidates.Count == 0) return ApiProblems.Conflict("tracking.no_station_at_depth",
-                    "No station matches that depth under the trip's depth filter.");
-                // The winner under the name the viewer knows it by, which the resolver carried
-                // alongside the rows' own. A depth-placed position is drawn on the model exactly
-                // like a pressed one, and one stamped in the other spelling would be a marker that
-                // silently never appears.
-                stationName = candidates[0].ViewerName;
-                depthEntered = request.DepthM;
-            }
-        }
-
         var created = new List<TripPositionEvent>();
         foreach (var caverId in caverIds)
         {
@@ -721,10 +688,10 @@ public static class TripTrackingEndpoints
                 CaverId = caverId,
                 TeamId = request.TeamId,
                 Kind = kind,
-                SurveyModelId = surveyModelId,
-                CaveFeatureId = caveFeatureId,
-                ViewerStationName = stationName,
-                DepthEnteredM = depthEntered,
+                SurveyModelId = placed.SurveyModelId,
+                CaveFeatureId = placed.CaveFeatureId,
+                ViewerStationName = placed.StationName,
+                DepthEnteredM = placed.DepthEnteredM,
                 Note = request.Note,
                 RecordedAt = recordedAt,
                 RecordedByUserId = user!.UserId,
@@ -736,6 +703,168 @@ public static class TripTrackingEndpoints
         IReadOnlyList<TrackingEventDto> dtos = [.. created.Select(e => new TrackingEventDto(
             e.Id, e.CaverId, e.TeamId, e.Kind, e.SurveyModelId, e.ViewerStationName, e.DepthEnteredM, e.Note, e.RecordedAt))];
         return TypedResults.Ok(dtos);
+    }
+
+    /// <summary>
+    /// Where a report puts somebody: the survey it is measured against, the cave that protects it,
+    /// the station in the viewer's own spelling, and the depth the reporter gave.
+    /// </summary>
+    /// <remarks>
+    /// <b>Extracted because two routes now decide this and the rules in it must not be spelled
+    /// twice.</b> Which survey a watch is on, whether this account may place anybody on it, how a
+    /// typed station name is matched against a model that spells it differently, and which station a
+    /// depth means under the trip's datum and filter — each is a decision a correction has to reach
+    /// exactly as the original report did. A second copy is how a report that could be recorded
+    /// becomes one that cannot be fixed, or worse, one whose fix lands somewhere else.
+    /// </remarks>
+    private static async Task<ResolvedPlace> ResolvePlaceAsync(
+        SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext ctx,
+        Domain.Entities.TripTracking tracking, TripPositionEventKind kind,
+        string? stationName, decimal? depthM,
+        CancellationToken ct)
+    {
+        Guid? surveyModelId = null;
+        Guid? caveFeatureId = null;
+        string? resolvedStation = null;
+        decimal? depthEntered = null;
+
+        if (kind is TripPositionEventKind.AtStation or TripPositionEventKind.AtDepth)
+        {
+            if (tracking.SurveyModelId is null)
+            {
+                return Refused(ApiProblems.Conflict("tracking.model_missing", "Tracking has no survey model to place cavers in."));
+            }
+            var usable = await UsableModelAsync(db, access, protection, ctx!, tracking.SurveyModelId, ct);
+            if (usable is null) return Refused(ApiProblems.Conflict("tracking.model_unavailable",
+                "The survey model does not exist here, or its cave cannot be placed by this account."));
+            surveyModelId = usable.Value.Model.Id;
+            caveFeatureId = usable.Value.Cave.Id;
+
+            if (kind == TripPositionEventKind.AtStation)
+            {
+                // Matched by resolving the name against the model rather than by comparing strings:
+                // the two sides of this application spell one station of a Therion model
+                // differently, so a station pressed on the model is a real station under a name a
+                // string comparison against the survey rows would call unknown.
+                resolvedStation = await ResolveStationAsync(db, usable.Value.Model, stationName!, ct);
+                if (resolvedStation is null) return Refused(ApiProblems.BadRequest("tracking.station_unknown",
+                    "The station is not one of the chosen model's stations."));
+            }
+            else
+            {
+                var stations = await StationsOfAsync(db, usable.Value.Model, ct);
+                var referenceZ = TrackingDepthResolver.ReferenceZ(stations, tracking.ReferenceStationName);
+                if (referenceZ is null) return Refused(ApiProblems.Conflict("tracking.reference_unknown",
+                    "The depth datum cannot be established for the chosen model."));
+                var candidates = TrackingDepthResolver.Resolve(
+                    stations, referenceZ.Value, (double)depthM!.Value, tracking.DepthFilter, take: 1);
+                if (candidates.Count == 0) return Refused(ApiProblems.Conflict("tracking.no_station_at_depth",
+                    "No station matches that depth under the trip's depth filter."));
+                // The winner under the name the viewer knows it by, which the resolver carried
+                // alongside the rows' own. A depth-placed position is drawn on the model exactly
+                // like a pressed one, and one stamped in the other spelling would be a marker that
+                // silently never appears.
+                resolvedStation = candidates[0].ViewerName;
+                depthEntered = depthM;
+            }
+        }
+
+
+        return new ResolvedPlace(surveyModelId, caveFeatureId, resolvedStation, depthEntered, null);
+    }
+
+    private static ResolvedPlace Refused(ProblemHttpResult problem) =>
+        new(null, null, null, null, problem);
+
+    /// <summary>What a report says about where somebody is, once every gate on it has been asked.</summary>
+    private sealed record ResolvedPlace(
+        Guid? SurveyModelId, Guid? CaveFeatureId, string? StationName, decimal? DepthEnteredM,
+        ProblemHttpResult? Refusal);
+
+    /// <summary>
+    /// Corrects one report in place: the moment it claims, where it puts somebody, which team it
+    /// was, and its note.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Why this exists, when the log was designed to be appended to and corrected by deleting.</b>
+    /// The reason given for delete-and-re-enter was that both halves land on the trip's audit
+    /// timeline, so nothing is lost by not editing. That reason holds for an edit too — this row is
+    /// audited exactly as its deletion would be — so what delete-and-re-enter actually bought was
+    /// the append-only shape rather than the auditability, and it cost two things worth more. A
+    /// re-entered report is a new row with a new identity, so anything hanging off the old one is
+    /// orphaned by a corrected typo; and on a watch that has been closed, deleting was permitted
+    /// while recording was not, which left a finished trip's log destroyable and unrepairable.
+    /// </para>
+    /// <para>
+    /// <b>The caver is not editable here, and that is not an omission.</b> A report about a
+    /// different person is a different report — it has a different subject, and the thing somebody
+    /// means by changing it is that this report should not exist and another should. Delete and
+    /// record. What is editable is everything about one person's report that a relayed phone call
+    /// can be written down wrongly: the hour, the place, the party they were with, the words.
+    /// </para>
+    /// <para>
+    /// Every gate the original report passed is asked again, through the same code: the watch must
+    /// be writable, the moment must not be in the future, a named team must belong to this trip, and
+    /// a claimed station must resolve against the survey the watch is on now — which is deliberately
+    /// the survey in force rather than the one the report was first measured against. A correction
+    /// is a statement about where somebody was, made now; stamping it with a superseded survey would
+    /// record a place that cannot be drawn.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<TrackingEventDto>, ProblemHttpResult>> UpdateEventAsync(
+        Guid tripLogId, Guid eventId, TrackingEventEditRequest request, SilexGisDbContext db,
+        IAccessService access, FeatureProtection protection, IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
+        var refusal = ctx is null
+            ? ApiProblems.NotFound("trip_log.not_found")
+            : await WriteGuardAsync(access, ctx, trip, ct);
+        if (refusal is not null) return refusal;
+
+        var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
+        if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
+        {
+            return ApiProblems.Conflict("tracking.not_writable", LogNotWritable);
+        }
+
+        var row = await db.TripPositionEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
+        if (row is null) return ApiProblems.NotFound("tracking.event_not_found");
+
+        var now = DateTimeOffset.UtcNow;
+        var recordedAt = request.RecordedAt ?? row.RecordedAt;
+        if (TripTrackingRules.MomentIsInFuture(recordedAt, now))
+        {
+            return ApiProblems.BadRequest("tracking.recorded_in_future", "A report cannot be about the future.");
+        }
+
+        if (request.TeamId is not null)
+        {
+            var teamKnown = await db.TripTeams.AsNoTracking()
+                .AnyAsync(t => t.Id == request.TeamId && t.TripLogId == tripLogId, ct);
+            if (!teamKnown) return ApiProblems.NotFound("tracking.team_not_found");
+        }
+
+        var placed = await ResolvePlaceAsync(
+            db, access, protection, ctx!, tracking, request.Kind!.Value,
+            request.StationName, request.DepthM, ct);
+        if (placed.Refusal is { } placeRefused) return placeRefused;
+
+        row.Kind = request.Kind!.Value;
+        row.TeamId = request.TeamId;
+        row.SurveyModelId = placed.SurveyModelId;
+        row.CaveFeatureId = placed.CaveFeatureId;
+        row.ViewerStationName = placed.StationName;
+        row.DepthEnteredM = placed.DepthEnteredM;
+        row.Note = request.Note;
+        row.RecordedAt = recordedAt;
+        await db.SaveChangesAsync(ct);
+
+        return TypedResults.Ok(new TrackingEventDto(
+            row.Id, row.CaverId, row.TeamId, row.Kind, row.SurveyModelId, row.ViewerStationName,
+            row.DepthEnteredM, row.Note, row.RecordedAt));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteEventAsync(

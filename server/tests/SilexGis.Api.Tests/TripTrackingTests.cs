@@ -81,10 +81,11 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         var cave = await CreateCaveAsync(locationProtected: false);
         var model = await SeedModelWithStationsAsync(cave);
 
-        // Reports land on armed tracking only.
+        // An off watch takes no report: it names no survey, so a claimed station has nothing to
+        // resolve against. A closed one does take them — see the correction tests of their own.
         var early = await PostEventAsync(owner, trip, new { caverIds = cavers, kind = "entered" });
         early.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        (await early.Content.ReadAsStringAsync()).ShouldContain("tracking.not_armed");
+        (await early.Content.ReadAsStringAsync()).ShouldContain("tracking.not_writable");
 
         (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
 
@@ -908,6 +909,158 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     }
 
     // ---- plumbing --------------------------------------------------------------------------
+
+    // ---- correcting what is already on the log ------------------------------------------------
+
+    /// <summary>
+    /// <b>The pair that was broken.</b> A closed watch's log takes a correction and takes a new
+    /// report, where recording used to be refused on anything but an armed watch — which left a
+    /// finished trip destroyable and unrepairable.
+    /// </summary>
+    [Fact]
+    public async Task A_closed_watch_still_takes_a_correction_and_a_report_while_an_off_one_takes_neither()
+    {
+        var (trip, cavers) = await CreateTripAsync("Written up afterwards", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+
+        // Off first, so the refusal below is a state being refused rather than the route missing.
+        var beforeArming = await PostEventAsync(owner, trip, new { caverIds = cavers, kind = "entered" });
+        beforeArming.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await beforeArming.Content.ReadAsStringAsync()).ShouldContain("tracking.not_writable");
+
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var recorded = await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers,
+            kind = "atStation",
+            stationName = "cave.upper.2",
+            recordedAt = At(10, 0),
+        });
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var eventId = (await recorded.Content.ReadFromJsonAsync<JsonElement>())
+            .EnumerateArray().First().GetProperty("id").GetGuid();
+
+        (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // A correction, on a watch that is over. This is the act the old rule made impossible.
+        var fixedUp = await PutEventAsync(owner, trip, eventId, new
+        {
+            kind = "atStation",
+            stationName = "cave.deep.3",
+            note = "read back off the tape",
+            recordedAt = At(11, 30),
+        });
+        fixedUp.StatusCode.ShouldBe(HttpStatusCode.OK, await fixedUp.Content.ReadAsStringAsync());
+        var body = await fixedUp.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("id").GetGuid().ShouldBe(eventId, "a correction keeps the row it corrects");
+        body.GetProperty("stationName").GetString().ShouldBe("cave.deep.3");
+        body.GetProperty("note").GetString().ShouldBe("read back off the tape");
+        body.GetProperty("caverId").GetGuid().ShouldBe(cavers[0], "and keeps its subject");
+
+        // And a report that was never written down at all can still be added afterwards, which is
+        // the other half of being able to write a trip up from notes.
+        var added = await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers,
+            kind = "exited",
+            recordedAt = At(12, 0),
+        });
+        added.StatusCode.ShouldBe(HttpStatusCode.OK, await added.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// A correction passes every gate the original report passed, asked again through the same code.
+    /// </summary>
+    [Fact]
+    public async Task A_correction_is_refused_for_the_same_reasons_a_report_is()
+    {
+        var (trip, cavers) = await CreateTripAsync("Refusals on a correction", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var recorded = await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.upper.2",
+        });
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var eventId = (await recorded.Content.ReadFromJsonAsync<JsonElement>())
+            .EnumerateArray().First().GetProperty("id").GetGuid();
+
+        // A station the survey does not hold, which is what stops a correction landing somewhere
+        // the party never was.
+        var unknown = await PutEventAsync(owner, trip, eventId, new
+        {
+            kind = "atStation", stationName = "nowhere.at.all",
+        });
+        unknown.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await unknown.Content.ReadAsStringAsync()).ShouldContain("tracking.station_unknown");
+
+        // A moment after now, for the same reason a report cannot claim one: relayed word is late,
+        // never early.
+        var ahead = await PutEventAsync(owner, trip, eventId, new
+        {
+            kind = "atStation", stationName = "cave.upper.2",
+            recordedAt = DateTimeOffset.UtcNow.AddHours(2),
+        });
+        ahead.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await ahead.Content.ReadAsStringAsync()).ShouldContain("tracking.recorded_in_future");
+
+        // A team belonging to another trip.
+        var (other, _) = await CreateTripAsync("Somebody else's", guests: 1);
+        var strangerTeam = await owner.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{other}/tracking/teams", new { title = "Theirs" });
+        strangerTeam.StatusCode.ShouldBe(HttpStatusCode.OK, await strangerTeam.Content.ReadAsStringAsync());
+        var strangerTeamId = (await strangerTeam.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var wrongTeam = await PutEventAsync(owner, trip, eventId, new
+        {
+            kind = "atStation", stationName = "cave.upper.2", teamId = strangerTeamId,
+        });
+        wrongTeam.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await wrongTeam.Content.ReadAsStringAsync()).ShouldContain("tracking.team_not_found");
+
+        // And the report is still exactly as it was: a refused correction changes nothing.
+        var log = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking/events");
+        log.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var rows = (await log.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("items");
+        var row = rows.EnumerateArray().Single(r => r.GetProperty("id").GetGuid() == eventId);
+        row.GetProperty("stationName").GetString().ShouldBe("cave.upper.2");
+    }
+
+    /// <summary>A report of a trip somebody may not write to is not theirs to correct either.</summary>
+    [Fact]
+    public async Task A_reader_who_may_not_write_the_trip_cannot_correct_its_log()
+    {
+        var (trip, cavers) = await CreateTripAsync("Not yours", guests: 1);
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var recorded = await PostEventAsync(owner, trip, new
+        {
+            caverIds = cavers, kind = "atStation", stationName = "cave.upper.2",
+        });
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var eventId = (await recorded.Content.ReadFromJsonAsync<JsonElement>())
+            .EnumerateArray().First().GetProperty("id").GetGuid();
+
+        var refused = await PutEventAsync(reader, trip, eventId, new
+        {
+            kind = "atStation", stationName = "cave.deep.3",
+        });
+        // Forbidden rather than not-found, because this account may read the trip: what is being
+        // refused is the writing, and pretending the trip is absent to somebody looking at it
+        // would be a worse answer than the true one.
+        refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // The positive twin: the same correction, by somebody who may.
+        (await PutEventAsync(owner, trip, eventId, new { kind = "atStation", stationName = "cave.deep.3" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static Task<HttpResponseMessage> PutEventAsync(
+        HttpClient client, Guid trip, Guid eventId, object body) =>
+        client.PutAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events/{eventId}", body);
 
     private async Task<(Guid Trip, List<Guid> Cavers)> CreateTripAsync(
         string title, int guests, string visibility = "authenticated")

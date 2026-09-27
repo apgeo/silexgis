@@ -13163,9 +13163,36 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Correct one report in place — its moment, its place, its team or its note — keeping the row it was written on. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                    eventId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingEventEditRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingEventDto"];
+                    };
+                };
+            };
+        };
         post?: never;
-        /** Remove a wrong report; corrections are delete-and-re-enter, never edits. */
+        /** Take a report off the log, when what it recorded never happened rather than happened differently. */
         delete: {
             parameters: {
                 query?: never;
@@ -24157,6 +24184,17 @@ export interface components {
             note: null | string;
             /** Format: date-time */
             recordedAt: string;
+        };
+        TrackingEventEditRequest: {
+            kind: null | components["schemas"]["TripPositionEventKind"];
+            stationName: null | string;
+            /** Format: double */
+            depthM: null | number;
+            /** Format: uuid */
+            teamId: null | string;
+            note: null | string;
+            /** Format: date-time */
+            recordedAt: null | string;
         };
         TrackingEventRequest: {
             caverIds: null | string[];

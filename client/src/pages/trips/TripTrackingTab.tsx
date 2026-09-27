@@ -38,6 +38,7 @@ import { replayPictures } from '../../caveview/trackingReplay.ts';
 import TrackingConfigCard from '../../components/trips/TrackingConfigCard.tsx';
 import TrackingModelPanel from '../../components/trips/TrackingModelPanel.tsx';
 import TrackingMomentPictures from '../../components/trips/TrackingMomentPictures.tsx';
+import TrackingEventEditDialog from '../../components/trips/TrackingEventEditDialog.tsx';
 import TrackingPicturesDialog from '../../components/trips/TrackingPicturesDialog.tsx';
 import TrackingPublicNameDialog from '../../components/trips/TrackingPublicNameDialog.tsx';
 import TrackingReportForm from '../../components/trips/TrackingReportForm.tsx';
@@ -120,6 +121,7 @@ export default function TripTrackingTab({
   const { data, isPending, isFetching, error, refetch } = useTripTracking(trip.id);
   const events = useTripTrackingEvents(trip.id, { pageSize: RECENT_EVENTS });
   const deleteEvent = useDeleteTrackingEvent();
+  const [correcting, setCorrecting] = useState<TrackingEvent | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** Whose caption on the published page is being set, or null while nobody's is. */
   const [naming, setNaming] = useState<TrackingParticipant | null>(null);
@@ -748,7 +750,26 @@ export default function TripTrackingTab({
     }
   };
 
-  /** The one control that takes a report off a log nothing can edit — the same one in both layouts. */
+  /**
+   * Correcting a report in place, rather than taking it off and writing another.
+   *
+   * Beside the delete because the two answer different things and a reader has to pick: a report
+   * written down wrongly is corrected, and one that should never have been there is removed. The
+   * difference matters beyond tidiness — a correction keeps the row, so a photograph pinned to that
+   * moment survives a fixed typo, where a delete-and-re-enter orphans it.
+   */
+  const correctControl = (row: TrackingEvent) => (
+    <Button
+      type="text"
+      size={controlSize}
+      icon={<EditOutlined />}
+      aria-label={t('trips.tracking.eventEdit')}
+      data-testid={`trip-tracking-event-edit-${row.id}`}
+      onClick={() => setCorrecting(row)}
+    />
+  );
+
+  /** The one control that takes a report off the log — the same one in both layouts. */
   const deleteControl = (row: TrackingEvent) => (
     <Popconfirm
       title={t('trips.tracking.eventDeleteConfirm')}
@@ -1259,6 +1280,7 @@ export default function TripTrackingTab({
                               right edge of a scroller 364px wide — the only way to take a wrong
                               report off a log nothing can edit, three screens sideways. */}
                           {canEdit && attachControl(row)}
+                          {canEdit && correctControl(row)}
                           {canEdit && deleteControl(row)}
                         </div>
                         <div className="tracking-stacked-facts">
@@ -1310,6 +1332,7 @@ export default function TripTrackingTab({
                           render: (_value: unknown, row: TrackingEvent) => (
                             <Flex gap={4} align="center">
                               {attachControl(row)}
+                              {correctControl(row)}
                               {deleteControl(row)}
                             </Flex>
                           ),
@@ -1340,6 +1363,18 @@ export default function TripTrackingTab({
           onAttach={() =>
             setAttaching({ at: defaultPictureMoment, caverId: [...selected][0] ?? null })
           }
+        />
+      )}
+
+      {/* One dialog for every row, opened by the row being corrected rather than mounted per row:
+          the log shows fifty reports and fifty mounted modals is fifty forms to keep in step. It
+          fills itself from whichever report was pressed. */}
+      {canEdit && (
+        <TrackingEventEditDialog
+          tripLogId={trip.id}
+          report={correcting}
+          teams={data?.teams ?? []}
+          onClose={() => setCorrecting(null)}
         />
       )}
 

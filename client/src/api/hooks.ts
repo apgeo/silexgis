@@ -7698,11 +7698,58 @@ export function useRecordTrackingEvents() {
 }
 
 /**
- * Takes a wrong report off the log.
+ * Corrects one report already on the log, keeping the row it is written on.
  *
- * The only correction there is: a report is never edited, because the thing it records is what
- * somebody said at a moment, and rewriting that in place would leave a log which cannot be told
- * apart from one nobody corrected.
+ * <b>It names no caver, and that is not an omission.</b> A report about a different person is a
+ * different report: what somebody means by changing its subject is that this one should not exist
+ * and another should, which is a deletion and a new report. What this changes is everything about
+ * one person's report that a relayed phone call can be written down wrongly — the hour, the place,
+ * the party they were with, the words.
+ *
+ * Every field is sent on every correction, including the ones that are not changing, because the
+ * server measures the whole report again: a kind without the place that belongs to it is refused,
+ * so a partial write would be a request that cannot be validated as a report at all.
+ */
+export function useUpdateTrackingEvent() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      eventId,
+      kind,
+      stationName = null,
+      depthM = null,
+      teamId = null,
+      note = null,
+      recordedAt = null,
+    }: {
+      tripLogId: string;
+      eventId: string;
+      kind: TripPositionEventKind;
+      stationName?: string | null;
+      depthM?: number | null;
+      teamId?: string | null;
+      note?: string | null;
+      /** Null leaves the moment the report already claims, which is the ordinary case. */
+      recordedAt?: string | null;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/trip-logs/{tripLogId}/tracking/events/{eventId}', {
+          params: { path: { tripLogId, eventId } },
+          body: { kind, stationName, depthM, teamId, note, recordedAt },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * Takes a report off the log, for when what it recorded never happened.
+ *
+ * Distinct from correcting one, which keeps the row: this is for a report that should not be there
+ * at all — somebody else's name typed, a call that turned out to be about another trip. A report
+ * that happened differently is corrected rather than removed and re-entered, so that anything
+ * hanging off it survives the fix.
  */
 export function useDeleteTrackingEvent() {
   const invalidate = useInvalidateTripTracking();

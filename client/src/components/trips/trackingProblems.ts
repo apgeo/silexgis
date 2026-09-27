@@ -17,7 +17,7 @@ import { ApiError } from '../../api/client.ts';
  * moment somebody is trying to record a position.
  */
 export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
-  'tracking.not_armed': 'trips.tracking.problems.notArmed',
+  'tracking.not_writable': 'trips.tracking.problems.notWritable',
   'tracking.state_invalid': 'trips.tracking.problems.stateInvalid',
   'tracking.model_missing': 'trips.tracking.problems.modelMissing',
   'tracking.model_unavailable': 'trips.tracking.problems.modelUnavailable',
@@ -40,7 +40,7 @@ export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'tracking.share_not_found': 'trips.tracking.problems.shareNotFound',
   'tracking.publication_refused_cave': 'trips.tracking.problems.publicationRefusedCave',
   'tracking.publication_refused_protected': 'trips.tracking.problems.publicationRefusedProtected',
-  // A third, and worded apart from the general `tracking.not_armed` above on purpose: that one is
+  // A third, and worded apart from the general `tracking.not_writable` above on purpose: that one is
   // refused to somebody trying to record where a party is, and this one to somebody trying to
   // publish. The act to take is the same and the sentence is not — one says a report cannot land,
   // the other says an address would be handed out that opens nothing.

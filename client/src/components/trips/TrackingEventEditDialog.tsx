@@ -1,0 +1,202 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { Alert, Button, Flex, Form, Input, InputNumber, Modal, Select, message } from 'antd';
+import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
+import {
+  TRACKING_EVENT_KINDS,
+  useUpdateTrackingEvent,
+  type TrackingEvent,
+  type TrackingTeam,
+  type TripPositionEventKind,
+} from '../../api/hooks.ts';
+import { trackingProblemMessage } from './trackingProblems.ts';
+import { trackingStationRules } from './trackingReport.ts';
+import TrackingWhenField from './TrackingWhenField.tsx';
+
+interface Props {
+  tripLogId: string;
+  /** The report being corrected, or null when the dialog is closed. */
+  report: TrackingEvent | null;
+  teams: readonly TrackingTeam[];
+  onClose: () => void;
+}
+
+interface EditForm {
+  kind: TripPositionEventKind;
+  stationName?: string;
+  depthM?: number | null;
+  teamId?: string | null;
+  note?: string;
+  recordedAt?: dayjs.Dayjs;
+}
+
+/**
+ * Correcting a report already on the log.
+ *
+ * <b>Why a correction rather than a deletion and a re-entry.</b> The log used to be corrected by
+ * taking a wrong report off and writing a right one, which cost two things. A re-entered report is
+ * a new row with a new identity, so anything hanging off the old one — a photograph pinned to that
+ * moment, a reader's link to it — is orphaned by a fixed typo. And on a watch that had been closed,
+ * removing was permitted while recording was not, so a finished trip's log could be destroyed and
+ * not repaired: exactly the trips that get written up afterwards, from notes, days later.
+ *
+ * <b>It does not offer the caver, deliberately.</b> A report about a different person is a different
+ * report — the thing somebody means by changing its subject is that this one should not exist and
+ * another should, which is the delete beside this on the same row. What is offered here is
+ * everything about one person's report that a relayed phone call can be written down wrongly.
+ *
+ * <b>Nothing here decides what a valid report is.</b> Whether a station exists on the survey in
+ * force, which station a depth means under the trip's datum and filter, whether a moment is in the
+ * future — all of it is the server's answer, asked again on the correction exactly as it was asked
+ * on the original. This form's own rules go no further than the shape of what it sends, so the two
+ * surfaces cannot come to disagree about what may be recorded.
+ */
+export default function TrackingEventEditDialog({ tripLogId, report, teams, onClose }: Props) {
+  const { t } = useTranslation();
+  return (
+    <Modal
+      open={report !== null}
+      title={t('trips.tracking.eventEditTitle')}
+      footer={null}
+      onCancel={onClose}
+      destroyOnHidden
+      data-testid="trip-tracking-event-edit"
+    >
+      {/* Keyed on the report, so opening a second row builds a second form rather than reusing the
+          first one's values. A single form filled from whichever report was pressed would offer one
+          report's place as a correction to another's the moment a fill was missed — and it would look
+          like working software. This makes that impossible rather than remembered. */}
+      {report !== null && (
+        <CorrectionForm
+          key={report.id}
+          tripLogId={tripLogId}
+          report={report}
+          teams={teams}
+          onClose={onClose}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function CorrectionForm({
+  tripLogId,
+  report,
+  teams,
+  onClose,
+}: {
+  tripLogId: string;
+  report: TrackingEvent;
+  teams: readonly TrackingTeam[];
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [form] = Form.useForm<EditForm>();
+  const update = useUpdateTrackingEvent();
+  const initial: EditForm = {
+    kind: report.kind,
+    stationName: report.stationName ?? undefined,
+    depthM: report.depthEnteredM ?? null,
+    teamId: report.teamId ?? null,
+    note: report.note ?? undefined,
+    recordedAt: dayjs(report.recordedAt),
+  };
+  // Falls back to the report's own kind so the field belonging to it is drawn on the very first
+  // paint rather than a tick later: a form whose place field appears late is one somebody can press
+  // Save on while it is still empty.
+  const kind = Form.useWatch('kind', form) ?? initial.kind;
+
+  const submit = async () => {
+    const values = await form.validateFields();
+    try {
+      await update.mutateAsync({
+        tripLogId,
+        eventId: report.id,
+        kind: values.kind,
+        // Sent as null rather than left out when the kind does not carry them: the server measures
+        // the whole report again, and a station left over from the kind this report used to be
+        // would be refused as belonging to the wrong sort of report.
+        stationName: values.kind === 'atStation' ? (values.stationName ?? null) : null,
+        depthM: values.kind === 'atDepth' ? (values.depthM ?? null) : null,
+        teamId: values.teamId ?? null,
+        note: values.note?.trim() ? values.note.trim() : null,
+        recordedAt: values.recordedAt ? values.recordedAt.toISOString() : null,
+      });
+      message.success(t('trips.tracking.eventCorrected'));
+      onClose();
+    } catch (error) {
+      message.error(trackingProblemMessage(error, t));
+    }
+  };
+
+  return (
+    <>
+      {/* Said every time rather than only on a closed watch: a reader correcting a log is changing
+          what the record says happened, and the replay, the published page and anything drawn from
+          the log all follow the correction. That is the point of it, and it is worth knowing. */}
+      <Alert
+        type="info"
+        showIcon
+        message={t('trips.tracking.eventEditNoticeTitle')}
+        description={t('trips.tracking.eventEditNoticeBody')}
+        style={{ marginBottom: 16 }}
+      />
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={initial}>
+        <Form.Item name="kind" label={t('trips.tracking.reportKind')}>
+          <Select
+            data-testid="trip-tracking-edit-kind"
+            options={TRACKING_EVENT_KINDS.map((value) => ({
+              value,
+              label: t(`trips.tracking.kinds.${value}`),
+            }))}
+          />
+        </Form.Item>
+
+        {kind === 'atStation' && (
+          <Form.Item
+            name="stationName"
+            label={t('trips.tracking.reportStation')}
+            extra={t('trips.tracking.reportStationHelp')}
+            rules={trackingStationRules(t)}
+          >
+            <Input data-testid="trip-tracking-edit-station" />
+          </Form.Item>
+        )}
+
+        {kind === 'atDepth' && (
+          <Form.Item
+            name="depthM"
+            label={t('trips.tracking.reportDepth')}
+            extra={t('trips.tracking.reportDepthHelp')}
+            rules={[{ required: true, message: t('trips.tracking.reportDepthRequired') }]}
+          >
+            <InputNumber style={{ width: '100%' }} data-testid="trip-tracking-edit-depth" />
+          </Form.Item>
+        )}
+
+        {teams.length > 0 && (
+          <Form.Item name="teamId" label={t('trips.tracking.reportTeam')}>
+            <Select
+              allowClear
+              data-testid="trip-tracking-edit-team"
+              options={teams.map((team) => ({ value: team.id, label: team.title }))}
+            />
+          </Form.Item>
+        )}
+
+        <Form.Item name="note" label={t('trips.tracking.reportNote')}>
+          <Input.TextArea rows={2} data-testid="trip-tracking-edit-note" />
+        </Form.Item>
+
+        <TrackingWhenField size="middle" coarse={false} idPrefix="trip-tracking-edit" />
+
+        <Flex gap={8} justify="flex-end">
+          <Button onClick={onClose}>{t('common.cancel')}</Button>
+          <Button type="primary" loading={update.isPending} onClick={() => void submit()}>
+            {t('trips.tracking.eventEditSave')}
+          </Button>
+        </Flex>
+      </Form>
+    </>
+  );
+}
