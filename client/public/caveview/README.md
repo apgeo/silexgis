@@ -3,8 +3,8 @@
 Source: https://github.com/apgeo/CaveView.js — this project's fork of
 https://github.com/aardgoose/CaveView.js (MIT license, see `LICENSE` in this directory).
 
-Vendored build: distribution version **2.9.0-slx.9**, built from the fork's `silexgis`
-branch at commit `ed0322e5` — the upstream **2.9.0 release tag** plus the fork's changes
+Vendored build: distribution version **2.9.0-slx.10**, built from the fork's `silexgis`
+branch at commit `9ba2954d` — the upstream **2.9.0 release tag** plus the fork's changes
 (each also kept on its own dev-based `feature/*` branch so upstream can take them): the
 dispose-handler typo fix, the `crsLookup` configuration option the app uses to resolve
 coordinate systems locally instead of via epsg.io, a navigation and hover API
@@ -32,6 +32,13 @@ not to take up a feature:
 - A marker move that can be **timed** (`{ duration }`, zero meaning place rather than send),
   which is what lets a host scrub a replay without each step fighting the previous tween.
 - A programmatic reveal, so a host can show what a hover would show without a pointer.
+- A marker label's **plate and writing are worked out from the background** the viewer draws
+  on, rather than being a fixed colour. A fixed black plate has no edge against the black
+  background nearly every viewer uses, so the label it was added to make readable read as text
+  floating in space. Measured composited at the default opacity: on black the plate lands at
+  `#bebebe` with its writing 11.3:1 against it, and stays past 4.5:1 over survey grey, over a
+  bright surface and over white. Both stay configurable — a theme naming a colour gets exactly
+  that colour, and `'auto'` is what asks for the derivation.
 - A **Romanian catalogue** (`lib/lang-ro.json`). Not vendored here, because this application
   does not set the viewer's language and the subset below is only what it loads; a build that
   did would take `lib/` with it. Worth revisiting — the viewer's own controls are English
@@ -47,10 +54,10 @@ CaveView.js is not published on npm; it ships as a prebuilt browser bundle. This
 directory contains the runtime subset the app needs, under a directory named by the
 distribution version:
 
-- `v2.9.0-slx.9/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
-- `v2.9.0-slx.9/js/workers/` — web workers the bundle spawns at runtime (paths resolved
+- `v2.9.0-slx.10/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
+- `v2.9.0-slx.10/js/workers/` — web workers the bundle spawns at runtime (paths resolved
   against the viewer's `home` option, which the app points at this directory)
-- `v2.9.0-slx.9/css/caveview.css`, `v2.9.0-slx.9/images/logo.svg` — runtime assets
+- `v2.9.0-slx.10/css/caveview.css`, `v2.9.0-slx.10/images/logo.svg` — runtime assets
 
 The version directory exists for cache correctness: these URLs are fetched outside the
 app bundle's hashed-asset pipeline, so a new build must arrive under new URLs or
@@ -69,8 +76,9 @@ turns that into a load failure until a full reload — then delete it in the rel
 after. (Earlier `2.9.0-slx.*` directories were removed rather than kept: none reached a release, so no
 browser can be holding it.) Do not edit the vendored files in place.
 
-`v2.9.0-slx.6/` is kept beside the current one under that rule and should go in the release
-after this one.
+`v2.9.0-slx.9/` is kept beside the current one under that rule and should go in the release
+after this one. `v2.9.0-slx.6/` was removed when slx.10 landed, having already been superseded
+for a release.
 
 **This build was verified to reproduce.** `js/CaveView2.min.js` built here from `ed0322e5` is
 byte-identical (SHA-256) to the bundle serving the club's public pages, which was built
