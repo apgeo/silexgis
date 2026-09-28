@@ -74,6 +74,8 @@ public sealed record PublicLiveTripListDto(
 /// </param>
 public sealed record PublicLiveTripDto(
     Guid TripLogId,
+    /// <summary>The camp this trip belongs to, or null when it belongs to none.</summary>
+    PublicTripExpeditionDto? Expedition,
     string Title,
     DateOnly TripDate,
     DateOnly? TripDateEnd,

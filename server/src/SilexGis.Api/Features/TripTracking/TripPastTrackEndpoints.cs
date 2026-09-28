@@ -217,9 +217,13 @@ public static class TripPastTrackEndpoints
             .Select(r => r.TripLogId)
             .ToHashSet();
 
+        var camps = await TripTrackingPublicationEndpoints.ExpeditionsOfAsync(
+            db, [.. page.Select(p => p.Id)], ct);
+
         return TypedResults.Ok(new PublicPastTripListDto(
             [.. page.Select(p => new PublicPastTripDto(
                 p.Id,
+                camps.GetValueOrDefault(p.Id),
                 p.Title,
                 p.TripDate,
                 p.TripDateEnd,
@@ -392,8 +396,11 @@ public static class TripPastTrackEndpoints
                 track));
         }
 
+        var trackCamps = await TripTrackingPublicationEndpoints.ExpeditionsOfAsync(db, [trip.Id], ct);
+
         return TypedResults.Ok(new PublicPastTrackDto(
             trip.Id,
+            trackCamps.GetValueOrDefault(trip.Id),
             trip.Title,
             trip.TripDate,
             trip.TripDateEnd,

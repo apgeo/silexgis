@@ -20,6 +20,7 @@ const at = (iso: string) => Date.parse(iso);
 function track(overrides: Partial<PublicPastTrack> = {}): PublicPastTrack {
   return {
     tripLogId: '0195f4a2-6c3e-7b10-9f21-ab44de77c001',
+    expedition: null,
     title: 'Peștera Demo Mare, the 2019 push',
     tripDate: '2019-07-06',
     tripDateEnd: null,

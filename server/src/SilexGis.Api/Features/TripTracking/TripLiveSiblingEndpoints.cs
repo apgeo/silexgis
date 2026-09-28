@@ -162,6 +162,10 @@ public static class TripLiveSiblingEndpoints
         var more = followed.Count > size;
         var shown = followed.Take(size).ToList();
 
+        // One query for the whole list, before the loop that folds each party.
+        var camps = await TripTrackingPublicationEndpoints.ExpeditionsOfAsync(
+            db, [.. shown.Select(row => row.Id)], ct);
+
         var trips = new List<PublicLiveTripDto>(shown.Count);
         foreach (var row in shown)
         {
@@ -173,6 +177,7 @@ public static class TripLiveSiblingEndpoints
 
             trips.Add(new PublicLiveTripDto(
                 row.Id,
+                camps.GetValueOrDefault(row.Id),
                 row.Title,
                 row.TripDate,
                 row.TripDateEnd,
