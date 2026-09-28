@@ -49,6 +49,9 @@ public sealed class TripPositionEventConfiguration : IEntityTypeConfiguration<Tr
 
         builder.HasIndex(x => new { x.TripLogId, x.CaverId, x.RecordedAt });
         builder.HasIndex(x => new { x.TripLogId, x.RecordedAt });
+        // Which trips reported against a survey model is asked from the model's side (which trips
+        // a movie of that model can show); without this it reads every report of every trip.
+        builder.HasIndex(x => x.SurveyModelId);
     }
 }
 
@@ -67,6 +70,9 @@ public sealed class TripTrackingConfiguration : IEntityTypeConfiguration<TripTra
         // turns it into a watch that reads as never having had one — the same null a withheld
         // configuration sends. Keeping the id is what lets the read say which of the two it is.
         builder.HasOne<Feature>().WithMany().HasForeignKey(x => x.CaveFeatureId).OnDelete(DeleteBehavior.SetNull);
+        // Which watches point at a survey model is asked from the model's side as well as by the
+        // survey-delete guard.
+        builder.HasIndex(x => x.SurveyModelId);
     }
 }
 
