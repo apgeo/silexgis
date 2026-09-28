@@ -2280,6 +2280,11 @@
       "positionNotOnMap": "Fără punct pe această hartă",
       "positionNotOnMapDetail": "Cineva a raportat acest om la {{station}}, iar această hartă nu are niciun punct definit pentru acea stație — așa că nu are unde să fie marcat pe această planșă. Ridicarea în sine are stația în continuare, iar vederea 3D îl poate arăta. Definirea unui punct pentru stație pe această hartă, din vizualizatorul de modele, este ceea ce îl aduce pe ea.",
       "positionUnreported": "Nicio poziție raportată"
+    },
+    "movie": {
+      "legendTripTeam": "{{trip}} · {{team}}",
+      "noteBy": "{{name}}: {{note}}",
+      "clockElapsed": "Timp scurs {{time}}"
     }
   },
   "surveyModels": {

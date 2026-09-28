@@ -564,6 +564,47 @@ export function trackedCaversAt(
 }
 
 /**
+ * Per caver, the stations of this model they were placed at up to a moment, in the order they were
+ * placed there, a station reported twice in a row kept once — the route an exported movie draws
+ * behind each marker.
+ *
+ * <b>The same reading as the markers, or the trail would argue with them.</b> Each report is dated
+ * and ordered exactly as {@link trackedCaversAt} orders them, and asked where it places somebody by
+ * the same rule: a report measured in another survey, a withheld one and a depth nobody named a
+ * station for all place nobody at a station here, so none of them adds a point. A route therefore
+ * only ever joins stations this reader was told somebody stood at — and its last point is where the
+ * caver's marker stands whenever their latest place was a station.
+ *
+ * Only cavers placed at a station at least once are in it; the rest have no route to draw.
+ */
+export function trackedRoutesAt(
+  events: readonly TrackingEvent[],
+  at: number,
+  surveyModelId: string | undefined,
+): Map<string, string[]> {
+  const routes = new Map<string, string[]>();
+  if (surveyModelId === undefined || !Number.isFinite(at)) {
+    return routes;
+  }
+  for (const { at: when, event } of datedEvents(events)) {
+    if (when > at) {
+      break;
+    }
+    const place = placeReported(event, surveyModelId);
+    if (place?.kind !== 'station') {
+      continue;
+    }
+    const route = routes.get(event.caverId);
+    if (route === undefined) {
+      routes.set(event.caverId, [place.station]);
+    } else if (route[route.length - 1] !== place.station) {
+      route.push(place.station);
+    }
+  }
+  return routes;
+}
+
+/**
  * What every caver's reports up to a moment add up to, keyed by caver.
  *
  * <b>One fold, two readers.</b> The party's markers are drawn from it and so is the station a
