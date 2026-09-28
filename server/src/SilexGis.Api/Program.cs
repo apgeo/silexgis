@@ -340,6 +340,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapMapLayerEndpoints();
     api.MapCaveEndpoints();
     api.MapCaveExternalIdEndpoints();
+    api.MapCaveDepthPlaceEndpoints();
     api.MapEntranceEndpoints();
     api.MapSurveyModelEndpoints();
     api.MapSurveySourceEndpoints();
