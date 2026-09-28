@@ -60,6 +60,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
 
     public DbSet<CaveQrPublication> CaveQrPublications => Set<CaveQrPublication>();
 
+    public DbSet<CaveDepthPlace> CaveDepthPlaces => Set<CaveDepthPlace>();
+
     public DbSet<MapLayer> MapLayers => Set<MapLayer>();
 
     public DbSet<Document> Documents => Set<Document>();
