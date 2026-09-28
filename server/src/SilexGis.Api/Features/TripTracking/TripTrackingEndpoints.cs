@@ -93,7 +93,7 @@ public static class TripTrackingEndpoints
     /// The survey model and its cave, only when the caller may both read the cave and place
     /// it. Missing, unreadable and location-closed all answer null — one shape, no leak.
     /// </summary>
-    private static async Task<(SurveyModel Model, Feature Cave)?> UsableModelAsync(
+    internal static async Task<(SurveyModel Model, Feature Cave)?> UsableModelAsync(
         SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext ctx,
         Guid? surveyModelId, CancellationToken ct)
     {

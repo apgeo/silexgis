@@ -2308,6 +2308,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{surveyModelId}/tracked-trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The trips tracked on this survey model that the caller may read — watching it now, or with reports recorded against it — latest activity first; report counts follow the event log's per-report withholding. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    surveyModelId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackedTripDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/trips/{token}/past": {
         parameters: {
             query?: never;
@@ -24153,6 +24191,27 @@ export interface components {
         };
         /** @enum {unknown} */
         TextExtractionState: "notApplicable" | "pending" | "extracted" | "noText" | "failed" | "unsupported";
+        TrackedTripDto: {
+            /** Format: uuid */
+            tripLogId: string;
+            title: string;
+            /** Format: date */
+            tripDate: null | string;
+            /** Format: date */
+            tripDateEnd: null | string;
+            state: components["schemas"]["TripTrackingState"];
+            /** Format: date-time */
+            armedAt: null | string;
+            /** Format: date-time */
+            closedAt: null | string;
+            watchesThisModel: boolean;
+            /** Format: int32 */
+            reportCount: number;
+            /** Format: date-time */
+            firstReportAt: null | string;
+            /** Format: date-time */
+            lastReportAt: null | string;
+        };
         TrackingConfigRequest: {
             state: null | components["schemas"]["TripTrackingState"];
             /** Format: uuid */

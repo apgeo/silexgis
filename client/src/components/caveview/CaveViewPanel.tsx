@@ -26,10 +26,11 @@ import { noStationsMissing, stationsNotOnModel } from '../../caveview/placedOnMo
 import { mediaForStation } from '../../caveview/stationMedia.ts';
 import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
 import {
-  sharedTeamTitle,
-  undergroundFirst,
-  type TrackedCaver,
-} from '../../caveview/trackedCavers.ts';
+  clusterLabelFor,
+  syncLiveMarkers,
+  type DrawnMarker,
+} from '../../caveview/liveMarkerSync.ts';
+import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
@@ -245,14 +246,13 @@ function screenCoveringSurface(surface: HTMLElement | null): HTMLElement | null 
   return covering ? surface : null;
 }
 
-/**
- * What one marker is currently drawn as, so the next answer can be turned into the moves it needs.
+/*
+ * What one marker is drawn as, and how the next answer is turned into the moves it needs, live in
+ * `caveview/liveMarkerSync.ts`, which an exported movie of a trip draws its party with too.
  *
- * <b>A marker's own label is one line and stays a string.</b> Several lines are a thing a *group*
- * of markers at one station says, and that label is answered by a function the viewer asks rather
- * than carried in a marker's options — so the comparison below stays a string comparison. An array
- * here would be a new value on every render and would slide every marker on every re-read of the
- * watch, which is precisely the rebuild this diff exists to avoid.
+ * <b>A marker's own label is one line.</b> Several lines are a thing a *group* of markers at one
+ * station says, and that label is answered by a function the viewer asks rather than carried in a
+ * marker's options.
  *
  * <b>Nothing is carried on the hover line any more, and the switch is why.</b> The last-report time
  * used to go there, revealed by a pointer resting on the marker. A collapsed marker has no such
@@ -262,11 +262,6 @@ function screenCoveringSurface(surface: HTMLElement | null): HTMLElement | null 
  * label now. The case that needed a marker to be added again rather than moved — a sublabel cannot
  * be taken off by a move, because a move replaces only the options it is given — goes with it.
  */
-interface DrawnMarker {
-  station: string;
-  label: string;
-  color: string;
-}
 
 // The label spelling itself lives in `caveview/markerLine.ts` now: the scanned map sheets
 // draw the same party, and one person must read the same on both drawings.
@@ -452,15 +447,8 @@ export default function CaveViewPanel({
   clusterLabelRef.current = (ids) => {
     const here = new Set(ids);
     const members = (trackedCavers ?? []).filter((caver) => here.has(caver.caverId));
-    if (members.length === 0) {
-      return null;
-    }
-    const title = sharedTeamTitle(members);
     const line = { t, language: i18n.language, showTimes: showMarkerTimes, today };
-    return [
-      ...(title === null ? [] : [title]),
-      ...undergroundFirst(members).map((member) => markerLine(member, line)),
-    ];
+    return clusterLabelFor(members, (member) => markerLine(member, line));
   };
 
   useEffect(() => {
@@ -727,28 +715,7 @@ export default function CaveViewPanel({
       });
     }
 
-    for (const [id, marker] of wanted) {
-      const before = drawn.get(id);
-      const options = { label: marker.label, color: marker.color };
-      // A move replaces only the options it is given, which is no longer a trap: every option
-      // these markers carry is given on every call, so none of them can be left behind by one.
-      if (before === undefined) {
-        viewer.addLiveMarker(id, marker.station, options);
-      } else if (
-        before.station !== marker.station
-        || before.label !== marker.label
-        || before.color !== marker.color
-      ) {
-        viewer.moveLiveMarker(id, marker.station, options);
-      }
-    }
-    for (const id of drawn.keys()) {
-      if (!wanted.has(id)) {
-        viewer.removeLiveMarker(id);
-      }
-    }
-
-    drawnMarkersRef.current = wanted;
+    drawnMarkersRef.current = syncLiveMarkers(viewer, drawn, wanted);
 
     // ---- And then ask the viewer what actually went onto the model ----
     //

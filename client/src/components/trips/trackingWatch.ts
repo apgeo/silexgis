@@ -2,6 +2,7 @@
 import type { TrackingParticipant } from '../../api/hooks.ts';
 import {
   partyStandings,
+  positionAgeInWords,
   sinceInWords,
   standingOf,
   type PublicTripStanding,
@@ -64,8 +65,8 @@ export function trackingStandings(
  * word.
  *
  * <b>The second moment arrived and is drawn beside the place, not here.</b> The read carries
- * `positionRecordedAt`, and the position is dated from that — see `positionAgeInWords` on the
- * followed page's module, which both this tab and that page word their position's age through.
+ * `positionRecordedAt`, and the position is dated from that — see `positionReportedInWords` below,
+ * which words it by the followed page's own rule, exactly as that page words its own.
  * This function stays exactly what it was: the age of the last word, under the column named for
  * the last word. The two are kept side by side and are never folded into one figure, because the
  * gap between them is the answer to a question a coordinator is actually asking — somebody can
@@ -98,4 +99,22 @@ export function lastHeardInWords(
 ): string | null {
   const iso = lastHeardAtIso(participant);
   return iso === null ? null : sinceInWords(iso, now, language);
+}
+
+/**
+ * How long ago the report that placed somebody was made, in the reader's own language, or null
+ * where nothing placed them.
+ *
+ * The watch tab words a position's age through here rather than reaching into the followed page's
+ * module itself: that module is another page's, and this one is where the watch borrows the
+ * followed page's wording from. The rule is called, not copied, for the same reason as
+ * {@link lastHeardInWords} — a coordinator and a family reading one position must round its age
+ * the same way.
+ */
+export function positionReportedInWords(
+  positionRecordedAt: string | null | undefined,
+  now: number,
+  language: string,
+): string | null {
+  return positionAgeInWords(positionRecordedAt, now, language);
 }

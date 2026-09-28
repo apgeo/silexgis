@@ -11,6 +11,7 @@ import {
   replayPictures,
   replayWindow,
   trackedCaversAt,
+  trackedRoutesAt,
   type ReplayPicture,
 } from './trackingReplay.ts';
 
@@ -823,5 +824,53 @@ describe('picturesAt and where a picture is drawn', () => {
       .toBe(at('2026-09-11T23:00:00Z'));
     expect(replayWindow(tracking, reports, at('2026-09-12T12:00:00Z'), picture('2026-09-13T11:00:00Z'))?.to)
       .toBe(at('2026-09-13T11:00:00Z'));
+  });
+});
+
+describe('trackedRoutesAt', () => {
+  it('lists the stations each caver was placed at, in order, a repeat in a row kept once', () => {
+    const log = newestFirst([
+      event({ stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ stationName: 'p.1', recordedAt: '2026-09-12T09:10:00Z' }),
+      event({ stationName: 'p.2', recordedAt: '2026-09-12T09:20:00Z' }),
+      event({ stationName: 'p.1', recordedAt: '2026-09-12T09:30:00Z' }),
+      event({ caverId: BOGDAN, stationName: 'q.1', recordedAt: '2026-09-12T09:15:00Z' }),
+    ]);
+    const routes = trackedRoutesAt(log, at('2026-09-12T10:00:00Z'), MODEL);
+    expect(routes.get(ANA)).toEqual(['p.1', 'p.2', 'p.1']);
+    expect(routes.get(BOGDAN)).toEqual(['q.1']);
+  });
+
+  it('stops at the moment, as the markers do', () => {
+    const log = newestFirst([
+      event({ stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ stationName: 'p.2', recordedAt: '2026-09-12T09:20:00Z' }),
+    ]);
+    expect(trackedRoutesAt(log, at('2026-09-12T09:10:00Z'), MODEL).get(ANA)).toEqual(['p.1']);
+    // And agrees with where the marker stands at that moment.
+    const [ana] = trackedCaversAt(state(), log, at('2026-09-12T09:10:00Z'), nameOf, MODEL);
+    expect(ana.position).toEqual({ kind: 'station', station: 'p.1' });
+  });
+
+  it('adds no point for a report of another survey, a withheld one, a depth or a note', () => {
+    const log = newestFirst([
+      event({ stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ stationName: 'x.9', surveyModelId: OTHER_MODEL, recordedAt: '2026-09-12T09:05:00Z' }),
+      event({ stationName: null, surveyModelId: null, recordedAt: '2026-09-12T09:10:00Z' }),
+      event({ kind: 'atDepth', depthEnteredM: 40, recordedAt: '2026-09-12T09:15:00Z' }),
+      event({ kind: 'note', note: 'ok', surveyModelId: null, recordedAt: '2026-09-12T09:20:00Z' }),
+      event({ stationName: 'p.1', recordedAt: '2026-09-12T09:25:00Z' }),
+      event({ caverId: BOGDAN, stationName: null, surveyModelId: null, recordedAt: '2026-09-12T09:25:00Z' }),
+    ]);
+    const routes = trackedRoutesAt(log, at('2026-09-12T10:00:00Z'), MODEL);
+    // The two station reports on either side of the gap collapse into one point.
+    expect(routes.get(ANA)).toEqual(['p.1']);
+    expect(routes.has(BOGDAN)).toBe(false);
+  });
+
+  it('answers nothing without a model or a readable moment', () => {
+    const log = [event({ stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' })];
+    expect(trackedRoutesAt(log, at('2026-09-12T10:00:00Z'), undefined).size).toBe(0);
+    expect(trackedRoutesAt(log, Number.NaN, MODEL).size).toBe(0);
   });
 });

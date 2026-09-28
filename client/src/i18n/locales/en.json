@@ -2280,6 +2280,11 @@
       "positionNotOnMap": "No point on this map",
       "positionNotOnMapDetail": "Somebody reported this caver at {{station}}, and this map has no point defined for that station — so there is nowhere to mark them on this sheet. The survey itself still holds the station, and the 3D view can still show them. Defining a point for the station on this map, from the survey viewer, is what puts them on it.",
       "positionUnreported": "No position reported"
+    },
+    "movie": {
+      "legendTripTeam": "{{trip}} · {{team}}",
+      "noteBy": "{{name}}: {{note}}",
+      "clockElapsed": "Elapsed {{time}}"
     }
   },
   "surveyModels": {
