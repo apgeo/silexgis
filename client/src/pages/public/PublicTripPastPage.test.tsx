@@ -83,6 +83,7 @@ const MODEL = {
 function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelope {
   return {
     tripLogId: '0195f4a2-6c3e-7b10-9f21-ab44de77c001',
+    expedition: null,
     title: 'Peștera Demo Mare, exploration',
     tripDate: '2026-09-14',
     tripDateEnd: null,
@@ -113,6 +114,7 @@ function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelo
 function pastTrack(): PublicPastTrack {
   return {
     tripLogId: '0195f4a2-6c3e-7b10-9f21-ab44de77c002',
+    expedition: null,
     title: 'Peștera Demo Mare, the 2019 push',
     tripDate: '2019-07-06',
     tripDateEnd: null,
@@ -170,6 +172,7 @@ beforeEach(() => {
       trips: [
         {
           tripLogId: TRIP_2019,
+          expedition: null,
           title: 'Peștera Demo Mare, the 2019 push',
           tripDate: '2019-07-06',
           tripDateEnd: null,
@@ -179,6 +182,7 @@ beforeEach(() => {
         },
         {
           tripLogId: TRIP_EMPTY,
+          expedition: null,
           title: 'Peștera Demo Mare, a look at the entrance',
           tripDate: '2018-05-02',
           tripDateEnd: null,

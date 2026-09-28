@@ -79,6 +79,8 @@ public sealed record PublicTripTrackingEnvelopeDto(
     /// </para>
     /// </remarks>
     Guid TripLogId,
+    /// <summary>The camp this trip belongs to, or null when it belongs to none.</summary>
+    PublicTripExpeditionDto? Expedition,
     string Title,
     DateOnly TripDate,
     DateOnly? TripDateEnd,
@@ -263,6 +265,37 @@ public sealed record PublicTripStationPictureDto(
     string StationName,
     string ThumbnailUrl,
     string? Caption);
+
+/// <summary>
+/// The camp a published trip belongs to, where it belongs to one.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Why an anonymous surface says this at all.</b> A club publishes a camp's trips on one page
+/// of its website, and the page has to know which of the cave's published trips belong to that
+/// camp. The lists this rides on are scoped to the <em>cave</em> — which is the right scope for a
+/// cave page and is what lets one link cover trips it was not minted for — so without this a page
+/// about a camp can only show the cave's whole published history, or be given one link per trip and
+/// edited every time the camp gains one.
+/// </para>
+/// <para>
+/// <b>What it discloses, exactly: that these published trips were gathered under a camp of this
+/// name.</b> The same class of fact the list already carries — a trip of this cave exists, under
+/// this title, on these dates — about trips somebody published deliberately. It names no member of
+/// the camp, no organiser and no group, and it opens nothing: no anonymous route takes an
+/// expedition id, so a camp's other trips stay exactly as unreachable as they were. A trip in no
+/// camp answers null, which is the ordinary case for a club that does not run them.
+/// </para>
+/// <para>
+/// <b>What this is not.</b> It is not a published expedition. A page filtering a cave's trips by
+/// the camp they name is not the same thing as a link that publishes a camp, and the difference
+/// shows the moment a camp works more than one cave: these lists would carry only the trips of
+/// whichever cave the reader's link belongs to, and the page would quietly show part of the camp.
+/// Publishing a camp in its own right needs an anchor set across several caves and a rule for
+/// refusing when one of them may not be published — recorded as work, not built.
+/// </para>
+/// </remarks>
+public sealed record PublicTripExpeditionDto(Guid Id, string Name);
 
 public sealed record PublicTripTeamDto(Guid Id, string Title);
 

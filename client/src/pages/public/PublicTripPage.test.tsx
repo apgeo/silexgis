@@ -121,6 +121,7 @@ function participant(overrides: Partial<PublicTripParticipant> = {}): PublicTrip
 function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelope {
   return {
     tripLogId: '0195f4a2-6c3e-7b10-9f21-ab44de77c001',
+    expedition: null,
     title: 'Peștera Demo Mare, exploration',
     tripDate: '2026-09-14',
     tripDateEnd: null,

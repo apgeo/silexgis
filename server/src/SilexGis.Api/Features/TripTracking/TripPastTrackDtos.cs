@@ -59,6 +59,8 @@ public sealed record PublicPastTripListDto(
 /// </param>
 public sealed record PublicPastTripDto(
     Guid TripLogId,
+    /// <summary>The camp this trip belongs to, or null when it belongs to none.</summary>
+    PublicTripExpeditionDto? Expedition,
     string Title,
     DateOnly TripDate,
     DateOnly? TripDateEnd,
@@ -109,6 +111,12 @@ public sealed record PublicPastTrackDto(
     /// several of them cannot come to match them by title.
     /// </remarks>
     Guid TripLogId,
+    /// <summary>
+    /// The camp this trip belonged to, or null when it belonged to none — carried for the reason the
+    /// trip's own id is: a page holding a replay beside the parties underground now reads one shape
+    /// for both, and matching them by anything softer than an identity is how it draws the wrong one.
+    /// </summary>
+    PublicTripExpeditionDto? Expedition,
     string Title,
     DateOnly TripDate,
     DateOnly? TripDateEnd,

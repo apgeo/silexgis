@@ -453,6 +453,61 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         participant.GetProperty("positionOnOtherModel").GetBoolean().ShouldBeFalse();
     }
 
+    /// <summary>
+    /// The camp a published trip belongs to travels on every shape a page reads, so a page about one
+    /// camp can pick its trips out of a cave's list.
+    /// </summary>
+    /// <remarks>
+    /// This is what lets one link cover a camp: the lists are scoped to the cave, deliberately, so
+    /// without the camp on each row a page about a camp could only show the cave's whole published
+    /// history — or be given one link per trip and edited every time the camp gained one.
+    /// </remarks>
+    [Fact]
+    public async Task Every_published_shape_says_which_camp_a_trip_belongs_to_and_null_when_it_belongs_to_none()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var joined = await PublishedTripAsync("In the camp", cave, model);
+        var loose = await PublishedTripAsync("In no camp", cave, model);
+
+        var camp = await CreateExpeditionAsync("Tabăra de test");
+        var joinedToCamp = await owner.PostAsJsonAsync(
+            $"/api/v1/expeditions/{camp}/trips", new { tripLogId = joined.Trip });
+        joinedToCamp.StatusCode.ShouldBe(HttpStatusCode.OK, await joinedToCamp.Content.ReadAsStringAsync());
+
+        // On the followed envelope, which is the first thing a page reads.
+        var followed = await Json(anonymous.GetAsync(Follow(joined.Token)));
+        followed.GetProperty("expedition").GetProperty("id").GetGuid().ShouldBe(camp);
+        followed.GetProperty("expedition").GetProperty("name").GetString().ShouldBe("Tabăra de test");
+
+        // On the live list, for both trips — and the pair is the point: a page filtering by camp has
+        // to be able to tell a trip that is in none from one that is in this one.
+        var list = await LiveListAsync(joined.Token);
+        var mine = TripIn(list, joined.Trip);
+        mine.GetProperty("expedition").GetProperty("id").GetGuid().ShouldBe(camp);
+        TripIn(list, loose.Trip).GetProperty("expedition").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // And on the archive list, with the same id, once the trip is over.
+        await CloseAsync(joined.Trip, DateTimeOffset.UtcNow.AddDays(-5));
+        var past = await Json(anonymous.GetAsync(PastList(joined.Token)));
+        var archived = past.GetProperty("trips").EnumerateArray()
+            .Single(t => t.GetProperty("tripLogId").GetGuid() == joined.Trip);
+        archived.GetProperty("expedition").GetProperty("id").GetGuid().ShouldBe(camp);
+    }
+
+    private async Task<Guid> CreateExpeditionAsync(string name)
+    {
+        var response = await owner.PostAsJsonAsync("/api/v1/expeditions", new
+        {
+            name,
+            startDate = "2026-09-20",
+            endDate = "2026-09-27",
+            visibility = "authenticated",
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
+
     // ---- addresses ---------------------------------------------------------------------------
 
     private static string Shares(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/shares";

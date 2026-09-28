@@ -22572,6 +22572,7 @@ export interface components {
         PublicLiveTripDto: {
             /** Format: uuid */
             tripLogId: string;
+            expedition: null | components["schemas"]["PublicTripExpeditionDto"];
             title: string;
             /** Format: date */
             tripDate: string;
@@ -22593,6 +22594,7 @@ export interface components {
         PublicPastTrackDto: {
             /** Format: uuid */
             tripLogId: string;
+            expedition: null | components["schemas"]["PublicTripExpeditionDto"];
             title: string;
             /** Format: date */
             tripDate: string;
@@ -22629,6 +22631,7 @@ export interface components {
         PublicPastTripDto: {
             /** Format: uuid */
             tripLogId: string;
+            expedition: null | components["schemas"]["PublicTripExpeditionDto"];
             title: string;
             /** Format: date */
             tripDate: string;
@@ -22661,6 +22664,11 @@ export interface components {
         };
         PublicQrDto: {
             instanceName: string;
+        };
+        PublicTripExpeditionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
         };
         PublicTripMapPointDto: {
             station: string;
@@ -22723,6 +22731,7 @@ export interface components {
         PublicTripTrackingEnvelopeDto: {
             /** Format: uuid */
             tripLogId: string;
+            expedition: null | components["schemas"]["PublicTripExpeditionDto"];
             title: string;
             /** Format: date */
             tripDate: string;

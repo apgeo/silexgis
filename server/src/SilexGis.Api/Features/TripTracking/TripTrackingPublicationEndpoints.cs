@@ -288,8 +288,11 @@ public static class TripTrackingPublicationEndpoints
         var party = await PartyAsync(
             db, protection, options.Value, trip.Id, tracking.SurveyModelId, configCave, ct);
 
+        var camps = await ExpeditionsOfAsync(db, [trip.Id], ct);
+
         return TypedResults.Ok(new PublicTripTrackingEnvelopeDto(
             trip.Id,
+            camps.GetValueOrDefault(trip.Id),
             trip.Title,
             trip.TripDate,
             trip.TripDateEnd,
@@ -448,6 +451,46 @@ public static class TripTrackingPublicationEndpoints
             [.. teams.Select(t => new PublicTripTeamDto(t.Id, t.Title))],
             participants,
             withheldAny);
+    }
+
+    /// <summary>
+    /// The camp each of these trips belongs to, for the trips that belong to one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One query for a whole list rather than one per row: a cave's published trips are read
+    /// together on both list routes, and a lookup per trip would make the cost of a page grow with
+    /// the number of parties on it.
+    /// </para>
+    /// <para>
+    /// <b>No visibility filter, and that needs saying.</b> The camp's own record is not being read
+    /// out — only its name, and only for a trip that somebody published deliberately. Filtering by
+    /// what an anonymous caller may see would answer null for every camp on every installation,
+    /// since nothing is visible to a caller with no account; the disclosure is argued on the
+    /// published trip instead, where the decision was actually taken.
+    /// </para>
+    /// </remarks>
+    internal static async Task<Dictionary<Guid, PublicTripExpeditionDto>> ExpeditionsOfAsync(
+        SilexGisDbContext db, IReadOnlyCollection<Guid> tripLogIds, CancellationToken ct)
+    {
+        if (tripLogIds.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await (
+            from join_ in db.ExpeditionTrips.AsNoTracking()
+            join camp in db.Expeditions.AsNoTracking() on join_.ExpeditionId equals camp.Id
+            where tripLogIds.Contains(join_.TripLogId)
+            select new { join_.TripLogId, camp.Id, camp.Name }).ToListAsync(ct);
+
+        // At most one camp per trip is carried by a unique index on the join, so the last writer
+        // here would be picking between rows that cannot both exist. Grouped anyway rather than
+        // keyed directly, so that a database which lost that index fails as a wrong name rather
+        // than as an exception in front of a reader.
+        return rows
+            .GroupBy(row => row.TripLogId)
+            .ToDictionary(g => g.Key, g => new PublicTripExpeditionDto(g.First().Id, g.First().Name));
     }
 
     /// <summary>

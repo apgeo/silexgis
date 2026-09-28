@@ -213,6 +213,9 @@ export function pastEnvelopeAt(track: PublicPastTrack, at: number): PublicTripEn
     // replay of one trip beside the parties underground in the same cave now — and matching them by
     // title is how a page comes to draw the wrong party under the right name.
     tripLogId: track.tripLogId,
+    // Carried through for the reason the id above it is: a page may hold this beside the
+    // parties underground now, and both shapes have to say which camp they belong to.
+    expedition: track.expedition,
     title: track.title,
     tripDate: track.tripDate,
     tripDateEnd: track.tripDateEnd,
