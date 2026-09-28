@@ -1,0 +1,229 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { useState } from 'react';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { App, Button, Card, Empty, Flex, Form, Input, InputNumber, Table, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
+import {
+  useCaveDepthPlaces,
+  useDeleteCaveDepthPlace,
+  useWriteCaveDepthPlace,
+  type CaveDepthPlace,
+} from '../../api/hooks.ts';
+
+interface DeclarationForm {
+  depthM: number | null;
+  stationName: string;
+  placeLabel: string;
+}
+
+/**
+ * What this cave's depths mean.
+ *
+ * A depth on its own is not a place. Turning one into a position means looking for the station
+ * nearest to it, and "nearest" cannot tell which of several stations within a metre of each other
+ * is the place people actually mean by that number — a club knows, and nothing in the geometry
+ * does. Declared here once, that answer is used by every path that turns a depth into a position:
+ * a report typed while a trip is underground, a correction made afterwards, and a sheet imported
+ * from a coordinator's spreadsheet.
+ *
+ * The name is the half that gets used most. A caver on the phone says "at the Meander", not "at
+ * 96 metres" and certainly not "at station 3.14", and a named place is what the report card and
+ * the importer can then offer instead of a number.
+ *
+ * <b>One declaration per depth, and the depth is the key.</b> Two answers to "what is at 96 m" is
+ * no answer, and the resolution that consults these has to be able to take one — so writing a
+ * depth that is already declared replaces it rather than adding beside it.
+ */
+export default function CaveDepthPlacesSection({
+  caveId,
+  canEdit,
+}: {
+  caveId: string;
+  canEdit: boolean;
+}) {
+  const { t } = useTranslation();
+  const { message, modal } = App.useApp();
+  const { data: places } = useCaveDepthPlaces(caveId);
+  const write = useWriteCaveDepthPlace(caveId);
+  const remove = useDeleteCaveDepthPlace(caveId);
+  const [form] = Form.useForm<DeclarationForm>();
+  const [adding, setAdding] = useState(false);
+
+  const save = async (values: DeclarationForm) => {
+    if (values.depthM === null || values.depthM === undefined) {
+      return;
+    }
+
+    try {
+      await write.mutateAsync({
+        depthM: values.depthM,
+        stationName: values.stationName.trim(),
+        placeLabel: values.placeLabel.trim() || null,
+      });
+      form.resetFields();
+      setAdding(false);
+      message.success(t('caves.depthPlaces.saved'));
+    } catch {
+      message.error(t('caves.depthPlaces.saveFailed'));
+    }
+  };
+
+  const confirmRemove = (place: CaveDepthPlace) =>
+    modal.confirm({
+      title: t('caves.depthPlaces.withdrawConfirm', { depth: place.depthM }),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await remove.mutateAsync({ id: place.id });
+        } catch {
+          message.error(t('caves.depthPlaces.saveFailed'));
+        }
+      },
+    });
+
+  /** Filling the form from a row, so changing a declaration is one press rather than retyping it. */
+  const edit = (place: CaveDepthPlace) => {
+    form.setFieldsValue({
+      depthM: place.depthM,
+      stationName: place.stationName,
+      placeLabel: place.placeLabel ?? '',
+    });
+    setAdding(true);
+  };
+
+  return (
+    <Card
+      size="small"
+      title={t('caves.depthPlaces.title')}
+      style={{ marginBottom: 16 }}
+      data-testid="cave-depth-places"
+      extra={
+        canEdit && !adding ? (
+          <Button
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={() => setAdding(true)}
+            data-testid="cave-depth-place-add"
+          >
+            {t('caves.depthPlaces.declare')}
+          </Button>
+        ) : null
+      }
+    >
+      <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+        {t('caves.depthPlaces.help')}
+      </Typography.Paragraph>
+
+      {places && places.length > 0 ? (
+        <Table<CaveDepthPlace>
+          size="small"
+          rowKey="id"
+          pagination={false}
+          dataSource={places}
+          columns={[
+            {
+              title: t('caves.depthPlaces.depth'),
+              dataIndex: 'depthM',
+              width: 110,
+              render: (depth: number) => t('caves.depthPlaces.metres', { depth }),
+            },
+            { title: t('caves.depthPlaces.station'), dataIndex: 'stationName' },
+            {
+              title: t('caves.depthPlaces.place'),
+              dataIndex: 'placeLabel',
+              render: (label: string | null) =>
+                label ?? (
+                  <Typography.Text type="secondary">
+                    {t('caves.depthPlaces.unnamed')}
+                  </Typography.Text>
+                ),
+            },
+            ...(canEdit
+              ? [
+                  {
+                    title: '',
+                    key: 'actions',
+                    width: 120,
+                    render: (_: unknown, place: CaveDepthPlace) => (
+                      <Flex gap={4}>
+                        <Button size="small" type="link" onClick={() => edit(place)}>
+                          {t('common.edit')}
+                        </Button>
+                        <Button
+                          size="small"
+                          type="text"
+                          danger
+                          icon={<DeleteOutlined />}
+                          aria-label={t('caves.depthPlaces.withdraw')}
+                          onClick={() => confirmRemove(place)}
+                        />
+                      </Flex>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
+      ) : (
+        <Empty
+          image={null}
+          description={t('caves.depthPlaces.none')}
+          data-testid="cave-depth-places-empty"
+        />
+      )}
+
+      {canEdit && adding && (
+        <Form<DeclarationForm>
+          form={form}
+          layout="inline"
+          style={{ marginTop: 12, rowGap: 8 }}
+          initialValues={{ depthM: null, stationName: '', placeLabel: '' }}
+          onFinish={save}
+        >
+          <Form.Item
+            name="depthM"
+            label={t('caves.depthPlaces.depth')}
+            rules={[{ required: true, message: t('caves.depthPlaces.depthRequired') }]}
+          >
+            <InputNumber
+              step={0.1}
+              style={{ width: 120 }}
+              data-testid="cave-depth-place-depth"
+              addonAfter="m"
+            />
+          </Form.Item>
+          <Form.Item
+            name="stationName"
+            label={t('caves.depthPlaces.station')}
+            rules={[{ required: true, message: t('caves.depthPlaces.stationRequired') }]}
+          >
+            <Input style={{ width: 180 }} data-testid="cave-depth-place-station" />
+          </Form.Item>
+          <Form.Item name="placeLabel" label={t('caves.depthPlaces.place')}>
+            <Input style={{ width: 200 }} data-testid="cave-depth-place-label" />
+          </Form.Item>
+          <Form.Item>
+            <Flex gap={8}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={write.isPending}
+                data-testid="cave-depth-place-save"
+              >
+                {t('common.save')}
+              </Button>
+              <Button
+                onClick={() => {
+                  form.resetFields();
+                  setAdding(false);
+                }}
+              >
+                {t('common.cancel')}
+              </Button>
+            </Flex>
+          </Form.Item>
+        </Form>
+      )}
+    </Card>
+  );
+}

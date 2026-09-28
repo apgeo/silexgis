@@ -402,6 +402,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapTripLogEndpoints();
     api.MapTripInvitationEndpoints();
     api.MapTripTrackingEndpoints();
+    api.MapTrackingCsvImportEndpoints();
     api.MapTripTrackingPictureEndpoints();
     api.MapTripTrackingPublicationEndpoints();
     api.MapTripPastTrackEndpoints();

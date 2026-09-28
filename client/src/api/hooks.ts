@@ -154,6 +154,7 @@ export const queryKeys = {
   surveySources: (caveId: string) => ['survey-sources', caveId] as const,
   surveyCompilations: (caveId: string) => ['survey-compilations', caveId] as const,
   caveExternalIds: (caveId: string) => ['cave-external-ids', caveId] as const,
+  caveDepthPlaces: (caveId: string) => ['cave-depth-places', caveId] as const,
   centerlines: (caveId: string) => ['centerlines', caveId] as const,
   search: (q: string, kind?: string) => ['search', q, kind ?? 'all'] as const,
   nominatim: (q: string) => ['nominatim', q] as const,
@@ -272,6 +273,10 @@ export const queryKeys = {
   // last segment is a word rather than a narrowing, which no narrowing can collide with.
   tripTrackingEventLog: (id: string) => ['trip-logs', 'tracking-events', id, 'log'] as const,
   tripTrackingShares: (id: string) => ['trip-logs', 'tracking-shares', id] as const,
+  // The places the watch's cave has declared. Held under the trip rather than under the cave
+  // because that is the identity the surface asking has: the page showing this list knows which
+  // watch it is drawn on and deliberately does not know which cave the watch is anchored to.
+  tripTrackingPlaces: (id: string) => ['trip-logs', 'tracking-places', id] as const,
   // What one depth means in one trip's cave. The depth is part of the key because it is the whole
   // of the question — two depths are two questions, not one answer going stale.
   tripTrackingDepth: (id: string, depthM: number) =>
@@ -732,6 +737,71 @@ export function useCaveExternalIds(caveId: string | undefined) {
       unwrap(api.GET('/api/v1/caves/{caveId}/external-ids', { params: { path: { caveId: caveId! } } })),
     enabled: !!caveId,
     staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * The depths this cave has declared the meaning of: each one a station, and a name for the place.
+ *
+ * <b>Why a cave declares this at all.</b> A depth alone has to be turned into a station by looking
+ * for the nearest one, and "nearest" cannot tell which of several stations within a metre of each
+ * other is the place people actually mean by that number. A club knows. Declaring it once means
+ * every report of that depth — typed, corrected or imported — lands where the club says, and gives
+ * the place a name somebody can report by instead of a number.
+ */
+export function useCaveDepthPlaces(caveId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.caveDepthPlaces(caveId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/caves/{caveId}/depth-places', { params: { path: { caveId: caveId! } } }),
+      ),
+    enabled: !!caveId,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Declares what one depth of this cave means, replacing the declaration for that depth.
+ *
+ * The depth is the key, and one declaration per depth is the whole point: two answers to "what is
+ * at 96 m" is no answer, and the resolution that consults these has to be able to take one.
+ */
+export function useWriteCaveDepthPlace(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      depthM,
+      stationName,
+      placeLabel,
+    }: {
+      depthM: number;
+      stationName: string;
+      placeLabel: string | null;
+    }) =>
+      unwrap(
+        api.PUT('/api/v1/caves/{caveId}/depth-places', {
+          params: { path: { caveId } },
+          body: { depthM, stationName, placeLabel },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveDepthPlaces(caveId) }),
+  });
+}
+
+/** Withdraws one declaration. Reports already recorded under it keep the station they were given. */
+export function useDeleteCaveDepthPlace(caveId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      unwrapVoid(
+        api.DELETE('/api/v1/caves/{caveId}/depth-places/{id}', {
+          params: { path: { caveId, id } },
+        }),
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caveDepthPlaces(caveId) }),
   });
 }
 
@@ -7301,6 +7371,12 @@ export type TripPositionEventKind = components['schemas']['TripPositionEventKind
 export type TrackingState = components['schemas']['TrackingStateDto'];
 export type TrackingParticipant = components['schemas']['TrackingParticipantDto'];
 export type TrackingTeam = components['schemas']['TrackingTeamDto'];
+export type TrackingPlace = components['schemas']['TrackingPlaceDto'];
+export type TrackingCsvOptions = components['schemas']['TrackingCsvImportOptionsDto'];
+export type TrackingCsvPreview = components['schemas']['TrackingCsvPreviewDto'];
+export type TrackingCsvPreviewRow = components['schemas']['TrackingCsvPreviewRowDto'];
+export type TrackingCsvDiagnostic = components['schemas']['TrackingCsvDiagnosticDto'];
+export type CaveDepthPlace = components['schemas']['CaveDepthPlaceDto'];
 export type TrackingEvent = components['schemas']['TrackingEventDto'];
 export type TrackingEventWrite = components['schemas']['TrackingEventRequest'];
 export type TrackingConfigWrite = components['schemas']['TrackingConfigRequest'];
@@ -7740,6 +7816,110 @@ export function useUpdateTrackingEvent() {
         }),
       ),
     onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * The places the watch's cave has declared: a depth, the station it means, and its name.
+ *
+ * <b>Asked of the trip, not of the cave.</b> The surface that needs this list is the report card,
+ * which knows which watch it is drawn on and is deliberately not told which cave the watch is
+ * anchored to — so the question is asked where the answer is already guarded, and a caller who may
+ * not place the cave is refused rather than handed an empty list they would read as "no places
+ * declared".
+ *
+ * Shallowest first, decided by the server, so every surface showing the list agrees about the
+ * order — and because that is the order a party passes the places in.
+ */
+export function useTrackingPlaces(tripLogId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tripTrackingPlaces(tripLogId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/trip-logs/{tripLogId}/tracking/places', {
+          params: { path: { tripLogId: tripLogId! } },
+        }),
+      ),
+    enabled: !!tripLogId && enabled,
+    // A watch with no usable model answers a conflict rather than a list, which is a settled
+    // answer and not a failure worth retrying: the model does not appear between two attempts.
+    retry: false,
+  });
+}
+
+/**
+ * What reading a sheet of tracking reports onto this trip would do — nothing is written.
+ *
+ * A mutation rather than a query although it changes nothing, because the sheet is the question:
+ * it arrives in the body, it changes every time somebody edits the column mapping, and caching an
+ * answer under it would mean keying a cache on a spreadsheet.
+ */
+export function useTrackingCsvPreview() {
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      text,
+      options = null,
+    }: {
+      tripLogId: string;
+      text: string;
+      options?: TrackingCsvOptions | null;
+    }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/csv-import/preview', {
+          params: { path: { tripLogId } },
+          body: { text, options },
+        }),
+      ),
+  });
+}
+
+/**
+ * Records the sheet's rows as reports.
+ *
+ * <b>Overwriting is asked for rather than assumed.</b> The key is the person and the instant, so
+ * re-importing a corrected sheet is the intended use — and it is also the one act that silently
+ * rewrites history, which is why the reviewer says so each time rather than a default saying it
+ * for them.
+ */
+export function useTrackingCsvCommit() {
+  const invalidate = useInvalidateTripTracking();
+  return useMutation({
+    mutationFn: ({
+      tripLogId,
+      text,
+      options = null,
+      replaceExisting = false,
+      lines = null,
+    }: {
+      tripLogId: string;
+      text: string;
+      options?: TrackingCsvOptions | null;
+      replaceExisting?: boolean;
+      /** The physical lines to commit, or null for every importable one. */
+      lines?: number[] | null;
+    }) =>
+      unwrap(
+        api.POST('/api/v1/trip-logs/{tripLogId}/tracking/csv-import/commit', {
+          params: { path: { tripLogId } },
+          body: { text, options, replaceExisting, lines },
+        }),
+      ),
+    onSuccess: (_data, variables) => invalidate(variables.tripLogId),
+  });
+}
+
+/**
+ * The column roles a tracking sheet can carry, and the header spellings each is detected under.
+ *
+ * Read from the server rather than written down here, so a mapping screen offers exactly what the
+ * reader recognises. Two lists that drift apart is a screen offering a column the parser ignores.
+ */
+export function useTrackingCsvFields() {
+  return useQuery({
+    queryKey: ['tracking-csv-import', 'fields'],
+    queryFn: () => unwrap(api.GET('/api/v1/tracking-csv-import/fields', {})),
+    staleTime: Infinity,
   });
 }
 

@@ -58,6 +58,8 @@ public static class TripTrackingEndpoints
             .WithSummary("Correct one report in place — its moment, its place, its team or its note — keeping the row it was written on.");
         tracking.MapDelete("/events/{eventId:guid}", DeleteEventAsync)
             .WithSummary("Take a report off the log, when what it recorded never happened rather than happened differently.");
+        tracking.MapGet("/places", ListPlacesAsync)
+            .WithSummary("The places the watch's cave has declared, shallowest first — the list a report names instead of a depth.");
         tracking.MapPost("/resolve-depth", ResolveDepthAsync).WithValidation<TrackingResolveDepthRequest>()
             .WithSummary("Preview which stations a depth could mean, under the trip's depth filter.");
 
@@ -93,7 +95,7 @@ public static class TripTrackingEndpoints
     /// The survey model and its cave, only when the caller may both read the cave and place
     /// it. Missing, unreadable and location-closed all answer null — one shape, no leak.
     /// </summary>
-    private static async Task<(SurveyModel Model, Feature Cave)?> UsableModelAsync(
+    internal static async Task<(SurveyModel Model, Feature Cave)?> UsableModelAsync(
         SilexGisDbContext db, IAccessService access, FeatureProtection protection, AccessContext ctx,
         Guid? surveyModelId, CancellationToken ct)
     {
@@ -135,7 +137,7 @@ public static class TripTrackingEndpoints
             model.Format, model.RootSurveyName, given, found.Contains);
     }
 
-    private static async Task<IReadOnlyList<TrackingDepthResolver.Station>> StationsOfAsync(
+    internal static async Task<IReadOnlyList<TrackingDepthResolver.Station>> StationsOfAsync(
         SilexGisDbContext db, SurveyModel model, CancellationToken ct)
     {
         var rows = await db.SurveyStations.AsNoTracking()
@@ -752,25 +754,49 @@ public static class TripTrackingEndpoints
             }
             else
             {
+                // Which station a depth means — what the cave declared it to be if it declared
+                // anything, otherwise the nearest station under this trip's datum and filter. The
+                // ordering between those two lives in one Domain function because recording,
+                // correcting and importing all have to reach the same answer.
                 var stations = await StationsOfAsync(db, usable.Value.Model, ct);
-                var referenceZ = TrackingDepthResolver.ReferenceZ(stations, tracking.ReferenceStationName);
-                if (referenceZ is null) return Refused(ApiProblems.Conflict("tracking.reference_unknown",
-                    "The depth datum cannot be established for the chosen model."));
-                var candidates = TrackingDepthResolver.Resolve(
-                    stations, referenceZ.Value, (double)depthM!.Value, tracking.DepthFilter, take: 1);
-                if (candidates.Count == 0) return Refused(ApiProblems.Conflict("tracking.no_station_at_depth",
-                    "No station matches that depth under the trip's depth filter."));
-                // The winner under the name the viewer knows it by, which the resolver carried
-                // alongside the rows' own. A depth-placed position is drawn on the model exactly
-                // like a pressed one, and one stamped in the other spelling would be a marker that
-                // silently never appears.
-                resolvedStation = candidates[0].ViewerName;
+                var placement = TrackingDepthPlacements.For(
+                    await DeclaredPlacesOfAsync(db, caveFeatureId.Value, ct),
+                    stations,
+                    tracking.ReferenceStationName,
+                    tracking.DepthFilter,
+                    depthM!.Value);
+
+                switch (placement.Outcome)
+                {
+                    case TrackingDepthPlacementOutcome.ReferenceUnknown:
+                        return Refused(ApiProblems.Conflict("tracking.reference_unknown",
+                            "The depth datum cannot be established for the chosen model."));
+                    case TrackingDepthPlacementOutcome.NoStationAtDepth:
+                        return Refused(ApiProblems.Conflict("tracking.no_station_at_depth",
+                            "No station matches that depth under the trip's depth filter."));
+                }
+
+                resolvedStation = placement.ViewerStationName;
                 depthEntered = depthM;
             }
         }
 
 
         return new ResolvedPlace(surveyModelId, caveFeatureId, resolvedStation, depthEntered, null);
+    }
+
+    /// <summary>The places a cave has declared names and stations for, ordered by depth.</summary>
+    internal static async Task<IReadOnlyList<DeclaredDepthPlaces.Declared>> DeclaredPlacesOfAsync(
+        SilexGisDbContext db, Guid caveFeatureId, CancellationToken ct)
+    {
+        var rows = await db.CaveDepthPlaces.AsNoTracking()
+            .Where(p => p.CaveFeatureId == caveFeatureId)
+            .OrderBy(p => p.DepthM)
+            .Select(p => new { p.DepthM, p.ViewerStationName, p.PlaceLabel })
+            .ToListAsync(ct);
+
+        return [.. rows.Select(r =>
+            new DeclaredDepthPlaces.Declared(r.DepthM, r.ViewerStationName, r.PlaceLabel))];
     }
 
     private static ResolvedPlace Refused(ProblemHttpResult problem) =>
@@ -883,6 +909,57 @@ public static class TripTrackingEndpoints
         db.TripPositionEvents.Remove(row);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// The places the watch's cave has declared: a depth, the station it means, and what people
+    /// call it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Here rather than on the cave because of what it is for: somebody taking word off a phone
+    /// picks the place out of this list instead of typing a depth, and the surface they do it on is
+    /// this trip's watch. It also means the list follows the watch — a trip moved onto another
+    /// survey offers that cave's places without the page having to know which cave it is looking
+    /// at.
+    /// </para>
+    /// <para>
+    /// Guarded exactly as the depth preview beside it: a declared place names a station, so it
+    /// tells the caller where in the cave something is, and a caller who may not place the cave is
+    /// told nothing rather than an empty list — which is why the model check is asked before the
+    /// declarations are read and not after.
+    /// </para>
+    /// <para>
+    /// Shallowest first, because that is the order the people using it think in — a party goes
+    /// down past the places in this order — and because deciding it here keeps every surface that
+    /// shows the list agreeing about it.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<IReadOnlyList<TrackingPlaceDto>>, ProblemHttpResult>> ListPlacesAsync(
+        Guid tripLogId, SilexGisDbContext db, IAccessService access, FeatureProtection protection,
+        IAccessContextAccessor accessAccessor, CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
+        var refusal = ctx is null
+            ? ApiProblems.NotFound("trip_log.not_found")
+            : await WriteGuardAsync(access, ctx, trip, ct);
+        if (refusal is not null) return refusal;
+
+        var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
+        var usable = await UsableModelAsync(db, access, protection, ctx!, tracking?.SurveyModelId, ct);
+        if (usable is null)
+        {
+            return ApiProblems.Conflict("tracking.model_unavailable",
+                "The survey model does not exist here, or its cave cannot be placed by this account.");
+        }
+
+        var declared = await DeclaredPlacesOfAsync(db, usable.Value.Cave.Id, ct);
+        IReadOnlyList<TrackingPlaceDto> dtos =
+        [
+            .. declared.Select(d => new TrackingPlaceDto(d.DepthM, d.ViewerStationName, d.PlaceLabel))
+        ];
+        return TypedResults.Ok(dtos);
     }
 
     private static async Task<Results<Ok<IReadOnlyList<TrackingDepthCandidateDto>>, ProblemHttpResult>> ResolveDepthAsync(

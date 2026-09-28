@@ -2,6 +2,7 @@
 import type { TrackingParticipant } from '../../api/hooks.ts';
 import {
   partyStandings,
+  positionAgeInWords,
   sinceInWords,
   standingOf,
   type PublicTripStanding,
@@ -98,4 +99,22 @@ export function lastHeardInWords(
 ): string | null {
   const iso = lastHeardAtIso(participant);
   return iso === null ? null : sinceInWords(iso, now, language);
+}
+
+/**
+ * How old the place drawn in somebody's row is — the second of the two moments above.
+ *
+ * <b>Here rather than imported straight into the tab, because a page slice may not reach into
+ * another page slice.</b> The rule that turns a gap into words lives with the followed page's fold
+ * and is called rather than copied — a coordinator and a family read the same silence, and two
+ * roundings of it would have them disagreeing by up to a whole unit. What this module adds is the
+ * one legal door to it: everything else in this file is already the trips slice's way of asking the
+ * same fold its questions.
+ */
+export function positionAgeOf(
+  positionRecordedAt: string | null | undefined,
+  now: number,
+  language: string,
+): string | null {
+  return positionAgeInWords(positionRecordedAt, now, language);
 }

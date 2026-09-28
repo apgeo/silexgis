@@ -42,6 +42,10 @@ vi.mock('../../stores/workspaceStore.ts', () => ({
 vi.mock('../../api/hooks.ts', () => ({
   useCave: () => ({ data: cave(), isPending: false }),
   useCaveSummary: () => ({ data: undefined }),
+  // The declared-depths card is drawn on this page; nothing declared, so it says so.
+  useCaveDepthPlaces: () => ({ data: [] }),
+  useWriteCaveDepthPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteCaveDepthPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useEntrances: () => ({ data: entrances }),
   useCaveTypes: () => ({ data: [] }),
   useRockTypes: () => ({ data: [] }),
