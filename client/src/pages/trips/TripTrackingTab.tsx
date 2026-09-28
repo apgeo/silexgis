@@ -52,8 +52,12 @@ import {
   type TrackingDepthGap,
 } from '../../components/trips/trackingDepthGap.ts';
 import { publicNamingOf } from '../../components/trips/trackingPublicName.ts';
+// The position's age, like the standing and the "last heard" age, is worded by the followed page's
+// own rule, borrowed through the watch module rather than copied: a coordinator and a family read
+// the same position, and two roundings of one gap would have them disagreeing about it.
 import {
   lastHeardInWords,
+  positionReportedInWords,
   trackingStandingOf,
   trackingStandings,
   type TrackingStanding,
@@ -62,10 +66,6 @@ import { drawableOn } from '../../caveview/drawableOn.ts';
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
-// The position's age is worded by the followed page's own rule, called rather than copied — the
-// same reason the standing and the "last heard" age above are. A coordinator and a family read the
-// same position, and two roundings of one gap would have them disagreeing about it.
-import { positionAgeInWords } from '../public/publicTripParty.ts';
 import './TripTrackingTab.css';
 
 /** How many reports the log shows without being asked for more. */
@@ -661,7 +661,7 @@ export default function TripTrackingTab({
    */
   const positionCell = (participant: TrackingParticipant) => {
     const { shown, placedAt } = positionOf(participant);
-    const since = positionAgeInWords(placedAt, now, i18n.language);
+    const since = positionReportedInWords(placedAt, now, i18n.language);
     return (
       <>
         {shown}
