@@ -99,11 +99,13 @@ async function setNumber(dialog: Locator, testId: string, value: number) {
 async function choose(page: Page, dialog: Locator, testId: string, text: string) {
   await dialog.getByTestId(testId).click();
   const exactly = new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
-  await page
-    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option-content')
-    .filter({ hasText: exactly })
-    .first()
-    .click();
+  // The list slides open, and on this browser — drawing the model in software on a busy machine —
+  // a click made while it is still sliding is lost: the list stayed open with the old value. So the
+  // list is given until its opening motion has ended before its option is pressed.
+  const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').last();
+  await expect(dropdown).toBeVisible();
+  await expect(dropdown).not.toHaveClass(/ant-slide-(up|down)-(appear|enter)/, { timeout: 15_000 });
+  await dropdown.locator('.ant-select-item-option-content').filter({ hasText: exactly }).first().click();
   await expect(dialog.getByTestId(testId)).toContainText(text);
 }
 
