@@ -102,10 +102,8 @@ beforeEach(() => {
   } as unknown as Cv2Namespace;
   vi.stubGlobal('fetch', vi.fn(async () => new Response(new Blob(['survey']))));
   // jsdom lays nothing out; the room the preview is given is 800 by 400.
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-    width: 800,
-    height: 400,
-  } as DOMRect);
+  vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(800);
+  vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(400);
 });
 
 afterEach(() => {
@@ -133,7 +131,10 @@ describe('MoviePreviewHost', () => {
     const { rerender } = render(host({ onReady: ready }));
     await waitFor(() => expect(loadCave).toHaveBeenCalledTimes(1));
     const viewer = FakeViewer.all[0];
-    expect(fetch).toHaveBeenCalledWith('http://files.local/model?sig=1');
+    expect(fetch).toHaveBeenCalledWith(
+      'http://files.local/model?sig=1',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect((loadCave.mock.calls[0][0] as File).name).toBe('Pestera 1.3d');
     expect(document.getElementById(viewer.containerId)).not.toBeNull();
     // Nothing is set before the model is there to set it on.
@@ -257,5 +258,22 @@ describe('MoviePreviewHost', () => {
     expect(ready).toHaveBeenLastCalledWith(null);
     // Its WebGL context is given back at once, not left to the collector.
     expect(loseContext).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a model still on its way', () => {
+  it('is called off when the preview goes', async () => {
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => new Promise<Response>(() => {
+        signal = init?.signal ?? undefined;
+      })),
+    );
+    const { unmount } = render(host());
+    await waitFor(() => expect(signal).toBeDefined());
+    expect(signal!.aborted).toBe(false);
+    unmount();
+    expect(signal!.aborted).toBe(true);
   });
 });
