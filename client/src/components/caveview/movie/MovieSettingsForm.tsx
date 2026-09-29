@@ -559,6 +559,7 @@ export default function MovieSettingsForm({
             value={view.direction}
             style={{ minWidth: 180 }}
             onChange={(direction: MovieViewDirection) => patch('view', { direction })}
+            aria-label={t('caveview.movie.viewDirection')}
             data-testid="movie-view-direction"
             options={MOVIE_VIEW_DIRECTIONS.map((direction) => ({
               value: direction,
