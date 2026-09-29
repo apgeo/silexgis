@@ -2398,7 +2398,7 @@
         "captions": "Captions"
       },
       "tripsHint": "Tick the trips the movie shows. Each keeps its colour in the order you tick them.",
-      "tripReports": "{{reports}} reports",
+      "tripReports": "Reports: {{reports}}",
       "noTrackedTrips": "No trip has been tracked on this model yet.",
       "trackedLoadError": "The trips tracked on this model could not be read.",
       "tripsLoadError": "A chosen trip's tracking could not be read.",
@@ -2467,6 +2467,7 @@
       "quietGap": "Quiet stretch length",
       "minutes": "min",
       "labels": "Caver labels",
+      "labelsHelp": "The first name is the first word of the name on the roster; two people who would read the same gain an initial.",
       "caverLabels": {
         "first": "First name",
         "full": "Full name",

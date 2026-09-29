@@ -2467,6 +2467,7 @@
       "quietGap": "Lungimea perioadei liniștite",
       "minutes": "min",
       "labels": "Etichetele speologilor",
+      "labelsHelp": "Prenumele este primul cuvânt al numelui din listă; două persoane care s-ar citi la fel primesc o inițială.",
       "caverLabels": {
         "first": "Prenume",
         "full": "Nume complet",

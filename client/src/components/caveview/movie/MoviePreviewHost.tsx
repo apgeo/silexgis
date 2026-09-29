@@ -153,8 +153,12 @@ export default function MoviePreviewHost({
     if (element === null) {
       return;
     }
+    // The room's own laid-out size, not its rectangle on the page: the dialog is scaled while it
+    // zooms open, and a rectangle measured mid-zoom would size the box to a fraction of the room,
+    // with nothing to measure it again once the zoom has ended.
     const measure = () => {
-      const { width, height } = element.getBoundingClientRect();
+      const width = element.clientWidth;
+      const height = element.clientHeight;
       setRoom((before) => (before.width === width && before.height === height ? before : { width, height }));
     };
     measure();
@@ -175,13 +179,14 @@ export default function MoviePreviewHost({
     let disposed = false;
     let ui: CaveViewUi | null = null;
     let created: CaveViewer | null = null;
+    const download = new AbortController();
     // Held from the start: by the time an unmount's cleanup runs, the page no longer has it.
     const container = document.getElementById(containerId);
     setStatus('loading');
     setErrorDetail(null);
     (async () => {
       const cv2 = await loadCaveView();
-      const response = await fetch(source.url);
+      const response = await fetch(source.url, { signal: download.signal });
       if (!response.ok) throw new Error(`survey file request failed (${response.status})`);
       const blob = await response.blob();
       if (disposed) return;
@@ -218,6 +223,9 @@ export default function MoviePreviewHost({
     });
     return () => {
       disposed = true;
+      // A model still on its way is not wanted any more: a large file would otherwise go on
+      // downloading for a dialog that has closed.
+      download.abort();
       const hadLoaded = loadedRef.current !== null;
       loadedRef.current = null;
       if (hadLoaded) {

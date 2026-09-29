@@ -798,7 +798,7 @@ describe('the trip picker', () => {
 
     const bravo = await screen.findByTestId('movie-trip-trip-b');
     expect(within(bravo).getByRole('checkbox')).toBeChecked();
-    expect(bravo).toHaveTextContent('3 reports');
+    expect(bravo).toHaveTextContent('Reports: 3');
     expect(within(screen.getByTestId('movie-trip-trip-a')).getByRole('checkbox')).not.toBeChecked();
     const never = screen.getByTestId('movie-trip-trip-c');
     expect(within(never).getByRole('checkbox')).toBeDisabled();
@@ -864,6 +864,109 @@ describe('the trip picker', () => {
 
     reads.trackedError = new Error('offline');
     open();
-    expect(await screen.findByText('The trips tracked on this model could not be read.')).toBeInTheDocument();
+    expect((await screen.findAllByText('The trips tracked on this model could not be read.')).length).toBeGreaterThan(0);
+  });
+
+  it('holds the export back when the list of tracked trips could not be read, even for the trip it was opened for', async () => {
+    reads.trackedError = new Error('offline');
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    await screen.findAllByText('The trips tracked on this model could not be read.');
+    await waitFor(() => expect(screen.getByTestId('movie-summary')).toBeInTheDocument());
+    expect(screen.getByTestId('movie-export')).toBeDisabled();
+  });
+});
+
+describe('the dialog and the keyboard', () => {
+  it('keeps the keys pressed on its controls from the viewer’s document-wide shortcuts, and lets the modal have Escape and Tab', async () => {
+    open(['trip-a']);
+    const seen: string[] = [];
+    const listener = (event: KeyboardEvent) => seen.push(event.key);
+    document.addEventListener('keydown', listener);
+    try {
+      fireEvent.click(await screen.findByText('Captions'));
+      const title = await screen.findByTestId('movie-title-text');
+      fireEvent.keyDown(title, { key: 'a' });
+      fireEvent.keyDown(title, { key: 'Backspace' });
+      fireEvent.keyDown(screen.getByTestId('movie-export'), { key: ' ' });
+      expect(seen).toEqual([]);
+      fireEvent.keyDown(title, { key: 'Escape' });
+      fireEvent.keyDown(title, { key: 'Tab' });
+      expect(seen).toEqual(['Escape', 'Tab']);
+    } finally {
+      document.removeEventListener('keydown', listener);
+    }
+  });
+
+  it('names every setting for assistive technology', async () => {
+    open(['trip-a']);
+    await screen.findByTestId('movie-settings');
+    for (const group of ['Motion', 'Cavers', 'View', 'Captions']) {
+      fireEvent.click(screen.getByText(group));
+    }
+    await screen.findByTestId('movie-layer-legs');
+    const settings = screen.getByTestId('movie-settings');
+    for (const role of ['combobox', 'spinbutton', 'switch', 'radiogroup', 'slider', 'checkbox', 'textbox'] as const) {
+      const all = within(settings).queryAllByRole(role);
+      const named = within(settings).queryAllByRole(role, { name: /\S/ });
+      expect(all.length, role).toBeGreaterThan(0);
+      expect(named.length, `${role}: ${all.length - named.length} without a name`).toBe(all.length);
+    }
+  });
+});
+
+describe('the preview’s party', () => {
+  /** A trip with one caver reported at one station of the model, so a marker is drawn. */
+  function tripAtStation(tripLogId: string, title: string) {
+    const made = movieTrip(tripLogId, title);
+    const event = {
+      id: 'event-1',
+      caverId: 'caver-1',
+      teamId: null,
+      kind: 'atStation',
+      surveyModelId: MODEL,
+      stationName: 'p8.1',
+      depthEnteredM: null,
+      note: null,
+      recordedAt: ARMED,
+    } as unknown as TrackingEvent;
+    // The fold draws the roster, so the caver has to be on it as well as on the log.
+    const participant = {
+      caverId: 'caver-1',
+      teamId: null,
+      lastKind: 'atStation',
+      lastRecordedAt: ARMED,
+      positionRecordedAt: ARMED,
+      stationName: 'p8.1',
+      depthM: null,
+      positionSurveyModelId: MODEL,
+    };
+    return {
+      trip: {
+        ...made.trip,
+        events: [event],
+        tracking: { ...made.trip.tracking, participants: [participant] } as unknown as TrackingState,
+      },
+      span: { ...made.span, moments: [Date.parse(ARMED)] },
+    };
+  }
+
+  it('draws a new viewer’s party once, names its groups first, and leaves an unmoved marker alone on the next change', async () => {
+    const viewer = preview.viewer as ReturnType<typeof fakeViewer>;
+    reads.movie = ready(tripAtStation('trip-a', 'Alpha'));
+    open(['trip-a']);
+    await waitFor(() => expect(viewer.addLiveMarker).toHaveBeenCalledTimes(1));
+    // Labelled by first name, the default.
+    expect(viewer.addLiveMarker).toHaveBeenCalledWith('trip-a:caver-1', 'p8.1', expect.objectContaining({ label: 'Ion' }));
+    // The grouped markers are named before anybody stands on the model.
+    expect(viewer.setLiveMarkerClusterLabel.mock.invocationCallOrder[0]).toBeLessThan(
+      viewer.addLiveMarker.mock.invocationCallOrder[0],
+    );
+    // A change that moves nobody: the trails switch, with a single station walked.
+    fireEvent.click(await screen.findByText('Cavers'));
+    fireEvent.click(screen.getByTestId('movie-trails'));
+    await waitFor(() => expect(screen.getByTestId('movie-trails')).toBeChecked());
+    expect(viewer.addLiveMarker).toHaveBeenCalledTimes(1);
+    expect(viewer.moveLiveMarker).not.toHaveBeenCalled();
   });
 });

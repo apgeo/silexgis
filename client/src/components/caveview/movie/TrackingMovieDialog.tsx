@@ -152,6 +152,21 @@ function withoutTitleText(settings: MovieSettings): MovieSettings {
     : { ...settings, captions: { ...settings.captions, titleText: '' } };
 }
 
+/**
+ * Keeps a key pressed on one of the dialog's controls from the viewer's own shortcuts.
+ *
+ * The viewer listens for keys on the whole document and, whenever the pointer is resting over it,
+ * takes every key for itself and cancels it — so a title typed with the pointer left over the
+ * preview wrote nothing, and the shortcuts turned the preview under a reader whose keys were meant
+ * for a text box. A key pressed on the dialog is the dialog's. Only the two the modal answers on
+ * its own frame, outside this body, go on past it: Escape to close, and Tab to keep the focus in.
+ */
+function keepKeysFromViewer(event: { key: string; stopPropagation(): void }): void {
+  if (event.key !== 'Escape' && event.key !== 'Tab') {
+    event.stopPropagation();
+  }
+}
+
 function MovieDialogBody({
   surveyModelId,
   initialTripIds,
@@ -302,6 +317,8 @@ function MovieDialogBody({
 
   const partyRef = useRef<MovieParty | null>(null);
   const drawnRef = useRef(new Map<string, DrawnMarker>());
+  /** The viewer the markers and trails in the two maps below are standing on. */
+  const drawnOnRef = useRef<CaveViewer | null>(null);
   const trailsRef = useRef(new Map<string, string>());
   const captionsRef = useRef<HTMLCanvasElement | null>(null);
   // One labeller for the preview's grouped markers, reading whichever party is on it now — and
@@ -385,6 +402,17 @@ function MovieDialogBody({
     if (viewer === null || recording) {
       return;
     }
+    // A viewer this party has not been drawn on starts with nothing on it, and its grouped markers
+    // are named by the preview's party before anybody stands on it. Decided by the viewer itself
+    // rather than by the count of viewers: the viewer is in a ref that is set before the count is,
+    // so the party was drawn on a new viewer in the same commit that announced it, and a reset keyed
+    // on the count then wiped the bookkeeping and had every marker and trail added a second time.
+    if (drawnOnRef.current !== viewer) {
+      drawnOnRef.current = viewer;
+      drawnRef.current = new Map();
+      trailsRef.current = new Map();
+      viewer.setLiveMarkerClusterLabel(clusterLabel);
+    }
     const party =
       timeline === null || frames === null
         ? null
@@ -447,13 +475,6 @@ function MovieDialogBody({
     playing,
     clusterLabel,
   ]);
-
-  // A new viewer starts with nothing on it, and names its grouped markers by the preview's party.
-  useEffect(() => {
-    drawnRef.current = new Map();
-    trailsRef.current = new Map();
-    handleRef.current?.viewer.setLiveMarkerClusterLabel(clusterLabel);
-  }, [generation, clusterLabel]);
 
   // While an export runs, the preview shows the frame just recorded; the captions over it are
   // that frame's, so the clock, the legend and the bar do not stand still while the cavers move.
@@ -588,17 +609,25 @@ function MovieDialogBody({
   // A chosen trip that could not be read holds the export back rather than dropping out of it: a
   // movie quietly missing one of the trips somebody ticked would be believed.
   const readFailed = movie.failed.length > 0;
-  const blocker = nothingChosen
-    ? t('caveview.movie.chooseTrip')
-    : movie.loading
-      ? t('caveview.movie.tripsLoading')
-      : readFailed
-        ? t('caveview.movie.tripsFailedHint')
-        : movie.trips.length === 0
-          ? t('trips.tracking.replay.nothingToReplay')
-          : null;
+  // The list is what says a trip is this model's. So nothing is exported before it has arrived,
+  // and nothing on the strength of a trip's own reads when it failed to arrive at all: a trip ticked
+  // before the list was read is only in the movie once the list has confirmed it.
+  const listReady = tracked.data !== undefined;
+  const blocker =
+    tracked.error !== null
+      ? t('caveview.movie.trackedLoadError')
+      : nothingChosen
+        ? t('caveview.movie.chooseTrip')
+        : movie.loading || !listReady
+          ? t('caveview.movie.tripsLoading')
+          : readFailed
+            ? t('caveview.movie.tripsFailedHint')
+            : movie.trips.length === 0
+              ? t('trips.tracking.replay.nothingToReplay')
+              : null;
   const canExport =
     previewReady
+    && listReady
     && timeline !== null
     && movie.trips.length > 0
     && !readFailed
@@ -615,7 +644,7 @@ function MovieDialogBody({
       : movieClockText(timeline.clock(frames.frame(at).position), t, i18n.language);
 
   return (
-    <div className="movie-dialog">
+    <div className="movie-dialog" onKeyDown={keepKeysFromViewer}>
       <div className="movie-dialog-body">
         <Flex vertical gap="small" className="movie-dialog-preview">
           <MoviePreviewHost
