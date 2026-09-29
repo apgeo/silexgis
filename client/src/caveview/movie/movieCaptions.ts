@@ -22,6 +22,11 @@ export interface MovieCaptions {
   title: string | null;
   clock: string | null;
   legend: MovieLegendEntry[];
+  /**
+   * The line that stands in for the legend entries a frame has no room for, given how many were
+   * left out. Without it the line reads `+N`.
+   */
+  legendMore?: (hidden: number) => string;
   /** 0..1, or null for no progress bar. */
   progress: number | null;
   note: string | null;
@@ -57,6 +62,32 @@ export function movieCaptionColors(): string[] {
       trackedCaverPalette.out,
     ]),
   ];
+}
+
+/**
+ * The legend's lines when only `room` of them fit.
+ *
+ * <b>A legend that runs out of room says so.</b> Cut silently, a movie of twenty trips showed the
+ * first ten and nothing else: the other ten trips' markers moved about in colours no line explained,
+ * and the key to the grey of somebody who has come out — added after every trip — was the first line
+ * dropped. So the entries that explain a kind of marker rather than name a trip or a team
+ * (`pinned`) are kept whatever else is cut, and the last line left for the rest says how many of
+ * them are not shown.
+ */
+function legendRows(
+  legend: readonly MovieLegendEntry[],
+  room: number,
+  more: ((hidden: number) => string) | undefined,
+): { color: string | null; label: string }[] {
+  if (legend.length <= room) {
+    return [...legend];
+  }
+  const pinned = legend.filter((entry) => entry.pinned === true);
+  const rest = legend.filter((entry) => entry.pinned !== true);
+  const restRoom = Math.max(0, room - pinned.length - 1);
+  const hidden = rest.length - restRoom;
+  const moreLine = { color: null, label: more === undefined ? `+${hidden}` : more(hidden) };
+  return [...rest.slice(0, restRoom), moreLine, ...pinned].slice(0, room);
 }
 
 /** Text cut to fit a width, ending in an ellipsis where it was cut. */
@@ -164,20 +195,22 @@ export function drawMovieCaptions(
     const swatch = Math.round(legendPx * 0.7);
     ctx.font = `${legendPx}px ${FONT_FAMILY}`;
     const labelRoom = width / 2 - margin - 3 * pad - swatch;
-    const labels = captions.legend.map((entry) => fitted(ctx, entry.label, labelRoom));
-    const plateWidth =
-      Math.max(...labels.map((label) => ctx.measureText(label).width)) + swatch + 3 * pad;
     // As many entries as fit above the note's area; a legend never runs off the frame.
     const room = Math.max(0, Math.floor((height * 0.6 - top) / legendLine));
-    const shown = labels.slice(0, room);
-    if (shown.length > 0) {
-      plate(ctx, margin, top, plateWidth, shown.length * legendLine + pad);
-      shown.forEach((label, index) => {
+    const rows = legendRows(captions.legend, room, captions.legendMore);
+    const labels = rows.map((row) => fitted(ctx, row.label, labelRoom));
+    if (rows.length > 0) {
+      const plateWidth =
+        Math.max(...labels.map((label) => ctx.measureText(label).width)) + swatch + 3 * pad;
+      plate(ctx, margin, top, plateWidth, rows.length * legendLine + pad);
+      rows.forEach((row, index) => {
         const middle = top + pad / 2 + index * legendLine + legendLine / 2;
-        ctx.fillStyle = captions.legend[index].color;
-        ctx.fillRect(margin + pad, Math.round(middle - swatch / 2), swatch, swatch);
+        if (row.color !== null) {
+          ctx.fillStyle = row.color;
+          ctx.fillRect(margin + pad, Math.round(middle - swatch / 2), swatch, swatch);
+        }
         ctx.fillStyle = INK;
-        ctx.fillText(label, margin + 2 * pad + swatch, middle);
+        ctx.fillText(labels[index], margin + 2 * pad + swatch, middle);
       });
     }
   }
@@ -285,6 +318,7 @@ export function movieCaptionsAt(
     title,
     clock: captions.clock ? movieClockText(clock, words.t, words.language) : null,
     legend: captions.legend ? party.legend : [],
+    legendMore: (hidden) => words.t('caveview.movie.legendMore', { count: hidden }),
     progress: captions.progress ? progress : null,
     // Already null unless the note caption is on: the party leaves it out itself.
     note: party.note,

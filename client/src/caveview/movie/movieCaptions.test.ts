@@ -6,11 +6,13 @@ import {
   drawMovieCaptions,
   movieAutoTitle,
   movieCaptionColors,
+  movieCaptionsAt,
   movieClockText,
   movieTitle,
   type MovieCaptions,
 } from './movieCaptions.ts';
 import { MOVIE_MARKER_PALETTE } from './movieParty.ts';
+import { DEFAULT_MOVIE_SETTINGS } from './movieSettings.ts';
 
 /** The test environment's 2D stub, with the calls this module makes recorded. */
 function recordingContext() {
@@ -61,6 +63,43 @@ describe('drawMovieCaptions', () => {
     }
     // The font is the system's own sans-serif.
     expect(ctx.font).toMatch(/sans-serif$/);
+  });
+
+  it('says how many legend entries it had no room for, and keeps the key to the grey of somebody out', () => {
+    const { ctx, fillText, fills } = recordingContext();
+    // Twenty trips' worth of entries and the out key after them, as a movie of twenty trips has.
+    const legend = [
+      ...Array.from({ length: 20 }, (_, index) => ({
+        color: MOVIE_MARKER_PALETTE[index % MOVIE_MARKER_PALETTE.length],
+        label: `Trip ${index + 1}`,
+      })),
+      { color: trackedCaverPalette.out, label: 'Out', pinned: true },
+    ];
+    drawMovieCaptions(
+      ctx,
+      640,
+      360,
+      captions({ clock: null, note: null, legend, legendMore: (hidden) => `and ${hidden} more` }),
+    );
+    const texts = fillText.mock.calls.map((call) => call[0] as string);
+    const trips = texts.filter((text) => text.startsWith('Trip '));
+    // Fewer than all of them fit into a 360-pixel frame...
+    expect(trips.length).toBeGreaterThan(0);
+    expect(trips.length).toBeLessThan(20);
+    // ...and the ones left out are counted, not dropped without a word.
+    expect(texts).toContain(`and ${20 - trips.length} more`);
+    // The grey is still explained, with its swatch.
+    expect(texts[texts.length - 1]).toBe('Out');
+    expect(fills).toContain(trackedCaverPalette.out);
+  });
+
+  it('names the legend entries it left out in the reader’s language', () => {
+    const party = { legend: [], note: null };
+    const made = movieCaptionsAt(DEFAULT_MOVIE_SETTINGS, null, party, { kind: 'elapsed', ms: 0 }, 0, {
+      t: i18n.t.bind(i18n),
+      language: 'en',
+    });
+    expect(made.legendMore?.(7)).toBe('+ 7 more');
   });
 
   it('draws nothing it is not given', () => {
