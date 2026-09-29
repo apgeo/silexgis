@@ -70,7 +70,8 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 [Ture](features/trips.md) ·
 [Evenimente și calendar](features/events-and-calendar.md) ·
 [Tabere](features/camps.md) ·
-[Liste de verificare și apelul de urgență](features/checklists-and-callout.md)
+[Liste de verificare și apelul de urgență](features/checklists-and-callout.md) ·
+[Urmărirea în direct și turele publicate](features/live-tracking.md)
 
 **Persoane și contul dumneavoastră**
 [Persoane, speologi și cluburi](features/people-and-clubs.md) ·

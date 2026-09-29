@@ -128,6 +128,21 @@ odată cu ea — și apoi paginile.
 | First visits | Primele vizite |
 | Leads | Continuări |
 | Who was there | Cine a fost |
+| Tracking (the tab) | Urmărire |
+| Tracking setup | Configurarea urmăririi |
+| Start tracking / Close tracking | Pornește urmărirea / Încheie urmărirea |
+| Tracking / Tracking closed / Not tracked | În urmărire / Urmărire încheiată / Neurmărită |
+| Record a report | Înregistrează un raport |
+| Went in / Came out | A intrat / A ieșit |
+| Correct (a report) | Corectează |
+| Import a sheet | Importă o foaie |
+| What this cave's depths mean | Ce înseamnă adâncimile acestei peșteri |
+| Declare a depth | Declară o adâncime |
+| Publish this trip | Publică această tură |
+| Follow link | Link de urmărire |
+| Caption (on the public page) | Etichetă |
+| Past trips in this cave | Ture trecute în această peșteră |
+| Being followed now | Urmărite acum |
 
 ## Alte
 

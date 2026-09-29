@@ -54,6 +54,12 @@ Previous versions:
 - **Trips, plans and expeditions** — logged over the days they ran, with who was there and what
   they did, invitations and waiting lists, checklists, a callout alarm, statistics per person,
   cave and club, and a report that writes itself up as a Word document.
+- **Live tracking and published trips** — while a party is underground, each relayed call is
+  recorded and every person drawn on the cave's own survey where they were last reported; a
+  report is corrected in place, a coordinator's spreadsheet is imported through a preview, and a
+  cave declares which station each of its depths means. One link publishes the trip to families
+  and to a club's website — the party live, the cave's other parties being followed and its
+  finished trips replayed — and a cave with protected coordinates is never published.
 - **Club events and one calendar** — meetings, training, deadlines and everything else dated,
   answered the way trips are, in one window that never names a cave.
 - **Notifications you control** — a grid of what happens against how to reach you, an in-app

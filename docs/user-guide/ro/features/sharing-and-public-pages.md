@@ -7,7 +7,7 @@
 
 ---
 
-Fiecare suprafață la care poate ajunge un vizitator **fără cont**. Sunt șase, și aceasta este
+Fiecare suprafață la care poate ajunge un vizitator **fără cont**. Sunt șapte, și aceasta este
 lista completă.
 
 | Suprafață | Ce primește un vizitator |
@@ -18,6 +18,7 @@ lista completă.
 | **Galeria publică** | Fotografiile îngrijite ale instalării |
 | **Un cod QR tipărit** | Confirmarea că acel cod este înregistrat. Nimic altceva |
 | **Pagina de dezabonare** | Deschisă dintr-un client de poștă |
+| **O tură publicată** | O echipă urmărită în peșteră, desenată pe ridicarea peșterii — și celelalte echipe ale acelei peșteri urmărite acum, și turele ei încheiate și publicate. Vedeți [Urmărirea în direct și turele publicate](live-tracking.md) |
 
 O instalare care nu publică nimic îi arată unui vizitator **pagina de autentificare** și nimic
 altceva.
@@ -111,6 +112,17 @@ acel cod nu poate fi tipărit ca etichetă**, în loc să vă lase să prindeți
 
 **Copiază adresa** vă dă URL-ul pe care ar trebui să-l codifice eticheta. Este o rută de cale, nu
 un fragment — deliberat, pentru că scanerele aruncă orice se află după un `#`.
+
+---
+
+## Ture publicate
+
+O tură urmărită poate fi publicată cu un **link de urmărire** și lipită în site-ul unui club ca
+vizualizare pe care o pot comanda legăturile din articol. Este singura suprafață publică ce
+**numește oameni** — implicit cu numele reale, dacă instalarea nu oprește asta sau o etichetă nu
+înlocuiește numele cuiva — și singura care se actualizează singură cât timp o echipă este în
+peșteră. O peșteră cu coordonate protejate nu poate fi publicată deloc. Totul despre ea se află
+în [Urmărirea în direct și turele publicate](live-tracking.md).
 
 ---
 

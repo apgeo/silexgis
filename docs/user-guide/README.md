@@ -66,7 +66,8 @@ linking out to the reference pages for detail.
 [Trips](features/trips.md) ·
 [Events and calendar](features/events-and-calendar.md) ·
 [Camps](features/camps.md) ·
-[Checklists and the callout](features/checklists-and-callout.md)
+[Checklists and the callout](features/checklists-and-callout.md) ·
+[Live tracking and published trips](features/live-tracking.md)
 
 **People and yourself**
 [People, cavers and clubs](features/people-and-clubs.md) ·

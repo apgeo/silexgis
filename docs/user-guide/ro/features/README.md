@@ -49,6 +49,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Evenimente și calendar](events-and-calendar.md) | Datele clubului, repetiția și o fereastră peste tot ce are dată |
 | [Tabere](camps.md) | Expediții cu mai multe ture, lista lor, panoul de continuări |
 | [Liste de verificare și apelul de urgență](checklists-and-callout.md) | Ce stabilește o echipă înainte de plecare și alarma de întârziere |
+| [Urmărirea în direct și turele publicate](live-tracking.md) | Unde este echipa cât timp e în peșteră, corectarea jurnalului, importul unei foi, ce înseamnă adâncimile unei peșteri, publicarea unei ture |
 
 ## Persoane și contul dumneavoastră
 

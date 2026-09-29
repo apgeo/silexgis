@@ -340,6 +340,27 @@ feature and walkthroughs of whole jobs.
   stopped and a party safely underground look alike, and the page comes down on the side of saying
   nobody has looked. Delivery is the ordinary email queue's, which tries several times and then gives
   up — an alarm is a prompt to go and look, not a guarantee somebody was reached.
+- **Following a party underground, and showing it to the people waiting** — a trip can be
+  *tracked*: whoever takes the calls on the surface records each one as a report — who went in,
+  who is at which station or how deep, who came out — and the trip's page draws every person on
+  the cave's survey where they were last reported, saying plainly when somebody's place is not
+  known, was measured on another survey, or may not be shown to you. It records and raises no
+  alarm; that is the callout's job. A cave can declare what its depths mean — that 96 m is the
+  Meander, at this station — so a depth phoned out lands on the station people mean rather than
+  on whichever one arithmetic finds nearest, and the report card warns when a depth sits far from
+  the station it will land on. A report written down wrongly is corrected in place, keeping
+  everything pinned to it, and a finished trip's log stays open for the write-up. A coordinator's
+  spreadsheet of calls is read onto the log through a preview that says, row by row, what it
+  would create, correct or refuse and states how it read the times; each report is filed under
+  the person and the moment, so a corrected sheet imported again corrects instead of doubling.
+  A trip can then be **published** with a link: anybody holding it, with no account, sees the
+  party on the survey, refreshed while they are underground, and a club pastes a block into its
+  own website to show the same viewer in an article whose links can move it. The same link lists
+  the cave's other parties being followed now and its finished published trips, each playable as
+  a replay on the survey its reports were measured in. The page names people as the installation
+  decides — real names by default, a caption to keep one person off it — a cave with protected
+  coordinates cannot be published at all, and a link ends by itself a short while after the watch
+  is closed. The [user guide](user-guide/features/live-tracking.md) has the whole of it.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
   the cave's owner and the full administrators get a message with a link to the cave, whether the cave

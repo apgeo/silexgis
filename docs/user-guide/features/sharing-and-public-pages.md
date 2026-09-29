@@ -7,7 +7,7 @@
 
 ---
 
-Every surface a visitor **without an account** can reach. There are six, and that is the
+Every surface a visitor **without an account** can reach. There are seven, and that is the
 complete list.
 
 | Surface | What a visitor gets |
@@ -18,6 +18,7 @@ complete list.
 | **The public gallery** | The installation's curated photographs |
 | **A printed QR code** | Confirmation that the code is registered. Nothing else |
 | **The unsubscribe page** | Opened from a mail client |
+| **A published trip** | A party being followed underground, drawn on the cave's survey — and that cave's other parties being followed now and its finished published trips. See [Live tracking and published trips](live-tracking.md) |
 
 An installation that publishes nothing shows a visitor **the sign-in page** and nothing more.
 
@@ -110,6 +111,17 @@ code cannot be printed as a label** rather than letting you bolt a broken one to
 
 **Copy address** gives you the URL the label should encode. It is a path route, not a
 fragment — deliberately, because scanners discard anything after a `#`.
+
+---
+
+## Published trips
+
+A trip being tracked can be published with a **follow link**, and pasted into a club's website
+as a viewer the article's own links can drive. It is the one public surface that **names
+people** — by default their real names, unless the installation turns that off or a caption
+replaces one person's — and the one that updates itself while a party is underground. A cave
+whose coordinates are protected cannot be published at all. Everything about it is in
+[Live tracking and published trips](live-tracking.md).
 
 ---
 
