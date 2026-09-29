@@ -136,6 +136,20 @@ vi.mock('./MoviePreviewHost.tsx', () => ({
   },
 }));
 
+// The real form, counted each time it is drawn.
+const settingsForm = vi.hoisted(() => ({ renders: 0 }));
+vi.mock('./MovieSettingsForm.tsx', async (original) => {
+  const actual = await original<typeof import('./MovieSettingsForm.tsx')>();
+  const Form = actual.default;
+  return {
+    ...actual,
+    default: function CountedSettingsForm(props: Parameters<typeof Form>[0]) {
+      settingsForm.renders++;
+      return <Form {...props} />;
+    },
+  };
+});
+
 const { default: TrackingMovieDialog } = await import('./TrackingMovieDialog.tsx');
 
 // ---- invented trips --------------------------------------------------------------------------------
@@ -476,6 +490,40 @@ describe('the tracking movie dialog', () => {
     expect(progressOf(drawMovieCaptions.mock.calls.at(-1)!)).toBeCloseTo(109 / 199, 2);
     // The slider and the moment beside it follow the same frame.
     expect(screen.getByTestId('movie-position').dataset.frame).toBe('109');
+
+    await act(async () => finish());
+    await waitFor(() => expect(saveBlob).toHaveBeenCalled());
+  });
+
+  it('does not draw its settings again for every frame an export records', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    let report!: (progress: Parameters<NonNullable<MovieRecording['onProgress']>>[0]) => void;
+    let finish!: () => void;
+    recordMovie.mockImplementation(
+      (recording) =>
+        new Promise<Blob>((resolve) => {
+          report = (progress) => recording.onProgress?.(progress);
+          finish = () => resolve(new Blob(['GIF89a'], { type: 'image/gif' }));
+        }),
+    );
+    open(['trip-a']);
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(recordMovie).toHaveBeenCalled());
+    act(() => report({ stage: 'rendering', done: 1, total: 220, step: 1, steps: 220 }));
+    await waitFor(() => expect(screen.getByTestId('movie-position').dataset.frame).toBe('0'));
+
+    const before = settingsForm.renders;
+    for (let step = 2; step <= 60; step++) {
+      act(() => report({ stage: 'rendering', done: step, total: 220, step, steps: 220 }));
+    }
+    // The progress and the slider follow every frame...
+    expect(screen.getByTestId('movie-position').dataset.frame).toBe('59');
+    expect(screen.getByTestId('movie-progress')).toHaveTextContent('60');
+    // ...while the settings, which cannot change during an export, are not drawn again for them.
+    // Drawn for each of a long export's frames, a form of this size was a large share of its time.
+    expect(settingsForm.renders - before).toBe(0);
 
     await act(async () => finish());
     await waitFor(() => expect(saveBlob).toHaveBeenCalled());

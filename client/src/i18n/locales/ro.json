@@ -2381,6 +2381,7 @@
     },
     "movie": {
       "legendTripTeam": "{{trip}} · {{team}}",
+      "legendMore": "și încă {{count}}",
       "noteBy": "{{name}}: {{note}}",
       "clockElapsed": "Timp scurs {{time}}",
       "previewLoading": "Se încarcă modelul pentru previzualizare…",

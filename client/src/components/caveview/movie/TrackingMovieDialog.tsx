@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { CaretRightOutlined, PauseOutlined, VideoCameraOutlined } from '@ant-design/icons';
 import { Alert, App, Button, Checkbox, Flex, Modal, Progress, Slider, Spin, Typography } from 'antd';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { saveBlob } from '../../../api/download.ts';
 import { useCave, useSurveyModel, useSurveyModelTrackedTrips, type TrackedTrip } from '../../../api/hooks.ts';
@@ -49,6 +49,16 @@ import { MOVIE_SHADINGS, type MovieShadingConstant } from './movieChoices.ts';
 import MovieSettingsForm from './MovieSettingsForm.tsx';
 import { useMovieTrips } from './useMovieTrips.ts';
 import './TrackingMovieDialog.css';
+
+/**
+ * The settings form, drawn again only when what it is given changes.
+ *
+ * An export reports its progress after every frame, and the progress is state of the dialog, so
+ * without this the whole form — dozens of antd controls and the list of trips — was drawn again for
+ * each of a long export's frames: on a movie of twenty trips that was a large share of the export's
+ * time, taken from the frames themselves. Nothing the form shows can change while an export runs.
+ */
+const SettingsForm = memo(MovieSettingsForm);
 
 /**
  * The dialog a movie of a survey model and its tracked trips is set up, previewed and exported in.
@@ -581,7 +591,7 @@ function MovieDialogBody({
   // and size can add up to thousands of large frames, and an export of an hour or more.
   const tooLong =
     settings.format !== 'gif' && frameCount * frameSize.width * frameSize.height > MOVIE_LONG_EXPORT_PIXELS;
-  const summary = (
+  const summary = useMemo(() => (
     <Flex vertical gap="small">
       <Typography.Text strong data-testid="movie-summary">
         {t('caveview.movie.summary', {
@@ -603,6 +613,23 @@ function MovieDialogBody({
         <Alert type="warning" showIcon title={t('caveview.movie.videoTooLong')} data-testid="movie-too-long" />
       )}
     </Flex>
+  ), [t, i18n.language, frameCount, estimate, tooLarge, tooLong]);
+
+  const tripPicker = useMemo(
+    () => (
+      <MovieTripPicker
+        tracked={tracked.data}
+        loading={tracked.isPending}
+        listFailed={tracked.error !== null}
+        chosen={chosenIds}
+        empty={movie.empty}
+        tripsFailed={movie.failed}
+        logFailed={movie.logFailed}
+        disabled={recording}
+        onChange={setTripIds}
+      />
+    ),
+    [tracked.data, tracked.isPending, tracked.error, chosenIds, movie.empty, movie.failed, movie.logFailed, recording],
   );
 
   const nothingChosen = chosenIds.length === 0;
@@ -702,7 +729,7 @@ function MovieDialogBody({
           <Typography.Text type="secondary">{blocker ?? t('caveview.movie.previewHint')}</Typography.Text>
         </Flex>
         <div className="movie-dialog-settings">
-          <MovieSettingsForm
+          <SettingsForm
             settings={settings}
             onChange={changeSettings}
             disabled={recording}
@@ -714,19 +741,7 @@ function MovieDialogBody({
             autoTitle={autoTitle}
             summary={summary}
             onViewAgain={previewReady ? viewAgain : null}
-            trips={
-              <MovieTripPicker
-                tracked={tracked.data}
-                loading={tracked.isPending}
-                listFailed={tracked.error !== null}
-                chosen={chosenIds}
-                empty={movie.empty}
-                tripsFailed={movie.failed}
-                logFailed={movie.logFailed}
-                disabled={recording}
-                onChange={setTripIds}
-              />
-            }
+            trips={tripPicker}
           />
         </div>
       </div>
