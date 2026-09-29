@@ -219,6 +219,7 @@ export default function MovieSettingsForm({
           value={settings.format}
           onChange={(event) => change({ ...settings, format: event.target.value as MovieFormat })}
           data-testid="movie-format"
+          aria-label={t('caveview.movie.format')}
         >
           {MOVIE_FORMATS.map((format) => {
             const refusal = formatRefusal(format);
@@ -277,6 +278,7 @@ export default function MovieSettingsForm({
           style={{ minWidth: 180 }}
           onChange={(value: string) => change({ ...settings, size: value })}
           data-testid="movie-size"
+          aria-label={t('caveview.movie.size')}
           options={MOVIE_ASPECTS.map((aspect) => ({
             label: t(`caveview.movie.aspects.${aspect.id}`),
             options: MOVIE_SIZES.filter((entry) => aspectOf(entry.width, entry.height) === aspect.id).map((entry) => ({
@@ -299,6 +301,7 @@ export default function MovieSettingsForm({
           style={{ minWidth: 100 }}
           onChange={(value: number) => change({ ...settings, fps: value })}
           data-testid="movie-fps"
+          aria-label={t('caveview.movie.fps')}
           options={rates.map((rate) => ({
             value: rate,
             label: rate.toLocaleString(i18n.language),
@@ -325,6 +328,7 @@ export default function MovieSettingsForm({
           value={settings.durationS}
           onChange={(value) => value !== null && change({ ...settings, durationS: value })}
           data-testid="movie-duration"
+          aria-label={t('caveview.movie.duration')}
         />
       </Row>
       <Row label={t('caveview.movie.holdEnd')}>
@@ -335,6 +339,7 @@ export default function MovieSettingsForm({
           value={settings.holdEndS}
           onChange={(value) => value !== null && change({ ...settings, holdEndS: value })}
           data-testid="movie-hold"
+          aria-label={t('caveview.movie.holdEnd')}
         />
       </Row>
       <Row
@@ -346,6 +351,7 @@ export default function MovieSettingsForm({
           value={settings.quality}
           onChange={(event) => change({ ...settings, quality: event.target.value as MovieQuality })}
           data-testid="movie-quality"
+          aria-label={t('caveview.movie.quality')}
           options={MOVIE_QUALITIES.map((quality) => ({
             value: quality,
             label: t(`caveview.movie.qualities.${quality}`),
@@ -364,11 +370,13 @@ export default function MovieSettingsForm({
           checked={rotation.enabled}
           onChange={(enabled) => patch('rotation', { enabled })}
           data-testid="movie-rotation"
+          aria-label={t('caveview.movie.rotation')}
         />
       </Row>
       <Row label={t('caveview.movie.rotationMode')}>
         <Radio.Group
           disabled={disabled || !rotation.enabled}
+          aria-label={t('caveview.movie.rotationMode')}
           value={rotation.mode}
           onChange={(event) =>
             patch('rotation', {
@@ -390,11 +398,13 @@ export default function MovieSettingsForm({
           value={rotation.degreesPerSecond}
           onChange={(value) => value !== null && patch('rotation', { degreesPerSecond: value })}
           data-testid="movie-degrees"
+          aria-label={t('caveview.movie.degreesPerSecond')}
         />
       </Row>
       <Row label={t('caveview.movie.direction')}>
         <Radio.Group
           disabled={disabled || !rotation.enabled}
+          aria-label={t('caveview.movie.direction')}
           value={rotation.clockwise}
           onChange={(event) => patch('rotation', { clockwise: event.target.value as boolean })}
           options={[
@@ -411,6 +421,7 @@ export default function MovieSettingsForm({
           value={cavers.transitionS}
           onChange={(value) => value !== null && patch('cavers', { transitionS: value })}
           data-testid="movie-transition"
+          aria-label={t('caveview.movie.transition')}
         />
       </Row>
       <Row label={t('caveview.movie.timelineMode')} help={t(`caveview.movie.timelineHelp.${timeline.mode}`)}>
@@ -422,6 +433,7 @@ export default function MovieSettingsForm({
             })
           }
           data-testid="movie-timeline"
+          aria-label={t('caveview.movie.timelineMode')}
           options={(['calendar', 'together'] as const).map((mode) => ({
             value: mode,
             label: t(`caveview.movie.timelineModes.${mode}`),
@@ -436,6 +448,7 @@ export default function MovieSettingsForm({
             checked={timeline.shortenQuiet}
             onChange={(shortenQuiet) => patch('timeline', { shortenQuiet })}
             data-testid="movie-shorten-quiet"
+            aria-label={t('caveview.movie.shortenQuiet')}
           />
           <InputNumber
             min={1}
@@ -460,6 +473,7 @@ export default function MovieSettingsForm({
           style={{ minWidth: 150 }}
           onChange={(labels: MovieCaverLabels) => patch('cavers', { labels })}
           data-testid="movie-labels"
+          aria-label={t('caveview.movie.labels')}
           options={MOVIE_CAVER_LABELS.map((mode) => ({
             value: mode,
             label: t(`caveview.movie.caverLabels.${mode}`),
@@ -485,6 +499,7 @@ export default function MovieSettingsForm({
       <Row label={t('caveview.movie.labelPlate')}>
         <Switch
           disabled={disabled || cavers.labels === 'off'}
+          aria-label={t('caveview.movie.labelPlate')}
           checked={cavers.labelPlate}
           onChange={(labelPlate) => patch('cavers', { labelPlate })}
         />
@@ -492,12 +507,14 @@ export default function MovieSettingsForm({
       <Row label={t('caveview.movie.showTimes')}>
         <Switch
           disabled={disabled || cavers.labels === 'off'}
+          aria-label={t('caveview.movie.showTimes')}
           checked={cavers.showTimes}
           onChange={(showTimes) => patch('cavers', { showTimes })}
         />
       </Row>
       <Row label={t('caveview.movie.colourBy')} help={t(`caveview.movie.colourByHelp.${cavers.colourBy}`)}>
         <Select
+          aria-label={t('caveview.movie.colourBy')}
           value={cavers.colourBy}
           style={{ minWidth: 150 }}
           onChange={(colourBy: MovieColourBy) => patch('cavers', { colourBy })}
@@ -508,10 +525,19 @@ export default function MovieSettingsForm({
         />
       </Row>
       <Row label={t('caveview.movie.showOut')}>
-        <Switch checked={cavers.showOut} onChange={(showOut) => patch('cavers', { showOut })} />
+        <Switch
+          aria-label={t('caveview.movie.showOut')}
+          checked={cavers.showOut}
+          onChange={(showOut) => patch('cavers', { showOut })}
+        />
       </Row>
       <Row label={t('caveview.movie.trails')}>
-        <Switch checked={cavers.trails} onChange={(trails) => patch('cavers', { trails })} data-testid="movie-trails" />
+        <Switch
+          aria-label={t('caveview.movie.trails')}
+          checked={cavers.trails}
+          onChange={(trails) => patch('cavers', { trails })}
+          data-testid="movie-trails"
+        />
       </Row>
     </Flex>
   );
@@ -569,6 +595,7 @@ export default function MovieSettingsForm({
             })
           }
           data-testid="movie-shading"
+          aria-label={t('caveview.movie.shading')}
           options={[
             { value: 'default', label: t('caveview.movie.shadings.default') },
             ...MOVIE_SHADINGS.map((shading) => ({
@@ -585,6 +612,7 @@ export default function MovieSettingsForm({
       <Row label={t('caveview.movie.camera')}>
         <Radio.Group
           optionType="button"
+          aria-label={t('caveview.movie.camera')}
           value={view.camera}
           onChange={(event) =>
             patch('view', {
@@ -633,6 +661,7 @@ export default function MovieSettingsForm({
           checked={captions.title}
           onChange={(title) => patch('captions', { title })}
           data-testid="movie-caption-title"
+          aria-label={t('caveview.movie.captionTitle')}
         />
       </Row>
       <Input
@@ -646,19 +675,32 @@ export default function MovieSettingsForm({
         allowClear
       />
       <Row label={t('caveview.movie.captionClock')}>
-        <Switch checked={captions.clock} onChange={(clock) => patch('captions', { clock })} />
+        <Switch
+          aria-label={t('caveview.movie.captionClock')}
+          checked={captions.clock}
+          onChange={(clock) => patch('captions', { clock })}
+        />
       </Row>
       <Row label={t('caveview.movie.captionLegend')}>
-        <Switch checked={captions.legend} onChange={(legend) => patch('captions', { legend })} />
+        <Switch
+          aria-label={t('caveview.movie.captionLegend')}
+          checked={captions.legend}
+          onChange={(legend) => patch('captions', { legend })}
+        />
       </Row>
       <Row label={t('caveview.movie.captionProgress')}>
-        <Switch checked={captions.progress} onChange={(progress) => patch('captions', { progress })} />
+        <Switch
+          aria-label={t('caveview.movie.captionProgress')}
+          checked={captions.progress}
+          onChange={(progress) => patch('captions', { progress })}
+        />
       </Row>
       <Row label={t('caveview.movie.captionNote')} help={t('caveview.movie.captionNoteHelp')}>
         <Switch
           checked={captions.note}
           onChange={(note) => patch('captions', { note })}
           data-testid="movie-caption-note"
+          aria-label={t('caveview.movie.captionNote')}
         />
       </Row>
       <Row label={t('caveview.movie.captionSize')}>

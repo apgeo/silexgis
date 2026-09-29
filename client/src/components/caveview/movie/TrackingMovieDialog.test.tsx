@@ -681,7 +681,7 @@ describe('the trip picker', () => {
 
     const bravo = await screen.findByTestId('movie-trip-trip-b');
     expect(within(bravo).getByRole('checkbox')).toBeChecked();
-    expect(bravo).toHaveTextContent('3 reports');
+    expect(bravo).toHaveTextContent('Reports: 3');
     expect(within(screen.getByTestId('movie-trip-trip-a')).getByRole('checkbox')).not.toBeChecked();
     const never = screen.getByTestId('movie-trip-trip-c');
     expect(within(never).getByRole('checkbox')).toBeDisabled();
@@ -748,5 +748,43 @@ describe('the trip picker', () => {
     reads.trackedError = new Error('offline');
     open();
     expect(await screen.findByText('The trips tracked on this model could not be read.')).toBeInTheDocument();
+  });
+});
+
+describe('the dialog and the keyboard', () => {
+  it('keeps the keys pressed on its controls from the viewer’s document-wide shortcuts, and lets the modal have Escape and Tab', async () => {
+    open(['trip-a']);
+    const seen: string[] = [];
+    const listener = (event: KeyboardEvent) => seen.push(event.key);
+    document.addEventListener('keydown', listener);
+    try {
+      fireEvent.click(await screen.findByText('Captions'));
+      const title = await screen.findByTestId('movie-title-text');
+      fireEvent.keyDown(title, { key: 'a' });
+      fireEvent.keyDown(title, { key: 'Backspace' });
+      fireEvent.keyDown(screen.getByTestId('movie-export'), { key: ' ' });
+      expect(seen).toEqual([]);
+      fireEvent.keyDown(title, { key: 'Escape' });
+      fireEvent.keyDown(title, { key: 'Tab' });
+      expect(seen).toEqual(['Escape', 'Tab']);
+    } finally {
+      document.removeEventListener('keydown', listener);
+    }
+  });
+
+  it('names every setting for assistive technology', async () => {
+    open(['trip-a']);
+    await screen.findByTestId('movie-settings');
+    for (const group of ['Motion', 'Cavers', 'View', 'Captions']) {
+      fireEvent.click(screen.getByText(group));
+    }
+    await screen.findByTestId('movie-layer-legs');
+    const settings = screen.getByTestId('movie-settings');
+    for (const role of ['combobox', 'spinbutton', 'switch', 'radiogroup', 'slider', 'checkbox', 'textbox'] as const) {
+      const all = within(settings).queryAllByRole(role);
+      const named = within(settings).queryAllByRole(role, { name: /\S/ });
+      expect(all.length, role).toBeGreaterThan(0);
+      expect(named.length, `${role}: ${all.length - named.length} without a name`).toBe(all.length);
+    }
   });
 });
