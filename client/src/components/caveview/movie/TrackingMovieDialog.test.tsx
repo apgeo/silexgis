@@ -105,10 +105,19 @@ function fakeViewer() {
 const preview = vi.hoisted(() => ({
   viewer: null as unknown,
   recordingSeen: [] as boolean[],
+  // What the preview was last asked to show, as the dialog hands it over.
+  direction: null as string | null,
+  viewRequest: null as number | null,
+  // Called on each render of the preview with the view it was handed, so its order against the
+  // viewer's calls can be read.
+  saw: null as unknown as (direction: string) => void,
 }));
 vi.mock('./MoviePreviewHost.tsx', () => ({
-  default: function FakePreviewHost({ onReady, overlay, recording }: MoviePreviewHostProps) {
+  default: function FakePreviewHost({ onReady, overlay, recording, view, viewRequest }: MoviePreviewHostProps) {
     preview.recordingSeen.push(recording === true);
+    preview.direction = view.direction;
+    preview.saw?.(view.direction);
+    preview.viewRequest = viewRequest ?? null;
     useEffect(() => {
       onReady?.({
         viewer: preview.viewer as never,
@@ -126,6 +135,20 @@ vi.mock('./MoviePreviewHost.tsx', () => ({
     return <div data-testid="movie-preview">{overlay}</div>;
   },
 }));
+
+// The real form, counted each time it is drawn.
+const settingsForm = vi.hoisted(() => ({ renders: 0 }));
+vi.mock('./MovieSettingsForm.tsx', async (original) => {
+  const actual = await original<typeof import('./MovieSettingsForm.tsx')>();
+  const Form = actual.default;
+  return {
+    ...actual,
+    default: function CountedSettingsForm(props: Parameters<typeof Form>[0]) {
+      settingsForm.renders++;
+      return <Form {...props} />;
+    },
+  };
+});
 
 const { default: TrackingMovieDialog } = await import('./TrackingMovieDialog.tsx');
 
@@ -213,6 +236,9 @@ function open(initialTripIds: string[] = []) {
 beforeEach(() => {
   preview.viewer = fakeViewer();
   preview.recordingSeen = [];
+  preview.direction = null;
+  preview.viewRequest = null;
+  preview.saw = vi.fn();
   probe.answer = ALL_FORMATS;
   reads.tracked = [
     trackedTrip('trip-a', 'Alpha'),
@@ -469,6 +495,40 @@ describe('the tracking movie dialog', () => {
     await waitFor(() => expect(saveBlob).toHaveBeenCalled());
   });
 
+  it('does not draw its settings again for every frame an export records', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    let report!: (progress: Parameters<NonNullable<MovieRecording['onProgress']>>[0]) => void;
+    let finish!: () => void;
+    recordMovie.mockImplementation(
+      (recording) =>
+        new Promise<Blob>((resolve) => {
+          report = (progress) => recording.onProgress?.(progress);
+          finish = () => resolve(new Blob(['GIF89a'], { type: 'image/gif' }));
+        }),
+    );
+    open(['trip-a']);
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(recordMovie).toHaveBeenCalled());
+    act(() => report({ stage: 'rendering', done: 1, total: 220, step: 1, steps: 220 }));
+    await waitFor(() => expect(screen.getByTestId('movie-position').dataset.frame).toBe('0'));
+
+    const before = settingsForm.renders;
+    for (let step = 2; step <= 60; step++) {
+      act(() => report({ stage: 'rendering', done: step, total: 220, step, steps: 220 }));
+    }
+    // The progress and the slider follow every frame...
+    expect(screen.getByTestId('movie-position').dataset.frame).toBe('59');
+    expect(screen.getByTestId('movie-progress')).toHaveTextContent('60');
+    // ...while the settings, which cannot change during an export, are not drawn again for them.
+    // Drawn for each of a long export's frames, a form of this size was a large share of its time.
+    expect(settingsForm.renders - before).toBe(0);
+
+    await act(async () => finish());
+    await waitFor(() => expect(saveBlob).toHaveBeenCalled());
+  });
+
   it('says so when an export fails', async () => {
     reads.movie = ready(movieTrip('trip-a', 'Alpha'));
     recordMovie.mockRejectedValue(new Error('GIF encoder, frame: out of memory'));
@@ -501,6 +561,92 @@ describe('the tracking movie dialog', () => {
     cleanup();
 
     expect(signal?.aborted).toBe(true);
+  });
+
+  it('starts from the north elevation, offers the viewer\'s five views, and turns to the chosen one again on asking', async () => {
+    open();
+    fireEvent.click(await screen.findByText('View'));
+    const choice = await screen.findByTestId('movie-view-direction');
+    expect(choice).toHaveTextContent('N elevation — facing north');
+    expect(preview.direction).toBe('north');
+
+    fireEvent.mouseDown(within(choice).getByRole('combobox'));
+    for (const name of ['Plan (from above)', 'N elevation — facing north', 'S elevation — facing south', 'E elevation — facing east', 'W elevation — facing west']) {
+      expect((await screen.findAllByTitle(name)).length).toBeGreaterThan(0);
+    }
+    fireEvent.click(screen.getAllByTitle('E elevation — facing east').at(-1)!);
+    await waitFor(() => expect(preview.direction).toBe('east'));
+    // Remembered with the rest of the settings.
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.view.direction).toBe('east'));
+
+    const again = screen.getByTestId('movie-view-again');
+    await waitFor(() => expect(again).not.toBeDisabled());
+    const before = preview.viewRequest ?? 0;
+    fireEvent.click(again);
+    await waitFor(() => expect(preview.viewRequest).toBe(before + 1));
+  });
+
+  it('stops playing the preview before turning it to another view, which play would otherwise undo', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    const handle = await screen.findByRole('slider', { name: 'Moment in the movie' });
+    await waitFor(() => expect(handle).not.toHaveAttribute('aria-disabled', 'true'));
+    fireEvent.click(await screen.findByText('View'));
+    const viewer = preview.viewer as ReturnType<typeof fakeViewer>;
+    fireEvent.click(screen.getByTestId('movie-play'));
+    expect(screen.getByTestId('movie-play')).toHaveAttribute('aria-label', 'Stop the preview');
+
+    fireEvent.mouseDown(within(screen.getByTestId('movie-view-direction')).getByRole('combobox'));
+    fireEvent.click((await screen.findAllByTitle('W elevation — facing west')).at(-1)!);
+    await waitFor(() => expect(preview.direction).toBe('west'));
+    expect(screen.getByTestId('movie-play')).toHaveAttribute('aria-label', 'Play the preview');
+    // Play put the camera back where it began before the preview was handed the new view.
+    const putBack = viewer.setCameraAngles.mock.calls.findLastIndex(([angles]) => angles.azimuth !== undefined);
+    const sawWest = (preview.saw as ReturnType<typeof vi.fn>).mock.calls.findIndex(([direction]) => direction === 'west');
+    expect(viewer.setCameraAngles.mock.invocationCallOrder[putBack]).toBeLessThan(
+      (preview.saw as ReturnType<typeof vi.fn>).mock.invocationCallOrder[sawWest],
+    );
+
+    // The same for turning to it again.
+    fireEvent.click(screen.getByTestId('movie-play'));
+    expect(screen.getByTestId('movie-play')).toHaveAttribute('aria-label', 'Stop the preview');
+    fireEvent.click(screen.getByTestId('movie-view-again'));
+    await waitFor(() => expect(screen.getByTestId('movie-play')).toHaveAttribute('aria-label', 'Play the preview'));
+  });
+
+  it('offers no turn to the starting view while an export runs', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    let started!: (recording: MovieRecording) => void;
+    const running = new Promise<MovieRecording>((resolve) => (started = resolve));
+    recordMovie.mockImplementation(
+      (recording) =>
+        new Promise<Blob>((_, reject) => {
+          recording.signal?.addEventListener('abort', () =>
+            reject(new DOMException('The movie export was cancelled.', 'AbortError')),
+          );
+          started(recording);
+        }),
+    );
+    open(['trip-a']);
+    fireEvent.click(await screen.findByText('View'));
+    const again = await screen.findByTestId('movie-view-again');
+    const exportButton = screen.getByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    expect(again).not.toBeDisabled();
+    fireEvent.click(exportButton);
+    await running;
+    await waitFor(() => expect(screen.getByTestId('movie-view-again')).toBeDisabled());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('movie-cancel'));
+    });
+  });
+
+  it('opens on the starting view the reader chose last time', async () => {
+    useUiPrefsStore.setState({ movieSettings: normaliseMovieSettings({ view: { direction: 'plan' } }) });
+    open();
+    fireEvent.click(await screen.findByText('View'));
+    expect(await screen.findByTestId('movie-view-direction')).toHaveTextContent('Plan (from above)');
+    expect(preview.direction).toBe('plan');
   });
 
   it('gates the layers on what the model has', async () => {
@@ -608,6 +754,25 @@ describe('the tracking movie dialog', () => {
     fireEvent.click(screen.getByTestId('movie-play'));
   });
 
+  it('never plays the preview from before its start, whatever time the browser stamps the first frame with', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    const handle = await screen.findByRole('slider', { name: 'Moment in the movie' });
+    await waitFor(() => expect(handle).not.toHaveAttribute('aria-disabled', 'true'));
+    // The browser stamps a frame with when it began drawing it, which can be before play was pressed.
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    fireEvent.click(screen.getByTestId('movie-play'));
+    expect(frames).toHaveLength(1);
+    act(() => frames[0](performance.now() - 5000));
+    expect(screen.getByTestId('movie-position').dataset.frame).toBe('0');
+    fireEvent.click(screen.getByTestId('movie-play'));
+    raf.mockRestore();
+  });
+
   it('warns before a video long enough to take a long time to render', async () => {
     useUiPrefsStore.setState({
       movieSettings: normaliseMovieSettings({
@@ -681,7 +846,7 @@ describe('the trip picker', () => {
 
     const bravo = await screen.findByTestId('movie-trip-trip-b');
     expect(within(bravo).getByRole('checkbox')).toBeChecked();
-    expect(bravo).toHaveTextContent('3 reports');
+    expect(bravo).toHaveTextContent('Reports: 3');
     expect(within(screen.getByTestId('movie-trip-trip-a')).getByRole('checkbox')).not.toBeChecked();
     const never = screen.getByTestId('movie-trip-trip-c');
     expect(within(never).getByRole('checkbox')).toBeDisabled();
@@ -747,6 +912,109 @@ describe('the trip picker', () => {
 
     reads.trackedError = new Error('offline');
     open();
-    expect(await screen.findByText('The trips tracked on this model could not be read.')).toBeInTheDocument();
+    expect((await screen.findAllByText('The trips tracked on this model could not be read.')).length).toBeGreaterThan(0);
+  });
+
+  it('holds the export back when the list of tracked trips could not be read, even for the trip it was opened for', async () => {
+    reads.trackedError = new Error('offline');
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    await screen.findAllByText('The trips tracked on this model could not be read.');
+    await waitFor(() => expect(screen.getByTestId('movie-summary')).toBeInTheDocument());
+    expect(screen.getByTestId('movie-export')).toBeDisabled();
+  });
+});
+
+describe('the dialog and the keyboard', () => {
+  it('keeps the keys pressed on its controls from the viewer’s document-wide shortcuts, and lets the modal have Escape and Tab', async () => {
+    open(['trip-a']);
+    const seen: string[] = [];
+    const listener = (event: KeyboardEvent) => seen.push(event.key);
+    document.addEventListener('keydown', listener);
+    try {
+      fireEvent.click(await screen.findByText('Captions'));
+      const title = await screen.findByTestId('movie-title-text');
+      fireEvent.keyDown(title, { key: 'a' });
+      fireEvent.keyDown(title, { key: 'Backspace' });
+      fireEvent.keyDown(screen.getByTestId('movie-export'), { key: ' ' });
+      expect(seen).toEqual([]);
+      fireEvent.keyDown(title, { key: 'Escape' });
+      fireEvent.keyDown(title, { key: 'Tab' });
+      expect(seen).toEqual(['Escape', 'Tab']);
+    } finally {
+      document.removeEventListener('keydown', listener);
+    }
+  });
+
+  it('names every setting for assistive technology', async () => {
+    open(['trip-a']);
+    await screen.findByTestId('movie-settings');
+    for (const group of ['Motion', 'Cavers', 'View', 'Captions']) {
+      fireEvent.click(screen.getByText(group));
+    }
+    await screen.findByTestId('movie-layer-legs');
+    const settings = screen.getByTestId('movie-settings');
+    for (const role of ['combobox', 'spinbutton', 'switch', 'radiogroup', 'slider', 'checkbox', 'textbox'] as const) {
+      const all = within(settings).queryAllByRole(role);
+      const named = within(settings).queryAllByRole(role, { name: /\S/ });
+      expect(all.length, role).toBeGreaterThan(0);
+      expect(named.length, `${role}: ${all.length - named.length} without a name`).toBe(all.length);
+    }
+  });
+});
+
+describe('the preview’s party', () => {
+  /** A trip with one caver reported at one station of the model, so a marker is drawn. */
+  function tripAtStation(tripLogId: string, title: string) {
+    const made = movieTrip(tripLogId, title);
+    const event = {
+      id: 'event-1',
+      caverId: 'caver-1',
+      teamId: null,
+      kind: 'atStation',
+      surveyModelId: MODEL,
+      stationName: 'p8.1',
+      depthEnteredM: null,
+      note: null,
+      recordedAt: ARMED,
+    } as unknown as TrackingEvent;
+    // The fold draws the roster, so the caver has to be on it as well as on the log.
+    const participant = {
+      caverId: 'caver-1',
+      teamId: null,
+      lastKind: 'atStation',
+      lastRecordedAt: ARMED,
+      positionRecordedAt: ARMED,
+      stationName: 'p8.1',
+      depthM: null,
+      positionSurveyModelId: MODEL,
+    };
+    return {
+      trip: {
+        ...made.trip,
+        events: [event],
+        tracking: { ...made.trip.tracking, participants: [participant] } as unknown as TrackingState,
+      },
+      span: { ...made.span, moments: [Date.parse(ARMED)] },
+    };
+  }
+
+  it('draws a new viewer’s party once, names its groups first, and leaves an unmoved marker alone on the next change', async () => {
+    const viewer = preview.viewer as ReturnType<typeof fakeViewer>;
+    reads.movie = ready(tripAtStation('trip-a', 'Alpha'));
+    open(['trip-a']);
+    await waitFor(() => expect(viewer.addLiveMarker).toHaveBeenCalledTimes(1));
+    // Labelled by first name, the default.
+    expect(viewer.addLiveMarker).toHaveBeenCalledWith('trip-a:caver-1', 'p8.1', expect.objectContaining({ label: 'Ion' }));
+    // The grouped markers are named before anybody stands on the model.
+    expect(viewer.setLiveMarkerClusterLabel.mock.invocationCallOrder[0]).toBeLessThan(
+      viewer.addLiveMarker.mock.invocationCallOrder[0],
+    );
+    // A change that moves nobody: the trails switch, with a single station walked.
+    fireEvent.click(await screen.findByText('Cavers'));
+    fireEvent.click(screen.getByTestId('movie-trails'));
+    await waitFor(() => expect(screen.getByTestId('movie-trails')).toBeChecked());
+    expect(viewer.addLiveMarker).toHaveBeenCalledTimes(1);
+    expect(viewer.moveLiveMarker).not.toHaveBeenCalled();
   });
 });

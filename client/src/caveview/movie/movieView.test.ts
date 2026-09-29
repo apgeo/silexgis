@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MOVIE_SETTINGS, MOVIE_LABEL_SIZE_RANGE } from './movieSettings.ts';
-import { applyMovieView, movieLabelDevicePixels, type MovieViewViewer } from './movieView.ts';
+import { applyMovieView, movieLabelDevicePixels, movieViewMode, turnToMovieView, type MovieViewViewer } from './movieView.ts';
 
 const CONSTANTS = { CAMERA_PERSPECTIVE: 1, CAMERA_ORTHOGRAPHIC: 2, SHADING_DEPTH: 9, SHADING_DEPTH_CURSOR: 11 };
 const HEIGHT = 0;
@@ -39,6 +39,45 @@ describe('applyMovieView', () => {
     const shown = viewer(HEIGHT);
     applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, shadingMode: 9 }, CONSTANTS, HEIGHT);
     expect(shown.shadingMode).toBe(HEIGHT);
+  });
+});
+
+describe('turnToMovieView', () => {
+  const VIEWS = { VIEW_PLAN: 1, VIEW_ELEVATION_N: 2, VIEW_ELEVATION_S: 3, VIEW_ELEVATION_E: 4, VIEW_ELEVATION_W: 5 };
+
+  it('names each starting view by the viewer\'s own constant', () => {
+    expect(movieViewMode('plan', VIEWS)).toBe(1);
+    expect(movieViewMode('north', VIEWS)).toBe(2);
+    expect(movieViewMode('south', VIEWS)).toBe(3);
+    expect(movieViewMode('east', VIEWS)).toBe(4);
+    expect(movieViewMode('west', VIEWS)).toBe(5);
+  });
+
+  it('turns the viewer to it every time it is asked, since the viewer cannot say where it looks from', () => {
+    const written: (number | 'settle')[] = [];
+    const shown = {
+      get view() { return 1; },
+      set view(mode: number) { written.push(mode); },
+      setCameraAngles: (angles: { azimuth?: number; polar?: number }) => {
+        if (angles.azimuth === undefined && angles.polar === undefined) written.push('settle');
+      },
+    };
+    turnToMovieView(shown, 'north', VIEWS);
+    turnToMovieView(shown, 'north', VIEWS);
+    turnToMovieView(shown, 'plan', VIEWS);
+    // Each turn first brings one still under way to its end: the viewer ignores a turn asked for
+    // while another is running.
+    expect(written).toEqual(['settle', 2, 'settle', 2, 'settle', 1]);
+  });
+
+  it('is not among the settings written on every change', () => {
+    const written: number[] = [];
+    const shown = Object.defineProperty(viewer(HEIGHT), 'view', {
+      get: () => 1,
+      set: (mode: number) => written.push(mode),
+    });
+    applyMovieView(shown, { ...DEFAULT_MOVIE_SETTINGS.view, direction: 'east' }, CONSTANTS, HEIGHT);
+    expect(written).toEqual([]);
   });
 });
 

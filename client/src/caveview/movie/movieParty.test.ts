@@ -177,7 +177,8 @@ describe('movieParty', () => {
       label: 'Ana (out)',
       color: trackedCaverPalette.out,
     });
-    expect(shown.legend).toContainEqual({ color: trackedCaverPalette.out, label: 'Out' });
+    // Pinned: it explains a kind of marker, so a legend short of room keeps it and cuts trips first.
+    expect(shown.legend).toContainEqual({ color: trackedCaverPalette.out, label: 'Out', pinned: true });
     expect(shown.clusterLabel(['trip-1:caver-ana', 'trip-1:caver-bogdan'])).toEqual(['Bogdan', 'Ana (out)']);
 
     const hidden = partyOf([one], settings({ showOut: false }));

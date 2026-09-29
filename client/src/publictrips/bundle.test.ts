@@ -246,6 +246,8 @@ describe('the fold, compiled for a page that has no build step', () => {
       // A bare specifier cannot be resolved by a page with no import map and no bundler.
       expect(/\bfrom\s*["'][a-zA-Z@]/.test(code), `${format}: no bare imports`).toBe(false);
       expect(/\brequire\(/.test(code), `${format}: nothing asks for CommonJS`).toBe(false);
+      // The movie's encoders and the viewer's capture session belong to the signed-in dialog alone.
+      expect(/\bbeginCapture\b|\bVideoEncoder\b|gifWorker/.test(code), `${format}: no movie code`).toBe(false);
       // The two hosts do not share a language or a catalogue: words stay with whoever is speaking.
       expect(/Intl\.|toLocale/.test(code), `${format}: no locale formatting`).toBe(false);
       // `import.meta.env` would be this application's build talking to a page that never had one.

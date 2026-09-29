@@ -455,6 +455,20 @@ export interface CaveViewer extends CaveViewLayers {
   shadingMode: number | undefined;
   /** `CAMERA_PERSPECTIVE` or `CAMERA_ORTHOGRAPHIC` (or `CAMERA_ANAGLYPH`). */
   cameraType: number;
+  /**
+   * Turns the camera to look at the whole model from above (`VIEW_PLAN`) or level, facing north,
+   * south, east or west (`VIEW_ELEVATION_N`, `_S`, `_E`, `_W` — the camera of the north elevation
+   * stands to the south of the model), framing the model as it goes.
+   *
+   * <b>The turn is animated, and the viewer ignores a turn asked for while another is running.</b> A
+   * caller settles any move under way first (`setCameraAngles({})` brings it to its end), and reads
+   * the camera's angles only after that — read mid-turn they are neither view.
+   *
+   * <b>Written, never read.</b> The viewer answers `VIEW_PLAN` whatever the camera is doing, so a
+   * caller that compares before writing would write on every comparison — and each write reframes
+   * the model, throwing away any turning or zooming done since.
+   */
+  view: number;
   /** Width of the survey's lines, 0 upwards; 0 is the thinnest. */
   linewidth: number;
   /** Vertical exaggeration of the model. Undefined with no model loaded. */
@@ -559,7 +573,16 @@ export interface CaveViewCameraConstants {
   CAMERA_ANAGLYPH: number;
 }
 
-export interface Cv2Namespace extends CaveViewShadingConstants, CaveViewCameraConstants {
+/** The views the viewer's `view` takes: from above, or level facing north, south, east or west. */
+export interface CaveViewViewConstants {
+  VIEW_PLAN: number;
+  VIEW_ELEVATION_N: number;
+  VIEW_ELEVATION_S: number;
+  VIEW_ELEVATION_E: number;
+  VIEW_ELEVATION_W: number;
+}
+
+export interface Cv2Namespace extends CaveViewShadingConstants, CaveViewCameraConstants, CaveViewViewConstants {
   CaveViewer: new (containerId: string, config: Record<string, unknown>) => CaveViewer;
   CaveViewUI: new (viewer: CaveViewer) => CaveViewUi;
   CaveViewToolbar: new (

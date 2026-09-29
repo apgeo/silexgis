@@ -362,6 +362,29 @@ describe('recordMovie', () => {
     expect(fake.captured.map((frame) => frame.advance)).toEqual([0, ...Array.from({ length: 29 }, () => 100)]);
   });
 
+  it('starts from the view a turn under way is going to, not from halfway through it', async () => {
+    const fake = fakeViewer();
+    const encoder = fakeEncoder();
+    // A turn to the starting view is still under way: until it is settled the camera stands
+    // between the two views, and settling it brings it to the one it was turning to.
+    const setAngles = fake.viewer.setCameraAngles;
+    let turning = true;
+    fake.viewer.setCameraAngles = vi.fn((next: { azimuth?: number; polar?: number }) => {
+      if (turning && next.azimuth === undefined && next.polar === undefined) {
+        turning = false;
+        setAngles({ azimuth: 1.2, polar: Math.PI / 2 });
+        return;
+      }
+      setAngles(next);
+    });
+    await recordMovie(recording(fake, encoder));
+
+    expect(fake.captured[0].azimuth).toBeCloseTo(1.2, 12);
+    expect(new Set(fake.captured.map((frame) => frame.polar))).toEqual(new Set([Math.PI / 2]));
+    // And the preview is handed back at that view, not tilted between two.
+    expect(fake.viewer.getCameraAngles()).toEqual({ azimuth: 1.2, polar: Math.PI / 2 });
+  });
+
   it('slides the markers over the transition time, and places them at once on the first frame', async () => {
     const fake = fakeViewer();
     await recordMovie(recording(fake, fakeEncoder(), { settings: settings({}, { transitionS: 1.5 }) }));

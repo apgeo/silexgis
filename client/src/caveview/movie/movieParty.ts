@@ -33,6 +33,11 @@ export interface MovieTripData {
 export interface MovieLegendEntry {
   color: string;
   label: string;
+  /**
+   * Explains a kind of marker rather than naming a trip or a team — the grey of somebody who has
+   * come out — so a legend with too little room keeps it and cuts the named entries instead.
+   */
+  pinned?: boolean;
 }
 
 export interface MovieParty {
@@ -217,7 +222,7 @@ export function movieParty(
           ]
         : [];
   if (placed.some((entry) => entry.caver.out)) {
-    legend.push({ color: trackedCaverPalette.out, label: t('caveview.tracking.out') });
+    legend.push({ color: trackedCaverPalette.out, label: t('caveview.tracking.out'), pinned: true });
   }
 
   return {

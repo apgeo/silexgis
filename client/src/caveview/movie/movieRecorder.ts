@@ -10,6 +10,7 @@ import { movieFrames, type MovieTimeline } from './movieTimeline.ts';
 import {
   applyMovieMarkerLabels,
   applyMovieView,
+  settleCamera,
   type MovieMarkerLabelViewer,
   type MovieViewConstants,
   type MovieViewViewer,
@@ -190,6 +191,9 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
   // What is standing on the model now, to be put back.
   const markersBefore = viewer.getLiveMarkers().map((marker) => ({ ...marker }));
   const trailsShownBefore = viewer.getTrails().filter((trail) => trail.visible).map((trail) => trail.id);
+  // A turn of the preview to its starting view is animated. Read mid-turn, these angles would start
+  // the movie — and hand the preview back — tilted between the two views.
+  settleCamera(viewer);
   const cameraBefore = viewer.getCameraAngles();
 
   let restoreView: (() => void) | null = null;

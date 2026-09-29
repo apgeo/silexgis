@@ -6,6 +6,7 @@ import {
   MOVIE_GIF_MAX_FRAMES,
   MOVIE_GIF_MAX_WIDTH,
   MOVIE_SIZES,
+  MOVIE_VIEW_DIRECTIONS,
   MOVIE_VIEW_LAYERS,
   movieSize,
   normaliseMovieSettings,
@@ -34,6 +35,17 @@ describe('normaliseMovieSettings', () => {
       expect(normaliseMovieSettings({ cavers: { labels } }).cavers.labels).toBe(labels);
     }
     expect(normaliseMovieSettings({ cavers: { labels: 'nicknames' } }).cavers.labels).toBe('first');
+  });
+
+  it('starts from the north elevation, and keeps any of the viewer\'s five views', () => {
+    expect(DEFAULT_MOVIE_SETTINGS.view.direction).toBe('north');
+    expect(MOVIE_VIEW_DIRECTIONS).toEqual(['plan', 'north', 'south', 'east', 'west']);
+    for (const direction of MOVIE_VIEW_DIRECTIONS) {
+      expect(normaliseMovieSettings({ view: { direction } }).view.direction).toBe(direction);
+    }
+    for (const raw of ['up', 'N', 2, null]) {
+      expect(normaliseMovieSettings({ view: { direction: raw } }).view.direction).toBe('north');
+    }
   });
 
   it('fills a partial object field by field, keeping what it does hold', () => {
