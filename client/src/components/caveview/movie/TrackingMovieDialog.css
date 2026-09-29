@@ -1,0 +1,62 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The movie dialog: the preview on the left, its settings beside it, and below both the export's
+   progress, the notice about what the file shows, and the buttons. On a narrow screen the settings
+   go under the preview. */
+
+.movie-dialog-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .movie-dialog-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Sized from the window rather than as a share of it, so that the notice and the export button
+   under both columns stay on screen on a laptop's 768 pixels as on a tall monitor: the dialog's
+   top margin, its title, and the footer with an export's progress take about 330 pixels. */
+.movie-dialog-settings {
+  max-height: max(240px, min(calc(100vh - 330px), 720px));
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.movie-dialog-position {
+  flex: 1;
+}
+
+/* The moment the preview shows, beside its slider; held to one line so the slider does not jump. */
+.movie-dialog-moment {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.movie-dialog-footer {
+  margin-top: 16px;
+}
+
+.movie-setting-help {
+  display: block;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.movie-layers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+}
+
+/* The captions are drawn at the movie's own size and shown at the box's, so the preview carries
+   them at exactly the share of the frame the file will. The model underneath stays draggable. */
+.movie-preview-captions {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}

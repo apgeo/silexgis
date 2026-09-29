@@ -5,7 +5,6 @@ import type { TrackingEvent, TrackingState } from '../../api/hooks.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
 import { DEFAULT_MOVIE_SETTINGS, type MovieSettings } from './movieSettings.ts';
 import {
-  initialsOf,
   MOVIE_MARKER_PALETTE,
   movieMarkerId,
   movieParty,
@@ -104,7 +103,7 @@ describe('movieParty', () => {
     expect([...party.markers.keys()]).toEqual([movieMarkerId('trip-1', ANA)]);
     expect(party.markers.get('trip-1:caver-ana')).toEqual({
       station: 'p.1',
-      label: 'Ana Popescu',
+      label: 'Ana',
       color: MOVIE_MARKER_PALETTE[0],
     });
   });
@@ -175,11 +174,11 @@ describe('movieParty', () => {
     const shown = partyOf([one]);
     expect(shown.markers.get('trip-1:caver-ana')).toEqual({
       station: 'p.1',
-      label: 'Ana Popescu (out)',
+      label: 'Ana (out)',
       color: trackedCaverPalette.out,
     });
     expect(shown.legend).toContainEqual({ color: trackedCaverPalette.out, label: 'Out' });
-    expect(shown.clusterLabel(['trip-1:caver-ana', 'trip-1:caver-bogdan'])).toEqual(['Bogdan Ionescu', 'Ana Popescu (out)']);
+    expect(shown.clusterLabel(['trip-1:caver-ana', 'trip-1:caver-bogdan'])).toEqual(['Bogdan', 'Ana (out)']);
 
     const hidden = partyOf([one], settings({ showOut: false }));
     expect([...hidden.markers.keys()]).toEqual(['trip-1:caver-bogdan']);
@@ -201,6 +200,44 @@ describe('movieParty', () => {
     expect(off.clusterLabel(['trip-1:caver-ana', 'trip-1:caver-cora'])).toBeNull();
   });
 
+  it('names people by first name, lengthened where two people of any selected trip would read the same', () => {
+    const log = [
+      event({ caverId: ANA, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ caverId: BOGDAN, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+    ];
+    const one = trip('trip-1', 'One', state([ANA, BOGDAN]), log);
+    // A second trip brings another Ana, who is not on the model at this instant — the names are
+    // settled over the rosters, so hers still lengthens the first Ana's.
+    const two: MovieTripData = {
+      ...trip('trip-2', 'Two', state(['caver-ana-dima']), []),
+      nameOf: () => 'Ana Dima',
+    };
+    const alone = partyOf([one]);
+    expect(alone.markers.get('trip-1:caver-ana')!.label).toBe('Ana');
+    expect(alone.clusterLabel(['trip-1:caver-ana', 'trip-1:caver-bogdan'])).toEqual(['Ana', 'Bogdan']);
+
+    const together = partyOf([one, two]);
+    expect(together.markers.has('trip-2:caver-ana-dima')).toBe(false);
+    expect(together.markers.get('trip-1:caver-ana')!.label).toBe('Ana P.');
+    expect(together.markers.get('trip-1:caver-bogdan')!.label).toBe('Bogdan');
+    expect(together.clusterLabel(['trip-1:caver-ana', 'trip-1:caver-bogdan'])).toEqual(['Ana P.', 'Bogdan']);
+
+    const full = partyOf([one], settings({ labels: 'full' }));
+    expect(full.markers.get('trip-1:caver-ana')!.label).toBe('Ana Popescu');
+  });
+
+  it('keeps the out suffix and the time on a first-name label', () => {
+    const one = trip('trip-1', 'One', state([ANA]), [
+      event({ caverId: ANA, stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
+      event({ caverId: ANA, kind: 'exited', surveyModelId: null, recordedAt: '2026-09-12T10:00:00Z' }),
+    ]);
+    const label = partyOf([one], settings({ showTimes: true })).markers.get('trip-1:caver-ana')!.label as string;
+    expect(label.startsWith('Ana ')).toBe(true);
+    expect(label).not.toContain('Popescu');
+    expect(label.endsWith('(out)')).toBe(true);
+    expect(label.length).toBeGreaterThan('Ana (out)'.length);
+  });
+
   it('heads a cluster with a team title only when everybody in it is one team of one trip', () => {
     const teams = [{ id: 'team-1', title: 'Echipa 1' }];
     const log = [
@@ -213,8 +250,9 @@ describe('movieParty', () => {
       event({ caverId: ANA, teamId: 'team-9', stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' }),
     ]);
     const party = partyOf([one, two]);
-    expect(party.clusterLabel(['trip-1:caver-ana', 'trip-1:caver-bogdan'])).toEqual(['Echipa 1', 'Ana Popescu', 'Bogdan Ionescu']);
-    expect(party.clusterLabel(['trip-1:caver-ana', 'trip-2:caver-ana'])).toEqual(['Ana Popescu', 'Ana Popescu']);
+    expect(party.clusterLabel(['trip-1:caver-ana', 'trip-1:caver-bogdan'])).toEqual(['Echipa 1', 'Ana', 'Bogdan']);
+    // The same person on two trips is one name, not two people who happen to share one.
+    expect(party.clusterLabel(['trip-1:caver-ana', 'trip-2:caver-ana'])).toEqual(['Ana', 'Ana']);
     expect(party.clusterLabel(['nobody'])).toBeNull();
   });
 
@@ -248,9 +286,9 @@ describe('movieParty', () => {
     const noteAtElapsed = (hours: number) =>
       partyOf([short, long], settings({}, { note: true }), timeline.instants(hours * 60 * 60_000)).note;
     // Two hours in, the short trip's note is five minutes old and the long trip has said nothing.
-    expect(noteAtElapsed(2)).toBe('Ana Popescu: Out soon');
+    expect(noteAtElapsed(2)).toBe('Ana: Out soon');
     // Five hours in, the short trip ended long ago; the long trip spoke two hours ago.
-    expect(noteAtElapsed(5)).toBe('Bogdan Ionescu: At the sump');
+    expect(noteAtElapsed(5)).toBe('Bogdan: At the sump');
   });
 
   it('carries the latest note only when the note caption is on, naming as the markers do', () => {
@@ -259,21 +297,10 @@ describe('movieParty', () => {
       event({ kind: 'note', surveyModelId: null, note: 'Turning back', recordedAt: '2026-09-12T11:00:00Z' }),
     ]);
     expect(partyOf([one]).note).toBeNull();
-    expect(partyOf([one], settings({}, { note: true })).note).toBe('Ana Popescu: Turning back');
-    expect(partyOf([one], settings({}, { note: true }), [Date.parse('2026-09-12T10:00:00Z')]).note).toBe(
-      'Ana Popescu: All well',
-    );
+    expect(partyOf([one], settings({}, { note: true })).note).toBe('Ana: Turning back');
+    expect(partyOf([one], settings({}, { note: true }), [Date.parse('2026-09-12T10:00:00Z')]).note).toBe('Ana: All well');
+    expect(partyOf([one], settings({ labels: 'full' }, { note: true })).note).toBe('Ana Popescu: Turning back');
     expect(partyOf([one], settings({ labels: 'initials' }, { note: true })).note).toBe('AP: Turning back');
     expect(partyOf([one], settings({ labels: 'off' }, { note: true })).note).toBe('Turning back');
-  });
-});
-
-describe('initialsOf', () => {
-  it('takes the first letter of each word and hyphenated part, in any script', () => {
-    expect(initialsOf('Ana Popescu')).toBe('AP');
-    expect(initialsOf('Cora-Maria Dan')).toBe('CMD');
-    expect(initialsOf('ștefan țurcanu')).toBe('ȘȚ');
-    expect(initialsOf('  Ion   A. ')).toBe('IA');
-    expect(initialsOf('3')).toBe('3');
   });
 });

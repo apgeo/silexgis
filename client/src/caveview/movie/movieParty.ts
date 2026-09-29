@@ -7,6 +7,7 @@ import { markerLine, type MarkerLineOptions } from '../markerLine.ts';
 import type { TrackedCaver } from '../trackedCavers.ts';
 import { noteAt, replayNotes, trackedCaversAt, trackedRoutesAt } from '../trackingReplay.ts';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
+import { movieCaverNames } from './movieCaverNames.ts';
 import type { MovieSettings } from './movieSettings.ts';
 
 /**
@@ -69,20 +70,6 @@ export function movieMarkerId(tripLogId: string, caverId: string): string {
   return `${tripLogId}:${caverId}`;
 }
 
-/**
- * A name's initials: the first letter of each word, a hyphenated part counting as a word, in
- * capitals. Letters of any script count; a word with none (a lone "-" or "3") gives nothing, and a
- * name that yields nothing at all is kept as it was, since an empty label would be no label.
- */
-export function initialsOf(name: string): string {
-  const initials = name
-    .split(/[\s\-‐‑]+/u)
-    .map((word) => Array.from(word).find((character) => /\p{L}/u.test(character)) ?? '')
-    .join('')
-    .toUpperCase();
-  return initials.length > 0 ? initials : name.trim();
-}
-
 /** A caver on the model, with what their marker is keyed and coloured by. */
 interface Placed {
   id: string;
@@ -137,10 +124,19 @@ export function movieParty(
 
   const line: MarkerLineOptions = { t, language, showTimes: settings.cavers.showTimes, today };
   const labelMode = settings.cavers.labels;
+  // Everybody on every selected trip's roster, so that whether two people's first names collide is
+  // one answer for the whole movie rather than a new one at each frame.
+  const names = movieCaverNames(
+    trips.flatMap((trip) =>
+      trip.tracking.participants.map((person) => ({ caverId: person.caverId, name: trip.nameOf(person.caverId) })),
+    ),
+    labelMode,
+  );
+  const nameOf = (caverId: string, fallback: string): string => names.get(caverId) ?? fallback;
+  // The out suffix and the optional time are still worded by the one spelling a marker has; only
+  // the name inside it is the movie's choice.
   const lineOf = (caver: TrackedCaver): string =>
-    labelMode === 'off'
-      ? ''
-      : markerLine(labelMode === 'initials' ? { ...caver, name: initialsOf(caver.name) } : caver, line);
+    labelMode === 'off' ? '' : markerLine({ ...caver, name: nameOf(caver.caverId, caver.name) }, line);
 
   const placed: Placed[] = [];
   trips.forEach((trip, index) => {
@@ -229,7 +225,7 @@ export function movieParty(
     clusterLabel,
     trails,
     legend,
-    note: settings.captions.note ? noteInForce(trips, instants, labelMode, t) : null,
+    note: settings.captions.note ? noteInForce(trips, instants, labelMode, nameOf, t) : null,
   };
 }
 
@@ -245,6 +241,7 @@ function noteInForce(
   trips: readonly MovieTripData[],
   instants: readonly number[],
   labelMode: MovieSettings['cavers']['labels'],
+  nameOf: (caverId: string, fallback: string) => string,
   t: TFunction,
 ): string | null {
   let best: { age: number; text: string } | null = null;
@@ -261,14 +258,10 @@ function noteInForce(
     if (best !== null && age >= best.age) {
       continue;
     }
-    const name = trip.nameOf(note.caverId);
     const text =
       labelMode === 'off'
         ? note.note
-        : t('caveview.movie.noteBy', {
-            name: labelMode === 'initials' ? initialsOf(name) : name,
-            note: note.note,
-          });
+        : t('caveview.movie.noteBy', { name: nameOf(note.caverId, trip.nameOf(note.caverId)), note: note.note });
     best = { age, text };
   }
   return best?.text ?? null;

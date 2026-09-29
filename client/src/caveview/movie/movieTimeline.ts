@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { ReplayWindow } from '../trackingReplay.ts';
+import type { TrackingEvent, TrackingState } from '../../api/hooks.ts';
+import { replayWindow, type ReplayWindow } from '../trackingReplay.ts';
 import type { MovieSettings, MovieTimelineMode } from './movieSettings.ts';
 
 /**
@@ -18,6 +19,36 @@ export interface MovieTripSpan {
   window: ReplayWindow;
   /** Report instants, ascending, epoch milliseconds. */
   moments: readonly number[];
+}
+
+/**
+ * One trip's part in a movie of a model, from the trip's watch and its whole log; null when the
+ * trip has nothing to replay (its watch was never armed, or its reports cover no stretch of time).
+ *
+ * The window is the trip's own replay window, the one its replay bar scrubs over. The moments are
+ * the instants something happened in the movie: every report except one measured against another
+ * survey model, which the replay does not draw on this one — so a stretch in which the party was
+ * reporting on another survey reads as quiet here, which on this model it is.
+ *
+ * @param openedAt when the movie was opened, which is where a trip still under way ends.
+ */
+export function movieTripSpan(
+  tripLogId: string,
+  tracking: Pick<TrackingState, 'armedAt' | 'closedAt'>,
+  events: readonly Pick<TrackingEvent, 'recordedAt' | 'surveyModelId'>[],
+  openedAt: number,
+  surveyModelId: string,
+): MovieTripSpan | null {
+  const window = replayWindow(tracking, events, openedAt);
+  if (window === null) {
+    return null;
+  }
+  const moments = events
+    .filter((event) => event.surveyModelId === null || event.surveyModelId === surveyModelId)
+    .map((event) => Date.parse(event.recordedAt))
+    .filter((at) => Number.isFinite(at))
+    .sort((left, right) => left - right);
+  return { tripLogId, window, moments };
 }
 
 export interface MovieTimeline {
@@ -155,7 +186,7 @@ export interface MovieFrame {
   position: number;
   /** How far through the replay part this frame is, 0..1; 1 on every still frame at the end. */
   progress: number;
-  /** Radians added to the camera's starting azimuth; positive is clockwise seen from above. */
+  /** Radians added to the camera's starting azimuth; positive turns the picture clockwise. */
   azimuthOffset: number;
   /** Milliseconds of marker motion to run before this frame is drawn. */
   advanceMs: number;
@@ -164,9 +195,27 @@ export interface MovieFrame {
 }
 
 /**
- * Which way a positive azimuth offset turns the camera. The viewer measures azimuth the way a
- * survey bearing is measured — growing clockwise seen from above — so clockwise is the positive
- * direction.
+ * How many frames a movie has — the replay part, at least one frame, then the still frames at the
+ * end — which depends on nothing but its length and rate, so it can be told before any trip is
+ * chosen.
+ */
+export function movieFrameCount(
+  settings: Pick<MovieSettings, 'fps' | 'durationS' | 'holdEndS'>,
+): { replayFrames: number; holdFrames: number; count: number } {
+  const replayFrames = Math.max(1, Math.round(settings.durationS * settings.fps));
+  const holdFrames = Math.max(0, Math.round(settings.holdEndS * settings.fps));
+  return { replayFrames, holdFrames, count: replayFrames + holdFrames };
+}
+
+/**
+ * The sign of an azimuth step that turns the picture clockwise.
+ *
+ * "Clockwise" is said of what the reader sees: the model turning like a clock's hands, seen from
+ * above. The viewer's azimuth is the orbit's own angle about the vertical, zero with the camera due
+ * south of the target and growing as it swings round through east — so the camera travels
+ * counter-clockwise seen from above as the angle grows, and the model, held still while the camera
+ * goes round it, appears to turn the other way, clockwise. A growing azimuth is therefore the
+ * clockwise turn.
  */
 const CLOCKWISE_SIGN = 1;
 
@@ -188,9 +237,7 @@ export function movieFrames(
   settings: MovieSettings,
 ): { count: number; fps: number; frame(index: number): MovieFrame } {
   const fps = settings.fps;
-  const replayFrames = Math.max(1, Math.round(settings.durationS * fps));
-  const holdFrames = Math.max(0, Math.round(settings.holdEndS * fps));
-  const count = replayFrames + holdFrames;
+  const { replayFrames, count } = movieFrameCount(settings);
   const { rotation } = settings;
   const radiansPerFrame = !rotation.enabled
     ? 0

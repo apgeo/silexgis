@@ -6,6 +6,7 @@ import {
   EyeOutlined,
   PictureOutlined,
   UploadOutlined,
+  VideoCameraOutlined,
 } from '@ant-design/icons';
 import { App, Button, Card, Flex, Popconfirm, Table, Tag, Tooltip, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +19,7 @@ import {
   type SurveyModelInfo,
 } from '../../api/hooks.ts';
 import SurveyModelViewerModal from '../../components/caveview/SurveyModelViewerModal.tsx';
+import LazyTrackingMovieDialog from '../../components/caveview/movie/LazyTrackingMovieDialog.tsx';
 import { openModelWindow } from '../../caveview/openModelWindow.ts';
 import SurveyModelUploadModal from './SurveyModelUploadModal.tsx';
 import { surveyModelProblemMessage } from './surveyModelProblems.ts';
@@ -49,6 +51,8 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
   const { data: models } = useSurveyModels(caveId);
   const remove = useDeleteSurveyModel();
   const [viewing, setViewing] = useState<SurveyModelInfo | null>(null);
+  /** The model a movie is being made on, or null while the movie dialog is closed. */
+  const [movieModelId, setMovieModelId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
   const stateCell = (model: SurveyModelInfo) => {
@@ -134,7 +138,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           },
           {
             key: 'actions',
-            width: 230,
+            width: 260,
             render: (_, model) => (
               <Flex gap={4}>
                 {surveyModelReadableByViewer(model) && (
@@ -161,6 +165,18 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                         icon={<ExportOutlined />}
                         aria-label={t('surveyModels.openInWindow')}
                         onClick={() => openModelWindow(model.id)}
+                      />
+                    </Tooltip>
+                    {/* A movie of the trips tracked on this model; which of them is chosen in the
+                        dialog, since nothing on this page says which trip is meant. */}
+                    <Tooltip title={t('caveview.movie.makeHelp')}>
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<VideoCameraOutlined />}
+                        aria-label={t('caveview.movie.make')}
+                        onClick={() => setMovieModelId(model.id)}
+                        data-testid={`survey-model-movie-${model.id}`}
                       />
                     </Tooltip>
                   </>
@@ -200,6 +216,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
       )}
 
       <SurveyModelViewerModal model={viewing} onClose={() => setViewing(null)} />
+      <LazyTrackingMovieDialog surveyModelId={movieModelId} onClose={() => setMovieModelId(null)} />
     </Card>
   );
 }

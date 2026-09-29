@@ -7,6 +7,7 @@ import {
   movieAutoTitle,
   movieCaptionColors,
   movieClockText,
+  movieTitle,
   type MovieCaptions,
 } from './movieCaptions.ts';
 import { MOVIE_MARKER_PALETTE } from './movieParty.ts';
@@ -107,7 +108,26 @@ describe('movieClockText', () => {
 });
 
 describe('movieAutoTitle', () => {
-  it('joins the trips’ titles, skipping empty ones', () => {
-    expect(movieAutoTitle(['One', ' ', 'Two'])).toBe('One · Two');
+  it('calls one trip by its own title', () => {
+    expect(movieAutoTitle([' Alpha '], 'Pestera 1', '12.09.2026')).toBe('Alpha');
+  });
+
+  it('calls several trips by the place and the days they span', () => {
+    expect(movieAutoTitle(['Alpha', 'Bravo'], 'Pestera 1', '12.09.2026 – 14.09.2026')).toBe(
+      'Pestera 1 · 12.09.2026 – 14.09.2026',
+    );
+    expect(movieAutoTitle(['Alpha', 'Bravo'], 'Pestera 1', null)).toBe('Pestera 1');
+  });
+
+  it('falls back to the place for a lone trip with a blank title', () => {
+    expect(movieAutoTitle(['  '], 'Pestera 1', '12.09.2026')).toBe('Pestera 1 · 12.09.2026');
+  });
+});
+
+describe('movieTitle', () => {
+  it('prefers the reader’s own words, and says nothing with the caption off', () => {
+    expect(movieTitle({ title: true, titleText: '  Own  ' }, 'Auto')).toBe('Own');
+    expect(movieTitle({ title: true, titleText: ' ' }, 'Auto')).toBe('Auto');
+    expect(movieTitle({ title: false, titleText: 'Own' }, 'Auto')).toBeNull();
   });
 });

@@ -401,6 +401,12 @@ export interface CaveViewer extends CaveViewLayers {
   /** Whether a capture session is open. */
   readonly capturing: boolean;
   /**
+   * Sizes the drawing surface to its container as it is now — what a window `resize` event does,
+   * for this viewer alone. A container restyled without it keeps drawing at its old size, stretched.
+   * During a capture session the resize is carried out when the session ends.
+   */
+  resize(): void;
+  /**
    * The camera's azimuth about the view target (radians, -π to π) and polar angle from plan, worked
    * out from where the camera is now — so right after a move animated to one of the toolbar's views,
    * a station or the model's first view. Reading them changes and draws nothing.

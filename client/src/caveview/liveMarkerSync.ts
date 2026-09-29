@@ -25,16 +25,6 @@ export interface DrawnMarker {
   color: string;
 }
 
-/**
- * The marker options with the one the viewer is gaining for exported movies: how long a move
- * takes, in milliseconds, where 0 places the marker without sliding it.
- *
- * Declared here, as an intersection over the viewer's own typings, only until those typings carry
- * the option themselves; then this collapses to the viewer's type and the intersection goes. A
- * viewer that does not know the option ignores it, which is the behaviour it has today.
- */
-type LiveMarkerOptionsWithDuration = CaveViewLiveMarkerOptions & { duration?: number };
-
 /** Two labels as the viewer would draw them: a single line, or the same lines in the same order. */
 function sameLabel(left: CaveViewLabelText, right: CaveViewLabelText): boolean {
   if (typeof left === 'string' || typeof right === 'string') {
@@ -73,7 +63,7 @@ export function syncLiveMarkers(
       || !sameLabel(before.label, marker.label)
       || before.color !== marker.color
     ) {
-      const moved: LiveMarkerOptionsWithDuration =
+      const moved: CaveViewLiveMarkerOptions =
         options?.duration === undefined ? given : { ...given, duration: options.duration };
       viewer.moveLiveMarker(id, marker.station, moved);
     }

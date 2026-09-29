@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_MOVIE_SETTINGS, type MovieSettings } from './movieSettings.ts';
-import { buildMovieTimeline, movieFrames, type MovieTripSpan } from './movieTimeline.ts';
+import {
+  buildMovieTimeline,
+  movieFrameCount,
+  movieFrames,
+  movieTripSpan,
+  type MovieTripSpan,
+} from './movieTimeline.ts';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -156,5 +162,51 @@ describe('movieFrames', () => {
   it('keeps the camera still when rotation is off', () => {
     const schedule = movieFrames(timeline, settings({ rotation: { ...DEFAULT_MOVIE_SETTINGS.rotation, enabled: false } }));
     expect(schedule.frame(30).azimuthOffset).toBe(0);
+  });
+});
+
+describe('movieTripSpan', () => {
+  const at = (ms: number) => new Date(ms).toISOString();
+  const report = (ms: number, surveyModelId: string | null) => ({ recordedAt: at(ms), surveyModelId });
+
+  it('spans the trip as its replay does, with the moments on this model in time order', () => {
+    const tracking = { armedAt: at(T0), closedAt: at(T0 + 4 * HOUR) };
+    // Newest first, as the log is read; one report on another survey, one with no place.
+    const events = [
+      report(T0 + 3 * HOUR, 'model-1'),
+      report(T0 + 2 * HOUR, 'model-2'),
+      report(T0 + HOUR, null),
+      report(T0 + 30 * MIN, 'model-1'),
+    ];
+
+    const result = movieTripSpan('trip-a', tracking, events, T0 + 10 * HOUR, 'model-1');
+
+    expect(result).toEqual({
+      tripLogId: 'trip-a',
+      window: { from: T0, to: T0 + 4 * HOUR },
+      moments: [T0 + 30 * MIN, T0 + HOUR, T0 + 3 * HOUR],
+    });
+  });
+
+  it('has nothing to replay for a watch that was never armed', () => {
+    expect(movieTripSpan('trip-a', { armedAt: null, closedAt: null }, [], T0, 'model-1')).toBeNull();
+  });
+
+  it('ends a trip still under way where the movie was opened', () => {
+    const result = movieTripSpan('trip-a', { armedAt: at(T0), closedAt: null }, [], T0 + 2 * HOUR, 'model-1');
+    expect(result?.window).toEqual({ from: T0, to: T0 + 2 * HOUR });
+  });
+});
+
+describe('movieFrameCount', () => {
+  it('counts the replay part and the still frames, and is the count the schedule has', () => {
+    const chosen = settings({ fps: 12.5, durationS: 4, holdEndS: 2 });
+    expect(movieFrameCount(chosen)).toEqual({ replayFrames: 50, holdFrames: 25, count: 75 });
+    const timeline = buildMovieTimeline([span('trip-a', T0, T0 + HOUR, [])], { mode: 'calendar', quietGapMs: null })!;
+    expect(movieFrames(timeline, chosen).count).toBe(75);
+  });
+
+  it('never has an empty replay part', () => {
+    expect(movieFrameCount(settings({ fps: 10, durationS: 0, holdEndS: 0 })).count).toBe(1);
   });
 });

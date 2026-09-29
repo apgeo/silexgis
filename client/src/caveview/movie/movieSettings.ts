@@ -10,9 +10,18 @@
  * (free text that can carry safety details) all start off, and the reader turns them on knowingly.
  */
 
-export type MovieFormat = 'gif' | 'webm' | 'mp4';
-export type MovieQuality = 'low' | 'medium' | 'high';
-export type MovieCaverLabels = 'names' | 'initials' | 'off';
+import type { CaveViewLayerGetter } from '../loadCaveView.ts';
+import { GIF_FRAME_RATES, type MovieFormat, type MovieQuality } from './encode/movieFormats.ts';
+
+// The format and quality are the encoders' words, and a GIF's frame rates are a fact about the
+// GIF format; each has its one home beside the encoders, and the settings speak them.
+export type { MovieFormat, MovieQuality } from './encode/movieFormats.ts';
+
+/**
+ * How a caver's marker names them. A caver record holds one full name, so `first` is its first
+ * word, lengthened only where two people in the movie would otherwise read the same.
+ */
+export type MovieCaverLabels = 'first' | 'full' | 'initials' | 'off';
 export type MovieColourBy = 'auto' | 'trip' | 'team' | 'single';
 export type MovieTimelineMode = 'calendar' | 'together';
 
@@ -104,11 +113,6 @@ export const MOVIE_SIZES: readonly { id: string; width: number; height: number; 
   { id: '1024x768', width: 1024, height: 768, gif: false },
 ];
 
-/**
- * Frame rates a GIF can hold exactly. A GIF frame lasts a whole number of hundredths of a second,
- * so only rates that divide a second into whole hundredths play at the speed they claim.
- */
-export const MOVIE_GIF_FRAME_RATES: readonly number[] = [10, 12.5, 20, 25];
 /** Frame rates offered for the video formats. */
 export const MOVIE_VIDEO_FRAME_RATES: readonly number[] = [10, 12.5, 15, 20, 24, 25, 30];
 /** The most frames a GIF is made of, still frames at the end included. */
@@ -120,7 +124,7 @@ export const MOVIE_GIF_MAX_WIDTH = 800;
  * The layers a movie may switch, each with the viewer's getter saying whether the loaded model has
  * that layer at all — null for the ones every model has.
  */
-export const MOVIE_VIEW_LAYERS: readonly { key: MovieViewLayer; has: string | null }[] = [
+export const MOVIE_VIEW_LAYERS: readonly { key: MovieViewLayer; has: CaveViewLayerGetter | null }[] = [
   { key: 'legs', has: 'hasLegs' },
   { key: 'stations', has: 'hasStations' },
   { key: 'stationLabels', has: 'hasStationLabels' },
@@ -156,7 +160,7 @@ export const DEFAULT_MOVIE_SETTINGS: MovieSettings = {
   rotation: { enabled: true, mode: 'speed', degreesPerSecond: 6, clockwise: true },
   timeline: { mode: 'calendar', shortenQuiet: true, quietGapMin: 30 },
   cavers: {
-    labels: 'names',
+    labels: 'first',
     labelSize: 16,
     labelPlate: true,
     showTimes: false,
@@ -262,7 +266,7 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
       ?? MOVIE_SIZES.find((entry) => entry.id === d.size)!;
   }
 
-  const rates = format === 'gif' ? MOVIE_GIF_FRAME_RATES : MOVIE_VIDEO_FRAME_RATES;
+  const rates = format === 'gif' ? GIF_FRAME_RATES : MOVIE_VIDEO_FRAME_RATES;
   const fps = nearestRate(number(top.fps, d.fps, 1, 60), rates);
   const holdEndS = number(top.holdEndS, d.holdEndS, 0, 10);
   let durationS = number(top.durationS, d.durationS, 1, 300);
@@ -300,7 +304,7 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
       quietGapMin: number(timeline.quietGapMin, d.timeline.quietGapMin, 1, 24 * 60),
     },
     cavers: {
-      labels: oneOf<MovieCaverLabels>(cavers.labels, ['names', 'initials', 'off'], d.cavers.labels),
+      labels: oneOf<MovieCaverLabels>(cavers.labels, ['first', 'full', 'initials', 'off'], d.cavers.labels),
       labelSize: Math.round(
         number(cavers.labelSize, d.cavers.labelSize, MOVIE_LABEL_SIZE_RANGE.min, MOVIE_LABEL_SIZE_RANGE.max),
       ),

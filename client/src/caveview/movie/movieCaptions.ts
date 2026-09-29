@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { TFunction } from 'i18next';
 import { trackedCaverPalette } from '../../map/markerPalette.ts';
-import { MOVIE_MARKER_PALETTE, type MovieLegendEntry } from './movieParty.ts';
+import { MOVIE_MARKER_PALETTE, type MovieLegendEntry, type MovieParty } from './movieParty.ts';
+import type { MovieSettings } from './movieSettings.ts';
 import type { MovieTimeline } from './movieTimeline.ts';
 
 /**
@@ -232,7 +233,61 @@ export function movieClockText(
   return t('caveview.movie.clockElapsed', { time });
 }
 
-/** The title a movie is given when the reader wrote none: its trips' titles, in order. */
-export function movieAutoTitle(titles: readonly string[]): string {
-  return titles.filter((title) => title.trim().length > 0).join(' · ');
+/**
+ * The title a movie is given when the reader wrote none.
+ *
+ * One trip is called by its own title. Several are called by where and when: the place, and the
+ * days the trips span. Their titles strung together would run off the frame by the third trip,
+ * and would say less than the place and the days do. A lone trip with a blank title falls back to
+ * the same place-and-days form.
+ *
+ * @param place the cave's name, or the model's when the cave's is not known.
+ * @param days the days the trips span as the reader writes them, or null when none is dated.
+ */
+export function movieAutoTitle(tripTitles: readonly string[], place: string, days: string | null): string {
+  if (tripTitles.length === 1 && tripTitles[0].trim().length > 0) {
+    return tripTitles[0].trim();
+  }
+  return [place.trim(), days?.trim() ?? '']
+    .filter((part) => part.length > 0)
+    .join(' · ');
+}
+
+/**
+ * The title a movie carries: the reader's own words when they wrote any, else the automatic one.
+ * Null when the title caption is off.
+ */
+export function movieTitle(
+  captions: Pick<MovieSettings['captions'], 'title' | 'titleText'>,
+  autoTitle: string,
+): string | null {
+  if (!captions.title) {
+    return null;
+  }
+  const own = captions.titleText.trim();
+  return own.length > 0 ? own : autoTitle;
+}
+
+/**
+ * The captions of one frame, with what the reader switched off left out — the one composition the
+ * export and the preview both draw, so the preview shows the captions the file will carry.
+ */
+export function movieCaptionsAt(
+  settings: MovieSettings,
+  title: string | null,
+  party: Pick<MovieParty, 'legend' | 'note'>,
+  clock: ReturnType<MovieTimeline['clock']>,
+  progress: number,
+  words: { t: TFunction; language: string },
+): MovieCaptions {
+  const { captions } = settings;
+  return {
+    title,
+    clock: captions.clock ? movieClockText(clock, words.t, words.language) : null,
+    legend: captions.legend ? party.legend : [],
+    progress: captions.progress ? progress : null,
+    // Already null unless the note caption is on: the party leaves it out itself.
+    note: party.note,
+    size: captions.size,
+  };
 }

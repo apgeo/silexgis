@@ -1,0 +1,752 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { App } from 'antd';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useEffect } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TrackedTrip, TrackingEvent, TrackingState } from '../../../api/hooks.ts';
+import type { MovieFormatSupport } from '../../../caveview/movie/encode/movieEncoder.ts';
+import type { MovieTripData } from '../../../caveview/movie/movieParty.ts';
+import type { MovieRecording } from '../../../caveview/movie/movieRecorder.ts';
+import type { MovieTripSpan } from '../../../caveview/movie/movieTimeline.ts';
+import { movieSlug } from '../../../caveview/movie/movieOutput.ts';
+import { DEFAULT_MOVIE_SETTINGS, normaliseMovieSettings } from '../../../caveview/movie/movieSettings.ts';
+import i18n from '../../../i18n';
+import { useUiPrefsStore } from '../../../stores/uiPrefsStore.ts';
+import type { MoviePreviewHostProps } from './MoviePreviewHost.tsx';
+import type { MovieTripsState } from './useMovieTrips.ts';
+
+const MODEL = 'model-1';
+const ARMED = '2026-09-12T08:00:00Z';
+const CLOSED = '2026-09-12T12:00:00Z';
+
+// ---- the reads, as each test sets them ----------------------------------------------------------
+const reads = vi.hoisted(() => ({
+  tracked: [] as TrackedTrip[],
+  trackedError: null as unknown,
+  movie: {
+    loading: false,
+    error: null,
+    failed: [],
+    logFailed: [],
+    trips: [],
+    spans: [],
+    empty: [],
+  } as unknown as MovieTripsState,
+  movieIdsAsked: [] as (readonly string[])[],
+}));
+vi.mock('../../../api/hooks.ts', () => ({
+  useSurveyModel: () => ({ data: { name: 'Main survey', caveId: 'cave-1' } }),
+  useCave: (id: string | undefined) => ({ data: id === 'cave-1' ? { name: 'Pestera 1' } : undefined }),
+  useSurveyModelTrackedTrips: () => ({
+    data: reads.trackedError === null ? reads.tracked : undefined,
+    isPending: false,
+    error: reads.trackedError,
+  }),
+}));
+vi.mock('./useMovieTrips.ts', () => ({
+  useMovieTrips: (_model: string, ids: readonly string[]) => {
+    reads.movieIdsAsked.push(ids);
+    return reads.movie;
+  },
+}));
+
+// ---- the browser's encoders, the recorder and the save --------------------------------------------
+const probe = vi.hoisted(() => ({
+  answer: [] as MovieFormatSupport[],
+}));
+vi.mock('../../../caveview/movie/encode/movieEncoder.ts', async (original) => ({
+  ...(await original<typeof import('../../../caveview/movie/encode/movieEncoder.ts')>()),
+  probeMovieFormats: () => Promise.resolve(probe.answer),
+}));
+const recordMovie = vi.hoisted(() => vi.fn<(recording: MovieRecording) => Promise<Blob>>());
+vi.mock('../../../caveview/movie/movieRecorder.ts', async (original) => ({
+  ...(await original<typeof import('../../../caveview/movie/movieRecorder.ts')>()),
+  recordMovie,
+}));
+const saveBlob = vi.hoisted(() => vi.fn());
+vi.mock('../../../api/download.ts', () => ({ saveBlob }));
+// The test canvas has no text drawing; what the captions say is the caption module's own business.
+const drawMovieCaptions = vi.hoisted(() => vi.fn());
+vi.mock('../../../caveview/movie/movieCaptions.ts', async (original) => ({
+  ...(await original<typeof import('../../../caveview/movie/movieCaptions.ts')>()),
+  drawMovieCaptions,
+}));
+
+// ---- the preview: no viewer, only the handle a loaded one would give -----------------------------
+function fakeViewer() {
+  return {
+    hasLegs: true,
+    hasStations: true,
+    hasStationLabels: true,
+    hasStationComments: false,
+    hasEntrances: true,
+    hasEntrance_dots: true,
+    hasSplays: false,
+    hasWalls: true,
+    hasScraps: false,
+    hasDuplicateLegs: false,
+    hasSurfaceLegs: false,
+    hasTraces: false,
+    hasWarnings: false,
+    hasBox: true,
+    hasGrid: true,
+    hasRealTerrain: false,
+    getCameraAngles: vi.fn(() => ({ azimuth: 0.5, polar: 1 })),
+    setCameraAngles: vi.fn(),
+    setLiveMarkerClusterLabel: vi.fn(),
+    addLiveMarker: vi.fn(),
+    moveLiveMarker: vi.fn(),
+    removeLiveMarker: vi.fn(),
+    addTrail: vi.fn(),
+    updateTrail: vi.fn(),
+    removeTrail: vi.fn(),
+  };
+}
+const preview = vi.hoisted(() => ({
+  viewer: null as unknown,
+  recordingSeen: [] as boolean[],
+}));
+vi.mock('./MoviePreviewHost.tsx', () => ({
+  default: function FakePreviewHost({ onReady, overlay, recording }: MoviePreviewHostProps) {
+    preview.recordingSeen.push(recording === true);
+    useEffect(() => {
+      onReady?.({
+        viewer: preview.viewer as never,
+        cv2: {
+          SHADING_HEIGHT: 0,
+          SHADING_LENGTH: 1,
+          SHADING_INCLINATION: 2,
+          SHADING_SINGLE: 4,
+          SHADING_SURVEY: 5,
+          SHADING_DEPTH: 9,
+          SHADING_DEPTH_CURSOR: 11,
+        } as never,
+      });
+    }, [onReady]);
+    return <div data-testid="movie-preview">{overlay}</div>;
+  },
+}));
+
+const { default: TrackingMovieDialog } = await import('./TrackingMovieDialog.tsx');
+
+// ---- invented trips --------------------------------------------------------------------------------
+function trackedTrip(tripLogId: string, title: string, armed = true): TrackedTrip {
+  return {
+    tripLogId,
+    title,
+    tripDate: '2026-09-12',
+    tripDateEnd: null,
+    state: 'closed',
+    armedAt: armed ? ARMED : null,
+    closedAt: armed ? CLOSED : null,
+    watchesThisModel: true,
+    reportCount: armed ? 3 : 0,
+    firstReportAt: armed ? ARMED : null,
+    lastReportAt: armed ? CLOSED : null,
+  };
+}
+
+function tracking(): TrackingState {
+  return {
+    state: 'closed',
+    surveyModelId: MODEL,
+    surveyModelMissing: false,
+    referenceStationName: null,
+    depthFilter: [],
+    armedAt: ARMED,
+    closedAt: CLOSED,
+    positionsWithheld: false,
+    publishesRealNames: true,
+    publishedAt: null,
+    publishedUntil: null,
+    teams: [],
+    participants: [],
+  } as unknown as TrackingState;
+}
+
+function movieTrip(tripLogId: string, title: string): { trip: MovieTripData; span: MovieTripSpan } {
+  const events: TrackingEvent[] = [];
+  return {
+    trip: {
+      tripLogId,
+      title,
+      tracking: tracking(),
+      events,
+      nameOf: () => 'Ion A.',
+    },
+    span: {
+      tripLogId,
+      window: { from: Date.parse(ARMED), to: Date.parse(CLOSED) },
+      moments: [],
+    },
+  };
+}
+
+function ready(...trips: { trip: MovieTripData; span: MovieTripSpan }[]): MovieTripsState {
+  return {
+    loading: false,
+    error: null,
+    failed: [],
+    logFailed: [],
+    trips: trips.map((t) => t.trip),
+    spans: trips.map((t) => t.span),
+    empty: [],
+  };
+}
+
+const ALL_FORMATS: MovieFormatSupport[] = [
+  { format: 'gif', supported: true, codec: null },
+  { format: 'webm', supported: true, codec: 'vp09.00.10.08' },
+  { format: 'mp4', supported: true, codec: 'avc1.42001f' },
+];
+
+function open(initialTripIds: string[] = []) {
+  const onClose = vi.fn();
+  render(
+    <App>
+      <TrackingMovieDialog surveyModelId={MODEL} initialTripIds={initialTripIds} onClose={onClose} />
+    </App>,
+  );
+  return { onClose };
+}
+
+beforeEach(() => {
+  preview.viewer = fakeViewer();
+  preview.recordingSeen = [];
+  probe.answer = ALL_FORMATS;
+  reads.tracked = [
+    trackedTrip('trip-a', 'Alpha'),
+    trackedTrip('trip-b', 'Bravo'),
+    trackedTrip('trip-c', 'Never armed', false),
+  ];
+  reads.trackedError = null;
+  reads.movie = ready();
+  reads.movieIdsAsked = [];
+  recordMovie.mockReset();
+  saveBlob.mockReset();
+  drawMovieCaptions.mockReset();
+  useUiPrefsStore.setState({ movieSettings: undefined });
+});
+
+afterEach(() => {
+  cleanup();
+  localStorage.removeItem('silexgis.uiPrefs');
+});
+
+describe('the tracking movie dialog', () => {
+  it('shows the preview, every group of settings, the notice about what the file shows, and the tracked trips', async () => {
+    open();
+
+    expect(await screen.findByTestId('movie-preview')).toBeInTheDocument();
+    for (const group of ['Trips', 'Output', 'Motion', 'Cavers', 'View', 'Captions']) {
+      expect(screen.getByText(group)).toBeInTheDocument();
+    }
+    expect(screen.getByTestId('movie-privacy')).toHaveTextContent('Share it only with people who may see both.');
+    expect(within(screen.getByTestId('movie-trips')).getByText('Alpha')).toBeInTheDocument();
+    // A trip that was never armed is listed, cannot be ticked, and says why.
+    const never = screen.getByTestId('movie-trip-trip-c');
+    expect(within(never).getByRole('checkbox')).toBeDisabled();
+    expect(never).toHaveTextContent('There is nothing to replay');
+    // Nothing is chosen, so there is nothing to export yet — and the reader is told what to do.
+    expect(screen.getByTestId('movie-export')).toBeDisabled();
+    expect(screen.getByText('Choose at least one trip to preview and export a movie.')).toBeInTheDocument();
+  });
+
+  it('keeps the trips in the order they were ticked, which is what keeps each trip its colour', async () => {
+    open(['trip-b']);
+    fireEvent.click(within(await screen.findByTestId('movie-trip-trip-a')).getByRole('checkbox'));
+
+    await waitFor(() => expect(reads.movieIdsAsked.at(-1)).toEqual(['trip-b', 'trip-a']));
+  });
+
+  it('offers a format this browser cannot write at the chosen size only as a refusal saying why', async () => {
+    probe.answer = [
+      { format: 'gif', supported: true, codec: null },
+      { format: 'webm', supported: false, codec: null },
+      { format: 'mp4', supported: true, codec: 'avc1.42001f' },
+    ];
+    open();
+
+    await waitFor(() => expect(screen.getByTestId('movie-format-webm')).toBeDisabled());
+    expect(screen.getByTestId('movie-format-mp4')).not.toBeDisabled();
+    expect(screen.getByTestId('movie-format-gif')).not.toBeDisabled();
+    // Written out, since a disabled button's tooltip cannot be relied on.
+    expect(screen.getByTestId('movie-format-refusal')).toHaveTextContent('This browser has no video encoder');
+  });
+
+  it('refuses to export a remembered format this browser cannot write, and says so', async () => {
+    useUiPrefsStore.setState({
+      movieSettings: normaliseMovieSettings({
+        ...DEFAULT_MOVIE_SETTINGS,
+        format: 'webm',
+      }),
+    });
+    probe.answer = [
+      { format: 'gif', supported: true, codec: null },
+      { format: 'webm', supported: false, codec: null },
+      { format: 'mp4', supported: false, codec: null },
+    ];
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    // A browser with a video encoder that cannot use it at this size: the refusal names the size.
+    vi.stubGlobal('VideoEncoder', class {});
+    try {
+      open(['trip-a']);
+
+      expect(await screen.findByTestId('movie-format-refused')).toHaveTextContent(
+        'This browser cannot write WebM at 640 × 360, 10 frames a second.',
+      );
+      expect(screen.getByTestId('movie-export')).toBeDisabled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    // One with no video encoder at all is told that instead.
+    cleanup();
+    open(['trip-a']);
+    expect(await screen.findByTestId('movie-format-refused')).toHaveTextContent('This browser has no video encoder');
+  });
+
+  it('remembers the settings in this browser, repaired, and starts the next movie from them', async () => {
+    open();
+    fireEvent.click(await screen.findByText('Motion'));
+    const rotation = await screen.findByTestId('movie-rotation');
+    fireEvent.click(rotation);
+
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.rotation.enabled).toBe(false));
+    // The rest is what the reader had, not something else.
+    expect(useUiPrefsStore.getState().movieSettings?.format).toBe(DEFAULT_MOVIE_SETTINGS.format);
+    const stored = JSON.parse(localStorage.getItem('silexgis.uiPrefs')!) as {
+      state: Record<string, unknown>;
+    };
+    expect(stored.state.movieSettings).toBeDefined();
+    // Which trips were in it is not a preference and is not kept.
+    expect(JSON.stringify(stored.state)).not.toContain('trip-a');
+
+    cleanup();
+    open();
+    fireEvent.click(await screen.findByText('Motion'));
+    expect(await screen.findByTestId('movie-rotation')).not.toBeChecked();
+  });
+
+  it('shows the frame count and an estimate, and warns about a GIF too large to send', async () => {
+    useUiPrefsStore.setState({
+      movieSettings: normaliseMovieSettings({
+        ...DEFAULT_MOVIE_SETTINGS,
+        size: '800x600',
+        fps: 25,
+        durationS: 22,
+      }),
+    });
+    open();
+
+    // 22 s at 25 fps, and the 2 s still at the end: 550 + 50.
+    expect(await screen.findByTestId('movie-summary')).toHaveTextContent('600 frames');
+    expect(screen.getByTestId('movie-too-large')).toBeInTheDocument();
+
+    cleanup();
+    useUiPrefsStore.setState({
+      movieSettings: normaliseMovieSettings({
+        ...DEFAULT_MOVIE_SETTINGS,
+        size: '320x180',
+      }),
+    });
+    open();
+    expect(await screen.findByTestId('movie-summary')).toHaveTextContent('220 frames');
+    expect(screen.queryByTestId('movie-too-large')).not.toBeInTheDocument();
+  });
+
+  it('exports from the preview viewer with the chosen trips, and saves the file under a readable name', async () => {
+    const alpha = movieTrip('trip-a', 'Alpha');
+    const bravo = movieTrip('trip-b', 'Bravo');
+    reads.movie = ready(bravo, alpha);
+    const file = new Blob(['GIF89a'], { type: 'image/gif' });
+    recordMovie.mockImplementation(async (recording) => {
+      recording.onProgress?.({ stage: 'rendering', done: 1, total: 2, step: 1, steps: 2 });
+      return file;
+    });
+    open(['trip-b', 'trip-a']);
+
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    const recording = recordMovie.mock.calls[0][0];
+    expect(recording.viewer).toBe(preview.viewer);
+    expect(recording.surveyModelId).toBe(MODEL);
+    expect(recording.trips.map((trip) => trip.tripLogId)).toEqual(['trip-b', 'trip-a']);
+    expect(recording.settings.format).toBe('gif');
+    expect(recording.signal?.aborted).toBe(false);
+    // Several trips are called by the cave and the days they span on the frame; the file is called
+    // by the cave and the one date it was made, not by a second date in the reader's own order.
+    const days = new Date(2026, 8, 12).toLocaleDateString(i18n.language);
+    expect(recording.title).toBe(`Pestera 1 · ${days}`);
+    const [saved, name] = saveBlob.mock.calls[0] as [Blob, string];
+    expect(saved).toBe(file);
+    expect(name).toMatch(new RegExp(`^silexgis-${movieSlug('Pestera 1')}-\\d{4}-\\d{2}-\\d{2}\\.gif$`));
+    // The preview carries the captions the file will.
+    expect(drawMovieCaptions).toHaveBeenCalled();
+    // The preview was left alone while the recording held the viewer.
+    expect(preview.recordingSeen).toContain(true);
+    expect(screen.queryByTestId('movie-export-failed')).not.toBeInTheDocument();
+  });
+
+  it('shows the progress of an export, and a cancel ends it without a word or a file', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    let started!: (recording: MovieRecording) => void;
+    const running = new Promise<MovieRecording>((resolve) => (started = resolve));
+    recordMovie.mockImplementation(
+      (recording) =>
+        new Promise<Blob>((_, reject) => {
+          // A GIF: 16 palette samples, then the third of its 40 frames.
+          recording.onProgress?.({ stage: 'rendering', done: 19, total: 56, step: 3, steps: 40 });
+          recording.signal?.addEventListener('abort', () =>
+            reject(new DOMException('The movie export was cancelled.', 'AbortError')),
+          );
+          started(recording);
+        }),
+    );
+    const errors = vi.spyOn(console, 'error');
+    open(['trip-a']);
+
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    const recording = await running;
+
+    // The frame of the movie it is at, not a count with the colour samples in it.
+    expect(await screen.findByTestId('movie-progress')).toHaveTextContent('Frame 3 of 40');
+    expect(screen.getByTestId('movie-progress')).not.toHaveTextContent('Frame 19');
+    // Nothing can be changed under a running export.
+    expect(screen.getByTestId('movie-format-webm')).toBeDisabled();
+    expect(screen.getByTestId('movie-trip-trip-a').querySelector('input')).toBeDisabled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('movie-cancel'));
+    });
+
+    expect(recording.signal?.aborted).toBe(true);
+    await waitFor(() => expect(screen.queryByTestId('movie-progress')).not.toBeInTheDocument());
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('movie-export-failed')).not.toBeInTheDocument();
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
+  });
+
+  it('captions the preview with the frame being recorded, not the one the slider was left at', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    let report!: (progress: Parameters<NonNullable<MovieRecording['onProgress']>>[0]) => void;
+    let finish!: () => void;
+    recordMovie.mockImplementation(
+      (recording) =>
+        new Promise<Blob>((resolve) => {
+          report = (progress) => recording.onProgress?.(progress);
+          finish = () => resolve(new Blob(['GIF89a'], { type: 'image/gif' }));
+        }),
+    );
+    open(['trip-a']);
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    await waitFor(() => expect(drawMovieCaptions).toHaveBeenCalled());
+    const progressOf = (call: unknown[]) => (call[3] as { progress: number | null }).progress;
+    // The slider is at the first frame, whose bar is empty.
+    expect(progressOf(drawMovieCaptions.mock.calls.at(-1)!)).toBe(0);
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(recordMovie).toHaveBeenCalled());
+
+    // Choosing a GIF's colours shows no frame of the movie in order, so nothing is captioned.
+    drawMovieCaptions.mockClear();
+    act(() => report({ stage: 'sampling', done: 1, total: 236, step: 1, steps: 16 }));
+    expect(drawMovieCaptions).not.toHaveBeenCalled();
+    // Frame 110 of the default 220 is half way through the replay's 200.
+    act(() => report({ stage: 'rendering', done: 126, total: 236, step: 110, steps: 220 }));
+    await waitFor(() => expect(drawMovieCaptions).toHaveBeenCalled());
+    expect(progressOf(drawMovieCaptions.mock.calls.at(-1)!)).toBeCloseTo(109 / 199, 2);
+    // The slider and the moment beside it follow the same frame.
+    expect(screen.getByTestId('movie-position').dataset.frame).toBe('109');
+
+    await act(async () => finish());
+    await waitFor(() => expect(saveBlob).toHaveBeenCalled());
+  });
+
+  it('says so when an export fails', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovie.mockRejectedValue(new Error('GIF encoder, frame: out of memory'));
+    open(['trip-a']);
+
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+
+    expect(await screen.findByTestId('movie-export-failed')).toHaveTextContent('GIF encoder, frame: out of memory');
+    expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  it('closing the dialog in the middle of an export calls the export off', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    let signal: AbortSignal | undefined;
+    recordMovie.mockImplementation(
+      (recording) =>
+        new Promise<Blob>((_, reject) => {
+          signal = recording.signal;
+          recording.signal?.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')));
+        }),
+    );
+    open(['trip-a']);
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(signal).toBeDefined());
+
+    cleanup();
+
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('gates the layers on what the model has', async () => {
+    open();
+    fireEvent.click(await screen.findByText('View'));
+
+    // The fake model has no splays and does have walls.
+    await waitFor(() => expect(screen.getByTestId('movie-layer-splays')).toBeDisabled());
+    expect(screen.getByTestId('movie-layer-walls')).not.toBeDisabled();
+    expect(screen.getByTestId('movie-layer-walls')).toBeChecked();
+    // The heads-up display starts off, since it prints altitudes into every frame.
+    expect(screen.getByTestId('movie-layer-HUD')).not.toBeChecked();
+  });
+
+  it('shortens quiet stretches side by side as in calendar order, and can be told not to in either', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    open(['trip-a']);
+    fireEvent.click(await screen.findByText('Motion'));
+    fireEvent.click(await screen.findByText('Side by side'));
+
+    // The switch that decides it is live in this mode too, since it changes the movie.
+    const shorten = await screen.findByTestId('movie-shorten-quiet');
+    expect(shorten).not.toBeDisabled();
+    expect(shorten).toBeChecked();
+
+    const exportButton = screen.getByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(recordMovie).toHaveBeenCalledTimes(1));
+    // The trip's four hours hold no report, so the stretch is cut to the default half hour.
+    expect(recordMovie.mock.calls[0][0].timeline.mode).toBe('together');
+    expect(recordMovie.mock.calls[0][0].timeline.length).toBe(30 * 60_000);
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+
+    fireEvent.click(shorten);
+    await waitFor(() => expect(shorten).not.toBeChecked());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(recordMovie).toHaveBeenCalledTimes(2));
+    expect(recordMovie.mock.calls[1][0].timeline.length).toBe(4 * 3_600_000);
+  });
+
+  it('does not carry a written title to the next movie, and names a file only by a title it shows', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    open(['trip-a']);
+    fireEvent.click(await screen.findByText('Captions'));
+    fireEvent.change(await screen.findByTestId('movie-title-text'), { target: { value: 'Another cave entirely' } });
+    fireEvent.click(screen.getByTestId('movie-caption-title'));
+
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.captions.title).toBe(false));
+    expect(useUiPrefsStore.getState().movieSettings?.captions.titleText).toBe('');
+    expect(localStorage.getItem('silexgis.uiPrefs')).not.toContain('Another cave entirely');
+
+    // The title is written but not drawn, so it does not name the file either.
+    const exportButton = screen.getByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    expect(recordMovie.mock.calls[0][0].title).toBeNull();
+    expect(saveBlob.mock.calls[0][1]).toMatch(/^silexgis-alpha-\d{4}-\d{2}-\d{2}\.gif$/);
+
+    // Drawn, it names the file.
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('movie-caption-title'));
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(2));
+    expect(saveBlob.mock.calls[1][1]).toMatch(/^silexgis-another-cave-entirely-\d{4}-\d{2}-\d{2}\.gif$/);
+
+    // The next movie starts with the reader's choice to draw a title, and no words in it.
+    cleanup();
+    open(['trip-a']);
+    fireEvent.click(await screen.findByText('Captions'));
+    expect(await screen.findByTestId('movie-title-text')).toHaveValue('');
+    expect(screen.getByTestId('movie-caption-title')).toBeChecked();
+  });
+
+  it('shows any moment of the movie on the slider, and playing it moves the moment on', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+
+    const handle = await screen.findByRole('slider', { name: 'Moment in the movie' });
+    await waitFor(() => expect(handle).not.toHaveAttribute('aria-disabled', 'true'));
+    await waitFor(() => expect(drawMovieCaptions).toHaveBeenCalled());
+    const clockOf = (call: unknown[]) => (call[3] as { clock: unknown }).clock;
+    const first = clockOf(drawMovieCaptions.mock.calls.at(-1)!);
+    const firstMoment = screen.getByTestId('movie-moment').textContent;
+    expect(firstMoment).not.toBe('');
+
+    fireEvent.keyDown(handle, { key: 'End', code: 'End', keyCode: 35 });
+    await waitFor(() => expect(Number(screen.getByTestId('movie-position').dataset.frame)).toBeGreaterThan(0));
+    // The captions follow the slider to the moment it shows, and so does the moment written beside it.
+    expect(clockOf(drawMovieCaptions.mock.calls.at(-1)!)).not.toEqual(first);
+    expect(screen.getByTestId('movie-moment').textContent).not.toBe(firstMoment);
+    expect(handle).toHaveAttribute('aria-valuetext', screen.getByTestId('movie-moment').textContent);
+
+    fireEvent.keyDown(handle, { key: 'Home', code: 'Home', keyCode: 36 });
+    await waitFor(() => expect(screen.getByTestId('movie-position').dataset.frame).toBe('0'));
+    fireEvent.click(screen.getByTestId('movie-play'));
+    await waitFor(() => expect(Number(screen.getByTestId('movie-position').dataset.frame)).toBeGreaterThan(0), {
+      timeout: 3000,
+    });
+    // Playing turns the camera with the movie.
+    expect((preview.viewer as ReturnType<typeof fakeViewer>).setCameraAngles).toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('movie-play'));
+  });
+
+  it('warns before a video long enough to take a long time to render', async () => {
+    useUiPrefsStore.setState({
+      movieSettings: normaliseMovieSettings({
+        ...DEFAULT_MOVIE_SETTINGS,
+        format: 'webm',
+        size: '1920x1080',
+        fps: 30,
+        durationS: 120,
+      }),
+    });
+    open();
+    expect(await screen.findByTestId('movie-too-long')).toHaveTextContent('may take a long time');
+
+    cleanup();
+    useUiPrefsStore.setState({
+      movieSettings: normaliseMovieSettings({ ...DEFAULT_MOVIE_SETTINGS, format: 'webm', size: '640x360' }),
+    });
+    open();
+    await screen.findByTestId('movie-summary');
+    expect(screen.queryByTestId('movie-too-long')).not.toBeInTheDocument();
+  });
+
+  it('says in words why the greyed layers are greyed', async () => {
+    open();
+    fireEvent.click(await screen.findByText('View'));
+    expect(await screen.findByTestId('movie-layers-missing')).toHaveTextContent('this model has none of them');
+    // The fake model stands on no terrain, which is why the depth shadings cannot be chosen.
+    expect(screen.getByText(/The depth shadings need the model to stand on real terrain/)).toBeInTheDocument();
+  });
+
+  it('shows the viewer’s sliders as what they mean', async () => {
+    open();
+    fireEvent.click(await screen.findByText('View'));
+    // True height, and the thinnest line, one pixel.
+    expect(await screen.findByTestId('movie-zscale')).toHaveTextContent('×1');
+    expect(screen.getByTestId('movie-linewidth')).toHaveTextContent('1 px');
+    fireEvent.click(screen.getByText('Captions'));
+    expect(await screen.findByTestId('movie-caption-size')).toHaveTextContent('100 %');
+  });
+
+  it('bounds a GIF’s length by the same number it is cut to, unrounded', async () => {
+    useUiPrefsStore.setState({
+      movieSettings: normaliseMovieSettings({ ...DEFAULT_MOVIE_SETTINGS, durationS: 58, holdEndS: 2.5 }),
+    });
+    open();
+    // 600 frames less 25 still ones, at 10 a second: 57.5 s, which the field may hold.
+    const field = await screen.findByTestId('movie-duration');
+    expect(field).toHaveAttribute('aria-valuemax', '57.5');
+    expect(field).toHaveValue('57.5');
+    expect(screen.getByText(/its replay lasts at most 57.5 s/)).toBeInTheDocument();
+  });
+
+  it('calls a movie of one trip by that trip’s title, and names its file after it', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    recordMovie.mockResolvedValue(new Blob(['GIF89a'], { type: 'image/gif' }));
+    open(['trip-a']);
+
+    const exportButton = await screen.findByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    fireEvent.click(exportButton);
+
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledTimes(1));
+    expect(recordMovie.mock.calls[0][0].title).toBe('Alpha');
+    expect(saveBlob.mock.calls[0][1]).toMatch(/^silexgis-alpha-\d{4}-\d{2}-\d{2}\.gif$/);
+  });
+});
+
+describe('the trip picker', () => {
+  it('lists the tracked trips with the one it was opened for ticked, and one never armed not tickable', async () => {
+    open(['trip-b']);
+
+    const bravo = await screen.findByTestId('movie-trip-trip-b');
+    expect(within(bravo).getByRole('checkbox')).toBeChecked();
+    expect(bravo).toHaveTextContent('3 reports');
+    expect(within(screen.getByTestId('movie-trip-trip-a')).getByRole('checkbox')).not.toBeChecked();
+    const never = screen.getByTestId('movie-trip-trip-c');
+    expect(within(never).getByRole('checkbox')).toBeDisabled();
+    expect(never).toHaveTextContent('There is nothing to replay');
+    // Only the ticked trip is read.
+    expect(reads.movieIdsAsked.at(-1)).toEqual(['trip-b']);
+  });
+
+  it('leaves out a trip it was opened for that the model’s list does not offer, since it could not be unticked', async () => {
+    open(['trip-elsewhere', 'trip-a']);
+
+    await screen.findByTestId('movie-trips');
+    expect(reads.movieIdsAsked.at(-1)).toEqual(['trip-a']);
+    expect(within(screen.getByTestId('movie-trip-trip-a')).getByRole('checkbox')).toBeChecked();
+  });
+
+  it('lets a ticked trip that turned out to have nothing to replay be unticked, and exports nothing meanwhile', async () => {
+    reads.movie = { ...ready(), empty: ['trip-a'] };
+    open(['trip-a']);
+
+    const alpha = await screen.findByTestId('movie-trip-trip-a');
+    expect(alpha).toHaveTextContent('There is nothing to replay');
+    expect(screen.getByTestId('movie-export')).toBeDisabled();
+    const box = within(alpha).getByRole('checkbox');
+    expect(box).not.toBeDisabled();
+
+    fireEvent.click(box);
+
+    await waitFor(() => expect(reads.movieIdsAsked.at(-1)).toEqual([]));
+    expect(screen.getByText('Choose at least one trip to preview and export a movie.')).toBeInTheDocument();
+  });
+
+  it('holds the export back while a chosen trip’s log cannot be read to its end, saying what the replay says', async () => {
+    reads.movie = {
+      ...ready(movieTrip('trip-a', 'Alpha')),
+      error: new Error('the tracking log has more pages than one read follows'),
+      failed: ['trip-b'],
+      logFailed: ['trip-b'],
+    };
+    open(['trip-a', 'trip-b']);
+
+    expect(await screen.findByTestId('movie-log-unavailable')).toHaveTextContent('The log could not be read');
+    expect(screen.getByTestId('movie-trip-trip-b')).toHaveTextContent('The log could not be read');
+    // The trip that did arrive is not exported on its own as if it were the whole choice.
+    expect(screen.getByTestId('movie-export')).toBeDisabled();
+    expect(screen.getByText('A chosen trip could not be read. Untick it, or close and try again.')).toBeInTheDocument();
+  });
+
+  it('says so when a chosen trip could not be read for another reason', async () => {
+    reads.movie = { ...ready(), error: new Error('offline'), failed: ['trip-a'] };
+    open(['trip-a']);
+
+    expect(await screen.findByTestId('movie-trips-failed')).toHaveTextContent("A chosen trip's tracking could not be read.");
+    expect(screen.getByTestId('movie-trip-trip-a')).toHaveTextContent('This trip could not be read.');
+    expect(screen.queryByTestId('movie-log-unavailable')).not.toBeInTheDocument();
+  });
+
+  it('says so when the model has no tracked trips, or they cannot be read', async () => {
+    reads.tracked = [];
+    open();
+    expect(await screen.findByText('No trip has been tracked on this model yet.')).toBeInTheDocument();
+    cleanup();
+
+    reads.trackedError = new Error('offline');
+    open();
+    expect(await screen.findByText('The trips tracked on this model could not be read.')).toBeInTheDocument();
+  });
+});

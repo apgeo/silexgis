@@ -12,6 +12,7 @@ import {
   type MapViewInfo,
 } from '../../api/hooks.ts';
 import { exportMapImage } from '../../map/viewConfig.ts';
+import { saveBlob } from '../../api/download.ts';
 
 interface ViewsPanelProps {
   onCapture: () => object;
@@ -66,12 +67,7 @@ export default function ViewsPanel({ onCapture, onApply }: ViewsPanelProps) {
       message.error(t('common.saveFailed'));
       return;
     }
-    const href = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = href;
-    anchor.download = `silexgis-map-${new Date().toISOString().slice(0, 10)}.png`;
-    anchor.click();
-    URL.revokeObjectURL(href);
+    saveBlob(blob, `silexgis-map-${new Date().toISOString().slice(0, 10)}.png`);
   };
 
   return (

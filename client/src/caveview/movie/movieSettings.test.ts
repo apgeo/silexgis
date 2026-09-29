@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
+import { GIF_FRAME_RATES } from './encode/movieFormats.ts';
 import {
   DEFAULT_MOVIE_SETTINGS,
-  MOVIE_GIF_FRAME_RATES,
   MOVIE_GIF_MAX_FRAMES,
   MOVIE_GIF_MAX_WIDTH,
   MOVIE_SIZES,
@@ -26,6 +26,14 @@ describe('normaliseMovieSettings', () => {
     expect(DEFAULT_MOVIE_SETTINGS.view.HUD).toBe(false);
     expect(DEFAULT_MOVIE_SETTINGS.view.grid).toBe(false);
     expect(DEFAULT_MOVIE_SETTINGS.captions.note).toBe(false);
+  });
+
+  it('names cavers by their first name unless asked otherwise', () => {
+    expect(DEFAULT_MOVIE_SETTINGS.cavers.labels).toBe('first');
+    for (const labels of ['first', 'full', 'initials', 'off'] as const) {
+      expect(normaliseMovieSettings({ cavers: { labels } }).cavers.labels).toBe(labels);
+    }
+    expect(normaliseMovieSettings({ cavers: { labels: 'nicknames' } }).cavers.labels).toBe('first');
   });
 
   it('fills a partial object field by field, keeping what it does hold', () => {
@@ -73,7 +81,7 @@ describe('normaliseMovieSettings', () => {
 
   it('holds a GIF to the frame rates it can play, its widest size and its frame count', () => {
     const settings = normaliseMovieSettings({ format: 'gif', size: '1280x720', fps: 30, durationS: 300, holdEndS: 4 });
-    expect(MOVIE_GIF_FRAME_RATES).toContain(settings.fps);
+    expect(GIF_FRAME_RATES).toContain(settings.fps);
     expect(settings.fps).toBe(25);
     // The same shape, as large as a GIF is offered.
     expect(settings.size).toBe('800x450');
