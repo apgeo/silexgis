@@ -747,7 +747,16 @@ describe('the trip picker', () => {
 
     reads.trackedError = new Error('offline');
     open();
-    expect(await screen.findByText('The trips tracked on this model could not be read.')).toBeInTheDocument();
+    expect((await screen.findAllByText('The trips tracked on this model could not be read.')).length).toBeGreaterThan(0);
+  });
+
+  it('holds the export back when the list of tracked trips could not be read, even for the trip it was opened for', async () => {
+    reads.trackedError = new Error('offline');
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    await screen.findAllByText('The trips tracked on this model could not be read.');
+    await waitFor(() => expect(screen.getByTestId('movie-summary')).toBeInTheDocument());
+    expect(screen.getByTestId('movie-export')).toBeDisabled();
   });
 });
 

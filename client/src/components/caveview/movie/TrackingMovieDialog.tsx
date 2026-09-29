@@ -582,17 +582,25 @@ function MovieDialogBody({
   // A chosen trip that could not be read holds the export back rather than dropping out of it: a
   // movie quietly missing one of the trips somebody ticked would be believed.
   const readFailed = movie.failed.length > 0;
-  const blocker = nothingChosen
-    ? t('caveview.movie.chooseTrip')
-    : movie.loading
-      ? t('caveview.movie.tripsLoading')
-      : readFailed
-        ? t('caveview.movie.tripsFailedHint')
-        : movie.trips.length === 0
-          ? t('trips.tracking.replay.nothingToReplay')
-          : null;
+  // The list is what says a trip is this model's. So nothing is exported before it has arrived,
+  // and nothing on the strength of a trip's own reads when it failed to arrive at all: a trip ticked
+  // before the list was read is only in the movie once the list has confirmed it.
+  const listReady = tracked.data !== undefined;
+  const blocker =
+    tracked.error !== null
+      ? t('caveview.movie.trackedLoadError')
+      : nothingChosen
+        ? t('caveview.movie.chooseTrip')
+        : movie.loading || !listReady
+          ? t('caveview.movie.tripsLoading')
+          : readFailed
+            ? t('caveview.movie.tripsFailedHint')
+            : movie.trips.length === 0
+              ? t('trips.tracking.replay.nothingToReplay')
+              : null;
   const canExport =
     previewReady
+    && listReady
     && timeline !== null
     && movie.trips.length > 0
     && !readFailed
