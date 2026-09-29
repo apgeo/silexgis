@@ -6829,6 +6829,9 @@ namespace SilexGis.Infrastructure.Migrations
                     b.HasIndex("RecordedByUserId")
                         .HasDatabaseName("ix_trip_position_events_recorded_by_user_id");
 
+                    b.HasIndex("SurveyModelId")
+                        .HasDatabaseName("ix_trip_position_events_survey_model_id");
+
                     b.HasIndex("TeamId")
                         .HasDatabaseName("ix_trip_position_events_team_id");
 
@@ -6971,6 +6974,9 @@ namespace SilexGis.Infrastructure.Migrations
 
                     b.HasIndex("CaveFeatureId")
                         .HasDatabaseName("ix_trip_tracking_cave_feature_id");
+
+                    b.HasIndex("SurveyModelId")
+                        .HasDatabaseName("ix_trip_tracking_survey_model_id");
 
                     b.ToTable("trip_tracking", (string)null);
                 });

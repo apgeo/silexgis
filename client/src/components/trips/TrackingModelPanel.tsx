@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CompressOutlined, ExpandOutlined, PushpinOutlined } from '@ant-design/icons';
+import { CompressOutlined, ExpandOutlined, PushpinOutlined, VideoCameraOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Flex, Tabs, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
@@ -13,6 +13,7 @@ import {
   type TripParticipant,
 } from '../../api/hooks.ts';
 import CaveViewPanel from '../caveview/CaveViewPanel.tsx';
+import LazyTrackingMovieDialog from '../caveview/movie/LazyTrackingMovieDialog.tsx';
 import type { CaveViewMediaEntry } from '../../caveview/loadCaveView.ts';
 import { partFromStation, pathOf, type PickedModelPart } from '../../caveview/modelParts.ts';
 import { trackedCaversFrom } from '../../caveview/trackedCavers.ts';
@@ -226,7 +227,24 @@ export default function TrackingModelPanel({
   const [attachingAt, setAttachingAt] = useState<number | null>(null);
   /** Which drawing is on screen: the 3D scene, or a declared map named by its link id. */
   const [activeTab, setActiveTab] = useState(TAB_3D);
+  /**
+   * The model the movie dialog was opened on, with this trip already ticked; null while it is
+   * closed. Taken when the button is pressed, not followed: a watch re-pointed while the dialog is
+   * open leaves the dialog on the model its preview is showing, rather than folding the reports
+   * against another model's stations under that picture.
+   */
+  const [movieModelId, setMovieModelId] = useState<string | null>(null);
+  const movieTrips = useMemo(() => [tripLogId], [tripLogId]);
   const { data: model } = useSurveyModel(tracking.surveyModelId ?? undefined);
+  // Rendered on every path out of this panel, so that the model going unready under an open dialog
+  // — re-pointed to one still loading, say — does not unmount it and call off its export.
+  const movieDialog = (
+    <LazyTrackingMovieDialog
+      surveyModelId={movieModelId}
+      initialTripIds={movieTrips}
+      onClose={() => setMovieModelId(null)}
+    />
+  );
 
   // The set the panel would have been given, less the one control that would hide the rest of the
   // panel. Subtracted from what the viewer wrapper chooses rather than listed here, so which
@@ -422,14 +440,17 @@ export default function TrackingModelPanel({
    */
   if (tracking.surveyModelMissing) {
     return (
-      <Alert
-        type="error"
-        showIcon
-        style={{ marginBottom: 16 }}
-        data-testid="trip-tracking-model-missing"
-        message={t('trips.tracking.modelMissingTitle')}
-        description={t('trips.tracking.modelMissingBody')}
-      />
+      <>
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          data-testid="trip-tracking-model-missing"
+          message={t('trips.tracking.modelMissingTitle')}
+          description={t('trips.tracking.modelMissingBody')}
+        />
+        {movieDialog}
+      </>
     );
   }
 
@@ -454,19 +475,22 @@ export default function TrackingModelPanel({
    */
   if (model !== undefined && model.status === 'failed') {
     return (
-      <Alert
-        type="error"
-        showIcon
-        style={{ marginBottom: 16 }}
-        data-testid="trip-tracking-model-unreadable"
-        title={t('trips.tracking.modelNothingToDrawTitle')}
-        description={t('trips.tracking.modelNothingToDrawBody')}
-      />
+      <>
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          data-testid="trip-tracking-model-unreadable"
+          title={t('trips.tracking.modelNothingToDrawTitle')}
+          description={t('trips.tracking.modelNothingToDrawBody')}
+        />
+        {movieDialog}
+      </>
     );
   }
 
   if (model === undefined || model.status !== 'ready' || !surveyModelReadableByViewer(model)) {
-    return null;
+    return movieDialog;
   }
 
   const shown = replaying && replayCavers !== null ? replayCavers : cavers;
@@ -543,6 +567,18 @@ export default function TrackingModelPanel({
                 : t(large ? 'trips.tracking.modelSmaller' : 'trips.tracking.modelLarger')}
             </Button>
           )}
+          {/* Offered whether or not the model is on screen here: the movie is drawn by a viewer of
+              its own, in its own dialog, and leaves this one — its markers, its camera, its
+              replay — exactly as it was. */}
+          <Button
+            size={controlSize}
+            icon={<VideoCameraOutlined />}
+            onClick={() => setMovieModelId(model.id)}
+            aria-label={t('caveview.movie.make')}
+            data-testid="trip-tracking-movie"
+          >
+            {narrow ? undefined : t('caveview.movie.make')}
+          </Button>
           <Button size={controlSize} onClick={onToggle} data-testid="trip-tracking-model-toggle">
             {t(open ? 'trips.tracking.modelHide' : 'trips.tracking.modelShow')}
           </Button>
@@ -702,6 +738,7 @@ export default function TrackingModelPanel({
           {t('trips.tracking.modelHint', { name: model.name })}
         </Typography.Text>
       )}
+      {movieDialog}
     </Card>
   );
 }

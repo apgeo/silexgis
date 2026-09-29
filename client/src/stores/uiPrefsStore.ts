@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { MovieSettings } from '../caveview/movie/movieSettings.ts';
 import type { SelectorPrefs } from '../filters/selectorPrefs.ts';
 import type { DensityPref, PanelLayout, PanelPrefs, PanelScope } from './panelPrefs.ts';
 
@@ -74,6 +75,20 @@ interface UiPrefsState {
   karstLinkTreatment?: ProtectedPositionTreatment;
   setKarstLinkTreatment: (treatment: ProtectedPositionTreatment | undefined) => void;
   /**
+   * How this person last set up a tracking movie — format, size, motion, labels, layers,
+   * captions — so the next movie starts from it. Undefined until one has been set up.
+   *
+   * Stored as it was chosen and read back only through the movie settings' own repair, which
+   * falls each unreadable or outdated field back to its default: a value saved by an older
+   * version, or one a newer version no longer offers, never reaches the dialog as it is. Which
+   * trips were in the movie is deliberately not kept — that is a choice about one movie, not a
+   * preference, and a remembered list would be a record of which trips somebody looked at. Nor is
+   * the title written for it (the dialog stores it empty): it names one cave and one trip, and
+   * kept, it would caption and name the next movie, of any other.
+   */
+  movieSettings?: MovieSettings;
+  setMovieSettings: (settings: MovieSettings | undefined) => void;
+  /**
    * How each selection panel is arranged, keyed by which panel it is. Every mount keeps its own,
    * so a pop-out somebody set up to show one thing is not rearranged by the main window.
    */
@@ -127,6 +142,8 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
       karstLinkTreatment: undefined,
       setKarstLinkTreatment: (treatment) => set({ karstLinkTreatment: treatment }),
+      movieSettings: undefined,
+      setMovieSettings: (settings) => set({ movieSettings: settings }),
       selectors: {},
       setSelectorPrefs: (key, patch) =>
         set((state) => ({
@@ -172,7 +189,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
     }),
     {
       name: 'silexgis.uiPrefs',
-      version: 5,
+      version: 6,
       // Without a migrate, raising the version makes zustand discard the whole stored blob —
       // wiping everyone's pinned types, landing page and centerline budgets to add one field.
       migrate: (persisted, from) => {
@@ -184,6 +201,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           layouts: from < 3 ? [] : (state.layouts ?? []),
           selectors: from < 4 ? {} : (state.selectors ?? {}),
           karstLinkTreatment: from < 5 ? undefined : state.karstLinkTreatment,
+          movieSettings: from < 6 ? undefined : state.movieSettings,
         };
       },
     },

@@ -3,8 +3,8 @@
 Source: https://github.com/apgeo/CaveView.js — this project's fork of
 https://github.com/aardgoose/CaveView.js (MIT license, see `LICENSE` in this directory).
 
-Vendored build: distribution version **2.9.0-slx.11**, built from the fork's `silexgis`
-branch at commit `9c0b2a9f` — the upstream **2.9.0 release tag** plus the fork's changes
+Vendored build: distribution version **2.9.0-slx.12**, built from the fork's `silexgis`
+branch at commit `5f14d910` — the upstream **2.9.0 release tag** plus the fork's changes
 (each also kept on its own dev-based `feature/*` branch so upstream can take them): the
 dispose-handler typo fix, the `crsLookup` configuration option the app uses to resolve
 coordinate systems locally instead of via epsg.io, a navigation and hover API
@@ -47,6 +47,49 @@ not to take up a feature:
   did would take `lib/` with it. Worth revisiting — the viewer's own controls are English
   inside an interface this application otherwise translates.
 
+**What slx.12 adds over slx.11**, for rendering the viewer into a movie and for labelling people
+by their own names:
+
+- A **capture session** — `beginCapture({ width, height, background })`, `captureFrame({ azimuth,
+  polar, advance, into })`, `endCapture()` and `capturing`. Frames are drawn synchronously, only
+  when asked, at exactly the size given, opaque, and as the container shows the view: everything
+  sized in pixels is scaled by `width / container width`, as on a display of that pixel ratio.
+  While a session is open the pointer and keyboard move nothing, an auto rotation is suspended,
+  camera animation is held, and the markers move only by the milliseconds each frame advances
+  them — a move of 600 ms is half-way after 300 of advancing and has arrived after 600, however
+  much real time passed. `endCapture()` puts back the size, pixel ratio, clear colour, controls,
+  auto rotation and marker clock. The same state gives the same pixels.
+- `getCameraAngles()` / `setCameraAngles({ azimuth, polar })`, reading and turning the camera
+  at once without animation. The angles are worked out from where the camera is, so they are right
+  straight after a move animated to one of the toolbar's views, to a station or to a model's first
+  view — the orbit controls' own angles are those of their last update, which such a move does not
+  make. A session also brings the viewer to its container's size if the container was restyled
+  without a resize, accepts a container whose sides were each rounded to a whole pixel, lets go of a
+  station the pointer was over, refuses the animated `azimuthAngle`/`polarAngle` turns, and gives
+  the marker labels back the size they had rather than one worked out again.
+- The label glyph atlas holds the **accented letters of European names**: Latin-1, the common
+  letters of Latin Extended-A, and Romanian `ĂăÂâÎîȘșȚț` with the cedilla forms `ŞşŢţ` it is often
+  typed with — 225 glyphs, under the 256 cells of the largest text, so the largest label size is
+  still 45. A marker's text is put in its composed form first, so a name typed with combining
+  accents draws from the same cells, and a glyph arriving once the atlas is full is drawn as a box
+  instead of failing the label.
+- `getSnapshot()` now puts the view back as it was: the camera, line widths and resolution,
+  entrance dots and scales were left sized to the snapshot image before.
+
+Checked in a real browser (Chromium, software GL) against this directory's bundle with the e2e
+fixture model: two captures of one state are byte-identical; a capture at twice the container,
+scaled back down, differs from the on-screen frame by a mean of 1.2 of 255 per channel (a
+capture turned 30° differs by 7.8); the timed move is at 0.50 of its way after 300 ms of
+advancing and arrived after 600; and the on-screen frame after `endCapture()` is byte-identical
+to the one before. After each of the toolbar's elevation and plan views, with nothing turning the
+camera first, `getCameraAngles()` matches the camera to a millionth of a radian, and a capture
+asked for those angles is byte-identical to one asked for none; a container restyled from 640 by
+480 to 640 by 360 with no resize captures byte-identically to one resized; a container of
+852.48 by 479.52 page pixels (852 by 480 once rounded) is accepted for 1280 by 720; an animated
+turn asked for during a session changes no frame and leaves the controls off; and labels of 13.2
+set by a pixel ratio of 1.1 are 13.2 again after a capture made at a ratio of 1. Each of those
+checks fails against the build this one replaced.
+
 The base is deliberately the release tag, not upstream `dev` HEAD: the two are
 source-identical, but `dev` bumps three.js r171 → r183, and a bundle built on r183 fails
 to compile the height-shading line shader (`vColor` became a vec4), leaving centerlines
@@ -57,10 +100,10 @@ CaveView.js is not published on npm; it ships as a prebuilt browser bundle. This
 directory contains the runtime subset the app needs, under a directory named by the
 distribution version:
 
-- `v2.9.0-slx.11/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
-- `v2.9.0-slx.11/js/workers/` — web workers the bundle spawns at runtime (paths resolved
+- `v2.9.0-slx.12/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
+- `v2.9.0-slx.12/js/workers/` — web workers the bundle spawns at runtime (paths resolved
   against the viewer's `home` option, which the app points at this directory)
-- `v2.9.0-slx.11/css/caveview.css`, `v2.9.0-slx.11/images/logo.svg` — runtime assets
+- `v2.9.0-slx.12/css/caveview.css`, `v2.9.0-slx.12/images/logo.svg` — runtime assets
 
 The version directory exists for cache correctness: these URLs are fetched outside the
 app bundle's hashed-asset pipeline, so a new build must arrive under new URLs or
@@ -79,12 +122,17 @@ turns that into a load failure until a full reload — then delete it in the rel
 after. (Earlier `2.9.0-slx.*` directories were removed rather than kept: none reached a release, so no
 browser can be holding it.) Do not edit the vendored files in place.
 
-`v2.9.0-slx.9/` is kept beside the current one under that rule and should go in the release
-after this one. `v2.9.0-slx.6/` was removed when slx.10 landed, having already been superseded
-for a release; slx.10 itself was replaced by slx.11 before either reached a release, so no
-browser can be holding it and it was not kept.
+`v2.9.0-slx.9/` is kept beside the current one under that rule: it is the last viewer to have
+reached a release, so it is the one a tab opened before an upgrade can still be asking for.
+`v2.9.0-slx.10/` and `v2.9.0-slx.11/` were each replaced before reaching a release, so no browser
+can be holding either and neither was kept. `v2.9.0-slx.6/` was removed when slx.10 landed,
+having already been superseded for a release. slx.12 itself was rebuilt in its own directory
+once, from `563b763b` to `5f14d910`, before it reached a release.
 
-**This build was verified to reproduce.** `js/CaveView2.min.js` built here from `ed0322e5` is
-byte-identical (SHA-256) to the bundle serving the club's public pages, which was built
-separately from the same commit. That is worth re-checking on the next upgrade: it is the
+**This build was verified to reproduce.** `v2.9.0-slx.12/js/CaveView2.min.js` (SHA-256
+`b12cb7dac4edcdc740e8e17cdcb281e9709a2b4c82ab97b7a74609fbca4ccf04`) is byte-identical to a
+fresh `npm run build` of commit `5f14d910` in a clean checkout of the fork, made separately
+from the build it was copied from; the workers, the stylesheet and the logo are byte-identical
+to slx.9's. (An earlier build, from `ed0322e5`, was checked the same way against the bundle
+serving the club's public pages.) That is worth re-checking on the next upgrade: it is the
 cheapest evidence that the vendored bytes are the fork's source and not a local accident.

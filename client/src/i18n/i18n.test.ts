@@ -33,6 +33,17 @@ import type {
   SurveyModelInfo,
 } from '../api/hooks.ts';
 import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
+import { MOVIE_VIEW_LAYERS } from '../caveview/movie/movieSettings.ts';
+import type { MovieProgress } from '../caveview/movie/movieRecorder.ts';
+import {
+  MOVIE_ASPECTS,
+  MOVIE_CAVER_LABELS,
+  MOVIE_COLOUR_BY,
+  MOVIE_FORMATS,
+  MOVIE_QUALITIES,
+  MOVIE_SETTINGS_GROUPS,
+  MOVIE_SHADINGS,
+} from '../components/caveview/movie/movieChoices.ts';
 import type { DrawShape } from '../map/mapEdit.ts';
 import { RESLINK_ANCHOR_KINDS, RESLINK_TARGET_TYPES } from '../components/reslinks/registry.ts';
 import {
@@ -421,6 +432,42 @@ describe('i18n locales', () => {
     expect(names.filter((name) => !roNames[name])).toEqual([]);
     expect(Object.keys(enNames).sort()).toEqual(names.sort());
     expect(Object.keys(roNames).sort()).toEqual(names.sort());
+  });
+
+  /**
+   * The movie dialog looks most of its choices up by the id of the choice — each view layer, each
+   * format and its help line, each frame shape, quality, label style, colouring, shading, group and
+   * export stage — so the scan for written-out keys sees none of them. Without this a layer added to
+   * the settings would be offered to the reader as a raw lookup key beside its neighbours.
+   */
+  it('every choice the movie dialog offers is named in both locales, and none is left over', () => {
+    const progressStages: Record<MovieProgress['stage'], true> = { sampling: true, rendering: true, finishing: true };
+    const families: [string, readonly string[]][] = [
+      ['layers', MOVIE_VIEW_LAYERS.map(({ key }) => key)],
+      ['formats', MOVIE_FORMATS],
+      ['formatHelp', MOVIE_FORMATS],
+      ['aspects', MOVIE_ASPECTS.map(({ id }) => id)],
+      ['qualities', MOVIE_QUALITIES],
+      ['caverLabels', MOVIE_CAVER_LABELS],
+      ['colourByValues', MOVIE_COLOUR_BY],
+      ['colourByHelp', MOVIE_COLOUR_BY],
+      ['shadings', ['default', ...MOVIE_SHADINGS.map(({ id }) => id)]],
+      ['groups', MOVIE_SETTINGS_GROUPS],
+      ['rotationModes', ['speed', 'fullTurn']],
+      ['timelineModes', ['calendar', 'together']],
+      ['timelineHelp', ['calendar', 'together']],
+      ['cameras', ['perspective', 'orthographic']],
+      // 'starting' is asked for by name, before the recorder has said anything.
+      ['progress', ['starting', ...Object.keys(progressStages)]],
+    ];
+    for (const [family, ids] of families) {
+      for (const locale of [en, ro]) {
+        const names = lookup(locale, `caveview.movie.${family}`) as Record<string, string> | undefined;
+        expect(names, family).toBeDefined();
+        expect(ids.filter((id) => !names![id]), family).toEqual([]);
+        expect(Object.keys(names!).sort(), family).toEqual([...ids].sort());
+      }
+    }
   });
 
   it('every survey model format is named in both locales, and none is left over', () => {

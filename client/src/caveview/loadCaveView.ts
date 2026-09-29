@@ -15,7 +15,7 @@ import { userManager } from '../auth/auth.tsx';
  * stale cached viewer across upgrades. A new vendored build lands in a new directory and
  * changes this constant in the same commit, so every asset URL changes with it.
  */
-export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.11/';
+export const CAVEVIEW_HOME = '/caveview/v2.9.0-slx.12/';
 
 const SCRIPT_URL = `${CAVEVIEW_HOME}js/CaveView2.min.js`;
 const CSS_URL = `${CAVEVIEW_HOME}css/caveview.css`;
@@ -112,7 +112,125 @@ export interface CaveViewLiveMarkerOptions {
   label?: CaveViewLabelText;
   sublabel?: CaveViewLabelText;
   color?: string;
+  /**
+   * How long this one move takes, in milliseconds, in place of `liveMarkerMoveTime`; 0 places the
+   * marker without moving it. Only a move reads it. A value that is not a finite number of at
+   * least 0 is ignored and the viewer's own move time applies.
+   */
+  duration?: number;
 }
+
+/** What a capture session draws: its frame size, and what the frames are drawn on. */
+export interface CaveViewCaptureOptions {
+  /**
+   * Frame size in pixels, each an even whole number of at least 16 and no larger than the
+   * renderer can draw. The container must already have the frame's shape, to within its width and
+   * height each being rounded to a whole page pixel (half a pixel on each side): the viewer refuses
+   * a container of another shape. A container restyled to that shape without `resize()` being
+   * called is fine — the viewer resizes itself to the container as the session opens, so the
+   * frames are never a stretched copy of the view it was last sized for.
+   */
+  width: number;
+  height: number;
+  /** Opaque background of the frames, as any CSS colour. Left out: the viewer's own background. */
+  background?: string;
+}
+
+/** Where one captured frame looks from, how far the markers have moved, and where it is drawn. */
+export interface CaveViewCaptureFrameOptions {
+  /** Absolute azimuth of the camera about the view target, radians. Left out: unchanged. */
+  azimuth?: number;
+  /** Absolute polar angle, radians from looking straight down (0 is a plan view). Left out: unchanged. */
+  polar?: number;
+  /**
+   * Milliseconds of marker-motion time to run before drawing. Default 0. A move of duration d
+   * arrives after exactly d milliseconds of advancing, however they were divided between frames —
+   * this is the markers' only clock while a session is open.
+   */
+  advance?: number;
+  /** When given, the frame is drawn into this context, scaled to its canvas, before returning. */
+  into?: CanvasRenderingContext2D;
+}
+
+export interface CaveViewCapturedFrame {
+  /**
+   * The viewer's own canvas, holding the frame. Its drawing buffer is not preserved, so the pixels
+   * are only valid until the calling task ends: read them (or pass `into`) before yielding.
+   */
+  canvas: HTMLCanvasElement;
+  /** The camera's azimuth and polar angle the frame was drawn from, radians. */
+  azimuth: number;
+  polar: number;
+  /** Whether a marker is still between stations. */
+  moving: boolean;
+}
+
+/** A trail's options as the viewer takes them; every one is optional on an update. */
+export interface CaveViewTrailOptions {
+  /** CSS colour. Default `#ffcc00`. */
+  color?: string;
+  /** Line width in CSS pixels. Default 4. */
+  width?: number;
+  /** Anything other than 'dashed' is solid. */
+  style?: 'solid' | 'dashed';
+  /** Default true. */
+  visible?: boolean;
+  /** How much of the trail is drawn, a fraction of its length, 0 to 1. Default 1. */
+  progress?: number;
+  /** Handed back untouched in the trail's description. */
+  payload?: unknown;
+}
+
+/** A trail as the viewer describes it back. */
+export interface CaveViewTrail {
+  id: string;
+  /** Whether every place the trail names is a station of the loaded model. */
+  resolved: boolean;
+  /**
+   * Each place named, with its distance along the trail in metres — null where the place is not a
+   * station of the loaded model.
+   */
+  points: readonly { ref: CaveViewRef; resolved: boolean; atLength: number | null }[];
+  /** Where the trail could not be routed between two consecutive places, drawn as a gap. */
+  gaps: readonly unknown[];
+  /** The routed length, metres. */
+  lengthM: number;
+  progress: number;
+  visible: boolean;
+  payload?: unknown;
+}
+
+/**
+ * The layers of the model the viewer switches on and off. Each is a boolean property of the same
+ * name, with a `has<Name>` getter saying whether the loaded model has anything on that layer — the
+ * name's first letter upper-cased and the rest left alone, so `hasEntrance_dots`. The HUD, the fog
+ * and the terrain are switched the same way but are not layers of the model, and have no such
+ * getter (the terrain's is `hasTerrain`).
+ */
+export type CaveViewModelLayer =
+  | 'legs'
+  | 'stations'
+  | 'stationLabels'
+  | 'stationComments'
+  | 'entrances'
+  | 'entrance_dots'
+  | 'splays'
+  | 'walls'
+  | 'scraps'
+  | 'model'
+  | 'duplicateLegs'
+  | 'surfaceLegs'
+  | 'traces'
+  | 'warnings'
+  | 'box'
+  | 'grid';
+
+/** The `has<Name>` getter of each model layer, as the viewer spells it. */
+export type CaveViewLayerGetter = `has${Capitalize<CaveViewModelLayer>}`;
+
+/** The model layers as boolean properties of the viewer, with their `has*` getters. */
+export type CaveViewLayers = Record<CaveViewModelLayer, boolean> &
+  Readonly<Record<CaveViewLayerGetter, boolean>>;
 
 /**
  * One marker as the viewer describes it back — the form a cluster label is asked about.
@@ -148,7 +266,7 @@ export interface CaveViewFocusOptions {
   popup?: boolean;
 }
 
-export interface CaveViewer {
+export interface CaveViewer extends CaveViewLayers {
   addEventListener(type: CaveViewerEvent, listener: (event: unknown) => void): void;
   removeEventListener(type: CaveViewerEvent, listener: (event: unknown) => void): void;
   /**
@@ -253,6 +371,116 @@ export interface CaveViewer {
    * the vendored bundle and a build without it should cost an empty index, not a crash.
    */
   forEachStation?(visit: (station: unknown) => void): void;
+
+  /**
+   * Opens a capture session: from here until `endCapture()` nothing is drawn except by
+   * `captureFrame()`, pointer and keyboard input move nothing, an auto rotation is suspended and a
+   * camera move in flight ends where it was going, and the markers move only by each frame's
+   * `advance`; setting `azimuthAngle` or `polarAngle` (animated turns) does nothing, and a station
+   * the pointer was over is let go. A frame is what the container shows, rendered at `width`×`height` with everything
+   * sized in pixels scaled by `width / container.clientWidth`, as on a display of that pixel ratio.
+   * Answers the size of the drawing buffer, which is the frame's. Throws with no model loaded, with
+   * a session already open, after dispose, on a size that is odd, under 16 or over what the renderer
+   * can draw, and on a container of another shape.
+   */
+  beginCapture(options: CaveViewCaptureOptions): {
+    width: number;
+    height: number;
+  };
+  /**
+   * Draws one frame synchronously, after advancing the markers and setting the camera as asked.
+   * The same state gives the same pixels. Throws outside a session.
+   */
+  captureFrame(options?: CaveViewCaptureFrameOptions): CaveViewCapturedFrame;
+  /**
+   * Ends the session and puts back exactly what it changed — size, pixel ratio, clear colour and
+   * alpha, controls, auto rotation, the marker clock, and everything sized to the view — then
+   * draws the view. Idempotent, and safe after dispose.
+   */
+  endCapture(): void;
+  /** Whether a capture session is open. */
+  readonly capturing: boolean;
+  /**
+   * Sizes the drawing surface to its container as it is now — what a window `resize` event does,
+   * for this viewer alone. A container restyled without it keeps drawing at its old size, stretched.
+   * During a capture session the resize is carried out when the session ends.
+   */
+  resize(): void;
+  /**
+   * The camera's azimuth about the view target (radians, -π to π) and polar angle from plan, worked
+   * out from where the camera is now — so right after a move animated to one of the toolbar's views,
+   * a station or the model's first view. Reading them changes and draws nothing.
+   */
+  getCameraAngles(): { azimuth: number; polar: number };
+  /**
+   * Turns the camera to these angles at once, with no animation, cancelling a move in flight; an
+   * angle left out stays. Draws the view, except in a capture session, where the next frame does.
+   * Throws on an angle that is not a finite number.
+   */
+  setCameraAngles(angles: { azimuth?: number; polar?: number }): void;
+  /** Whether the camera turns about the view target by itself. Suspended in a capture session. */
+  autoRotate: boolean;
+  /** Speed of the auto rotation, -1 to 1 (negative turns the other way). */
+  autoRotateSpeed: number;
+  /**
+   * Size of the markers' label text in device pixels of whatever is drawn — the screen, or a
+   * capture's frame. The default is a number, never null: 12 page pixels at the display's pixel
+   * ratio as the viewer was built (at most 45), and — while no size has been set — 12 page pixels at
+   * the capture's density during a session, given back as it was when the session ends. Null asks
+   * for the model's own station-label size (the theme's, 18 screen pixels unless it says otherwise),
+   * drawn from the material the model's labels share, which keeps its share of the view in a
+   * capture. Once any size has been set, null included, the labels no longer follow a capture's
+   * density, and there is no value that means "the default again": to put a size back, read this
+   * property before changing it and write back what was read. The viewer refuses, with a warning, a
+   * size above the glyph atlas's maximum of 45 and anything that is not a positive number or null.
+   */
+  liveMarkerLabelSize: number | null;
+  /** Whether a plate is drawn behind each marker's label. On by default. */
+  liveMarkerLabelBacking: boolean;
+  /** How long a marker's move between two stations takes by default, in milliseconds. */
+  liveMarkerMoveTime: number;
+  /**
+   * The survey's shading, one of the `SHADING_*` constants of the namespace. Undefined with no model
+   * loaded. The depth shadings need real terrain.
+   */
+  shadingMode: number | undefined;
+  /** `CAMERA_PERSPECTIVE` or `CAMERA_ORTHOGRAPHIC` (or `CAMERA_ANAGLYPH`). */
+  cameraType: number;
+  /** Width of the survey's lines, 0 upwards; 0 is the thinnest. */
+  linewidth: number;
+  /** Vertical exaggeration of the model. Undefined with no model loaded. */
+  zScale: number | undefined;
+  /** The heads-up display: the compass, the angle of view, the scale and the colour key. */
+  HUD: boolean;
+  fog: boolean;
+  /** Whether the terrain is shown. */
+  terrain: boolean;
+  /** Whether the model has terrain at all, and whether it is real rather than a flat plane. */
+  readonly hasTerrain: boolean;
+  /** Null, not false, when the model has no terrain at all: test it for truth, not `=== false`. */
+  readonly hasRealTerrain: boolean | null;
+
+  /**
+   * Draws the way somebody went, routed along the survey between the stations named, and answers
+   * it as the viewer now holds it (null with no id). A trail is kept across model loads and drawn
+   * wherever the loaded model holds its stations.
+   */
+  addTrail(
+    id: string,
+    refs: readonly CaveViewRef[],
+    options?: CaveViewTrailOptions,
+  ): CaveViewTrail | null;
+  /** Changes a trail; null refs change only the options and route nothing again. Null for an unknown id. */
+  updateTrail(
+    id: string,
+    refs: readonly CaveViewRef[] | null,
+    options?: CaveViewTrailOptions,
+  ): CaveViewTrail | null;
+  /** How much of the trail is drawn, as a fraction of its length. Null for an unknown id. */
+  setTrailProgress(id: string, value: number): CaveViewTrail | null;
+  removeTrail(id: string): boolean;
+  clearTrails(): void;
+  getTrails(): CaveViewTrail[];
 }
 
 /**
@@ -294,7 +522,35 @@ export interface CaveViewToolbar {
   dispose(): void;
 }
 
-export interface Cv2Namespace {
+/** The shading modes the viewer's `shadingMode` takes, as the namespace names them. */
+export interface CaveViewShadingConstants {
+  SHADING_HEIGHT: number;
+  SHADING_LENGTH: number;
+  SHADING_INCLINATION: number;
+  SHADING_CURSOR: number;
+  SHADING_SINGLE: number;
+  SHADING_SURVEY: number;
+  SHADING_OVERLAY: number;
+  SHADING_SHADED: number;
+  SHADING_RELIEF: number;
+  SHADING_DEPTH: number;
+  SHADING_PATH: number;
+  SHADING_DEPTH_CURSOR: number;
+  SHADING_DISTANCE: number;
+  SHADING_CONTOURS: number;
+  SHADING_SURFACE: number;
+  SHADING_DUPLICATE: number;
+  SHADING_CUSTOM: number;
+}
+
+/** The camera kinds the viewer's `cameraType` takes. */
+export interface CaveViewCameraConstants {
+  CAMERA_ORTHOGRAPHIC: number;
+  CAMERA_PERSPECTIVE: number;
+  CAMERA_ANAGLYPH: number;
+}
+
+export interface Cv2Namespace extends CaveViewShadingConstants, CaveViewCameraConstants {
   CaveViewer: new (containerId: string, config: Record<string, unknown>) => CaveViewer;
   CaveViewUI: new (viewer: CaveViewer) => CaveViewUi;
   CaveViewToolbar: new (

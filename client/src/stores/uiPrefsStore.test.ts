@@ -10,6 +10,7 @@ afterEach(() => {
     landingPage: 'map',
     appearance: DEFAULT_APPEARANCE,
     karstLinkTreatment: undefined,
+    movieSettings: undefined,
   });
   localStorage.removeItem('silexgis.uiPrefs');
 });
@@ -42,7 +43,7 @@ describe('uiPrefsStore pinned types', () => {
     const raw = localStorage.getItem('silexgis.uiPrefs');
     expect(raw).not.toBeNull();
     const stored = JSON.parse(raw!) as { state: { pinnedTypeIds: number[]; mapChromeHidden: boolean }; version: number };
-    expect(stored.version).toBe(5);
+    expect(stored.version).toBe(6);
     expect(stored.state.pinnedTypeIds).toEqual([7]);
     expect(stored.state.mapChromeHidden).toBe(true);
   });
@@ -160,6 +161,25 @@ describe('uiPrefsStore appearance', () => {
     expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([6]);
     expect(useUiPrefsStore.getState().selectors).toEqual({ caves: { width: 300 } });
     expect(useUiPrefsStore.getState().karstLinkTreatment).toBeUndefined();
+  });
+
+  it('keeps a remembered export answer when the movie settings arrive beside it', () => {
+    // One version on again. Somebody who settled the interchange question must keep that answer,
+    // and must come back with no movie settings rather than with somebody else's idea of them —
+    // the dialog starts from its own private defaults when nothing is stored.
+    localStorage.setItem(
+      'silexgis.uiPrefs',
+      JSON.stringify({
+        version: 5,
+        state: { pinnedTypeIds: [2], karstLinkTreatment: 'omit' },
+      }),
+    );
+
+    useUiPrefsStore.persist.rehydrate();
+
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([2]);
+    expect(useUiPrefsStore.getState().karstLinkTreatment).toBe('omit');
+    expect(useUiPrefsStore.getState().movieSettings).toBeUndefined();
   });
 });
 

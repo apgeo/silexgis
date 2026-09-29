@@ -13,6 +13,7 @@ import '../../i18n';
 import { ApiError } from '../../api/client.ts';
 import { surveyModelPollInterval } from '../../api/hooks.ts';
 import type { CaveSummary, SurveyModelInfo } from '../../api/hooks.ts';
+import type { TrackingMovieDialogProps } from '../../components/caveview/movie/TrackingMovieDialog.tsx';
 
 const uploadMutate = vi.fn();
 const deleteMutate = vi.fn();
@@ -92,6 +93,18 @@ vi.mock('../../api/hooks.ts', async () => {
 // harness deliberately does not provide.
 vi.mock('../../rastermap/useRasterMapLinks.ts', () => ({
   useRasterMapLinks: () => ({ data: undefined }),
+}));
+
+// The movie dialog brings a viewer and the encoders with it. What this list owes it is which
+// model it is opened on, and that no trip is chosen for it — so that is what the stand-in keeps.
+let movieDialog: TrackingMovieDialogProps | undefined;
+vi.mock('../../components/caveview/movie/LazyTrackingMovieDialog.tsx', () => ({
+  default: (props: TrackingMovieDialogProps) => {
+    movieDialog = props;
+    return props.surveyModelId === null ? null : (
+      <button data-testid="fake-movie-dialog-close" onClick={props.onClose} />
+    );
+  },
 }));
 
 const { default: SurveyModelSection } = await import('./SurveyModelSection.tsx');
@@ -228,6 +241,33 @@ describe('the survey model list', () => {
       'silexgis-viewer3d-other',
     ]);
     expect(opened[0][0]).toBe('/panel/viewer3d?model=plot');
+  });
+
+  it('makes a movie of the model asked for, with no trip chosen for the reader', async () => {
+    movieDialog = undefined;
+    models = [
+      model({ id: 'mesh' }),
+      model({ id: 'plot', format: 'lox', name: 'Grind plot' }),
+      model({ id: 'other', format: 'survex3d', name: 'Other plot' }),
+    ];
+    show();
+    await screen.findByText('Grind plot');
+
+    // Behind the same format gate as every other way of opening a model: a mesh has no stations
+    // for anybody to stand at.
+    const buttons = screen.getAllByLabelText('Make a movie');
+    expect(buttons).toHaveLength(2);
+    expect(screen.queryByTestId('survey-model-movie-mesh')).toBeNull();
+    expect(movieDialog?.surveyModelId).toBeNull();
+
+    fireEvent.click(screen.getByTestId('survey-model-movie-other'));
+
+    expect(movieDialog?.surveyModelId).toBe('other');
+    // Nothing on a cave page says which trip is meant, so none is ticked for the reader.
+    expect(movieDialog?.initialTripIds ?? []).toEqual([]);
+
+    fireEvent.click(screen.getByTestId('fake-movie-dialog-close'));
+    expect(movieDialog?.surveyModelId).toBeNull();
   });
 
   it('stops asking once nothing is left to wait for', () => {

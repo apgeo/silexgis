@@ -1,0 +1,69 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The room a movie's preview is fitted into, and the box of the frame's shape inside it.
+
+   The box's size is an inline style, set in whole pixels from the room's, because the viewer's own
+   stylesheet is injected later and wins ties; only what that stylesheet does not set is here. */
+
+.movie-preview-room {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.movie-preview-box {
+  position: relative;
+  overflow: hidden;
+}
+
+/* The viewer's container is the surface, and the viewer's stylesheet gives every container
+   (`.cv-container`) a fixed 1000 × 600 in the page's flow. That sheet is injected into the head when
+   the bundle loads, so it comes after this file and wins a tie: a rule of the surface's one class
+   lost to it, and the viewer drew a 1000 × 600 picture cropped by the box — a preview that was not
+   the movie, and a capture the viewer refused as the wrong shape. Three classes outrank its one. */
+.movie-preview-box .movie-preview-surface.cv-container,
+.movie-preview-surface {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* The box's own size, unless the surface is laid out smaller and scaled up to fill the box: at
+     most so many device pixels, so a caver's label is drawn at its share of the frame. */
+  width: var(--movie-surface-width, 100%);
+  height: var(--movie-surface-height, 100%);
+  transform: scale(var(--movie-surface-scale, 1));
+  transform-origin: 0 0;
+}
+
+/* Below 768px the viewer's sheet pins every container over the whole screen with `!important`
+   (`body div.cv-container:not(.toggle-fullscreen)`), which would lift the preview out of its box
+   and over the dialog. Taken back the same way, with one class more than that rule names. */
+@media (max-width: 767px) {
+  body div.movie-preview-surface.cv-container:not(.toggle-fullscreen) {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: var(--movie-surface-width, 100%) !important;
+    height: var(--movie-surface-height, 100%) !important;
+    transform: scale(var(--movie-surface-scale, 1)) !important;
+    transform-origin: 0 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: auto;
+  }
+}
+
+/* The viewer's own settings panel and its tabs. The movie's settings are the one place a movie's
+   view is chosen; a second one here would change the preview in ways the movie does not remember,
+   and its "save as default" would carry a movie's choices into every model opened afterwards. */
+.movie-preview-surface .cv-frame,
+.movie-preview-surface .cv-tab-box {
+  display: none;
+}
+
+.movie-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

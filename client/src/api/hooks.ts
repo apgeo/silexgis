@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  queryOptions,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
 import {
@@ -265,6 +272,10 @@ export const queryKeys = {
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
   tripChecklist: (id: string) => ['trip-logs', 'checklist', id] as const,
   tripTracking: (id: string) => ['trip-logs', 'tracking', id] as const,
+  // Which trips were tracked on a survey model, held under the trips' prefix: it is an answer
+  // about trips, so a trip or tracking write that changes one of them reaches it.
+  surveyModelTrackedTrips: (surveyModelId: string) =>
+    ['trip-logs', 'tracked-on-model', surveyModelId] as const,
   // The narrowing is part of the key, as everywhere else a paged read is held: a page of one
   // caver's reports is a different question from a page of everybody's, not a stale answer to it.
   tripTrackingEvents: (id: string, params: TrackingEventListParams) =>
@@ -3660,11 +3671,28 @@ export function useMyTripLogs(params: MyTripLogListParams) {
   });
 }
 
+/**
+ * The one definition of how a trip is read, used by the single-trip hook and the many-trip one so
+ * both hold the answer under the same key — a trip already open elsewhere is not read twice.
+ */
+function tripLogQuery(id: string) {
+  return queryOptions({
+    queryKey: queryKeys.tripLog(id),
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/{id}', { params: { path: { id } } })),
+  });
+}
+
 export function useTripLog(id: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.tripLog(id ?? ''),
-    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/{id}', { params: { path: { id: id! } } })),
-    enabled: !!id,
+  return useQuery({ ...tripLogQuery(id ?? ''), enabled: !!id });
+}
+
+/**
+ * Several trips at once, each under the key the single-trip read holds it by. For a surface that
+ * shows several trips' parties together and needs each trip's roster names.
+ */
+export function useTripLogsById(tripLogIds: readonly string[]) {
+  return useQueries({
+    queries: tripLogIds.map((id) => ({ ...tripLogQuery(id), enabled: id !== '' })),
   });
 }
 
@@ -7378,6 +7406,7 @@ export type TrackingCsvPreviewRow = components['schemas']['TrackingCsvPreviewRow
 export type TrackingCsvDiagnostic = components['schemas']['TrackingCsvDiagnosticDto'];
 export type CaveDepthPlace = components['schemas']['CaveDepthPlaceDto'];
 export type TrackingEvent = components['schemas']['TrackingEventDto'];
+export type TrackedTrip = components['schemas']['TrackedTripDto'];
 export type TrackingEventWrite = components['schemas']['TrackingEventRequest'];
 export type TrackingConfigWrite = components['schemas']['TrackingConfigRequest'];
 export type TrackingDepthCandidate = components['schemas']['TrackingDepthCandidateDto'];
@@ -7445,16 +7474,31 @@ function trackingPollInterval(state: TripTrackingState | undefined) {
  * Nothing is asked for once tracking is closed or was never armed.
  */
 export function useTripTracking(tripLogId: string | undefined, enabled = true) {
-  return useQuery({
-    queryKey: queryKeys.tripTracking(tripLogId ?? ''),
+  return useQuery({ ...tripTrackingQuery(tripLogId ?? ''), enabled: !!tripLogId && enabled });
+}
+
+/**
+ * The one definition of the tracking-state read — its key, its fetch and its polling — shared by
+ * the single-trip hook and the many-trip one, so the two hold one cache entry per trip and keep it
+ * fresh on the same condition.
+ */
+function tripTrackingQuery(tripLogId: string) {
+  return queryOptions({
+    queryKey: queryKeys.tripTracking(tripLogId),
     queryFn: () =>
       unwrap(
         api.GET('/api/v1/trip-logs/{tripLogId}/tracking', {
-          params: { path: { tripLogId: tripLogId! } },
+          params: { path: { tripLogId } },
         }),
       ),
-    enabled: !!tripLogId && enabled,
     refetchInterval: (query) => trackingPollInterval(query.state.data?.state),
+  });
+}
+
+/** Several trips' tracking states, each under the key and polling the single-trip read uses. */
+export function useTripTrackings(tripLogIds: readonly string[]) {
+  return useQueries({
+    queries: tripLogIds.map((id) => ({ ...tripTrackingQuery(id), enabled: id !== '' })),
   });
 }
 
@@ -7523,14 +7567,25 @@ const TRACKING_LOG_MAX_PAGES = 50;
  */
 export function useTripTrackingEventLog(tripLogId: string | undefined, enabled = true) {
   return useQuery({
-    queryKey: queryKeys.tripTrackingEventLog(tripLogId ?? ''),
+    ...tripTrackingEventLogQuery(tripLogId ?? ''),
+    enabled: !!tripLogId && enabled,
+  });
+}
+
+/**
+ * The one definition of the whole-log read, shared by the single-trip hook and the many-trip one so
+ * a log already read for one trip's replay is the same cache entry a several-trip surface reads.
+ */
+function tripTrackingEventLogQuery(tripLogId: string) {
+  return queryOptions({
+    queryKey: queryKeys.tripTrackingEventLog(tripLogId),
     queryFn: async () => {
       const items: TrackingEvent[] = [];
       for (let page = 1; page <= TRACKING_LOG_MAX_PAGES; page++) {
         const answer = await unwrap(
           api.GET('/api/v1/trip-logs/{tripLogId}/tracking/events', {
             params: {
-              path: { tripLogId: tripLogId! },
+              path: { tripLogId },
               query: { page, pageSize: TRACKING_LOG_PAGE_SIZE },
             },
           }),
@@ -7544,7 +7599,39 @@ export function useTripTrackingEventLog(tripLogId: string | undefined, enabled =
       }
       throw new Error('the tracking log has more pages than one read follows');
     },
-    enabled: !!tripLogId && enabled,
+  });
+}
+
+/**
+ * Several trips' whole logs, each under the key the single-trip read holds it by, and like it not
+ * polled — a replay of several trips reads their history once.
+ */
+export function useTripTrackingEventLogs(tripLogIds: readonly string[]) {
+  return useQueries({
+    queries: tripLogIds.map((id) => ({ ...tripTrackingEventLogQuery(id), enabled: id !== '' })),
+  });
+}
+
+/**
+ * The trips tracked on one survey model that this reader may read: those whose watch points at it
+ * now, and those with reports recorded against it — a watch re-pointed at a newer survey keeps its
+ * earlier reports on the older one. Latest activity first.
+ *
+ * The report counts and first/last instants are over the reports whose place this reader may see,
+ * under the same withholding the trip's own log applies; a trip whose only tie to the model is
+ * withheld is not listed. A model this reader may not see answers not-found, as the model's own
+ * read does.
+ */
+export function useSurveyModelTrackedTrips(surveyModelId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.surveyModelTrackedTrips(surveyModelId ?? ''),
+    queryFn: () =>
+      unwrap(
+        api.GET('/api/v1/survey-models/{surveyModelId}/tracked-trips', {
+          params: { path: { surveyModelId: surveyModelId! } },
+        }),
+      ),
+    enabled: !!surveyModelId && enabled,
   });
 }
 
@@ -7560,6 +7647,8 @@ function useInvalidateTripTracking() {
   return (tripLogId: string) => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.tripTracking(tripLogId) });
     void queryClient.invalidateQueries({ queryKey: ['trip-logs', 'tracking-events', tripLogId] });
+    // A report or a re-pointed watch changes which trips a model lists and what each counts.
+    void queryClient.invalidateQueries({ queryKey: ['trip-logs', 'tracked-on-model'] });
   };
 }
 

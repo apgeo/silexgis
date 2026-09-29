@@ -57,7 +57,7 @@ export default function TripChecklistTab({
   };
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       <Typography.Title level={5} style={{ marginBottom: 0 }}>
         {data.title}
       </Typography.Title>

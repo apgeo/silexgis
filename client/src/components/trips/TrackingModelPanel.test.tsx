@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { SurveyModelInfo, TrackingEvent, TrackingState, TripParticipant } from '../../api/hooks.ts';
 import type { PickedModelPart } from '../../caveview/modelParts.ts';
+import type { TrackingMovieDialogProps } from '../caveview/movie/TrackingMovieDialog.tsx';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
 
 const ANA = 'caver-ana';
@@ -164,6 +165,18 @@ let narrow = false;
 let coarse = false;
 vi.mock('../../hooks/useIsMobile.ts', () => ({ useIsMobile: () => narrow }));
 vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => coarse }));
+
+// The movie dialog draws with a viewer of its own and brings the encoders with it; what this panel
+// owes it is which model, which trip ticked, and a way to close — so that is what the stand-in keeps.
+let movieDialog: TrackingMovieDialogProps | undefined;
+vi.mock('../caveview/movie/LazyTrackingMovieDialog.tsx', () => ({
+  default: (props: TrackingMovieDialogProps) => {
+    movieDialog = props;
+    return props.surveyModelId === null ? null : (
+      <button data-testid="fake-movie-dialog-close" onClick={props.onClose} />
+    );
+  },
+}));
 
 const { default: TrackingModelPanel } = await import('./TrackingModelPanel.tsx');
 
@@ -338,6 +351,7 @@ beforeEach(() => {
   sheetPanes.clear();
   viewerLifecycle.mounts = 0;
   viewerLifecycle.unmounts = 0;
+  movieDialog = undefined;
   narrow = false;
   coarse = false;
   onRecorded.mockReset();
@@ -1061,6 +1075,80 @@ describe('TrackingModelPanel', () => {
  * proved here is the panel's side of the bargain: what it fetches and when, what it hands
  * each pane, and that the viewer survives every switch.
  */
+describe('the movie of the trip', () => {
+  it('opens the movie on the watch’s model with this trip already ticked', () => {
+    show();
+    expect(movieDialog?.surveyModelId).toBeNull();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-movie'));
+
+    expect(movieDialog?.surveyModelId).toBe(MODEL);
+    expect(movieDialog?.initialTripIds).toEqual(['trip-1']);
+    // The movie is drawn by a viewer of its own: asking for one does not open this panel's.
+    expect(viewerLifecycle.mounts).toBe(0);
+
+    fireEvent.click(screen.getByTestId('fake-movie-dialog-close'));
+    expect(movieDialog?.surveyModelId).toBeNull();
+  });
+
+  it('stays on the model it was opened on when the watch is pointed at another, even one not yet read', () => {
+    const { rerender } = show();
+    fireEvent.click(screen.getByTestId('trip-tracking-movie'));
+    expect(movieDialog?.surveyModelId).toBe(MODEL);
+
+    // Re-pointed to a model whose information has not arrived: the panel has nothing to draw, but
+    // the open dialog — and any export it is running — is not taken down with it.
+    held = undefined;
+    rerender(
+      <App>
+        <TrackingModelPanel
+          tripLogId="trip-1"
+          tracking={tracking({ surveyModelId: 'model-2' })}
+          participants={roster}
+          events={[]}
+          canEdit
+          selectedCaverIds={[ANA]}
+          onRecorded={onRecorded}
+        />
+      </App>,
+    );
+    expect(screen.queryByTestId('trip-tracking-movie')).toBeNull();
+    expect(movieDialog?.surveyModelId).toBe(MODEL);
+    expect(screen.getByTestId('fake-movie-dialog-close')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('fake-movie-dialog-close'));
+    expect(movieDialog?.surveyModelId).toBeNull();
+  });
+
+  it('leaves the panel’s own viewer mounted and untouched while the movie is open over it', () => {
+    show();
+    fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+    const before = given;
+
+    fireEvent.click(screen.getByTestId('trip-tracking-movie'));
+    fireEvent.click(screen.getByTestId('fake-movie-dialog-close'));
+
+    expect(viewerLifecycle).toEqual({ mounts: 1, unmounts: 0 });
+    expect(given?.trackedCavers).toBe(before?.trackedCavers);
+  });
+
+  it('is not offered for a model this viewer cannot read', () => {
+    held = model({ format: 'stl' });
+    show();
+
+    expect(screen.queryByTestId('trip-tracking-movie')).toBeNull();
+  });
+
+  it('keeps its name for a reader on a narrow screen, where the word is left off the button', () => {
+    narrow = true;
+    show();
+
+    const button = screen.getByTestId('trip-tracking-movie');
+    expect(button).toHaveAccessibleName('Make a movie');
+    expect(button).not.toHaveTextContent('Make a movie');
+  });
+});
+
 describe('the map sheets beside the 3D scene', () => {
   it('asks for the map links only while the model is open, like everything else it draws', () => {
     show();

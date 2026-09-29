@@ -75,7 +75,25 @@ async function download(url: string, body?: unknown): Promise<void> {
   const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
   const fileName = decodeURIComponent(match?.[1] ?? 'export');
 
-  const blob = await response.blob();
+  saveBlob(await response.blob(), fileName);
+}
+
+/**
+ * How long a saved file's address is kept alive after the save was started. The browser reads the
+ * file through that address after the click has returned, and a large one — a movie runs to tens
+ * of megabytes — is still being read when a same-task release would already have cut it off in
+ * some browsers. A minute is far past any read of a file already in memory, and all it holds on
+ * to meanwhile is a file the page has finished with.
+ */
+const SAVED_BLOB_LIFETIME_MS = 60_000;
+
+/**
+ * Hands a file the page made or fetched to the browser to save, under the name given.
+ *
+ * The link is put into the document before it is clicked, because a detached link's click is
+ * ignored by some browsers, and taken out again straight after.
+ */
+export function saveBlob(blob: Blob, fileName: string): void {
   const href = URL.createObjectURL(blob);
   try {
     const anchor = document.createElement('a');
@@ -85,7 +103,7 @@ async function download(url: string, body?: unknown): Promise<void> {
     anchor.click();
     anchor.remove();
   } finally {
-    URL.revokeObjectURL(href);
+    setTimeout(() => URL.revokeObjectURL(href), SAVED_BLOB_LIFETIME_MS);
   }
 }
 
