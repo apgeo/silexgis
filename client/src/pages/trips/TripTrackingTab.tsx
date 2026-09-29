@@ -4,6 +4,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   EyeInvisibleOutlined,
+  ImportOutlined,
   PictureOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
@@ -36,6 +37,7 @@ import {
 } from '../../api/hooks.ts';
 import { replayPictures } from '../../caveview/trackingReplay.ts';
 import TrackingConfigCard from '../../components/trips/TrackingConfigCard.tsx';
+import TrackingCsvImportDialog from '../../components/trips/TrackingCsvImportDialog.tsx';
 import TrackingModelPanel from '../../components/trips/TrackingModelPanel.tsx';
 import TrackingMomentPictures from '../../components/trips/TrackingMomentPictures.tsx';
 import TrackingEventEditDialog from '../../components/trips/TrackingEventEditDialog.tsx';
@@ -52,12 +54,9 @@ import {
   type TrackingDepthGap,
 } from '../../components/trips/trackingDepthGap.ts';
 import { publicNamingOf } from '../../components/trips/trackingPublicName.ts';
-// The position's age, like the standing and the "last heard" age, is worded by the followed page's
-// own rule, borrowed through the watch module rather than copied: a coordinator and a family read
-// the same position, and two roundings of one gap would have them disagreeing about it.
 import {
   lastHeardInWords,
-  positionReportedInWords,
+  positionAgeOf,
   trackingStandingOf,
   trackingStandings,
   type TrackingStanding,
@@ -66,6 +65,9 @@ import { drawableOn } from '../../caveview/drawableOn.ts';
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
+// The position's age is worded by the followed page's own rule, called rather than copied — the
+// same reason the standing and the "last heard" age above are. A coordinator and a family read the
+// same position, and two roundings of one gap would have them disagreeing about it.
 import './TripTrackingTab.css';
 
 /** How many reports the log shows without being asked for more. */
@@ -122,6 +124,8 @@ export default function TripTrackingTab({
   const events = useTripTrackingEvents(trip.id, { pageSize: RECENT_EVENTS });
   const deleteEvent = useDeleteTrackingEvent();
   const [correcting, setCorrecting] = useState<TrackingEvent | null>(null);
+  /** Whether the sheet-reading dialog is open. */
+  const [importing, setImporting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   /** Whose caption on the published page is being set, or null while nobody's is. */
   const [naming, setNaming] = useState<TrackingParticipant | null>(null);
@@ -661,7 +665,7 @@ export default function TripTrackingTab({
    */
   const positionCell = (participant: TrackingParticipant) => {
     const { shown, placedAt } = positionOf(participant);
-    const since = positionReportedInWords(placedAt, now, i18n.language);
+    const since = positionAgeOf(placedAt, now, i18n.language);
     return (
       <>
         {shown}
@@ -1231,7 +1235,24 @@ export default function TripTrackingTab({
       )}
 
       <div>
-        <Typography.Text strong>{t('trips.tracking.events')}</Typography.Text>
+        <Flex justify="space-between" align="start" gap={8} wrap>
+          <Typography.Text strong>{t('trips.tracking.events')}</Typography.Text>
+          {/* Beside the log rather than beside the report card, because that is what it fills: a
+              coordinator's sheet is a log written somewhere else, and the button belongs where the
+              rows it becomes are read. Offered on a closed watch too — a sheet is usually typed up
+              after everybody is out, and refusing it then would leave the one case it exists for
+              unserved. */}
+          {canEdit && (
+            <Button
+              size="small"
+              icon={<ImportOutlined />}
+              onClick={() => setImporting(true)}
+              data-testid="trip-tracking-csv-open"
+            >
+              {t('trips.tracking.csvImport.open')}
+            </Button>
+          )}
+        </Flex>
         <Typography.Paragraph type="secondary" style={{ marginTop: 4 }}>
           {t('trips.tracking.eventsCorrection')}
         </Typography.Paragraph>
@@ -1375,6 +1396,16 @@ export default function TripTrackingTab({
           report={correcting}
           teams={data?.teams ?? []}
           onClose={() => setCorrecting(null)}
+        />
+      )}
+
+      {/* Mounted only while it is open, so a sheet chosen and thought better of is not still
+          sitting in the dialog's state the next time it is opened. */}
+      {canEdit && importing && (
+        <TrackingCsvImportDialog
+          open
+          tripLogId={trip.id}
+          onClose={() => setImporting(false)}
         />
       )}
 

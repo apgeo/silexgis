@@ -33,6 +33,17 @@ public enum TrackingCsvField
     /// </summary>
     Station,
 
+    /// <summary>
+    /// A place the cave itself has declared a name for, which resolves to a station and a depth.
+    /// </summary>
+    /// <remarks>
+    /// Between <see cref="Station"/> and <see cref="Depth"/> in authority, and it is the column a
+    /// club can actually fill in: a caver on the phone says "at the Meander", not "at station
+    /// 3.14" and not "at 96 m". What each declared name means is the cave's own business, so a
+    /// label that matches no declaration is reported rather than guessed at.
+    /// </remarks>
+    Place,
+
     /// <summary>Who the report is about. Multi-valued — one row can be a whole party.</summary>
     Cavers,
 

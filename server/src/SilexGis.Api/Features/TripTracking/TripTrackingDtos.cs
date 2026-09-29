@@ -242,6 +242,20 @@ public sealed record TrackingEventDto(
     string? Note,
     DateTimeOffset RecordedAt);
 
+/// <summary>
+/// One place the watch's cave has declared: what it is called, which station it is, how deep.
+/// </summary>
+/// <remarks>
+/// Its own shape rather than the cave page's, because these two surfaces are not the same list
+/// seen twice: the cave page edits declarations and needs each row's identity to change or
+/// withdraw it, while a report names a place and needs only what the place is. Sending an id here
+/// would be handing a surface a handle it has no business using.
+/// </remarks>
+public sealed record TrackingPlaceDto(
+    decimal DepthM,
+    string StationName,
+    string? PlaceLabel);
+
 public sealed record TrackingDepthCandidateDto(
     string StationName,
     string? SurveyName,

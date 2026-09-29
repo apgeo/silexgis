@@ -12,10 +12,14 @@ const recordEvents = vi.fn();
  */
 const depthReading = vi.fn();
 
+/** The places the cave has declared, shallowest first, as the server sends them. */
+const declaredPlaces = vi.fn<() => { depthM: number; stationName: string; placeLabel: string | null }[]>();
+
 vi.mock('../../api/hooks.ts', () => ({
   TRACKING_EVENT_KINDS: ['entered', 'atStation', 'atDepth', 'note', 'exited'],
   useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
   useTrackingDepthReading: (_tripLogId: string, depthM: number | null) => depthReading(depthM),
+  useTrackingPlaces: () => ({ data: declaredPlaces() }),
 }));
 
 /** Asking the check again, the way the button on a failed reading does. */
@@ -48,6 +52,36 @@ async function toDepth(value: string) {
   fireEvent.mouseDown(kind.querySelector('.ant-select-selector') ?? kind);
   fireEvent.click(document.querySelector('.ant-select-item-option[title="At a depth"]')!);
   fireEvent.change(await screen.findByTestId('trip-tracking-depth'), { target: { value } });
+}
+
+/**
+ * Opens the declared-places chooser and returns its own options.
+ *
+ * <b>Scoped to this select's own popup, which is the whole reason it is a helper.</b> Every antd
+ * dropdown that has been opened stays in the document, so a bare query for options collects the
+ * kind chooser's five as well — and a click on "the first option" then lands on "Went in" and
+ * silently changes the kind. The popup is found through the combobox's `aria-controls`, which is
+ * the only link between a select and the element it portalled out of itself.
+ */
+async function openPlaces(known: string) {
+  const chooser = screen.getByTestId('trip-tracking-place');
+  fireEvent.mouseDown(chooser.querySelector('.ant-select-selector') ?? chooser);
+
+  // Found through one option this caller knows is in the list, then widened to that option's own
+  // dropdown. Every antd popup that has been opened stays in the document, so a bare query for
+  // options collects the kind chooser's as well — and a click on "the first option" then lands on
+  // "Went in" and silently changes what is being reported. The select's `aria-controls` is no help:
+  // it names the hidden listbox, not the list the options are drawn in.
+  const anchor = await waitFor(() => {
+    const found = document.querySelector<HTMLElement>(
+      `.ant-select-item-option[title="${known}"]`,
+    );
+    expect(found).not.toBeNull();
+    return found!;
+  });
+
+  const popup = anchor.closest('.ant-select-dropdown')!;
+  return Array.from(popup.querySelectorAll<HTMLElement>('.ant-select-item-option'));
 }
 
 /** Opens the calendar behind "when it was said", the way pressing the field does. */
@@ -91,6 +125,9 @@ function panelSizes(): string {
 beforeEach(() => {
   coarse = false;
   recordEvents.mockReset().mockResolvedValue([{}]);
+  // Nothing declared by default, which is the state of every cave until somebody declares
+  // something — so the cases below that do not mention places are drawn as they are today.
+  declaredPlaces.mockReset().mockReturnValue([]);
   checkAgain.mockReset();
   depthReading
     .mockReset()
@@ -98,6 +135,77 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+/**
+ * Reporting by the name of a place rather than by a number.
+ *
+ * <b>What this chooser is actually for.</b> A caver relaying word out of a cave says "at the
+ * Meander". Nobody says "at 96 metres" and nobody at all says "at station 3.14" — so the chooser is
+ * the fastest of the three ways to report, and the one a coordinator under pressure will reach for.
+ * The cases below are the ones where it could quietly report something else: a chooser drawn for a
+ * cave that declared nothing, an order that is not the order the server decided, or a choice that
+ * sends a station while the log records a depth.
+ */
+describe('TrackingReportForm, reporting a declared place', () => {
+  it('is not drawn at all for a cave that has declared nothing', () => {
+    // An empty chooser is worse than no chooser: it says this cave has places and offers none.
+    show();
+
+    expect(screen.queryByTestId('trip-tracking-place')).not.toBeInTheDocument();
+  });
+
+  it('is drawn for the kinds that claim a place and for no others', async () => {
+    declaredPlaces.mockReturnValue([{ depthM: 96, stationName: 'upper.2', placeLabel: 'Meandru' }]);
+    show();
+
+    // The card opens on "went in", which claims no station — so there is nothing for a place to
+    // say, and offering one would invite a report that silently drops it.
+    expect(screen.queryByTestId('trip-tracking-place')).not.toBeInTheDocument();
+
+    await toDepth('96');
+    expect(screen.getByTestId('trip-tracking-place')).toBeInTheDocument();
+  });
+
+  it('offers the places in the order the server decided, which is by depth', async () => {
+    // Shallowest first, because a party goes down past the places in that order — and the order is
+    // the server's so that every surface showing this list agrees about it. Re-sorting here, or
+    // taking whatever order a cache happened to hold, is how two screens come to disagree.
+    declaredPlaces.mockReturnValue([
+      { depthM: 12, stationName: 'ent.1', placeLabel: 'Puțul de intrare' },
+      { depthM: 96, stationName: 'upper.2', placeLabel: 'Meandru' },
+      { depthM: 150, stationName: 'deep.3', placeLabel: null },
+    ]);
+    show();
+    await toDepth('96');
+
+    const offered = (await openPlaces('Meandru — 96 m')).map((option) => option.textContent);
+    expect(offered).toEqual(['Puțul de intrare — 12 m', 'Meandru — 96 m', 'deep.3 — 150 m']);
+  });
+
+  it('records the declared depth, so the station that lands is the one the cave declared', async () => {
+    // <b>The point of sending a depth rather than the station beside it.</b> The server resolves a
+    // depth through the very declaration that was chosen here, so the place the person picked and
+    // the station written on the log cannot disagree. Sending the station instead would be a second
+    // answer to a question the server already answers, and the two could drift.
+    declaredPlaces.mockReturnValue([{ depthM: 96, stationName: 'upper.2', placeLabel: 'Meandru' }]);
+    show();
+    await toDepth('0');
+
+    fireEvent.click((await openPlaces('Meandru — 96 m'))[0]);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('trip-tracking-depth')).toHaveValue('96'),
+    );
+
+    fireEvent.click(screen.getByTestId('trip-tracking-record'));
+    await waitFor(() => expect(recordEvents).toHaveBeenCalledOnce());
+    const sent = recordEvents.mock.calls[0][0];
+    expect(sent.kind).toBe('atDepth');
+    expect(sent.depthM).toBe(96);
+    // And no station, because the station is the server's answer and not this card's guess at it.
+    expect(sent.stationName ?? null).toBeNull();
+  });
+});
 
 /**
  * The calendar behind "when it was said" — the one panel on this card that is not drawn inside it,

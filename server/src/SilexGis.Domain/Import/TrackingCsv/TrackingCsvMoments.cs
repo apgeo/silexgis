@@ -128,6 +128,36 @@ public static class TrackingCsvMoments
     }
 
     /// <summary>
+    /// The date half of a cell, read but not yet resolved — the evidence this row contributes to
+    /// the file's day-first-or-month-first question.
+    /// </summary>
+    /// <remarks>
+    /// Exposed separately because the order has to be settled over the whole column before any row
+    /// can be read, and <see cref="Read"/> already needs the answer. A cell that states its own
+    /// offset abstains: it is ISO, so it proves nothing about how this club writes an ambiguous
+    /// date, and counting it as evidence would let one exported row decide the reading of a hundred
+    /// hand-typed ones.
+    /// </remarks>
+    public static TripCsvDateReading DatePartOf(string? text)
+    {
+        var tidy = TripCsvValues.Tidy(text);
+        if (tidy.Length == 0 || !TripCsvValues.CarriesMeaning(tidy))
+        {
+            return TripCsvDateReading.Empty;
+        }
+
+        if (StatesAnOffset(tidy)
+            && DateTimeOffset.TryParse(tidy, CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces, out _))
+        {
+            return TripCsvDateReading.Empty;
+        }
+
+        var (datePart, _) = Divide(tidy);
+        return TripCsvDates.Read(datePart);
+    }
+
+    /// <summary>
     /// Whether the cell states a zone of its own — a trailing Z, or a signed offset after the time.
     /// </summary>
     /// <remarks>

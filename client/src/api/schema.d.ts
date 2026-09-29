@@ -5587,6 +5587,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/caves/{caveId}/depth-places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The depths this cave has declared the meaning of, shallowest first. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveDepthPlaceDto"][];
+                    };
+                };
+            };
+        };
+        /** Declares what one depth of this cave means, replacing the declaration for that depth where there is one (Write on the cave). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CaveDepthPlaceWriteRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveDepthPlaceDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/caves/{caveId}/depth-places/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Withdraws one declaration (Write on the cave). */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    caveId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{id}/statistics": {
         parameters: {
             query?: never;
@@ -13257,6 +13358,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{tripLogId}/tracking/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The places the watch's cave has declared, shallowest first — the list a report names instead of a depth. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingPlaceDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/trip-logs/{tripLogId}/tracking/resolve-depth": {
         parameters: {
             query?: never;
@@ -13293,6 +13432,160 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/csv-import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reads a sheet of reports against this trip and answers what importing it would do — nothing is written. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingCsvImportRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingCsvPreviewDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{tripLogId}/tracking/csv-import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records the sheet's rows as reports, keyed on the person and the instant so a re-import corrects rather than doubles. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tripLogId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrackingCsvCommitRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingCsvCommitDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tracking-csv-import/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The column roles a tracking sheet can carry, and the header spellings each one is detected under. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackingCsvFieldDto"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tracking-csv-import/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A sample sheet with invented rows, in the spellings this installation detects. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18974,6 +19267,20 @@ export interface components {
             hasReadings: boolean;
             summary: null | components["schemas"]["CrossSectionSummary"];
         };
+        CaveDepthPlaceDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: double */
+            depthM: number;
+            stationName: string;
+            placeLabel: null | string;
+        };
+        CaveDepthPlaceWriteRequest: {
+            /** Format: double */
+            depthM: null | number;
+            stationName: null | string;
+            placeLabel: null | string;
+        };
         CaveDto: {
             /** Format: uuid */
             id: string;
@@ -24228,6 +24535,86 @@ export interface components {
             referenceStationName: null | string;
             depthFilter: null | string[];
         };
+        TrackingCsvCommitDto: {
+            /** Format: int32 */
+            created: number;
+            /** Format: int32 */
+            updated: number;
+            /** Format: int32 */
+            skipped: number;
+            refused: components["schemas"]["TrackingCsvDiagnosticDto"][];
+        };
+        TrackingCsvCommitRequest: {
+            text: null | string;
+            options: null | components["schemas"]["TrackingCsvImportOptionsDto"];
+            replaceExisting: boolean;
+            lines: null | number[];
+        };
+        TrackingCsvDiagnosticDto: {
+            severity: string;
+            problem: string;
+            /** Format: int32 */
+            line: number;
+            column: null | string;
+            detail: null | string;
+        };
+        TrackingCsvFieldDto: {
+            field: string;
+            candidates: string[];
+        };
+        TrackingCsvImportOptionsDto: {
+            columns: null | {
+                [key: string]: string;
+            };
+            delimiter: null | string;
+            multiValueSeparators: null | string;
+            dateOrder: null | components["schemas"]["TripCsvDateOrder"];
+            wentInWords: null | string[];
+            cameOutWords: null | string[];
+        };
+        TrackingCsvImportRequest: {
+            text: null | string;
+            options: null | components["schemas"]["TrackingCsvImportOptionsDto"];
+        };
+        TrackingCsvPreviewDto: {
+            header: string[];
+            resolvedColumns: {
+                [key: string]: string;
+            };
+            unmappedColumns: string[];
+            dateOrder: components["schemas"]["TripCsvDateOrder"];
+            dateOrderSource: string;
+            /** Format: int32 */
+            rowsRead: number;
+            /** Format: int32 */
+            creates: number;
+            /** Format: int32 */
+            replaces: number;
+            unmatchedCavers: string[];
+            rows: components["schemas"]["TrackingCsvPreviewRowDto"][];
+            fileDiagnostics: components["schemas"]["TrackingCsvDiagnosticDto"][];
+            refused: components["schemas"]["TrackingCsvDiagnosticDto"][];
+        };
+        TrackingCsvPreviewRowDto: {
+            /** Format: int32 */
+            line: number;
+            /** Format: date-time */
+            recordedAt: string;
+            /** Format: uuid */
+            caverId: string;
+            caverWritten: string;
+            caverMatched: string;
+            matchedBy: string;
+            /** Format: uuid */
+            teamId: null | string;
+            kind: components["schemas"]["TripPositionEventKind"];
+            stationName: null | string;
+            /** Format: double */
+            depthM: null | number;
+            note: null | string;
+            replaces: boolean;
+            diagnostics: components["schemas"]["TrackingCsvDiagnosticDto"][];
+        };
         TrackingDepthCandidateDto: {
             stationName: string;
             surveyName: null | string;
@@ -24331,6 +24718,12 @@ export interface components {
         };
         TrackingPictureWriteRequest: {
             items: null | components["schemas"]["TrackingPictureInput"][];
+        };
+        TrackingPlaceDto: {
+            /** Format: double */
+            depthM: number;
+            stationName: string;
+            placeLabel: null | string;
         };
         TrackingResolveDepthRequest: {
             /** Format: double */

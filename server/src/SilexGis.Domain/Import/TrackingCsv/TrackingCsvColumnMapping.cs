@@ -46,6 +46,9 @@ public sealed record TrackingCsvColumnMapping
              "datetime", "date and time", "time", "timestamp", "when"],
         TrackingCsvField.Depth => ["adancime", "adancimea", "cota", "depth", "elevation", "m"],
         TrackingCsvField.Station => ["statie", "statia", "punct", "punctul", "station", "point"],
+        TrackingCsvField.Place =>
+            ["loc", "locul", "locatie", "locatia", "nume loc", "denumire", "denumirea locului",
+             "reper", "toponim", "place", "place name", "location", "landmark"],
         TrackingCsvField.Cavers =>
             ["speologi", "speolog", "participanti", "participant", "echipa membri", "membri",
              "nume", "cavers", "caver", "people", "names"],

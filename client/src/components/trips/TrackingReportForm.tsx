@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import {
   TRACKING_EVENT_KINDS,
   useTrackingDepthReading,
+  useTrackingPlaces,
   type TrackingDepthCandidate,
   type TrackingTeam,
   type TripPositionEventKind,
@@ -127,6 +128,17 @@ export default function TrackingReportForm({
    */
   const reading = useTrackingDepthReading(tripLogId, askedDepth);
   const candidates: TrackingDepthCandidate[] | undefined = reading.data;
+
+  /**
+   * The places this cave has declared, which are what somebody on the phone actually names.
+   *
+   * Asked for whenever the form is drawn, because the chooser below is the fastest way to report
+   * and a list that arrived only after somebody started typing a depth would never be used. A cave
+   * that has declared nothing answers an empty list, and then no chooser is drawn at all — there is
+   * nothing to say about it, and an empty select is worse than no select.
+   */
+  const places = useTrackingPlaces(tripLogId);
+  const declared = places.data ?? [];
   /** How far the station this depth would be recorded at sits from the depth itself. */
   const gap = trackingDepthGap(askedDepth, candidates?.[0]);
 
@@ -142,6 +154,24 @@ export default function TrackingReportForm({
       />
     );
   }
+
+  /**
+   * Taking a declared place as the answer.
+   *
+   * <b>Recorded as its depth, not as its station, and the difference matters.</b> What the cave
+   * declared is a depth, a station and a name together, so the depth is part of what is being
+   * said — and it is also what reading the same place back out of the declarations depends on.
+   * Sending the depth means the server resolves it through the very declaration that was chosen
+   * here, so the place the person picked and the station that lands on the log cannot disagree.
+   */
+  const choosePlace = (depthM: number | null) => {
+    if (depthM === null || depthM === undefined) {
+      return;
+    }
+
+    form.setFieldsValue({ kind: 'atDepth', depthM, stationName: undefined });
+    setListing(false);
+  };
 
   const send = async (values: TrackingReportValues) => {
     if ((await report.send(tripLogId, caverIds, values)).recorded) {
@@ -216,6 +246,41 @@ export default function TrackingReportForm({
               }))}
             />
           </Form.Item>
+
+          {/* Before either of the two fields below, because it is the one most reports are made
+              with: a caver relaying word says where they are by name, and a chooser that came
+              after the depth field would be read as an afterthought to it. Drawn only where the
+              cave has declared something, and only for the kinds that claim a place. */}
+          {declared.length > 0 && (kind === 'atStation' || kind === 'atDepth') && (
+            <Form.Item
+              label={t('trips.tracking.reportPlace')}
+              extra={t('trips.tracking.reportPlaceHelp')}
+            >
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t('trips.tracking.reportPlacePlaceholder')}
+                data-testid="trip-tracking-place"
+                onChange={choosePlace}
+                options={declared.map((place) => ({
+                  // The depth is the value because the depth is what gets recorded: the server
+                  // consults the same declarations and answers with the station the club named,
+                  // so what lands on the log is the declared place and not a second guess at it.
+                  value: place.depthM,
+                  label: place.placeLabel
+                    ? t('trips.tracking.reportPlaceOption', {
+                        place: place.placeLabel,
+                        depth: place.depthM,
+                      })
+                    : t('trips.tracking.reportPlaceOptionUnnamed', {
+                        station: place.stationName,
+                        depth: place.depthM,
+                      }),
+                }))}
+              />
+            </Form.Item>
+          )}
 
           {kind === 'atStation' && (
             <Form.Item

@@ -58,6 +58,7 @@ import {
 import { SEEDED_CONTINUATION_STATE_CODES } from '../components/expeditions/continuationStates.ts';
 import { SEEDED_EXPEDITION_ROSTER_ROLE_CODES } from '../components/expeditions/rosterRoles.ts';
 import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRoles.ts';
+import { TRACKING_CSV_PROBLEMS } from '../components/trips/trackingCsvProblems.ts';
 import { TRACKING_PROBLEM_MESSAGE_KEYS } from '../components/trips/trackingProblems.ts';
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
 import { TERRAIN_PROBLEM_MESSAGE_KEYS } from '../pages/admin/terrain/terrainProblems.ts';
@@ -527,6 +528,36 @@ describe('i18n locales', () => {
     expect(named).toEqual([...new Set(named)]);
     expect(Object.keys(en.trips.tracking.problems).sort()).toEqual(named);
     expect(Object.keys(ro.trips.tracking.problems).sort()).toEqual(named);
+  });
+
+  /**
+   * The sheet importer's findings, which arrive as bare names in a response rather than through
+   * the refusal table above. A finding with no wording is shown as `PlaceLabelAmbiguous` on the
+   * one screen whose entire job is telling a reviewer what to go and fix, so the absence has to
+   * fail here instead of reaching them.
+   */
+  it('every tracking sheet problem is worded in both locales, and none is left over', () => {
+    const names = [...TRACKING_CSV_PROBLEMS].sort();
+    expect(names.length).toBeGreaterThan(20);
+    expect(Object.keys(en.trips.tracking.csvImport.problemNames).sort()).toEqual(names);
+    expect(Object.keys(ro.trips.tracking.csvImport.problemNames).sort()).toEqual(names);
+  });
+
+  /** And the column roles the mapping screen offers, which the server publishes by name too. */
+  it('every tracking sheet column role is named in both locales, and none is left over', () => {
+    const roles = [
+      'RecordedAt',
+      'Depth',
+      'Station',
+      'Place',
+      'Cavers',
+      'Team',
+      'Note',
+      'Details',
+      'State',
+    ].sort();
+    expect(Object.keys(en.trips.tracking.csvImport.fields).sort()).toEqual(roles);
+    expect(Object.keys(ro.trips.tracking.csvImport.fields).sort()).toEqual(roles);
   });
 
   it('every terrain build status, phase, source kind and depth band is named in both locales', () => {
