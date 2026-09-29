@@ -195,7 +195,27 @@ export interface EmbedFocusedMessage {
   found: boolean;
 }
 
-export type EmbedOutboundMessage = EmbedReadyMessage | EmbedFocusedMessage;
+/**
+ * The embedded page saying it can hear, to whoever framed it.
+ *
+ * <b>The one message that is not addressed, and it carries nothing.</b> A hello reaches this page
+ * only once its listener is installed, and that listener comes from a script the page loads after
+ * its own `load` event — so a framer that says hello when its document is ready and again when the
+ * frame has loaded has spoken twice before anybody could hear, and a viewer that only ever learns
+ * its framer from a hello would never announce the party. This is how the page ends the wait: the
+ * moment it is listening it says so, and the relay answers with the hello it could not deliver
+ * earlier. The framer's origin is not known yet, which is the whole reason to say it, so it is
+ * posted without one — and what is posted is the channel, the version and this word. Nothing the
+ * origin rule protects is in it: the framer already knows it framed a viewer, and so does any
+ * other script on that page, from the frame's own `src`.
+ */
+export interface EmbedListeningMessage {
+  silexgis: typeof EMBED_CHANNEL;
+  v: typeof EMBED_PROTOCOL;
+  type: 'listening';
+}
+
+export type EmbedOutboundMessage = EmbedReadyMessage | EmbedFocusedMessage | EmbedListeningMessage;
 
 /** What the embedded page will act on: a greeting, or a place to show. */
 export type EmbedInbound =
@@ -327,6 +347,35 @@ const RELAY_SOURCE = `(function () {
     send(frame, { silexgis: CHANNEL, v: VERSION, type: 'hello' });
   }
 
+  /* How often a frame that has not answered is greeted again, and for how long. */
+  var COURT_EVERY_MS = 500;
+  var COURT_FOR_MS = 60000;
+
+  /* Says hello until the viewer answers.
+
+     A hello reaches nothing unless the viewer is already listening, and it was not listening at
+     either moment this script used to speak: the document inside the frame installs its listener
+     from a script it loads after its own load event, so a hello said when this page was ready and
+     one said again when the frame had loaded both arrived before anybody could hear them — and
+     the viewer, which only ever learns who framed it from a hello, then never announced the party
+     at all. So the greeting is repeated every half second until the first ready comes back from
+     that frame, for at most a minute. The viewer also says it is listening the moment it can
+     hear, which is answered at once below; the repetition is what covers a page that ran this
+     script late, after the viewer had already said so. */
+  function court(frame) {
+    if (frame.silexgisCourting) clearInterval(frame.silexgisCourting);
+    var until = Date.now() + COURT_FOR_MS;
+    hello(frame);
+    frame.silexgisCourting = setInterval(function () {
+      if (frame.getAttribute('data-silexgis-heard') || Date.now() > until) {
+        clearInterval(frame.silexgisCourting);
+        frame.silexgisCourting = null;
+        return;
+      }
+      hello(frame);
+    }, COURT_EVERY_MS);
+  }
+
   /* Somebody has to speak first, and it has to be this side: a page can only post to an origin it
      names, and the viewer does not know who framed it until it is told. */
   function greet() {
@@ -337,11 +386,12 @@ const RELAY_SOURCE = `(function () {
          and what it is running it for is the frame that arrived with it. */
       if (frame.getAttribute('data-silexgis-greeted')) continue;
       frame.setAttribute('data-silexgis-greeted', '1');
-      hello(frame);
-      /* Said again when the frame finishes loading, because a hello sent before the document
-         inside it exists reaches nothing at all. */
+      court(frame);
+      /* Started over when the frame finishes loading: the document that just arrived has heard
+         nothing, whatever the one before it answered. */
       frame.addEventListener('load', function () {
-        hello(this);
+        this.removeAttribute('data-silexgis-heard');
+        court(this);
       });
     }
   }
@@ -436,14 +486,18 @@ const RELAY_SOURCE = `(function () {
     if (!data || data.silexgis !== CHANNEL || data.v !== VERSION) return;
     /* The origin is checked against the one this page was told to talk to, and the window against
        the frame that claims to have sent it. Either alone is not enough. */
-    var mine = false;
+    var mine = null;
     var all = frames();
     for (var i = 0; i < all.length; i++) {
       if (all[i].contentWindow === event.source && all[i].getAttribute('data-silexgis-embed') === event.origin) {
-        mine = true;
+        mine = all[i];
       }
     }
     if (!mine) return;
+    /* The viewer has heard this page, so the greeting need not be said again. */
+    if (data.type === 'ready') mine.setAttribute('data-silexgis-heard', '1');
+    /* The viewer can hear now, whatever was said before it could. */
+    if (data.type === 'listening') hello(mine);
     document.dispatchEvent(new CustomEvent('silexgis:' + data.type, { detail: data }));
   });
 })();`;
@@ -548,7 +602,8 @@ export function buildEmbedSnippet({
        <a href="#cave" data-silexgis-survey="galeria-nord" data-silexgis-target="${frameId}">the north gallery</a>
        <a href="#cave" data-silexgis-caver="3" data-silexgis-target="${frameId}">caver 3</a>
      And the same viewer can play a past trip of this cave, and follow a team or a person through
-     it. The trip id is the one the viewer's own "Past trips" list shows:
+     it. The trip and team ids are in the full page's address once you pick the trip and whom to
+     follow there (?past=…&team=… or &caver=…); the list itself prints no ids:
        <a href="#cave" data-silexgis-trip="TRIP-ID" data-silexgis-target="${frameId}">the 2019 push</a>
        <a href="#cave" data-silexgis-team="TEAM-ID" data-silexgis-trip="TRIP-ID"
           data-silexgis-target="${frameId}">the survey team that day</a>

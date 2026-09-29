@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { PublicTripEnvelope, PublicTripParticipant } from '../../api/hooks.ts';
 import type { CaveViewFocusRequest } from '../../components/caveview/CaveViewPanel.tsx';
 import { EMBED_CHANNEL, EMBED_PROTOCOL } from './publicTripEmbed.ts';
 
 const HOST = 'https://club.example.org';
 
-let answer: { data?: PublicTripEnvelope; isPending: boolean; error: unknown };
+let answer: {
+  data?: PublicTripEnvelope;
+  isPending: boolean;
+  error: unknown;
+  refetch?: () => unknown;
+};
 
 /**
  * Every read this document made that a stranger on somebody else's website could not perform.
@@ -26,6 +32,11 @@ vi.mock('../../api/hooks.ts', () => ({
   useResLinksForTarget: authenticatedOnly('useResLinksForTarget'),
   useSurveyModel: authenticatedOnly('useSurveyModel'),
   usePublicPastTrips: (_token: string | undefined, enabled: boolean) => ({
+    data: undefined,
+    isPending: enabled,
+    isError: false,
+  }),
+  usePublicLiveTrips: (_token: string | undefined, enabled: boolean) => ({
     data: undefined,
     isPending: enabled,
     isError: false,
@@ -126,14 +137,17 @@ function envelope(overrides: Partial<PublicTripEnvelope> = {}): PublicTripEnvelo
  * half of the contract a wrong implementation gets wrong silently.
  */
 function fakeParent() {
+  /** What the page answered its framer with: the party, and what a link found. */
   const sent: { message: Record<string, unknown>; origin: string }[] = [];
+  /** The one word said before the framer is known, kept apart because it is addressed to nobody. */
+  const listening: { message: Record<string, unknown>; origin: string }[] = [];
   const parent = {
     postMessage: (message: Record<string, unknown>, origin: string) => {
-      sent.push({ message, origin });
+      (message.type === 'listening' ? listening : sent).push({ message, origin });
     },
   } as unknown as Window;
   Object.defineProperty(window, 'parent', { value: parent, configurable: true });
-  return { parent, sent };
+  return { parent, sent, listening };
 }
 
 /** Delivers a message as the browser would, with a source and an origin on it. */
@@ -274,6 +288,38 @@ describe('the viewer a website frames', () => {
 
     expect(screen.getByTestId('viewer')).toBeInTheDocument();
     expect(screen.queryByTestId('public-trip-embed-failure')).toBeNull();
+    // And says nothing about it: a fault that may clear is not news inside an article.
+    expect(screen.queryByTestId('public-trip-ended')).toBeNull();
+  });
+
+  it('says the link has stopped answering once a poll is refused for good, and keeps the drawing', () => {
+    // The end of every published trip that carried sheets or pictures: the grace runs out and
+    // the route answers 404 with the last envelope still in hand. The drawing stays — it is the
+    // last true word — under one line saying the frame will not change again.
+    answer = { data: envelope(), isPending: false, error: new ApiError(404) };
+    render(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('viewer')).toBeInTheDocument();
+    expect(screen.getByTestId('public-trip-ended')).toHaveTextContent('This link has stopped answering');
+  });
+
+  it('draws every unusable link as nothing to show, and a first read that failed on the network as a fault', () => {
+    answer = { data: undefined, isPending: false, error: new ApiError(404) };
+    const view = render(<PublicTripEmbedPage />);
+    expect(screen.getByTestId('public-trip-embed-failure')).toHaveTextContent('Nothing to show for this link');
+
+    // A phone with no signal, opened straight onto the article: nothing in hand, and no answer
+    // from the server about the link either. Said as a fault, with the way to ask again.
+    const refetch = vi.fn();
+    answer = { data: undefined, isPending: false, error: new TypeError('Failed to fetch'), refetch };
+    view.rerender(<PublicTripEmbedPage />);
+
+    expect(screen.queryByTestId('public-trip-embed-failure')).toBeNull();
+    expect(screen.getByTestId('public-trip-embed-unreachable')).toHaveTextContent(
+      'The trip could not be read just now',
+    );
+    fireEvent.click(screen.getByTestId('public-trip-retry'));
+    expect(refetch).toHaveBeenCalledOnce();
   });
 
   /**
@@ -318,6 +364,41 @@ describe('the viewer a website frames', () => {
 });
 
 describe('the conversation with the page that framed it', () => {
+  it('says it is listening the moment it can hear, once, and says nothing else with it', () => {
+    // This page is reached by a script loaded after the frame's own load event, so a framer that
+    // said hello when its document was ready and again when the frame had loaded has spoken twice
+    // to nobody — and a page that only ever learns its framer from a hello would then never
+    // announce the party. Reproduced with the snippet the share panel hands out: no ready reached
+    // the host until a hello was posted by hand after the page was up.
+    const { parent, sent, listening } = fakeParent();
+    const view = render(<PublicTripEmbedPage />);
+
+    expect(listening).toHaveLength(1);
+    // Addressed to nobody, because the framer is not known yet — so it carries nothing but the
+    // channel, the version and the word. Anything more on it would be volunteered to whoever is
+    // listening, which is what the address rule on every answer exists to refuse.
+    expect(listening[0].origin).toBe('*');
+    expect(Object.keys(listening[0].message).sort()).toEqual(['silexgis', 'type', 'v']);
+    expect(listening[0].message).toEqual({
+      silexgis: EMBED_CHANNEL,
+      v: EMBED_PROTOCOL,
+      type: 'listening',
+    });
+    // The party still waits for the hello the word is meant to draw.
+    expect(sent).toHaveLength(0);
+
+    // Once per page, not once per re-installation of the listener: the envelope landing rebuilds
+    // it, and the framer is the same document it was.
+    answer = { data: envelope(), isPending: false, error: null };
+    view.rerender(<PublicTripEmbedPage />);
+    expect(listening).toHaveLength(1);
+
+    deliver(parent, HOST, hello);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].message).toMatchObject({ type: 'ready' });
+    expect(sent[0].origin).toBe(HOST);
+  });
+
   it('answers a greeting with the party, addressed to the framer’s own origin', () => {
     const { parent, sent } = fakeParent();
     render(<PublicTripEmbedPage />);

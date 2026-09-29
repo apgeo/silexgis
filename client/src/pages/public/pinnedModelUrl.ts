@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 /**
  * Which drawing a delivery URL delivers, ignoring the signature that expires.
@@ -47,6 +47,13 @@ export function modelDeliveryIdentity(url: string): string {
  * a page whose model went missing for a minute keeps drawing what it had rather than blanking the
  * survey a family is watching.
  *
+ * <b>Decided while rendering, never a render late.</b> The pages branch on this answer: null is
+ * where they say there is no drawing for this trip. Settled in an effect it was null for the whole
+ * of the render in which an address first arrived — and the old trip's address for the render in
+ * which a different trip was chosen — so a frame in somebody's article could commit "there is no
+ * survey drawing" over a trip that has one. So the pin is state that is brought up to date in the
+ * render that sees the change, and the value returned is always the updated one.
+ *
  * @param modelUrl the address the latest envelope carried, or null when it carried no survey.
  * @param token the trip being followed. A different trip is a different page, pinned from scratch.
  */
@@ -54,20 +61,26 @@ export function usePinnedModelUrl(
   modelUrl: string | null | undefined,
   token: string | undefined,
 ): string | null {
-  const [pinned, setPinned] = useState<string | null>(null);
+  const [held, setHeld] = useState<{ token: string | undefined; url: string | null }>(() => ({
+    token,
+    url: modelUrl ?? null,
+  }));
 
-  useEffect(() => setPinned(null), [token]);
+  let next = held;
+  if (held.token !== token) {
+    next = { token, url: modelUrl ?? null };
+  } else if (
+    modelUrl !== null
+    && modelUrl !== undefined
+    && (held.url === null || modelDeliveryIdentity(held.url) !== modelDeliveryIdentity(modelUrl))
+  ) {
+    next = { token, url: modelUrl };
+  }
+  if (next !== held) {
+    // Stored during render, which React applies by rendering again before anything of this
+    // render is committed — the documented way to keep state in step with a changed prop.
+    setHeld(next);
+  }
 
-  useEffect(() => {
-    if (modelUrl === null || modelUrl === undefined) {
-      return;
-    }
-    setPinned((current) =>
-      current !== null && modelDeliveryIdentity(current) === modelDeliveryIdentity(modelUrl)
-        ? current
-        : modelUrl,
-    );
-  }, [modelUrl]);
-
-  return pinned;
+  return next.url;
 }

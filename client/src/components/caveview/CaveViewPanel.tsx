@@ -103,6 +103,16 @@ export interface CaveViewPanelProps {
    */
   trackedCavers?: readonly TrackedCaver[];
   /**
+   * How long a marker takes to move to its next station, in milliseconds; 0 places it.
+   *
+   * <b>A replay decides this, the live watch does not.</b> The viewer's own slide is right for a
+   * party re-read every half minute and wrong for a clock ticking five times a second: it lasts
+   * three ticks, so at speed every marker trails the moment on the clock, and a drag of the handle
+   * animates the party racing through the cave instead of placing it where it was. Absent means
+   * the viewer's own move time, which is what the live watch has always had.
+   */
+  markerMoveMs?: number;
+  /**
    * Told which stations the loaded model turns out to hold no node for.
    *
    * <b>Only this panel can answer it, and the surfaces that most need the answer are not in
@@ -279,6 +289,7 @@ export default function CaveViewPanel({
   onPartPick,
   surveyModelId,
   trackedCavers,
+  markerMoveMs,
   onUnplacedStationsChange,
   onStationsLoaded,
   toolbar = false,
@@ -454,6 +465,7 @@ export default function CaveViewPanel({
   useEffect(() => {
     let disposed = false;
     let ui: CaveViewUi | null = null;
+    let built: CaveViewer | null = null;
     setStatus('loading');
     setMissingPart(false);
     setOpenCaverId(null);
@@ -598,6 +610,7 @@ export default function CaveViewPanel({
       });
 
       ui = new cv2.CaveViewUI(viewer);
+      built = viewer;
       viewerRef.current = { viewer, ui };
       ui.loadCave(new File([blob], fileName));
     })().catch((error: unknown) => {
@@ -611,6 +624,18 @@ export default function CaveViewPanel({
       viewerRef.current = null;
       ui?.dispose();
       ui = null;
+      // A disposed viewer is asked to draw once more, and it throws. The load handed to it above
+      // is not awaited — nothing here can await it — so this panel is routinely pointed at another
+      // file while the last one is still parsing: every pick of a past trip and every way back on
+      // the public page re-keys it. The viewer's own progress dial goes on calling `renderView` on
+      // each progress event of that parse and once more half a second after it ends, against a
+      // renderer that `dispose()` has already nulled — an uncaught TypeError on the one surface
+      // strangers read with nobody watching its console. There is nothing left to draw, so the
+      // late asks are answered with nothing.
+      if (built !== null) {
+        built.renderView = () => {};
+        built = null;
+      }
     };
   }, [fileUrl, fileName]);
 
@@ -715,7 +740,12 @@ export default function CaveViewPanel({
       });
     }
 
-    drawnMarkersRef.current = syncLiveMarkers(viewer, drawn, wanted);
+    drawnMarkersRef.current = syncLiveMarkers(
+      viewer,
+      drawn,
+      wanted,
+      markerMoveMs === undefined ? undefined : { duration: markerMoveMs },
+    );
 
     // ---- And then ask the viewer what actually went onto the model ----
     //
@@ -752,7 +782,7 @@ export default function CaveViewPanel({
     // This cannot feed itself: the same set is answered when nothing was learned, and it is named
     // in no dependency list of this effect.
     setUnplacedStations((known) => stationsNotOnModel(known, viewer.getLiveMarkers()));
-  }, [trackedCavers, showMarkerTimes, status, t, i18n.language, today]);
+  }, [trackedCavers, markerMoveMs, showMarkerTimes, status, t, i18n.language, today]);
 
   // ---- Handing that answer to the surfaces outside this panel ----
   //
@@ -792,11 +822,27 @@ export default function CaveViewPanel({
   // not holding what was named is said, because an abandoned move — superseded by a second link
   // followed a moment later, or cancelled by somebody selecting something while the camera flew —
   // leaves the camera exactly where whoever was driving it wanted it.
+  //
+  // <b>Performed once per request, not once per model.</b> `status` is a dependency so that a
+  // request made while the model was still loading is performed the moment it is ready — but the
+  // same dependency fires again when this panel is pointed at another file and that one is ready,
+  // with the request object unchanged. A request is one ask about one drawing: flying a later
+  // drawing to it would move the camera to somewhere nobody asked for on that model, report a
+  // station name as missing from a survey it was never about, and tell whoever made the request
+  // a second time. So the last request performed is remembered and not performed again; a fresh
+  // object, which is how every caller asks, is always honoured.
+  const performedFocusRef = useRef<CaveViewFocusRequest | undefined>(undefined);
   useEffect(() => {
     const viewer = viewerRef.current?.viewer;
-    if (focusRequest === undefined || viewer === undefined || status !== 'ready') {
+    if (
+      focusRequest === undefined ||
+      viewer === undefined ||
+      status !== 'ready' ||
+      performedFocusRef.current === focusRequest
+    ) {
       return;
     }
+    performedFocusRef.current = focusRequest;
     let abandoned = false;
     setMissingPart(false);
     const moved =
@@ -990,7 +1036,7 @@ export default function CaveViewPanel({
         <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="caveview-loading" />
       )}
       {status === 'error' && (
-        <Alert type="error" showIcon message={t('caveview.loadError')} description={errorDetail} />
+        <Alert type="error" showIcon title={t('caveview.loadError')} description={errorDetail} />
       )}
       {missingPart && (
         <Alert
@@ -999,7 +1045,7 @@ export default function CaveViewPanel({
           showIcon
           closable
           onClose={() => setMissingPart(false)}
-          message={t('caveview.notInThisModel')}
+          title={t('caveview.notInThisModel')}
           data-testid="caveview-missing-part"
         />
       )}

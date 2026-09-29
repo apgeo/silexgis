@@ -10,15 +10,17 @@ import {
   type CSSProperties,
 } from 'react';
 import { HistoryOutlined } from '@ant-design/icons';
-import { Button, Drawer, Flex, Skeleton, Spin, Tabs, Typography, theme } from 'antd';
+import { Alert, Button, Drawer, Flex, Skeleton, Spin, Tabs, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
-import { usePublicPastTrips, usePublicTrip } from '../../api/hooks.ts';
+import { isSettledRefusal } from '../../api/client.ts';
+import { usePublicLiveTrips, usePublicPastTrips, usePublicTrip } from '../../api/hooks.ts';
 import CaveViewPanel, {
   type CaveViewFocusRequest,
 } from '../../components/caveview/CaveViewPanel.tsx';
 import { noStationsMissing } from '../../caveview/placedOnModel.ts';
 import { envelopeCrsLookup, publicTrackedCavers } from '../../caveview/publicTrackedCavers.ts';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { usePublishedStationMedia } from '../../caveview/useStationMedia.ts';
 import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { usePublishedSheets } from '../../rastermap/publishedSheets.ts';
@@ -26,12 +28,14 @@ import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import { followedStation, type PastFollow } from './pastTrackReplay.ts';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import PublicPastBar from './PublicPastBar.tsx';
+import PublicLiveTripList from './PublicLiveTripList.tsx';
 import PublicPastTripList from './PublicPastTripList.tsx';
 import {
   EMBED_CHANNEL,
   EMBED_PROTOCOL,
   EMBED_TRIP_LIVE,
   parseEmbedInbound,
+  type EmbedListeningMessage,
   type EmbedOutboundMessage,
   type EmbedReadyMessage,
 } from './publicTripEmbed.ts';
@@ -71,11 +75,21 @@ export default function PublicTripEmbedPage() {
   const { t } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const { token: antdToken } = theme.useToken();
-  // The refusal is not read separately here: a first read that failed leaves nothing to frame and
-  // is the same empty box as a trip with no drawing, and a later one that failed leaves what is
-  // already on screen alone.
-  const { data, isPending } = usePublicTrip(token);
+  // The refusal is read for two decisions and nothing else. With nothing in hand it decides
+  // whether the box says the link opens nothing or that the server could not be reached — the
+  // first is an answer, the second is a phone with no signal, and a frame asserting the first on
+  // the evidence of the second would be somebody's website calling its own embed dead. With an
+  // envelope in hand a later fault leaves the drawing alone, and only a refusal that is final is
+  // said at all, in one line, because from then on this frame is a picture of the past.
+  const { data, isPending, error, refetch } = usePublicTrip(token);
   const [focusRequest, setFocusRequest] = useState<CaveViewFocusRequest | undefined>();
+  /**
+   * How big the frame's own buttons are drawn: for a finger where a finger drives them, whatever
+   * the frame's width. The strip that plays a past trip sizes every one of its controls this way,
+   * and the button that opens the archive sits in the same strip's place — left at the mouse size,
+   * the one way into the cave's other trips was the smallest thing a phone reader could press.
+   */
+  const controlSize: 'large' | 'small' = useCoarsePointer() ? 'large' : 'small';
 
   /**
    * A place in the drawing that a link named alongside a trip, held until that trip is on screen.
@@ -108,6 +122,17 @@ export default function PublicTripEmbedPage() {
    */
   const [picker, setPicker] = useState(false);
   const pastTrips = usePublicPastTrips(token, picker);
+  // The other half of the cave's list, behind the same press: the parties being followed now,
+  // which the archive deliberately leaves out — the case this frame was built for is an
+  // expedition with two parties underground at once, and one of them must not be invisible.
+  const liveTrips = usePublicLiveTrips(token, picker);
+  /**
+   * Whether this link has been refused for good since the frame opened. The cave's lists are read
+   * with the same link, so while it is refused a refusal of either list may be nothing more than
+   * the link being over — and it arrives as exactly the answer an installation with its archive
+   * switched off gives. The lists are told, so that neither claims a reason it cannot know.
+   */
+  const linkEnded = error != null && isSettledRefusal(error);
 
   /**
    * What this frame is showing: the party now, or a past trip wound back to a moment.
@@ -156,8 +181,8 @@ export default function PublicTripEmbedPage() {
    * <b>Not the object, deliberately.</b> `past` is rebuilt every render, so a listener depending on
    * it would be torn down and stood up again five times a second while a replay plays — and a
    * message arriving in that gap is a link in somebody's article that did nothing. The four
-   * callbacks are stable and the span changes once per trip, which is what this listener actually
-   * cares about.
+   * callbacks are stable, and the span, the trip and whether its track is still in flight each
+   * change once per trip, which is what this listener actually cares about.
    */
   const {
     open: openPast,
@@ -166,6 +191,8 @@ export default function PublicTripEmbedPage() {
     setAt: setPastAt,
     span: pastSpan,
     engaged: pastEngaged,
+    tripLogId: pastTripLogId,
+    loading: pastLoading,
   } = past;
 
   const followStation = followedStation(cavers, past.follow);
@@ -174,6 +201,28 @@ export default function PublicTripEmbedPage() {
       setFocusRequest({ kind: 'station', ref: followStation });
     }
   }, [followStation]);
+  /**
+   * A request belongs to the trip it was made on, and is forgotten the moment that trip leaves.
+   *
+   * <b>Otherwise the last request is performed again on the next drawing, and answered again.</b>
+   * Requests here are only ever set — by a follow above, or by a link in the article — so a trip
+   * change left the last one standing while the survey under it changed, and the panel, which
+   * performs a request whenever a model finishes loading, flew the fresh drawing to a place of
+   * some other trip. For a request a link made that is worse than a wrong camera: it carries the
+   * article's callback, so the article was told `focused` a second time, for a link nobody had
+   * just pressed, about a survey the link was never written against.
+   *
+   * Forgotten while rendering rather than in an effect, on purpose: a state change made during a
+   * render is applied by rendering again at once, before anything of this render is committed, so
+   * the request is gone before the follow above, or the place held for this trip below, makes the
+   * next one — whatever order they are declared in.
+   */
+  const playingId = past.tripLogId;
+  const [requestedOn, setRequestedOn] = useState(playingId);
+  if (requestedOn !== playingId) {
+    setRequestedOn(playingId);
+    setFocusRequest(undefined);
+  }
 
   const crsLookup = useMemo(() => envelopeCrsLookup(model), [model]);
 
@@ -312,11 +361,18 @@ export default function PublicTripEmbedPage() {
    *
    * Both are held rather than derived because the conversation outlives any one render: a greeting
    * arrives while the envelope is still in flight, so the useful answer is the one sent *after*
-   * it lands, and there is no second greeting to hang that on — the host script says hello once
-   * per frame and then listens.
+   * it lands, and there is no later greeting to hang that on — the host script says hello until
+   * it is answered, and then listens.
    */
   const framerOrigin = useRef<string | null>(null);
   const announced = useRef<string | null>(null);
+  /**
+   * Whether this page has said it is listening, which it says once.
+   *
+   * The listener below is installed and taken down again as what it closes over changes, and the
+   * word is about the page being able to hear at all, not about any one installation of it.
+   */
+  const saidListening = useRef(false);
 
   /**
    * What the framer has been told, as a value that changes when the <em>statement</em> changes.
@@ -523,17 +579,31 @@ export default function PublicTripEmbedPage() {
       }
       if (askedAt !== null) {
         const asked = instantOf(askedAt);
-        // A moment only means something over a replay. On the live trip there is no clock to move,
-        // and answering `false` is what lets an article grey such a link out rather than offer one
-        // that does nothing.
-        if (asked === null || pastSpan === null) {
-          settled(false);
-          return;
-        }
-        setPastAt(Math.min(Math.max(asked, pastSpan.from), pastSpan.to));
-        if (kind === 'moment') {
-          settled(true);
-          return;
+        if (asked !== null && pastSpan === null && pastLoading && pastTripLogId !== null) {
+          // A replay whose track is still in flight: there is a clock, it just has no stretch to
+          // clamp into yet. Handed to the playback as the moment to open at — the same hold a
+          // trip link with a moment uses — so it is placed the instant the track lands, rather
+          // than refused and greyed out a second before it would have worked. Accepted the way
+          // that trip link is: the next announcement names the moment actually on screen.
+          openPast(pastTripLogId, { at: askedAt });
+          if (kind === 'moment') {
+            settled(true);
+            return;
+          }
+        } else {
+          // A moment only means something over a replay. On the live trip there is no clock to
+          // move, and answering `false` is what lets an article grey such a link out rather than
+          // offer one that does nothing. A trip that has landed with nothing to play has no
+          // clock either.
+          if (asked === null || pastSpan === null) {
+            settled(false);
+            return;
+          }
+          setPastAt(Math.min(Math.max(asked, pastSpan.from), pastSpan.to));
+          if (kind === 'moment') {
+            settled(true);
+            return;
+          }
         }
       }
 
@@ -558,6 +628,18 @@ export default function PublicTripEmbedPage() {
     };
 
     window.addEventListener('message', onMessage);
+    if (!saidListening.current) {
+      saidListening.current = true;
+      // The one thing said before the framer is known, and it is said *because* the framer is not
+      // known: this page is reached by a script loaded after the frame's own load event, so every
+      // hello the framer could say on its own has already been said to nobody. The word is posted
+      // to whoever framed the page — there is no origin to name yet — and carries nothing beyond
+      // the channel and the word itself: no party, no trip, nothing the address rule protects.
+      parent.postMessage(
+        { silexgis: EMBED_CHANNEL, v: EMBED_PROTOCOL, type: 'listening' } satisfies EmbedListeningMessage,
+        '*',
+      );
+    }
     return () => window.removeEventListener('message', onMessage);
   }, [
     announce,
@@ -569,6 +651,8 @@ export default function PublicTripEmbedPage() {
     setPastAt,
     pastSpan,
     pastEngaged,
+    pastTripLogId,
+    pastLoading,
   ]);
 
   // Antd's tokens reach the stylesheet as custom properties on the page's own root, so the rules
@@ -615,9 +699,48 @@ export default function PublicTripEmbedPage() {
   // Only when there is nothing to show. A poll that failed while an envelope is already in hand —
   // a phone that went through a tunnel — leaves the drawing and the party exactly where they were
   // rather than replacing somebody's website with an assertion that the link never existed.
+  if (data === undefined && error != null && !isSettledRefusal(error)) {
+    return (
+      <div className="public-trip-embed" style={palette} data-testid="public-trip-embed-unreachable">
+        <div className="public-trip-embed-failure">
+          <Flex vertical align="center" gap="small">
+            <Typography.Text type="secondary">{t('publicTrip.unreachableTitle')}</Typography.Text>
+            <Button
+              size={controlSize}
+              onClick={() => void refetch()}
+              data-testid="public-trip-retry"
+            >
+              {t('publicTrip.retry')}
+            </Button>
+          </Flex>
+        </div>
+      </div>
+    );
+  }
   if (data === undefined) {
     return failure(t('publicTrip.notFoundTitle'));
   }
+
+  /**
+   * The link's end, said once the server has said it.
+   *
+   * A share is taken back, or a publication's grace runs out, and the route answers 404 for good
+   * while this frame still holds the last envelope. The drawing stays — it is still the last true
+   * word — but a frame that went on looking live inside an article would be the one surface here
+   * that never tells its reader the trip's publication has ended. One banner line, above the
+   * strip, only for that final answer: a fault that may clear says nothing, as before.
+   */
+  const ended =
+    linkEnded ? (
+      <Alert
+        type="warning"
+        banner
+        showIcon
+        title={t('publicTrip.endedTitle')}
+        className="public-trip-embed-ended"
+        data-testid="public-trip-ended"
+      />
+    ) : null;
 
   /**
    * The archive, over the frame rather than beside it.
@@ -645,11 +768,22 @@ export default function PublicTripEmbedPage() {
       rootClassName="public-past-drawer"
       data-testid="public-past-drawer"
     >
+      <PublicLiveTripList
+        trips={liveTrips.data?.trips}
+        more={liveTrips.data?.more ?? false}
+        loading={liveTrips.isPending}
+        failed={liveTrips.isError}
+        refused={isSettledRefusal(liveTrips.error)}
+        linkEnded={linkEnded}
+        ownTripLogId={data.tripLogId}
+      />
       <PublicPastTripList
         trips={pastTrips.data?.trips}
         more={pastTrips.data?.more ?? false}
         loading={pastTrips.isPending}
         failed={pastTrips.isError}
+        refused={isSettledRefusal(pastTrips.error)}
+        linkEnded={linkEnded}
         playingId={past.tripLogId}
         onPlay={(tripLogId) => {
           past.open(tripLogId, { follow: null });
@@ -674,7 +808,7 @@ export default function PublicTripEmbedPage() {
   ) : (
     <div className="public-trip-embed-strip">
       <Button
-        size="small"
+        size={controlSize}
         icon={<HistoryOutlined />}
         onClick={() => setPicker(true)}
         data-testid="public-past-open"
@@ -698,6 +832,7 @@ export default function PublicTripEmbedPage() {
     return (
       <div className={frameClass} style={palette} data-testid="public-trip-embed">
         <div className="public-trip-embed-pending" data-testid="public-trip-embed-pending" />
+        {ended}
         {strip}
         {archive}
       </div>
@@ -718,6 +853,7 @@ export default function PublicTripEmbedPage() {
         <div className="public-trip-embed-failure">
           <Typography.Text type="secondary">{t('publicTrip.embedNoModel')}</Typography.Text>
         </div>
+        {ended}
         {strip}
         {archive}
       </div>
@@ -748,6 +884,9 @@ export default function PublicTripEmbedPage() {
                 // theirs.
                 height="100%"
                 trackedCavers={cavers}
+                // Placed at each moment of a replay while it is dragged or stepped, sliding one tick's
+                // worth while it plays — the viewer's own slide on the live party, as always.
+                markerMoveMs={past.markerMoveMs}
                 // The one thing this frame learns for itself. The list of people that would have
                 // said it is the article around the frame, so it leaves here on the message
                 // instead.
@@ -788,6 +927,7 @@ export default function PublicTripEmbedPage() {
           })),
         ]}
       />
+      {ended}
       {strip}
       {archive}
     </div>

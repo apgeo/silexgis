@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   EMBED_CHANNEL,
   EMBED_FOCUS_KINDS,
@@ -125,25 +125,58 @@ function hostPage(html: string) {
     });
   }
 
-  // The relay's own `window`: it keeps its registry on this and listens for messages on it.
-  const win = { addEventListener: () => {} } as unknown as Window;
+  // The relay's own `window`: it keeps its registry on this and listens for messages on it. What
+  // it listens with is kept, so a test can hand it what a frame posted back.
+  const listeners: ((event: { data: unknown; source: unknown; origin: string }) => void)[] = [];
+  const win = {
+    addEventListener: (type: string, listener: (typeof listeners)[number]) => {
+      if (type === 'message') listeners.push(listener);
+    },
+  } as unknown as Window;
   for (const script of Array.from(doc.querySelectorAll('script'))) {
     // The snippet is pasted as text and executed by a browser; running it any other way here
     // would be testing something this project does not hand out.
     new Function('window', 'document', script.textContent ?? '')(win, doc);
   }
+  // A document made this way is still "loading", and the first block on a page waits for the
+  // browser to say the article is ready before greeting anybody — a second block asks the first
+  // to greet at once, which is why a page with two blocks never needed this to be said here.
+  doc.dispatchEvent(new Event('DOMContentLoaded'));
 
   return {
     document: doc,
     sent,
     focuses: () => sent.filter((posted) => posted.message.type === 'focus'),
+    hellos: (frameId: string) =>
+      sent.filter((posted) => posted.frame === frameId && posted.message.type === 'hello').length,
     click(selector: string) {
       doc
         .querySelector(selector)!
         .dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     },
+    /** What the viewer inside a frame posted back, delivered as the browser would deliver it. */
+    receive(frameId: string, data: Record<string, unknown>) {
+      const frame = doc.getElementById(frameId) as HTMLIFrameElement;
+      for (const listener of listeners) {
+        listener({
+          data,
+          source: frame.contentWindow,
+          origin: frame.getAttribute('data-silexgis-embed')!,
+        });
+      }
+    },
   };
 }
+
+// The relay keeps greeting a frame on a timer until it is answered. Held still here so that no
+// test's count of greetings depends on how long the test took, and so nothing goes on knocking on
+// a page that has been thrown away.
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const idA = embedFrameId(TOKEN_A);
 const idB = embedFrameId(TOKEN_B);
@@ -233,6 +266,76 @@ describe('an article that frames more than one trip', () => {
     page.click('#link-none');
 
     expect(page.focuses()).toHaveLength(0);
+  });
+});
+
+describe('greeting a viewer that cannot hear yet', () => {
+  // The document inside the frame installs its listener from a script it loads after its own
+  // load event, so a hello said when the article was ready and one said again when the frame had
+  // loaded both arrived before anybody could hear — and the viewer, which only ever learns who
+  // framed it from a hello, never announced the party. Reproduced with the block the share panel
+  // hands out: no ready reached the host until a hello was posted by hand after the page was up.
+  const ready = { silexgis: EMBED_CHANNEL, v: EMBED_PROTOCOL, type: 'ready', loaded: true, party: [] };
+  const listening = { silexgis: EMBED_CHANNEL, v: EMBED_PROTOCOL, type: 'listening' };
+
+  it('says hello again until the viewer answers, and then stops', () => {
+    const page = hostPage(snippet({ token: TOKEN_A }));
+    expect(page.hellos(idA)).toBe(1);
+
+    vi.advanceTimersByTime(500);
+    expect(page.hellos(idA)).toBe(2);
+    vi.advanceTimersByTime(500);
+    expect(page.hellos(idA)).toBe(3);
+
+    page.receive(idA, ready);
+    vi.advanceTimersByTime(5_000);
+    expect(page.hellos(idA)).toBe(3);
+  });
+
+  it('answers a viewer that says it is listening at once', () => {
+    const page = hostPage(snippet({ token: TOKEN_A }));
+    expect(page.hellos(idA)).toBe(1);
+
+    page.receive(idA, listening);
+    expect(page.hellos(idA)).toBe(2);
+    // And the article hears the word too, as it hears every message from the viewer.
+    page.receive(idA, ready);
+    vi.advanceTimersByTime(5_000);
+    expect(page.hellos(idA)).toBe(2);
+  });
+
+  it('gives up after a minute rather than knocking forever', () => {
+    const page = hostPage(snippet({ token: TOKEN_A }));
+    vi.advanceTimersByTime(61_000);
+    const said = page.hellos(idA);
+    expect(said).toBeGreaterThan(1);
+
+    vi.advanceTimersByTime(60_000);
+    expect(page.hellos(idA)).toBe(said);
+  });
+
+  it('starts over when the frame loads a new document', () => {
+    const page = hostPage(snippet({ token: TOKEN_A }));
+    page.receive(idA, ready);
+    vi.advanceTimersByTime(5_000);
+    const answered = page.hellos(idA);
+
+    // A document that just arrived has heard nothing, whatever the one before it answered.
+    page.document.getElementById(idA)!.dispatchEvent(new Event('load'));
+    expect(page.hellos(idA)).toBe(answered + 1);
+    vi.advanceTimersByTime(500);
+    expect(page.hellos(idA)).toBe(answered + 2);
+  });
+
+  it('answers only the frame that spoke, and only on the origin it was told', () => {
+    const page = twoEmbeds();
+    page.receive(idB, listening);
+
+    expect(page.hellos(idB)).toBe(2);
+    expect(page.hellos(idA)).toBe(1);
+    for (const posted of page.sent) {
+      expect(posted.origin).toBe('https://caves.example.org');
+    }
   });
 });
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { usePublicPastTrack, type PublicPastTrack, type PublicTripEnvelope } from '../../api/hooks.ts';
 import { instantOf } from './publicTripParty.ts';
 import {
@@ -10,6 +10,11 @@ import {
   type PastFollow,
 } from './pastTrackReplay.ts';
 import type { ReplayWindow } from '../../caveview/trackingReplay.ts';
+import {
+  replayMarkerMoveMs,
+  useReplayClock,
+  type ReplayClock,
+} from '../../caveview/useReplayClock.ts';
 
 /**
  * What a visitor asked to be shown of a cave's past, held in one place for the two surfaces that
@@ -54,6 +59,22 @@ export interface PastTripPlayback {
   open(tripLogId: string, options?: { at?: string | null; follow?: PastFollow | null }): void;
   /** Puts the live party back, and forgets everything about the past that was on screen. */
   backToNow(): void;
+  /**
+   * The clock the replay runs on — play, pause, speed and the handle.
+   *
+   * <b>Held here rather than in the strip that draws its controls</b>, because the drawing beside
+   * the strip needs one of its answers in the same render the moment changes: whether the clock is
+   * playing is what decides whether the markers slide to the new moment or are placed at it, and a
+   * value reported upwards from the strip after it rendered arrives one render late — which is
+   * exactly the render a drag of the handle happens in.
+   */
+  transport: ReplayClock;
+  /**
+   * How long each marker move takes on the drawing, in milliseconds: undefined while the live
+   * party is on screen (the viewer's own slide, for a party re-read every half minute), a short
+   * slide while the replay plays, and 0 — placed, not animated — for every other move.
+   */
+  markerMoveMs: number | undefined;
 }
 
 export function usePastTripPlayback(token: string | undefined): PastTripPlayback {
@@ -69,9 +90,30 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
    * until the track lands.
    */
   const [pendingAt, setPendingAt] = useState<number | null>(null);
+  // The trip on screen as of the last call, for `open` to decide against without reading state
+  // from inside an updater: an updater runs twice under strict rendering, and a decision made
+  // there is made twice with side effects each time.
+  const tripRef = useRef<string | null>(null);
 
   const query = usePublicPastTrack(token, tripLogId ?? undefined);
   const track = query.data;
+  const failed = tripLogId !== null && query.isError;
+
+  /**
+   * A refused trip donates its moment to nobody.
+   *
+   * A link names a trip and an instant; the trip cannot be read — past its retention, taken back,
+   * a placeholder id left in a snippet — and the reader picks another trip from the list. The
+   * instant held for the first trip must not be waiting for the second: clamped into a trip years
+   * away it lands at the far end of the rail, with everybody out, which reads as a replay that
+   * has nothing to show. `open` already forgets it on a change of trip; this forgets it the moment
+   * the trip it was asked for has answered that it cannot be played.
+   */
+  useEffect(() => {
+    if (failed) {
+      setPendingAt(null);
+    }
+  }, [failed]);
 
   const span = useMemo(() => (track === undefined ? null : pastReplayWindow(track)), [track]);
   const moments = useMemo(() => (track === undefined ? [] : pastReportMoments(track)), [track]);
@@ -126,32 +168,65 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
     [track],
   );
 
+  /**
+   * The trip on screen and the follow rule that goes with its track, as of the last render — for
+   * `open` to reach without depending on them.
+   *
+   * `open` has to stay one function for the life of the page: the followed page re-applies its
+   * address whenever `open` changes, and one that changed with every track would send a reader who
+   * pressed "back to now" straight back into the past by their own URL. The trip is held beside the
+   * rule so that a rule built on one trip's track is never applied to a follow asked of another.
+   */
+  const playingRef = useRef<{ tripLogId: string | null; setFollow: typeof setFollow }>({
+    tripLogId: null,
+    setFollow,
+  });
+  // Written as the render commits rather than after it paints, so that a message arriving in
+  // between is never decided against the render before.
+  useLayoutEffect(() => {
+    playingRef.current = { tripLogId, setFollow };
+  }, [tripLogId, setFollow]);
+
   const open = useCallback(
     (chosen: string, options?: { at?: string | null; follow?: PastFollow | null }) => {
-      setTripLogId((current) => {
+      const changed = tripRef.current !== chosen;
+      tripRef.current = chosen;
+      setTripLogId(chosen);
+      const asked = instantOf(options?.at);
+      if (changed) {
+        // A different trip starts from its own opening rule, and any moment still held for the
+        // trip before it is dropped with that trip: an instant asked for one trip is not an
+        // instant in another, and clamped into one it is the end of the rail.
+        setAt(null);
+        setPendingAt(asked);
+      } else if (asked !== null) {
         // Re-opening the trip already playing keeps its clock where the reader left it unless the
         // caller named a moment: a link that says "follow the survey team" should not rewind.
-        if (current !== chosen) {
-          setAt(null);
-        }
-        return chosen;
-      });
-      const asked = instantOf(options?.at);
-      if (asked !== null) {
         setPendingAt(asked);
         setAt(null);
       }
       if (options?.follow !== undefined) {
-        // Written straight rather than through the wrapper above: the track for the trip being
-        // opened has not been read yet, so there is no moment to move to — the opening rule in the
-        // effect above is what places the clock for a follow that arrives with its trip.
-        setFollowState(options.follow);
+        const playing = playingRef.current;
+        if (!changed && asked === null && playing.tripLogId === chosen) {
+          // The trip already on screen, with its clock left where the reader put it: a follow
+          // named here is the same act as choosing whom to follow on the strip, and moves the
+          // clock by the same rule — forwards to where that person first appears, when the replay
+          // stands before it. Written straight, it would answer a link naming the trip and a
+          // caver with nothing visible, while the same link without the trip moved the clock.
+          playing.setFollow(options.follow);
+        } else {
+          // A trip being opened, or a clock being re-placed by a moment the caller named: there is
+          // no track to move against yet, or the clock is about to be placed anyway — the opening
+          // rule in the effect above places it for a follow that arrives with its trip.
+          setFollowState(options.follow);
+        }
       }
     },
     [],
   );
 
   const backToNow = useCallback(() => {
+    tripRef.current = null;
     setTripLogId(null);
     setFollowState(null);
     setAt(null);
@@ -163,12 +238,15 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
     [track, at],
   );
 
+  const engaged = tripLogId !== null;
+  const transport = useReplayClock({ span, at, onAtChange: setAt, engaged });
+
   return {
     tripLogId,
-    engaged: tripLogId !== null,
+    engaged,
     track,
     loading: tripLogId !== null && query.isPending,
-    failed: tripLogId !== null && query.isError,
+    failed,
     span,
     moments,
     at,
@@ -178,5 +256,7 @@ export function usePastTripPlayback(token: string | undefined): PastTripPlayback
     setFollow,
     open,
     backToNow,
+    transport,
+    markerMoveMs: engaged ? replayMarkerMoveMs(transport.playing) : undefined,
   };
 }

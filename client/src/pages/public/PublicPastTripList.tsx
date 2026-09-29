@@ -11,6 +11,26 @@ export interface PublicPastTripListProps {
   more: boolean;
   loading: boolean;
   failed: boolean;
+  /**
+   * True when the failure was the server's own final answer rather than a request that did not
+   * land. An installation can switch its archive off, and then this list is refused exactly as an
+   * unknown link is refused — a settled refusal, which no retry will ever change. Told apart from
+   * a dropped request so that the reader is not invited to try again something that will never
+   * answer.
+   */
+  refused?: boolean;
+  /**
+   * True when this link's own read has been refused for good as well — the page is showing the
+   * last envelope it was given under a notice that the link has stopped answering.
+   *
+   * <b>Then a refused list is not evidence that the archive is switched off.</b> The archive
+   * outlives a trip's live window, so a link whose party has merely gone past its grace still opens
+   * the cave's earlier trips; one that has been taken back or has run out is refused for them too,
+   * with the very answer an installation whose archive is off gives. The page cannot tell those
+   * apart, so the list must not claim either one — and it must not invite another try, which will
+   * be refused the same way.
+   */
+  linkEnded?: boolean;
   /** Which row is playing, so the list says which one the drawing above is showing. */
   playingId: string | null;
   onPlay(tripLogId: string): void;
@@ -41,13 +61,40 @@ export default function PublicPastTripList({
   more,
   loading,
   failed,
+  refused = false,
+  linkEnded = false,
   playingId,
   onPlay,
 }: PublicPastTripListProps) {
   const { t, i18n } = useTranslation();
 
   if (failed) {
-    return (
+    // Failures with different honest sentences. A refusal the server settled while the link itself
+    // still answers means the archive is not offered on this installation, and is said as that, in
+    // plain words and without a way to try again. The same refusal on a link that has stopped
+    // answering could be either the link being over or the archive being off, so it says only
+    // what is certain. A request that did not land keeps the invitation, because that one can
+    // clear.
+    if (refused && linkEnded) {
+      return (
+        <Alert
+          type="info"
+          showIcon
+          title={t('publicTrip.past.listLinkEndedTitle')}
+          description={t('publicTrip.past.listLinkEndedBody')}
+          data-testid="public-past-link-ended"
+        />
+      );
+    }
+    return refused ? (
+      <Alert
+        type="info"
+        showIcon
+        title={t('publicTrip.past.listNotOfferedTitle')}
+        description={t('publicTrip.past.listNotOfferedBody')}
+        data-testid="public-past-not-offered"
+      />
+    ) : (
       <Alert
         type="warning"
         showIcon

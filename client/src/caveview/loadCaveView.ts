@@ -401,6 +401,15 @@ export interface CaveViewer extends CaveViewLayers {
   /** Whether a capture session is open. */
   readonly capturing: boolean;
   /**
+   * Draws the view once.
+   *
+   * An own property of each instance, and the viewer's own progress dial reaches it through the
+   * property: on every progress event of a load and on a timer half a second after the load ends —
+   * including after `dispose()`, when the renderer it would draw with has been nulled and the call
+   * throws. A host that disposes a viewer mid-load replaces it with a no-op for that reason.
+   */
+  renderView(): void;
+  /**
    * Sizes the drawing surface to its container as it is now — what a window `resize` event does,
    * for this viewer alone. A container restyled without it keeps drawing at its old size, stretched.
    * During a capture session the resize is carried out when the session ends.

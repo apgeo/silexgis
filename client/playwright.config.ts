@@ -53,6 +53,13 @@ const PHONE_ONLY_SPECS = [
   // desktop-too because the phone IS the case: this is the one surface of this application whose
   // reader holds no account and is not a caver, and its layout is designed at 360px.
   /(^|\/)public-trip-mobile\.spec\.ts$/,
+  // The same link's archive of past trips under a finger. The desktop spec that stands a real
+  // archive up sets a 360px viewport but keeps its mouse, so the finger-sized branch of every
+  // control on the replay strip is only ever exercised here.
+  /(^|\/)public-trip-past-mobile\.spec\.ts$/,
+  // Correcting, importing and reporting by place under a finger: the log, the sheet's preview and
+  // the report card each have a phone layout of their own, and only a phone profile draws them.
+  /(^|\/)trip-tracking-writes-mobile\.spec\.ts$/,
 ];
 
 export default defineConfig({

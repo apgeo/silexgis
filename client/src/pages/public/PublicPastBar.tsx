@@ -20,11 +20,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { TripTrackingState } from '../../api/hooks.ts';
 import { trackedCaverTeams, type TrackedCaver } from '../../caveview/trackedCavers.ts';
-import {
-  COARSE_SLIDER,
-  REPLAY_SPEEDS,
-  useReplayClock,
-} from '../../caveview/useReplayClock.ts';
+import { COARSE_SLIDER, REPLAY_SPEEDS } from '../../caveview/useReplayClock.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { followedName, momentAfter, momentBefore, type PastFollow } from './pastTrackReplay.ts';
@@ -54,9 +50,10 @@ export interface PublicPastBarProps {
   /**
    * The party at the moment on the clock, as the drawings are holding it.
    *
-   * Handed in rather than folded again here: the words this strip prints for a followed team or
-   * caver have to be the very words on the marker beside them, and the only way to guarantee that
-   * is to read the same array.
+   * Handed in rather than folded again here, and read for one thing: whether anybody is outside
+   * every team at this moment, which is the only time "not in a team" is a party the camera can
+   * be asked to keep up with. Everything else the follow control offers comes from the trip's own
+   * roster, so what it says matches the banner and the markers by construction.
    */
   cavers: readonly TrackedCaver[];
   /** The frame inside somebody's article, where every line costs a share of a small box. */
@@ -88,14 +85,9 @@ export default function PublicPastBar({
   const { t, i18n } = useTranslation();
   const coarse = useCoarsePointer();
   const narrow = useIsMobile();
-  const { span, at, moments, track } = playback;
-
-  const transport = useReplayClock({
-    span,
-    at,
-    onAtChange: playback.setAt,
-    engaged: playback.engaged,
-  });
+  // The clock belongs to the playback, not to this strip: the drawing beside it reads whether it
+  // is playing to decide how the markers move, in the same render the moment changes.
+  const { span, at, moments, track, transport } = playback;
 
   // Held still across renders: a fresh object here is a fresh theme five times a second while the
   // replay plays, and every one of those has the whole slider's styles derived again.
@@ -144,35 +136,67 @@ export default function PublicPastBar({
    */
   const controlSize = coarse ? 'large' : 'small';
 
-  /**
-   * Whom the replay can be asked to keep up with: the whole party, one of its teams, or one
-   * person.
-   *
-   * <b>Built from the party at the moment on screen, which is the only party there is.</b> A team
-   * nobody had been put into yet simply is not offered at that moment, and appears the moment a
-   * report names it — which is the same truth the drawing beside this is telling. Offering the
-   * trip's eventual teams from the start would be offering a reader a team that did not exist yet.
-   */
-  const followOptions = useMemo(() => {
-    const teams = trackedCaverTeams(cavers).map((team) => ({
-      value: `team:${team.teamId ?? ''}`,
-      label: team.title ?? t('publicTrip.noTeam'),
-    }));
-    const people = cavers.map((caver) => ({
-      value: `caver:${caver.caverId}`,
-      label: caver.name,
-    }));
-    return [
-      { value: 'none', label: t('publicTrip.past.followNobody') },
-      ...teams,
-      ...people,
-    ];
-  }, [cavers, t]);
-
   const followValue =
     playback.follow === null
       ? 'none'
       : `${playback.follow.kind}:${playback.follow.id ?? ''}`;
+
+  // The words for whoever is being followed, read off the trip's own roster rather than off the
+  // moment — see the function, where the difference is the reason it is written that way.
+  const followName =
+    track === undefined
+      ? null
+      : followedName(track, playback.follow, {
+          unteamed: t('publicTrip.noTeam'),
+          unnamed: (ordinal) => t('publicTrip.caverOrdinal', { ordinal }),
+        });
+
+  /**
+   * Whom the replay can be asked to keep up with: the whole party, one of its teams, or one
+   * person.
+   *
+   * <b>Built from the trip's own roster, not from the party at the moment on screen.</b> A replay
+   * opens at the trip's beginning, where nobody has been reported into any team yet; a control
+   * that offered only the parties reported by that moment would offer nobody at all, on the one
+   * screen whose reason to exist is "show me the survey team". Choosing a party that has not
+   * appeared yet is the ordinary case, and `setFollow` answers it by moving the clock to where
+   * they first appear. Every team and every person the trip had is therefore always offered, in
+   * the words the banner and the markers use for them.
+   *
+   * <b>And whoever is being followed is always among the options, named.</b> A link can name a
+   * team before any report placed it, or a person beyond the roster; the control draws a value it
+   * has no option for as the raw value, which for a team is its identifier. So a follow the roster
+   * does not offer is appended as one more option, under its name where the roster knows one and
+   * under a plain "not in this trip" where it does not — never as an identifier on a phone.
+   */
+  const followOptions = useMemo(() => {
+    const teams = (track?.teams ?? []).map((team) => ({
+      value: `team:${team.id}`,
+      label: team.title,
+    }));
+    // "Not in a team" is a party only where somebody is in it at the moment on screen: the roster
+    // has no entry for it, and offered always it would be a choice that follows nobody most of
+    // the time.
+    if (trackedCaverTeams(cavers).some((team) => team.teamId === null)) {
+      teams.push({ value: 'team:', label: t('publicTrip.noTeam') });
+    }
+    const people = (track?.participants ?? []).map((participant) => ({
+      value: `caver:${participant.ordinal}`,
+      label: participant.label ?? t('publicTrip.caverOrdinal', { ordinal: participant.ordinal }),
+    }));
+    const options = [
+      { value: 'none', label: t('publicTrip.past.followNobody') },
+      ...teams,
+      ...people,
+    ];
+    if (!options.some((option) => option.value === followValue)) {
+      options.push({
+        value: followValue,
+        label: followName ?? t('publicTrip.past.followNotInTrip'),
+      });
+    }
+    return options;
+  }, [track, cavers, followValue, followName, t]);
 
   const onFollowChange = (value: string) => {
     if (value === 'none') {
@@ -186,16 +210,6 @@ export default function PublicPastBar({
         : { kind: 'caver', id };
     playback.setFollow(follow);
   };
-
-  // The words for whoever is being followed, read off the trip's own roster rather than off the
-  // moment — see the function, where the difference is the reason it is written that way.
-  const followName =
-    track === undefined
-      ? null
-      : followedName(track, playback.follow, {
-          unteamed: t('publicTrip.noTeam'),
-          unnamed: (ordinal) => t('publicTrip.caverOrdinal', { ordinal }),
-        });
 
   const live = liveState === 'armed';
   const leave = (
@@ -226,22 +240,31 @@ export default function PublicPastBar({
                 states: which trip and when it was are what the reader must not be able to miss,
                 and they are said in full on both surfaces. What the frame drops is the paragraph
                 spelling out what a replay is — in a box a club may have made 260px tall, that
-                paragraph is the drawing's height. */}
-            {track === undefined
-              ? t('publicTrip.past.bannerLoading')
-              : t(compact ? 'publicTrip.past.bannerWhatShort' : 'publicTrip.past.bannerWhat', {
+                paragraph is the drawing's height.
+
+                A trip that could not be read has no name to give and is not being read either:
+                the body below says it failed, so this line says only that it is a past trip —
+                "reading this trip" above "this trip could not be read" is a strip that both is
+                and is not reading it, and for a trip past retention that state is permanent. */}
+            {track !== undefined
+              ? t(compact ? 'publicTrip.past.bannerWhatShort' : 'publicTrip.past.bannerWhat', {
                   title: track.title,
                   dates,
-                })}
+                })
+              : playback.failed
+                ? t('publicTrip.past.unknownTrip')
+                : t('publicTrip.past.bannerLoading')}
           </div>
           {/* Said only where it is true, and never as the reason the view is in the past: a reader
               can follow nobody and still be looking at a past trip. */}
           {followName !== null && (
             <div data-testid="public-past-banner-following">
               {t('publicTrip.past.following', { who: followName })}{' '}
+              {/* A link in a line of prose, and still a target a finger has to hit: sized on the
+                  pointer like every other control on this strip. */}
               <Button
                 type="link"
-                size="small"
+                size={controlSize}
                 onClick={() => playback.setFollow(null)}
                 data-testid="public-past-unfollow"
               >
@@ -271,12 +294,31 @@ export default function PublicPastBar({
     />
   );
 
-  /** The moment in words: the whole stamp where there is room for it, the time of day where not. */
+  /**
+   * Whether the stretch being played runs past a local midnight.
+   *
+   * A camp trip is measured over two or three days, and on one of those a time of day alone on
+   * the clock says nothing about which day the party is being shown on: noon on the first day and
+   * noon on the second print identically, and the "reported 3 hours ago" beside every name is
+   * measured from that ambiguous moment. Decided on the calendar day the reader's browser is in,
+   * since that is the day the clock prints.
+   */
+  const multiDay =
+    span !== null
+    && new Date(span.from).toLocaleDateString(i18n.language)
+      !== new Date(span.to).toLocaleDateString(i18n.language);
+
+  /**
+   * The moment in words: the whole stamp where there is room for it, the time of day where not —
+   * and the day beside it, however little room there is, once the trip spans more than one.
+   */
   const clock = (value: number) =>
     new Date(value).toLocaleString(
       i18n.language,
       narrow || compact
-        ? { hour: '2-digit', minute: '2-digit' }
+        ? multiDay
+          ? { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }
+          : { hour: '2-digit', minute: '2-digit' }
         : { dateStyle: 'short', timeStyle: 'short' },
     );
 

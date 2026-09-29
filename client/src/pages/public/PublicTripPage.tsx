@@ -1,15 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import {
   EyeInvisibleOutlined,
   HistoryOutlined,
   QuestionCircleOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { Alert, Card, Collapse, Flex, Result, Skeleton, Spin, Tabs, Tag, Typography, theme } from 'antd';
+import { Alert, Button, Card, Collapse, Flex, Result, Skeleton, Spin, Tabs, Tag, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { isSettledRefusal } from '../../api/client.ts';
 import {
+  usePublicLiveTrips,
   usePublicPastTrips,
   usePublicTrip,
   type PublicTripParticipant,
@@ -24,9 +36,10 @@ import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { useIsMobile } from '../../hooks/useIsMobile.ts';
 import { usePublishedSheets } from '../../rastermap/publishedSheets.ts';
 import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
-import { followedStation } from './pastTrackReplay.ts';
+import { followedStation, type PastFollow } from './pastTrackReplay.ts';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import PublicPastBar from './PublicPastBar.tsx';
+import PublicLiveTripList from './PublicLiveTripList.tsx';
 import PublicPastTripList from './PublicPastTripList.tsx';
 import {
   partyByTeam,
@@ -77,7 +90,7 @@ export default function PublicTripPage() {
   const { token } = useParams<{ token: string }>();
   const narrow = useIsMobile();
   const { token: antdToken } = theme.useToken();
-  const { data, isPending, error } = usePublicTrip(token);
+  const { data, isPending, error, refetch } = usePublicTrip(token);
 
   /**
    * The cave's past, and which of it this reader has asked to see.
@@ -200,6 +213,28 @@ export default function PublicTripPage() {
       setFocusRequest({ kind: 'station', ref: followStation });
     }
   }, [followStation]);
+  /**
+   * A request belongs to the trip it was made on, and is forgotten the moment that trip leaves.
+   *
+   * <b>Otherwise the last thing a follow asked for is done again on the next drawing.</b> The
+   * request above is only ever set, so leaving the past — or opening another trip — left it
+   * standing while the survey under it changed: a past trip's survey is its own, so the way back
+   * to the live party loads the live survey, and the panel, which performs a request whenever a
+   * model finishes loading, flew the fresh drawing to where a party of some other year had been —
+   * or reported "not in this model" about a station name that survey never had.
+   *
+   * Forgotten while rendering rather than in an effect, on purpose: a state change made during a
+   * render is applied by rendering again at once, before anything of this render is committed, so
+   * the request is gone before the follow above can make the next one. A link that opens a trip
+   * and follows a party in one press therefore ends with that party's request and nothing older,
+   * whatever order the two were declared in.
+   */
+  const playingId = past.tripLogId;
+  const [requestedOn, setRequestedOn] = useState(playingId);
+  if (requestedOn !== playingId) {
+    setRequestedOn(playingId);
+    setFocusRequest(undefined);
+  }
 
   /**
    * Whether the archive section stands open, and therefore whether its list has been read at all.
@@ -215,11 +250,65 @@ export default function PublicTripPage() {
     }
   }, [past.engaged]);
   const pastTrips = usePublicPastTrips(token, pastOpen);
+  // The other half of the cave's list, behind the same press: the parties being followed now,
+  // which the archive deliberately leaves out. Without it a second party of the same expedition
+  // is invisible from this page, and a trip whose watch has just closed is in neither list.
+  const liveTrips = usePublicLiveTrips(token, pastOpen);
+  /**
+   * Whether this link has been refused for good since the page opened. The cave's lists are read
+   * with the same link, so while it is refused a refusal of either list may be nothing more than
+   * the link being over — and it arrives as exactly the answer an installation with its archive
+   * switched off gives. The lists are told, so that neither claims a reason it cannot know.
+   */
+  const linkEnded = error != null && isSettledRefusal(error);
+
+  /**
+   * Bringing the statement that this is the past to where the reader is looking.
+   *
+   * <b>The picker is the last thing on this page and the strip is the first.</b> On a phone, with
+   * a party of eight between them, a row is pressed a screen or more below where the banner, the
+   * way back and the transport mount — and the only visible answer to the press was the row's own
+   * tag turning to "Playing". A reader had to know to scroll up to find out what had happened;
+   * a screen reader was told, because the banner is an alert, and a sighted reader was not. So a
+   * press in the picker is followed, once the strip is on the page, by the strip being brought
+   * to the top of the viewport, where the banner names the trip and the controls are under it.
+   *
+   * Counted rather than keyed on the trip, because pressing the row already playing is a press
+   * too. And only a press: a link that arrives already playing opens at the top of the page in any
+   * case, and a page that moved itself whenever the trip changed would fight a reader who is
+   * scrubbing.
+   *
+   * <b>Not at the press, but once the replay has drawn its body.</b> In the render the press
+   * causes, the trip's counts, survey and party are not there yet — they need the track and a
+   * moment on the clock — so the page is briefly only the title, the strip and the list. Scrolled
+   * then, the strip is already at the top of a page too short to scroll, and when the body arrives
+   * a moment later the browser's scroll anchoring keeps the pressed row where it was on the screen,
+   * which carries the page straight back down to the bottom: the strip ends up out of sight above
+   * after all. So the press is remembered, and answered in the first layout where the replay has
+   * settled what it draws — a moment to show, a trip that could not be read, or one with nothing
+   * to play — and before that layout is painted, so the reader never sees the page jump twice.
+   */
+  const pastBarRef = useRef<HTMLDivElement>(null);
+  const [picked, setPicked] = useState(0);
+  /** The trip a press asked to be brought into view, until the page has done so. */
+  const scrollOwedFor = useRef<string | null>(null);
+  const pastSettled =
+    past.engaged && !past.loading && (past.envelope !== null || past.failed || past.span === null);
+  useLayoutEffect(() => {
+    if (scrollOwedFor.current === null || scrollOwedFor.current !== past.tripLogId || !pastSettled) {
+      return;
+    }
+    scrollOwedFor.current = null;
+    // Optional because a renderer that lays nothing out has no such method.
+    pastBarRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [picked, pastSettled, past.tripLogId]);
 
   /** Choosing a trip: play it, and write it into the address so the view can be sent to somebody. */
   const play = (tripLogId: string) => {
     past.open(tripLogId, { follow: null });
     setSearch(writePastLink(search, tripLogId, null), { replace: true });
+    scrollOwedFor.current = tripLogId;
+    setPicked((count) => count + 1);
   };
 
   /**
@@ -232,8 +321,29 @@ export default function PublicTripPage() {
    * the reader's history to go back to.
    */
   const leavePast = () => {
+    scrollOwedFor.current = null;
     past.backToNow();
     setSearch(writePastLink(search, null, null), { replace: true });
+  };
+
+  /**
+   * Choosing whom to keep up with, address included.
+   *
+   * <b>The address is what a reader copies to send the view on, so it has to say who is followed
+   * as well as which trip.</b> A reader who follows the survey team and pastes the bar into a
+   * message otherwise sends a link that opens the trip following nobody — while the same link with
+   * the team written on it, which this page reads, does what they meant. `replace`, because a
+   * change of whom to follow is a change of the view and not a place in the reader's history.
+   *
+   * The address being rewritten sends the page back through its own link reading, which asks for
+   * the same follow of the same trip again; the playback answers a follow it already holds by
+   * doing nothing more, so the round trip moves neither the clock nor the camera.
+   */
+  const followPast = (follow: PastFollow | null) => {
+    past.setFollow(follow);
+    if (past.tripLogId !== null) {
+      setSearch(writePastLink(search, past.tripLogId, follow), { replace: true });
+    }
   };
 
   /**
@@ -294,6 +404,31 @@ export default function PublicTripPage() {
   // next poll, and on evidence that says no such thing. The envelope already in hand is still
   // the last true word about where everybody was; it stays on screen, under a notice saying it
   // has stopped being refreshed.
+  //
+  // And with nothing in hand the same distinction still has to be kept. A first read that failed
+  // because the phone had no signal is not an answer about the link, and a page asserting that the
+  // link "may never have existed" on that evidence would be telling a family something false. So
+  // a fault that may clear is said as one, with the way to try again; only a refusal the server
+  // actually gave — and every unusable link gives the same one — is drawn as nothing to show.
+  if (data === undefined && error != null && !isSettledRefusal(error)) {
+    return (
+      <Flex align="center" justify="center" style={{ minHeight: '100dvh', padding: 16 }}>
+        <Card style={{ maxWidth: 520, width: '100%' }}>
+          <Result
+            status="warning"
+            title={t('publicTrip.unreachableTitle')}
+            subTitle={t('publicTrip.unreachableBody')}
+            extra={
+              <Button type="primary" onClick={() => void refetch()} data-testid="public-trip-retry">
+                {t('publicTrip.retry')}
+              </Button>
+            }
+            data-testid="public-trip-unreachable"
+          />
+        </Card>
+      </Flex>
+    );
+  }
   if (data === undefined) {
     return (
       <Flex align="center" justify="center" style={{ minHeight: '100dvh', padding: 16 }}>
@@ -507,13 +642,16 @@ export default function PublicTripPage() {
       </header>
 
       <main className="public-trip-body">
-        {/* First thing under the title, and it stays there for as long as the past is on screen. */}
+        {/* First thing under the title, and it stays there for as long as the past is on screen.
+            Wrapped so a press in the picker at the bottom of the page has something to scroll to. */}
         {past.engaged && (
-          <PublicPastBar
-            playback={{ ...past, backToNow: leavePast }}
-            liveState={data.state}
-            cavers={cavers}
-          />
+          <div ref={pastBarRef}>
+            <PublicPastBar
+              playback={{ ...past, backToNow: leavePast, setFollow: followPast }}
+              liveState={data.state}
+              cavers={cavers}
+            />
+          </div>
         )}
 
         {view !== undefined && (
@@ -535,13 +673,27 @@ export default function PublicTripPage() {
             what is on screen. A reader watching a trip from 2019 does not need to be told that
             this minute's refresh of a different trip did not land. */}
         {error != null && !past.engaged && (
-          <Alert
-            type="warning"
-            showIcon
-            title={t('publicTrip.staleTitle')}
-            description={t('publicTrip.staleBody')}
-            data-testid="public-trip-stale"
-          />
+          isSettledRefusal(error) ? (
+            // The server's own answer, and a final one: the link has been taken back or the
+            // publication has run out. Said in those words, and without the promise that the
+            // page will refresh — the poll has stopped for good, and a reader told "it starts
+            // refreshing again by itself" would be waiting for something that cannot happen.
+            <Alert
+              type="warning"
+              showIcon
+              title={t('publicTrip.endedTitle')}
+              description={t('publicTrip.endedBody')}
+              data-testid="public-trip-ended"
+            />
+          ) : (
+            <Alert
+              type="warning"
+              showIcon
+              title={t('publicTrip.staleTitle')}
+              description={t('publicTrip.staleBody')}
+              data-testid="public-trip-stale"
+            />
+          )
         )}
 
         {/* Superseded by the past banner while one is up: two notices saying "this is finished"
@@ -630,6 +782,9 @@ export default function PublicTripPage() {
                       // be the only thing under a thumb. dvh because a phone's address bar collapses.
                       height={`min(${narrow ? 300 : 440}px, 60dvh)`}
                       trackedCavers={cavers}
+                      // Placed at each moment of a replay while it is dragged or stepped, sliding one tick's
+                      // worth while it plays — the viewer's own slide on the live party, as always.
+                      markerMoveMs={past.markerMoveMs}
                       crsLookup={crsLookup}
                       // Where a followed team or caver is, when a replay is keeping up with one.
                       focusRequest={focusRequest}
@@ -743,14 +898,27 @@ export default function PublicTripPage() {
                   </span>
                 ),
                 children: (
-                  <PublicPastTripList
-                    trips={pastTrips.data?.trips}
-                    more={pastTrips.data?.more ?? false}
-                    loading={pastTrips.isPending}
-                    failed={pastTrips.isError}
-                    playingId={past.tripLogId}
-                    onPlay={play}
-                  />
+                  <>
+                    <PublicLiveTripList
+                      trips={liveTrips.data?.trips}
+                      more={liveTrips.data?.more ?? false}
+                      loading={liveTrips.isPending}
+                      failed={liveTrips.isError}
+                      refused={isSettledRefusal(liveTrips.error)}
+                      linkEnded={linkEnded}
+                      ownTripLogId={data.tripLogId}
+                    />
+                    <PublicPastTripList
+                      trips={pastTrips.data?.trips}
+                      more={pastTrips.data?.more ?? false}
+                      loading={pastTrips.isPending}
+                      failed={pastTrips.isError}
+                      refused={isSettledRefusal(pastTrips.error)}
+                      linkEnded={linkEnded}
+                      playingId={past.tripLogId}
+                      onPlay={play}
+                    />
+                  </>
                 ),
               },
             ]}

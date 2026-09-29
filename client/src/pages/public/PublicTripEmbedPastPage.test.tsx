@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type {
   PublicPastTrack,
   PublicPastTripList,
@@ -25,9 +26,12 @@ const TEAM_B = '22222222-2222-2222-2222-222222222222';
 const TRIP_2019 = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 let live: { data?: PublicTripEnvelope; isPending: boolean; error: unknown };
-let list: { data?: PublicPastTripList; isPending: boolean; isError: boolean };
+let list: { data?: PublicPastTripList; isPending: boolean; isError: boolean; error?: unknown };
 let trackAnswer: { data?: PublicPastTrack; isPending: boolean; isError: boolean };
 let listReads = 0;
+let liveReads = 0;
+/** What the list of parties being followed now answers once it is asked. */
+let liveList: { data?: { trips: never[]; more: boolean }; isPending: boolean; isError: boolean; error?: unknown };
 let trackReads: (string | undefined)[] = [];
 
 vi.mock('../../api/hooks.ts', () => ({
@@ -40,6 +44,13 @@ vi.mock('../../api/hooks.ts', () => ({
     }
     return enabled ? list : { data: undefined, isPending: false, isError: false };
   },
+  // The parties being followed now, behind the same press as the archive and counted the same way.
+  usePublicLiveTrips: (_token: string | undefined, enabled: boolean) => {
+    if (enabled) {
+      liveReads++;
+    }
+    return enabled ? liveList : { data: undefined, isPending: false, isError: false };
+  },
   usePublicPastTrack: (_token: string | undefined, tripLogId: string | undefined) => {
     trackReads.push(tripLogId);
     return tripLogId === undefined
@@ -48,6 +59,9 @@ vi.mock('../../api/hooks.ts', () => ({
   },
 }));
 vi.mock('react-router-dom', () => ({ useParams: () => ({ token: 'follow-token' }) }));
+// Whether a finger is driving the frame. False by default — the desk this suite is read on.
+let coarse = false;
+vi.mock('../../hooks/useCoarsePointer.ts', () => ({ useCoarsePointer: () => coarse }));
 
 let given: Record<string, unknown> | undefined;
 vi.mock('../../components/caveview/CaveViewPanel.tsx', () => ({
@@ -214,9 +228,12 @@ beforeEach(() => {
   };
   trackAnswer = { data: pastTrack(), isPending: false, isError: false };
   listReads = 0;
+  liveReads = 0;
+  liveList = { data: { trips: [], more: false }, isPending: false, isError: false };
   trackReads = [];
   given = undefined;
   sheetPane = undefined;
+  coarse = false;
 });
 
 afterEach(cleanup);
@@ -229,10 +246,57 @@ describe('the archive inside a framed viewer', () => {
     // leave the drawing a strip.
     expect(screen.queryByTestId('public-past-list')).toBeNull();
     expect(listReads).toBe(0);
+    // The parties being followed now are the other half of the same sheet, behind the same press.
+    expect(liveReads).toBe(0);
 
     fireEvent.click(screen.getByTestId('public-past-open'));
     expect(screen.getByTestId('public-past-list')).toBeTruthy();
     expect(listReads).toBeGreaterThan(0);
+    expect(screen.getByTestId('public-live')).toBeTruthy();
+    expect(liveReads).toBeGreaterThan(0);
+  });
+
+  it('says the archive is not offered rather than asking for another try, when the server refused it for good', () => {
+    // An installation with its archive switched off refuses the list exactly as it refuses an
+    // unknown link. Inside somebody's article that answer is final, and a sheet inviting the
+    // reader to open it again would be inviting them to wait for something that cannot happen.
+    list = { data: undefined, isPending: false, isError: true, error: new ApiError(404, 'not_found') };
+    render(<PublicTripEmbedPage />);
+    fireEvent.click(screen.getByTestId('public-past-open'));
+
+    expect(screen.getByTestId('public-past-not-offered')).toHaveTextContent('not offered');
+    expect(screen.queryByTestId('public-past-failed')).toBeNull();
+  });
+
+  it('says the lists are refused with the link, not that the archive is off, once the link has ended', () => {
+    // The link was taken back or ran out while the frame was open, and the banner says so. The
+    // cave's lists are read with the same link and refused with it, in the very words an archive
+    // switched off answers — so the sheet must claim neither reason, nor invite another try.
+    live = { data: envelope(), isPending: false, error: new ApiError(404, 'tracking.share_not_found') };
+    list = { data: undefined, isPending: false, isError: true, error: new ApiError(404, 'tracking.share_not_found') };
+    liveList = { isPending: false, isError: true, error: new ApiError(404, 'tracking.share_not_found') };
+    render(<PublicTripEmbedPage />);
+    expect(screen.getByTestId('public-trip-ended')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('public-past-open'));
+
+    expect(screen.getByTestId('public-past-link-ended')).toBeTruthy();
+    expect(screen.queryByTestId('public-past-not-offered')).toBeNull();
+    expect(screen.getByTestId('public-live-link-ended')).toBeTruthy();
+    expect(screen.queryByText(/Try opening this list again/)).toBeNull();
+  });
+
+  it('invites another try when the list merely did not land, and plays nothing in its place', () => {
+    // A phone that lost its signal for the one request, not an archive switched off: the sheet
+    // says so and asks for another try, and the frame goes on showing the party it was showing.
+    list = { data: undefined, isPending: false, isError: true, error: new TypeError('Failed to fetch') };
+    render(<PublicTripEmbedPage />);
+    fireEvent.click(screen.getByTestId('public-past-open'));
+
+    expect(screen.getByTestId('public-past-failed')).toHaveTextContent('Try opening this list again');
+    expect(screen.queryByTestId('public-past-not-offered')).toBeNull();
+    expect(screen.queryByTestId('public-past-banner')).toBeNull();
+    expect(screen.getByTestId('public-trip-embed')).not.toHaveClass('public-trip-embed-past');
+    expect(trackReads.every((tripLogId) => tripLogId === undefined)).toBe(true);
   });
 
   it('plays a trip a reader picked from the sheet, and closes it behind them', () => {
@@ -248,6 +312,23 @@ describe('the archive inside a framed viewer', () => {
     );
   });
 
+  it('hands the drawing the replay’s own marker timing, and the live party none', () => {
+    // The club's own viewer places the party under a drag and slides it one tick while playing;
+    // this frame is the same replay and must move the same way.
+    render(<PublicTripEmbedPage />);
+    expect(given?.markerMoveMs).toBeUndefined();
+
+    fireEvent.click(screen.getByTestId('public-past-open'));
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+    expect(given?.markerMoveMs).toBe(0);
+
+    fireEvent.click(screen.getByTestId('public-past-play'));
+    expect(given?.markerMoveMs).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByTestId('public-past-play'));
+    expect(given?.markerMoveMs).toBe(0);
+  });
+
   it('says nothing about a missing drawing while the chosen trip is still being read', () => {
     trackAnswer = { data: undefined, isPending: true, isError: false };
     render(<PublicTripEmbedPage />);
@@ -261,6 +342,56 @@ describe('the archive inside a framed viewer', () => {
     expect(screen.getByTestId('public-past-track-loading')).toBeTruthy();
     // And the signal that costs no height is still on the frame a reader scrolled the strip out of.
     expect(screen.getByTestId('public-trip-embed').className).toContain('embed-past');
+  });
+
+  /**
+   * Not even for one render.
+   *
+   * The address the viewer is handed is held still across re-signings, and the frame reads its
+   * absence as "this trip has no drawing". Settled a render late, that hold was empty for the whole
+   * of the render in which an address first arrived — so the sentence was committed into the
+   * document over a trip that has a drawing, and replaced a moment later. Whether a browser paints
+   * that frame is up to its scheduling; that the document held it is not, and it is what is
+   * checked: every node the frame ever put in, including the ones taken out again.
+   */
+  describe('never commits the no-drawing sentence over a trip that has a drawing', () => {
+    const everSaidNoDrawing = (records: MutationRecord[]) =>
+      records.some((record) =>
+        [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some((node) =>
+          /no survey drawing/i.test(node.textContent ?? ''),
+        ),
+      );
+
+    it('as the frame first draws the live trip', () => {
+      const observer = new MutationObserver(() => {});
+      observer.observe(document.body, { childList: true, subtree: true });
+      render(<PublicTripEmbedPage />);
+      const records = observer.takeRecords();
+      observer.disconnect();
+
+      expect(everSaidNoDrawing(records)).toBe(false);
+      expect(screen.getByTestId('viewer')).toBeTruthy();
+    });
+
+    it('as a past trip with its own survey lands', () => {
+      const track = pastTrack();
+      trackAnswer = {
+        data: { ...track, model: { ...model, modelUrl: '/api/v1/files/old/content?token=first' } },
+        isPending: false,
+        isError: false,
+      };
+      render(<PublicTripEmbedPage />);
+      fireEvent.click(screen.getByTestId('public-past-open'));
+
+      const observer = new MutationObserver(() => {});
+      observer.observe(document.body, { childList: true, subtree: true });
+      fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+      const records = observer.takeRecords();
+      observer.disconnect();
+
+      expect(everSaidNoDrawing(records)).toBe(false);
+      expect(given?.fileUrl).toBe('/api/v1/files/old/content?token=first');
+    });
   });
 
   it('says nothing about a missing drawing when the chosen trip could not be read at all', () => {
@@ -291,6 +422,36 @@ describe('the archive inside a framed viewer', () => {
     fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
     // A reader who scrolled the strip out of view still cannot mistake a past trip for a live one.
     expect(screen.getByTestId('public-trip-embed').className).toContain('embed-past');
+  });
+});
+
+/**
+ * The frame's own buttons, sized on the pointer as every control on the strip beside them is.
+ *
+ * The strip that plays a past trip grows its controls for a finger; the button in its place while
+ * the live trip is on screen did not, so on a phone the one way into the archive was a
+ * twenty-four-pixel target — and so was the one way to try again when the trip did not arrive.
+ */
+describe('the frame’s buttons under a finger', () => {
+  it('grows the way into the archive for a finger', () => {
+    coarse = true;
+    render(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('public-past-open').className).toContain('ant-btn-lg');
+  });
+
+  it('keeps it at the mouse size under a mouse', () => {
+    render(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('public-past-open').className).toContain('ant-btn-sm');
+  });
+
+  it('grows the way to try again for a finger, when the trip did not arrive', () => {
+    coarse = true;
+    live = { data: undefined, isPending: false, error: new TypeError('Failed to fetch') };
+    render(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('public-trip-retry').className).toContain('ant-btn-lg');
   });
 });
 
@@ -394,6 +555,41 @@ describe('an article driving the cave’s past through the frame', () => {
     expect(focused(sent).at(-1)).toMatchObject({ found: true });
   });
 
+  it('takes a follow’s camera request out with the trip it was made on', () => {
+    // The follow's request was only ever set, so the way back handed the viewer the live survey
+    // together with a station of the 2019 push, to be flown to as soon as that survey was up.
+    const { parent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('team', TEAM_B, { trip: TRIP_2019 }));
+    expect(given?.focusRequest).toEqual({ kind: 'station', ref: 'far.end.2' });
+
+    deliver(parent, 'https://club.example.org', focus('trip', 'live'));
+
+    expect(given?.focusRequest).toBeUndefined();
+  });
+
+  it('answers a link about a place exactly once, however many trips follow it', () => {
+    // A request a link made carries the article's callback. Left standing across a trip change it
+    // was performed again on the next survey and the article was told `focused` a second time, for
+    // a link nobody had just pressed, about a drawing the link was never written against.
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('station', 'today.1'));
+    expect(given?.focusRequest).toMatchObject({ kind: 'station', ref: 'today.1' });
+    const asked = focused(sent).length;
+
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+    expect(given?.focusRequest).toBeUndefined();
+
+    deliver(parent, 'https://club.example.org', focus('trip', 'live'));
+    expect(given?.focusRequest).toBeUndefined();
+    // The two trip links were each answered; the station link was not answered again.
+    expect(focused(sent).length).toBe(asked + 2);
+    expect(focused(sent).slice(asked).every((posted) => (posted.target as { kind: string }).kind === 'trip')).toBe(true);
+  });
+
   it('says which trip every announced party belongs to', () => {
     const { parent, sent } = fakeParent();
     render(<PublicTripEmbedPage />);
@@ -442,6 +638,48 @@ describe('an article driving the cave’s past through the frame', () => {
     // unplaced, never standing where they were reported half an hour later.
     const drawn = (given?.trackedCavers ?? []) as { name: string; position: { kind: string } }[];
     expect(drawn.map((caver) => caver.position.kind)).toEqual(['station', 'unreported']);
+  });
+
+  it('holds a moment pressed while the trip playing is still being read, and winds to it when it lands', () => {
+    // The press arrives before the response it belongs to. Refused then, an article that greys a
+    // link out on `found: false` disabled one that would have worked a second later.
+    trackAnswer = { data: undefined, isPending: true, isError: false };
+    const { parent, sent } = fakeParent();
+    const { rerender } = render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+
+    deliver(parent, 'https://club.example.org', focus('moment', '2019-07-06T09:30:00Z'));
+
+    expect(focused(sent).at(-1)).toMatchObject({ target: { kind: 'moment' }, found: true });
+
+    trackAnswer = { data: pastTrack(), isPending: false, isError: false };
+    rerender(<PublicTripEmbedPage />);
+
+    // Half past nine, as asked: the first report made and the second not yet.
+    const drawn = (given?.trackedCavers ?? []) as { name: string; position: { kind: string } }[];
+    expect(drawn.map((caver) => caver.position.kind)).toEqual(['station', 'unreported']);
+  });
+
+  it('moves the clock to a caver named beside the trip already open, as it does without the trip', () => {
+    // Two spellings of one link: an article names a caver with the trip beside it, or the caver
+    // alone once the trip is open. The replay stands at its start, before this person was placed
+    // anywhere, so following them there is a camera with nothing to aim at — both spellings move
+    // the clock to where they first appear, or one of them answers `found` and does nothing.
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+    const before = (given?.trackedCavers ?? []) as { position: { kind: string } }[];
+    expect(before.map((caver) => caver.position.kind)).toEqual(['unreported', 'unreported']);
+
+    deliver(parent, 'https://club.example.org', focus('caver', '2', { trip: TRIP_2019 }));
+
+    expect(focused(sent).at(-1)).toMatchObject({ target: { kind: 'caver' }, found: true });
+    // Ten o'clock, where Ileana was first reported — and Mircea, reported at nine, placed too.
+    const drawn = (given?.trackedCavers ?? []) as { position: { kind: string } }[];
+    expect(drawn.map((caver) => caver.position.kind)).toEqual(['station', 'station']);
+    expect(given?.focusRequest).toEqual({ kind: 'station', ref: 'far.end.2' });
   });
 
   it('resolves a place in the party against the trip on screen, not against today’s', () => {

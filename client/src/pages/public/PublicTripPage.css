@@ -345,6 +345,36 @@
   font-size: 0.78rem;
 }
 
+/* The parties being followed right now, above the archive's rows. Not buttons: a row here names a
+   party that is underground and says so, and this page draws the link's own trip, so there is
+   nothing a press could open. The same shape as an archive row, so the list reads as one list. */
+.public-live {
+  margin-bottom: 12px;
+}
+
+.public-live-heading {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.public-live-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--silexgis-public-border);
+  border-radius: 8px;
+}
+
+.public-live-row-marks {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
 .public-past-bar {
   display: flex;
   flex-direction: column;
@@ -409,6 +439,12 @@
 .public-trip-embed-tabs {
   flex: 1;
   min-height: 0;
+}
+
+/* The one line the frame adds when its link has stopped answering: fixed height, above the strip,
+   so the drawing keeps the rest of whatever box the snippet gave it. */
+.public-trip-embed-ended {
+  flex: none;
 }
 
 .public-trip-embed-strip {

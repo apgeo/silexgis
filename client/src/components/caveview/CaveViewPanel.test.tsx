@@ -32,6 +32,8 @@ let lastViewerConfig: Record<string, unknown> | undefined;
 let stationLabelOver = false;
 
 const loadCave = vi.fn();
+/** What the real viewer's progress dial calls, through the property, while a survey loads. */
+const renderView = vi.fn();
 const focusStation = vi.fn<(ref: unknown, options?: unknown) => Promise<unknown>>();
 const focusSurvey = vi.fn<(ref: unknown) => Promise<void>>();
 const highlightStation = vi.fn();
@@ -106,6 +108,7 @@ class FakeViewer {
     listeners.set(type, [...(listeners.get(type) ?? []), listener]);
   }
   removeEventListener() {}
+  renderView = renderView;
   focusStation = focusStation;
   focusSurvey = focusSurvey;
   highlightStation = highlightStation;
@@ -333,6 +336,29 @@ describe('CaveViewPanel', () => {
     await waitFor(() => expect(screen.queryByTestId('caveview-loading')).not.toBeInTheDocument());
   });
 
+  describe('a survey taken off the screen while it is still loading', () => {
+    it('answers the viewer’s own late asks to draw with nothing', async () => {
+      // The vendored viewer's progress dial calls `renderView` through this property on every
+      // progress event of a load and once more half a second after the load ends, and it does so
+      // after the viewer has been disposed — against a renderer that dispose has nulled. On the
+      // public page every pick of a past trip and every way back re-keys this panel, so a reader
+      // pressing faster than a drawing loads got an uncaught TypeError on each press.
+      const view = render(
+        <CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" surveyModelId={MODEL} />,
+      );
+      await waitFor(() => expect(viewers).toHaveLength(1));
+      const viewer = viewers[0];
+      // Wired: while the viewer is alive, the ask reaches it.
+      viewer.renderView();
+      expect(renderView).toHaveBeenCalledTimes(1);
+
+      view.unmount();
+
+      viewer.renderView();
+      expect(renderView).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('answering a link', () => {
     it('moves the camera to a station instead of loading the survey again', async () => {
       await renderReady();
@@ -362,6 +388,43 @@ describe('CaveViewPanel', () => {
 
       expect(focusSurvey).toHaveBeenCalledWith('p.g');
       expect(focusStation).not.toHaveBeenCalled();
+    });
+
+    it('performs a request once, and not again on the next model it is pointed at', async () => {
+      // <b>The defect this pins.</b> A request made from outside was performed whenever a model
+      // finished loading, so a panel re-pointed at another survey — a past trip's own drawing,
+      // then the live one on the way back — flew the fresh drawing to a place asked for on the
+      // old one, and said "not in this model" about a station that survey never had.
+      const request = { kind: 'station' as const, ref: 'far.end.2' };
+      const { rerender } = await renderReady({ focusRequest: request });
+      expect(focusStation).toHaveBeenCalledTimes(1);
+
+      const attached = listeners.get('newCave')?.length ?? 0;
+      rerender(
+        <CaveViewPanel
+          fileUrl="http://files.local/other-survey"
+          fileName="other.lox"
+          surveyModelId={MODEL}
+          focusRequest={request}
+        />,
+      );
+      await waitFor(() => expect(listeners.get('newCave')?.length ?? 0).toBeGreaterThan(attached));
+      act(() => emit('newCave', {}));
+      await waitFor(() => expect(screen.queryByTestId('caveview-loading')).not.toBeInTheDocument());
+
+      expect(focusStation).toHaveBeenCalledTimes(1);
+
+      // The positive twin: a fresh ask about the new model is honoured, which is how every caller
+      // asks — a new object per press, so the same link pressed twice flies the camera twice.
+      rerender(
+        <CaveViewPanel
+          fileUrl="http://files.local/other-survey"
+          fileName="other.lox"
+          surveyModelId={MODEL}
+          focusRequest={{ kind: 'station', ref: 'far.end.2' }}
+        />,
+      );
+      await waitFor(() => expect(focusStation).toHaveBeenCalledTimes(2));
     });
 
     it('says so when the model does not hold the point a link names', async () => {
@@ -467,6 +530,42 @@ describe('CaveViewPanel', () => {
         />,
       );
       expect(removeLiveMarker).toHaveBeenCalledWith('caver-1');
+    });
+
+    it('moves a marker in the time a replay asks for, and in the viewer’s own time otherwise', async () => {
+      // The live watch says nothing about time and keeps the viewer's own slide; a replay being
+      // dragged asks for 0, which places the marker, and one that plays asks for a short slide.
+      const at = (station: string, markerMoveMs?: number) => (
+        <CaveViewPanel
+          fileUrl="http://files.local/survey"
+          fileName="demo.lox"
+          surveyModelId={MODEL}
+          trackedCavers={[caver({ position: { kind: 'station', station } })]}
+          markerMoveMs={markerMoveMs}
+        />
+      );
+      const { rerender } = await renderReady({ trackedCavers: [caver()] });
+
+      rerender(at('p.g.8'));
+      expect(moveLiveMarker).toHaveBeenLastCalledWith(
+        'caver-1',
+        'p.g.8',
+        expect.not.objectContaining({ duration: expect.anything() }),
+      );
+
+      rerender(at('p.g.9', 0));
+      expect(moveLiveMarker).toHaveBeenLastCalledWith(
+        'caver-1',
+        'p.g.9',
+        expect.objectContaining({ duration: 0 }),
+      );
+
+      rerender(at('p.g.10', 220));
+      expect(moveLiveMarker).toHaveBeenLastCalledWith(
+        'caver-1',
+        'p.g.10',
+        expect.objectContaining({ duration: 220 }),
+      );
     });
 
     it('draws whoever has come out in a quieter colour, and in one the viewer can keep', async () => {

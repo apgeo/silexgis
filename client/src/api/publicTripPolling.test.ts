@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
-import { publicTripPollInterval, type PublicTripEnvelope, type TripTrackingState } from './hooks.ts';
+import { ApiError } from './client.ts';
+import {
+  publicLiveTripsPollInterval,
+  publicTripPollInterval,
+  publicTripRefetchInterval,
+  type PublicLiveTripList,
+  type PublicTripEnvelope,
+  type TripTrackingState,
+} from './hooks.ts';
 
 /** A published trip as the query holds it, said only in the parts this decision reads. */
 const published = (state: TripTrackingState, pictures = 0, maps = 0): PublicTripEnvelope =>
@@ -85,6 +93,63 @@ describe('how a published trip is kept fresh', () => {
   it('keeps the live interval for an armed trip, pictures or not', () => {
     // The party is what that page is being read for; pictures never slow it down.
     expect(publicTripPollInterval(published('armed', 3))).toBe(
+      publicTripPollInterval(published('armed')),
+    );
+  });
+});
+
+/**
+ * The end of a publication, as the query lives through it.
+ *
+ * A share's grace runs out or a link is taken back, and from then on the route answers 404 for
+ * good while the query still holds the last envelope it read. The interval is decided on both:
+ * an answer that will never change stops the clock, and a fault that may — no signal, a server
+ * coming back — keeps it, so the page resumes by itself.
+ */
+describe('when a published trip stops being asked about', () => {
+  it('stops for good once the link has been refused, whatever the last envelope said', () => {
+    expect(publicTripRefetchInterval(published('armed'), new ApiError(404))).toBe(false);
+    expect(publicTripRefetchInterval(published('closed', 0, 1), new ApiError(404))).toBe(false);
+    expect(publicTripRefetchInterval(published('closed', 2), new ApiError(410))).toBe(false);
+  });
+
+  it('keeps asking through a fault that may clear by itself', () => {
+    const armed = publicTripPollInterval(published('armed'));
+    expect(publicTripRefetchInterval(published('armed'), new TypeError('Failed to fetch'))).toBe(armed);
+    expect(publicTripRefetchInterval(published('armed'), new ApiError(503))).toBe(armed);
+    expect(publicTripRefetchInterval(published('armed'), new ApiError(429))).toBe(armed);
+    expect(publicTripRefetchInterval(published('armed'), null)).toBe(armed);
+  });
+});
+
+/** The parties being followed in the cave, said only in the parts this decision reads. */
+const followed = (...states: TripTrackingState[]): PublicLiveTripList =>
+  ({
+    trips: states.map((state, index) => ({ tripLogId: `trip-${index}`, state })),
+    more: false,
+  }) as unknown as PublicLiveTripList;
+
+/**
+ * The list of parties being followed is a statement about now, and it is kept fresh only while
+ * "now" can still change: a row whose watch has closed is a party that is out, and a list of such
+ * rows is read once. A refusal that will not change stops the clock for good.
+ */
+describe('how the parties being followed are kept fresh', () => {
+  it('is re-read at the followed pace while any party is still underground', () => {
+    expect(publicLiveTripsPollInterval(followed('closed', 'armed'), null)).toBe(
+      publicTripPollInterval(published('armed')),
+    );
+  });
+
+  it('is read once when every watch in it has closed, and when it is empty', () => {
+    expect(publicLiveTripsPollInterval(followed('closed', 'closed'), null)).toBe(false);
+    expect(publicLiveTripsPollInterval(followed(), null)).toBe(false);
+    expect(publicLiveTripsPollInterval(undefined, null)).toBe(false);
+  });
+
+  it('stops for good once the link has been refused, and not for a fault that may clear', () => {
+    expect(publicLiveTripsPollInterval(followed('armed'), new ApiError(404))).toBe(false);
+    expect(publicLiveTripsPollInterval(followed('armed'), new ApiError(503))).toBe(
       publicTripPollInterval(published('armed')),
     );
   });

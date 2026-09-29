@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import '../../i18n';
+import { ApiError } from '../../api/client.ts';
 import type { PublicTripEnvelope, PublicTripParticipant } from '../../api/hooks.ts';
 import type { TrackedCaver } from '../../caveview/trackedCavers.ts';
 
 const TEAM_A = '11111111-1111-1111-1111-111111111111';
 const TEAM_B = '22222222-2222-2222-2222-222222222222';
 
-let answer: { data?: PublicTripEnvelope; isPending: boolean; error: unknown } = {
+let answer: {
+  data?: PublicTripEnvelope;
+  isPending: boolean;
+  error: unknown;
+  refetch?: () => unknown;
+} = {
   data: undefined,
   isPending: true,
   error: null,
@@ -43,6 +49,11 @@ vi.mock('../../api/hooks.ts', () => ({
   // The archive, stubbed as never having answered: this file is about the live page, and whether
   // the archive is read at all — and when — is proved in the file that is about the archive.
   usePublicPastTrips: (_token: string | undefined, enabled: boolean) => ({
+    data: undefined,
+    isPending: enabled,
+    isError: false,
+  }),
+  usePublicLiveTrips: (_token: string | undefined, enabled: boolean) => ({
     data: undefined,
     isPending: enabled,
     isError: false,
@@ -320,11 +331,59 @@ describe('a trip followed by somebody with no account', () => {
   });
 
   it('answers every unusable link with one page, and inspects nothing to choose it', () => {
-    answer = { data: undefined, isPending: false, error: new Error('404') };
+    // The server's answer to a malformed, unknown, revoked and lapsed token is one identical 404,
+    // and this page draws one identical card for it — with nothing read off the refusal to say
+    // which of those it was.
+    answer = { data: undefined, isPending: false, error: new ApiError(404) };
     render(<PublicTripPage />);
 
     expect(screen.getByTestId('public-trip-not-found')).toBeInTheDocument();
     expect(screen.getByText('Nothing to show for this link')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-trip-unreachable')).toBeNull();
+  });
+
+  it('says the server could not be reached when a first read fails on the network', () => {
+    // A phone with no signal, opened straight onto the link: the read failed and nothing is in
+    // hand. That is not an answer about the link, and a card saying it "may never have existed"
+    // would be this page stating something it has no evidence for. Said as a fault, with the way
+    // to ask again.
+    const refetch = vi.fn();
+    answer = { data: undefined, isPending: false, error: new TypeError('Failed to fetch'), refetch };
+    render(<PublicTripPage />);
+
+    expect(screen.queryByTestId('public-trip-not-found')).toBeNull();
+    expect(screen.getByTestId('public-trip-unreachable')).toHaveTextContent(
+      'The trip could not be read just now',
+    );
+    fireEvent.click(screen.getByTestId('public-trip-retry'));
+    expect(refetch).toHaveBeenCalledOnce();
+  });
+
+  it('treats a server that is coming back like a dropped connection, not like a refusal', () => {
+    answer = { data: undefined, isPending: false, error: new ApiError(503) };
+    render(<PublicTripPage />);
+
+    expect(screen.getByTestId('public-trip-unreachable')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-trip-not-found')).toBeNull();
+  });
+
+  it('says the link has stopped answering once a poll is refused for good, and promises no refresh', () => {
+    // The ordinary end of every published trip that carried sheets or pictures: the grace after
+    // the watch closed runs out, the route answers 404, and the last envelope is still in hand.
+    // The party stays on screen, but the notice must not be the one about a dropped connection —
+    // that one promises the page will refresh by itself, and this page never will again.
+    ready();
+    const view = render(<PublicTripPage />);
+    expect(screen.getByTestId('public-trip-caver-1')).toHaveTextContent('Ana');
+
+    answer = { data: envelope(), isPending: false, error: new ApiError(404) };
+    view.rerender(<PublicTripPage />);
+
+    expect(screen.queryByTestId('public-trip-not-found')).toBeNull();
+    expect(screen.getByTestId('public-trip-caver-1')).toHaveTextContent('Ana');
+    expect(screen.queryByTestId('public-trip-stale')).toBeNull();
+    expect(screen.getByTestId('public-trip-ended')).toHaveTextContent('This link has stopped answering');
+    expect(screen.getByTestId('public-trip-ended')).not.toHaveTextContent('by itself');
   });
 
   it('keeps the party on screen when a poll fails, and says the page has stopped refreshing', () => {

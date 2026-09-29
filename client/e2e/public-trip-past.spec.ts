@@ -321,6 +321,15 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
       await pub.waitForTimeout(400);
       await pub.screenshot({ path: `${process.env.PAST_SHOTS}/61-past-page-360.png`, fullPage: true });
     }
+    // A row pressed at the bottom of a phone page is answered at the top of it. The picker sits
+    // under the whole party; without the page bringing the strip into view, the only visible
+    // change after the press was the row's own tag, and the statement that this is the past, the
+    // way back and the transport all mounted out of sight above.
+    await pub.getByTestId('public-past-back').click();
+    await expect(pub.getByTestId('public-past-banner')).toHaveCount(0);
+    await row.click();
+    await expect(pub.getByTestId('public-past-banner')).toBeInViewport({ timeout: 20_000 });
+    await expect(pub.getByTestId('public-past-back')).toBeInViewport();
     await pub.setViewportSize({ width: 1280, height: 900 });
 
     // ---- The way back, while there is a party to go back to ----
@@ -329,6 +338,27 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     await pub.getByTestId('public-past-back').click();
     await expect(pub.getByTestId('public-past-banner')).toHaveCount(0);
     await expect(pub.getByTestId('public-trip-party')).toContainText('E2E Carmen');
+
+    // ---- Back and forth faster than a drawing loads ----
+    // Every pick and every way back points the viewer at another survey file, and the one being
+    // taken off the screen may still be parsing. At reading speed, as above, nothing showed;
+    // pressed 150 ms apart, the disposed viewer's own progress dial went on asking it to draw
+    // against a renderer that was gone, and this page threw an uncaught TypeError on each press —
+    // on the one surface strangers read with nobody watching its console. Swept by the error
+    // lists this test ends on.
+    for (let round = 0; round < 3; round += 1) {
+      if (!(await row.isVisible())) {
+        await pub.getByText('Past trips in this cave').click();
+      }
+      await row.click();
+      await pub.waitForTimeout(150);
+      await pub.getByTestId('public-past-back').click();
+      await pub.waitForTimeout(150);
+    }
+    await expect(pub.getByTestId('public-past-banner')).toHaveCount(0);
+    await expect(pub.getByTestId('public-trip-party')).toContainText('E2E Carmen');
+    // The dial's last ask comes half a second after the load it belongs to ends.
+    await pub.waitForTimeout(1_000);
 
     // ---- A hyperlink into the past, opened cold ----
     await pub.goto(`/shared/trips/${liveShare.token}?past=${past.id}&team=${survey.id}`);

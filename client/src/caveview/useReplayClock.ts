@@ -34,6 +34,30 @@ export const REPLAY_DEFAULT_SPEED = 60;
 /** How often the clock advances while playing. Five steps a second; the markers slide between them. */
 const TICK_MS = 200;
 
+/**
+ * How long a marker takes to slide to where the next tick puts it, while the replay plays.
+ *
+ * <b>One tick and a little over, rather than the viewer's own default.</b> The viewer's default
+ * move is 600ms, three ticks: at three hundred times life speed each slide then ends three
+ * trip-minutes behind the clock, and a move asked for mid-flight supersedes the one under way, so
+ * the markers trail the moment printed beside them for the whole playback. Slightly longer than a
+ * tick keeps the motion continuous — the next move starts before the last has quite stopped.
+ */
+export const REPLAY_MARKER_MOVE_MS = 220;
+
+/**
+ * How long each marker move of a replay takes: a slide while the clock plays, and none at all
+ * otherwise.
+ *
+ * A drag of the handle, a step to the next report, or a follow that jumps the clock asks where the
+ * party <em>was</em> at that moment, not for somewhere to set off towards — so the markers are
+ * placed. Animated instead, a drag across the rail is the party racing through the cave behind the
+ * reader's finger.
+ */
+export function replayMarkerMoveMs(playing: boolean): number {
+  return playing ? REPLAY_MARKER_MOVE_MS : 0;
+}
+
 /** How many places the handle can stop at across the window, whatever the window's length. */
 const SCRUB_STEPS = 1000;
 

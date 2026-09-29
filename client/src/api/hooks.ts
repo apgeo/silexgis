@@ -15,7 +15,7 @@ import {
   inboxPollIntervalMs,
   isInboxTransport,
 } from '../notifications/transport.ts';
-import { api, ApiError, lastReadETag, readJson } from './client.ts';
+import { api, ApiError, isSettledRefusal, lastReadETag, readJson } from './client.ts';
 import type { components, paths } from './schema';
 
 export type CaveListItem = components['schemas']['CaveListItemDto'];
@@ -303,6 +303,8 @@ export const queryKeys = {
   publicPastTrips: (token: string) => ['public-trips', token, 'past'] as const,
   publicPastTrack: (token: string, tripLogId: string) =>
     ['public-trips', token, 'past', tripLogId] as const,
+  // The parties being followed in the same cave right now, under the token for the same reason.
+  publicLiveTrips: (token: string) => ['public-trips', token, 'live'] as const,
   checklists: ['checklists'] as const,
   checklist: (id: string) => ['checklists', 'detail', id] as const,
   tripReportTemplates: ['trip-report-templates'] as const,
@@ -1356,7 +1358,14 @@ export function useSurveyModels(caveId: string | undefined) {
  *
  * A cave whose exact location is withheld from this reader answers with an empty list rather than
  * a refusal, and that shape is carried straight through: fewer models offered is what "there is
- * nothing here for you" looks like, and it is never an error worth reporting.
+ * nothing here for you" looks like, and it is never an error worth reporting. Which is also why
+ * an empty list on its own proves nothing about the cave: a surface that wants to say "nothing
+ * was uploaded" has to ask `useCaveExactLocationAccess` first, because the withheld shape and the
+ * empty one are the same list.
+ *
+ * A request that failed is not folded into that emptiness. It is reported as `isError`, with a
+ * `refetch` to try again, because a chooser drawn empty over a failed read would say the cave has
+ * no surveys when nothing about the cave is known at all.
  */
 export function useSurveyModelsForCaves(caveIds: readonly string[]) {
   return useQueries({
@@ -1376,6 +1385,42 @@ export function useSurveyModelsForCaves(caveIds: readonly string[]) {
     })),
     combine: (results) => ({
       data: results.flatMap((result) => result.data ?? []),
+      isPending: results.some((result) => result.isPending),
+      isError: results.some((result) => result.isError),
+      refetch: () => {
+        for (const result of results) {
+          if (result.isError) {
+            void result.refetch();
+          }
+        }
+      },
+    }),
+  });
+}
+
+/**
+ * Whether any of these caves keeps its exact location from this reader.
+ *
+ * The one fact that tells a cave with no surveys from a cave whose surveys are withheld: the
+ * survey-model list answers both with an empty list, on purpose, and the cave's own summary is
+ * where the server says which it is. Read under the summary's ordinary key, so a page that
+ * already holds the cave's summary pays nothing more for the answer. A cave that cannot be read at all counts as
+ * withheld — nothing of it is being shown, and a notice about uploading to it would be wrong.
+ */
+export function useCaveExactLocationAccess(ids: readonly string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.caveSummary(id),
+      queryFn: () => unwrap(api.GET('/api/v1/caves/{id}/summary', { params: { path: { id } } })),
+      staleTime: 300_000,
+      retry: false,
+    })),
+    combine: (results) => ({
+      withheld: results.some(
+        (result) =>
+          result.isError ||
+          (result.data !== undefined && !result.data.permissions.canViewExactLocation),
+      ),
       isPending: results.some((result) => result.isPending),
     }),
   });
@@ -7710,6 +7755,14 @@ export function useSetTripTracking() {
       void queryClient.invalidateQueries({
         queryKey: ['trip-logs', 'tracking-depth', variables.tripLogId],
       });
+      // And the places the cave has declared, held under this trip. They are checked against the
+      // watch's model, and a watch that names no model answers that question with a refusal — a
+      // settled one, held like any answer. Arming with a model is the act that changes the answer,
+      // so the held refusal goes with the depths: otherwise the report card, which stays mounted
+      // across the arming, goes on drawing no chooser until something else happens to ask again.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.tripTrackingPlaces(variables.tripLogId),
+      });
       // Handed back rather than started and forgotten, as on the trip's own writes: the next
       // configuration change is checked against the version this one produced, and only a read
       // records a version. Without the wait, a second save a moment later is refused as a
@@ -7826,8 +7879,9 @@ export function useSetTrackingParticipantLabel() {
  * several times with nothing tying the rows together. The answer is the rows that were created,
  * one per caver.
  *
- * Reports land on an armed watch only — that is the server's rule, and the form is gated on the
- * same state rather than trusting the refusal to be readable.
+ * Reports land on a watch that has been started — armed, or closed since — and on no other; that
+ * is the server's rule, and the form is gated on the same state rather than trusting the refusal to
+ * be readable.
  */
 export function useRecordTrackingEvents() {
   const invalidate = useInvalidateTripTracking();
@@ -8380,6 +8434,43 @@ export function publicTripPollInterval(trip: PublicTripEnvelope | undefined) {
 }
 
 /**
+ * The interval above, silenced for good once the server has answered that the link is done.
+ *
+ * <b>A published trip ends by answering 404, and the last envelope stays in hand when it does.</b>
+ * Every publication lapses — a share's grace after the watch closes runs out, or the link is taken
+ * back — and from then on the route answers every read with the same refusal it gives an unknown
+ * token, while the query keeps the envelope it read last. Decided on the envelope alone, the poll
+ * would go on for as long as that envelope says it should: a closed trip carrying sheets or
+ * photographs would be re-read every few minutes from every tab that was ever opened on it, for a
+ * link that will never answer again. So the refusal is consulted first, and a settled one stops the
+ * clock. A network fault or a 5xx is not settled and keeps the interval, which is how the page comes
+ * back on its own once the phone has signal again.
+ */
+export function publicTripRefetchInterval(trip: PublicTripEnvelope | undefined, error: unknown) {
+  return isSettledRefusal(error) ? (false as const) : publicTripPollInterval(trip);
+}
+
+/**
+ * Whether a reader coming back to the tab — or a phone finding its signal again — re-reads the
+ * published trip.
+ *
+ * <b>The interval is only half of what a tab costs.</b> TanStack re-reads every query on each
+ * return to its window and each reconnection unless told otherwise, and a finished trip whose
+ * interval has stopped would still be asked about on every glance at the tab, by every reader who
+ * was ever handed the link. So a return re-reads exactly when the interval would have kept reading:
+ * a party still underground, whose family wants where they are now rather than in a minute; a
+ * finished trip carrying signed addresses, which a backgrounded tab's interval never refreshed; and
+ * a page that has no envelope at all yet, because a first read that failed for want of signal is
+ * what a return is for. A settled refusal is never asked again.
+ */
+export function publicTripRefetchOnReturn(trip: PublicTripEnvelope | undefined, error: unknown) {
+  if (isSettledRefusal(error)) {
+    return false;
+  }
+  return trip === undefined || publicTripPollInterval(trip) !== false;
+}
+
+/**
  * A published trip as somebody holding its link sees it.
  *
  * Every unusable token — malformed, unknown, revoked, lapsed, belonging to a watch that has been
@@ -8396,7 +8487,8 @@ export function publicTripPollInterval(trip: PublicTripEnvelope | undefined) {
  * Kept fresh while the watch is armed, and afterwards only for as long as something in the answer
  * goes stale on its own — which is the signed URL behind every published photograph, and nothing
  * else. A closed trip that publishes none is read once and never asked about again, because a link
- * handed round a club can be open in a hundred tabs nobody is looking at.
+ * handed round a club can be open in a hundred tabs nobody is looking at — and that holds for a
+ * return to the tab and a reconnection as much as for the interval.
  */
 export function usePublicTrip(token: string | undefined) {
   return useQuery({
@@ -8404,7 +8496,9 @@ export function usePublicTrip(token: string | undefined) {
     queryFn: () =>
       unwrap(api.GET('/api/v1/public/trips/{token}', { params: { path: { token: token! } } })),
     enabled: !!token,
-    refetchInterval: (query) => publicTripPollInterval(query.state.data),
+    refetchInterval: (query) => publicTripRefetchInterval(query.state.data, query.state.error),
+    refetchOnWindowFocus: (query) => publicTripRefetchOnReturn(query.state.data, query.state.error),
+    refetchOnReconnect: (query) => publicTripRefetchOnReturn(query.state.data, query.state.error),
   });
 }
 
@@ -8466,6 +8560,75 @@ export function usePublicPastTrack(token: string | undefined, tripLogId: string 
       ),
     enabled: !!token && !!tripLogId,
     staleTime: Infinity,
+  });
+}
+
+// ---- the parties being followed in the same cave right now, for the same link ----
+
+export type PublicLiveTripList = components['schemas']['PublicLiveTripListDto'];
+export type PublicLiveTrip = components['schemas']['PublicLiveTripDto'];
+
+/**
+ * How often the list of parties being followed is re-read, and when it stops.
+ *
+ * <b>Only while somebody in it is still underground.</b> A row whose watch has closed is a party
+ * that is out and a trip on its way into the archive; nothing in it moves any more, and a list of
+ * such rows is read once. A settled refusal stops the clock for good, as it does for the envelope:
+ * a link that has been taken back does not go on asking after the cave's other parties.
+ *
+ * Exported to be checked directly, for the reason the envelope's interval is: this is what keeps
+ * the archive of a finished expedition from being polled forever by every tab that opened it.
+ */
+export function publicLiveTripsPollInterval(list: PublicLiveTripList | undefined, error: unknown) {
+  if (isSettledRefusal(error)) {
+    return false as const;
+  }
+  return list?.trips.some((trip) => trip.state === 'armed')
+    ? PUBLIC_TRACKING_POLL_MS
+    : (false as const);
+}
+
+/**
+ * Whether a return to the tab, or a reconnection, re-reads the list of parties being followed —
+ * by the envelope's rule: when the interval would have, or when no list has arrived yet.
+ */
+export function publicLiveTripsRefetchOnReturn(
+  list: PublicLiveTripList | undefined,
+  error: unknown,
+) {
+  if (isSettledRefusal(error)) {
+    return false;
+  }
+  return list === undefined || publicLiveTripsPollInterval(list, error) !== false;
+}
+
+/**
+ * Every party being followed in this link's cave right now — the other half of the archive.
+ *
+ * <b>A published trip is in exactly one of the two lists at any moment, and a page has to read
+ * both to see all of them.</b> The archive carries finished trips and deliberately excludes one
+ * still being followed; this list carries those, each with its party, including a watch that has
+ * closed but whose link is still inside its grace — a trip that is in neither list is a gap this
+ * page would otherwise have for the length of that grace. Rows are matched to the page's own trip
+ * by `tripLogId` and never by title: two trips of one cave may share a title.
+ *
+ * <b>Behind the same press as the archive, for the archive's reason.</b> The page this hangs off
+ * is opened by families while a party is underground, on phones, in numbers nobody can see, and
+ * its cost has to stay what it was; a reader who never opens the list is never charged for it.
+ * Read afresh each time the list is opened — it is a statement about now — and kept fresh only
+ * while a row in it is still underground.
+ */
+export function usePublicLiveTrips(token: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.publicLiveTrips(token ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/public/trips/{token}/live', { params: { path: { token: token! } } })),
+    enabled: !!token && enabled,
+    refetchInterval: (query) => publicLiveTripsPollInterval(query.state.data, query.state.error),
+    refetchOnWindowFocus: (query) =>
+      publicLiveTripsRefetchOnReturn(query.state.data, query.state.error),
+    refetchOnReconnect: (query) =>
+      publicLiveTripsRefetchOnReturn(query.state.data, query.state.error),
   });
 }
 
