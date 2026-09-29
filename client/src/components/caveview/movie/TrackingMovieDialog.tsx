@@ -302,6 +302,8 @@ function MovieDialogBody({
 
   const partyRef = useRef<MovieParty | null>(null);
   const drawnRef = useRef(new Map<string, DrawnMarker>());
+  /** The viewer the markers and trails in the two maps below are standing on. */
+  const drawnOnRef = useRef<CaveViewer | null>(null);
   const trailsRef = useRef(new Map<string, string>());
   const captionsRef = useRef<HTMLCanvasElement | null>(null);
   // One labeller for the preview's grouped markers, reading whichever party is on it now — and
@@ -379,6 +381,17 @@ function MovieDialogBody({
     if (viewer === null || recording) {
       return;
     }
+    // A viewer this party has not been drawn on starts with nothing on it, and its grouped markers
+    // are named by the preview's party before anybody stands on it. Decided by the viewer itself
+    // rather than by the count of viewers: the viewer is in a ref that is set before the count is,
+    // so the party was drawn on a new viewer in the same commit that announced it, and a reset keyed
+    // on the count then wiped the bookkeeping and had every marker and trail added a second time.
+    if (drawnOnRef.current !== viewer) {
+      drawnOnRef.current = viewer;
+      drawnRef.current = new Map();
+      trailsRef.current = new Map();
+      viewer.setLiveMarkerClusterLabel(clusterLabel);
+    }
     const party =
       timeline === null || frames === null
         ? null
@@ -441,13 +454,6 @@ function MovieDialogBody({
     playing,
     clusterLabel,
   ]);
-
-  // A new viewer starts with nothing on it, and names its grouped markers by the preview's party.
-  useEffect(() => {
-    drawnRef.current = new Map();
-    trailsRef.current = new Map();
-    handleRef.current?.viewer.setLiveMarkerClusterLabel(clusterLabel);
-  }, [generation, clusterLabel]);
 
   // While an export runs, the preview shows the frame just recorded; the captions over it are
   // that frame's, so the clock, the legend and the bar do not stand still while the cavers move.

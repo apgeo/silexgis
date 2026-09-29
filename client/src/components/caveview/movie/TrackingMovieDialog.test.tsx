@@ -797,3 +797,59 @@ describe('the dialog and the keyboard', () => {
     }
   });
 });
+
+describe('the preview’s party', () => {
+  /** A trip with one caver reported at one station of the model, so a marker is drawn. */
+  function tripAtStation(tripLogId: string, title: string) {
+    const made = movieTrip(tripLogId, title);
+    const event = {
+      id: 'event-1',
+      caverId: 'caver-1',
+      teamId: null,
+      kind: 'atStation',
+      surveyModelId: MODEL,
+      stationName: 'p8.1',
+      depthEnteredM: null,
+      note: null,
+      recordedAt: ARMED,
+    } as unknown as TrackingEvent;
+    // The fold draws the roster, so the caver has to be on it as well as on the log.
+    const participant = {
+      caverId: 'caver-1',
+      teamId: null,
+      lastKind: 'atStation',
+      lastRecordedAt: ARMED,
+      positionRecordedAt: ARMED,
+      stationName: 'p8.1',
+      depthM: null,
+      positionSurveyModelId: MODEL,
+    };
+    return {
+      trip: {
+        ...made.trip,
+        events: [event],
+        tracking: { ...made.trip.tracking, participants: [participant] } as unknown as TrackingState,
+      },
+      span: { ...made.span, moments: [Date.parse(ARMED)] },
+    };
+  }
+
+  it('draws a new viewer’s party once, names its groups first, and leaves an unmoved marker alone on the next change', async () => {
+    const viewer = preview.viewer as ReturnType<typeof fakeViewer>;
+    reads.movie = ready(tripAtStation('trip-a', 'Alpha'));
+    open(['trip-a']);
+    await waitFor(() => expect(viewer.addLiveMarker).toHaveBeenCalledTimes(1));
+    // Labelled by first name, the default.
+    expect(viewer.addLiveMarker).toHaveBeenCalledWith('trip-a:caver-1', 'p8.1', expect.objectContaining({ label: 'Ion' }));
+    // The grouped markers are named before anybody stands on the model.
+    expect(viewer.setLiveMarkerClusterLabel.mock.invocationCallOrder[0]).toBeLessThan(
+      viewer.addLiveMarker.mock.invocationCallOrder[0],
+    );
+    // A change that moves nobody: the trails switch, with a single station walked.
+    fireEvent.click(await screen.findByText('Cavers'));
+    fireEvent.click(screen.getByTestId('movie-trails'));
+    await waitFor(() => expect(screen.getByTestId('movie-trails')).toBeChecked());
+    expect(viewer.addLiveMarker).toHaveBeenCalledTimes(1);
+    expect(viewer.moveLiveMarker).not.toHaveBeenCalled();
+  });
+});
