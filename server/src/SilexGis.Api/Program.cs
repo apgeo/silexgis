@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -269,16 +268,12 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
 
     var app = builder.Build();
 
-    // The API always sits behind a reverse proxy (nginx `web` service / Vite dev proxy);
-    // honor its scheme/host so OIDC issuer and redirects are right.
-    // The proxy is only reachable on the internal network, so no known-proxy allow-list.
-    var forwardedHeaders = new ForwardedHeadersOptions
-    {
-        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-    };
-    forwardedHeaders.KnownIPNetworks.Clear();
-    forwardedHeaders.KnownProxies.Clear();
-    app.UseForwardedHeaders(forwardedHeaders);
+    // The API always sits behind a reverse proxy (nginx `web` service / Vite dev proxy); honor
+    // its scheme so OIDC issuer and redirects are right, and walk X-Forwarded-For back to the
+    // caller so the per-address limiters above key on the caller and not on the proxy. How many
+    // proxies there are, and which networks they speak from, is configuration — see
+    // TrustedProxies for why "any peer, one hop" is not safe under the TLS overlay.
+    app.UseForwardedHeaders(TrustedProxies.Read(builder.Configuration));
 
     app.UseExceptionHandler();
     app.UseStatusCodePages();

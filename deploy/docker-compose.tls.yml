@@ -38,6 +38,15 @@ services:
     # firewall the SILEXGIS_HTTP_PORT instead.)
     ports: !reset []
 
+  api:
+    environment:
+      # Two proxies now sit between a caller and the API: Caddy, then nginx. Each appends its
+      # peer to X-Forwarded-For, so the caller's address is two entries from the end. The API
+      # walks back exactly this many; at the base file's one it would take Caddy's address for
+      # every caller, and the per-address limiters (sign-in, printed codes, published trips)
+      # would share one budget across the whole internet.
+      SILEXGIS__Proxy__Hops: "2"
+
 volumes:
   silexgis-caddy-data:
   silexgis-caddy-config:
