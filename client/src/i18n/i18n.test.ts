@@ -33,7 +33,7 @@ import type {
   SurveyModelInfo,
 } from '../api/hooks.ts';
 import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
-import { MOVIE_VIEW_LAYERS } from '../caveview/movie/movieSettings.ts';
+import { MOVIE_VIEW_DIRECTIONS, MOVIE_VIEW_LAYERS } from '../caveview/movie/movieSettings.ts';
 import type { MovieProgress } from '../caveview/movie/movieRecorder.ts';
 import {
   MOVIE_ASPECTS,
@@ -457,6 +457,7 @@ describe('i18n locales', () => {
       ['timelineModes', ['calendar', 'together']],
       ['timelineHelp', ['calendar', 'together']],
       ['cameras', ['perspective', 'orthographic']],
+      ['viewDirections', MOVIE_VIEW_DIRECTIONS],
       // 'starting' is asked for by name, before the recorder has said anything.
       ['progress', ['starting', ...Object.keys(progressStages)]],
     ];

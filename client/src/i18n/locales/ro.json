@@ -2467,6 +2467,7 @@
       "quietGap": "Lungimea perioadei liniștite",
       "minutes": "min",
       "labels": "Etichetele speologilor",
+      "labelsHelp": "Prenumele este primul cuvânt al numelui din listă; două persoane care s-ar citi la fel primesc o inițială.",
       "caverLabels": {
         "first": "Prenume",
         "full": "Nume complet",
@@ -2530,6 +2531,16 @@
         "perspective": "Perspectivă",
         "orthographic": "Ortografică"
       },
+      "viewDirection": "Vederea de pornire",
+      "viewDirections": {
+        "plan": "Plan (de sus)",
+        "north": "Profil N — privind spre nord",
+        "south": "Profil S — privind spre sud",
+        "east": "Profil E — privind spre est",
+        "west": "Profil V — privind spre vest"
+      },
+      "viewDirectionHelp": "Cum privește camera întregul model când începe filmul: de sus, sau la orizontală, într-o direcție. Rotirea sau apropierea previzualizării după aceea se păstrează.",
+      "viewDirectionAgain": "Revino la ea",
       "linewidth": "Grosimea liniilor",
       "zScale": "Scara verticală",
       "captionTitle": "Titlu",
