@@ -74,7 +74,7 @@ export const groups = {
     'ProtectionDepthTests',
   ],
   caves: [
-    'AssociationDisclosureTests', 'CaveDomainTests', 'CaveExternalIdTests',
+    'AssociationDisclosureTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests',
     'CaveListingSortStabilityTests', 'CaveOverburdenTests', 'CaveSubtypeMissingTests',
     'CenterlineTests', 'EntrancePlacementGuardTests', 'HypsometryTests', 'ProtectionDepthTests',
     'StructureComparisonTests', 'SurveyMeshTests', 'SurveyModelTests',
@@ -365,8 +365,8 @@ export const crossCutting = {
   locationClasses: [
  'AccessHistoryTests', 'AclAndCavingGroupTests', 'AreaKarstStatisticsTests',
  'AssociationDisclosureTests', 'AttachmentReachListingTests', 'CalendarTests',
- 'CaveDomainTests', 'CaveExternalIdTests', 'CaveOverburdenTests', 'CavePassageShapeTests',
- 'CaveSurveyStatisticsTests', 'CenterlineTests', 'ClosestApproachTests', 'ConcurrencyTests',
+ 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests', 'CaveOverburdenTests',
+ 'CavePassageShapeTests', 'CaveSurveyStatisticsTests', 'CenterlineTests', 'ClosestApproachTests', 'ConcurrencyTests',
  'DashboardTests', 'DocumentAccessApiTests', 'DocumentCommentNotificationTests',
  'DocumentContentSearchTests', 'DocumentSurfaceProtectionSweepTests',
  'DocumentViewerBytesTests', 'EntrancePlacementGuardTests', 'ExpeditionLeadsTests',
