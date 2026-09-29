@@ -608,6 +608,25 @@ describe('the tracking movie dialog', () => {
     fireEvent.click(screen.getByTestId('movie-play'));
   });
 
+  it('never plays the preview from before its start, whatever time the browser stamps the first frame with', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    const handle = await screen.findByRole('slider', { name: 'Moment in the movie' });
+    await waitFor(() => expect(handle).not.toHaveAttribute('aria-disabled', 'true'));
+    // The browser stamps a frame with when it began drawing it, which can be before play was pressed.
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    fireEvent.click(screen.getByTestId('movie-play'));
+    expect(frames).toHaveLength(1);
+    act(() => frames[0](performance.now() - 5000));
+    expect(screen.getByTestId('movie-position').dataset.frame).toBe('0');
+    fireEvent.click(screen.getByTestId('movie-play'));
+    raf.mockRestore();
+  });
+
   it('warns before a video long enough to take a long time to render', async () => {
     useUiPrefsStore.setState({
       movieSettings: normaliseMovieSettings({

@@ -339,7 +339,9 @@ function MovieDialogBody({
       if (current === null || play === null) {
         return;
       }
-      const at = from + Math.floor(((now - began) * current.fps) / 1000);
+      // A frame's timestamp is when the browser began drawing it, which can be before the moment
+      // play was pressed; counted from there the first frame would land before the start.
+      const at = from + Math.floor((Math.max(0, now - began) * current.fps) / 1000);
       if (at >= current.count) {
         setPosition(current.count - 1);
         stopPlaying();
