@@ -33,6 +33,13 @@ interface DeclarationForm {
  * <b>One declaration per depth, and the depth is the key.</b> Two answers to "what is at 96 m" is
  * no answer, and the resolution that consults these has to be able to take one — so writing a
  * depth that is already declared replaces it rather than adding beside it.
+ *
+ * <b>Which is why editing a declaration's depth is two writes and not one.</b> The server knows
+ * nothing about "the row being edited": a write at 97 m is a declaration at 97 m, and the one at
+ * 96 m it was meant to correct stays where it was. Left like that, the same place is declared
+ * twice under two depths — the report chooser offers two "Meandru", and an imported row naming it
+ * is refused because which station is meant cannot be decided. So a correction that moves the
+ * depth withdraws the declaration it moved, once the new one has landed.
  */
 export default function CaveDepthPlacesSection({
   caveId,
@@ -48,6 +55,14 @@ export default function CaveDepthPlacesSection({
   const remove = useDeleteCaveDepthPlace(caveId);
   const [form] = Form.useForm<DeclarationForm>();
   const [adding, setAdding] = useState(false);
+  /** The declaration the form was filled from, or null while it is declaring a new one. */
+  const [editing, setEditing] = useState<CaveDepthPlace | null>(null);
+
+  const leaveForm = () => {
+    form.resetFields();
+    setAdding(false);
+    setEditing(null);
+  };
 
   const save = async (values: DeclarationForm) => {
     if (values.depthM === null || values.depthM === undefined) {
@@ -60,12 +75,32 @@ export default function CaveDepthPlacesSection({
         stationName: values.stationName.trim(),
         placeLabel: values.placeLabel.trim() || null,
       });
-      form.resetFields();
-      setAdding(false);
-      message.success(t('caves.depthPlaces.saved'));
     } catch {
       message.error(t('caves.depthPlaces.saveFailed'));
+      return;
     }
+
+    // A correction that moved the depth has left the row it was filled from behind, under the old
+    // depth, and the depth is the key — so that row is withdrawn now. After the write and not
+    // before it: a write that fails then leaves the old declaration standing, which is a cave
+    // still declaring the place, rather than one declaring nothing there at all.
+    const moved = editing !== null && editing.depthM !== values.depthM ? editing : null;
+    if (moved !== null) {
+      try {
+        await remove.mutateAsync({ id: moved.id });
+      } catch {
+        // Said as what it is, which is not a failed save: the new declaration is there. What is
+        // also there is the old one, and until it goes the place answers to two depths.
+        message.error(
+          t('caves.depthPlaces.oldDepthKept', { depth: values.depthM, old: moved.depthM }),
+        );
+        leaveForm();
+        return;
+      }
+    }
+
+    leaveForm();
+    message.success(t('caves.depthPlaces.saved'));
   };
 
   const confirmRemove = (place: CaveDepthPlace) =>
@@ -81,13 +116,18 @@ export default function CaveDepthPlacesSection({
       },
     });
 
-  /** Filling the form from a row, so changing a declaration is one press rather than retyping it. */
+  /**
+   * Filling the form from a row, so changing a declaration is one press rather than retyping it.
+   * The row is remembered as well as copied, because saving under a changed depth has to know
+   * which declaration it is a correction of — see {@link save}.
+   */
   const edit = (place: CaveDepthPlace) => {
     form.setFieldsValue({
       depthM: place.depthM,
       stationName: place.stationName,
       placeLabel: place.placeLabel ?? '',
     });
+    setEditing(place);
     setAdding(true);
   };
 
@@ -146,7 +186,12 @@ export default function CaveDepthPlacesSection({
                     width: 120,
                     render: (_: unknown, place: CaveDepthPlace) => (
                       <Flex gap={4}>
-                        <Button size="small" type="link" onClick={() => edit(place)}>
+                        <Button
+                          size="small"
+                          type="link"
+                          onClick={() => edit(place)}
+                          data-testid={`cave-depth-place-edit-${place.id}`}
+                        >
                           {t('common.edit')}
                         </Button>
                         <Button
@@ -185,11 +230,14 @@ export default function CaveDepthPlacesSection({
             label={t('caves.depthPlaces.depth')}
             rules={[{ required: true, message: t('caves.depthPlaces.depthRequired') }]}
           >
+            {/* The unit inside the field rather than hung off it as an addon: the library has
+                deprecated the addon on a number field, and the warning it prints is a console error
+                that the browser sweep files as a defect on every page this card is drawn on. */}
             <InputNumber
               step={0.1}
               style={{ width: 120 }}
               data-testid="cave-depth-place-depth"
-              addonAfter="m"
+              suffix="m"
             />
           </Form.Item>
           <Form.Item
@@ -212,14 +260,7 @@ export default function CaveDepthPlacesSection({
               >
                 {t('common.save')}
               </Button>
-              <Button
-                onClick={() => {
-                  form.resetFields();
-                  setAdding(false);
-                }}
-              >
-                {t('common.cancel')}
-              </Button>
+              <Button onClick={leaveForm}>{t('common.cancel')}</Button>
             </Flex>
           </Form.Item>
         </Form>

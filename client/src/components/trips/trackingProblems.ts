@@ -18,6 +18,10 @@ import { ApiError } from '../../api/client.ts';
  */
 export const TRACKING_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'tracking.not_writable': 'trips.tracking.problems.notWritable',
+  // A sheet of reports offered to a trip that has no watch at all. Distinct from the line above:
+  // that one is a log that exists and may not be written to, this is a log with nowhere to put a
+  // report, and the way out is setting the watch up rather than starting or reopening it.
+  'tracking.not_configured': 'trips.tracking.problems.notConfigured',
   'tracking.state_invalid': 'trips.tracking.problems.stateInvalid',
   'tracking.model_missing': 'trips.tracking.problems.modelMissing',
   'tracking.model_unavailable': 'trips.tracking.problems.modelUnavailable',

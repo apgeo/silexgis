@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
-/* The dialog a station press opens. Everything here is about the two screen shapes it has to
-   survive: a 412x839 phone held upright, and the same phone sideways at 863x360. */
+/* The two dialogs that write a report — the one a station press opens, and the one a row's Edit
+   opens to correct a report already on the log. Everything here is about the two screen shapes
+   they have to survive: a 412x839 phone held upright, and the same phone sideways at 863x360. */
 
 /* Never wider than the screen it opens on, and no wider than a form of five fields needs. The
    library's own default is a flat 520px, which on a 412px phone is a dialog with its edges off the

@@ -1,5 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, Button, Flex, Form, Input, InputNumber, Modal, Select, message } from 'antd';
+import {
+  Alert,
+  App,
+  Button,
+  ConfigProvider,
+  Flex,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Select,
+} from 'antd';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
@@ -9,9 +20,12 @@ import {
   type TrackingTeam,
   type TripPositionEventKind,
 } from '../../api/hooks.ts';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
+import { COARSE_CONTROL_HEIGHT, useTrackingPanelTheme } from './trackingControlSizes.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
 import { trackingStationRules } from './trackingReport.ts';
 import TrackingWhenField from './TrackingWhenField.tsx';
+import './TrackingReportDialog.css';
 
 interface Props {
   tripLogId: string;
@@ -29,6 +43,9 @@ interface EditForm {
   note?: string;
   recordedAt?: dayjs.Dayjs;
 }
+
+/** How big everything in the dialog is drawn — decided by the pointer, once, at the top. */
+type ControlSize = 'large' | 'middle';
 
 /**
  * Correcting a report already on the log.
@@ -50,32 +67,55 @@ interface EditForm {
  * future — all of it is the server's answer, asked again on the correction exactly as it was asked
  * on the original. This form's own rules go no further than the shape of what it sends, so the two
  * surfaces cannot come to disagree about what may be recorded.
+ *
+ * <b>Built for a finger where there is one.</b> This is the dialog opened from a phone to fix an
+ * hour typed off a call, so every control follows the pointer the way the dialog a station press
+ * opens does: the same touch target, the same enlarged calendar and list, the same stylesheet that
+ * keeps the dialog inside the screen and its buttons under a body that scrolls. The pointer and
+ * not the width, because a phone held sideways has a desk's room across and still no pixel
+ * precision.
  */
 export default function TrackingEventEditDialog({ tripLogId, report, teams, onClose }: Props) {
   const { t } = useTranslation();
+  const coarse = useCoarsePointer();
+  const panelTheme = useTrackingPanelTheme(coarse);
+  const controlSize: ControlSize = coarse ? 'large' : 'middle';
+  // The portalled panels' own sizes, plus the height every `large` control in here is built from.
+  const theme = {
+    ...panelTheme,
+    token: coarse ? { controlHeightLG: COARSE_CONTROL_HEIGHT } : {},
+  };
   return (
-    <Modal
-      open={report !== null}
-      title={t('trips.tracking.eventEditTitle')}
-      footer={null}
-      onCancel={onClose}
-      destroyOnHidden
-      data-testid="trip-tracking-event-edit"
-    >
-      {/* Keyed on the report, so opening a second row builds a second form rather than reusing the
-          first one's values. A single form filled from whichever report was pressed would offer one
-          report's place as a correction to another's the moment a fill was missed — and it would look
-          like working software. This makes that impossible rather than remembered. */}
-      {report !== null && (
-        <CorrectionForm
-          key={report.id}
-          tripLogId={tripLogId}
-          report={report}
-          teams={teams}
-          onClose={onClose}
-        />
-      )}
-    </Modal>
+    <ConfigProvider theme={theme}>
+      <Modal
+        // The stylesheet shared with the dialog a station press opens: never wider than the
+        // screen, a body that scrolls under a footer that never leaves it, and a corner X a
+        // finger can hit.
+        className="tracking-report-dialog"
+        open={report !== null}
+        title={t('trips.tracking.eventEditTitle')}
+        footer={null}
+        onCancel={onClose}
+        destroyOnHidden
+        data-testid="trip-tracking-event-edit"
+      >
+        {/* Keyed on the report, so opening a second row builds a second form rather than reusing
+            the first one's values. A single form filled from whichever report was pressed would
+            offer one report's place as a correction to another's the moment a fill was missed — and
+            it would look like working software. This makes that impossible rather than remembered. */}
+        {report !== null && (
+          <CorrectionForm
+            key={report.id}
+            tripLogId={tripLogId}
+            report={report}
+            teams={teams}
+            coarse={coarse}
+            controlSize={controlSize}
+            onClose={onClose}
+          />
+        )}
+      </Modal>
+    </ConfigProvider>
   );
 }
 
@@ -83,14 +123,22 @@ function CorrectionForm({
   tripLogId,
   report,
   teams,
+  coarse,
+  controlSize,
   onClose,
 }: {
   tripLogId: string;
   report: TrackingEvent;
   teams: readonly TrackingTeam[];
+  coarse: boolean;
+  controlSize: ControlSize;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  // The application's own message surface rather than the static one: the static API draws into
+  // a root of its own that outlives whatever mounted it, and the correction dialog is only ever
+  // shown under the application shell.
+  const { message } = App.useApp();
   const [form] = Form.useForm<EditForm>();
   const update = useUpdateTrackingEvent();
   const initial: EditForm = {
@@ -107,7 +155,15 @@ function CorrectionForm({
   const kind = Form.useWatch('kind', form) ?? initial.kind;
 
   const submit = async () => {
-    const values = await form.validateFields();
+    let values: EditForm;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // The form is already showing why. Swallowed rather than rethrown so a refused validation
+      // does not surface as an unhandled rejection in the browser, which is watched for and
+      // reported as a defect — and clearing a field before pressing Save is an ordinary act.
+      return;
+    }
     try {
       await update.mutateAsync({
         tripLogId,
@@ -137,11 +193,17 @@ function CorrectionForm({
       <Alert
         type="info"
         showIcon
-        message={t('trips.tracking.eventEditNoticeTitle')}
+        title={t('trips.tracking.eventEditNoticeTitle')}
         description={t('trips.tracking.eventEditNoticeBody')}
         style={{ marginBottom: 16 }}
       />
-      <Form form={form} layout="vertical" requiredMark={false} initialValues={initial}>
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        size={controlSize}
+        initialValues={initial}
+      >
         <Form.Item name="kind" label={t('trips.tracking.reportKind')}>
           <Select
             data-testid="trip-tracking-edit-kind"
@@ -188,11 +250,26 @@ function CorrectionForm({
           <Input.TextArea rows={2} data-testid="trip-tracking-edit-note" />
         </Form.Item>
 
-        <TrackingWhenField size="middle" coarse={false} idPrefix="trip-tracking-edit" />
+        {/* `confined`: the fields here scroll inside the modal's body, whose cap keeps the buttons
+            on screen and leaves too little scroll to open a finger-sized calendar under. The field
+            says so, and its stylesheet pins the panel to the screen. */}
+        <TrackingWhenField
+          size={controlSize}
+          coarse={coarse}
+          idPrefix="trip-tracking-edit"
+          confined
+        />
 
         <Flex gap={8} justify="flex-end">
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button type="primary" loading={update.isPending} onClick={() => void submit()}>
+          <Button size={controlSize} onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            type="primary"
+            size={controlSize}
+            loading={update.isPending}
+            onClick={() => void submit()}
+          >
             {t('trips.tracking.eventEditSave')}
           </Button>
         </Flex>

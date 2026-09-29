@@ -4,6 +4,7 @@ import type { TrackingParticipant } from '../../api/hooks.ts';
 import {
   lastHeardAtIso,
   lastHeardInWords,
+  trackingLogWritable,
   trackingStandingOf,
   trackingStandings,
 } from './trackingWatch.ts';
@@ -211,5 +212,19 @@ describe('how old the last word is', () => {
     expect(lastHeardInWords({ lastRecordedAt: '2026-09-16T09:00:00Z' }, NOON, 'ro')).toContain(
       'ore',
     );
+  });
+});
+
+/**
+ * Whether a watch's log may be written, which is the server's rule read here so that every surface
+ * gating a write — the card under the watch, the offer a pressed station makes — gives one answer.
+ */
+describe('trackingLogWritable', () => {
+  it('lets an armed watch and a closed one be written, and never one that was not started', () => {
+    // A closed watch is a finished trip, and a finished trip is written up afterwards from notes.
+    // An off watch names no survey, so a claimed place would have nothing to resolve against.
+    expect(trackingLogWritable('armed')).toBe(true);
+    expect(trackingLogWritable('closed')).toBe(true);
+    expect(trackingLogWritable('off')).toBe(false);
   });
 });

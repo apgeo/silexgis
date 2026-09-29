@@ -89,6 +89,19 @@ export interface TrackingDepthGap {
   gapM: number;
   /** Whether that distance is past the tolerance above. */
   wide: boolean;
+  /**
+   * Whether the station is there because the cave declared this depth to mean it, rather than
+   * because it is the nearest one.
+   *
+   * <b>The distance is the same measurement either way; the reason for it is not, and a warning
+   * has to give the right one.</b> A depth somebody typed that matches one of the cave's own
+   * declarations lands on the station the club named for it, however far the survey puts that
+   * station from the number — the declaration outranks the measurement by design. Explained as
+   * "a depth is always recorded at the nearest station", a wide gap on such a report names the
+   * right station for a reason that is false, and sends the reader to doubt the number when what
+   * would need checking, if anything, is the declaration.
+   */
+  declared: boolean;
 }
 
 /**
@@ -112,6 +125,7 @@ export function trackingDepthGap(
     stationDepthM: candidate.depthM,
     gapM: candidate.deltaM,
     wide: candidate.deltaM > depthGapToleranceM(askedDepthM),
+    declared: candidate.declared,
   };
 }
 
@@ -169,7 +183,8 @@ export interface RecordedDepthReport {
  * already refuses on exactly this test, and refusing here for the same reason keeps the two
  * agreeing about what a stored place means.</li>
  * <li><b>Re-resolving the stored depth reproduces the station that was stored.</b> The recording
- * path writes down the nearest candidate, and this reading asks for the candidates in the same
+ * path writes down the first candidate (the station the cave declared for that depth where it
+ * declared one, the nearest station otherwise), and this reading asks for the candidates in the same
  * order under the same spelling — so if the configuration has not moved, the stored station is
  * necessarily still the first answer. If it is not first, something has moved since, and the only
  * honest thing to say about the distance is nothing. This is a proof by contradiction rather than a

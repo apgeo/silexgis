@@ -21,6 +21,21 @@ import { useMemo } from 'react';
  * measure on a phone.
  */
 export const COARSE_SELECT = { optionHeight: 40 };
+
+/**
+ * The touch target every control in a report dialog is built to.
+ *
+ * <b>Forty-four rather than the forty the card under the watch uses, and only in the dialogs.</b>
+ * A dialog is where a reader fills a form in while looking at a model they have just pressed, or
+ * fixes an hour typed off a call, one-handed, with the other hand holding a phone to their ear —
+ * the case both dialogs exist for. The card keeps the forty pixels it was measured at, because
+ * those measurements were taken against a calendar whose geometry depends on them; the dialogs
+ * have none of that history and are simply built larger.
+ *
+ * Given as the token every `large` control derives from, so the padding, the line height and the
+ * icon inside each of them are built for the size the control believes it is.
+ */
+export const COARSE_CONTROL_HEIGHT = 44;
 export const COARSE_DATE_PICKER = {
   cellHeight: 40,
   cellWidth: 40,

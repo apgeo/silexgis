@@ -214,7 +214,7 @@ export default function TrackingReplayBar({
         <Alert
           type="error"
           showIcon
-          message={t('trips.tracking.replay.logUnavailable')}
+          title={t('trips.tracking.replay.logUnavailable')}
           description={t('trips.tracking.replay.logUnavailableBody')}
           action={leave}
           data-testid="trip-tracking-replay-unavailable"
@@ -243,7 +243,7 @@ export default function TrackingReplayBar({
         <Alert
           type="info"
           showIcon
-          message={t('trips.tracking.replay.nothingToReplay')}
+          title={t('trips.tracking.replay.nothingToReplay')}
           action={leave}
           data-testid="trip-tracking-replay-empty"
         />

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { TrackingParticipant } from '../../api/hooks.ts';
+import type { TrackingParticipant, TripTrackingState } from '../../api/hooks.ts';
 import {
   partyStandings,
   positionAgeInWords,
@@ -7,6 +7,22 @@ import {
   standingOf,
   type PublicTripStanding,
 } from '../../pages/public/publicTripParty.ts';
+
+/**
+ * Whether a watch in this state may have its log written — a report recorded, corrected or removed.
+ *
+ * <b>The server's rule, said once here so every surface that gates a write reads the same
+ * answer.</b> An armed watch's log is written as the trip runs, and a closed one's stays writable,
+ * because a finished trip is written up afterwards, from notes, days later — and the server accepts
+ * that for recording, correcting and removing alike. Only a watch that was never started refuses,
+ * for a reason of its own: it names no survey, so a claimed place has nothing to resolve against.
+ * The card under the watch and the offer a pressed station makes used to gate on "armed", which
+ * was the client saying no where the server says yes, on exactly the trips most in need of writing
+ * up: a coordinator could correct and remove a closed log's rows and not add one.
+ */
+export function trackingLogWritable(state: TripTrackingState): boolean {
+  return state !== 'off';
+}
 
 /**
  * Where one member of the party stands, in the three states a watch actually distinguishes.

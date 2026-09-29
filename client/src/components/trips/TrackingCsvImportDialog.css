@@ -1,0 +1,83 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+/* The dialog that reads a coordinator's sheet onto the log. What is here is the difference
+   between a desk, where the settings stand in a row and the preview is a table, and a phone,
+   where each setting takes the whole width and each previewed row is a card of labelled fields. */
+
+/* A setting's width on a desk: enough for the longest option in any of them, and the same for all
+   of them so the row of three reads as one row. The two lists of words get more, because what goes
+   in them is typed rather than chosen. */
+.tracking-csv-dialog .tracking-csv-field {
+  width: 260px;
+}
+
+.tracking-csv-dialog .tracking-csv-field-wide {
+  width: 300px;
+}
+
+/* Full width on a phone, where two settings side by side would each be too narrow to read the
+   option in. Width is what decides this — a phone held sideways has room for the row. */
+.tracking-csv-dialog-narrow .tracking-csv-field,
+.tracking-csv-dialog-narrow .tracking-csv-field-wide {
+  width: 100%;
+}
+
+/* ---- One card per previewed row, its columns stacked inside it: what a phone gets instead of a
+   table. A note, a name or a finding is free to wrap now that nothing stands beside it. */
+.tracking-csv-rows-stacked .ant-table-cell {
+  overflow-wrap: anywhere;
+}
+
+.tracking-csv-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tracking-csv-stacked-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tracking-csv-stacked-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tracking-csv-stacked-fact {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+/* The colour is the library's secondary text — see the component. Only the size and the refusal
+   to be squeezed are said here. */
+.tracking-csv-stacked-label {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.tracking-csv-stacked-value {
+  min-width: 0;
+  text-align: end;
+}
+
+/* A row's tick under a finger: the whole cell is the target, not the sixteen-pixel box inside it.
+   Asked of the pointer rather than the width, because a phone held sideways has a desk's room
+   across and still no pixel precision. */
+@media (hover: none), (pointer: coarse) {
+  .tracking-csv-dialog .ant-table-selection-column {
+    position: relative;
+  }
+
+  .tracking-csv-dialog .ant-table-selection-column .ant-checkbox-wrapper {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import '../../i18n';
 import type { TrackingState, TripCalloutState } from '../../api/hooks.ts';
 
@@ -31,6 +31,11 @@ const survey = (id: string, name: string, overrides: Record<string, string> = {}
  */
 let models: ReturnType<typeof survey>[] = [];
 let modelsPending = false;
+let modelsFailed = false;
+const modelsRetry = vi.fn();
+/** What the caves' own summaries say about this reader seeing their exact location. */
+let locationWithheld = false;
+let locationPending = false;
 
 const setTracking = vi.fn();
 const createTeam = vi.fn();
@@ -54,8 +59,14 @@ vi.mock('../../api/hooks.ts', async () => ({
   useCreateTrackingTeam: () => ({ mutateAsync: createTeam, isPending: false }),
   useRenameTrackingTeam: () => ({ mutateAsync: renameTeam, isPending: false }),
   useDeleteTrackingTeam: () => ({ mutateAsync: deleteTeam, isPending: false }),
-  useSurveyModelsForCaves: () => ({ data: models, isPending: modelsPending }),
+  useSurveyModelsForCaves: () => ({
+    data: models,
+    isPending: modelsPending,
+    isError: modelsFailed,
+    refetch: modelsRetry,
+  }),
   useCaveNames: () => new Map<string, string>(),
+  useCaveExactLocationAccess: () => ({ withheld: locationWithheld, isPending: locationPending }),
 }));
 
 // What decides how big every control on this card is drawn. Mocked rather than driven by a media
@@ -123,9 +134,31 @@ beforeEach(() => {
   coarse = false;
   models = [survey(MODEL, 'Main survey'), survey(OTHER_MODEL, 'Corrected survey')];
   modelsPending = false;
+  modelsFailed = false;
+  modelsRetry.mockReset();
+  locationWithheld = false;
+  locationPending = false;
 });
 
 afterEach(cleanup);
+
+/**
+ * antd names a deprecated prop through `console.error`, once per render — and in development the
+ * application's own error sweep files every one of those as a defect. So every case in this file
+ * also checks that nothing it drew spoke that way; a notice written with the old spelling of a
+ * prop fails here rather than in somebody's diagnostics.
+ */
+let consoleError: MockInstance<typeof console.error>;
+beforeEach(() => {
+  consoleError = vi.spyOn(console, 'error');
+});
+afterEach(() => {
+  const deprecations = consoleError.mock.calls
+    .map(([first]) => String(first))
+    .filter((line) => /\[antd: [^\]]+\].*deprecated/.test(line));
+  consoleError.mockRestore();
+  expect(deprecations).toEqual([]);
+});
 
 describe('TrackingConfigCard', () => {
   /**
@@ -177,6 +210,29 @@ describe('TrackingConfigCard', () => {
     expect(sent).toMatchObject({ state: 'closed' });
     expect(sent.referenceStationName).toBeUndefined();
     expect(sent.surveyModelId).toBeUndefined();
+  });
+
+  /**
+   * What closing does, said truthfully before it is done.
+   *
+   * A closed watch's log stays writable — reports are still recorded, corrected and removed on it,
+   * which is how a trip is written up from notes afterwards. A confirmation saying that reports
+   * stop being accepted would have a coordinator finish the write-up first, and leave the watch and
+   * its published page live for as long as that took.
+   */
+  it('says the log stays open after closing, rather than that reports stop being accepted', async () => {
+    show();
+
+    fireEvent.click(screen.getByTestId('trip-tracking-close'));
+
+    const confirmation = (await screen.findByText('Close tracking for this trip?')).closest(
+      '.ant-popconfirm',
+    ) as HTMLElement;
+    expect(confirmation).toHaveTextContent('The party stops being followed');
+    expect(confirmation).toHaveTextContent(
+      'reports can still be recorded, corrected or removed afterwards',
+    );
+    expect(confirmation).not.toHaveTextContent('stop being accepted');
   });
 
   // Arming carries the chosen survey with it, so starting a watch is one act. Split in two, the
@@ -858,6 +914,74 @@ describe('TrackingConfigCard', () => {
       expect(said).not.toHaveTextContent(/import one again/i);
       expect(screen.queryByTestId('trip-tracking-no-placeable-model')).not.toBeInTheDocument();
       expect(screen.queryByTestId('trip-tracking-no-cave-named')).not.toBeInTheDocument();
+    });
+
+    /**
+     * The same empty list, from a cave whose surveys this reader may not be shown.
+     *
+     * <b>The defect this pins.</b> The survey request answers a cave whose exact location is
+     * withheld with an empty list, on purpose — a survey is a measured drawing of the passage. Read
+     * as "nothing uploaded", that list sent a co-writer without exact-location rights to the cave's
+     * page to upload a line plot the cave already has, and which they could not have seen there
+     * either. The cave's summary is where the server says which emptiness this is.
+     */
+    it('says the surveys are withheld, not missing, when the cave keeps its location from the reader', () => {
+      models = [];
+      locationWithheld = true;
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      const said = screen.getByTestId('trip-tracking-surveys-withheld');
+      expect(said).toHaveTextContent(/not shown to you/i);
+      expect(said).not.toHaveTextContent(/upload/i);
+      expect(screen.queryByTestId('trip-tracking-no-survey-uploaded')).not.toBeInTheDocument();
+    });
+
+    /** And nothing is claimed either way while the cave's summary is still on its way. */
+    it('claims nothing about an empty list until the cave has said whether it is withheld', () => {
+      models = [];
+      locationPending = true;
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      expect(screen.queryByTestId('trip-tracking-no-survey-uploaded')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('trip-tracking-surveys-withheld')).not.toBeInTheDocument();
+    });
+
+    /**
+     * A list that never arrived is not an empty list. Drawn as "nothing uploaded", a failed read
+     * would send somebody to upload a file over a cave with three; it is tried again instead.
+     */
+    it('says the surveys could not be read, and offers to try again, rather than calling the cave empty', () => {
+      models = [];
+      modelsFailed = true;
+      show(state({ state: 'off', surveyModelId: null, armedAt: null }));
+
+      const said = screen.getByTestId('trip-tracking-surveys-unread');
+      expect(said).toHaveTextContent(/could not be read/i);
+      expect(screen.queryByTestId('trip-tracking-no-survey-uploaded')).not.toBeInTheDocument();
+
+      fireEvent.click(within(said).getByRole('button', { name: 'Retry' }));
+      expect(modelsRetry).toHaveBeenCalledOnce();
+    });
+
+    /**
+     * Under a withheld configuration the warning above the form already says the surveys are kept
+     * from this reader; a "nothing uploaded" notice beneath it would contradict it.
+     */
+    it('says nothing about the empty list when the whole setup is being withheld', () => {
+      models = [];
+      show(
+        state({
+          state: 'armed',
+          positionsWithheld: true,
+          surveyModelId: null,
+          referenceStationName: null,
+          depthFilter: [],
+        }),
+      );
+
+      expect(screen.getByTestId('trip-tracking-config-withheld')).toBeInTheDocument();
+      expect(screen.queryByTestId('trip-tracking-no-survey-uploaded')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('trip-tracking-surveys-withheld')).not.toBeInTheDocument();
     });
 
     /**

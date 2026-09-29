@@ -5,28 +5,13 @@ import { useTranslation } from 'react-i18next';
 import type { TrackingTeam, TripPositionEventKind } from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import TrackingWhenField from './TrackingWhenField.tsx';
-import { useTrackingPanelTheme } from './trackingControlSizes.ts';
+import { COARSE_CONTROL_HEIGHT, useTrackingPanelTheme } from './trackingControlSizes.ts';
 import {
   trackingStationRules,
   useTrackingReport,
   type TrackingReportValues,
 } from './trackingReport.ts';
 import './TrackingReportDialog.css';
-
-/**
- * The touch target every control in this dialog is built to.
- *
- * <b>Forty-four rather than the forty the surface behind it uses, and only here.</b> This is the one
- * place in the feature where a reader is being asked to fill a form in while looking at a model they
- * have just pressed, one-handed, with the other hand holding a phone to their ear — the case the
- * whole dialog exists for. The card under the watch keeps the forty pixels it was measured at,
- * because those measurements were taken against a calendar whose geometry depends on them; this
- * surface has none of that history and can simply be built larger.
- *
- * Given as the token every `large` control derives from, so the padding, the line height and the
- * icon inside each of them are built for the size the control believes it is.
- */
-const COARSE_CONTROL_HEIGHT = 44;
 
 /**
  * What a report opened by pressing a station may be, and why the list is shorter than the card's.
@@ -197,7 +182,7 @@ export default function TrackingReportDialog({
         onCancel={onClose}
         // The form is built afresh for each station rather than carried over: a note about the last
         // report, or a moment named for it, standing in the fields of the next one is how a wrong
-        // thing reaches a log that is never edited.
+        // thing reaches the log — and is then corrected by hand, where it need not have been.
         destroyOnHidden
         data-testid="trip-tracking-record-here"
       >

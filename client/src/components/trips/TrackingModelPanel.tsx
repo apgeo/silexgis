@@ -34,6 +34,7 @@ import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import TrackingPicturesDialog from './TrackingPicturesDialog.tsx';
 import TrackingReplayBar from './TrackingReplayBar.tsx';
 import TrackingReportDialog from './TrackingReportDialog.tsx';
+import { trackingLogWritable } from './trackingWatch.ts';
 
 export interface TrackingModelPanelProps {
   /** Whose watch this is — the replay reads the trip's whole log for itself. */
@@ -446,7 +447,7 @@ export default function TrackingModelPanel({
           showIcon
           style={{ marginBottom: 16 }}
           data-testid="trip-tracking-model-missing"
-          message={t('trips.tracking.modelMissingTitle')}
+          title={t('trips.tracking.modelMissingTitle')}
           description={t('trips.tracking.modelMissingBody')}
         />
         {movieDialog}
@@ -498,12 +499,13 @@ export default function TrackingModelPanel({
   /**
    * Whether pressing a station is worth offering at all.
    *
-   * Both halves are the same rule the card under the watch is drawn by: reports land on an armed
-   * watch and on no other, and a reader who cannot write to the log is not shown an offer that
-   * would be refused. Nothing is gated on the refusal itself — a press that produced an offer that
-   * produced a refusal is three acts spent learning something the page already knew.
+   * Both halves are the same rule the card under the watch is drawn by: reports land on a watch
+   * that has been started — running or closed since — and never on one that was not, and a reader
+   * who cannot write to the log is not shown an offer that would be refused. Nothing is gated on
+   * the refusal itself — a press that produced an offer that produced a refusal is three acts
+   * spent learning something the page already knew.
    */
-  const canRecord = canEdit && tracking.state === 'armed';
+  const canRecord = canEdit && trackingLogWritable(tracking.state);
 
   /**
    * A pinned station pressed on a map sheet, raised as the very offer a 3D press raises.

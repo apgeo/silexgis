@@ -20,6 +20,7 @@ export const TRACKING_CSV_PROBLEMS = [
   'UnmappedColumn',
   'MomentColumnMissing',
   'CaverColumnMissing',
+  'MomentSplitAcrossColumns',
   'MomentUnreadable',
   'MomentWithoutTime',
   'MomentMissing',
@@ -29,6 +30,7 @@ export const TRACKING_CSV_PROBLEMS = [
   'DepthUnreadable',
   'DepthOutOfRange',
   'StateWordUnknown',
+  'NoteTooLong',
   'StateOverridesPlace',
   'CaverNotOnRoster',
   'CaverAmbiguous',
@@ -42,6 +44,7 @@ export const TRACKING_CSV_PROBLEMS = [
   'DuplicateInFile',
   'MomentInFuture',
   'AlreadyRecorded',
+  'AlreadyRecordedSeveralTimes',
   'DateOrderConflict',
 ] as const;
 

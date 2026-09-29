@@ -397,10 +397,16 @@ export default function CaveDetailPage() {
           compiled from are two different things, and only one of them can be re-compiled. */}
       {id && <SurveySourceSection caveId={id} canEdit={canEdit} />}
 
+      {/* Under the surveys because that is what a declaration names: a depth, the station of this
+          cave's survey it means, and what people call the place. Read by every path that turns a
+          reported depth into a position — a report typed while a party is underground, a
+          correction afterwards, and an imported sheet — so it belongs beside the survey those
+          stations come from rather than among the cave's own identifiers. */}
+      {id && <CaveDepthPlacesSection caveId={id} canEdit={canEdit} />}
+
       {/* Directly under the archive it is read from: these are the compiler's own figures about an
           archived log, not something this application worked out from the stored survey. Silent
           for a cave nobody has archived a log for. */}
-      {id && <CaveDepthPlacesSection caveId={id} canEdit={canEdit} />}
       {id && <CaveExternalIdsSection caveId={id} canEdit={canEdit} />}
 
       {id && <SurveyQualityPanel caveId={id} />}

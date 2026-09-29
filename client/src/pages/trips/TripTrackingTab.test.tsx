@@ -49,8 +49,9 @@ vi.mock('../../api/hooks.ts', async () => ({
   useCreateTrackingTeam: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useRenameTrackingTeam: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDeleteTrackingTeam: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useSurveyModelsForCaves: () => ({ data: [], isPending: false }),
+  useSurveyModelsForCaves: () => ({ data: [], isPending: false, isError: false, refetch: () => {} }),
   useCaveNames: () => new Map<string, string>(),
+  useCaveExactLocationAccess: () => ({ withheld: false, isPending: false }),
   // The watch on the survey model it is resolved against. These tests set no model on the watch,
   // so nothing is asked for and nothing is offered; that surface has its own tests. The whole log
   // the replay reads is asked for on the same surface and is not asked for here either.
@@ -398,6 +399,17 @@ describe('TripTrackingTab', () => {
     );
   });
 
+  it('says above the log what the controls beside each row do: correct in place, or delete', () => {
+    // For a while the paragraph went on saying a report is never edited, under rows that each
+    // carried a Correct control — and a coordinator who believed the sentence deleted rows to fix
+    // a typo, which is the one thing correcting in place exists to spare.
+    show();
+
+    const sentence = screen.getByText(/corrected in place/);
+    expect(sentence).toHaveTextContent('One that should not be there at all is deleted.');
+    expect(sentence).not.toHaveTextContent(/never edited/);
+  });
+
   /**
    * A log that could not be read is not an empty log. Under the table's own empty text, a refused
    * or dropped request says "nothing has been reported yet" directly beneath a participants table
@@ -416,8 +428,8 @@ describe('TripTrackingTab', () => {
     expect(screen.queryByText('Nothing has been reported yet.')).toBeNull();
   });
 
-  // Reports land on an armed watch and on no other, so a form offered on a watch nobody started
-  // is a form whose every use is refused — at the moment somebody is relaying word out of a cave.
+  // A watch nobody started names no survey, so every report on it is refused — and a form offered
+  // there is a form whose every use fails, at the moment somebody is relaying word out of a cave.
   it('offers the report form only once tracking has been started', () => {
     trackingQuery.mockReturnValue({
       data: state({ state: 'off', armedAt: null }),
@@ -428,7 +440,7 @@ describe('TripTrackingTab', () => {
     const { unmount } = show();
 
     expect(screen.getByTestId('trip-tracking-not-armed')).toHaveTextContent(
-      'Tracking is not on for this trip',
+      'Tracking has not been started for this trip',
     );
     expect(screen.queryByTestId('trip-tracking-record')).toBeNull();
     unmount();
@@ -441,6 +453,25 @@ describe('TripTrackingTab', () => {
     });
     show();
     expect(screen.getByTestId('trip-tracking-record')).toBeTruthy();
+    expect(screen.queryByTestId('trip-tracking-not-armed')).toBeNull();
+  });
+
+  // A closed watch's log stays writable — a finished trip is written up afterwards, from notes,
+  // and the server takes a report there exactly as it takes a correction or a removal. The card
+  // used to be withheld on a closed watch, which left a coordinator able to correct and delete a
+  // finished log's rows and unable to add one, short of re-arming the watch and restarting its
+  // publication window.
+  it('keeps offering the report form on a closed watch', () => {
+    trackingQuery.mockReturnValue({
+      data: state({ state: 'closed', closedAt: '2026-09-12T18:00:00Z' }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    show();
+
+    expect(screen.getByTestId('trip-tracking-record')).toBeTruthy();
+    expect(screen.getByTestId('trip-tracking-mark-out')).toBeTruthy();
     expect(screen.queryByTestId('trip-tracking-not-armed')).toBeNull();
   });
 
@@ -511,9 +542,12 @@ describe('TripTrackingTab', () => {
     expect(candidates).toHaveTextContent('Q4');
   });
 
-  // Corrections are delete-and-say-again. Nothing on this surface edits a report, so the delete
-  // has to be reachable or a wrong position stays on the log for good.
-  it('takes a wrong report off the log rather than offering to edit it', async () => {
+  // Deleting is for a report that should never have been on the log — one about the wrong person,
+  // say — while a report merely written down wrongly is corrected in place beside it. The delete
+  // still has to be reachable, or such a report stays on the log for good — and its confirmation
+  // is the last place to send a coordinator who only meant to fix a typo to the Correct control
+  // instead, since a deleted report takes whatever was pinned to its moment with it.
+  it('takes a report that should not be there off the log, and points a mistyped one at Correct', async () => {
     eventsQuery.mockReturnValue({
       data: {
         items: [
@@ -538,6 +572,9 @@ describe('TripTrackingTab', () => {
     show();
 
     fireEvent.click(screen.getByTestId('trip-tracking-event-delete-event-1'));
+    const confirm = await screen.findByText(/Delete this report\?/);
+    expect(confirm).toHaveTextContent('is corrected instead, with Correct beside it');
+    expect(confirm).not.toHaveTextContent(/no other/);
     fireEvent.click(await screen.findByText('OK'));
 
     await waitFor(() => expect(deleteEvent).toHaveBeenCalledTimes(1));
@@ -836,6 +873,18 @@ describe('TripTrackingTab', () => {
       show();
 
       expect(screen.getByTestId('trip-tracking-event-delete-event-1')).toHaveClass('ant-btn-sm');
+    });
+
+    it('sizes the button that opens a sheet on the pointer, like the controls beside it', () => {
+      // The one control on the log's own row that was left at a mouse's size whatever pressed it,
+      // beside a row of buttons that follow the pointer.
+      const { unmount } = show();
+      expect(screen.getByTestId('trip-tracking-csv-open')).toHaveClass('ant-btn-sm');
+      unmount();
+
+      coarse = true;
+      show();
+      expect(screen.getByTestId('trip-tracking-csv-open')).toHaveClass('ant-btn-lg');
     });
 
     it('sizes the form a party is actually recorded with, fields and all', () => {
@@ -1894,6 +1943,35 @@ describe('TripTrackingTab, a depth report read afterwards', () => {
     expect(within(row).getByText('p.g.119')).toBeTruthy();
     expect(within(row).getByText('Reported as 120 m down')).toBeTruthy();
     expect(within(row).queryByTestId('trip-tracking-position-gap')).toBeNull();
+  });
+
+  /**
+   * A depth the cave has declared was placed by that declaration, and the mark's detail says so.
+   *
+   * The distance is honest either way, but the sentence behind it used to explain every depth as a
+   * snap to the nearest station "with no tolerance at all" — false for a declared depth, which lands
+   * on the station the club named for it however far the survey puts that station. A coordinator
+   * told the wrong reason goes to doubt the number when the thing to look at is the declaration.
+   */
+  it('says a far-off station was placed by the cave’s declaration when it was', async () => {
+    logged('p.g.meandru', 96);
+    depthReadings.mockReturnValue(
+      new Map([
+        [
+          96,
+          [{ stationName: 'p.g.meandru', surveyName: 'p.g', depthM: 136.2, deltaM: 40.2, declared: true }],
+        ],
+      ]),
+    );
+    show();
+
+    fireEvent.mouseEnter(within(logRow()).getByTestId('trip-tracking-position-gap'));
+
+    const detail = await screen.findByRole('tooltip');
+    await waitFor(() =>
+      expect(detail).toHaveTextContent('a depth this cave declares as p.g.meandru'),
+    );
+    expect(detail).not.toHaveTextContent('nearest, with no tolerance at all');
   });
 
   /**

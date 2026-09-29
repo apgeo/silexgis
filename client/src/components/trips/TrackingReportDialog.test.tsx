@@ -163,20 +163,31 @@ describe('TrackingReportDialog', () => {
   /**
    * Any other refusal leaves the statement standing.
    *
-   * Otherwise the field would appear whenever anything went wrong — a watch that is not armed, a
-   * report about somebody who is not on the trip — and the reader would be invited to correct the
-   * one thing that was right.
+   * Otherwise the field would appear whenever anything went wrong — a watch whose log cannot be
+   * written, a report about somebody who is not on the trip — and the reader would be invited to
+   * correct the one thing that was right.
+   *
+   * Refused with codes the server really answers, and each one's own sentence asserted: a code
+   * nobody sends any more falls through to the general "try again", and a case that only ever sees
+   * the fallback would go on passing after the wording it is about had been lost.
    */
-  it('keeps the station a statement when the refusal was about something else', async () => {
-    recordEvents.mockRejectedValue(new ApiError(409, 'tracking.not_armed'));
-    show();
+  it.each([
+    ['tracking.not_writable', /Tracking has never been started/],
+    ['tracking.caver_not_participant', /has to be on the trip's roster first/],
+  ])(
+    'keeps the station a statement when the refusal was about something else (%s)',
+    async (code, wording) => {
+      recordEvents.mockRejectedValue(new ApiError(409, code));
+      show();
 
-    await accept();
+      await accept();
 
-    await waitFor(() => expect(recordEvents).toHaveBeenCalled());
-    expect(screen.queryByTestId('trip-tracking-dialog-station')).toBeNull();
-    expect(screen.getByTestId('trip-tracking-dialog-place')).toHaveTextContent('p.g.42');
-  });
+      await waitFor(() => expect(recordEvents).toHaveBeenCalled());
+      expect(await screen.findByText(wording)).toBeInTheDocument();
+      expect(screen.queryByTestId('trip-tracking-dialog-station')).toBeNull();
+      expect(screen.getByTestId('trip-tracking-dialog-place')).toHaveTextContent('p.g.42');
+    },
+  );
 
   /**
    * A press is often not the whole of what a voice on the phone just said, so the kinds that carry

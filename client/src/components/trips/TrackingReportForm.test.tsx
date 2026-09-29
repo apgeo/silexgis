@@ -14,12 +14,17 @@ const depthReading = vi.fn();
 
 /** The places the cave has declared, shallowest first, as the server sends them. */
 const declaredPlaces = vi.fn<() => { depthM: number; stationName: string; placeLabel: string | null }[]>();
+/** Whether the card asked for those places at all, which it must not while the watch is off. */
+const placesAsked = vi.fn<(enabled: boolean) => void>();
 
 vi.mock('../../api/hooks.ts', () => ({
   TRACKING_EVENT_KINDS: ['entered', 'atStation', 'atDepth', 'note', 'exited'],
   useRecordTrackingEvents: () => ({ mutateAsync: recordEvents, isPending: false }),
   useTrackingDepthReading: (_tripLogId: string, depthM: number | null) => depthReading(depthM),
-  useTrackingPlaces: () => ({ data: declaredPlaces() }),
+  useTrackingPlaces: (_tripLogId: string, enabled = true) => {
+    placesAsked(enabled);
+    return { data: declaredPlaces() };
+  },
 }));
 
 /** Asking the check again, the way the button on a failed reading does. */
@@ -37,7 +42,7 @@ function show() {
     <App>
       <TrackingReportForm
         tripLogId="trip-1"
-        armed
+        writable
         caverIds={['caver-1']}
         teams={[]}
         onRecorded={vi.fn()}
@@ -124,6 +129,7 @@ function panelSizes(): string {
 
 beforeEach(() => {
   coarse = false;
+  placesAsked.mockClear();
   recordEvents.mockReset().mockResolvedValue([{}]);
   // Nothing declared by default, which is the state of every cave until somebody declares
   // something — so the cases below that do not mention places are drawn as they are today.
@@ -147,6 +153,39 @@ afterEach(cleanup);
  * sends a station while the log records a depth.
  */
 describe('TrackingReportForm, reporting a declared place', () => {
+  it('does not ask for the places while the watch is off, and asks once it is on', () => {
+    // The hooks run whether or not the card is drawn, and the server refuses the question for a
+    // watch with no model. A refusal fetched while the watch was off would be held and drawn as
+    // no chooser the moment the watch comes on — so the question is not asked until then.
+    const { rerender } = render(
+      <App>
+        <TrackingReportForm
+          tripLogId="trip-1"
+          writable={false}
+          caverIds={['caver-1']}
+          teams={[]}
+          onRecorded={vi.fn()}
+        />
+      </App>,
+    );
+    expect(screen.getByTestId('trip-tracking-not-armed')).toBeInTheDocument();
+    expect(placesAsked).toHaveBeenCalled();
+    expect(placesAsked.mock.calls.every(([enabled]) => enabled === false)).toBe(true);
+
+    rerender(
+      <App>
+        <TrackingReportForm
+          tripLogId="trip-1"
+          writable
+          caverIds={['caver-1']}
+          teams={[]}
+          onRecorded={vi.fn()}
+        />
+      </App>,
+    );
+    expect(placesAsked).toHaveBeenLastCalledWith(true);
+  });
+
   it('is not drawn at all for a cave that has declared nothing', () => {
     // An empty chooser is worse than no chooser: it says this cave has places and offers none.
     show();
@@ -164,6 +203,19 @@ describe('TrackingReportForm, reporting a declared place', () => {
 
     await toDepth('96');
     expect(screen.getByTestId('trip-tracking-place')).toBeInTheDocument();
+  });
+
+  it('names the chooser by its label, so a screen reader says what it chooses', async () => {
+    // The chooser's value is read off the depth field rather than held by the form, so its form
+    // item has no field name — and a form item without one gives its label no `for`. Without the
+    // tie, the fastest way to report was announced as a bare "combobox".
+    declaredPlaces.mockReturnValue([{ depthM: 96, stationName: 'upper.2', placeLabel: 'Meandru' }]);
+    show();
+    await toDepth('96');
+
+    const chooser = screen.getByRole('combobox', { name: 'Place' });
+    expect(screen.getByTestId('trip-tracking-place')).toContainElement(chooser);
+    expect(screen.getByText('Place', { selector: 'label' })).toHaveAttribute('for', chooser.id);
   });
 
   it('offers the places in the order the server decided, which is by depth', async () => {
@@ -204,6 +256,61 @@ describe('TrackingReportForm, reporting a declared place', () => {
     expect(sent.depthM).toBe(96);
     // And no station, because the station is the server's answer and not this card's guess at it.
     expect(sent.stationName ?? null).toBeNull();
+  });
+
+  /**
+   * The chooser and the depth field are two ways of saying one thing, and they must never say two.
+   *
+   * <b>The chooser shows a place only while the depth in the box is that place's depth.</b> Left to
+   * hold its own choice, it went on naming the place after the report it was chosen for had landed
+   * and the depth had been emptied — the next report's card read "Meandru — 96 m" over an empty
+   * field and refused to record a place its reader believed was chosen — and after the depth had
+   * been retyped by hand, which is two answers on one card with nothing saying which is sent.
+   */
+  it('lets the place go once the report it was chosen for has landed', async () => {
+    declaredPlaces.mockReturnValue([{ depthM: 96, stationName: 'upper.2', placeLabel: 'Meandru' }]);
+    show();
+    await toDepth('0');
+    fireEvent.click((await openPlaces('Meandru — 96 m'))[0]);
+    await waitFor(() =>
+      expect(screen.getByTestId('trip-tracking-place')).toHaveTextContent('Meandru — 96 m'),
+    );
+
+    fireEvent.click(screen.getByTestId('trip-tracking-record'));
+    await waitFor(() => expect(recordEvents).toHaveBeenCalledOnce());
+
+    await waitFor(() => expect(screen.getByTestId('trip-tracking-depth')).toHaveValue(''));
+    const chooser = screen.getByTestId('trip-tracking-place');
+    expect(chooser).not.toHaveTextContent('Meandru — 96 m');
+    expect(chooser).toHaveTextContent('Name the place instead of a depth');
+  });
+
+  it('lets the place go when a different depth is typed over it', async () => {
+    declaredPlaces.mockReturnValue([{ depthM: 96, stationName: 'upper.2', placeLabel: 'Meandru' }]);
+    show();
+    await toDepth('0');
+    fireEvent.click((await openPlaces('Meandru — 96 m'))[0]);
+    await waitFor(() => expect(screen.getByTestId('trip-tracking-depth')).toHaveValue('96'));
+
+    fireEvent.change(screen.getByTestId('trip-tracking-depth'), { target: { value: '120' } });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('trip-tracking-place')).not.toHaveTextContent('Meandru — 96 m'),
+    );
+  });
+
+  it('takes the depth it filled in back out when the place is cleared', async () => {
+    declaredPlaces.mockReturnValue([{ depthM: 96, stationName: 'upper.2', placeLabel: 'Meandru' }]);
+    show();
+    await toDepth('0');
+    fireEvent.click((await openPlaces('Meandru — 96 m'))[0]);
+    await waitFor(() => expect(screen.getByTestId('trip-tracking-depth')).toHaveValue('96'));
+
+    const chooser = screen.getByTestId('trip-tracking-place');
+    fireEvent.mouseDown(chooser.querySelector('.ant-select-clear')!);
+
+    await waitFor(() => expect(screen.getByTestId('trip-tracking-depth')).toHaveValue(''));
+    expect(chooser).not.toHaveTextContent('Meandru — 96 m');
   });
 });
 
@@ -297,7 +404,7 @@ describe('TrackingReportForm, the relayed-time calendar', () => {
  *
  * <b>What is asserted is the instant, not the button.</b> A row of buttons that set a field to
  * roughly the right moment would pass any test about labels and still put a report on a log at a
- * time nobody said — and the log is never edited, so a wrong moment is a wrong record. So the clock
+ * time nobody said — a wrong record, until somebody notices and corrects it by hand. So the clock
  * is held still and the value that reaches the request is read back: the report body carries the
  * instant as a string, which is the form the server actually stores.
  */
@@ -486,6 +593,37 @@ describe('TrackingReportForm, a depth nothing in the cave is near', () => {
     // before "no warning" means anything, or "not yet" passes for "never".
     await waitFor(() => expect(depthReading).toHaveBeenCalledWith(120));
     expect(screen.queryByTestId('trip-tracking-depth-gap')).toBeNull();
+  });
+
+  /**
+   * A depth the cave has declared lands where the cave declared it, and the warning says so.
+   *
+   * <b>The distance is still worth saying; the reason given for it was wrong.</b> The server puts a
+   * declared station first, flagged as declared and with its distance honestly measured, because
+   * that is where recording the depth will put the party. A wide gap there is not a depth that
+   * snapped to the nearest station — it is a declaration the survey disagrees with — and telling
+   * the coordinator that "a depth is always recorded at the nearest station" names the right place
+   * for a false reason and sends them to doubt the number rather than the declaration.
+   */
+  it('says a declared depth landed where the cave declared it, not at the nearest station', async () => {
+    // 96 m is declared as the Meander's station, which the survey and this trip's datum put at
+    // 136.2 m — 40.2 m out, past the quarter-of-the-depth tolerance at 96 m.
+    const meander = {
+      stationName: 'p.g.meandru',
+      surveyName: 'p.g',
+      depthM: 136.2,
+      deltaM: 40.2,
+      declared: true,
+    };
+    depthReading.mockReturnValue({ data: [meander], isFetching: false, error: null });
+    show();
+    await toDepth('96');
+
+    const warning = await screen.findByTestId('trip-tracking-depth-gap');
+    expect(warning).toHaveTextContent('This cave declares that depth as p.g.meandru');
+    expect(warning).toHaveTextContent('40.2');
+    expect(warning).toHaveTextContent('136.2');
+    expect(warning).not.toHaveTextContent('nearest station');
   });
 });
 

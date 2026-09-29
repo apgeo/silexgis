@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { AimOutlined, LogoutOutlined } from '@ant-design/icons';
 import {
   Alert,
@@ -41,8 +41,11 @@ interface ReportForm extends TrackingReportValues {
 
 interface Props {
   tripLogId: string;
-  /** Whether the watch is armed. Reports land on an armed watch and on no other. */
-  armed: boolean;
+  /**
+   * Whether the watch's log may be written: it has been started, and is either still running or
+   * has been closed since. A watch never started is the one state that refuses every report.
+   */
+  writable: boolean;
   /** The people this report is about — the table's selection, in the order it holds them. */
   caverIds: readonly string[];
   teams: readonly TrackingTeam[];
@@ -77,9 +80,11 @@ interface Props {
  * warning, never as a refusal, because a coordinator with better information than this page has
  * must still be able to record what they were told.
  *
- * The form is drawn only while the watch is armed. The server refuses reports otherwise, and
- * relying on that refusal would mean offering somebody a form that cannot work at the moment they
- * most need one — the wording here says which act is missing instead.
+ * The form is drawn once the watch has been started, and stays drawn after it is closed: a finished
+ * trip is written up afterwards from notes, and the server takes those reports exactly as it takes
+ * live ones. A watch never started refuses every report, and relying on that refusal would mean
+ * offering somebody a form that cannot work at the moment they most need one — the wording here
+ * says which act is missing instead.
  *
  * What a report actually *is* — which fields travel, how a moment is written, which refusal is a
  * warning — is not decided here. This card and the dialog opened by pressing a station on the model
@@ -87,7 +92,7 @@ interface Props {
  */
 export default function TrackingReportForm({
   tripLogId,
-  armed,
+  writable,
   caverIds,
   teams,
   onRecorded,
@@ -103,6 +108,14 @@ export default function TrackingReportForm({
   /** Whether the list of stations the depth could mean has been asked for. */
   const [listing, setListing] = useState(false);
   const panelTheme = useTrackingPanelTheme(coarse);
+  /**
+   * What ties the place chooser to its label. That chooser is the one field here the form does not
+   * hold — its value is read off the depth field instead — and a form item with no field name
+   * gives its label no `for`: a screen reader then announces a bare "combobox" for the quickest
+   * way there is to report. Minted per card rather than written down, so a second card on a page
+   * cannot hand its label to the first one's chooser.
+   */
+  const placeFieldId = useId();
 
   /**
    * The depth to ask about, once somebody has stopped typing it.
@@ -122,9 +135,9 @@ export default function TrackingReportForm({
   /**
    * What that depth means, asked of the one place that knows.
    *
-   * Reports land on an armed watch and on no other, and a watch cannot be armed without a survey
-   * model — so wherever this form is drawn at all there is a model to resolve against, and the
-   * question is never asked into the void.
+   * A watch cannot be started without a survey model, and closing it keeps the model — so wherever
+   * this form is drawn at all there is a model to resolve against, and the question is never asked
+   * into the void.
    */
   const reading = useTrackingDepthReading(tripLogId, askedDepth);
   const candidates: TrackingDepthCandidate[] | undefined = reading.data;
@@ -136,13 +149,32 @@ export default function TrackingReportForm({
    * and a list that arrived only after somebody started typing a depth would never be used. A cave
    * that has declared nothing answers an empty list, and then no chooser is drawn at all — there is
    * nothing to say about it, and an empty select is worse than no select.
+   *
+   * And not before the watch has been started. The question is answered against the watch's model,
+   * and a watch that has none is refused rather than answered; the hooks below run whether or not
+   * the form is drawn, so asked unconditionally the refusal would be fetched while the watch was
+   * off and held, and the card would open on arming with no chooser at all.
    */
-  const places = useTrackingPlaces(tripLogId);
+  const places = useTrackingPlaces(tripLogId, writable);
   const declared = places.data ?? [];
+  /**
+   * The place the chooser shows: the declared one whose depth is the depth in the box, on a depth
+   * report, and nothing otherwise.
+   *
+   * <b>Read off the field rather than remembered by the chooser, because the two are one answer.</b>
+   * A chooser holding its own choice went on naming a place after the report it was chosen for had
+   * landed and the depth had been emptied, and after somebody typed a different depth over it — a
+   * card saying "Meandru" over an empty field, or over 120 m, with nothing to say which of the two
+   * would be sent. The depth is what is sent, so the depth decides.
+   */
+  const chosenPlaceDepth =
+    kind === 'atDepth' && typeof depthTyped === 'number'
+      ? declared.find((place) => place.depthM === depthTyped)?.depthM
+      : undefined;
   /** How far the station this depth would be recorded at sits from the depth itself. */
   const gap = trackingDepthGap(askedDepth, candidates?.[0]);
 
-  if (!armed) {
+  if (!writable) {
     return (
       <Alert
         type="info"
@@ -164,8 +196,12 @@ export default function TrackingReportForm({
    * Sending the depth means the server resolves it through the very declaration that was chosen
    * here, so the place the person picked and the station that lands on the log cannot disagree.
    */
-  const choosePlace = (depthM: number | null) => {
+  const choosePlace = (depthM: number | null | undefined) => {
     if (depthM === null || depthM === undefined) {
+      // Clearing the place takes back the depth it filled in: the chooser shows what the field
+      // holds, so a cleared chooser over a depth it put there would still be reporting it.
+      form.setFieldValue('depthM', null);
+      setListing(false);
       return;
     }
 
@@ -254,14 +290,17 @@ export default function TrackingReportForm({
           {declared.length > 0 && (kind === 'atStation' || kind === 'atDepth') && (
             <Form.Item
               label={t('trips.tracking.reportPlace')}
+              htmlFor={placeFieldId}
               extra={t('trips.tracking.reportPlaceHelp')}
             >
               <Select
+                id={placeFieldId}
                 allowClear
                 showSearch
                 optionFilterProp="label"
                 placeholder={t('trips.tracking.reportPlacePlaceholder')}
                 data-testid="trip-tracking-place"
+                value={chosenPlaceDepth}
                 onChange={choosePlace}
                 options={declared.map((place) => ({
                   // The depth is the value because the depth is what gets recorded: the server
@@ -326,19 +365,31 @@ export default function TrackingReportForm({
                   and a coordinator who knows that must still be able to record what they heard.
                   What it must never do is stay quiet, which is what a form with the answer one
                   unpressed button away was doing. */}
+              {/* Two reasons a station can sit that far from the number, and each is said as
+                  itself. A depth the cave has declared lands on the station the club named for
+                  it, whatever the survey measures; explaining that as "the nearest station" would
+                  name the right place for a false reason and point the reader at the number when
+                  what they might want to check is the declaration. */}
               {gap?.wide === true && (
                 <Alert
                   type="warning"
                   showIcon
-                  title={t('trips.tracking.depthGapTitle', {
-                    station: gap.stationName,
-                    gap: gap.gapM,
-                  })}
-                  description={t('trips.tracking.depthGapBody', {
-                    asked: Math.abs(askedDepth ?? 0),
-                    station: gap.stationName,
-                    depth: gap.stationDepthM,
-                  })}
+                  title={t(
+                    gap.declared
+                      ? 'trips.tracking.depthGapDeclaredTitle'
+                      : 'trips.tracking.depthGapTitle',
+                    { station: gap.stationName, gap: gap.gapM },
+                  )}
+                  description={t(
+                    gap.declared
+                      ? 'trips.tracking.depthGapDeclaredBody'
+                      : 'trips.tracking.depthGapBody',
+                    {
+                      asked: Math.abs(askedDepth ?? 0),
+                      station: gap.stationName,
+                      depth: gap.stationDepthM,
+                    },
+                  )}
                   style={{ marginBottom: 12 }}
                   data-testid="trip-tracking-depth-gap"
                 />

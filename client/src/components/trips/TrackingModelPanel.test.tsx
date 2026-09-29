@@ -940,11 +940,21 @@ describe('TrackingModelPanel', () => {
       expect(given!.onPartPick).toBeUndefined();
     });
 
-    it('offers nothing while the watch is not armed', () => {
-      show(tracking({ state: 'closed' }));
+    it('offers nothing while the watch was never started', () => {
+      show(tracking({ state: 'off' }));
       fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
 
       expect(given!.onPartPick).toBeUndefined();
+    });
+
+    it('still offers it on a closed watch, whose log stays writable', () => {
+      // A finished trip is written up afterwards, from notes, and the server takes a report on a
+      // closed log exactly as it takes a correction there. An offer withheld here was the client
+      // refusing what the server allows, on the trips most in need of it.
+      show(tracking({ state: 'closed' }));
+      fireEvent.click(screen.getByTestId('trip-tracking-model-toggle'));
+
+      expect(given!.onPartPick).toBeDefined();
     });
 
     it('takes the offer down when the press names no single place', () => {

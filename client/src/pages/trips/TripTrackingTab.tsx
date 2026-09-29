@@ -57,6 +57,7 @@ import { publicNamingOf } from '../../components/trips/trackingPublicName.ts';
 import {
   lastHeardInWords,
   positionAgeOf,
+  trackingLogWritable,
   trackingStandingOf,
   trackingStandings,
   type TrackingStanding,
@@ -96,8 +97,13 @@ const RECENT_EVENTS = 20;
  * tells a coordinator that nobody has said where a party is since noon although somebody has said
  * *something* since — so the two are never collapsed into one figure or one label.
  *
- * **A wrong report is deleted, never edited.** What is on the log is what somebody said at a
- * moment; rewriting one in place would leave a record indistinguishable from one nobody corrected.
+ * **A wrong report is corrected in place, or deleted — and the rows offer both.** What is on the
+ * log is what somebody said at a moment. A report written down wrongly is corrected where it
+ * stands, which keeps its place on the log and everything pinned to it; one that should not be
+ * there at all is deleted. The paragraph above the log says which act is for what, and it has to
+ * say the same thing as the controls beside each row: for a while it went on saying a report is
+ * never edited under rows that each carried a Correct control, and a coordinator who believed the
+ * sentence deleted rows to fix a typo.
  *
  * **A failed read is a notice, not a demolition.** The watch is re-read every half minute while a
  * party is underground, so a refusal here is the ordinary consequence of a dropped connection
@@ -562,12 +568,19 @@ export default function TripTrackingTab({
         </Typography.Text>
         {gap?.wide === true && (
           <Tooltip
-            title={t('trips.tracking.positionGapDetail', {
-              asked: Math.abs(depthM),
-              station: gap.stationName,
-              depth: gap.stationDepthM,
-              gap: gap.gapM,
-            })}
+            // Why it landed there is part of what the distance means: a depth the cave declared
+            // went to the station the club named for it, not to whichever station was nearest.
+            title={t(
+              gap.declared
+                ? 'trips.tracking.positionGapDetailDeclared'
+                : 'trips.tracking.positionGapDetail',
+              {
+                asked: Math.abs(depthM),
+                station: gap.stationName,
+                depth: gap.stationDepthM,
+                gap: gap.gapM,
+              },
+            )}
           >
             <Tag
               color="warning"
@@ -1227,7 +1240,10 @@ export default function TripTrackingTab({
       {canEdit && (
         <TrackingReportForm
           tripLogId={trip.id}
-          armed={data.state === 'armed'}
+          // Offered on a closed watch as well as a running one: a finished trip is written up
+          // afterwards, and the server takes a report on a closed log exactly as it takes a
+          // correction or a removal there. Only a watch nobody started is refused.
+          writable={trackingLogWritable(data.state)}
           caverIds={[...selected]}
           teams={data.teams}
           onRecorded={() => setSelected(new Set())}
@@ -1244,7 +1260,7 @@ export default function TripTrackingTab({
               unserved. */}
           {canEdit && (
             <Button
-              size="small"
+              size={controlSize}
               icon={<ImportOutlined />}
               onClick={() => setImporting(true)}
               data-testid="trip-tracking-csv-open"

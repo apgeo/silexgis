@@ -253,7 +253,7 @@ export default function TrackingPicturesDialog({
           type="warning"
           showIcon
           style={{ marginTop: 12 }}
-          message={t('trips.tracking.pictures.guessedTitle', { count: guessedCount })}
+          title={t('trips.tracking.pictures.guessedTitle', { count: guessedCount })}
           description={
             <Flex gap="small" align="center" wrap>
               <span>{t('trips.tracking.pictures.guessedBody')}</span>
@@ -279,7 +279,7 @@ export default function TrackingPicturesDialog({
           type="warning"
           showIcon
           style={{ marginTop: 12 }}
-          message={t('trips.tracking.pictures.strayTitle', { count: stray.length })}
+          title={t('trips.tracking.pictures.strayTitle', { count: stray.length })}
           description={t('trips.tracking.pictures.strayBody', {
             at: new Date(stray[0].at),
           })}

@@ -98,7 +98,7 @@ export default function TrackingMomentPictures({
         <Alert
           type="error"
           showIcon
-          message={t('trips.tracking.pictures.panelUnavailable')}
+          title={t('trips.tracking.pictures.panelUnavailable')}
           data-testid="trip-tracking-pictures-unavailable"
         />
       ) : loading ? (

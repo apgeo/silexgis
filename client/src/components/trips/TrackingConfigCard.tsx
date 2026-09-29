@@ -22,6 +22,7 @@ import { isConcurrencyConflict } from '../../api/client.ts';
 import {
   surveyModelCanPlaceACaver,
   surveyModelPlacingObstacle,
+  useCaveExactLocationAccess,
   useCaveNames,
   useCreateTrackingTeam,
   useDeleteTrackingTeam,
@@ -128,6 +129,10 @@ export default function TrackingConfigCard({
 
   const models = useSurveyModelsForCaves(caveIds);
   const caveNames = useCaveNames(caveIds.length > 1 ? caveIds : []);
+  // Asked beside the list because the list cannot answer it: a cave whose exact location is
+  // withheld from this reader answers the survey request with the same empty list a cave nobody
+  // has uploaded to does. Only the cave's own summary says which.
+  const location = useCaveExactLocationAccess(caveIds);
 
   const when = (value: string | null) =>
     value ? new Date(value).toLocaleString(i18n.language) : '—';
@@ -575,7 +580,7 @@ export default function TrackingConfigCard({
         <Alert
           type="warning"
           showIcon
-          message={t('trips.tracking.positionsOnOtherModelTitle')}
+          title={t('trips.tracking.positionsOnOtherModelTitle')}
           description={t('trips.tracking.positionsOnOtherModelBody')}
           style={{ marginBottom: 12 }}
           data-testid="trip-tracking-positions-other-model"
@@ -588,7 +593,7 @@ export default function TrackingConfigCard({
             <Alert
               type="warning"
               showIcon
-              message={t('trips.tracking.configWithheldTitle')}
+              title={t('trips.tracking.configWithheldTitle')}
               description={t('trips.tracking.configWithheldBody')}
               style={{ marginBottom: 12 }}
               data-testid="trip-tracking-config-withheld"
@@ -667,15 +672,49 @@ export default function TrackingConfigCard({
                   data-testid="trip-tracking-no-cave-named"
                 />
               )}
-              {!models.isPending && caveIds.length > 0 && models.data.length === 0 && (
-                <Alert
-                  type="info"
-                  showIcon
-                  title={t('trips.tracking.noSurveyUploadedTitle')}
-                  description={t('trips.tracking.noSurveyUploadedBody')}
-                  style={{ marginBottom: 12 }}
-                  data-testid="trip-tracking-no-survey-uploaded"
-                />
+              {/* <b>An empty list is three different facts, and only one of them is "nothing was
+                  uploaded".</b> The survey request answers a cave whose exact location this
+                  reader may not see with an empty list on purpose, and a request that failed has
+                  no list at all. Told apart here rather than folded into one notice, because the
+                  act each asks for differs: a failed read is tried again; a withheld cave is
+                  somebody else's to set the watch up on; and only the empty cave sends anybody
+                  to upload a file. Under a withheld configuration nothing is said at all — the
+                  warning above already covers it, and a second notice beneath would contradict
+                  the first. */}
+              {!models.isPending && caveIds.length > 0 && models.data.length === 0 && !configWithheld && (
+                models.isError ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title={t('trips.tracking.surveysUnreadTitle')}
+                    description={t('trips.tracking.surveysUnreadBody')}
+                    style={{ marginBottom: 12 }}
+                    data-testid="trip-tracking-surveys-unread"
+                    action={
+                      <Button size={chipSize} onClick={() => models.refetch()}>
+                        {t('common.retry')}
+                      </Button>
+                    }
+                  />
+                ) : location.withheld ? (
+                  <Alert
+                    type="info"
+                    showIcon
+                    title={t('trips.tracking.surveysWithheldTitle')}
+                    description={t('trips.tracking.surveysWithheldBody')}
+                    style={{ marginBottom: 12 }}
+                    data-testid="trip-tracking-surveys-withheld"
+                  />
+                ) : location.isPending ? null : (
+                  <Alert
+                    type="info"
+                    showIcon
+                    title={t('trips.tracking.noSurveyUploadedTitle')}
+                    description={t('trips.tracking.noSurveyUploadedBody')}
+                    style={{ marginBottom: 12 }}
+                    data-testid="trip-tracking-no-survey-uploaded"
+                  />
+                )
               )}
               {!models.isPending && models.data.length > 0 && placeable.length === 0 && (
                 <Alert
@@ -699,7 +738,7 @@ export default function TrackingConfigCard({
                 <Alert
                   type="warning"
                   showIcon
-                  message={t('trips.tracking.modelSwapClearsDatumTitle')}
+                  title={t('trips.tracking.modelSwapClearsDatumTitle')}
                   description={t('trips.tracking.modelSwapClearsDatumBody')}
                   style={{ marginBottom: 12 }}
                   data-testid="trip-tracking-model-swap-clears-datum"
@@ -777,10 +816,17 @@ export default function TrackingConfigCard({
                 {tracking.state === 'closed' ? t('trips.tracking.rearm') : t('trips.tracking.arm')}
               </Button>
             )}
+            {/* What closing does is said before it is done, and said as what it is: the party
+                stops being followed, while the log stays writable. A confirmation claiming that
+                reports stop being accepted would have a coordinator finish the whole write-up
+                first, and keep a watch and its published page live for hours longer than the
+                party was underground. Capped in width because it is a paragraph, not a line. */}
             {armed && (
               <Popconfirm
                 title={t('trips.tracking.closeConfirm')}
+                description={t('trips.tracking.closeConfirmBody')}
                 onConfirm={() => void write('closed', false)}
+                styles={{ root: { maxWidth: 'min(400px, 100vw)' } }}
                 {...confirmSizes}
               >
                 <Button size={controlSize} icon={<StopOutlined />} data-testid="trip-tracking-close">

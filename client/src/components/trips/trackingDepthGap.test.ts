@@ -8,8 +8,8 @@ import {
 } from './trackingDepthGap.ts';
 
 /** A candidate as the resolution route answers one: a station, how deep it is, how far off it is. */
-function candidate(stationName: string, depthM: number, deltaM: number) {
-  return { stationName, surveyName: null, depthM, deltaM };
+function candidate(stationName: string, depthM: number, deltaM: number, declared = false) {
+  return { stationName, surveyName: null, depthM, deltaM, declared };
 }
 
 /**
@@ -87,6 +87,17 @@ describe('the gap between a reported depth and the station it was recorded at', 
     expect(trackingDepthGap(1200, undefined)).toBeNull();
     expect(trackingDepthGap(null, candidate('p.g.140', 139.4, 1060.6))).toBeNull();
   });
+
+  it('carries whether the station is the one the cave declared, so the reason can be said', () => {
+    // The distance is measured the same way for both; what differs is why the station is there.
+    // A declared depth lands on the club's station however far the survey puts it, and a surface
+    // that could not tell the two apart would explain that as a snap to the nearest station.
+    const declared = trackingDepthGap(96, candidate('p.g.meandru', 136.2, 40.2, true));
+    expect(declared!.wide).toBe(true);
+    expect(declared!.declared).toBe(true);
+
+    expect(trackingDepthGap(1200, candidate('p.g.140', 139.4, 1060.6))!.declared).toBe(false);
+  });
 });
 
 /**
@@ -112,6 +123,19 @@ describe('the gap on a report already recorded', () => {
 
     expect(gap!.wide).toBe(true);
     expect(gap!.gapM).toBe(1060.6);
+  });
+
+  it('measures a report the cave’s declaration placed, and says that it was the declaration', () => {
+    // Re-resolving a declared depth answers the declared station first, which is also what the
+    // recording path wrote down — so the row may measure it, and must say why it is there.
+    const gap = recordedDepthGap(
+      { askedDepthM: 96, stationName: 'p.g.meandru', surveyModelId: WATCH_MODEL },
+      WATCH_MODEL,
+      [candidate('p.g.meandru', 136.2, 40.2, true), candidate('p.g.96', 95.8, 0.2)],
+    );
+
+    expect(gap!.wide).toBe(true);
+    expect(gap!.declared).toBe(true);
   });
 
   it('measures it and stays quiet when the report all but landed on its station', () => {

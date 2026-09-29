@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import '../../i18n';
 import type { TrackingEvent, TrackingState } from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
@@ -109,6 +109,24 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+/**
+ * antd names a deprecated prop through `console.error`, once per render — and in development the
+ * application's own error sweep files every one of those as a defect. So every case in this file
+ * also checks that nothing it drew spoke that way; a notice written with the old spelling of a
+ * prop fails here rather than in somebody's diagnostics.
+ */
+let consoleError: MockInstance<typeof console.error>;
+beforeEach(() => {
+  consoleError = vi.spyOn(console, 'error');
+});
+afterEach(() => {
+  const deprecations = consoleError.mock.calls
+    .map(([first]) => String(first))
+    .filter((line) => /\[antd: [^\]]+\].*deprecated/.test(line));
+  consoleError.mockRestore();
+  expect(deprecations).toEqual([]);
+});
 
 describe('TrackingReplayBar', () => {
   it('offers nothing for a watch that was never armed', () => {
