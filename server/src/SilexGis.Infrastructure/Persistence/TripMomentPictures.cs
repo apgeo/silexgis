@@ -32,13 +32,14 @@ public readonly record struct TripMomentPictureResult(TripMomentPictureOutcome O
 /// <remarks>
 /// <para>
 /// <b>The attachment hangs on the trip at an instant, never on the report row, and that is the
-/// whole design.</b> A tracking log is append-only and a correction is a deletion followed by a
-/// fresh report with a new id — <c>DeleteEventAsync</c> removes the row outright and there is no
-/// update route at all. So a picture keyed to a report is destroyed the first time somebody fixes a
-/// typo in a time, silently, by an act nobody thinks of as destructive. What a link stores instead
-/// is <c>(this trip, 14:05)</c>, and neither of those identifiers moves when a report is deleted
-/// and re-entered: the picture survives the correction untouched, and the replay folds the
-/// corrected log to place it again.
+/// whole design.</b> When this was decided a tracking log was append-only and a correction was a
+/// deletion followed by a fresh report with a new id, so a picture keyed to a report was destroyed
+/// the first time somebody fixed a typo in a time, silently, by an act nobody thinks of as
+/// destructive. A report is since corrected in place and keeps its id, but one can still be taken
+/// off the log outright, and the reasoning holds either way: what a link stores is
+/// <c>(this trip, 14:05)</c>, and neither of those identifiers moves when a report is corrected or
+/// removed — the picture survives untouched, and the replay folds the corrected log to place it
+/// again.
 /// </para>
 /// <para>
 /// <b>The honest cost, which is not hidden.</b> Correcting a report's <em>time</em> does not drag

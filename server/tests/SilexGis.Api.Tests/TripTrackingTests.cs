@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
+using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Jobs;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
@@ -75,7 +76,7 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
     // ---- the core loop -------------------------------------------------------------------
 
     [Fact]
-    public async Task Tracking_arms_takes_reports_folds_the_latest_per_caver_and_corrections_are_deletions()
+    public async Task Tracking_arms_takes_reports_folds_the_latest_per_caver_and_a_wrong_report_can_be_taken_off_the_log()
     {
         var (trip, cavers) = await CreateTripAsync("Core loop", guests: 2);
         var cave = await CreateCaveAsync(locationProtected: false);
@@ -967,6 +968,40 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
             recordedAt = At(12, 0),
         });
         added.StatusCode.ShouldBe(HttpStatusCode.OK, await added.Content.ReadAsStringAsync());
+        var addedId = (await added.Content.ReadFromJsonAsync<JsonElement>())
+            .EnumerateArray().First().GetProperty("id").GetGuid();
+
+        // Taking a report off is the third of the three acts one rule governs, and a closed log
+        // allows it as it allows the other two.
+        (await owner.DeleteAsync($"/api/v1/trip-logs/{trip}/tracking/events/{addedId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // An off watch refuses all three, with one code, on a log that holds a row — the case the
+        // refusal before arming above cannot reach, because there the log was empty and a
+        // correction or a removal had nothing to name. No request moves a watch into Off, so the
+        // state is written directly; what is under test is the rule refusing it on every route,
+        // not how a log comes to be in it (an archive imported onto a trip whose watch was never
+        // started is one way).
+        await SetStateAsync(trip, TripTrackingState.Off);
+        HttpResponseMessage[] acts =
+        [
+            await PostEventAsync(owner, trip, new { caverIds = cavers, kind = "exited", recordedAt = At(12, 30) }),
+            await PutEventAsync(owner, trip, eventId, new { kind = "atStation", stationName = "cave.upper.2" }),
+            await owner.DeleteAsync($"/api/v1/trip-logs/{trip}/tracking/events/{eventId}"),
+        ];
+        foreach (var act in acts)
+        {
+            var payload = await act.Content.ReadAsStringAsync();
+            act.StatusCode.ShouldBe(HttpStatusCode.Conflict, $"{act.RequestMessage!.Method}: {payload}");
+            payload.ShouldContain("tracking.not_writable");
+        }
+
+        // Refused means untouched: the one row left is the correction, exactly as it was made.
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var rows = await db.TripPositionEvents.AsNoTracking().Where(e => e.TripLogId == trip).ToListAsync();
+        rows.ShouldHaveSingleItem().Id.ShouldBe(eventId);
+        rows[0].ViewerStationName.ShouldBe("cave.deep.3");
     }
 
     /// <summary>
@@ -1053,22 +1088,128 @@ public sealed class TripTrackingTests : IAsyncLifetime, IDisposable, IClassFixtu
         // would be a worse answer than the true one.
         refused.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 
-        // The positive twin: the same correction, by somebody who may.
+        // Asked again once the watch is over, which is when a trip is written up and its log is
+        // open to correction by anybody who may write the trip — so the refusal is shown to be about
+        // this account's right, and not something a closed watch happens to change.
+        (await PutConfigAsync(owner, trip, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await PutEventAsync(reader, trip, eventId, new { kind = "atStation", stationName = "cave.deep.3" }))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await reader.DeleteAsync($"/api/v1/trip-logs/{trip}/tracking/events/{eventId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        // The positive twin: the same correction, by somebody who may, on the same closed watch.
         (await PutEventAsync(owner, trip, eventId, new { kind = "atStation", stationName = "cave.deep.3" }))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
     }
+
+    // ---- the places a report can name -------------------------------------------------------
+
+    /// <summary>
+    /// The places a report can name instead of a depth: served shallowest first to whoever runs the
+    /// trip, refused to a reader, and refused to a writer who may not place the cave exactly as the
+    /// depth preview beside it refuses them.
+    /// </summary>
+    /// <remarks>
+    /// A declared place names a station, so the list says where in the cave something is. The
+    /// writer without the placing right is built the way it happens: another editor runs a trip on
+    /// the survey while the cave is open, and the cave is protected afterwards. They still write
+    /// their trip; the list is served to them before and refused after, so the refusal is the
+    /// protection and nothing else — and the cave's owner, on the same cave at the same moment, is
+    /// still served it.
+    /// </remarks>
+    [Fact]
+    public async Task The_places_list_is_shallowest_first_and_guarded_as_the_depth_preview_is()
+    {
+        var cave = await CreateCaveAsync(locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        var (trip, _) = await CreateTripAsync("Places", guests: 1);
+        (await ArmAsync(owner, trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Declared deepest first, so the order the list comes back in is the list's own doing.
+        foreach (var (depth, station, label) in new[]
+        {
+            (120m, "cave.deep.3", "Sala Mare"),
+            (50m, "cave.upper.2", "Puțul"),
+        })
+        {
+            var declared = await owner.PutAsJsonAsync($"/api/v1/caves/{cave}/depth-places", new
+            {
+                depthM = depth,
+                stationName = station,
+                placeLabel = label,
+            });
+            declared.StatusCode.ShouldBe(HttpStatusCode.OK, await declared.Content.ReadAsStringAsync());
+        }
+
+        var listed = await owner.GetAsync(PlacesOf(trip));
+        listed.StatusCode.ShouldBe(HttpStatusCode.OK, await listed.Content.ReadAsStringAsync());
+        (await BodyAsync(listed)).EnumerateArray()
+            .Select(p => (
+                p.GetProperty("depthM").GetDecimal(),
+                p.GetProperty("stationName").GetString(),
+                p.GetProperty("placeLabel").GetString(),
+                p.GetProperty("stationInModel").GetBoolean()))
+            .ShouldBe([(50m, "cave.upper.2", "Puțul", true), (120m, "cave.deep.3", "Sala Mare", true)]);
+
+        // A reader may read the trip and is refused the list, as they are refused the preview.
+        (await reader.GetAsync(PlacesOf(trip))).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        var guideEmail = $"trk-guide-{Guid.NewGuid():N}"[..20] + "@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, guideEmail);
+        var guide = await AuthHelper.BearerClientAsync(factory, guideEmail);
+        var (theirs, _) = await CreateTripAsync("Guided", guests: 1, client: guide);
+        (await ArmAsync(guide, theirs, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await guide.GetAsync(PlacesOf(theirs))).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        await SetLocationProtectedAsync(cave, true);
+
+        var refused = await guide.GetAsync(PlacesOf(theirs));
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await refused.Content.ReadAsStringAsync()).ShouldContain("tracking.model_unavailable");
+        var preview = await guide.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{theirs}/tracking/resolve-depth", new { depthM = 50 });
+        preview.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await preview.Content.ReadAsStringAsync()).ShouldContain("tracking.model_unavailable");
+
+        (await owner.GetAsync(PlacesOf(trip))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static string PlacesOf(Guid trip) => $"/api/v1/trip-logs/{trip}/tracking/places";
 
     private static Task<HttpResponseMessage> PutEventAsync(
         HttpClient client, Guid trip, Guid eventId, object body) =>
         client.PutAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events/{eventId}", body);
 
+    /// <summary>
+    /// Writes a watch's state directly, for the one state no request moves a watch into. The state
+    /// is a plain recorded fact with nothing derived from it, which is what makes writing it this
+    /// way faithful — unlike protection, which goes through the service that maintains its derived
+    /// columns.
+    /// </summary>
+    private async Task SetStateAsync(Guid trip, TripTrackingState state)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var tracking = await db.TripTrackings.SingleAsync(t => t.TripLogId == trip);
+        tracking.State = state;
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SetLocationProtectedAsync(Guid caveFeatureId, bool value)
+    {
+        using var scope = factory.Services.CreateScope();
+        var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
+        await writer.SetLocationProtectedAsync(caveFeatureId, value);
+        await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().SaveChangesAsync();
+    }
+
     private async Task<(Guid Trip, List<Guid> Cavers)> CreateTripAsync(
-        string title, int guests, string visibility = "authenticated")
+        string title, int guests, string visibility = "authenticated", HttpClient? client = null)
     {
         var participants = Enumerable.Range(1, guests)
             .Select(i => new { newCaverName = $"Guest {i} {Guid.NewGuid():N}"[..24] })
             .ToArray();
-        var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
+        var response = await (client ?? owner).PostAsJsonAsync("/api/v1/trip-logs/", new
         {
             title = $"{title} {Guid.NewGuid():N}",
             tripDate = "2026-09-12",

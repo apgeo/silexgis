@@ -49,6 +49,7 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
 
     private HttpClient owner = null!;
     private HttpClient anonymous = null!;
+    private string ownerEmail = null!;
     private long caveTypeId;
 
     public TripPastTrackTests(PostgresFixture postgres)
@@ -83,8 +84,9 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"past-own-{suffix}@t.local");
-        owner = await AuthHelper.BearerClientAsync(factory, $"past-own-{suffix}@t.local");
+        ownerEmail = $"past-own-{suffix}@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, ownerEmail);
+        owner = await AuthHelper.BearerClientAsync(factory, ownerEmail);
         anonymous = factory.CreateClient();
 
         using var scope = factory.Services.CreateScope();
@@ -259,6 +261,84 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
         ListedIds(await ListAsync(reader.Token)).ShouldBe(new[] { reader.Trip });
         (await anonymous.GetAsync(PastTrack(reader.Token, withdrawn.Trip)))
             .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// A watch closed and then armed again — a party going back in — leaves the archive and is
+    /// followed again, and the whole crossing is driven by the clock alone.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Closed to armed is a move the watch allows, and arming clears the instant it closed at,
+    /// which is what carries the trip from the archive back onto the live list. Nothing here is
+    /// written behind the API: the close is stamped by the request that closes the watch, and the
+    /// windows are read by the requests that follow it.
+    /// </para>
+    /// <para>
+    /// That only works because both ends of the grace are read off one clock. This host's clock
+    /// runs three minutes ahead of the machine's and its grace is one minute, so a close stamped
+    /// from any clock other than the one the windows are read against lands outside its own grace
+    /// the moment it is written — and the first assertions below, still followed and not yet
+    /// history, see it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_watch_closed_past_its_grace_and_armed_again_leaves_the_archive_for_the_live_list()
+    {
+        var clock = new TestTimeProvider(DateTimeOffset.UtcNow);
+        var settings = HostSettings();
+        settings["TripTracking:ShareGraceAfterClose"] = "00:01:00";
+        using var host = new SilexGisApiFactory(connectionString, settings, services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.AddSingleton<TimeProvider>(clock);
+        });
+        // Signed in while this host's clock and the machine's still agree, so the session and the
+        // token it issues are good whichever of the two they are later checked against; the clock
+        // then moves by minutes, well inside a token's life.
+        var coordinator = await AuthHelper.BearerClientAsync(host, ownerEmail);
+        var visitor = host.CreateClient();
+
+        var trip = await PublishedTripAsync("Back in");
+
+        clock.Now = DateTimeOffset.UtcNow.AddMinutes(3);
+        (await PutConfigAsync(coordinator, trip.Trip, new { state = "closed" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Just closed, by this clock: still followed, saying it is over, and not yet history.
+        (await Json(visitor.GetAsync(Live(trip.Token))))
+            .GetProperty("state").GetString().ShouldBe("closed");
+        ListedIds(await Json(visitor.GetAsync(PastList(trip.Token)))).ShouldBeEmpty();
+
+        // Past the grace by the same clock: out of the live window, into the archive, playable.
+        clock.Now = clock.Now.AddMinutes(2);
+        (await visitor.GetAsync(Live(trip.Token))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var archived = (await Json(visitor.GetAsync(PastList(trip.Token))))
+            .GetProperty("trips").EnumerateArray().ShouldHaveSingleItem();
+        archived.GetProperty("tripLogId").GetGuid().ShouldBe(trip.Trip);
+        archived.GetProperty("playable").GetBoolean().ShouldBeTrue();
+        (await visitor.GetAsync(PastTrack(trip.Token, trip.Trip))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        ListedIds(await Json(visitor.GetAsync(LiveList(trip.Token)))).ShouldBeEmpty();
+
+        // The party goes back in.
+        (await PutConfigAsync(coordinator, trip.Trip, new { state = "armed" }))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // Out of the archive, as a row and as a playback ...
+        ListedIds(await Json(visitor.GetAsync(PastList(trip.Token)))).ShouldBeEmpty();
+        (await visitor.GetAsync(PastTrack(trip.Token, trip.Trip)))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        // ... and followed again, as a watch that is running with no close behind it — on the
+        // list of parties in the cave and on its own page alike.
+        var listed = (await Json(visitor.GetAsync(LiveList(trip.Token))))
+            .GetProperty("trips").EnumerateArray().ShouldHaveSingleItem();
+        listed.GetProperty("tripLogId").GetGuid().ShouldBe(trip.Trip);
+        listed.GetProperty("state").GetString().ShouldBe("armed");
+        listed.GetProperty("closedAt").ValueKind.ShouldBe(JsonValueKind.Null);
+        var followed = await Json(visitor.GetAsync(Live(trip.Token)));
+        followed.GetProperty("state").GetString().ShouldBe("armed");
+        followed.GetProperty("closedAt").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 
     /// <summary>
@@ -771,6 +851,8 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
     private static string Live(string token) => $"/api/v1/public/trips/{Uri.EscapeDataString(token)}";
 
     private static string PastList(string token) => $"{Live(token)}/past";
+
+    private static string LiveList(string token) => $"{Live(token)}/live";
 
     private static string PastTrack(string token, Guid tripLogId) => $"{Live(token)}/past/{tripLogId}";
 

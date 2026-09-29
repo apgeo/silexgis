@@ -73,8 +73,9 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
 
         // Notifications are one table for the whole database, and earlier test classes queue rows of
         // their own that nothing drains. A drain here is not scoped to a user, so those leftovers
-        // would be claimed first — taking the one-shot delivery failure this class injects, and
-        // making its counts depend on whatever ran before it.
+        // would be claimed first, making the passes and their counts depend on whatever ran before
+        // it. (The failures this class injects are aimed at its own recipient's address for the
+        // same reason, and do not depend on this.)
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         await db.Notifications.ExecuteDeleteAsync();
@@ -260,12 +261,15 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
 
         try
         {
-            factory.Messages.FailNextSend = true;
+            // Aimed at this test's own recipient rather than at "the next send": the drain settles
+            // whatever is due in the shared database, so a one-shot failure could land on another
+            // class's message and leave this one delivered on the first pass.
+            factory.Messages.FailSendsTo = RecipientEmail;
             await DrainAsync();
         }
         finally
         {
-            factory.Messages.FailNextSend = false;
+            factory.Messages.FailSendsTo = null;
         }
 
         var afterFailure = (await DeliveriesAsync()).ShouldHaveSingleItem();
@@ -783,12 +787,15 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
 
         try
         {
-            factory.Messages.FailNextSend = true;
+            // Aimed at this test's own recipient rather than at "the next send": the drain settles
+            // whatever is due in the shared database, so a one-shot failure could land on another
+            // class's message and leave this one delivered on the first pass.
+            factory.Messages.FailSendsTo = RecipientEmail;
             await DrainAsync();
         }
         finally
         {
-            factory.Messages.FailNextSend = false;
+            factory.Messages.FailSendsTo = null;
         }
 
         (await DeliveriesAsync()).ShouldHaveSingleItem().Status.ShouldBe(NotificationDeliveryStatus.Pending);

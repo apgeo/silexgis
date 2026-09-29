@@ -317,12 +317,21 @@ public sealed class AdminMessagingTests : IAsyncLifetime, IDisposable, IClassFix
     {
         var admin = await AuthHelper.BearerClientAsync(factory, adminEmail);
 
-        factory.Messages.FailNextSend = true;
-        var failed = await admin.PostAsJsonAsync("/api/v1/admin/settings/mail/test", new { recipient = adminEmail });
-        failed.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var body = await failed.Content.ReadFromJsonAsync<JsonElement>();
-        body.GetProperty("sent").GetBoolean().ShouldBeFalse();
-        body.GetProperty("error").GetString().ShouldNotBeNullOrWhiteSpace();
+        try
+        {
+            // Aimed at the address the test send goes to, so the failure cannot be spent by a
+            // delivery some other class drains at the same moment.
+            factory.Messages.FailSendsTo = adminEmail;
+            var failed = await admin.PostAsJsonAsync("/api/v1/admin/settings/mail/test", new { recipient = adminEmail });
+            failed.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var body = await failed.Content.ReadFromJsonAsync<JsonElement>();
+            body.GetProperty("sent").GetBoolean().ShouldBeFalse();
+            body.GetProperty("error").GetString().ShouldNotBeNullOrWhiteSpace();
+        }
+        finally
+        {
+            factory.Messages.FailSendsTo = null;
+        }
 
         var succeeded = await admin.PostAsJsonAsync("/api/v1/admin/settings/mail/test", new { recipient = adminEmail });
         (await succeeded.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("sent").GetBoolean().ShouldBeTrue();

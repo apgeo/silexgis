@@ -49,8 +49,10 @@ public enum TripPositionEventSource : short
 
 /// <summary>
 /// One report about one caver during a tracked trip, at the moment <see cref="RecordedAt"/>
-/// refers to. The log is append-only: a wrong report is deleted and re-entered, never edited,
-/// so both directions land on the trip's audit timeline.
+/// refers to. A wrong report is corrected in place, keeping its row and its identity — anything
+/// hung on that row survives the correction — and is taken off the log only when what it recorded
+/// never happened rather than happened differently. Both acts land on the trip's audit timeline,
+/// as recording does, and all three are refused on a watch that was never armed.
 ///
 /// A position is a station reference — the station's name in the viewer's own spelling plus
 /// the survey model it belongs to. No coordinate is ever stored here: geometry stays in

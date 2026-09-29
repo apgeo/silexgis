@@ -21,6 +21,16 @@ namespace SilexGis.Domain.Trips;
 /// approximate and says how far off it was.
 /// </para>
 /// <para>
+/// <b>One key for a depth, whoever writes it.</b> A depth reaches this table three ways — declared
+/// on the cave page, typed into a report, written in a sheet — and two of those accept the sign
+/// field notes actually use (−120 for 120 metres down) and any number of decimals. The table holds
+/// a magnitude to one decimal, because that is the key it is read by. So every comparison here goes
+/// through <see cref="Key"/>: a report of −400 finds the declaration at 400, and a declaration
+/// written as 120.04 corrects the one at 120 rather than trying to sit beside it. Rounding to the
+/// table's own precision is not the nearest-declared guessing rejected below: no declaration can
+/// be made finer than a tenth of a metre, so a depth within that tenth can mean nothing else.
+/// </para>
+/// <para>
 /// Nothing here reads a database or a survey: it is given the declarations and decides only what a
 /// depth means. Whether the station it names exists on the survey in force is the caller's
 /// question, and a declaration naming a station a re-exported model no longer has is a visible,
@@ -46,9 +56,10 @@ public static class DeclaredDepthPlaces
     {
         ArgumentNullException.ThrowIfNull(declarations);
 
+        var asked = Key(depthM);
         foreach (var declaration in declarations)
         {
-            if (declaration.DepthM == depthM)
+            if (Key(declaration.DepthM) == asked)
             {
                 return declaration;
             }
@@ -56,6 +67,21 @@ public static class DeclaredDepthPlaces
 
         return null;
     }
+
+    /// <summary>
+    /// The form a depth takes as the key of a declaration: its magnitude, to one decimal, rounded
+    /// half away from zero — which is also what the column that stores it keeps.
+    /// </summary>
+    /// <remarks>
+    /// Applied before a declaration is looked up, before one is written and before a reported
+    /// depth is compared with one, so that the sign a person wrote and the decimals they typed
+    /// decide nothing. A write that skipped this would look up 120.04, find nothing beside the row
+    /// at 120, and then be refused by the unique index for inserting the same key. The rounding is
+    /// the one a report's own depth gets, taken from the same place, so a declaration and the
+    /// report that meets it cannot round a value two ways.
+    /// </remarks>
+    public static decimal Key(decimal depthM) =>
+        Math.Abs(TripTrackingRules.RecordedDepthM(depthM));
 
     /// <summary>
     /// The declaration people call by this name, or null when none is called that.

@@ -202,9 +202,10 @@ public sealed class ImportBatchItemConfiguration : IEntityTypeConfiguration<Impo
         // one of whose rows somebody later removed, which is exactly the import worth finding.
         builder.HasOne<TripLog>().WithMany().HasForeignKey(x => x.TripLogId).OnDelete(DeleteBehavior.SetNull);
         // The one pointer here that goes with its object rather than outliving it. A position
-        // event is removed when it is corrected — the log is append-only, so a wrong report is
-        // deleted and re-entered — and a line still naming a row that has gone would send an undo
-        // looking for something nobody can find. Cascade, so the line goes too.
+        // event is corrected in place and keeps its row, so this line survives a correction and
+        // still names the row the import wrote. The row goes only when what it recorded never
+        // happened, and a line still naming a row that has gone would send an undo looking for
+        // something nobody can find. Cascade, so the line goes with the row.
         builder.HasOne<TripPositionEvent>().WithMany().HasForeignKey(x => x.TripPositionEventId)
             .OnDelete(DeleteBehavior.Cascade);
 

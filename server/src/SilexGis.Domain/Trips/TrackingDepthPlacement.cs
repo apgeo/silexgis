@@ -59,13 +59,19 @@ public static class TrackingDepthPlacements
     {
         ArgumentNullException.ThrowIfNull(stations);
 
+        // Placed as the log will store it, not as it was typed. The stored column keeps one
+        // decimal, and a station chosen for 120.04 is not always the station 120.0 would have
+        // chosen — so a row that reads "120.0 m" beside another could stand somewhere else. Done
+        // here, before either answer below, so that every caller places on the number it keeps.
+        var depth = TripTrackingRules.RecordedDepthM(depthM);
+
         // Checked against the model rather than trusted, because a declaration made against an
         // older survey can name a station the current one does not have, and a station name
         // nothing resolves is a marker that silently never appears. Such a declaration is passed
         // over and the measurement below answers instead — the wrong station is recoverable, an
         // invisible one is not even noticeable.
-        if (DeclaredDepthPlaces.For(declarations, depthM) is { } declared
-            && stations.Any(s => s.ViewerName == declared.ViewerStationName))
+        if (DeclaredDepthPlaces.For(declarations, depth) is { } declared
+            && NamesAStationOf(stations, declared))
         {
             return new TrackingDepthPlacement(
                 TrackingDepthPlacementOutcome.Declared, declared.ViewerStationName);
@@ -78,7 +84,7 @@ public static class TrackingDepthPlacements
         }
 
         var candidates = TrackingDepthResolver.Resolve(
-            stations, referenceZ.Value, (double)depthM, depthFilter, take: 1);
+            stations, referenceZ.Value, (double)depth, depthFilter, take: 1);
         if (candidates.Count == 0)
         {
             return new TrackingDepthPlacement(TrackingDepthPlacementOutcome.NoStationAtDepth, null);
@@ -89,5 +95,24 @@ public static class TrackingDepthPlacements
         // and one stamped in the other spelling would never appear.
         return new TrackingDepthPlacement(
             TrackingDepthPlacementOutcome.Measured, candidates[0].ViewerName);
+    }
+
+    /// <summary>
+    /// Whether the station a declaration names is one the model has, under the viewer's spelling
+    /// the declaration is stored in.
+    /// </summary>
+    /// <remarks>
+    /// The same test the placement above applies before honouring a declaration, offered on its own
+    /// so that a list of declared places can say which of them a report would actually land on. A
+    /// declaration that fails it is passed over silently at the moment of recording — that is the
+    /// safe answer there — and the only way the fault gets noticed and fixed is for the surfaces
+    /// that offer the place to be told.
+    /// </remarks>
+    public static bool NamesAStationOf(
+        IReadOnlyCollection<TrackingDepthResolver.Station> stations,
+        DeclaredDepthPlaces.Declared declaration)
+    {
+        ArgumentNullException.ThrowIfNull(stations);
+        return stations.Any(s => s.ViewerName == declaration.ViewerStationName);
     }
 }

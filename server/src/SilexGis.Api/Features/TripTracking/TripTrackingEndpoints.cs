@@ -479,14 +479,19 @@ public static class TripTrackingEndpoints
             db.TripTrackings.Add(tracking);
         }
 
+        // Stamped from the same clock every window reads them against. The close moment is one
+        // end of the grace a closed watch stays followable for, and the other end is "now" as the
+        // public routes ask it; taken from two different clocks, a test that moves time could not
+        // move both, and the boundary could only be reached by writing the row behind the API.
+        var stampedAt = clock.GetUtcNow();
         if (current != TripTrackingState.Armed && target == TripTrackingState.Armed)
         {
-            tracking.ArmedAt = DateTimeOffset.UtcNow;
+            tracking.ArmedAt = stampedAt;
             tracking.ClosedAt = null;
         }
         if (current != TripTrackingState.Closed && target == TripTrackingState.Closed)
         {
-            tracking.ClosedAt = DateTimeOffset.UtcNow;
+            tracking.ClosedAt = stampedAt;
         }
         tracking.State = target;
         if (request.SurveyModelId is not null)
@@ -653,8 +658,12 @@ public static class TripTrackingEndpoints
         }
 
         var now = DateTimeOffset.UtcNow;
-        var recordedAt = request.RecordedAt ?? now;
-        if (recordedAt > now + TripTrackingRules.RecordedAtSkew)
+        // Brought to UTC on the way in rather than stored as sent: the column is an instant, and
+        // the database refuses a value carrying any other offset outright, so a report written by
+        // a client that says "+03:00" instead of "Z" would otherwise fail with nothing telling the
+        // caller why. The instant is the same either way; only its spelling changes.
+        var recordedAt = (request.RecordedAt ?? now).ToUniversalTime();
+        if (TripTrackingRules.MomentIsInFuture(recordedAt, now))
         {
             return ApiProblems.BadRequest("tracking.recorded_in_future", "A report cannot be about the future.");
         }
@@ -703,7 +712,8 @@ public static class TripTrackingEndpoints
         await db.SaveChangesAsync(ct);
 
         IReadOnlyList<TrackingEventDto> dtos = [.. created.Select(e => new TrackingEventDto(
-            e.Id, e.CaverId, e.TeamId, e.Kind, e.SurveyModelId, e.ViewerStationName, e.DepthEnteredM, e.Note, e.RecordedAt))];
+            e.Id, e.CaverId, e.TeamId, e.Kind, e.SurveyModelId, e.ViewerStationName, e.DepthEnteredM, e.Note, e.RecordedAt,
+            placed.Placement))];
         return TypedResults.Ok(dtos);
     }
 
@@ -729,6 +739,7 @@ public static class TripTrackingEndpoints
         Guid? caveFeatureId = null;
         string? resolvedStation = null;
         decimal? depthEntered = null;
+        TrackingDepthPlacementOutcome? placement = null;
 
         if (kind is TripPositionEventKind.AtStation or TripPositionEventKind.AtDepth)
         {
@@ -759,14 +770,14 @@ public static class TripTrackingEndpoints
                 // ordering between those two lives in one Domain function because recording,
                 // correcting and importing all have to reach the same answer.
                 var stations = await StationsOfAsync(db, usable.Value.Model, ct);
-                var placement = TrackingDepthPlacements.For(
+                var placedAt = TrackingDepthPlacements.For(
                     await DeclaredPlacesOfAsync(db, caveFeatureId.Value, ct),
                     stations,
                     tracking.ReferenceStationName,
                     tracking.DepthFilter,
                     depthM!.Value);
 
-                switch (placement.Outcome)
+                switch (placedAt.Outcome)
                 {
                     case TrackingDepthPlacementOutcome.ReferenceUnknown:
                         return Refused(ApiProblems.Conflict("tracking.reference_unknown",
@@ -776,13 +787,18 @@ public static class TripTrackingEndpoints
                             "No station matches that depth under the trip's depth filter."));
                 }
 
-                resolvedStation = placement.ViewerStationName;
-                depthEntered = depthM;
+                resolvedStation = placedAt.ViewerStationName;
+                // Kept, and echoed, in the form the column stores: the row would round it on the
+                // way in anyway, and an answer saying 120.04 about a row that reads 120.0 is an
+                // answer about something else.
+                depthEntered = TripTrackingRules.RecordedDepthM(depthM!.Value);
+                // Carried back to the caller: a declared place the model lacks is measured instead,
+                // and the answer is the one place that can say so.
+                placement = placedAt.Outcome;
             }
         }
 
-
-        return new ResolvedPlace(surveyModelId, caveFeatureId, resolvedStation, depthEntered, null);
+        return new ResolvedPlace(surveyModelId, caveFeatureId, resolvedStation, depthEntered, placement, null);
     }
 
     /// <summary>The places a cave has declared names and stations for, ordered by depth.</summary>
@@ -800,12 +816,13 @@ public static class TripTrackingEndpoints
     }
 
     private static ResolvedPlace Refused(ProblemHttpResult problem) =>
-        new(null, null, null, null, problem);
+        new(null, null, null, null, null, problem);
 
     /// <summary>What a report says about where somebody is, once every gate on it has been asked.</summary>
+    /// <param name="Placement">How a depth became its station; null for a report that named no depth.</param>
     private sealed record ResolvedPlace(
         Guid? SurveyModelId, Guid? CaveFeatureId, string? StationName, decimal? DepthEnteredM,
-        ProblemHttpResult? Refusal);
+        TrackingDepthPlacementOutcome? Placement, ProblemHttpResult? Refusal);
 
     /// <summary>
     /// Corrects one report in place: the moment it claims, where it puts somebody, which team it
@@ -860,7 +877,8 @@ public static class TripTrackingEndpoints
         if (row is null) return ApiProblems.NotFound("tracking.event_not_found");
 
         var now = DateTimeOffset.UtcNow;
-        var recordedAt = request.RecordedAt ?? row.RecordedAt;
+        // To UTC for the same reason the record route does it: the column accepts no other offset.
+        var recordedAt = (request.RecordedAt ?? row.RecordedAt).ToUniversalTime();
         if (TripTrackingRules.MomentIsInFuture(recordedAt, now))
         {
             return ApiProblems.BadRequest("tracking.recorded_in_future", "A report cannot be about the future.");
@@ -890,9 +908,20 @@ public static class TripTrackingEndpoints
 
         return TypedResults.Ok(new TrackingEventDto(
             row.Id, row.CaverId, row.TeamId, row.Kind, row.SurveyModelId, row.ViewerStationName,
-            row.DepthEnteredM, row.Note, row.RecordedAt));
+            row.DepthEnteredM, row.Note, row.RecordedAt, placed.Placement));
     }
 
+    /// <summary>
+    /// Removes one report — under the same gate as recording and correcting one.
+    /// </summary>
+    /// <remarks>
+    /// The gate is here on purpose and not only on the two writes. Without it a log whose watch
+    /// was never armed — which is what an archive imported onto an existing trip leaves — could be
+    /// destroyed row by row and never repaired, since the correction route refused it; that is the
+    /// destroyable-and-unrepairable shape one rule for all three acts exists to rule out. Rows an
+    /// import put on such a trip are taken back by undoing the import, which is the act that
+    /// answers for them.
+    /// </remarks>
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteEventAsync(
         Guid tripLogId, Guid eventId, SilexGisDbContext db, IAccessService access,
         IAccessContextAccessor accessAccessor, CancellationToken ct)
@@ -903,6 +932,12 @@ public static class TripTrackingEndpoints
             ? ApiProblems.NotFound("trip_log.not_found")
             : await WriteGuardAsync(access, ctx, trip, ct);
         if (refusal is not null) return refusal;
+
+        var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
+        if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
+        {
+            return ApiProblems.Conflict("tracking.not_writable", LogNotWritable);
+        }
 
         var row = await db.TripPositionEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
         if (row is null) return ApiProblems.NotFound("tracking.event_not_found");
@@ -954,10 +989,17 @@ public static class TripTrackingEndpoints
                 "The survey model does not exist here, or its cave cannot be placed by this account.");
         }
 
+        // Each declaration is checked against the model exactly as recording a report at its depth
+        // checks it, because a declaration naming a station the model lacks is passed over there
+        // and measured instead. Listed all the same, marked: the only way that fault gets fixed on
+        // the cave is for the surface offering the place to be able to say it is broken.
         var declared = await DeclaredPlacesOfAsync(db, usable.Value.Cave.Id, ct);
+        var stations = await StationsOfAsync(db, usable.Value.Model, ct);
         IReadOnlyList<TrackingPlaceDto> dtos =
         [
-            .. declared.Select(d => new TrackingPlaceDto(d.DepthM, d.ViewerStationName, d.PlaceLabel))
+            .. declared.Select(d => new TrackingPlaceDto(
+                d.DepthM, d.ViewerStationName, d.PlaceLabel,
+                TrackingDepthPlacements.NamesAStationOf(stations, d)))
         ];
         return TypedResults.Ok(dtos);
     }
@@ -983,12 +1025,42 @@ public static class TripTrackingEndpoints
             "The survey model does not exist here, or its cave cannot be placed by this account.");
 
         var stations = await StationsOfAsync(db, usable.Value.Model, ct);
-        var referenceZ = TrackingDepthResolver.ReferenceZ(stations, tracking.ReferenceStationName);
-        if (referenceZ is null) return ApiProblems.Conflict("tracking.reference_unknown",
-            "The depth datum cannot be established for the chosen model.");
+        // Previewed on the depth recording it would store, so the station shown is the station the
+        // report lands on; the placement rule rounds the same way before it answers.
+        var asked = TripTrackingRules.RecordedDepthM(request.DepthM!.Value);
+        var take = request.Take ?? 5;
 
-        var candidates = TrackingDepthResolver.Resolve(
-            stations, referenceZ.Value, (double)request.DepthM!.Value, tracking.DepthFilter, request.Take ?? 5);
+        // What the cave declared this depth to be comes first, because it is what recording the
+        // depth will write down: the record, correct and import routes all ask the same Domain
+        // rule, which honours a declaration naming a station the model has before it measures
+        // anything. A preview that measured only would show one station while the report landed on
+        // another, and the gap warning drawn from it would remark on a distance nobody is at.
+        var declared = DeclaredDepthPlaces.For(
+            await DeclaredPlacesOfAsync(db, usable.Value.Cave.Id, ct), asked) is { } declaration
+            && TrackingDepthPlacements.NamesAStationOf(stations, declaration)
+                ? stations.First(s => s.ViewerName == declaration.ViewerStationName)
+                : (TrackingDepthResolver.Station?)null;
+
+        var referenceZ = TrackingDepthResolver.ReferenceZ(stations, tracking.ReferenceStationName);
+        if (referenceZ is null && declared is null)
+        {
+            return ApiProblems.Conflict("tracking.reference_unknown",
+                "The depth datum cannot be established for the chosen model.");
+        }
+
+        var dtos = new List<TrackingDepthCandidateDto>(take);
+        if (declared is { } place)
+        {
+            // Its depth is measured like every other candidate's when the datum allows it, so
+            // the distance shown beside it is honest about a declaration that sits far from the
+            // depth it names; without a datum the declaration's own depth is all there is to say.
+            var depthM = referenceZ is { } datum ? datum - place.Z : (double)asked;
+            dtos.Add(new TrackingDepthCandidateDto(
+                place.ViewerName, place.SurveyName,
+                Math.Round(depthM, 1), Math.Round(Math.Abs(depthM - (double)Math.Abs(asked)), 1),
+                Declared: true));
+        }
+
         // Named as the viewer names them, because this is a preview of what recording the depth
         // would write down, and it is also a list somebody picks a station out of to report it
         // outright. A preview that spells a station one way while the report it leads to stores it
@@ -997,12 +1069,21 @@ public static class TripTrackingEndpoints
         // The survey name is left as the file labels it: it is the survey's own description of
         // where the station sits, offered to tell two candidates apart, and not a path anything
         // resolves.
-        IReadOnlyList<TrackingDepthCandidateDto> dtos = [.. candidates.Select(c =>
-            new TrackingDepthCandidateDto(
-                c.ViewerName,
-                c.SurveyName,
-                Math.Round(c.DepthM, 1),
-                Math.Round(c.DeltaM, 1)))];
-        return TypedResults.Ok(dtos);
+        if (referenceZ is { } reference)
+        {
+            var candidates = TrackingDepthResolver.Resolve(
+                stations, reference, (double)asked, tracking.DepthFilter, take);
+            dtos.AddRange(candidates
+                .Where(c => declared is null || c.ViewerName != declared.Value.ViewerName)
+                .Take(take - dtos.Count)
+                .Select(c => new TrackingDepthCandidateDto(
+                    c.ViewerName,
+                    c.SurveyName,
+                    Math.Round(c.DepthM, 1),
+                    Math.Round(c.DeltaM, 1),
+                    Declared: false)));
+        }
+
+        return TypedResults.Ok((IReadOnlyList<TrackingDepthCandidateDto>)dtos);
     }
 }

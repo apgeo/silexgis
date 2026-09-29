@@ -343,11 +343,11 @@ public sealed class ImportCommitService(
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-        // Positions first, and they are removed rather than stamped: the tracking log is
-        // append-only and a wrong report is corrected by deleting it, so an undo speaks the same
-        // language the surface does. Removed even when the trip is about to go with them — the
-        // trip usually is not going, because a recording is normally imported onto a trip that
-        // already existed and has its own history to keep.
+        // Positions first, and they are removed rather than stamped: a report of something that
+        // never happened is taken off the log, which is what the tracking surface itself does with
+        // one, so an undo speaks the same language. Removed even when the trip is about to go
+        // with them — the trip usually is not going, because a recording is normally imported
+        // onto a trip that already existed and has its own history to keep.
         if (eventIds.Count > 0)
         {
             await db.TripPositionEvents.Where(e => eventIds.Contains(e.Id)).ExecuteDeleteAsync(ct);

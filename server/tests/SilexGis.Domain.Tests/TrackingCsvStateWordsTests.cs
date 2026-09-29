@@ -29,6 +29,16 @@ public class TrackingCsvStateWordsTests
         Words.KindOf("went out").ShouldBe(TripPositionEventKind.Exited);
         Words.KindOf("out").ShouldBe(TripPositionEventKind.Exited);
         Words.KindOf("in").ShouldBe(TripPositionEventKind.Entered);
+
+        // The words above are all list words, so they answer the same under equality and under
+        // containment. These are not, and each one is what a containment test would get wrong:
+        // a phrase with a list word inside it ("intrat" is one) would be read as that word, and a
+        // fragment of a list word ("went" of "went out", "i" of "iesire") would be read as the
+        // word it is a piece of. Each is a word nobody listed, so it names no standing and is
+        // reported rather than guessed at.
+        Words.KindOf("intrat in bivuac").ShouldBeNull();
+        Words.KindOf("went").ShouldBeNull();
+        Words.KindOf("i").ShouldBeNull();
     }
 
     [Fact]

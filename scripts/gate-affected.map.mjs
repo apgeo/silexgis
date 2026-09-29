@@ -26,6 +26,7 @@ export const groups = {
     'TripTypeVocabularyTests', 'TripTrackingTests', 'TripTrackingPublicationTests',
     'TripPastTrackTests', 'TripTrackingPicturesTests', 'TripTrackingStationNamesTests',
     'TripLiveSiblingTests', 'SurveyModelTrackedTripsTests', 'TrackingCsvImportTests',
+    'TrustedProxyTests', 'TripTrackingOptionsTests',
     'CredentialUrlScrubberTests',
     'TripOrganizingGroupGuardTests', 'TripsOfTheCallerTests',
   ],
@@ -118,8 +119,8 @@ export const groups = {
   ],
   users: [
     'AuthFlowTests', 'CredentialRevocationTests', 'EmailVerificationTests', 'ExternalAuthTests',
-    'MfaAndRateLimitTests', 'ProfileVisibilityTests', 'TestLoginTests', 'TwoFactorChannelTests',
-    'UserAdministrationTests',
+    'MfaAndRateLimitTests', 'ProfileVisibilityTests', 'TestLoginTests', 'TrustedProxyTests',
+    'TwoFactorChannelTests', 'UserAdministrationTests',
   ],
   resLinks: [
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',

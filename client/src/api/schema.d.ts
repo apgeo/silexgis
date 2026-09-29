@@ -24622,7 +24622,10 @@ export interface components {
             depthM: number;
             /** Format: double */
             deltaM: number;
+            declared: boolean;
         };
+        /** @enum {unknown} */
+        TrackingDepthPlacementOutcome: "declared" | "measured" | "referenceUnknown" | "noStationAtDepth" | null;
         TrackingEventDto: {
             /** Format: uuid */
             id: string;
@@ -24639,6 +24642,7 @@ export interface components {
             note: null | string;
             /** Format: date-time */
             recordedAt: string;
+            depthPlacement?: null | components["schemas"]["TrackingDepthPlacementOutcome"];
         };
         TrackingEventEditRequest: {
             kind: null | components["schemas"]["TripPositionEventKind"];
@@ -24724,6 +24728,7 @@ export interface components {
             depthM: number;
             stationName: string;
             placeLabel: null | string;
+            stationInModel: boolean;
         };
         TrackingResolveDepthRequest: {
             /** Format: double */

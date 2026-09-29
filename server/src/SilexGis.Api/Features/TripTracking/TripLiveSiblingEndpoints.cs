@@ -159,7 +159,12 @@ public static class TripLiveSiblingEndpoints
                 live.Value.ShareGraceAfterClose))
             .ToList();
 
-        var more = followed.Count > size;
+        // Something more exists either because the fold left more than one page of it, or because
+        // the candidate read hit its cap and an older party still underground never arrived to be
+        // folded — the same two reasons the archive's bit has. Read from the list alone, a cave
+        // whose published trips outnumber the cap dropped a still-followable older trip and said
+        // nothing.
+        var more = followed.Count > size || candidates.Count >= cap;
         var shown = followed.Take(size).ToList();
 
         // One query for the whole list, before the loop that folds each party.

@@ -703,10 +703,14 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         var filtered = await PreviewAsync(editor, fileId, Options(model, mine, cavers[0]));
         filtered.GetProperty("proposedCount").GetInt32().ShouldBe(0);
 
-        // The same filter, now belonging to a different cave's survey, steers nothing here.
+        // The same filter, now belonging to a different cave's survey, steers nothing here. The
+        // state is a closed watch re-pointed across caves in one write — the party is out and the
+        // trip turns out to have been somewhere else — because that is the only way a watch comes
+        // to carry another cave's survey: an armed watch may not be moved across caves, by design,
+        // and re-arming it onto one is refused for the same reason.
         var other = await CreateCaveAsync(editor, locationProtected: false);
         var otherModel = await SeedModelWithStationsAsync(other);
-        (await ArmAsync(editor, mine, otherModel, depthFilter: ["nowhere.at.all"]))
+        (await CloseOntoAsync(editor, mine, otherModel, depthFilter: ["nowhere.at.all"]))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
         var unfiltered = await PreviewAsync(editor, fileId, Options(model, mine, cavers[0]));
         unfiltered.GetProperty("proposedCount").GetInt32().ShouldBe(2);
@@ -1270,9 +1274,22 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
     private static List<string> AllPointsOf(JsonElement preview) =>
         [.. preview.GetProperty("selectablePointIds").EnumerateArray().Select(e => e.GetString()!)];
 
+    private static Task<HttpResponseMessage> ArmAsync(
+        HttpClient client, Guid trip, Guid model, string[]? depthFilter = null) =>
+        PutConfigAsync(client, trip, "armed", model, depthFilter);
+
+    /// <summary>
+    /// Closes the watch and points it at <paramref name="model"/> in the same write — the one act
+    /// by which a watch comes to carry another cave's survey, since an armed one may not be moved
+    /// across caves.
+    /// </summary>
+    private static Task<HttpResponseMessage> CloseOntoAsync(
+        HttpClient client, Guid trip, Guid model, string[]? depthFilter = null) =>
+        PutConfigAsync(client, trip, "closed", model, depthFilter);
+
     /// <summary>Config writes ride the trip's version: fetch the ETag, then PUT with If-Match.</summary>
-    private static async Task<HttpResponseMessage> ArmAsync(
-        HttpClient client, Guid trip, Guid model, string[]? depthFilter = null)
+    private static async Task<HttpResponseMessage> PutConfigAsync(
+        HttpClient client, Guid trip, string state, Guid model, string[]? depthFilter)
     {
         var current = await client.GetAsync($"/api/v1/trip-logs/{trip}/tracking");
         current.StatusCode.ShouldBe(HttpStatusCode.OK, await current.Content.ReadAsStringAsync());
@@ -1280,7 +1297,7 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         {
             Content = JsonContent.Create(new
             {
-                state = "armed",
+                state,
                 surveyModelId = model,
                 depthFilter = depthFilter ?? [],
             }),

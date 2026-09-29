@@ -205,7 +205,7 @@ public static class TripTrackingPublicationEndpoints
 
     private static async Task<Results<NoContent, ProblemHttpResult>> RevokeAsync(
         Guid tripLogId, Guid shareId, SilexGisDbContext db, IAccessService access,
-        IAccessContextAccessor accessAccessor, CancellationToken ct)
+        IAccessContextAccessor accessAccessor, TimeProvider clock, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
@@ -218,10 +218,11 @@ public static class TripTrackingPublicationEndpoints
             .FirstOrDefaultAsync(s => s.Id == shareId && s.TripLogId == tripLogId, ct);
         if (share is null) return ApiProblems.NotFound(NotFoundCode);
 
-        // Idempotent: a second revoke keeps the original revocation timestamp.
+        // Idempotent: a second revoke keeps the original revocation timestamp. Stamped from the
+        // clock the link's other boundaries are read against, so one link is not dated by two.
         if (share.RevokedAt is null)
         {
-            share.RevokedAt = DateTimeOffset.UtcNow;
+            share.RevokedAt = clock.GetUtcNow();
             await db.SaveChangesAsync(ct);
         }
 
@@ -240,16 +241,23 @@ public static class TripTrackingPublicationEndpoints
             return ApiProblems.NotFound(NotFoundCode);
         }
 
+        // One round trip whatever the token turns out to be. The link, its trip and its watch are
+        // read together, so a token that was once real — since revoked, lapsed, or on a watch that
+        // is over — costs the database exactly what an invented one costs, and the refusal below is
+        // decided in memory. Read one at a time, a once-real token took two more round trips than
+        // an unknown one before the same 404: a difference in response time, which is the one bit
+        // this route promises not to give away. A link whose trip or watch is gone finds no row
+        // here and is refused the same way.
         var hash = HashToken(token);
-        var share = await db.TripTrackingShares.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.TokenHash == hash, ct);
-        if (share is null) return ApiProblems.NotFound(NotFoundCode);
+        var found = await (
+            from link in db.TripTrackingShares.AsNoTracking()
+            join log in db.TripLogs.AsNoTracking() on link.TripLogId equals log.Id
+            join watch in db.TripTrackings.AsNoTracking() on log.Id equals watch.TripLogId
+            where link.TokenHash == hash
+            select new { Share = link, Trip = log, Tracking = watch }).FirstOrDefaultAsync(ct);
+        if (found is null) return ApiProblems.NotFound(NotFoundCode);
 
-        var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == share.TripLogId, ct);
-        if (trip is null) return ApiProblems.NotFound(NotFoundCode);
-
-        var tracking = await db.TripTrackings.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.TripLogId == trip.Id, ct);
+        var (share, trip, tracking) = (found.Share, found.Trip, found.Tracking);
 
         // Whether this link is still a link, asked here rather than remembered anywhere. Revoked,
         // lapsed, and pointing at a watch that has closed or was never armed are four different
@@ -265,7 +273,7 @@ public static class TripTrackingPublicationEndpoints
         // underground. Nothing there widens this: a link outside both windows answers exactly what
         // an invented one answers, so neither route tells a stranger that a token was once real.
         // Do not "unify" the two gates — they are two deliberate lifetimes, not an inconsistency.
-        var open = tracking is not null && TripPublicationWindow.IsOpen(
+        var open = TripPublicationWindow.IsOpen(
             clock.GetUtcNow(),
             share.RevokedAt,
             share.ExpiresAt,
@@ -278,7 +286,7 @@ public static class TripTrackingPublicationEndpoints
         // protected now closes the page, and so does a configuration that has lost the cave it
         // was anchored to — answered as an unknown token is, because whether this trip exists is
         // part of what the refusal keeps back.
-        if (tracking?.CaveFeatureId is not { } configCave) return ApiProblems.NotFound(NotFoundCode);
+        if (tracking.CaveFeatureId is not { } configCave) return ApiProblems.NotFound(NotFoundCode);
         var publishable = await TrackingWithholding.PublishableCaveIdsAsync(db, protection, [configCave], ct);
         if (!publishable.Contains(configCave)) return ApiProblems.NotFound(NotFoundCode);
 

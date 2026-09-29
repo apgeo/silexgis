@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Buffers.Text;
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NetTopologySuite.Geometries;
 using Shouldly;
@@ -244,6 +249,62 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         ListedIds(await LiveListAsync(published.Token)).ShouldBe([published.Trip]);
     }
 
+    /// <summary>
+    /// Publication is asked of the trip and not of the link: withdrawing one of a trip's two links
+    /// leaves it published through the other, while the withdrawn link itself opens nothing on any
+    /// of the four routes.
+    /// </summary>
+    /// <remarks>
+    /// Every other test here mints one link per trip, where "the trip has an unrevoked link" and
+    /// "this link is unrevoked" are the same fact and a query that confused them passes. The last
+    /// step is the other half of that: which expiry keeps a trip followable is the latest among the
+    /// links nobody withdrew, so the withdrawn link's later expiry must not hold the trip on the
+    /// list once the surviving link has run out.
+    /// </remarks>
+    [Fact]
+    public async Task One_revoked_link_does_not_unpublish_a_trip_that_has_another()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var reader = await PublishedTripAsync("Reader", cave, model);
+        var twice = await PublishedTripAsync("Two links", cave, model, station: "cave.deep.3");
+        var (survivingId, surviving) = await PublishAsync(twice.Trip);
+
+        (await owner.DeleteAsync($"{Shares(twice.Trip)}/{twice.ShareId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Still published: listed through another trip's link and through its own surviving one,
+        // with its party, and its own page still opens on the surviving link.
+        ListedIds(await LiveListAsync(reader.Token)).ShouldBe([reader.Trip, twice.Trip], ignoreOrder: true);
+        var throughSurvivor = await LiveListAsync(surviving);
+        ListedIds(throughSurvivor).ShouldBe([reader.Trip, twice.Trip], ignoreOrder: true);
+        StationOf(throughSurvivor, twice.Trip, ordinal: 1).ShouldBe("cave.deep.3");
+        (await Json(anonymous.GetAsync(Follow(surviving))))
+            .GetProperty("tripLogId").GetGuid().ShouldBe(twice.Trip);
+
+        // The withdrawn link opens nothing, and says so in the words an invented token gets — on
+        // the followed page, both lists and the playback alike. The trip it named being published
+        // still is not something it may learn.
+        var baseline = await RefusalShapeAsync(await anonymous.GetAsync(Follow("not-a-token-at-all")));
+        foreach (var route in new[]
+        {
+            Follow(twice.Token),
+            LiveList(twice.Token),
+            PastList(twice.Token),
+            $"{PastList(twice.Token)}/{twice.Trip}",
+        })
+        {
+            (await RefusalShapeAsync(await anonymous.GetAsync(route))).ShouldBe(baseline, route);
+        }
+
+        // The surviving link runs out while the withdrawn one, on paper, has not. The trip is no
+        // longer followable by any link that still counts, so it leaves the list — and, still armed,
+        // it is not history either.
+        await ExpireAsync(survivingId, DateTimeOffset.UtcNow.AddDays(-1));
+        ListedIds(await LiveListAsync(reader.Token)).ShouldBe([reader.Trip]);
+        ListedIds(await Json(anonymous.GetAsync(PastList(reader.Token)))).ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task A_watch_that_was_never_armed_is_absent_even_with_a_link_to_it()
     {
@@ -381,6 +442,68 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
+    /// The candidate read is bounded, and the bit says so — otherwise a party still underground on
+    /// a trip older than the newest hundred published ones is neither listed nor announced.
+    /// </summary>
+    /// <remarks>
+    /// A hundred trips of this cave, every one over and still published, all dated after the one
+    /// party still underground: newest first, the bounded read fills up before it reaches that
+    /// party. An empty list is then allowed; saying that there is nothing more is not. The
+    /// archive's bit already read its cap this way, and this one read only the page.
+    /// </remarks>
+    [Fact]
+    public async Task A_party_older_than_the_bounded_read_reaches_is_announced_as_more_rather_than_dropped()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var underground = await PublishedTripAsync("Still underground", cave, model, tripDate: "2026-04-01");
+        await SeedClosedPublishedTripsAsync(cave, model, count: 100, from: new DateOnly(2026, 4, 2), underground.ShareId);
+
+        var list = await LiveListAsync(underground.Token);
+        ListedIds(list).ShouldBeEmpty();
+        list.GetProperty("more").GetBoolean().ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// A token that was once real costs the database exactly what an invented one costs, on every
+    /// anonymous route — so response time says nothing that the body and the code keep back.
+    /// </summary>
+    /// <remarks>
+    /// The gates used to read the link, then its trip, then its watch, and refuse only afterwards,
+    /// so a revoked token took two or three more round trips than an unknown one before the same
+    /// 404. Commands are counted through an interceptor on a host of this test's own, and the two
+    /// tokens are asked the same things in turn; the assertion is equality rather than a number,
+    /// because how many commands a page costs is not the promise.
+    /// </remarks>
+    [Fact]
+    public async Task A_once_real_token_costs_the_database_what_an_invented_one_costs()
+    {
+        var published = await PublishedTripAsync("Counted");
+        (await owner.DeleteAsync($"{Shares(published.Trip)}/{published.ShareId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var counter = new CommandCounter();
+        using var counted = new SilexGisApiFactory(connectionString, HostSettings(), services =>
+        {
+            JobWorkers.RemoveFrom(services);
+            services.ConfigureDbContext<SilexGisDbContext>(options => options.AddInterceptors(counter));
+        });
+        using var client = counted.CreateClient();
+
+        foreach (var route in new Func<string, string>[] { Follow, LiveList, PastList })
+        {
+            var revoked = await CountedAsync(counter, client, route(published.Token));
+            var invented = await CountedAsync(counter, client, route("not-a-token-at-all"));
+            revoked.Status.ShouldBe(HttpStatusCode.NotFound);
+            invented.Status.ShouldBe(HttpStatusCode.NotFound);
+            // The link lookup itself is one command, so a count of zero on both sides would mean
+            // the interceptor was never attached, and equality proved nothing.
+            invented.Commands.ShouldBeGreaterThan(0, route("…"));
+            revoked.Commands.ShouldBe(invented.Commands, route("…"));
+        }
+    }
+
+    /// <summary>
     /// The consequence of sharing the archive's gate, asserted rather than left in a comment: a link
     /// whose own trip is over keeps reporting who is in the cave now — and the archive's retention
     /// is the one setting that closes both.
@@ -423,6 +546,54 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         (await offAnonymous.GetAsync(LiveList(old.Token))).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         // A link whose own watch is running is not reaching through the archive's gate at all.
         (await offAnonymous.GetAsync(LiveList(now.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// The whole published surface is read under one window per address, sized by the
+    /// installation — proved by tightening it until it trips. A window nobody has seen trip is one
+    /// that a <c>RequireRateLimiting</c> dropped from a route, or a misspelled setting name in the
+    /// registration, removes without changing any other answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The four routes share one budget on purpose — a page reads the envelope, the parties now
+    /// and the archive together — so with a window of three the three reads a page makes all
+    /// answer and the fourth route is refused. Asked on an invented trip: the window answers
+    /// before the route does, so the refusal proves the route is inside it without a past trip
+    /// having to exist, and the default host answers the same request with the route's own 404.
+    /// </para>
+    /// <para>
+    /// The window is per address and the test server presents every client as one address, so
+    /// the tight window gets a host of its own rather than sharing this class's — sharing it
+    /// would starve every other test here behind it — and the setting's name is written out
+    /// because binding that exact name is part of what is under test.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task The_published_surface_is_read_under_one_window_per_address_that_the_installation_sizes()
+    {
+        var cave = await CaveAsync(locationProtected: false);
+        var model = await ModelAsync(cave);
+        var published = await PublishedTripAsync("Watched", cave, model);
+        var playback = $"{PastList(published.Token)}/{Guid.CreateVersion7()}";
+
+        using var tight = HostWith(("TripTracking:PublicRateLimitPerMinute", "3"));
+        using var tightAnonymous = tight.CreateClient();
+        (await tightAnonymous.GetAsync(Follow(published.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await tightAnonymous.GetAsync(LiveList(published.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await tightAnonymous.GetAsync(PastList(published.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var refused = await tightAnonymous.GetAsync(playback);
+        refused.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests, await refused.Content.ReadAsStringAsync());
+        // A problem document like every other refusal on this surface — with no code, because the
+        // window answers before any route could mint one.
+        refused.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetInt32().ShouldBe(429);
+
+        // The default window is wide enough that the same four reads all reach their routes.
+        (await anonymous.GetAsync(Follow(published.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await anonymous.GetAsync(LiveList(published.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await anonymous.GetAsync(PastList(published.Token))).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await anonymous.GetAsync(playback)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     /// <summary>
@@ -620,6 +791,20 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
     }
 
     /// <summary>
+    /// Backdates one link's own end — the part of the window no request can reach, since an expiry
+    /// is fixed when the link is minted. A plain recorded fact, read against the clock on every
+    /// request, so a row written this way is exactly a link that ran out then.
+    /// </summary>
+    private async Task ExpireAsync(Guid shareId, DateTimeOffset at)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var share = await db.TripTrackingShares.SingleAsync(s => s.Id == shareId);
+        share.ExpiresAt = at;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
     /// Points every one of a trip's reports at another cave — the per-row anchor, which is a
     /// different question from the watch's own cave and is what the withholding rule asks about.
     /// </summary>
@@ -652,6 +837,116 @@ public sealed class TripLiveSiblingTests : IAsyncLifetime, IDisposable, IClassFi
         var writer = scope.ServiceProvider.GetRequiredService<FeatureWriteService>();
         await writer.SetLocationProtectedAsync(caveFeatureId, value);
         await scope.ServiceProvider.GetRequiredService<SilexGisDbContext>().SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Trips of the cave that are over and still published, written straight into the tables.
+    /// </summary>
+    /// <remarks>
+    /// The candidate read narrows on the watch's state and the existence of an unrevoked link, and
+    /// a hundred trips armed, published and closed through the API would be a minute of requests
+    /// proving nothing these rows do not. Dated a day apart from the given day on, so all of them
+    /// are newer than that day; closed long ago, so none is still followable.
+    /// </remarks>
+    private async Task SeedClosedPublishedTripsAsync(
+        Guid cave, Guid model, int count, DateOnly from, Guid shareOfCreator)
+    {
+        var trips = new List<Guid>(count);
+        for (var i = 0; i < count; i++)
+        {
+            trips.Add((await CreateTripAsync("Over", tripDate: from.AddDays(i).ToString("yyyy-MM-dd"))).Trip);
+        }
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var creator = await db.TripTrackingShares.AsNoTracking()
+            .Where(s => s.Id == shareOfCreator).Select(s => s.CreatedBy).SingleAsync();
+        var closedAt = new DateTimeOffset(from, TimeOnly.MinValue, TimeSpan.Zero);
+        foreach (var trip in trips)
+        {
+            db.TripTrackings.Add(new SilexGis.Domain.Entities.TripTracking
+            {
+                TripLogId = trip,
+                State = TripTrackingState.Closed,
+                SurveyModelId = model,
+                CaveFeatureId = cave,
+                ArmedAt = closedAt.AddHours(-8),
+                ClosedAt = closedAt,
+            });
+            db.TripTrackingShares.Add(new TripTrackingShare
+            {
+                TripLogId = trip,
+                TokenHash = Base64Url.EncodeToString(
+                    SHA256.HashData(Encoding.UTF8.GetBytes($"seeded-{Guid.NewGuid():N}"))),
+                CreatedBy = creator,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(30),
+            });
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<(HttpStatusCode Status, int Commands)> CountedAsync(
+        CommandCounter counter, HttpClient client, string url)
+    {
+        counter.Reset();
+        var response = await client.GetAsync(url);
+        return (response.StatusCode, counter.Count);
+    }
+
+    /// <summary>Every command the host sends to the database, counted and nothing else.</summary>
+    private sealed class CommandCounter : DbCommandInterceptor
+    {
+        private int count;
+
+        public int Count => Volatile.Read(ref count);
+
+        public void Reset() => Interlocked.Exchange(ref count, 0);
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        {
+            Interlocked.Increment(ref count);
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref count);
+            return new(result);
+        }
+
+        public override InterceptionResult<object> ScalarExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<object> result)
+        {
+            Interlocked.Increment(ref count);
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<object> result,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref count);
+            return new(result);
+        }
+
+        public override InterceptionResult<int> NonQueryExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+        {
+            Interlocked.Increment(ref count);
+            return result;
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref count);
+            return new(result);
+        }
     }
 
     private async Task<Guid> CaveAsync(bool locationProtected)

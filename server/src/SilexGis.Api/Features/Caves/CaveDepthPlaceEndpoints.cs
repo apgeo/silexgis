@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -88,7 +90,12 @@ public static class CaveDepthPlaceEndpoints
             return ApiProblems.NotFound("cave.not_found");
         }
 
-        var depth = request.DepthM!.Value;
+        // Keyed the way the table keys it — magnitude, one decimal — before it is looked up or
+        // written. The request accepts the sign field notes use and any decimals a person types;
+        // the column holds neither. Looking up the raw value would find nothing beside the row at
+        // 120 for a write of 120.04 or −120, and the insert that followed would then be refused by
+        // the unique index for the very row it failed to find.
+        var depth = DeclaredDepthPlaces.Key(request.DepthM!.Value);
         var station = request.StationName!.Trim();
         var label = string.IsNullOrWhiteSpace(request.PlaceLabel) ? null : request.PlaceLabel.Trim();
 
@@ -116,11 +123,30 @@ public static class CaveDepthPlaceEndpoints
             existing.PlaceLabel = label;
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (IsRaceOnDepth(e))
+        {
+            // With the key normalised above, the index can only fire when two first-time writes
+            // at one depth cross between the read and this save. That is a conflict worth its
+            // name rather than an unexplained failure: the caller reads the list and writes again.
+            return ApiProblems.Conflict("cave_depth_place.concurrent_write",
+                "That depth was declared by somebody else while this was being written. Read the list and write again.");
+        }
 
         return TypedResults.Ok(
             new CaveDepthPlaceDto(existing.Id, existing.DepthM, existing.ViewerStationName, existing.PlaceLabel));
     }
+
+    /// <summary>The unique index on (cave, depth) refused the write, and nothing else did.</summary>
+    private static bool IsRaceOnDepth(DbUpdateException e) =>
+        e.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "ux_cave_depth_places_cave_depth",
+        };
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
         Guid caveId, Guid id, SilexGisDbContext db, IAccessService access,

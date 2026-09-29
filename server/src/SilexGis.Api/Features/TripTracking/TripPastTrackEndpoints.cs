@@ -458,22 +458,37 @@ public static class TripPastTrackEndpoints
             return refused;
         }
 
+        // One round trip whatever the token turns out to be. The link, its trip, its watch and the
+        // trip's latest unrevoked expiry are read together, so a token that was once real — since
+        // revoked, lapsed, or past its retention — costs the database exactly what an invented one
+        // costs, and every refusal below is decided in memory. Read one at a time, a once-real
+        // token took three more round trips than an unknown one before the same 404: a difference
+        // in response time, which is the one bit this gate promises not to give away. A link whose
+        // trip or watch is gone finds no row here and is refused the same way.
         var hash = TripTrackingPublicationEndpoints.HashToken(token);
-        var share = await db.TripTrackingShares.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.TokenHash == hash, ct);
-        if (share is null) return refused;
+        var found = await (
+            from link in db.TripTrackingShares.AsNoTracking()
+            join log in db.TripLogs.AsNoTracking() on link.TripLogId equals log.Id
+            join watch in db.TripTrackings.AsNoTracking() on log.Id equals watch.TripLogId
+            where link.TokenHash == hash
+            select new
+            {
+                Share = link,
+                Trip = log,
+                Tracking = watch,
+                // The trip's own latest unrevoked expiry rather than this link's, so that "is this
+                // trip over" is read the same way here as it is read of every other trip in the
+                // list — null when every link of it has been withdrawn, which is what "not
+                // published" means on this surface. This link's own expiry still governs the live
+                // half of the question, inside the rule.
+                LatestUnrevokedExpiry = db.TripTrackingShares
+                    .Where(s => s.TripLogId == log.Id && s.RevokedAt == null)
+                    .Max(s => (DateTimeOffset?)s.ExpiresAt),
+            }).FirstOrDefaultAsync(ct);
+        if (found is null) return refused;
 
-        var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == share.TripLogId, ct);
-        if (trip is null) return refused;
-
-        var tracking = await db.TripTrackings.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.TripLogId == trip.Id, ct);
-        if (tracking is null) return refused;
-
-        // The trip's own latest unrevoked expiry rather than this link's, so that "is this trip
-        // over" is read the same way here as it is read of every other trip in the list. This
-        // link's own expiry still governs the live half of the question, inside the rule.
-        var latestUnrevokedExpiry = await LatestUnrevokedExpiryAsync(db, trip.Id, ct);
+        var (share, trip, tracking, latestUnrevokedExpiry) =
+            (found.Share, found.Trip, found.Tracking, found.LatestUnrevokedExpiry);
 
         // A revoked link opens nothing at all, and it is asked first because only one of the two
         // windows below takes a revocation as an argument: the archive's rule is about the trip's

@@ -40,17 +40,17 @@ public sealed class MessageCapture
 
     public bool SmsConfigured { get; set; } = true;
 
-    /// <summary>Makes the next send throw, standing in for a mail server that is refusing.</summary>
-    public bool FailNextSend { get; set; }
-
     /// <summary>
-    /// An address every send to which throws, until it is cleared.
+    /// An address every send to which throws, until it is cleared — standing in for a mail server
+    /// that is refusing.
     /// </summary>
     /// <remarks>
-    /// <see cref="FailNextSend"/> cannot be aimed. A drain is not scoped to a recipient, so it
-    /// settles whatever else is due in the shared database at that moment — and a one-shot failure
-    /// then lands on whichever message the pass happened to reach first, which may be somebody
-    /// else's entirely. A test that needs *its own* send to fail names the address instead.
+    /// Aimed by address on purpose, and there is deliberately no "fail the next send" beside it.
+    /// A drain is not scoped to a recipient, so it settles whatever else is due in the shared
+    /// database at that moment — and a one-shot failure lands on whichever message the pass
+    /// happened to reach first, which may be somebody else's entirely, leaving the test's own
+    /// send delivered and its assertion red only when the suite runs as a whole. A test that
+    /// needs *its own* send to fail names the address.
     /// </remarks>
     public string? FailSendsTo { get; set; }
 
@@ -98,12 +98,6 @@ public sealed class MessageCapture
 
     internal void Record(string channel, string recipient, string? subject, string body)
     {
-        if (FailNextSend)
-        {
-            FailNextSend = false;
-            throw new InvalidOperationException("Simulated delivery failure.");
-        }
-
         if (FailSendsTo is { } address && string.Equals(recipient, address, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("Simulated delivery failure.");

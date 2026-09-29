@@ -231,6 +231,14 @@ public sealed record TrackingStateDto(
     IReadOnlyList<TrackingTeamDto> Teams,
     IReadOnlyList<TrackingParticipantDto> Participants);
 
+/// <summary>One report of the log, or the answer to recording or correcting one.</summary>
+/// <param name="DepthPlacement">
+/// How a reported depth became the station it names — what the cave declared, or the nearest
+/// station measured — on the answer to a record or a correction. Null where the report named no
+/// depth, and on a read of the log, which does not keep how a station was arrived at. It is there
+/// because a declaration whose station the model lacks is passed over and measured instead, and a
+/// person who picked a declared place would otherwise never learn that the log holds something else.
+/// </param>
 public sealed record TrackingEventDto(
     Guid Id,
     Guid CaverId,
@@ -240,7 +248,8 @@ public sealed record TrackingEventDto(
     string? StationName,
     decimal? DepthEnteredM,
     string? Note,
-    DateTimeOffset RecordedAt);
+    DateTimeOffset RecordedAt,
+    TrackingDepthPlacementOutcome? DepthPlacement = null);
 
 /// <summary>
 /// One place the watch's cave has declared: what it is called, which station it is, how deep.
@@ -251,16 +260,30 @@ public sealed record TrackingEventDto(
 /// withdraw it, while a report names a place and needs only what the place is. Sending an id here
 /// would be handing a surface a handle it has no business using.
 /// </remarks>
+/// <param name="StationInModel">
+/// Whether the station this declaration names is one the watch's model has. A declaration written
+/// against a survey that has since been replaced can name a station nothing resolves; a report at
+/// its depth is then measured instead, and honouring it would place a marker nobody ever sees. The
+/// place is still listed, so that whoever offers it can say it needs fixing on the cave rather than
+/// quietly offering a place that records somewhere else.
+/// </param>
 public sealed record TrackingPlaceDto(
     decimal DepthM,
     string StationName,
-    string? PlaceLabel);
+    string? PlaceLabel,
+    bool StationInModel);
 
+/// <summary>One station a depth could mean, with how far off it is.</summary>
+/// <param name="Declared">
+/// True for the station the cave declared this depth to be, which recording the depth will write
+/// down whatever the measurement says; it is listed first. False for a station found by measuring.
+/// </param>
 public sealed record TrackingDepthCandidateDto(
     string StationName,
     string? SurveyName,
     double DepthM,
-    double DeltaM);
+    double DeltaM,
+    bool Declared);
 
 // ---- writes ----
 

@@ -82,6 +82,27 @@ public static class TripTrackingRules
         at > now + RecordedAtSkew;
 
     /// <summary>
+    /// A reported depth in the form the log keeps it: one decimal, half away from zero, sign kept.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The column a report's depth is stored in holds one decimal and rounds a finer value on the
+    /// way in, silently. A depth placed, stored and shown from three different numbers is how two
+    /// rows that read as the same depth come to stand at two stations: a report of 120.04 placed
+    /// on the value as typed, stored as 120.0 and listed beside a report of 120, could have measured
+    /// to a different station from it — or missed the cave's declaration at 120 altogether — while
+    /// every reader sees "120.0 m" twice. So a depth is brought to this form before it is placed,
+    /// before it is stored and before it is echoed, and the three cannot come apart.
+    /// </para>
+    /// <para>
+    /// Half away from zero because that is what the database does to the value it stores; the
+    /// sign is kept because the log keeps it, and a declaration's key takes the magnitude of this.
+    /// </para>
+    /// </remarks>
+    public static decimal RecordedDepthM(decimal depthM) =>
+        decimal.Round(depthM, 1, MidpointRounding.AwayFromZero);
+
+    /// <summary>
     /// Off arms, Armed closes, Closed re-arms (a party that turns out to still be underground),
     /// and any state restates itself. Nothing returns to Off: history exists, and "we never
     /// tracked this trip" would be a lie the moment one event row is on the timeline.

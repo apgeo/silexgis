@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -141,6 +142,44 @@ public sealed class AnonymousSurfaceTests(PostgresFixture postgres) : IDisposabl
 
         guarded.Count.ShouldBeGreaterThan(100);
         guarded.ShouldAllBe(e => e.Metadata.GetMetadata<IAuthorizeData>() != null);
+    }
+
+    /// <summary>
+    /// Every route of the published-trip surface is read under that surface's one window.
+    /// </summary>
+    /// <remarks>
+    /// Asserted against the routing table rather than exercised, for the reason the surface
+    /// itself is: the window is attached at each call site, so a fifth route added beside these
+    /// four is outside it the moment it is written, and a <c>RequireRateLimiting</c> dropped from
+    /// one of them changes no answer any other test reads. The policy name is the literal the
+    /// registration uses. That the policy behind it is really registered, and bound to the setting
+    /// an installation sizes it with, is proved where the window is tightened until it trips.
+    /// </remarks>
+    [Fact]
+    public void Every_published_trip_route_is_under_the_published_trip_window()
+    {
+        var routes = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(e => e.RoutePattern.RawText?.StartsWith("/api/v1/public/trips", StringComparison.Ordinal) == true)
+            .ToList();
+
+        // The four, named, so a route that leaves the prefix — and with it this check — is noticed.
+        routes.Select(e => e.RoutePattern.RawText!).Order(StringComparer.Ordinal).ShouldBe(
+        [
+            "/api/v1/public/trips/{token}",
+            "/api/v1/public/trips/{token}/live",
+            "/api/v1/public/trips/{token}/past",
+            "/api/v1/public/trips/{token}/past/{tripLogId:guid}",
+        ]);
+
+        foreach (var route in routes)
+        {
+            var window = route.Metadata.GetMetadata<EnableRateLimitingAttribute>();
+            window.ShouldNotBeNull($"{route.RoutePattern.RawText} is read under no window");
+            window.PolicyName.ShouldBe("public-trip", route.RoutePattern.RawText);
+            route.Metadata.GetMetadata<DisableRateLimitingAttribute>().ShouldBeNull(
+                $"{route.RoutePattern.RawText} switches its window off again");
+        }
     }
 
     public void Dispose() => factory.Dispose();
