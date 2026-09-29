@@ -40,7 +40,7 @@ import {
   type MovieViewLayer,
 } from '../../../caveview/movie/movieSettings.ts';
 import { buildMovieTimeline, movieFrameCount, movieFrames } from '../../../caveview/movie/movieTimeline.ts';
-import { movieLayersAvailable } from '../../../caveview/movie/movieView.ts';
+import { movieLayersAvailable, settleCamera } from '../../../caveview/movie/movieView.ts';
 import { useUiPrefsStore } from '../../../stores/uiPrefsStore.ts';
 import { formatTripDates } from '../../trips/tripDates.ts';
 import { movieTripDays } from './movieDays.ts';
@@ -175,8 +175,17 @@ function MovieDialogBody({
   const [settings, setSettings] = useState<MovieSettings>(() =>
     withoutTitleText(remembered === undefined ? DEFAULT_MOVIE_SETTINGS : normaliseMovieSettings(remembered)),
   );
+  // Playing the preview holds the camera: each of its frames puts the angles back from where play
+  // began. A turn to another starting view made under it would be undone on the next frame, so play
+  // stops first. Reached through refs because play is set up further down.
+  const stopPlayingRef = useRef<() => void>(() => {});
+  const directionRef = useRef(settings.view.direction);
+  directionRef.current = settings.view.direction;
   const changeSettings = useCallback(
     (next: MovieSettings) => {
+      if (next.view.direction !== directionRef.current) {
+        stopPlayingRef.current();
+      }
       setSettings(next);
       // Whether a title is drawn is a preference; what it says is about this movie. Remembered, a
       // title written for one cave's trip would caption and name the next movie, of any cave.
@@ -279,6 +288,12 @@ function MovieDialogBody({
   }, []);
   const generation = preview?.generation ?? 0;
   const previewReady = preview !== null;
+  // Counted up when the reader asks the preview to turn to the starting view again.
+  const [viewRequest, setViewRequest] = useState(0);
+  const viewAgain = useCallback(() => {
+    stopPlayingRef.current();
+    setViewRequest((count) => count + 1);
+  }, []);
   const [position, setPosition] = useState(0);
   const index = frames === null ? 0 : Math.min(position, frames.count - 1);
   const [run, setRun] = useState<ExportRun | null>(null);
@@ -323,6 +338,7 @@ function MovieDialogBody({
     }
     setPlaying(false);
   }, []);
+  stopPlayingRef.current = stopPlaying;
 
   const startPlaying = () => {
     const schedule = framesRef.current;
@@ -332,6 +348,9 @@ function MovieDialogBody({
     }
     const from = positionRef.current >= schedule.count - 1 ? 0 : positionRef.current;
     const began = performance.now();
+    // Read after any turn still under way has reached its view, or play would begin — and stop,
+    // putting the camera back — between two views.
+    settleCamera(viewer);
     const start = viewer.getCameraAngles();
     const tick = (now: number) => {
       const current = framesRef.current;
@@ -607,6 +626,7 @@ function MovieDialogBody({
             maxHeight="max(200px, min(calc(100vh - 400px), 640px))"
             onReady={onPreviewReady}
             recording={recording}
+            viewRequest={viewRequest}
             overlay={
               <canvas
                 ref={captionsRef}
@@ -664,6 +684,7 @@ function MovieDialogBody({
             terrain={preview?.terrain === true}
             autoTitle={autoTitle}
             summary={summary}
+            onViewAgain={previewReady ? viewAgain : null}
             trips={
               <MovieTripPicker
                 tracked={tracked.data}

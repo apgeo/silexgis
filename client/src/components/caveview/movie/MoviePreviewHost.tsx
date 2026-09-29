@@ -12,7 +12,7 @@ import {
   type Cv2Namespace,
 } from '../../../caveview/loadCaveView.ts';
 import { MOVIE_LABEL_SIZE_RANGE, type MovieSettings } from '../../../caveview/movie/movieSettings.ts';
-import { applyMovieMarkerLabels, applyMovieView } from '../../../caveview/movie/movieView.ts';
+import { applyMovieMarkerLabels, applyMovieView, turnToMovieView } from '../../../caveview/movie/movieView.ts';
 import { viewerFileName } from '../../../caveview/viewerFileName.ts';
 import { previewBox, previewSurface } from './previewBox.ts';
 import './MoviePreviewHost.css';
@@ -71,6 +71,11 @@ export interface MoviePreviewHostProps {
    * meanwhile is applied when the recording lets go.
    */
   recording?: boolean;
+  /**
+   * Changed by the dialog when the reader asks for the starting view again, after turning or
+   * zooming the preview away from it. Its value means nothing; only a change does.
+   */
+  viewRequest?: number;
 }
 
 type Status = 'loading' | 'ready' | 'error';
@@ -111,6 +116,7 @@ export default function MoviePreviewHost({
   onReady,
   overlay,
   recording = false,
+  viewRequest = 0,
 }: MoviePreviewHostProps) {
   const { t } = useTranslation();
   const containerId = `movie-preview-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -185,8 +191,13 @@ export default function MoviePreviewHost({
         theme: MOVIE_LABEL_THEME,
       });
       created = viewer;
-      viewer.addEventListener('newCave', () => {
+      viewer.addEventListener('newCave', (event) => {
         if (disposed) return;
+        // The viewer says `newCave` for a model that has loaded, carrying the survey, and also,
+        // carrying none, when a key switches how its controls behave. Only a model's arrival is a
+        // load: counted as one, the key would turn the preview back to its starting view — throwing
+        // away the reader's framing — and read the movie's own shading as the viewer's.
+        if ((event as { survey?: unknown } | null)?.survey === undefined) return;
         // Read before any of the movie's settings is written: this is the viewer's own.
         const shading = viewer.shadingMode;
         loadedRef.current = {
@@ -249,6 +260,24 @@ export default function MoviePreviewHost({
       applyMovieView(loaded.viewer, view, loaded.cv2, loaded.viewerShading);
     }
   }, [loads, view, recording]);
+
+  // The starting view: when a model has loaded, when the choice changes, and when the reader asks
+  // for it again — and on no other change, since every turn reframes the model and would undo the
+  // reader's own turning and zooming. After the view settings above, so a camera change is in place
+  // before the model is framed. A recording is let alone, and ending one turns nothing: the choice
+  // cannot change while it runs, so the key is the one already applied.
+  const turnedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const loaded = loadedRef.current;
+    if (loaded === null || recording) {
+      return;
+    }
+    const key = `${loads}:${view.direction}:${viewRequest}`;
+    if (turnedRef.current !== key) {
+      turnedRef.current = key;
+      turnToMovieView(loaded.viewer, view.direction, loaded.cv2);
+    }
+  }, [loads, view.direction, viewRequest, recording]);
 
   // The labels at the share of the picture the movie will give them: a label of so many frame
   // pixels is drawn at the surface's device pixels per frame pixel.

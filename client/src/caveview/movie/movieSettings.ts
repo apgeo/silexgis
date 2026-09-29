@@ -45,6 +45,19 @@ export type MovieViewLayer =
   | 'box'
   | 'grid';
 
+/**
+ * How the camera looks at the model when the movie starts: the viewer's own five views, named as
+ * the viewer names them. `plan` looks down from above; `north` is the viewer's north elevation,
+ * whose camera stands level to the south of the model and faces north — and so on round. That is
+ * the reverse of a surveyor's "elevation seen from the north", which is why the reader is told the
+ * way the camera faces rather than an elevation's name. With rotation on, the camera orbits from
+ * there, so an elevation turns the model about its vertical axis seen from the side.
+ */
+export type MovieViewDirection = 'plan' | 'north' | 'south' | 'east' | 'west';
+
+/** Every view a movie can start from, in the order they are offered. */
+export const MOVIE_VIEW_DIRECTIONS: readonly MovieViewDirection[] = ['plan', 'north', 'south', 'east', 'west'];
+
 export interface MovieSettings {
   format: MovieFormat;
   /** One of {@link MOVIE_SIZES}' ids, e.g. '1280x720'. */
@@ -75,6 +88,11 @@ export interface MovieSettings {
     trails: boolean;
   };
   view: Record<MovieViewLayer, boolean> & {
+    /**
+     * The view the preview turns to when the model loads and when this changes. The movie starts
+     * from what the preview shows, so turning or zooming the preview afterwards is kept.
+     */
+    direction: MovieViewDirection;
     /** A shading-mode constant of the viewer, or null for the viewer's own default. */
     shadingMode: number | null;
     camera: 'perspective' | 'orthographic';
@@ -187,6 +205,7 @@ export const DEFAULT_MOVIE_SETTINGS: MovieSettings = {
     HUD: false,
     box: false,
     grid: false,
+    direction: 'north',
     shadingMode: null,
     camera: 'perspective',
     linewidth: 0,
@@ -317,6 +336,7 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
     },
     view: {
       ...layers,
+      direction: oneOf<MovieViewDirection>(view.direction, MOVIE_VIEW_DIRECTIONS, d.view.direction),
       shadingMode,
       camera: oneOf(view.camera, ['perspective', 'orthographic'] as const, d.view.camera),
       linewidth: number(view.linewidth, d.view.linewidth, 0, 1),

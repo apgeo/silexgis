@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
   Alert,
+  Button,
   Checkbox,
   Collapse,
   ConfigProvider,
@@ -23,6 +24,7 @@ import {
   MOVIE_LABEL_SIZE_RANGE,
   MOVIE_SIZES,
   MOVIE_VIDEO_FRAME_RATES,
+  MOVIE_VIEW_DIRECTIONS,
   MOVIE_VIEW_LAYERS,
   normaliseMovieSettings,
   type MovieCaverLabels,
@@ -30,6 +32,7 @@ import {
   type MovieFormat,
   type MovieQuality,
   type MovieSettings,
+  type MovieViewDirection,
   type MovieViewLayer,
 } from '../../../caveview/movie/movieSettings.ts';
 import { GIF_FRAME_RATES } from '../../../caveview/movie/encode/movieEncoder.ts';
@@ -78,6 +81,11 @@ export interface MovieSettingsFormProps {
   autoTitle: string;
   /** The trip picker, shown as the first group. */
   trips: ReactNode;
+  /**
+   * Turns the preview to the starting view again, after the reader turned or zoomed it away; null
+   * until there is a preview to turn.
+   */
+  onViewAgain: (() => void) | null;
   /** The file's frame count and estimated size, shown under the output settings. */
   summary: ReactNode;
 }
@@ -178,6 +186,7 @@ export default function MovieSettingsForm({
   autoTitle,
   trips,
   summary,
+  onViewAgain,
 }: MovieSettingsFormProps) {
   const { t, i18n } = useTranslation();
   const formatNumber = (value: number, digits: number) =>
@@ -518,6 +527,28 @@ export default function MovieSettingsForm({
 
   const viewSettings = (
     <Flex vertical gap="middle">
+      <Row label={t('caveview.movie.viewDirection')} help={t('caveview.movie.viewDirectionHelp')}>
+        <Flex gap="small" wrap>
+          <Select
+            value={view.direction}
+            style={{ minWidth: 180 }}
+            onChange={(direction: MovieViewDirection) => patch('view', { direction })}
+            data-testid="movie-view-direction"
+            options={MOVIE_VIEW_DIRECTIONS.map((direction) => ({
+              value: direction,
+              label: t(`caveview.movie.viewDirections.${direction}`),
+            }))}
+          />
+          <Button
+            // Said outright, since a button's own `disabled` overrides the form's while an export runs.
+            disabled={disabled || onViewAgain === null}
+            onClick={() => onViewAgain?.()}
+            data-testid="movie-view-again"
+          >
+            {t('caveview.movie.viewDirectionAgain')}
+          </Button>
+        </Flex>
+      </Row>
       <div className="movie-layers">
         {MOVIE_VIEW_LAYERS.map(({ key }) => {
           const missing = layers !== null && !layers.has(key);

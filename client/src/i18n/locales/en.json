@@ -2530,6 +2530,16 @@
         "perspective": "Perspective",
         "orthographic": "Orthographic"
       },
+      "viewDirection": "Starting view",
+      "viewDirections": {
+        "plan": "Plan (from above)",
+        "north": "N elevation — facing north",
+        "south": "S elevation — facing south",
+        "east": "E elevation — facing east",
+        "west": "W elevation — facing west"
+      },
+      "viewDirectionHelp": "How the camera looks at the whole model when the movie starts: from above, or level and facing one way. Turning or zooming the preview afterwards is kept.",
+      "viewDirectionAgain": "Turn to it again",
       "linewidth": "Line width",
       "zScale": "Vertical scale",
       "captionTitle": "Title",

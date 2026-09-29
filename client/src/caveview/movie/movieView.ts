@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { CaveViewer, CaveViewLayerGetter, Cv2Namespace } from '../loadCaveView.ts';
-import { MOVIE_LABEL_SIZE_RANGE, MOVIE_VIEW_LAYERS, type MovieSettings, type MovieViewLayer } from './movieSettings.ts';
+import {
+  MOVIE_LABEL_SIZE_RANGE,
+  MOVIE_VIEW_LAYERS,
+  type MovieSettings,
+  type MovieViewDirection,
+  type MovieViewLayer,
+} from './movieSettings.ts';
 
 /**
  * Putting a movie's view settings on a viewer, and taking them off again.
@@ -109,6 +115,58 @@ export function applyMovieView(
       }
     }
   };
+}
+
+/** The namespace's constants the starting views are spelled in. */
+export type MovieViewDirectionConstants = Pick<
+  Cv2Namespace,
+  'VIEW_PLAN' | 'VIEW_ELEVATION_N' | 'VIEW_ELEVATION_S' | 'VIEW_ELEVATION_E' | 'VIEW_ELEVATION_W'
+>;
+
+/** The viewer's own constant for a starting view. */
+export function movieViewMode(direction: MovieViewDirection, constants: MovieViewDirectionConstants): number {
+  switch (direction) {
+    case 'plan':
+      return constants.VIEW_PLAN;
+    case 'north':
+      return constants.VIEW_ELEVATION_N;
+    case 'south':
+      return constants.VIEW_ELEVATION_S;
+    case 'east':
+      return constants.VIEW_ELEVATION_E;
+    case 'west':
+      return constants.VIEW_ELEVATION_W;
+  }
+}
+
+/**
+ * Brings a camera move still under way to its end at once — a turn to a view is animated over many
+ * frames. Whatever reads where the camera is (an export's starting angles, a play of the preview)
+ * reads it after this, or it reads a camera halfway through a turn and starts the movie tilted
+ * between two views; and a new turn is written after this, since the viewer ignores a turn asked
+ * for while another is still running.
+ */
+export function settleCamera(viewer: Pick<CaveViewer, 'setCameraAngles'>): void {
+  viewer.setCameraAngles({});
+}
+
+/**
+ * Turns the viewer to a movie's starting view, framing the whole model.
+ *
+ * Kept apart from {@link applyMovieView}, which is applied again on every change of any setting:
+ * the viewer always reads its view back as the plan view, so the view cannot be compared before it
+ * is written, and every write reframes the model. Written from there it would undo the reader's
+ * turning and zooming of the preview whenever anything else changed. So the caller writes it only
+ * when the model loads, when the starting view changes, and when the reader asks for it again — and
+ * an export never writes it at all: it starts from whatever the preview shows.
+ */
+export function turnToMovieView(
+  viewer: Pick<CaveViewer, 'view' | 'setCameraAngles'>,
+  direction: MovieViewDirection,
+  constants: MovieViewDirectionConstants,
+): void {
+  settleCamera(viewer);
+  viewer.view = movieViewMode(direction, constants);
 }
 
 /** Which of a movie's layers the loaded model has at all, for the controls that switch them. */

@@ -105,10 +105,19 @@ function fakeViewer() {
 const preview = vi.hoisted(() => ({
   viewer: null as unknown,
   recordingSeen: [] as boolean[],
+  // What the preview was last asked to show, as the dialog hands it over.
+  direction: null as string | null,
+  viewRequest: null as number | null,
+  // Called on each render of the preview with the view it was handed, so its order against the
+  // viewer's calls can be read.
+  saw: null as unknown as (direction: string) => void,
 }));
 vi.mock('./MoviePreviewHost.tsx', () => ({
-  default: function FakePreviewHost({ onReady, overlay, recording }: MoviePreviewHostProps) {
+  default: function FakePreviewHost({ onReady, overlay, recording, view, viewRequest }: MoviePreviewHostProps) {
     preview.recordingSeen.push(recording === true);
+    preview.direction = view.direction;
+    preview.saw?.(view.direction);
+    preview.viewRequest = viewRequest ?? null;
     useEffect(() => {
       onReady?.({
         viewer: preview.viewer as never,
@@ -213,6 +222,9 @@ function open(initialTripIds: string[] = []) {
 beforeEach(() => {
   preview.viewer = fakeViewer();
   preview.recordingSeen = [];
+  preview.direction = null;
+  preview.viewRequest = null;
+  preview.saw = vi.fn();
   probe.answer = ALL_FORMATS;
   reads.tracked = [
     trackedTrip('trip-a', 'Alpha'),
@@ -501,6 +513,92 @@ describe('the tracking movie dialog', () => {
     cleanup();
 
     expect(signal?.aborted).toBe(true);
+  });
+
+  it('starts from the north elevation, offers the viewer\'s five views, and turns to the chosen one again on asking', async () => {
+    open();
+    fireEvent.click(await screen.findByText('View'));
+    const choice = await screen.findByTestId('movie-view-direction');
+    expect(choice).toHaveTextContent('N elevation — facing north');
+    expect(preview.direction).toBe('north');
+
+    fireEvent.mouseDown(within(choice).getByRole('combobox'));
+    for (const name of ['Plan (from above)', 'N elevation — facing north', 'S elevation — facing south', 'E elevation — facing east', 'W elevation — facing west']) {
+      expect((await screen.findAllByTitle(name)).length).toBeGreaterThan(0);
+    }
+    fireEvent.click(screen.getAllByTitle('E elevation — facing east').at(-1)!);
+    await waitFor(() => expect(preview.direction).toBe('east'));
+    // Remembered with the rest of the settings.
+    await waitFor(() => expect(useUiPrefsStore.getState().movieSettings?.view.direction).toBe('east'));
+
+    const again = screen.getByTestId('movie-view-again');
+    await waitFor(() => expect(again).not.toBeDisabled());
+    const before = preview.viewRequest ?? 0;
+    fireEvent.click(again);
+    await waitFor(() => expect(preview.viewRequest).toBe(before + 1));
+  });
+
+  it('stops playing the preview before turning it to another view, which play would otherwise undo', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    open(['trip-a']);
+    const handle = await screen.findByRole('slider', { name: 'Moment in the movie' });
+    await waitFor(() => expect(handle).not.toHaveAttribute('aria-disabled', 'true'));
+    fireEvent.click(await screen.findByText('View'));
+    const viewer = preview.viewer as ReturnType<typeof fakeViewer>;
+    fireEvent.click(screen.getByTestId('movie-play'));
+    expect(screen.getByTestId('movie-play')).toHaveAttribute('aria-label', 'Stop the preview');
+
+    fireEvent.mouseDown(within(screen.getByTestId('movie-view-direction')).getByRole('combobox'));
+    fireEvent.click((await screen.findAllByTitle('W elevation — facing west')).at(-1)!);
+    await waitFor(() => expect(preview.direction).toBe('west'));
+    expect(screen.getByTestId('movie-play')).toHaveAttribute('aria-label', 'Play the preview');
+    // Play put the camera back where it began before the preview was handed the new view.
+    const putBack = viewer.setCameraAngles.mock.calls.findLastIndex(([angles]) => angles.azimuth !== undefined);
+    const sawWest = (preview.saw as ReturnType<typeof vi.fn>).mock.calls.findIndex(([direction]) => direction === 'west');
+    expect(viewer.setCameraAngles.mock.invocationCallOrder[putBack]).toBeLessThan(
+      (preview.saw as ReturnType<typeof vi.fn>).mock.invocationCallOrder[sawWest],
+    );
+
+    // The same for turning to it again.
+    fireEvent.click(screen.getByTestId('movie-play'));
+    expect(screen.getByTestId('movie-play')).toHaveAttribute('aria-label', 'Stop the preview');
+    fireEvent.click(screen.getByTestId('movie-view-again'));
+    await waitFor(() => expect(screen.getByTestId('movie-play')).toHaveAttribute('aria-label', 'Play the preview'));
+  });
+
+  it('offers no turn to the starting view while an export runs', async () => {
+    reads.movie = ready(movieTrip('trip-a', 'Alpha'));
+    let started!: (recording: MovieRecording) => void;
+    const running = new Promise<MovieRecording>((resolve) => (started = resolve));
+    recordMovie.mockImplementation(
+      (recording) =>
+        new Promise<Blob>((_, reject) => {
+          recording.signal?.addEventListener('abort', () =>
+            reject(new DOMException('The movie export was cancelled.', 'AbortError')),
+          );
+          started(recording);
+        }),
+    );
+    open(['trip-a']);
+    fireEvent.click(await screen.findByText('View'));
+    const again = await screen.findByTestId('movie-view-again');
+    const exportButton = screen.getByTestId('movie-export');
+    await waitFor(() => expect(exportButton).not.toBeDisabled());
+    expect(again).not.toBeDisabled();
+    fireEvent.click(exportButton);
+    await running;
+    await waitFor(() => expect(screen.getByTestId('movie-view-again')).toBeDisabled());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('movie-cancel'));
+    });
+  });
+
+  it('opens on the starting view the reader chose last time', async () => {
+    useUiPrefsStore.setState({ movieSettings: normaliseMovieSettings({ view: { direction: 'plan' } }) });
+    open();
+    fireEvent.click(await screen.findByText('View'));
+    expect(await screen.findByTestId('movie-view-direction')).toHaveTextContent('Plan (from above)');
+    expect(preview.direction).toBe('plan');
   });
 
   it('gates the layers on what the model has', async () => {

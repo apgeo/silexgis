@@ -48,6 +48,20 @@ class FakeViewer {
   zScale = 0.5;
   shadingMode = 0;
   hasRealTerrain = null;
+  // Every view the camera was turned to. The viewer reads its view back as the plan view whatever
+  // it shows, which is why a turn cannot be compared before it is made.
+  viewWrites: number[] = [];
+  get view() {
+    return 1;
+  }
+  set view(mode: number) {
+    this.viewWrites.push(mode);
+  }
+  // Settling a turn under way, which a new turn is always preceded by.
+  settles = 0;
+  setCameraAngles(angles: { azimuth?: number; polar?: number }) {
+    if (angles.azimuth === undefined && angles.polar === undefined) this.settles += 1;
+  }
   constructor(containerId: string, config: Record<string, unknown>) {
     this.containerId = containerId;
     this.config = config;
@@ -56,8 +70,10 @@ class FakeViewer {
   addEventListener(type: string, listener: Listener) {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
   }
-  emit(type: string) {
-    for (const listener of this.listeners.get(type) ?? []) listener({});
+  // A model that has loaded is announced carrying its survey; the viewer's other `newCave`, when a
+  // key switches how its controls behave, carries none.
+  emit(type: string, event: Record<string, unknown> = type === 'newCave' ? { survey: {} } : {}) {
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
   }
 }
 
@@ -99,6 +115,11 @@ beforeEach(() => {
     CAMERA_ORTHOGRAPHIC: 2,
     SHADING_DEPTH: 9,
     SHADING_DEPTH_CURSOR: 11,
+    VIEW_PLAN: 1,
+    VIEW_ELEVATION_N: 2,
+    VIEW_ELEVATION_S: 3,
+    VIEW_ELEVATION_E: 4,
+    VIEW_ELEVATION_W: 5,
   } as unknown as Cv2Namespace;
   vi.stubGlobal('fetch', vi.fn(async () => new Response(new Blob(['survey']))));
   // jsdom lays nothing out; the room the preview is given is 800 by 400.
@@ -211,6 +232,80 @@ describe('MoviePreviewHost', () => {
     await waitFor(() => expect(viewer.shadingMode).toBe(1));
     rerender(host({ view: { ...DEFAULT_MOVIE_SETTINGS.view, shadingMode: null } }));
     await waitFor(() => expect(viewer.shadingMode).toBe(3));
+  });
+
+  it('turns to the starting view when the model loads, when the choice changes and when asked again — and on nothing else', async () => {
+    const { rerender } = render(host());
+    await waitFor(() => expect(loadCave).toHaveBeenCalled());
+    const viewer = FakeViewer.all[0];
+    expect(viewer.viewWrites).toEqual([]);
+    act(() => viewer.emit('newCave'));
+    // A movie starts from the north elevation unless the reader chooses otherwise.
+    await waitFor(() => expect(viewer.viewWrites).toEqual([2]));
+
+    // Another setting changes: the reader's own turning and zooming of the preview is kept.
+    const withGrid = { ...DEFAULT_MOVIE_SETTINGS.view, grid: true };
+    rerender(host({ view: withGrid }));
+    await waitFor(() => expect(viewer.grid).toBe(true));
+    expect(viewer.viewWrites).toEqual([2]);
+
+    // The choice changes.
+    const east = { ...withGrid, direction: 'east' as const };
+    rerender(host({ view: east }));
+    await waitFor(() => expect(viewer.viewWrites).toEqual([2, 4]));
+    // The reader asks for it again after turning the preview away from it.
+    rerender(host({ view: east, viewRequest: 1 }));
+    await waitFor(() => expect(viewer.viewWrites).toEqual([2, 4, 4]));
+
+    // A recording takes the viewer and lets it go: the movie started from what the preview
+    // showed, and the preview is not turned back afterwards.
+    rerender(host({ view: east, viewRequest: 1, recording: true }));
+    rerender(host({ view: east, viewRequest: 1, recording: false }));
+    await act(async () => {});
+    expect(viewer.viewWrites).toEqual([2, 4, 4]);
+  });
+
+  it('settles a turn under way before turning again, which the viewer would otherwise ignore', async () => {
+    const { rerender } = render(host());
+    await waitFor(() => expect(loadCave).toHaveBeenCalled());
+    const viewer = FakeViewer.all[0];
+    act(() => viewer.emit('newCave'));
+    await waitFor(() => expect(viewer.viewWrites).toEqual([2]));
+    expect(viewer.settles).toBe(1);
+    rerender(host({ view: { ...DEFAULT_MOVIE_SETTINGS.view, direction: 'west' } }));
+    await waitFor(() => expect(viewer.viewWrites).toEqual([2, 5]));
+    expect(viewer.settles).toBe(2);
+  });
+
+  it('holds a turn asked for during a recording until it lets go, then makes it once', async () => {
+    const { rerender } = render(host());
+    await waitFor(() => expect(loadCave).toHaveBeenCalled());
+    const viewer = FakeViewer.all[0];
+    act(() => viewer.emit('newCave'));
+    await waitFor(() => expect(viewer.viewWrites).toEqual([2]));
+    rerender(host({ recording: true }));
+    rerender(host({ recording: true, viewRequest: 1 }));
+    await act(async () => {});
+    // Nothing turns under a recording: the frame it draws next would show the turn.
+    expect(viewer.viewWrites).toEqual([2]);
+    rerender(host({ recording: false, viewRequest: 1 }));
+    await waitFor(() => expect(viewer.viewWrites).toEqual([2, 2]));
+    rerender(host({ recording: false, viewRequest: 1 }));
+    await act(async () => {});
+    expect(viewer.viewWrites).toEqual([2, 2]);
+  });
+
+  it('does not take the viewer\'s other newCave, for a change of controls, as a model loading', async () => {
+    render(host());
+    await waitFor(() => expect(loadCave).toHaveBeenCalled());
+    const viewer = FakeViewer.all[0];
+    act(() => viewer.emit('newCave'));
+    await waitFor(() => expect(viewer.viewWrites).toEqual([2]));
+    viewer.shadingMode = 6;
+    act(() => viewer.emit('newCave', {}));
+    await act(async () => {});
+    // The reader's framing stays, and the viewer's own shading is not re-read from the movie's.
+    expect(viewer.viewWrites).toEqual([2]);
   });
 
   it('turns the labels off rather than drawing them empty', async () => {
