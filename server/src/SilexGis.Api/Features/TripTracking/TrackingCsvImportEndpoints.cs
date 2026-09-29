@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Api.Common;
@@ -86,11 +87,29 @@ public static class TrackingCsvImportEndpoints
         return TypedResults.Ok(fields);
     }
 
-    private static IResult GetTemplate() =>
-        // The byte-order mark is deliberate: without it a spreadsheet on Windows opens the file in
-        // the system code page and turns every Romanian diacritic into a different letter, which
-        // makes the sample look like a file this application mangled.
-        Results.Text("﻿" + SampleCsv, "text/csv; charset=utf-8");
+    /// <summary>The sample sheet, as a file a spreadsheet will open.</summary>
+    /// <remarks>
+    /// <para>
+    /// The byte-order mark is deliberate: without it a spreadsheet on Windows opens the file in the
+    /// system code page and turns every Romanian diacritic into a different letter, which makes the
+    /// sample look like a file this application mangled.
+    /// </para>
+    /// <para>
+    /// <b>Named in a Content-Disposition</b>, because the only way a browser can fetch this route is
+    /// with the caller's bearer token — which plain anchor navigation cannot carry — so the client
+    /// fetches the bytes and saves them itself, under the name stated here. Without it the reviewer
+    /// gets a file called <c>export</c> with no extension, which a spreadsheet will not open by
+    /// being double-clicked.
+    /// </para>
+    /// </remarks>
+    private static FileContentHttpResult GetTemplate() =>
+        TypedResults.File(
+            Encoding.UTF8.GetBytes("﻿" + SampleCsv),
+            "text/csv; charset=utf-8",
+            TemplateFileName);
+
+    /// <summary>What the sample sheet is saved as. Named once, because a test asserts it.</summary>
+    public const string TemplateFileName = "tracking-reports-sample.csv";
 
     // ---- preview ------------------------------------------------------------------------
 

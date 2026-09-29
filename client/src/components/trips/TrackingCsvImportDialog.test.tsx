@@ -6,6 +6,10 @@ import '../../i18n';
 
 const look = vi.fn();
 const send = vi.fn();
+const save = vi.fn();
+
+// The one helper that knows how to carry the caller's token into a file download.
+vi.mock('../../api/download.ts', () => ({ downloadFile: (url: string) => save(url) }));
 
 // The two writes are stubbed and nothing else is: the column roles, the wording of every finding
 // and the shape of a preview are the real ones, so a rename on either side is felt here.
@@ -88,6 +92,7 @@ async function drop(text: string) {
 }
 
 beforeEach(() => {
+  save.mockReset().mockResolvedValue(undefined);
   look.mockReset().mockResolvedValue(PREVIEW);
   send.mockReset().mockResolvedValue({ created: 1, updated: 1, skipped: 0, refused: [] });
 });
@@ -209,13 +214,17 @@ describe('TrackingCsvImportDialog', () => {
     expect(screen.queryByText('PlaceLabelAmbiguous')).not.toBeInTheDocument();
   });
 
-  it('offers the sample sheet as a download', () => {
-    // The fastest way to explain a column layout is a file somebody can open in the spreadsheet
-    // they already use, and it comes from the server so it is one this server can read.
+  it('fetches the sample sheet with the caller\'s token rather than opening a link', async () => {
+    // <b>The defect this pins.</b> The route is authenticated like every other, and plain anchor
+    // navigation carries no Authorization header — so an href would download a 401 problem
+    // document under a .csv name. That is worse than no button at all: the reviewer gets a file,
+    // opens it in a spreadsheet, and finds a refusal where the sample was meant to be.
     open();
-    expect(screen.getByTestId('trip-tracking-csv-template')).toHaveAttribute(
-      'href',
-      '/api/v1/tracking-csv-import/template',
-    );
+    const button = screen.getByTestId('trip-tracking-csv-template');
+    expect(button).not.toHaveAttribute('href');
+
+    fireEvent.click(button);
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save).toHaveBeenCalledWith('/api/v1/tracking-csv-import/template');
   });
 });

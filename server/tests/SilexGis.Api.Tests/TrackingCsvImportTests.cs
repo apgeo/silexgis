@@ -238,6 +238,15 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         var download = await owner.GetAsync("/api/v1/tracking-csv-import/template");
         download.StatusCode.ShouldBe(HttpStatusCode.OK);
         download.Content.Headers.ContentType!.MediaType.ShouldBe("text/csv");
+        // Named, because the client cannot open this route as a link — it is authenticated, so the
+        // bytes are fetched with the caller's token and saved by the browser under whatever name
+        // this header gives. Without one the reviewer gets a file called "export" with no
+        // extension, which a spreadsheet will not open by being double-clicked.
+        // Trimmed of quotes before comparing: whether a header value is quoted is an HTTP
+        // detail the framework decides, and the claim here is the name the reviewer's
+        // spreadsheet will see.
+        download.Content.Headers.ContentDisposition!.FileName!.Trim('"')
+            .ShouldBe("tracking-reports-sample.csv");
         var template = await download.Content.ReadAsStringAsync();
 
         var preview = await PreviewAsync(trip, template);

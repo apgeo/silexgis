@@ -29,6 +29,7 @@ import {
   type TrackingCsvPreview,
   type TrackingCsvPreviewRow,
 } from '../../api/hooks.ts';
+import { downloadFile } from '../../api/download.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
 
 interface Props {
@@ -67,6 +68,7 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
   const [wentIn, setWentIn] = useState('');
   const [cameOut, setCameOut] = useState('');
   const [preview, setPreview] = useState<TrackingCsvPreview | null>(null);
+  const [fetchingTemplate, setFetchingTemplate] = useState(false);
 
   const fields = useTrackingCsvFields();
   const read = useTrackingCsvPreview();
@@ -94,6 +96,18 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
       cameOutWords: words(cameOut).length > 0 ? words(cameOut) : null,
     };
   }, [mapping, wentIn, cameOut]);
+
+  /** Saving the sample sheet, through the one helper that knows how to carry the token. */
+  const takeTemplate = async () => {
+    setFetchingTemplate(true);
+    try {
+      await downloadFile('/api/v1/tracking-csv-import/template');
+    } catch (error) {
+      message.error(trackingProblemMessage(t, error));
+    } finally {
+      setFetchingTemplate(false);
+    }
+  };
 
   const close = () => {
     setText('');
@@ -156,10 +170,15 @@ export default function TrackingCsvImportDialog({ tripLogId, open, onClose }: Pr
       data-testid="trip-tracking-csv-import"
       footer={
         <Flex justify="space-between" align="center" gap={12} wrap>
+          {/* Fetched with the caller's token and saved from a blob, not opened as a link.
+              The route is authenticated like every other, and plain anchor navigation carries
+              no Authorization header — so an href here downloads a 401 body under a .csv name,
+              which is worse than no button: the reviewer gets a file, opens it, and finds a
+              problem document where the sample was meant to be. */}
           <Button
             icon={<DownloadOutlined />}
-            href="/api/v1/tracking-csv-import/template"
-            download="tracking-sample.csv"
+            loading={fetchingTemplate}
+            onClick={takeTemplate}
             data-testid="trip-tracking-csv-template"
           >
             {t('trips.tracking.csvImport.template')}
