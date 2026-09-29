@@ -152,6 +152,21 @@ function withoutTitleText(settings: MovieSettings): MovieSettings {
     : { ...settings, captions: { ...settings.captions, titleText: '' } };
 }
 
+/**
+ * Keeps a key pressed on one of the dialog's controls from the viewer's own shortcuts.
+ *
+ * The viewer listens for keys on the whole document and, whenever the pointer is resting over it,
+ * takes every key for itself and cancels it — so a title typed with the pointer left over the
+ * preview wrote nothing, and the shortcuts turned the preview under a reader whose keys were meant
+ * for a text box. A key pressed on the dialog is the dialog's. Only the two the modal answers on
+ * its own frame, outside this body, go on past it: Escape to close, and Tab to keep the focus in.
+ */
+function keepKeysFromViewer(event: { key: string; stopPropagation(): void }): void {
+  if (event.key !== 'Escape' && event.key !== 'Tab') {
+    event.stopPropagation();
+  }
+}
+
 function MovieDialogBody({
   surveyModelId,
   initialTripIds,
@@ -594,7 +609,7 @@ function MovieDialogBody({
       : movieClockText(timeline.clock(frames.frame(at).position), t, i18n.language);
 
   return (
-    <div className="movie-dialog">
+    <div className="movie-dialog" onKeyDown={keepKeysFromViewer}>
       <div className="movie-dialog-body">
         <Flex vertical gap="small" className="movie-dialog-preview">
           <MoviePreviewHost
