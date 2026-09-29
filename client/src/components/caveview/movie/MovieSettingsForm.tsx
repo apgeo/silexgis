@@ -467,7 +467,7 @@ export default function MovieSettingsForm({
 
   const caverSettings = (
     <Flex vertical gap="middle">
-      <Row label={t('caveview.movie.labels')}>
+      <Row label={t('caveview.movie.labels')} help={t('caveview.movie.labelsHelp')}>
         <Select
           value={cavers.labels}
           style={{ minWidth: 150 }}

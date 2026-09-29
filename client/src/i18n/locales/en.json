@@ -2467,6 +2467,7 @@
       "quietGap": "Quiet stretch length",
       "minutes": "min",
       "labels": "Caver labels",
+      "labelsHelp": "The first name is the first word of the name on the roster; two people who would read the same gain an initial.",
       "caverLabels": {
         "first": "First name",
         "full": "Full name",
