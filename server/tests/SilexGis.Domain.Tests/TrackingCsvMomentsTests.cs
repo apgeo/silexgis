@@ -90,6 +90,67 @@ public class TrackingCsvMomentsTests
     }
 
     [Fact]
+    public void A_dash_in_the_date_is_not_taken_for_an_offset_wherever_the_date_is_written()
+    {
+        // <b>The bug these exist for.</b> An offset was looked for as any sign after the first
+        // colon, so a time-first cell with a dashed date "stated an offset" and the whole cell went
+        // to the framework's parser — which shifted it into the server's zone and read the day and
+        // the month the other way round from what the file decided. All three are silent wrong
+        // answers on the one field the upsert key is built from.
+        Read("14:30 2026-09-12").At.ShouldBe(new DateTimeOffset(2026, 9, 12, 14, 30, 0, TimeSpan.Zero));
+        Read("14:30 12-09-2026", TripCsvDateOrder.DayFirst).At
+            .ShouldBe(new DateTimeOffset(2026, 9, 12, 14, 30, 0, TimeSpan.Zero));
+        Read("12-09-2026 14:30", TripCsvDateOrder.DayFirst).At
+            .ShouldBe(new DateTimeOffset(2026, 9, 12, 14, 30, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void A_day_first_date_beside_a_real_offset_is_read_in_the_decided_order_and_then_shifted()
+    {
+        // The date half follows the file's order like every other cell, and only the offset the
+        // cell wrote is applied — glued to the time or a word after it, both as a device writes.
+        var expected = new DateTimeOffset(2026, 9, 12, 11, 30, 0, TimeSpan.Zero);
+        Read("12.09.2026 14:30 +03:00", TripCsvDateOrder.DayFirst).At.ShouldBe(expected);
+        Read("12.09.2026 14:30+03:00", TripCsvDateOrder.DayFirst).At.ShouldBe(expected);
+        Read("12.09.2026 14:30:00 +0300", TripCsvDateOrder.DayFirst).At.ShouldBe(expected);
+        Read("12.09.2026 14:30 Z", TripCsvDateOrder.DayFirst).At
+            .ShouldBe(new DateTimeOffset(2026, 9, 12, 14, 30, 0, TimeSpan.Zero));
+        Read("2026-09-12T14:30:00.000Z").At
+            .ShouldBe(new DateTimeOffset(2026, 9, 12, 14, 30, 0, TimeSpan.Zero));
+        Read("2026-09-12T14:30:00-05:00").At
+            .ShouldBe(new DateTimeOffset(2026, 9, 12, 19, 30, 0, TimeSpan.Zero));
+
+        // And an offset no clock has is not a moment.
+        Read("12.09.2026 14:30 +25:00").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+    }
+
+    [Fact]
+    public void A_cell_that_states_an_offset_contributes_no_evidence_about_the_days_order_and_one_that_does_not_does()
+    {
+        TrackingCsvMoments.DatePartOf("2026-09-12T14:30:00+03:00").Kind.ShouldBe(TripCsvDateKind.Empty);
+        TrackingCsvMoments.DatePartOf("14:30 13-09-2026").ProvenOrder.ShouldBe(TripCsvDateOrder.DayFirst);
+        TrackingCsvMoments.DatePartOf("14:30 2026-09-12").Kind.ShouldBe(TripCsvDateKind.Settled);
+    }
+
+    [Fact]
+    public void A_time_written_without_its_colon_is_read_beside_a_date_wherever_it_stands()
+    {
+        // The colon-less spelling was listed among the accepted times and could never be reached:
+        // the time word was found by its colon alone, so "0815" stayed glued to the date and the
+        // whole cell was refused as a date of four parts.
+        Read("12.09.2026 0815").At.ShouldBe(new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero));
+        Read("0815 12.09.2026").At.ShouldBe(new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero));
+        Read("2026-09-12 1645").At.ShouldBe(new DateTimeOffset(2026, 9, 12, 16, 45, 0, TimeSpan.Zero));
+        TrackingCsvMoments.DatePartOf("13.09.2026 0815").ProvenOrder.ShouldBe(TripCsvDateOrder.DayFirst);
+
+        // Three digits are never a time, four digits no clock shows are not one either, and four
+        // digits beside something that is not a date are left where they stand.
+        Read("12.09.2026 815").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+        Read("2500 12.09.2026").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+        Read("Meandru 0815").Kind.ShouldBe(TrackingCsvMomentKind.Unreadable);
+    }
+
+    [Fact]
     public void A_blank_cell_is_nothing_written_and_not_a_fault()
     {
         // A sheet has blank rows and trailing lines, and an importer that called them faults would

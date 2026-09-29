@@ -162,8 +162,14 @@ public static class TrackingCsvImportEndpoints
         var parsed = TrackingCsvParser.Parse(request.Text, options, mapping);
         var plan = TrackingCsvPlanner.Plan(parsed.Rows, loaded.Subject!);
 
-        var chosen = request.Lines is { Count: > 0 } lines ? lines.ToHashSet() : null;
-        var now = DateTimeOffset.UtcNow;
+        // Null is the caller saying nothing, so every importable row goes; an empty list is the
+        // caller saying none, and it commits nothing. The two must not read alike: a screen
+        // whose reviewer unticked every row and pressed the button anyway would otherwise
+        // import the whole sheet, which is the one outcome a selection exists to prevent.
+        var chosen = request.Lines?.ToHashSet();
+        // The clock the plan was decided against, so a row the plan let through is not refused
+        // here by a later reading of it.
+        var now = loaded.Subject!.Now;
         var refused = new List<TrackingCsvDiagnostic>(plan.Refused);
         var created = 0;
         var updated = 0;
@@ -171,9 +177,19 @@ public static class TrackingCsvImportEndpoints
 
         // Loaded once for the whole file rather than looked up per row: a trip's log is thousands
         // of rows at most, and a query per report is what turns importing a season into a minute.
-        var existing = await db.TripPositionEvents
-            .Where(e => e.TripLogId == tripLogId)
-            .ToDictionaryAsync(e => (e.CaverId, e.RecordedAt), e => e, ct);
+        //
+        // Grouped rather than keyed directly, because nothing makes the person and the instant
+        // unique in the log: a typed "entered" and a typed note filed at the same minute for one
+        // person are two rows under one key, and a dictionary built straight off them would throw
+        // and fail the whole sheet with nothing naming the rows. A key the log holds once maps to
+        // that row; a key it holds several times maps to null, which the loop below refuses on
+        // the row exactly as the planner does — the planner is the ordinary gate for it, and this
+        // is the same answer for a report typed in between the plan and the write.
+        var existing = (await db.TripPositionEvents
+                .Where(e => e.TripLogId == tripLogId)
+                .ToListAsync(ct))
+            .GroupBy(e => (e.CaverId, e.RecordedAt))
+            .ToDictionary(g => g.Key, g => g.Count() == 1 ? g.First() : null);
 
         foreach (var report in plan.Reports)
         {
@@ -193,6 +209,14 @@ public static class TrackingCsvImportEndpoints
 
             if (existing.TryGetValue((report.CaverId, report.At), out var row))
             {
+                if (row is null)
+                {
+                    refused.Add(new TrackingCsvDiagnostic(
+                        TrackingCsvSeverity.Error, TrackingCsvProblem.AlreadyRecordedSeveralTimes,
+                        report.Line, Detail: report.CaverWritten));
+                    continue;
+                }
+
                 if (!request.ReplaceExisting)
                 {
                     refused.Add(new TrackingCsvDiagnostic(
@@ -289,9 +313,14 @@ public static class TrackingCsvImportEndpoints
                 ApiProblems.Conflict("tracking.not_configured", "This trip has no watch to import reports onto."));
         }
 
+        // Distinct by person, not by roster row: the roster is one row per person per job, so the
+        // leader who also proposed the trip is two rows and one person. Handed in twice they would
+        // be two hits under one key, and the ladder's rule that several hits is an ambiguity would
+        // refuse the one person a sheet is most likely to name.
         var roster = await db.TripLogParticipants.AsNoTracking()
             .Where(p => p.TripLogId == tripLogId)
             .Join(db.Cavers.AsNoTracking(), p => p.CaverId, c => c.Id, (_, c) => new { c.Id, c.FullName })
+            .Distinct()
             .ToListAsync(ct);
 
         var teams = await db.TripTeams.AsNoTracking()
@@ -310,9 +339,13 @@ public static class TrackingCsvImportEndpoints
             declarations = await TripTrackingEndpoints.DeclaredPlacesOfAsync(db, model.Cave.Id, ct);
         }
 
+        // Every key with how many rows the log holds under it. A key held once is one a sheet
+        // corrects; a key held more than once is one the planner refuses, because which of the
+        // rows the sheet means is not the importer's to guess.
         var existing = await db.TripPositionEvents.AsNoTracking()
             .Where(e => e.TripLogId == tripLogId)
-            .Select(e => new { e.CaverId, e.RecordedAt })
+            .GroupBy(e => new { e.CaverId, e.RecordedAt })
+            .Select(g => new { g.Key.CaverId, g.Key.RecordedAt, Count = g.Count() })
             .ToListAsync(ct);
 
         var subject = new TrackingCsvSubject
@@ -327,6 +360,9 @@ public static class TrackingCsvImportEndpoints
             ReferenceStationName = tracking.ReferenceStationName,
             DepthFilter = tracking.DepthFilter,
             Existing = existing.Select(e => (e.CaverId, e.RecordedAt)).ToHashSet(),
+            ExistingSeveralTimes = existing.Where(e => e.Count > 1)
+                .Select(e => (e.CaverId, e.RecordedAt)).ToHashSet(),
+            Now = DateTimeOffset.UtcNow,
         };
 
         return new Loaded(subject, tracking, usable?.Model.Id, usable?.Cave.Id, null);

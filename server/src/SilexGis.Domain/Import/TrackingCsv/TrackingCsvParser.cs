@@ -76,6 +76,25 @@ public static class TrackingCsvParser
                 headerRecord.Line, column));
         }
 
+        // A date column beside a time column, which is how a hand-kept sheet often arrives and a
+        // layout this reader does not join. Read as it stands, every row would be refused for a
+        // missing time while the time sits one column over, and nothing on a mapping screen can
+        // join the two. Said once for the file, naming both columns, because the repair is to the
+        // sheet's layout and not to any row.
+        if (columns.TryGetValue(TrackingCsvField.RecordedAt, out var momentColumn)
+            && TrackingCsvColumnMapping.DateOnlyHeaders.Contains(FoldedText.Of(TripCsvValues.Tidy(header[momentColumn])).Value))
+        {
+            var dateHeader = TripCsvValues.Tidy(header[momentColumn]);
+            var timeHeader = unmapped.FirstOrDefault(h =>
+                TrackingCsvColumnMapping.TimeOnlyHeaders.Contains(FoldedText.Of(h).Value));
+            if (timeHeader is not null)
+            {
+                fileDiagnostics.Add(new TrackingCsvDiagnostic(
+                    TrackingCsvSeverity.Error, TrackingCsvProblem.MomentSplitAcrossColumns,
+                    headerRecord.Line, dateHeader, $"{dateHeader} + {timeHeader}"));
+            }
+        }
+
         // Two columns without which no row means anything. Refused for the file rather than row by
         // row: a sheet whose moment column was misnamed would otherwise report the same error a
         // thousand times and bury the one thing the reviewer has to fix.
@@ -311,6 +330,19 @@ public static class TrackingCsvParser
                 TrackingCsvSeverity.Error, TrackingCsvProblem.NoPlaceAndNoState, record.Line));
         }
 
+        // Bounded here, on the row, because the bound is the stored column's and a row that
+        // overran it would otherwise be previewed as fine and then fail the whole file's write —
+        // every other row of the sheet with it, and without a line to go and fix. Measured on
+        // the folded note rather than on either column, since folding is what gets stored.
+        var note = FoldNote(Text(TrackingCsvField.Note), Text(TrackingCsvField.Details));
+        if (note is { Length: > TripTrackingRules.MaxNoteLength })
+        {
+            diagnostics.Add(new TrackingCsvDiagnostic(
+                TrackingCsvSeverity.Error, TrackingCsvProblem.NoteTooLong,
+                record.Line, Named(TrackingCsvField.Note),
+                $"{note.Length} > {TripTrackingRules.MaxNoteLength}"));
+        }
+
         return new TrackingCsvRow
         {
             Line = record.Line,
@@ -322,7 +354,7 @@ public static class TrackingCsvParser
             DepthM = depth,
             Decides = decides,
             State = state,
-            Note = FoldNote(Text(TrackingCsvField.Note), Text(TrackingCsvField.Details)),
+            Note = note,
             Diagnostics = diagnostics,
         };
     }
@@ -354,7 +386,10 @@ public static class TrackingCsvParser
             return (null, TrackingCsvProblem.DepthOutOfRange);
         }
 
-        return (depth, null);
+        // In the form the log stores it — one decimal — from the moment it is read, so the preview
+        // shows the depth the write will keep and the row is placed on that depth rather than on
+        // a finer one the column would round away afterwards.
+        return (TripTrackingRules.RecordedDepthM(depth), null);
     }
 
     /// <summary>

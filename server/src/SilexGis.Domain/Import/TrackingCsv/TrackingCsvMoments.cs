@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
+using System.Text.RegularExpressions;
 using SilexGis.Domain.Import.TripCsv;
 
 namespace SilexGis.Domain.Import.TrackingCsv;
@@ -65,9 +66,11 @@ public static class TrackingCsvMoments
 {
     /// <summary>
     /// Time-of-day spellings accepted, most specific first. Seconds are optional because a sheet
-    /// typed from a phone call carries minutes, and a sheet exported from a device carries seconds.
+    /// typed from a phone call carries minutes, and a sheet exported from a device carries seconds
+    /// — and sometimes fractions of one, which an export writes and nobody types.
     /// </summary>
-    private static readonly string[] TimeFormats = ["HH:mm:ss", "H:mm:ss", "HH:mm", "H:mm", "HHmm"];
+    private static readonly string[] TimeFormats =
+        ["HH:mm:ss.FFFFFFF", "H:mm:ss.FFFFFFF", "HH:mm:ss", "H:mm:ss", "HH:mm", "H:mm", "HHmm"];
 
     /// <summary>
     /// The moment a cell names.
@@ -80,25 +83,13 @@ public static class TrackingCsvMoments
             return TrackingCsvMoment.Empty;
         }
 
-        // An instant that states its own offset, which is what an export or a device writes. Taken
-        // as given, because it is the one case where the cell says what zone it means.
-        //
-        // <b>Only when the offset is actually written.</b> Asking the framework to parse a cell
-        // with no offset in it hands back one in the *server's* zone, which is the lie this reader
-        // exists to avoid: the same sheet would import three hours out on one installation and
-        // right on another, and would change meaning if the server moved. A cell with no offset
-        // falls through to the reading below, which stamps what the club wrote without shifting it.
-        if (StatesAnOffset(tidy)
-            && DateTimeOffset.TryParse(tidy, CultureInfo.InvariantCulture,
-                DateTimeStyles.AllowWhiteSpaces, out var stated))
-        {
-            return new TrackingCsvMoment(TrackingCsvMomentKind.Read, stated.ToUniversalTime());
-        }
-
-        // Otherwise: a date and a time beside it, in whatever the club writes. Split at the first
-        // run of whitespace that has a colon after it, so "12.09.2026 14:30" and "12 09 2026 14:30"
-        // both divide in the right place.
-        var (datePart, timePart) = Divide(tidy);
+        // The cell taken apart into its date, its time, and the offset the time carries if it
+        // carries one. Never handed whole to the framework's parser: asked to read a cell, that
+        // parser supplies the server's own offset for one that states none and reads an ambiguous
+        // date month-first whatever the file decided, so the same sheet would import three hours
+        // out on one installation and on the wrong day on another. Every part is read here, under
+        // the file's decided order, and only an offset the cell actually wrote is applied.
+        var (datePart, timePart, offsetPart) = Divide(tidy);
 
         var date = TripCsvDates.Read(datePart);
         if (date.Kind == TripCsvDateKind.Unreadable || date.Kind == TripCsvDateKind.Empty)
@@ -122,9 +113,17 @@ public static class TrackingCsvMoments
             return TrackingCsvMoment.Unreadable;
         }
 
+        // An instant that states its own offset, which is what an export or a device writes, is
+        // taken as given and converted — it is the one case where the cell says what zone it
+        // means. A cell that states none is stamped as it stands, without shifting.
+        if (!TryReadOffset(offsetPart, out var offset))
+        {
+            return TrackingCsvMoment.Unreadable;
+        }
+
         return new TrackingCsvMoment(
             TrackingCsvMomentKind.Read,
-            new DateTimeOffset(day.ToDateTime(time), TimeSpan.Zero));
+            new DateTimeOffset(day.ToDateTime(time), offset).ToUniversalTime());
     }
 
     /// <summary>
@@ -134,9 +133,9 @@ public static class TrackingCsvMoments
     /// <remarks>
     /// Exposed separately because the order has to be settled over the whole column before any row
     /// can be read, and <see cref="Read"/> already needs the answer. A cell that states its own
-    /// offset abstains: it is ISO, so it proves nothing about how this club writes an ambiguous
-    /// date, and counting it as evidence would let one exported row decide the reading of a hundred
-    /// hand-typed ones.
+    /// offset abstains: it is what an export writes, so it proves nothing about how this club
+    /// writes an ambiguous date, and counting it as evidence would let one exported row decide the
+    /// reading of a hundred hand-typed ones.
     /// </remarks>
     public static TripCsvDateReading DatePartOf(string? text)
     {
@@ -146,53 +145,71 @@ public static class TrackingCsvMoments
             return TripCsvDateReading.Empty;
         }
 
-        if (StatesAnOffset(tidy)
-            && DateTimeOffset.TryParse(tidy, CultureInfo.InvariantCulture,
-                DateTimeStyles.AllowWhiteSpaces, out _))
-        {
-            return TripCsvDateReading.Empty;
-        }
-
-        var (datePart, _) = Divide(tidy);
-        return TripCsvDates.Read(datePart);
+        var (datePart, _, offsetPart) = Divide(tidy);
+        return offsetPart.Length > 0 ? TripCsvDateReading.Empty : TripCsvDates.Read(datePart);
     }
 
     /// <summary>
-    /// Whether the cell states a zone of its own — a trailing Z, or a signed offset after the time.
+    /// An offset as a cell writes one beside the time — a Z, or a sign with hours and optional
+    /// minutes — with nothing else allowed to pass for one.
+    /// </summary>
+    private const string OffsetPattern = @"(?<offset>[Zz]|[+-]\d{2}(:?\d{2})?)";
+
+    private static readonly Regex OffsetSuffix = new(
+        OffsetPattern + "$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture);
+
+    private static readonly Regex OffsetWord = new(
+        "^" + OffsetPattern + "$", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture);
+
+    /// <summary>
+    /// The offset an offset word states, or zero for a cell that wrote none.
     /// </summary>
     /// <remarks>
-    /// Looked for rather than inferred from a successful parse, because the framework will happily
-    /// supply the server's own offset for a cell that states none, and a reading that depends on
-    /// where the server is, is not a reading.
+    /// False for an offset no clock has, which means the cell was not a moment after all: a sign
+    /// after the time has to be an offset, and one that is not a real offset is a cell to report.
     /// </remarks>
-    private static bool StatesAnOffset(string tidy)
+    private static bool TryReadOffset(string offsetPart, out TimeSpan offset)
     {
-        if (tidy.EndsWith('Z') || tidy.EndsWith('z'))
+        offset = TimeSpan.Zero;
+        if (offsetPart.Length == 0 || offsetPart is "Z" or "z")
         {
             return true;
         }
 
-        var colon = tidy.IndexOf(':', StringComparison.Ordinal);
-        if (colon < 0)
+        var digits = offsetPart[1..].Replace(":", string.Empty, StringComparison.Ordinal);
+        var hours = int.Parse(digits[..2], NumberStyles.None, CultureInfo.InvariantCulture);
+        var minutes = digits.Length == 4
+            ? int.Parse(digits[2..], NumberStyles.None, CultureInfo.InvariantCulture)
+            : 0;
+        if (hours > 14 || minutes > 59)
         {
             return false;
         }
 
-        // A sign after the time is an offset; a sign before it is part of the date.
-        var afterTime = tidy[colon..];
-        return afterTime.Contains('+', StringComparison.Ordinal)
-            || afterTime.LastIndexOf('-') > 0;
+        var magnitude = new TimeSpan(hours, minutes, 0);
+        offset = offsetPart[0] == '-' ? -magnitude : magnitude;
+        return true;
     }
 
     /// <summary>
-    /// The cell split into what looks like a date and what looks like a time.
+    /// The cell split into what looks like a date, what looks like a time, and the offset written
+    /// on or after the time, if any.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The time is found by its colon rather than by position, because a sheet writes
     /// "12.09.2026 14:30" and another writes "14:30 12.09.2026", and a split on the first space
-    /// would read the second as a date of "14:30".
+    /// would read the second as a date of "14:30". A time written without its colon is found by
+    /// <see cref="ClockWord"/>, on the stricter terms that method states.
+    /// </para>
+    /// <para>
+    /// The offset is looked for only where a clock writes it — glued to the end of the time word,
+    /// as in "14:30:00+03:00", or as the word right after it, as in "14:30 +03:00". Looked for
+    /// anywhere else, the dashes of "2026-09-12" and "12-09-2026" pass for offsets, and a cell
+    /// that merely writes its date with dashes gets read as if it had named a zone.
+    /// </para>
     /// </remarks>
-    private static (string Date, string Time) Divide(string tidy)
+    private static (string Date, string Time, string Offset) Divide(string tidy)
     {
         // An ISO cell separates the two with a T rather than a space, and reaches here whenever it
         // states no offset. Normalised to a space so there is one divider to reason about, and only
@@ -207,15 +224,69 @@ public static class TrackingCsvMoments
             }
         }
 
-        var words = new string(chars).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var timeWord = Array.FindIndex(words, w => w.Contains(':', StringComparison.Ordinal));
+        var words = new string(chars).Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var timeWord = words.FindIndex(w => w.Contains(':', StringComparison.Ordinal));
+        if (timeWord < 0)
+        {
+            timeWord = ClockWord(words);
+        }
 
         if (timeWord < 0)
         {
-            return (tidy, string.Empty);
+            return (tidy, string.Empty, string.Empty);
         }
 
-        var date = string.Join(' ', words.Where((_, i) => i != timeWord));
-        return (date, words[timeWord]);
+        var time = words[timeWord];
+        var offset = string.Empty;
+
+        // Glued on: the suffix has to leave a time in front of it, so "14:30" alone — whose
+        // trailing ":30" is not an offset — is never cut short.
+        var glued = OffsetSuffix.Match(time);
+        if (glued.Success && glued.Index > 0 && time[..glued.Index].Contains(':', StringComparison.Ordinal))
+        {
+            offset = glued.Groups["offset"].Value;
+            time = time[..glued.Index];
+        }
+        else if (timeWord + 1 < words.Count && OffsetWord.Match(words[timeWord + 1]) is { Success: true } apart)
+        {
+            offset = apart.Groups["offset"].Value;
+            words.RemoveAt(timeWord + 1);
+        }
+
+        words.RemoveAt(timeWord);
+        return (string.Join(' ', words), time, offset);
+    }
+
+    /// <summary>
+    /// The word that is a time written without its colon — the "0815" of "12.09.2026 0815" — or
+    /// -1 when the cell has none.
+    /// </summary>
+    /// <remarks>
+    /// Four digits on their own are a year as readily as a time, so a word is taken as the time
+    /// only when it is one of exactly two and the other reads as a date by itself. The trailing
+    /// word is tried first because a sheet writes the date before the time, and "2026 0815" would
+    /// otherwise read either way round. Without this the colon-less spelling among the accepted
+    /// time formats could never be reached: the cell stayed whole and was refused as a date of four
+    /// parts.
+    /// </remarks>
+    private static int ClockWord(List<string> words)
+    {
+        if (words.Count != 2)
+        {
+            return -1;
+        }
+
+        foreach (var candidate in new[] { 1, 0 })
+        {
+            var word = words[candidate];
+            var rest = TripCsvDates.Read(words[1 - candidate]);
+            if (word.Length == 4 && word.All(char.IsAsciiDigit)
+                && rest.Kind is not (TripCsvDateKind.Unreadable or TripCsvDateKind.Empty))
+            {
+                return candidate;
+            }
+        }
+
+        return -1;
     }
 }

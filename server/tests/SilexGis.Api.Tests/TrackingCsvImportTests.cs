@@ -117,6 +117,7 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
     {
         var trip = await ArmedTripAsync();
         (await CommitAsync(trip, Sheet)).GetProperty("created").GetInt32().ShouldBe(6);
+        var firstIds = await EventIdsAsync(trip);
 
         // The same instants and the same people, with one note written properly. Person and
         // instant are the key, so this is the same six reports said again.
@@ -126,6 +127,11 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         second.GetProperty("created").GetInt32().ShouldBe(0);
         second.GetProperty("updated").GetInt32().ShouldBe(6);
         (await EventCountAsync(trip)).ShouldBe(6);
+
+        // Changed on the rows they were, not replaced by six new ones: a picture pinned to a report,
+        // or a link somebody holds to it, names the row, and a re-import that deleted and recreated
+        // would count the same and leave every one of those pointing at nothing.
+        (await EventIdsAsync(trip)).ShouldBe(firstIds);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
@@ -216,6 +222,57 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
     }
 
     [Fact]
+    public async Task A_row_about_the_future_is_refused_in_the_preview_and_not_first_at_the_commit()
+    {
+        var trip = await ArmedTripAsync();
+        var future = DateTimeOffset.UtcNow.AddDays(2).ToString("dd.MM.yyyy HH:mm");
+        var sheet = $"Data si ora,Adancime,Speologi,Stare\r\n{future},0,Ion Popescu,intrare\r\n"
+            + "12.09.2026 08:15,0,Maria Pop,intrare\r\n";
+
+        // The preview says it, so the reviewer learns of a mistyped year before anything is
+        // written, and the commit agrees with the preview about what will land.
+        var preview = await PreviewAsync(trip, sheet);
+        preview.GetProperty("creates").GetInt32().ShouldBe(1);
+        preview.GetProperty("refused").EnumerateArray()
+            .Select(d => d.GetProperty("problem").GetString()).ShouldContain("MomentInFuture");
+
+        var commit = await CommitAsync(trip, sheet);
+        commit.GetProperty("created").GetInt32().ShouldBe(1);
+        commit.GetProperty("refused").EnumerateArray()
+            .Select(d => d.GetProperty("problem").GetString()).ShouldContain("MomentInFuture");
+        (await EventCountAsync(trip)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Two_rows_of_one_sheet_that_are_the_same_report_preview_as_one_and_commit_as_one()
+    {
+        var trip = await ArmedTripAsync();
+        var sheet = "Data si ora,Adancime,Speologi,Nota\r\n"
+            + "12.09.2026 08:20,50,Maria Pop,prima\r\n"
+            + "12.09.2026 08:20,50,Maria Pop,a doua\r\n";
+
+        // One report, the last row's, and both rows told about it — never one create and one
+        // "already recorded" refusal for a row the log had not held when the sheet was previewed.
+        var preview = await PreviewAsync(trip, sheet);
+        preview.GetProperty("creates").GetInt32().ShouldBe(1);
+        preview.GetProperty("replaces").GetInt32().ShouldBe(0);
+        preview.GetProperty("rows").EnumerateArray().Single().GetProperty("note").GetString().ShouldBe("a doua");
+        preview.GetProperty("refused").EnumerateArray()
+            .Select(d => d.GetProperty("problem").GetString()).ShouldBe(["DuplicateInFile"]);
+
+        var commit = await CommitAsync(trip, sheet);
+        commit.GetProperty("created").GetInt32().ShouldBe(1);
+        commit.GetProperty("skipped").GetInt32().ShouldBe(0);
+        commit.GetProperty("refused").EnumerateArray()
+            .Select(d => d.GetProperty("problem").GetString()).ShouldNotContain("AlreadyRecorded");
+        (await EventCountAsync(trip)).ShouldBe(1);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripPositionEvents.SingleAsync(e => e.TripLogId == trip)).Note.ShouldBe("a doua");
+    }
+
+    [Fact]
     public async Task A_station_the_survey_does_not_have_is_refused_exactly_as_a_typed_one_is()
     {
         var trip = await ArmedTripAsync();
@@ -257,6 +314,53 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         // Its two named people are the two this trip has, so every row about a place resolves and
         // only the sample's own invented station and place do not.
         preview.GetProperty("unmatchedCavers").EnumerateArray().ShouldBeEmpty();
+
+        // Every one of the template's eight headers is read as the field it teaches — not merely
+        // "none unmapped", which a header claimed by the wrong field would satisfy just as well.
+        preview.GetProperty("resolvedColumns").EnumerateObject()
+            .Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)
+            .ShouldBe(["Cavers", "Depth", "Note", "Place", "RecordedAt", "State", "Station", "Team"]);
+
+        // And its rows import. Two people going in (line 2) and out (line 8), the two at 96 m twice
+        // (lines 3 and 7) and one at 150 m (line 5) on the seeded survey's nearest stations: nine
+        // reports, while exactly the sample's two invented places are refused with their reasons.
+        // Asserted on what would land rather than implied by the headers, because a template whose
+        // depth rows all came back without a station, or whose state words stopped being
+        // recognised, passed the assertions above unnoticed.
+        preview.GetProperty("creates").GetInt32().ShouldBe(9);
+        preview.GetProperty("refused").EnumerateArray()
+            .Select(d => (d.GetProperty("problem").GetString(), d.GetProperty("line").GetInt32(),
+                d.GetProperty("detail").GetString()))
+            .ShouldBe([("PlaceLabelUnknown", 4, "Meandru"), ("StationNotInModel", 6, "3.14")]);
+        var kinds = preview.GetProperty("rows").EnumerateArray()
+            .GroupBy(r => r.GetProperty("line").GetInt32())
+            .ToDictionary(g => g.Key, g => g.Select(r => r.GetProperty("kind").GetString()).Distinct().Single());
+        kinds[2].ShouldBe("entered");
+        kinds[3].ShouldBe("atDepth");
+        kinds[8].ShouldBe("exited");
+    }
+
+    [Fact]
+    public async Task A_reading_choice_the_preview_refuses_is_refused_by_the_commit_too()
+    {
+        // The two read the sheet under the same choices or the reviewer commits something they
+        // never saw: the reader drops a delimiter that is not one character and reads with the
+        // default, so a commit that accepted ";;" after the preview had refused it wrote a file
+        // previewed under no such choice.
+        var trip = await ArmedTripAsync();
+        var body = new { text = Sheet, options = new { delimiter = ";;" } };
+
+        (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/csv-import/preview", body))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", body))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await EventCountAsync(trip)).ShouldBe(0);
+
+        // A second rule from the same set, so what is shared is the whole set and not one line.
+        var words = new { text = Sheet, options = new { wentInWords = new[] { new string('w', 101) } } };
+        (await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/csv-import/commit", words))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await EventCountAsync(trip)).ShouldBe(0);
     }
 
     [Fact]
@@ -291,6 +395,45 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         (await BodyAsync(refused)).GetProperty("code").GetString().ShouldBe("tracking.not_configured");
     }
 
+    /// <summary>
+    /// An import passes the write gate a typed report passes: a watch that is over still takes a
+    /// sheet, because writing a trip up from notes afterwards is what the import is for, and a
+    /// watch that is off refuses it with the one code every write to the log is refused with.
+    /// </summary>
+    /// <remarks>
+    /// The off watch here holds a row, so the refusal is the state being refused rather than the
+    /// "no watch at all" answer an empty trip gets. No request moves a watch into Off, so the state
+    /// is written directly; what is under test is the gate, not how a trip comes to be there.
+    /// </remarks>
+    [Fact]
+    public async Task A_closed_watch_takes_a_sheet_and_an_off_one_with_a_report_on_it_is_refused_it()
+    {
+        var closed = await ArmedTripAsync();
+        (await PutConfigAsync(closed, new { state = "closed" })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var commit = await CommitAsync(closed, Sheet);
+        commit.GetProperty("created").GetInt32().ShouldBe(6);
+        (await EventCountAsync(closed)).ShouldBe(6);
+
+        var (off, cavers) = await CreateTripAsync();
+        var (model, _) = await SeedModelAsync();
+        (await ArmAsync(off, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var typed = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{off}/tracking/events", new
+        {
+            caverIds = new[] { cavers[0] },
+            kind = "entered",
+            recordedAt = new DateTimeOffset(2026, 9, 12, 8, 0, 0, TimeSpan.Zero),
+        });
+        typed.StatusCode.ShouldBe(HttpStatusCode.OK, await typed.Content.ReadAsStringAsync());
+        await SetStateAsync(off, TripTrackingState.Off);
+
+        var refused = await owner.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{off}/tracking/csv-import/commit", new { text = Sheet });
+        refused.StatusCode.ShouldBe(HttpStatusCode.Conflict, await refused.Content.ReadAsStringAsync());
+        (await BodyAsync(refused)).GetProperty("code").GetString().ShouldBe("tracking.not_writable");
+        (await EventCountAsync(off)).ShouldBe(1);
+    }
+
     [Fact]
     public async Task Only_the_lines_a_reviewer_names_are_committed()
     {
@@ -306,6 +449,119 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         body.GetProperty("created").GetInt32().ShouldBe(2);
         body.GetProperty("skipped").GetInt32().ShouldBe(4);
         (await EventCountAsync(trip)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_selection_that_names_no_line_commits_nothing_and_a_missing_one_commits_everything()
+    {
+        var trip = await ArmedTripAsync();
+
+        // "None" and "nothing said" used to be read alike, so a reviewer who unticked every row
+        // and pressed the button anyway imported the whole sheet. An empty list is a decision.
+        var none = await owner.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit",
+            new { text = Sheet, lines = Array.Empty<int>() });
+        none.StatusCode.ShouldBe(HttpStatusCode.OK, await none.Content.ReadAsStringAsync());
+
+        var body = await BodyAsync(none);
+        body.GetProperty("created").GetInt32().ShouldBe(0);
+        body.GetProperty("updated").GetInt32().ShouldBe(0);
+        body.GetProperty("skipped").GetInt32().ShouldBe(6);
+        (await EventCountAsync(trip)).ShouldBe(0);
+
+        // Saying nothing about the lines is still every importable row.
+        var all = await owner.PostAsJsonAsync(
+            $"/api/v1/trip-logs/{trip}/tracking/csv-import/commit",
+            new { text = Sheet });
+        all.StatusCode.ShouldBe(HttpStatusCode.OK, await all.Content.ReadAsStringAsync());
+        (await BodyAsync(all)).GetProperty("created").GetInt32().ShouldBe(6);
+        (await EventCountAsync(trip)).ShouldBe(6);
+    }
+
+    [Fact]
+    public async Task A_log_holding_two_reports_at_one_instant_refuses_that_row_and_still_imports_the_rest()
+    {
+        // Nothing keeps a log from holding two reports about one person at one minute: a typed
+        // "entered" and a typed note both filed at 08:15 is an ordinary write-up. Every commit on
+        // such a trip used to fail whole, with a generic error and nothing naming the rows, while
+        // the preview kept promising creates.
+        var (trip, cavers) = await CreateTripAsync();
+        var (model, _) = await SeedModelAsync();
+        (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var at = new DateTimeOffset(2026, 9, 12, 8, 15, 0, TimeSpan.Zero);
+        foreach (var kind in new[] { "entered", "note" })
+        {
+            var typed = await owner.PostAsJsonAsync($"/api/v1/trip-logs/{trip}/tracking/events", new
+            {
+                caverIds = new[] { cavers[0] },
+                kind,
+                note = kind == "note" ? "typed twice at one minute" : null,
+                recordedAt = at,
+            });
+            typed.StatusCode.ShouldBe(HttpStatusCode.OK, await typed.Content.ReadAsStringAsync());
+        }
+
+        (await EventCountAsync(trip)).ShouldBe(2);
+
+        // The preview names the collision on the row, in Ion's name, and still plans Maria's
+        // report from the same row and every report from the other rows.
+        var preview = await PreviewAsync(trip, Sheet);
+        var refused = preview.GetProperty("refused").EnumerateArray().Single();
+        refused.GetProperty("problem").GetString().ShouldBe("AlreadyRecordedSeveralTimes");
+        refused.GetProperty("line").GetInt32().ShouldBe(2);
+        refused.GetProperty("detail").GetString().ShouldBe("Ion Popescu");
+        preview.GetProperty("creates").GetInt32().ShouldBe(5);
+
+        var commit = await CommitAsync(trip, Sheet, replaceExisting: true);
+        commit.GetProperty("created").GetInt32().ShouldBe(5);
+        commit.GetProperty("updated").GetInt32().ShouldBe(0);
+        commit.GetProperty("refused").EnumerateArray()
+            .Select(d => d.GetProperty("problem").GetString())
+            .ShouldBe(["AlreadyRecordedSeveralTimes"]);
+
+        // Both typed reports are still there, untouched: the importer chose neither.
+        (await EventCountAsync(trip)).ShouldBe(7);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripPositionEvents.CountAsync(e => e.TripLogId == trip && e.RecordedAt == at))
+            .ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_person_with_two_jobs_on_the_trip_is_imported_and_not_refused_as_two_people()
+    {
+        // The roster holds one row per person per job, so somebody who proposed the trip and went
+        // on it is two rows. That is the person a sheet is most likely to name, and they used to be
+        // refused as ambiguous with a message naming them against themselves.
+        var (trip, _) = await CreateTripAsync(proposers: ["Ion Popescu"]);
+        var (model, _) = await SeedModelAsync();
+        (await ArmAsync(trip, model)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var preview = await PreviewAsync(trip, Sheet);
+        preview.GetProperty("refused").EnumerateArray().ShouldBeEmpty();
+        preview.GetProperty("creates").GetInt32().ShouldBe(6);
+
+        (await CommitAsync(trip, Sheet)).GetProperty("created").GetInt32().ShouldBe(6);
+    }
+
+    [Fact]
+    public async Task A_note_too_long_for_a_report_costs_that_row_and_not_the_sheet()
+    {
+        // The typed route refuses a note past the bound; the imported one used to preview as fine
+        // and then fail the whole file's write on the stored column's length.
+        var trip = await ArmedTripAsync();
+        var sheet = Sheet + $"12.09.2026 12:00,50,,,Ion Popescu,,{new string('n', 2001)},\r\n";
+
+        var preview = await PreviewAsync(trip, sheet);
+        var refused = preview.GetProperty("refused").EnumerateArray().Single();
+        refused.GetProperty("problem").GetString().ShouldBe("NoteTooLong");
+        refused.GetProperty("line").GetInt32().ShouldBe(6);
+        preview.GetProperty("creates").GetInt32().ShouldBe(6);
+
+        var commit = await CommitAsync(trip, sheet);
+        commit.GetProperty("created").GetInt32().ShouldBe(6);
+        (await EventCountAsync(trip)).ShouldBe(6);
     }
 
     // ---- plumbing --------------------------------------------------------------------------
@@ -343,24 +599,48 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
     /// <summary>
     /// Arms the watch on a model, the way the page does — reading the trip's current version first.
     /// </summary>
+    private Task<HttpResponseMessage> ArmAsync(Guid trip, Guid model) =>
+        PutConfigAsync(trip, new { state = "armed", surveyModelId = model });
+
+    /// <summary>
+    /// Writes the watch's configuration the way the page does — reading the trip's current version
+    /// first.
+    /// </summary>
     /// <remarks>
     /// The configuration write is guarded by an <c>If-Match</c> against the trip, so a request
     /// without one is refused before any of this feature is reached. Read from the tracking read's
     /// own ETag rather than from the trip's, because that is the version the route compares.
     /// </remarks>
-    private async Task<HttpResponseMessage> ArmAsync(Guid trip, Guid model)
+    private async Task<HttpResponseMessage> PutConfigAsync(Guid trip, object body)
     {
         var current = await owner.GetAsync($"/api/v1/trip-logs/{trip}/tracking");
         current.StatusCode.ShouldBe(HttpStatusCode.OK, await current.Content.ReadAsStringAsync());
         var request = new HttpRequestMessage(HttpMethod.Put, $"/api/v1/trip-logs/{trip}/tracking")
         {
-            Content = JsonContent.Create(new { state = "armed", surveyModelId = model }),
+            Content = JsonContent.Create(body),
         };
         request.Headers.TryAddWithoutValidation("If-Match", current.Headers.ETag!.ToString());
         return await owner.SendAsync(request);
     }
 
-    private async Task<(Guid Trip, List<Guid> Cavers)> CreateTripAsync()
+    /// <summary>
+    /// Writes a watch's state directly, for the one state no request moves a watch into. A plain
+    /// recorded fact with nothing derived from it, which is what makes writing it this way faithful.
+    /// </summary>
+    private async Task SetStateAsync(Guid trip, TripTrackingState state)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        var tracking = await db.TripTrackings.SingleAsync(t => t.TripLogId == trip);
+        tracking.State = state;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A trip with Ion and Maria on it. A proposer named here must be one of the two, so that the
+    /// same person holds two roster rows — which is what the one test that names one is about.
+    /// </summary>
+    private async Task<(Guid Trip, List<Guid> Cavers)> CreateTripAsync(string[]? proposers = null)
     {
         var response = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
         {
@@ -379,8 +659,37 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        // In the order the participants were written, so cavers[0] is Ion.
         var cavers = await db.TripLogParticipants.Where(p => p.TripLogId == trip)
-            .Select(p => p.CaverId).Distinct().ToListAsync();
+            .Join(db.Cavers, p => p.CaverId, c => c.Id, (p, c) => new { c.Id, c.FullName })
+            .Distinct()
+            .OrderByDescending(c => c.FullName == "Ion Popescu")
+            .Select(c => c.Id)
+            .ToListAsync();
+
+        if (proposers is { Length: > 0 })
+        {
+            // The roster is written whole, so the participants are sent back with the proposers.
+            var names = new Dictionary<string, Guid>();
+            foreach (var c in await db.Cavers.Where(c => cavers.Contains(c.Id)).ToListAsync())
+            {
+                names[c.FullName] = c.Id;
+            }
+
+            var updated = await owner.PutWithIfMatchAsync($"/api/v1/trip-logs/{trip}", new
+            {
+                title = $"Csv import {Guid.NewGuid():N}"[..28],
+                tripDate = "2026-09-12",
+                participants = cavers.Select(id => new { caverId = id }).ToArray(),
+                proposers = proposers.Select(name => new { caverId = names[name] }).ToArray(),
+                visibility = "authenticated",
+            });
+            updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+
+            (await db.TripLogParticipants.CountAsync(p => p.TripLogId == trip))
+                .ShouldBe(cavers.Count + proposers.Length);
+        }
+
         return (trip, cavers);
     }
 
@@ -441,6 +750,18 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         return await db.TripPositionEvents.CountAsync(e => e.TripLogId == trip);
+    }
+
+    /// <summary>The ids of a trip's reports, in id order, so two readings compare as lists.</summary>
+    private async Task<List<Guid>> EventIdsAsync(Guid trip)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        return await db.TripPositionEvents.AsNoTracking()
+            .Where(e => e.TripLogId == trip)
+            .OrderBy(e => e.Id)
+            .Select(e => e.Id)
+            .ToListAsync();
     }
 
     private async Task<List<string>> StoredNamesAsync(Guid trip)

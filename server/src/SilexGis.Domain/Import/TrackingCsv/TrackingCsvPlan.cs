@@ -53,6 +53,29 @@ public sealed record TrackingCsvSubject
     /// </remarks>
     public IReadOnlySet<(Guid CaverId, DateTimeOffset At)> Existing { get; init; } =
         new HashSet<(Guid, DateTimeOffset)>();
+
+    /// <summary>
+    /// The keys under which the log holds <em>more than one</em> report.
+    /// </summary>
+    /// <remarks>
+    /// Nothing stops a log from holding two reports about one person at one instant: a typed
+    /// "entered" and a typed note both filed at 08:15 is an ordinary write-up. A sheet's row under
+    /// that key is one report, and which of the two it corrects is not the importer's to guess —
+    /// so such rows are refused, and this set is how the planner knows which they are.
+    /// </remarks>
+    public IReadOnlySet<(Guid CaverId, DateTimeOffset At)> ExistingSeveralTimes { get; init; } =
+        new HashSet<(Guid, DateTimeOffset)>();
+
+    /// <summary>
+    /// The clock a row's moment is measured against, so a report about the future is refused here
+    /// and shown in the preview rather than discovered at the write.
+    /// </summary>
+    /// <remarks>
+    /// Handed in rather than read, for the reason everything else here is: the preview and the
+    /// commit have to decide every row the same way, and two readings of the clock are two
+    /// decisions.
+    /// </remarks>
+    public DateTimeOffset Now { get; init; } = DateTimeOffset.UtcNow;
 }
 
 /// <summary>One report a sheet's row turned into, ready to be written.</summary>
@@ -145,16 +168,29 @@ public static class TrackingCsvPlanner
         var unmatchedSeen = new HashSet<string>(StringComparer.Ordinal);
 
         // What this file has already claimed, so two rows about one person at one instant are
-        // reported rather than silently written one over the other. The last one wins, which is
-        // the same rule the upsert against the log follows, so a sheet and a re-import of it
-        // behave the same way.
-        var claimed = new Dictionary<(Guid, DateTimeOffset), int>();
+        // one report and not two. The last one wins and the earlier one is dropped from the plan,
+        // which is the rule the upsert against the log follows for a re-import — and it is decided
+        // here, in the plan, so that the commit never meets a key the same file just wrote: a plan
+        // that counted both as creates would preview two reports and write one, refusing the
+        // other as already recorded by a row the log never held. Both rows are told about it.
+        var claimed = new Dictionary<(Guid, DateTimeOffset), TrackingCsvPlannedReport>();
 
         foreach (var row in rows)
         {
             if (!row.Importable)
             {
                 refused.AddRange(row.Diagnostics.Where(d => d.Severity == TrackingCsvSeverity.Error));
+                continue;
+            }
+
+            // Refused here and not only at the write, so the preview shows it: a sheet with a
+            // mistyped year should say so before anything is written, not after everything else
+            // has been.
+            if (TripTrackingRules.MomentIsInFuture(row.At!.Value, subject.Now))
+            {
+                refused.Add(new TrackingCsvDiagnostic(
+                    TrackingCsvSeverity.Error, TrackingCsvProblem.MomentInFuture,
+                    row.Line, Detail: row.At.Value.ToString("O")));
                 continue;
             }
 
@@ -202,17 +238,31 @@ public static class TrackingCsvPlanner
 
                 var hit = hits[0];
                 var key = (hit.Key, row.At!.Value);
+                if (subject.ExistingSeveralTimes.Contains(key))
+                {
+                    // Refused rather than resolved onto one of them, for the same reason a name
+                    // two people answer to is: choosing would quietly rewrite a report the sheet
+                    // may not have meant. Refused in the preview as well as the commit, so the
+                    // reviewer learns it before writing anything.
+                    refused.Add(new TrackingCsvDiagnostic(
+                        TrackingCsvSeverity.Error, TrackingCsvProblem.AlreadyRecordedSeveralTimes,
+                        row.Line, Detail: written));
+                    continue;
+                }
+
                 var notes = rowNotes;
                 if (claimed.TryGetValue(key, out var earlier))
                 {
                     notes = [.. rowNotes, new TrackingCsvDiagnostic(
                         TrackingCsvSeverity.Warning, TrackingCsvProblem.DuplicateInFile,
-                        row.Line, Detail: earlier.ToString())];
+                        row.Line, Detail: earlier.Line.ToString())];
+                    refused.Add(new TrackingCsvDiagnostic(
+                        TrackingCsvSeverity.Warning, TrackingCsvProblem.DuplicateInFile,
+                        earlier.Line, Detail: row.Line.ToString()));
+                    reports.Remove(earlier);
                 }
 
-                claimed[key] = row.Line;
-
-                reports.Add(new TrackingCsvPlannedReport
+                var report = new TrackingCsvPlannedReport
                 {
                     Line = row.Line,
                     At = row.At!.Value,
@@ -227,7 +277,9 @@ public static class TrackingCsvPlanner
                     Note = row.Note,
                     Replaces = subject.Existing.Contains(key),
                     Diagnostics = notes,
-                });
+                };
+                claimed[key] = report;
+                reports.Add(report);
             }
         }
 

@@ -97,6 +97,24 @@ public class CaverNameLadderTests
     }
 
     [Fact]
+    public void A_roster_that_lists_one_person_twice_answers_with_them_once()
+    {
+        // One row per person per job is how a trip's roster is kept, so the same key arrives twice
+        // for somebody with two jobs. Two hits under one key are one person named twice, not two
+        // people to choose between — and the difference is whether the trip leader can be imported.
+        (int Key, string? Name)[] repeated =
+        [
+            (1, "Ion Popescu"),
+            (1, "Ion Popescu"),
+            (3, "Ana Georgescu"),
+        ];
+
+        CaverNameLadder.Match("Ion Popescu", repeated).ShouldHaveSingleItem().Key.ShouldBe(1);
+        CaverNameLadder.Match("Ion", repeated).ShouldHaveSingleItem().Key.ShouldBe(1);
+        CaverNameLadder.Match("Ion P.", repeated).ShouldHaveSingleItem().Key.ShouldBe(1);
+    }
+
+    [Fact]
     public void Nothing_written_is_nobody_rather_than_everybody()
     {
         Match("").ShouldBeEmpty();

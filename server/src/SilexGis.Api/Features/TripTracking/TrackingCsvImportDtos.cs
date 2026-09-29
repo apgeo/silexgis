@@ -38,21 +38,36 @@ public sealed record TrackingCsvImportRequest(
     public const int MaxTextLength = 1_000_000;
 }
 
+/// <summary>
+/// The rules on how a sheet may be asked to be read, held once because two requests carry the
+/// same choices.
+/// </summary>
+/// <remarks>
+/// The preview and the commit have to read the sheet under the same choices, or the reviewer
+/// commits something they never saw: the reader drops a delimiter that is not one character and
+/// reads with the default, so a commit that accepted ";;" after the preview refused it would write
+/// a file previewed under no such choice. One validator, included by both requests, is what keeps
+/// the two from drifting apart rule by rule.
+/// </remarks>
+public sealed class TrackingCsvImportOptionsDtoValidator : AbstractValidator<TrackingCsvImportOptionsDto>
+{
+    public TrackingCsvImportOptionsDtoValidator()
+    {
+        RuleFor(x => x.Delimiter!).Length(1).When(x => x.Delimiter is not null);
+        RuleFor(x => x.MultiValueSeparators!).MaximumLength(8).When(x => x.MultiValueSeparators is not null);
+        RuleForEach(x => x.Columns!.Values).NotEmpty().MaximumLength(200).When(x => x.Columns is not null);
+        RuleForEach(x => x.WentInWords!).NotEmpty().MaximumLength(100).When(x => x.WentInWords is not null);
+        RuleForEach(x => x.CameOutWords!).NotEmpty().MaximumLength(100).When(x => x.CameOutWords is not null);
+    }
+}
+
 public sealed class TrackingCsvImportRequestValidator : AbstractValidator<TrackingCsvImportRequest>
 {
     public TrackingCsvImportRequestValidator()
     {
         RuleFor(x => x.Text).NotEmpty().MaximumLength(TrackingCsvImportRequest.MaxTextLength);
-        RuleFor(x => x.Options!.Delimiter!).Length(1)
-            .When(x => x.Options?.Delimiter is not null);
-        RuleFor(x => x.Options!.MultiValueSeparators!).MaximumLength(8)
-            .When(x => x.Options?.MultiValueSeparators is not null);
-        RuleForEach(x => x.Options!.Columns!.Values).NotEmpty().MaximumLength(200)
-            .When(x => x.Options?.Columns is not null);
-        RuleForEach(x => x.Options!.WentInWords!).NotEmpty().MaximumLength(100)
-            .When(x => x.Options?.WentInWords is not null);
-        RuleForEach(x => x.Options!.CameOutWords!).NotEmpty().MaximumLength(100)
-            .When(x => x.Options?.CameOutWords is not null);
+        RuleFor(x => x.Options!).SetValidator(new TrackingCsvImportOptionsDtoValidator())
+            .When(x => x.Options is not null);
     }
 }
 
@@ -63,7 +78,8 @@ public sealed class TrackingCsvImportRequestValidator : AbstractValidator<Tracki
 /// also the one that silently changes history, so the reviewer says so.
 /// </param>
 /// <param name="Lines">
-/// The physical lines to commit, or null for every importable one. A reviewer who has read a
+/// The physical lines to commit, or null for every importable one. An empty list commits
+/// nothing: saying "none" is not the same as saying nothing. A reviewer who has read a
 /// preview commits what they read, and naming the lines is what makes that exact.
 /// </param>
 public sealed record TrackingCsvCommitRequest(
@@ -77,6 +93,8 @@ public sealed class TrackingCsvCommitRequestValidator : AbstractValidator<Tracki
     public TrackingCsvCommitRequestValidator()
     {
         RuleFor(x => x.Text).NotEmpty().MaximumLength(TrackingCsvImportRequest.MaxTextLength);
+        RuleFor(x => x.Options!).SetValidator(new TrackingCsvImportOptionsDtoValidator())
+            .When(x => x.Options is not null);
         RuleFor(x => x.Lines!.Count).LessThanOrEqualTo(20_000).When(x => x.Lines is not null);
     }
 }

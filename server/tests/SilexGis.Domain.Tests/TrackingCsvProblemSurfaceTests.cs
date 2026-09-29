@@ -40,12 +40,14 @@ public class TrackingCsvProblemSurfaceTests
         nameof(TrackingCsvProblem.UnmappedColumn),
         nameof(TrackingCsvProblem.MomentColumnMissing),
         nameof(TrackingCsvProblem.CaverColumnMissing),
+        nameof(TrackingCsvProblem.MomentSplitAcrossColumns),
         nameof(TrackingCsvProblem.MomentUnreadable),
         nameof(TrackingCsvProblem.MomentWithoutTime),
         nameof(TrackingCsvProblem.NoCavers),
         nameof(TrackingCsvProblem.NoPlaceAndNoState),
         nameof(TrackingCsvProblem.DepthUnreadable),
         nameof(TrackingCsvProblem.StateWordUnknown),
+        nameof(TrackingCsvProblem.NoteTooLong),
         nameof(TrackingCsvProblem.MomentMissing),
         nameof(TrackingCsvProblem.RaggedRow),
         nameof(TrackingCsvProblem.DepthOutOfRange),
@@ -63,6 +65,7 @@ public class TrackingCsvProblemSurfaceTests
         nameof(TrackingCsvProblem.DuplicateInFile),
         nameof(TrackingCsvProblem.MomentInFuture),
         nameof(TrackingCsvProblem.AlreadyRecorded),
+        nameof(TrackingCsvProblem.AlreadyRecordedSeveralTimes),
     ];
 
     [Fact]

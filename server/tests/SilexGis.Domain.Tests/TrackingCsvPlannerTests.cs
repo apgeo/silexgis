@@ -257,15 +257,87 @@ public class TrackingCsvPlannerTests
     }
 
     [Fact]
-    public void Two_rows_that_are_the_same_report_are_reported_rather_than_written_over_each_other()
+    public void A_report_the_log_holds_several_times_is_refused_rather_than_resolved_onto_one_of_them()
     {
+        // Nothing keeps a log from holding two reports about one person at one instant — a typed
+        // "entered" and a typed note both filed at 09:00 is an ordinary write-up. The sheet's row is
+        // one report, and which of the two it corrects is not the importer's to guess: refused on
+        // the row, in the preview, so the reviewer settles it in the log before anything is written.
+        var at = new DateTimeOffset(2026, 9, 12, 9, 0, 0, TimeSpan.Zero);
+        var subject = Subject(existing: [(Ion, at)]) with
+        {
+            ExistingSeveralTimes = new HashSet<(Guid, DateTimeOffset)> { (Ion, at) },
+        };
+
+        var plan = PlanOf(
+            "12.09.2026 09:00,105,,,\"Ion Popescu; Maria Pop\",,,", subject);
+
+        // Maria's report on the same row still stands: the refusal costs the person, not the row.
+        plan.Reports.Single().CaverId.ShouldBe(Maria);
+        var refused = plan.Refused.ShouldHaveSingleItem();
+        refused.Problem.ShouldBe(TrackingCsvProblem.AlreadyRecordedSeveralTimes);
+        refused.Severity.ShouldBe(TrackingCsvSeverity.Error);
+        refused.Line.ShouldBe(2);
+        refused.Detail.ShouldBe("Ion Popescu");
+    }
+
+    [Fact]
+    public void A_person_the_roster_lists_twice_is_one_person_and_not_an_ambiguity()
+    {
+        // A trip's roster is one row per person per job, so the leader who also proposed the trip
+        // arrives twice under one key. That is the person a sheet is most likely to name, and an
+        // importer that read the repeat as two candidates refused them with a message naming them
+        // against themselves.
+        var subject = Subject() with
+        {
+            Roster = [(Ion, "Ion Popescu"), (Ion, "Ion Popescu"), (Maria, "Maria Pop")],
+        };
+
+        var plan = PlanOf("12.09.2026 09:00,105,,,Ion Popescu,,,", subject);
+
+        plan.Refused.ShouldBeEmpty();
+        plan.Reports.Single().CaverId.ShouldBe(Ion);
+    }
+
+    [Fact]
+    public void Two_rows_that_are_the_same_report_become_one_report_the_last_row_wins_and_both_are_told()
+    {
+        // Decided in the plan, because the preview and the commit have to agree: a plan that
+        // counted both rows as creates previewed two reports, and the commit then wrote the first
+        // and refused the second as already recorded — by a row the log never held, and with no
+        // overwrite box offered because the preview said nothing would be replaced.
         var plan = PlanOf(
             "12.09.2026 09:00,105,,,Ion Popescu,,prima,\r\n"
             + "12.09.2026 09:00,150,,,Ion Popescu,,a doua,");
 
-        plan.Reports.Count.ShouldBe(2);
-        plan.Reports[1].Diagnostics.ShouldContain(d =>
+        plan.Reports.Count.ShouldBe(1);
+        plan.Creates.ShouldBe(1);
+        plan.Reports[0].Line.ShouldBe(3);
+        plan.Reports[0].Note.ShouldBe("a doua");
+        plan.Reports[0].Diagnostics.ShouldContain(d =>
             d.Problem == TrackingCsvProblem.DuplicateInFile && d.Detail == "2");
+        plan.Refused.ShouldContain(d =>
+            d.Problem == TrackingCsvProblem.DuplicateInFile && d.Line == 2 && d.Detail == "3"
+            && d.Severity == TrackingCsvSeverity.Warning);
+    }
+
+    [Fact]
+    public void A_report_about_the_future_is_refused_in_the_plan_so_the_preview_says_so()
+    {
+        // Measured against the clock the subject carries, not one read here, so the preview and
+        // the commit refuse exactly the same rows.
+        var subject = Subject() with { Now = new DateTimeOffset(2026, 9, 12, 10, 0, 0, TimeSpan.Zero) };
+        var plan = PlanOf(
+            "12.09.2026 09:00,100,,,Ion Popescu,,,\r\n"
+            + "12.09.2026 10:01,100,,,Ion Popescu,,,\r\n"
+            + "14.09.2026 09:00,100,,,Ion Popescu,,,",
+            subject);
+
+        // Inside the allowed clock skew is not the future.
+        plan.Reports.Select(r => r.Line).ShouldBe([2, 3]);
+        plan.Refused.ShouldContain(d =>
+            d.Problem == TrackingCsvProblem.MomentInFuture && d.Line == 4
+            && d.Severity == TrackingCsvSeverity.Error);
     }
 
     [Fact]

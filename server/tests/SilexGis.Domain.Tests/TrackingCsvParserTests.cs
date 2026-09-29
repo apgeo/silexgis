@@ -3,6 +3,7 @@ using Shouldly;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import.TrackingCsv;
 using SilexGis.Domain.Import.TripCsv;
+using SilexGis.Domain.Trips;
 
 namespace SilexGis.Domain.Tests;
 
@@ -216,6 +217,42 @@ public class TrackingCsvParserTests
     }
 
     [Fact]
+    public void A_note_longer_than_a_report_may_carry_is_refused_on_its_row_rather_than_failing_the_write()
+    {
+        // The bound is the stored column's. A row that overran it used to preview as fine and then
+        // fail the whole sheet's write — every other row with it, and with nothing naming the line.
+        var tooLong = new string('x', TripTrackingRules.MaxNoteLength + 1);
+        var row = TrackingCsvParser.Parse(
+            "Data,Adancime,Speologi,Nota\r\n"
+            + $"12.09.2026 09:00,96,Ion,{tooLong}\r\n").Rows[0];
+
+        row.Importable.ShouldBeFalse();
+        var problem = row.Diagnostics.ShouldHaveSingleItem();
+        problem.Problem.ShouldBe(TrackingCsvProblem.NoteTooLong);
+        problem.Severity.ShouldBe(TrackingCsvSeverity.Error);
+        problem.Column.ShouldBe("Nota");
+
+        // Exactly at the bound is still a note a report may carry.
+        TrackingCsvParser.Parse(
+            "Data,Adancime,Speologi,Nota\r\n"
+            + $"12.09.2026 09:00,96,Ion,{tooLong[..^1]}\r\n").Rows[0].Importable.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void The_note_bound_is_measured_on_the_folded_note_because_that_is_what_gets_stored()
+    {
+        // Two columns each inside the bound, together past it: the fold is what is written, so the
+        // fold is what is measured.
+        var half = new string('y', TripTrackingRules.MaxNoteLength / 2 + 10);
+        var row = TrackingCsvParser.Parse(
+            "Data,Adancime,Speologi,Nota,Detalii\r\n"
+            + $"12.09.2026 09:00,96,Ion,{half},{half}\r\n").Rows[0];
+
+        row.Importable.ShouldBeFalse();
+        row.Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.NoteTooLong);
+    }
+
+    [Fact]
     public void A_sheet_with_no_moment_column_is_refused_once_for_the_file_and_not_once_per_row()
     {
         var result = TrackingCsvParser.Parse(
@@ -237,6 +274,39 @@ public class TrackingCsvParserTests
         result.UnmappedColumns.ShouldBe(["Adncime"]);
         result.FileDiagnostics.ShouldContain(d =>
             d.Problem == TrackingCsvProblem.UnmappedColumn && d.Column == "Adncime");
+    }
+
+    [Fact]
+    public void A_date_column_beside_a_time_column_is_refused_once_for_the_file_naming_both()
+    {
+        // The layout a hand-kept sheet often has. Read as it stood, the time column was claimed
+        // as the moment and every row refused with "08:15 is not a time" — pointing at rows when
+        // the fault is the layout, which nothing on the mapping screen can repair.
+        var result = TrackingCsvParser.Parse(
+            "Data,Ora,Adancime,Speologi\r\n12.09.2026,08:15,96,Ion\r\n12.09.2026,09:40,120,Ion\r\n");
+
+        result.ResolvedColumns[TrackingCsvField.RecordedAt].ShouldBe("Data");
+        result.Readable.ShouldBeFalse();
+        result.Rows.ShouldBeEmpty();
+        var split = result.FileDiagnostics.Single(d => d.Problem == TrackingCsvProblem.MomentSplitAcrossColumns);
+        split.Severity.ShouldBe(TrackingCsvSeverity.Error);
+        split.Column.ShouldBe("Data");
+        split.Detail.ShouldBe("Data + Ora");
+        result.FileDiagnostics.ShouldNotContain(d => d.Problem == TrackingCsvProblem.MomentUnreadable);
+    }
+
+    [Fact]
+    public void A_date_only_header_outranks_a_time_only_one_and_a_lone_date_column_is_still_refused_row_by_row()
+    {
+        // Whichever side of the sheet the two stand on, the date is the moment column.
+        TrackingCsvParser.Parse("Ora,Data,Speologi\r\n08:15,12.09.2026,Ion\r\n")
+            .ResolvedColumns[TrackingCsvField.RecordedAt].ShouldBe("Data");
+
+        // A sheet with a date and no time column at all is not the split layout: it is refused
+        // row by row, as before, with the true reason on each row.
+        var dateOnly = TrackingCsvParser.Parse("Data,Adancime,Speologi\r\n12.09.2026,96,Ion\r\n");
+        dateOnly.FileDiagnostics.ShouldNotContain(d => d.Problem == TrackingCsvProblem.MomentSplitAcrossColumns);
+        dateOnly.Rows.Single().Diagnostics.ShouldContain(d => d.Problem == TrackingCsvProblem.MomentWithoutTime);
     }
 
     [Fact]

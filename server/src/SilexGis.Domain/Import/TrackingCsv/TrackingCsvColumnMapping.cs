@@ -32,6 +32,28 @@ public sealed record TrackingCsvColumnMapping
         Columns.TryGetValue(field, out var header) && !string.IsNullOrWhiteSpace(header) ? header : null;
 
     /// <summary>
+    /// Header spellings under which one column carries both the date and the time of day — the
+    /// layout the moment is read from.
+    /// </summary>
+    public static IReadOnlyList<string> DateAndTimeHeaders { get; } =
+        ["data si ora", "data/ora", "data ora", "moment", "datetime", "date and time", "timestamp", "when"];
+
+    /// <summary>
+    /// Header spellings that promise a date and say nothing about the time of day.
+    /// </summary>
+    /// <remarks>
+    /// Tried after the combined spellings and before the time-only ones, so that a sheet keeping
+    /// its date and its time in two columns has the moment read from the date column: every row
+    /// then says its time is missing, which is true, rather than that "08:15" is not a time, which
+    /// is not. The parser recognises that layout as a whole and refuses the file once, naming both
+    /// columns, since nothing on a mapping screen can join two columns into one.
+    /// </remarks>
+    public static IReadOnlyList<string> DateOnlyHeaders { get; } = ["data", "date"];
+
+    /// <summary>Header spellings that promise a time of day and say nothing about the date.</summary>
+    public static IReadOnlyList<string> TimeOnlyHeaders { get; } = ["ora", "timp", "time"];
+
+    /// <summary>
     /// Header spellings recognised without being told, best first.
     /// </summary>
     /// <remarks>
@@ -41,9 +63,7 @@ public sealed record TrackingCsvColumnMapping
     /// </remarks>
     public static IReadOnlyList<string> CandidatesFor(TrackingCsvField field) => field switch
     {
-        TrackingCsvField.RecordedAt =>
-            ["data si ora", "data/ora", "data ora", "ora", "data", "moment", "timp",
-             "datetime", "date and time", "time", "timestamp", "when"],
+        TrackingCsvField.RecordedAt => [.. DateAndTimeHeaders, .. DateOnlyHeaders, .. TimeOnlyHeaders],
         TrackingCsvField.Depth => ["adancime", "adancimea", "cota", "depth", "elevation", "m"],
         TrackingCsvField.Station => ["statie", "statia", "punct", "punctul", "station", "point"],
         TrackingCsvField.Place =>

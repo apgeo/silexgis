@@ -70,9 +70,15 @@ public static class CaverNameLadder
             return [];
         }
 
+        // One entry per person, whatever the roster repeats. A trip's roster is one row per person
+        // per job, so somebody who both led and surveyed arrives here twice under one key — and two
+        // hits with one key are not two people to choose between, they are one person named twice.
+        // Collapsed here rather than left to every caller, because a caller that forgot would refuse
+        // the trip leader as ambiguous with a message naming them against themselves.
         var people = roster
             .Select(person => (person.Key, Display: person.Name ?? string.Empty, Words: Words(person.Name)))
             .Where(person => person.Words.Length > 0)
+            .DistinctBy(person => person.Key)
             .ToList();
 
         // Rung one: the whole thing, which is also what a sheet written up properly carries.

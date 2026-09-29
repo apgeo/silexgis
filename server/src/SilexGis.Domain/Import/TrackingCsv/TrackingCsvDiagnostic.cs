@@ -35,6 +35,13 @@ public enum TrackingCsvProblem
     /// <summary>No column carries the people, without which a row is about nobody.</summary>
     CaverColumnMissing,
 
+    /// <summary>
+    /// The date and the time of day are in two columns. The moment is read from one column that
+    /// carries both, so the sheet is refused as a whole and told which two columns to join —
+    /// rather than every row being refused for a time that sits one column over.
+    /// </summary>
+    MomentSplitAcrossColumns,
+
     /// <summary>Something is written in the moment cell and it is not a moment.</summary>
     MomentUnreadable,
 
@@ -52,6 +59,13 @@ public enum TrackingCsvProblem
 
     /// <summary>The state column carries a word neither list knows.</summary>
     StateWordUnknown,
+
+    /// <summary>
+    /// The note, once the note and details columns are folded together, is longer than a report
+    /// may carry. Refused on the row rather than cut short, because a typed report of that length
+    /// is refused too and an import is not allowed to say more than typing can.
+    /// </summary>
+    NoteTooLong,
 
     // ---- found while matching a row against the trip it is being imported into ----
 
@@ -90,6 +104,13 @@ public enum TrackingCsvProblem
 
     /// <summary>The log already holds this report and the reviewer did not allow overwriting.</summary>
     AlreadyRecorded,
+
+    /// <summary>
+    /// The log holds more than one report for this person at this instant, so which of them the
+    /// sheet's row corrects cannot be decided. Settled in the log, by a person, before the row can
+    /// be imported.
+    /// </summary>
+    AlreadyRecordedSeveralTimes,
 
     /// <summary>The moment cell is blank, so the row cannot be placed in time.</summary>
     MomentMissing,
