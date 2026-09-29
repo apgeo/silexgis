@@ -81,7 +81,7 @@ export default function AlbumsPage() {
       modal.info({
         title: t('gallery.shareTitle'),
         content: (
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             <Typography.Paragraph type="secondary">{t('gallery.shareOnce')}</Typography.Paragraph>
             <Input readOnly value={url} onFocus={(e) => e.target.select()} />
           </Space>

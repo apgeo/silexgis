@@ -103,7 +103,7 @@ export default function ChecklistsPage() {
   return (
     <>
       <Flex justify="space-between" align="center" gap="middle" wrap style={{ marginBottom: 12 }}>
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Typography.Title level={3} style={{ margin: 0 }}>
             {t('checklists.title')}
           </Typography.Title>
@@ -124,7 +124,7 @@ export default function ChecklistsPage() {
           renderItem={(list) => (
             <Card size="small" style={{ marginBottom: 12 }}>
               <Flex justify="space-between" align="flex-start" gap="middle" wrap>
-                <Space direction="vertical" size={2}>
+                <Space orientation="vertical" size={2}>
                   <Typography.Text strong>{list.title}</Typography.Text>
                   {list.description ? (
                     <Typography.Text type="secondary">{list.description}</Typography.Text>
@@ -204,7 +204,7 @@ export default function ChecklistsPage() {
 
           <Form.List name="items">
             {(fields, { add, remove: removeLine }) => (
-              <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Space orientation="vertical" size={4} style={{ width: '100%' }}>
                 <Typography.Text strong>{t('checklists.fieldItems')}</Typography.Text>
                 {fields.map((field) => (
                   <Flex key={field.key} gap={8} align="baseline">

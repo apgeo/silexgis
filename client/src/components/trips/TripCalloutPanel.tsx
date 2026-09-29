@@ -193,7 +193,7 @@ export default function TripCalloutPanel({
     }
 
     return (
-      <Space direction="vertical" size="small" style={{ width: '100%', marginBottom: 12 }}>
+      <Space orientation="vertical" size="small" style={{ width: '100%', marginBottom: 12 }}>
         <Flex justify="flex-start">{arrangeButton}</Flex>
         {dialog}
       </Space>
@@ -201,7 +201,7 @@ export default function TripCalloutPanel({
   }
 
   return (
-    <Space direction="vertical" size="small" style={{ width: '100%', marginBottom: 12 }}>
+    <Space orientation="vertical" size="small" style={{ width: '100%', marginBottom: 12 }}>
       {state === 'overdue' && (
         <Alert
           type="error"
