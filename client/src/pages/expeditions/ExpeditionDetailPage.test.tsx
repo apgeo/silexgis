@@ -10,14 +10,20 @@ import ExpeditionDetailPage from './ExpeditionDetailPage.tsx';
 
 const CAMP = '77777777-8888-9999-aaaa-bbbbbbbbbbbb';
 
-const { campSpy } = vi.hoisted(() => ({ campSpy: vi.fn() }));
+const { campSpy, accessSpy } = vi.hoisted(() => ({ campSpy: vi.fn(), accessSpy: vi.fn() }));
 
 vi.mock('../../api/hooks.ts', () => ({
   useExpedition: () => campSpy(),
   useCavingGroups: () => ({ data: [{ id: 'club-1', name: 'Clubul Speo' }] }),
-  useEffectiveAccess: () => ({ data: undefined }),
+  useEffectiveAccess: () => accessSpy(),
   useCan: () => false,
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
+}));
+
+// Opened from here, exercised by its own tests: what this page owes it is a button and the camp.
+vi.mock('../../components/permissions/PermissionsModal.tsx', () => ({
+  default: ({ entityType, open }: { entityType: string; open: boolean }) =>
+    open ? <div>permissions for {entityType}</div> : null,
 }));
 
 // The sections are mounted by name here, not exercised: each has its own tests, and each asks the
@@ -73,6 +79,7 @@ function renderPage(entry = `/expeditions/${CAMP}`) {
 afterEach(cleanup);
 beforeEach(() => {
   campSpy.mockReturnValue({ data: camp(), isPending: false, isError: false });
+  accessSpy.mockReturnValue({ data: undefined });
 });
 
 describe('the camp page', () => {
@@ -140,6 +147,20 @@ describe('the camp page', () => {
 
     expect(screen.getByText('tags for expedition')).toBeTruthy();
     expect(screen.getByText('links for expedition')).toBeTruthy();
+  });
+
+  it('offers the permissions dialog only to somebody who may manage them, over the camp itself', () => {
+    // Naming who may read a camp is its own right: a reader, and even an editor, is not shown
+    // the door. The server refuses regardless; what is avoided is a dialog that always fails.
+    accessSpy.mockReturnValue({ data: { actions: 'read,write' } });
+    renderPage();
+    expect(screen.queryByTestId('expedition-permissions')).toBeNull();
+
+    cleanup();
+    accessSpy.mockReturnValue({ data: { actions: 'read,write,managePermissions' } });
+    renderPage();
+    fireEvent.click(screen.getByTestId('expedition-permissions'));
+    expect(screen.getByText('permissions for expedition')).toBeTruthy();
   });
 });
 

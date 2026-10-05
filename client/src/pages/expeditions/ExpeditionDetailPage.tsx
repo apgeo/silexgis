@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { useState } from 'react';
+import { LockOutlined } from '@ant-design/icons';
 import { Button, Card, Descriptions, Flex, Result, Spin, Tabs, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -10,6 +12,7 @@ import {
   useExpedition,
 } from '../../api/hooks.ts';
 import HistoryPanel from '../../components/history/HistoryPanel.tsx';
+import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 // The camp shares the trips' lifecycle vocabulary and their date convention — an absent end
@@ -57,6 +60,7 @@ export default function ExpeditionDetailPage() {
   const { data: effective } = useEffectiveAccess('expedition', id);
   const domainFallback = useCan('expeditions', 'write');
   const held = effective ? parseAccessActions(effective.actions) : null;
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
 
   // An unrecognised key in the address falls back to the page's own tab rather than leaving antd
   // with an activeKey matching no pane, which renders the page with nothing under the tab strip.
@@ -87,6 +91,9 @@ export default function ExpeditionDetailPage() {
   }
 
   const canEdit = held ? held.has('write') : domainFallback;
+  // Naming who may read a camp is its own right, held by the person who made it and by anybody
+  // they hand it to — not implied by being able to edit it.
+  const canManagePermissions = held ? held.has('managePermissions') : domainFallback;
   const organizingCavingGroup = cavingGroups?.find((group) => group.id === camp.cavingGroupId);
   const spansDays = isMultiDay(camp.startDate, camp.endDate);
   const dateText = formatTripDates(camp.startDate, camp.endDate, i18n.resolvedLanguage);
@@ -99,6 +106,20 @@ export default function ExpeditionDetailPage() {
             {camp.name}
           </Typography.Title>
           <TripStateTag state={camp.state} />
+        </Flex>
+        <Flex gap={8} wrap>
+          {/* Who may read this camp, narrowed person by person — and, through the camp's own
+              sharing, the trips it gathers. A camp contains no features, so the dialog offers
+              reach over this camp alone. */}
+          {canManagePermissions && (
+            <Button
+              icon={<LockOutlined />}
+              onClick={() => setPermissionsOpen(true)}
+              data-testid="expedition-permissions"
+            >
+              {t('permissions.button')}
+            </Button>
+          )}
         </Flex>
       </Flex>
 
@@ -187,6 +208,15 @@ export default function ExpeditionDetailPage() {
           },
         ]}
       />
+
+      {canManagePermissions && (
+        <PermissionsModal
+          entityType="expedition"
+          entityId={camp.id}
+          open={permissionsOpen}
+          onClose={() => setPermissionsOpen(false)}
+        />
+      )}
     </div>
   );
 }
