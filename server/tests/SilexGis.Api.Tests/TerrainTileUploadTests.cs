@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using OSGeo.GDAL;
 using Shouldly;
+using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Terrain;
 
@@ -36,7 +37,7 @@ public sealed class TerrainTileUploadTests : IDisposable
     private const int Side = 1201;
 
     private readonly string root = Path.Combine(
-        Path.GetTempPath(), "silexgis-tile-upload-" + Guid.NewGuid().ToString("N"));
+        TestScratch.Root, "silexgis-tile-upload-" + Guid.NewGuid().ToString("N"));
 
     private readonly TerrainUploads uploads;
 

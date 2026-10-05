@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using NetTopologySuite;
 using NetTopologySuite.Geometries;
+using NetTopologySuite;
 using Shouldly;
+using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Terrain;
@@ -31,7 +32,7 @@ namespace SilexGis.Api.Tests;
 public sealed class TerrainPublishPhaseTests : IDisposable
 {
     private readonly string root = Path.Combine(
-        Path.GetTempPath(), "silexgis-publish-" + Guid.NewGuid().ToString("N")[..8]);
+        TestScratch.Root, "silexgis-publish-" + Guid.NewGuid().ToString("N")[..8]);
 
     private readonly TerrainWorkspace workspace;
     private readonly TerrainPublishPhase phase;

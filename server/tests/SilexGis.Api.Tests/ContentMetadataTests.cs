@@ -16,7 +16,7 @@ namespace SilexGis.Api.Tests;
 public sealed class ContentMetadataTests : IDisposable
 {
     private readonly string root = Path.Combine(
-        Path.GetTempPath(), $"silexgis-test-facts-{Guid.NewGuid():N}");
+        TestScratch.Root, $"silexgis-test-facts-{Guid.NewGuid():N}");
 
     private readonly ContentMetadataReader reader = new();
 

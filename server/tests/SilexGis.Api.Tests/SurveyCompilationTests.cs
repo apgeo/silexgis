@@ -35,7 +35,7 @@ public sealed class SurveyCompilationTests : IAsyncLifetime, IDisposable, IClass
 
     public SurveyCompilationTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-comp-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-comp-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?>

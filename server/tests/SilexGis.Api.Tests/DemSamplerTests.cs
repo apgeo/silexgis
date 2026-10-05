@@ -56,7 +56,7 @@ public sealed class DemSamplerTests : IDisposable
     private const string RealTileDirectoryVariable = "SILEXGIS_TEST_DEM_DIR";
 
     private readonly string root =
-        Path.Combine(Path.GetTempPath(), $"silexgis-dem-{Guid.NewGuid():N}");
+        Path.Combine(TestScratch.Root, $"silexgis-dem-{Guid.NewGuid():N}");
 
     private readonly GdalTerrainRasterPreparer preparer = new();
 

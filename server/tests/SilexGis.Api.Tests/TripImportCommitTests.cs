@@ -69,7 +69,7 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
 
     public TripImportCommitTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-files-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

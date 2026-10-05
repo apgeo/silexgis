@@ -43,9 +43,9 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
     {
         connectionString = postgres.ConnectionString;
         var suffix = Guid.NewGuid().ToString("N");
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-bulk-{suffix}");
-        importRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-import-{suffix}");
-        outsideRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-outside-{suffix}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-bulk-{suffix}");
+        importRoot = Path.Combine(TestScratch.Root, $"silexgis-test-import-{suffix}");
+        outsideRoot = Path.Combine(TestScratch.Root, $"silexgis-test-outside-{suffix}");
         Directory.CreateDirectory(importRoot);
         Directory.CreateDirectory(outsideRoot);
 
@@ -185,7 +185,7 @@ public sealed class BulkImportTests : IAsyncLifetime, IDisposable, IClassFixture
     [Fact]
     public async Task An_archive_expanding_past_its_ceiling_is_abandoned_with_a_reason()
     {
-        var tinyRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-tiny-{Guid.NewGuid():N}");
+        var tinyRoot = Path.Combine(TestScratch.Root, $"silexgis-test-tiny-{Guid.NewGuid():N}");
         using var tinyFactory = new SilexGisApiFactory(
             connectionString,
             new Dictionary<string, string?>

@@ -46,7 +46,7 @@ public sealed class ExpeditionReportTests : IAsyncLifetime, IDisposable, IClassF
 
     public ExpeditionReportTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-camprep-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-camprep-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

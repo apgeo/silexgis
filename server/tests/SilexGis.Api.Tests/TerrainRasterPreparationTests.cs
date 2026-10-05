@@ -34,7 +34,7 @@ public sealed class TerrainRasterPreparationTests : IDisposable
     private const int LongitudeLatitude = 4326;
 
     private readonly string root =
-        Path.Combine(Path.GetTempPath(), $"silexgis-prepare-{Guid.NewGuid():N}");
+        Path.Combine(TestScratch.Root, $"silexgis-prepare-{Guid.NewGuid():N}");
 
     private readonly GdalTerrainRasterPreparer preparer = new();
 

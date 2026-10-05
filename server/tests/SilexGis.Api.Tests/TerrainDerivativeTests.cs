@@ -54,7 +54,7 @@ public sealed class TerrainDerivativeTests : IDisposable
     private const int Size = 24;
 
     private readonly string root = Path.Combine(
-        Path.GetTempPath(), "silexgis-derivative-" + Guid.NewGuid().ToString("N"));
+        TestScratch.Root, "silexgis-derivative-" + Guid.NewGuid().ToString("N"));
 
     private readonly GdalDemDerivatives derivatives = new();
 
@@ -66,7 +66,7 @@ public sealed class TerrainDerivativeTests : IDisposable
 
     public void Dispose()
     {
-        Gdal.SetConfigOption("CPL_TMPDIR", Path.GetTempPath());
+        Gdal.SetConfigOption("CPL_TMPDIR", TestScratch.Root);
 
         try
         {

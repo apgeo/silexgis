@@ -40,7 +40,7 @@ public sealed class DocumentAccessApiTests : IAsyncLifetime, IDisposable, IClass
 
     public DocumentAccessApiTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-docacl-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-docacl-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

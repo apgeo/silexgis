@@ -30,7 +30,7 @@ public sealed class DocumentMetadataTests : IAsyncLifetime, IDisposable, IClassF
     public DocumentMetadataTests(PostgresFixture postgres)
     {
         ArgumentNullException.ThrowIfNull(postgres);
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-docmeta-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-docmeta-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

@@ -46,7 +46,7 @@ public sealed class DocumentContentSearchTests : IAsyncLifetime, IDisposable, IC
 
     public DocumentContentSearchTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-search-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-search-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

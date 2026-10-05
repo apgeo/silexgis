@@ -57,9 +57,9 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
     public TerrainSourceTests(PostgresFixture postgres)
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        buildRoot = Path.Combine(Path.GetTempPath(), $"silexgis-tsrc-builds-{suffix}");
-        importRoot = Path.Combine(Path.GetTempPath(), $"silexgis-tsrc-allowed-{suffix}");
-        outsideRoot = Path.Combine(Path.GetTempPath(), $"silexgis-tsrc-elsewhere-{suffix}");
+        buildRoot = Path.Combine(TestScratch.Root, $"silexgis-tsrc-builds-{suffix}");
+        importRoot = Path.Combine(TestScratch.Root, $"silexgis-tsrc-allowed-{suffix}");
+        outsideRoot = Path.Combine(TestScratch.Root, $"silexgis-tsrc-elsewhere-{suffix}");
         Directory.CreateDirectory(importRoot);
         Directory.CreateDirectory(outsideRoot);
 

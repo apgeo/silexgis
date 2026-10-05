@@ -53,7 +53,7 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable, IClas
     public DocumentConversionTests(PostgresFixture postgres)
     {
         connectionString = postgres.ConnectionString;
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-convert-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-convert-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?>
@@ -221,7 +221,7 @@ public sealed class DocumentConversionTests : IAsyncLifetime, IDisposable, IClas
     {
         // A second installation of the same version, with nothing deployed to lay documents
         // out. This is the ordinary case, and it must not read as a damaged document.
-        var bareRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-noconvert-{Guid.NewGuid():N}");
+        var bareRoot = Path.Combine(TestScratch.Root, $"silexgis-test-noconvert-{Guid.NewGuid():N}");
         // Deliberately not a `using` declaration: that would dispose the application at the end
         // of the method, which is after the cleanup below has already deleted the directory it
         // stores files in. The application has to be shut down first — see the finally block.

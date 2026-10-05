@@ -42,7 +42,7 @@ public sealed class TerrainBuildPipelineTests : IAsyncLifetime, IDisposable, ICl
 
     public TerrainBuildPipelineTests(PostgresFixture postgres)
     {
-        buildRoot = Path.Combine(Path.GetTempPath(), $"silexgis-terrain-{Guid.NewGuid():N}");
+        buildRoot = Path.Combine(TestScratch.Root, $"silexgis-terrain-{Guid.NewGuid():N}");
 
         // Named here rather than left at its default, which resolves against the test host's own
         // directory: a published pyramid is what tells a run that a build has already finished, so

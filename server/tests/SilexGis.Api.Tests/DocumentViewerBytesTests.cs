@@ -41,7 +41,7 @@ public sealed class DocumentViewerBytesTests : IAsyncLifetime, IDisposable, ICla
 
     public DocumentViewerBytesTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-viewbytes-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-viewbytes-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

@@ -49,7 +49,7 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
 
     public TerrainDerivativeApiTests(PostgresFixture postgres)
     {
-        buildRoot = Path.Combine(Path.GetTempPath(), $"silexgis-tderivapi-{Guid.NewGuid():N}");
+        buildRoot = Path.Combine(TestScratch.Root, $"silexgis-tderivapi-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?> { ["Terrain:BuildRoot"] = buildRoot },

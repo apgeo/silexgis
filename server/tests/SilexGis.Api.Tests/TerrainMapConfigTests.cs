@@ -41,7 +41,7 @@ public sealed class TerrainMapConfigTests : IAsyncLifetime, IDisposable, IClassF
     private const string MountedCredit = "Baked by hand from data somebody already had";
 
     private readonly string publishRoot = Path.Combine(
-        Path.GetTempPath(), "silexgis-mapcfg-" + Guid.NewGuid().ToString("N")[..8]);
+        TestScratch.Root, "silexgis-mapcfg-" + Guid.NewGuid().ToString("N")[..8]);
 
     private readonly SilexGisApiFactory builder;   // names no pyramid: builds decide
     private readonly SilexGisApiFactory mounted;   // names one, the way installations do today

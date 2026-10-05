@@ -72,7 +72,7 @@ public sealed class TerrainProbeTests : IAsyncLifetime, IDisposable, IClassFixtu
 
     public TerrainProbeTests(PostgresFixture postgres)
     {
-        buildRoot = Path.Combine(Path.GetTempPath(), $"silexgis-tprobe-{Guid.NewGuid():N}");
+        buildRoot = Path.Combine(TestScratch.Root, $"silexgis-tprobe-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?> { ["Terrain:BuildRoot"] = buildRoot },

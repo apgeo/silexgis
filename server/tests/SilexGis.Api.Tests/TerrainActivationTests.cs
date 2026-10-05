@@ -40,7 +40,7 @@ public sealed class TerrainActivationTests : IAsyncLifetime, IDisposable, IClass
 {
     private readonly SilexGisApiFactory factory;
     private readonly string publishRoot = Path.Combine(
-        Path.GetTempPath(), "silexgis-active-" + Guid.NewGuid().ToString("N")[..8]);
+        TestScratch.Root, "silexgis-active-" + Guid.NewGuid().ToString("N")[..8]);
 
     private HttpClient executor = null!;  // granted Execute on the terrain domain, and nothing else
     private HttpClient remover = null!;   // granted Delete on the terrain domain, and nothing else

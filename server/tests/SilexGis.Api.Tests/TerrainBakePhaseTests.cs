@@ -44,7 +44,7 @@ public sealed class TerrainBakePhaseTests : IAsyncLifetime, IDisposable, IClassF
     public TerrainBakePhaseTests(PostgresFixture postgres)
     {
         this.postgres = postgres;
-        var scratch = Path.Combine(Path.GetTempPath(), $"silexgis-tbake-{Guid.NewGuid():N}");
+        var scratch = Path.Combine(TestScratch.Root, $"silexgis-tbake-{Guid.NewGuid():N}");
         buildRoot = Path.Combine(scratch, "builds");
         spoolRoot = Path.Combine(scratch, "spool");
         factory = Installation(bakes: true);

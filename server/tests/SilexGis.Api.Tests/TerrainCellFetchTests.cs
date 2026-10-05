@@ -2,6 +2,7 @@
 using System.Net;
 using Microsoft.Extensions.Options;
 using Shouldly;
+using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Terrain;
 using SilexGis.Infrastructure.Terrain;
 
@@ -23,7 +24,7 @@ public class TerrainCellFetchTests : IDisposable
     private const string Cell = "N46_00_E022_00";
 
     private readonly string directory =
-        Path.Combine(Path.GetTempPath(), $"silexgis-cells-{Guid.NewGuid():N}");
+        Path.Combine(TestScratch.Root, $"silexgis-cells-{Guid.NewGuid():N}");
 
     public TerrainCellFetchTests() => Directory.CreateDirectory(directory);
 

@@ -91,7 +91,7 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
 
     public SpeleolocTripImportTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-files-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?>
@@ -897,7 +897,7 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
     /// </param>
     private byte[] BuildArchive(Guid? crowdedRecording = null, int crowdedScans = 0, bool withLogColumn = true)
     {
-        var directory = Path.Combine(Path.GetTempPath(), $"silexgis-speleoloc-fixture-{Guid.NewGuid():N}");
+        var directory = Path.Combine(TestScratch.Root, $"silexgis-speleoloc-fixture-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         var databasePath = Path.Combine(directory, "speleo_loc.sqlite");
         try

@@ -78,7 +78,7 @@ public sealed class CaveOverburdenTests : IAsyncLifetime, IDisposable, IClassFix
 
     public CaveOverburdenTests(PostgresFixture postgres)
     {
-        buildRoot = Path.Combine(Path.GetTempPath(), $"silexgis-overb-{Guid.NewGuid():N}");
+        buildRoot = Path.Combine(TestScratch.Root, $"silexgis-overb-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,
             new Dictionary<string, string?> { ["Terrain:BuildRoot"] = buildRoot },

@@ -48,7 +48,7 @@ public sealed class TerrainPreparePhaseTests : IAsyncLifetime, IDisposable, ICla
 
     public TerrainPreparePhaseTests(PostgresFixture postgres)
     {
-        buildRoot = Path.Combine(Path.GetTempPath(), $"silexgis-tprep-{Guid.NewGuid():N}");
+        buildRoot = Path.Combine(TestScratch.Root, $"silexgis-tprep-{Guid.NewGuid():N}");
 
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,

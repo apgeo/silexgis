@@ -46,7 +46,7 @@ public sealed class ResLinkProtectionFloorTests : IAsyncLifetime, IDisposable, I
     public ResLinkProtectionFloorTests(PostgresFixture postgres, ITestOutputHelper output)
     {
         this.output = output;
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-rlfloor-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-rlfloor-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

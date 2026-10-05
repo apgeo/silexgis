@@ -34,7 +34,7 @@ public sealed class PhotoBytesProtectionTests : IAsyncLifetime, IDisposable, ICl
 
     public PhotoBytesProtectionTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-photobytes-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-photobytes-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

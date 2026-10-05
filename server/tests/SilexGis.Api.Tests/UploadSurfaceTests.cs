@@ -35,7 +35,7 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable, IClassFixt
     {
         ArgumentNullException.ThrowIfNull(postgres);
         connectionString = postgres.ConnectionString;
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-upload-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-upload-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,
@@ -286,7 +286,7 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable, IClassFixt
     {
         // A separate installation, configured with a limit small enough to cross in a test.
         const long cap = 4096;
-        var root = Path.Combine(Path.GetTempPath(), $"silexgis-test-cap-{Guid.NewGuid():N}");
+        var root = Path.Combine(TestScratch.Root, $"silexgis-test-cap-{Guid.NewGuid():N}");
         await using var capped = new SilexGisApiFactory(
             connectionString,
             new Dictionary<string, string?>
@@ -346,7 +346,7 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable, IClassFixt
         // bare transport error with nothing in the log to explain it, so raising the
         // application's cap alone changes nothing. This asserts they move together.
         const long cap = 700L * 1024 * 1024;
-        var root = Path.Combine(Path.GetTempPath(), $"silexgis-test-limits-{Guid.NewGuid():N}");
+        var root = Path.Combine(TestScratch.Root, $"silexgis-test-limits-{Guid.NewGuid():N}");
         await using var configured = new SilexGisApiFactory(
             connectionString,
             new Dictionary<string, string?>
@@ -415,7 +415,7 @@ public sealed class UploadSurfaceTests : IAsyncLifetime, IDisposable, IClassFixt
         // let an administrator who tightens document uploads silently break raster uploads —
         // at a size no message anywhere names. The ceiling tracks whichever limit is larger.
         const long cap = 16L * 1024 * 1024;
-        var root = Path.Combine(Path.GetTempPath(), $"silexgis-test-lowcap-{Guid.NewGuid():N}");
+        var root = Path.Combine(TestScratch.Root, $"silexgis-test-lowcap-{Guid.NewGuid():N}");
         await using var tightened = new SilexGisApiFactory(
             connectionString,
             new Dictionary<string, string?>

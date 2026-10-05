@@ -33,7 +33,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable, IClassF
 
     public GeoreferencedMapTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-files-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,
@@ -192,7 +192,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable, IClassF
     private static byte[] MakeGeoTiff(double lonMin, double latMax, double pixelDegrees, int size)
     {
         GdalBase.ConfigureAll();
-        var path = Path.Combine(Path.GetTempPath(), $"silexgis-fixture-{Guid.NewGuid():N}.tif");
+        var path = Path.Combine(TestScratch.Root, $"silexgis-fixture-{Guid.NewGuid():N}.tif");
         try
         {
             var driver = Gdal.GetDriverByName("GTiff");
@@ -225,7 +225,7 @@ public sealed class GeoreferencedMapTests : IAsyncLifetime, IDisposable, IClassF
     private static byte[] MakePlainTiff()
     {
         GdalBase.ConfigureAll();
-        var path = Path.Combine(Path.GetTempPath(), $"silexgis-fixture-{Guid.NewGuid():N}.tif");
+        var path = Path.Combine(TestScratch.Root, $"silexgis-fixture-{Guid.NewGuid():N}.tif");
         try
         {
             var driver = Gdal.GetDriverByName("GTiff");

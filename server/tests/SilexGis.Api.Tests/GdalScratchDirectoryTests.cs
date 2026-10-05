@@ -32,7 +32,7 @@ namespace SilexGis.Api.Tests;
 public sealed class GdalScratchDirectoryTests : IDisposable
 {
     private readonly string root = Path.Combine(
-        Path.GetTempPath(), "silexgis-scratch-" + Guid.NewGuid().ToString("N"));
+        TestScratch.Root, "silexgis-scratch-" + Guid.NewGuid().ToString("N"));
 
     private readonly GdalTerrainRasterPreparer preparer = new();
 
@@ -44,7 +44,7 @@ public sealed class GdalScratchDirectoryTests : IDisposable
 
     public void Dispose()
     {
-        Gdal.SetConfigOption("CPL_TMPDIR", Path.GetTempPath());
+        Gdal.SetConfigOption("CPL_TMPDIR", TestScratch.Root);
 
         try
         {

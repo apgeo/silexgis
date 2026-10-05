@@ -39,7 +39,7 @@ public sealed class AlbumAndPublicGalleryTests : IAsyncLifetime, IDisposable, IC
 
     public AlbumAndPublicGalleryTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-albums-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-albums-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

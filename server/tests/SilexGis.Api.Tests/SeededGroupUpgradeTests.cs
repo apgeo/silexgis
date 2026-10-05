@@ -34,7 +34,7 @@ public sealed class SeededGroupUpgradeTests : IAsyncLifetime, IDisposable, IClas
     private readonly string adminConnectionString;
     private readonly string databaseName = $"silexgis_upgrade_{Guid.NewGuid():N}";
     private readonly string filesRoot =
-        Path.Combine(Path.GetTempPath(), $"silexgis-test-upgrade-{Guid.NewGuid():N}");
+        Path.Combine(TestScratch.Root, $"silexgis-test-upgrade-{Guid.NewGuid():N}");
 
     private SilexGisApiFactory factory = null!;
     private HttpClient editor = null!;

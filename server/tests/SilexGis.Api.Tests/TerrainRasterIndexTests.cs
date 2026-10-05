@@ -43,7 +43,7 @@ public sealed class TerrainRasterIndexTests : IAsyncLifetime, IDisposable, IClas
 
     public TerrainRasterIndexTests(PostgresFixture postgres)
     {
-        buildRoot = Path.Combine(Path.GetTempPath(), $"silexgis-tindex-{Guid.NewGuid():N}");
+        buildRoot = Path.Combine(TestScratch.Root, $"silexgis-tindex-{Guid.NewGuid():N}");
 
         factory = new SilexGisApiFactory(
             postgres.ConnectionString,

@@ -41,7 +41,7 @@ public sealed class ResLinkTargetPictureTests : IAsyncLifetime, IDisposable, ICl
 
     public ResLinkTargetPictureTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-rlpic-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-rlpic-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

@@ -42,7 +42,7 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable, IC
     public UploadLimitsAndResumeTests(PostgresFixture postgres)
     {
         connectionString = postgres.ConnectionString;
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-uplimits-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-uplimits-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,
@@ -198,7 +198,7 @@ public sealed class UploadLimitsAndResumeTests : IAsyncLifetime, IDisposable, IC
     [Fact]
     public async Task A_quota_is_reported_up_front_and_binds_when_the_bytes_arrive()
     {
-        var quotaRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-quota-{Guid.NewGuid():N}");
+        var quotaRoot = Path.Combine(TestScratch.Root, $"silexgis-test-quota-{Guid.NewGuid():N}");
         using var quotaFactory = new SilexGisApiFactory(
             connectionString,
             new Dictionary<string, string?>

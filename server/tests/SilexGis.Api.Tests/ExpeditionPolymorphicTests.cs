@@ -36,7 +36,7 @@ public sealed class ExpeditionPolymorphicTests : IAsyncLifetime, IDisposable, IC
 
     public ExpeditionPolymorphicTests(PostgresFixture postgres)
     {
-        filesRoot = Path.Combine(Path.GetTempPath(), $"silexgis-test-xpoly-{Guid.NewGuid():N}");
+        filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-xpoly-{Guid.NewGuid():N}");
         factory = new SilexGisApiFactory(postgres.ConnectionString, new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,

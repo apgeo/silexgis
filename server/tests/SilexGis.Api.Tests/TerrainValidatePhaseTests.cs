@@ -43,7 +43,7 @@ public sealed class TerrainValidatePhaseTests : IAsyncLifetime, IDisposable, ICl
     public TerrainValidatePhaseTests(PostgresFixture postgres)
     {
         this.postgres = postgres;
-        buildRoot = Path.Combine(Path.GetTempPath(), $"silexgis-tcheck-{Guid.NewGuid():N}");
+        buildRoot = Path.Combine(TestScratch.Root, $"silexgis-tcheck-{Guid.NewGuid():N}");
         factory = Installation();
     }
 
