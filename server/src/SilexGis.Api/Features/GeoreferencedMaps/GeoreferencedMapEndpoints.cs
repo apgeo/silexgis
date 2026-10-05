@@ -350,8 +350,10 @@ public static class GeoreferencedMapEndpoints
         m.Visibility,
         m.Status == RasterStatus.Ready
             // A tile reader fetches ranges of the raster itself, so nothing less than the
-            // whole file serves this at all.
-            ? $"/api/v1/files/{m.FileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(m.FileId, FileDelivery.Full))}"
+            // whole file serves this at all — and it keeps fetching them for as long as the map
+            // is on screen, from the one address it was created with, so the address is minted
+            // for a session rather than for a fetch.
+            ? $"/api/v1/files/{m.FileId}/content?token={Uri.EscapeDataString(tokens.CreateToken(m.FileId, FileDelivery.Full, FileAccessLifetime.Session))}"
             : null,
         m.CreatedAt,
         m.UpdatedAt);

@@ -971,6 +971,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/survey-models/{id}/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Makes this the model its cave is represented by, among the cave's models of the same kind (Write on the cave). */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SurveyModelDto"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/caves/{caveId}/survey-sources": {
         parameters: {
             query?: never;
@@ -22000,6 +22038,7 @@ export interface components {
             maxPoints: number;
             terrain: null | components["schemas"]["TerrainSourceDto"];
             terrainFallback: null | components["schemas"]["TerrainSourceDto"];
+            terrainBuilds: components["schemas"]["TerrainBuildChoiceDto"][];
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";
@@ -24190,6 +24229,7 @@ export interface components {
             description: null | string;
             /** Format: date */
             surveyedAt: null | string;
+            isCurrent: boolean;
             modelUrl: string;
             status: components["schemas"]["SurveyModelStatus"];
             processingError: null | string;
@@ -24202,6 +24242,8 @@ export interface components {
             anchorHeightM: null | number;
             /** Format: int32 */
             triangleCount: null | number;
+            /** Format: int64 */
+            meshSizeBytes: null | number;
             sourcePrecisionLost: boolean;
             /** Format: int32 */
             droppedShotCount: null | number;
@@ -24539,6 +24581,20 @@ export interface components {
         };
         /** @enum {unknown} */
         TermStripMode: "none" | "leading" | "trailing" | "anywhere";
+        TerrainBuildChoiceDto: {
+            /** Format: uuid */
+            id: string;
+            extent: components["schemas"]["GeoJsonGeometry"];
+            /** Format: int32 */
+            requestedMaxDepth: number;
+            url: string;
+            attribution: null | string;
+            /** Format: double */
+            surveyHeightOffsetM: number;
+            isDrawn: boolean;
+            /** Format: date-time */
+            finishedAt: null | string;
+        };
         TerrainBuildDetailDto: {
             build: components["schemas"]["TerrainBuildDto"];
             logTail: null | string;
@@ -24745,7 +24801,12 @@ export interface components {
             attribution: null | string;
             /** Format: double */
             surveyHeightOffsetM: number;
+            origin: components["schemas"]["TerrainSourceOrigin"];
+            /** Format: uuid */
+            buildId: null | string;
         };
+        /** @enum {unknown} */
+        TerrainSourceOrigin: "configured" | "build";
         /** @enum {unknown} */
         TerrainSurfaceFit: "horn" | "zevenbergenThorne" | null;
         TestLoginInfo: {

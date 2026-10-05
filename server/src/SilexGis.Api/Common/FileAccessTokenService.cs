@@ -47,6 +47,29 @@ public enum FileDelivery
 /// handles the URL, including the browser history and any log the URL lands in.
 /// </para>
 /// </remarks>
+/// <summary>
+/// How long a delivery token stays good for, decided by the mint site from how the address will
+/// be used.
+/// </summary>
+public enum FileAccessLifetime
+{
+    /// <summary>
+    /// Minutes: a picture, a document, a mesh — one fetch, made soon after the address was handed
+    /// out. Short enough that a copied link stops working before it has gone far.
+    /// </summary>
+    Fetch = 0,
+
+    /// <summary>
+    /// Hours: an address a tile reader keeps open and asks ranges of for as long as a map is on
+    /// screen. A reader holds the address it was created with, so a token that expires under it
+    /// refuses the next range request on a layer that has been drawing perfectly well for ten
+    /// minutes — a session that ends in the middle of a pan, with nothing on screen to say why.
+    /// Measured in hours because that is the length of a working session, and because the listing
+    /// that mints these is re-read while the page is open, so a page left open gets a fresh one.
+    /// </summary>
+    Session = 1,
+}
+
 public interface IFileAccessTokenService
 {
     /// <summary>
@@ -54,7 +77,7 @@ public interface IFileAccessTokenService
     /// default reach — a mint site that has not thought about whether the caller may have
     /// the original bytes has not thought about the question this type exists to answer.
     /// </summary>
-    string CreateToken(Guid fileId, FileDelivery delivery);
+    string CreateToken(Guid fileId, FileDelivery delivery, FileAccessLifetime lifetime = FileAccessLifetime.Fetch);
 
     /// <summary>
     /// What the token opens for this file and who it was minted for, or null when it is
@@ -74,8 +97,16 @@ public sealed record FileAccessGrant(FileDelivery Delivery, Guid? UserId);
 
 public sealed class FileAccessTokenService : IFileAccessTokenService
 {
-    /// <summary>Long enough for a gallery/COG session, short enough to limit link sharing.</summary>
-    private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
+    /// <summary>Long enough for a gallery page, short enough to limit link sharing.</summary>
+    private static readonly TimeSpan FetchLifetime = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Long enough for a map session over a raster read in ranges. Four hours and not a day: the
+    /// address is still a bearer of the file, and what it bears is a georeferenced map somebody
+    /// chose to share with this caller, so the revocation staleness this service accepts is
+    /// stretched to one sitting, not removed.
+    /// </summary>
+    private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(4);
 
     private const string Anonymous = "-";
 
@@ -88,9 +119,10 @@ public sealed class FileAccessTokenService : IFileAccessTokenService
         this.currentUser = currentUser;
     }
 
-    public string CreateToken(Guid fileId, FileDelivery delivery) =>
+    public string CreateToken(Guid fileId, FileDelivery delivery, FileAccessLifetime lifetime = FileAccessLifetime.Fetch) =>
         protector.Protect(
-            Payload(fileId, delivery, currentUser.UserId), DateTimeOffset.UtcNow.Add(Lifetime));
+            Payload(fileId, delivery, currentUser.UserId),
+            DateTimeOffset.UtcNow.Add(lifetime == FileAccessLifetime.Session ? SessionLifetime : FetchLifetime));
 
     public FileAccessGrant? Validate(string? token, Guid fileId)
     {
