@@ -88,7 +88,7 @@ public static class ObjectAccessEndpoints
 
     private const string TargetVocabulary =
         "entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', " +
-        "'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).";
+        "'georeferencedMap', 'mapView', 'expedition', 'event', 'checklist' (case-insensitive).";
 
     public const string NotFoundCode = "access.entity_not_found";
 
@@ -397,6 +397,7 @@ public static class ObjectAccessEndpoints
             : $"{feature.Kind} {feature.Id.ToString("N")[..8]}",
         TripLog trip => trip.Title,
         Event calendarEvent => calendarEvent.Title,
+        Checklist checklist => checklist.Title,
         Geofile geofile => geofile.Name,
         GeoreferencedMap map => map.Name,
         MapView view => view.Name,
@@ -412,6 +413,8 @@ public static class ObjectAccessEndpoints
         AttachedEntityType.MapView => "/map",
         AttachedEntityType.Expedition => $"/expeditions/{target.Entity.Id}",
         AttachedEntityType.Event => $"/events/{target.Entity.Id}",
+        // A list has no page of its own; the lists page draws every one the caller may read.
+        AttachedEntityType.Checklist => "/checklists",
         // A kind with no page in the client leads to the home page rather than to a URL that
         // renders the router's error screen. An arm is added here the day that page ships, never
         // before it.
@@ -447,6 +450,8 @@ public static class ObjectAccessEndpoints
                 await db.Expeditions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
             AttachedEntityType.Event =>
                 await db.Events.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
+            AttachedEntityType.Checklist =>
+                await db.Checklists.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct),
             _ => null,
         };
 
@@ -486,6 +491,9 @@ public static class ObjectAccessEndpoints
                 return true;
             case "event":
                 type = AttachedEntityType.Event;
+                return true;
+            case "checklist":
+                type = AttachedEntityType.Checklist;
                 return true;
             default:
                 type = null;

@@ -71,7 +71,7 @@ public static class MeEndpoints
         }
 
         return TypedResults.Ok(MeMapping.ToDto(
-            user, await AddressesAsync(db, user.Id, ct), tokens));
+            user, await AddressesAsync(db, user.Id, ct), tokens, await CaverIdAsync(db, user.Id, ct)));
     }
 
     private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> UpdateAsync(
@@ -108,7 +108,7 @@ public static class MeEndpoints
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Ok(MeMapping.ToDto(
-            user, await AddressesAsync(db, user.Id, ct), tokens));
+            user, await AddressesAsync(db, user.Id, ct), tokens, await CaverIdAsync(db, user.Id, ct)));
     }
 
     private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAvatarAsync(
@@ -175,7 +175,7 @@ public static class MeEndpoints
         }
 
         return TypedResults.Ok(MeMapping.ToDto(
-            user, await AddressesAsync(db, user.Id, ct), tokens));
+            user, await AddressesAsync(db, user.Id, ct), tokens, await CaverIdAsync(db, user.Id, ct)));
     }
 
     private static async Task<Results<Ok<MeDto>, UnauthorizedHttpResult>> SetAvatarPresetAsync(
@@ -199,7 +199,7 @@ public static class MeEndpoints
         await db.SaveChangesAsync(ct);
 
         return TypedResults.Ok(MeMapping.ToDto(
-            user, await AddressesAsync(db, user.Id, ct), tokens));
+            user, await AddressesAsync(db, user.Id, ct), tokens, await CaverIdAsync(db, user.Id, ct)));
     }
 
     private static async Task<Results<NoContent, UnauthorizedHttpResult>> RemoveAvatarAsync(
@@ -228,6 +228,17 @@ public static class MeEndpoints
             .Where(a => a.UserId == userId)
             .OrderBy(a => a.SortOrder).ThenBy(a => a.CreatedAt)
             .ToListAsync(ct);
+
+    /// <summary>
+    /// The roster entry linked to this account, if any. At most one: the link column is unique,
+    /// so an account is one person in the club's records or nobody in them.
+    /// </summary>
+    internal static async Task<Guid?> CaverIdAsync(
+        SilexGisDbContext db, Guid userId, CancellationToken ct) =>
+        await db.Cavers.AsNoTracking()
+            .Where(c => c.UserId == userId)
+            .Select(c => (Guid?)c.Id)
+            .FirstOrDefaultAsync(ct);
 
     /// <summary>
     /// Drops the user's uploaded avatar and deletes its blob. Saves, because the file row must be

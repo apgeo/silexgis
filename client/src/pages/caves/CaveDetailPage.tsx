@@ -26,7 +26,7 @@ import {
   Typography,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   useCave,
   useCaveSummary,
@@ -101,7 +101,24 @@ export default function CaveDetailPage() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingEntrance, setEditingEntrance] = useState<Entrance | null>(null);
-  const [permissionsOpen, setPermissionsOpen] = useState(false);
+  // The permissions dialog has an address of its own, `?permissions=1`, so that a notice saying
+  // somebody asked on a trip cannot open this cave can link to the place where access is granted
+  // rather than to a page with a lock button somewhere on it. The address opens the dialog only
+  // for a caller who may manage this cave's permissions; for anybody else it is inert, never a
+  // dialog they cannot use. Closing clears the parameter with a history replace, so Back does not
+  // reopen the dialog and a reload lands shut.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const permissionsAddressed = searchParams.get('permissions') === '1';
+  const [permissionsClicked, setPermissionsClicked] = useState(false);
+  const permissionsOpen = permissionsClicked || (permissionsAddressed && canManagePermissions);
+  const closePermissions = () => {
+    setPermissionsClicked(false);
+    if (permissionsAddressed) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('permissions');
+      setSearchParams(next, { replace: true });
+    }
+  };
   const [shareOpen, setShareOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
 
@@ -208,7 +225,7 @@ export default function CaveDetailPage() {
             </Button>
           )}
           {canManagePermissions && (
-            <Button icon={<LockOutlined />} onClick={() => setPermissionsOpen(true)}>
+            <Button icon={<LockOutlined />} onClick={() => setPermissionsClicked(true)}>
               {t('permissions.button')}
             </Button>
           )}
@@ -504,7 +521,7 @@ export default function CaveDetailPage() {
           entityType="feature"
           entityId={id}
           open={permissionsOpen}
-          onClose={() => setPermissionsOpen(false)}
+          onClose={closePermissions}
         />
       )}
 

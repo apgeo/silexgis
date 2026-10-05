@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState, type ReactNode } from 'react';
 import {
+  CheckCircleOutlined,
   DeleteOutlined,
   EyeInvisibleOutlined,
   StarFilled,
@@ -101,6 +102,14 @@ export interface InvitationsPanelProps {
   onUnknownInvitee: () => void;
   /** Anything the subject offers below the list. A trip offers one act here; an event offers none. */
   footer?: ReactNode;
+  /**
+   * The reader's own entry in the club's records, when their account is linked to one. With it,
+   * a reader who was never asked can put themselves down: the server admits anybody who may read
+   * the subject to answer for themselves, row or no row, and this is the only way to reach that
+   * without a row. Null or absent draws no such control — an account linked to nobody in the
+   * records has nobody to sign up as.
+   */
+  self?: { caverId: string } | null;
 }
 
 /**
@@ -134,8 +143,27 @@ export default function InvitationsPanel({
   onRemove,
   onUnknownInvitee,
   footer,
+  self = null,
 }: InvitationsPanelProps) {
   const { t } = useTranslation();
+
+  // Putting oneself down is answering "yes" for oneself, through the same act a row's own
+  // controls use — there is one way to answer, and this is only a way to reach it with no row.
+  const [signingUp, setSigningUp] = useState(false);
+  const signUp = async () => {
+    if (!self) {
+      return;
+    }
+    setSigningUp(true);
+    try {
+      await onAnswer(self.caverId, 'yes', null);
+    } finally {
+      setSigningUp(false);
+    }
+  };
+  // Offered only while there is no row to answer on. Once there is one, that row carries the
+  // reader's own controls, and a second place to answer would be a second place for one act.
+  const canSignUp = self !== null && !data.invitations.some((row) => row.caverId === self.caverId);
 
   // The name being typed into the picker, and the person it last named. Held apart because they
   // can come apart: text edited after somebody was chosen no longer names them.
@@ -241,6 +269,20 @@ export default function InvitationsPanel({
             >
               {t(`${keys}.invite`)}
             </Button>
+          </Flex>
+        )}
+
+        {canSignUp && (
+          <Flex gap={8} align="center" wrap style={{ marginBottom: 12 }}>
+            <Button
+              icon={<CheckCircleOutlined />}
+              loading={signingUp}
+              onClick={() => void signUp()}
+              data-testid={`${idPrefix}-sign-up`}
+            >
+              {t(`${keys}.signUp`)}
+            </Button>
+            <Typography.Text type="secondary">{t(`${keys}.signUpHint`)}</Typography.Text>
           </Flex>
         )}
 

@@ -285,6 +285,9 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, ICl
         var told = await CaveNoticesForAsync(keeperId, caveId);
         told.Count.ShouldBe(1);
         told[0].Placeholders.ShouldContain(caveName);
+        // The message is about a grant, so its link lands on the cave's permissions dialog —
+        // the page's address for it — and not merely on the cave's page.
+        told[0].Placeholders.ShouldContain($"/caves/{caveId}?permissions=1");
         (await CaveNoticesForAsync(mateId, caveId)).ShouldBeEmpty(
             "the person who cannot open the cave is never told its name");
 

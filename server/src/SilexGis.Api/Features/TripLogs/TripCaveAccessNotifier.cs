@@ -227,8 +227,11 @@ internal static class TripCaveAccessNotifier
                             ["caveName"] = cave.Name is { Length: > 0 } name
                                 ? name
                                 : $"{cave.Kind} {cave.Id.ToString("N")[..8]}",
-                            // The cave's own page, which is where its permissions are changed from.
-                            ["url"] = $"/caves/{cave.Id}",
+                            // The cave's permissions dialog, opened on the cave's page by its address:
+                            // the message is about a grant, so the link lands where the grant is made
+                            // rather than on a page with a lock button somewhere on it. The address
+                            // opens nothing for a reader who may not manage the cave's permissions.
+                            ["url"] = $"/caves/{cave.Id}?permissions=1",
                         });
                 }
             }

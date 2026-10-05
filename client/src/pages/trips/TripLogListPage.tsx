@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BarChartOutlined, DownloadOutlined, EnvironmentOutlined, PlusOutlined } from '@ant-design/icons';
-import { App, Button, Empty, Flex, Input, Table, Tag, Typography } from 'antd';
+import {
+  BarChartOutlined,
+  DownOutlined,
+  DownloadOutlined,
+  EnvironmentOutlined,
+  PlusOutlined,
+  ScheduleOutlined,
+} from '@ant-design/icons';
+import { App, Button, Dropdown, Empty, Flex, Input, Space, Table, Tag, Typography } from 'antd';
 import type { SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -23,7 +30,7 @@ import TripGroupingPanel from '../../components/trips/TripGroupingPanel.tsx';
 import { countPeople } from '../../components/trips/roster.ts';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
-import TripFormModal from './TripFormModal.tsx';
+import TripFormModal, { type TripCreationIntent } from './TripFormModal.tsx';
 import {
   DefaultTripPageSize,
   NoGrouping,
@@ -101,9 +108,11 @@ export default function TripLogListPage() {
   );
 
   // The dashboard's "new trip" action routes here asking for the form to be open on arrival.
+  // Which door the form is open on, or null while it is closed: the same form files a report or
+  // opens a plan, and the dashboard's action means a report, as it always did.
   const location = useLocation();
-  const [creating, setCreating] = useState(
-    Boolean((location.state as { create?: boolean } | null)?.create),
+  const [creating, setCreating] = useState<TripCreationIntent | null>(
+    (location.state as { create?: boolean } | null)?.create ? 'report' : null,
   );
   // Router state is stored in the history entry, so it outlives the modal being closed: without
   // clearing it, going Back to this entry (or reloading it) would re-open the form unasked. The
@@ -217,10 +226,36 @@ export default function TripLogListPage() {
                 ]
               : []}
           />
+          {/* One home for creating a trip, with two doors behind it: the button files a report
+              and the menu beside it opens a plan. A plan is the same trip through the other
+              door — one form, told which door it is writing for — so the second door is an
+              entry in a menu and not a second button, let alone a second page. */}
           {canCreate && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-              {t('trips.new')}
-            </Button>
+            <Space.Compact>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating('report')}>
+                {t('trips.new')}
+              </Button>
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: [
+                    {
+                      key: 'plan',
+                      icon: <ScheduleOutlined />,
+                      label: t('trips.plan.new'),
+                      onClick: () => setCreating('plan'),
+                    },
+                  ],
+                }}
+              >
+                <Button
+                  type="primary"
+                  icon={<DownOutlined />}
+                  aria-label={t('trips.plan.createMenu')}
+                  data-testid="trip-create-menu"
+                />
+              </Dropdown>
+            </Space.Compact>
           )}
         </Flex>
       </Flex>
@@ -353,10 +388,11 @@ export default function TripLogListPage() {
           that path must not hand a create form to someone the server would refuse. */}
       {canCreate && (
         <TripFormModal
-          open={creating}
+          open={creating !== null}
           trip={null}
+          intent={creating ?? 'report'}
           onClose={(savedId) => {
-            setCreating(false);
+            setCreating(null);
             if (savedId) {
               navigate(`/trip-logs/${savedId}`);
             }

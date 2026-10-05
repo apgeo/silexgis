@@ -954,6 +954,8 @@
     "openTrip": "Open trip log",
     "new": "New trip log",
     "edit": "Edit trip log",
+    "notFound": "No such trip",
+    "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
     "tabReport": "Report",
     "tabLinks": "Links",
     "tabPhotos": "Photographs",
@@ -964,6 +966,8 @@
       "title": "Who is coming",
       "invite": "Ask",
       "invitePlaceholder": "Somebody the club knows",
+      "signUp": "Sign me up",
+      "signUpHint": "Nobody has asked you yet, but anybody who may read this can put themselves down as coming, in the order they say so.",
       "invited": "Added to the list.",
       "pickFromDirectory": "Choose somebody from the list of suggestions. A person is asked by their entry in the club's records, not by a name typed here — a name nobody can resolve would be a name nobody can tell.",
       "empty": "Nobody has been asked on this trip yet.",
@@ -1231,6 +1235,24 @@
       "empty": "You are not on any trip yet. A trip appears here once somebody invites you to one or puts you on the party.",
       "emptyFiltered": "No trip of yours matches these filters.",
       "failed": "Your trips could not be loaded."
+    },
+    "track": {
+      "import": "Import track (GPX)",
+      "imported": "The recorded track is now the trip's sketch.",
+      "problems": {
+        "file_empty": "The file is empty.",
+        "file_too_large": "The file is larger than a trip's track may be.",
+        "format_unsupported": "A track is imported from a GPX file.",
+        "file_unreadable": "The file could not be read as GPX.",
+        "no_track": "The file holds no track or route — waypoints alone are not a track.",
+        "too_many_points": "The track has more points than a trip's sketch may carry; shorten it before importing."
+      }
+    },
+    "plan": {
+      "new": "Plan a trip",
+      "createMenu": "Other ways to create a trip",
+      "audienceFromGroup": "Unless you choose otherwise, this plan is shared with your caving group, {{group}} — a plan only its author can read is a plan to nobody.",
+      "audiencePrivate": "This plan starts private: you are in no single caving group, so the application does not guess which club should read it. Widen the audience here if it should be read."
     },
     "expectedReturnAt": "Expected back",
     "calloutAlarmAt": "Raise the alarm at",
@@ -4305,6 +4327,8 @@
       "title": "Who is coming",
       "invite": "Ask",
       "invitePlaceholder": "Somebody the club knows",
+      "signUp": "Sign me up",
+      "signUpHint": "Nobody has asked you yet, but anybody who may read this can put themselves down as coming, in the order they say so.",
       "invited": "Added to the list.",
       "pickFromDirectory": "Choose somebody from the list of suggestions. A person is asked by their entry in the club's records, not by a name typed here — a name nobody can resolve would be a name nobody can tell.",
       "empty": "Nobody has been asked about this event yet.",

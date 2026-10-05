@@ -7,6 +7,14 @@ import '../../i18n';
 const createMutate = vi.fn();
 const updateMutate = vi.fn();
 const deleteMutate = vi.fn();
+// What the permissions dialog was last handed; the dialog itself is somebody else's to test.
+const permissionsModal = vi.fn();
+
+const OWNER = '22222222-2222-2222-2222-222222222222';
+const SOMEBODY_ELSE = '99999999-9999-9999-9999-999999999999';
+// Who is reading the page, and whether they hold the right to manage every list's rules.
+let reader = SOMEBODY_ELSE;
+let managesAnyList = false;
 
 const checklists = [
   {
@@ -34,8 +42,17 @@ vi.mock('../../api/hooks.ts', async () => {
     useCreateChecklist: () => ({ mutateAsync: createMutate, isPending: false }),
     useUpdateChecklist: () => ({ mutateAsync: updateMutate, isPending: false }),
     useDeleteChecklist: () => ({ mutate: deleteMutate, isPending: false }),
+    useMe: () => ({ data: { id: reader } }),
+    useCan: () => managesAnyList,
   };
 });
+
+vi.mock('../../components/permissions/PermissionsModal.tsx', () => ({
+  default: (props: { entityType: string; entityId: string; open: boolean }) => {
+    permissionsModal(props);
+    return null;
+  },
+}));
 
 const { default: ChecklistsPage } = await import('./ChecklistsPage.tsx');
 
@@ -43,6 +60,9 @@ beforeEach(() => {
   createMutate.mockReset().mockResolvedValue({});
   updateMutate.mockReset().mockResolvedValue({});
   deleteMutate.mockReset();
+  permissionsModal.mockReset();
+  reader = SOMEBODY_ELSE;
+  managesAnyList = false;
 });
 afterEach(cleanup);
 
@@ -93,5 +113,37 @@ describe('ChecklistsPage', () => {
       text: 'Permit obtained from the estate',
     });
     expect(body.items[1].id).toBe('44444444-4444-4444-4444-444444444444');
+  });
+
+  /**
+   * Handing one list to one person by name goes through the object-permissions dialog, behind a
+   * lock on the card. The listing does not say who may manage each list's rules, so the lock is
+   * drawn for the owner and for somebody who holds that right over every list, and for nobody
+   * else — a dialog that opened only to be refused would be a worse answer than no lock.
+   */
+  it("opens the permissions dialog on the list from its owner's lock", () => {
+    reader = OWNER;
+    show();
+
+    fireEvent.click(screen.getByTestId('checklist-permissions-11111111-1111-1111-1111-111111111111'));
+
+    expect(permissionsModal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entityType: 'checklist',
+        entityId: '11111111-1111-1111-1111-111111111111',
+        open: true,
+      }),
+    );
+  });
+
+  it('draws the lock for somebody who manages every list, and for nobody else', () => {
+    show();
+    expect(screen.queryByTestId('checklist-permissions-11111111-1111-1111-1111-111111111111')).toBeNull();
+    expect(permissionsModal).not.toHaveBeenCalled();
+
+    cleanup();
+    managesAnyList = true;
+    show();
+    expect(screen.getByTestId('checklist-permissions-11111111-1111-1111-1111-111111111111')).toBeTruthy();
   });
 });

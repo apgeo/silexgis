@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { CaveDetail, Entrance } from '../../api/hooks.ts';
@@ -20,8 +20,12 @@ import type { CaveDetail, Entrance } from '../../api/hooks.ts';
 const navigate = vi.fn();
 const fitGeoJsonGeometry = vi.fn();
 const setSelection = vi.fn();
+// What the permissions dialog was last handed; the dialog itself is somebody else's to test.
+const permissionsModal = vi.fn();
 
 let entrances: Entrance[] = [];
+// What the domain capability answers, which is what the page falls back on with no summary.
+let can = false;
 
 vi.mock('react-router-dom', async () => ({
   ...(await vi.importActual<typeof import('react-router-dom')>('react-router-dom')),
@@ -54,7 +58,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useDeleteEntrance: () => ({ mutateAsync: vi.fn() }),
   useUpdateCave: () => ({ mutateAsync: vi.fn() }),
   useUpdateEntrance: () => ({ mutateAsync: vi.fn() }),
-  useCan: () => false,
+  useCan: () => can,
 }));
 
 // The page is a shell around a dozen independent sections, none of which this is about. Each is
@@ -62,7 +66,12 @@ vi.mock('../../api/hooks.ts', () => ({
 // (each factory is written out because vi.mock calls are hoisted above any const they would share)
 vi.mock('../../components/attachments/AttachmentSection.tsx', () => ({ default: () => null }));
 vi.mock('../../components/history/HistoryPanel.tsx', () => ({ default: () => null }));
-vi.mock('../../components/permissions/PermissionsModal.tsx', () => ({ default: () => null }));
+vi.mock('../../components/permissions/PermissionsModal.tsx', () => ({
+  default: (props: { open: boolean; onClose: () => void }) => {
+    permissionsModal(props);
+    return null;
+  },
+}));
 vi.mock('../../components/reslinks/LinksSection.tsx', () => ({ default: () => null }));
 vi.mock('../../components/statistics/CaveCrossSectionPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/statistics/CavePatternPanel.tsx', () => ({ default: () => null }));
@@ -119,6 +128,25 @@ function show() {
   );
 }
 
+/** The address the page is at, as the router sees it, so a test can watch the page change it. */
+function LocationProbe() {
+  return <span data-testid="location-search">{useLocation().search}</span>;
+}
+
+function showAt(path: string) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <CaveDetailPage />
+      <LocationProbe />
+    </MemoryRouter>,
+  );
+}
+
+/** The permissions dialog's props as of its latest render. */
+function permissionsDialog(): { open: boolean; onClose: () => void } {
+  return permissionsModal.mock.lastCall![0] as { open: boolean; onClose: () => void };
+}
+
 /** The row for one entrance, found by the name in its first cell. */
 function row(name: string) {
   return screen.getByText(name).closest('tr') as HTMLElement;
@@ -128,6 +156,8 @@ beforeEach(() => {
   navigate.mockClear();
   fitGeoJsonGeometry.mockClear();
   setSelection.mockClear();
+  permissionsModal.mockClear();
+  can = false;
 });
 
 afterEach(cleanup);
@@ -179,5 +209,48 @@ describe('CaveDetailPage entrances table', () => {
     show();
 
     expect(within(row('Entrance b')).getByRole('button', { name: 'Show on map' })).toBeEnabled();
+  });
+});
+
+/**
+ * The permissions dialog has an address, so a message about granting access to this cave can
+ * link to where the grant is made. What is asserted is the pair that makes an address safe: it
+ * opens the dialog only for somebody who may use it, and closing hands back a clean address.
+ */
+describe('CaveDetailPage permissions address', () => {
+  it('opens the permissions dialog from its address for a caller who may manage them', () => {
+    can = true;
+    showAt('/caves/cave-1?permissions=1');
+
+    expect(permissionsDialog().open).toBe(true);
+  });
+
+  it('leaves the address inert for a caller who may not', () => {
+    can = false;
+    showAt('/caves/cave-1?permissions=1');
+
+    expect(permissionsModal.mock.calls.every(([props]) => props.open === false)).toBe(true);
+    expect(screen.queryByRole('button', { name: /Permissions/ })).toBeNull();
+  });
+
+  it('clears the address when the dialog closes, and stays shut', () => {
+    can = true;
+    showAt('/caves/cave-1?permissions=1');
+    expect(screen.getByTestId('location-search').textContent).toBe('?permissions=1');
+
+    act(() => permissionsDialog().onClose());
+
+    expect(screen.getByTestId('location-search').textContent).toBe('');
+    expect(permissionsDialog().open).toBe(false);
+  });
+
+  it('opens from the lock button without touching the address', () => {
+    can = true;
+    showAt('/caves/cave-1');
+
+    fireEvent.click(screen.getByRole('button', { name: /Permissions/ }));
+
+    expect(permissionsDialog().open).toBe(true);
+    expect(screen.getByTestId('location-search').textContent).toBe('');
   });
 });

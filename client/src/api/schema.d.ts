@@ -2270,6 +2270,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/trip-logs/{id}/geometry/gpx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sets the trip's own geometry from the track in an uploaded GPX file.
+         * @description Multipart, one part named 'file'. Every track and route in the file is joined, in file order, into one line that replaces the trip's sketch; waypoints are ignored. Nothing of the file is kept. Needs Write on the trip.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/trips/{token}": {
         parameters: {
             query?: never;
@@ -16432,7 +16479,7 @@ export interface paths {
         };
         /**
          * Rules anchored on this object (ManagePermissions). A rule carrying a camp was written by that camp's sharing: it is shown here and withdrawn there.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event', 'checklist' (case-insensitive).
          */
         get: {
             parameters: {
@@ -16459,7 +16506,7 @@ export interface paths {
         };
         /**
          * Replaces the rules authored here, bounded by what the caller holds. A rule a camp's sharing wrote is left exactly as it is.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event', 'checklist' (case-insensitive).
          */
         put: {
             parameters: {
@@ -16504,7 +16551,7 @@ export interface paths {
         };
         /**
          * What the caller may do here; ?explain=true names the deciding rule.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event', 'checklist' (case-insensitive).
          */
         get: {
             parameters: {
@@ -21814,6 +21861,8 @@ export interface components {
             phoneNumber: null | string;
             /** Format: uuid */
             cavingClubId: null | string;
+            /** Format: uuid */
+            caverId: null | string;
             locale: string;
             avatarUrl: null | string;
             avatarPreset: null | string;

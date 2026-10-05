@@ -76,6 +76,8 @@ prin fișa ei din listă.
 
 Fiecare răspunde pentru sine: **Vine · Nu vine · Poate · Fără răspuns**, cu o notă. Cine poate
 corecta tura poate răspunde în locul cuiva care a sunat.
+Dacă nimeni nu v-a invitat încă, **Înscrie-mă** vă trece drept participant — oricine poate citi
+tura o poate face, iar intrați în coadă în ordinea în care ați spus-o.
 
 Cu **Locuri** stabilite: *„n din m locuri ocupate, k în așteptare"* — **în ordinea în care au
 răspuns oamenii**. Primul venit; o răzgândire trece la coadă. Organizatorul poate **Alege** pe
@@ -184,6 +186,17 @@ Aceeași fișă, pentru ce stabilește o echipă înainte de plecare: ora și pu
 descris, șoferii, locurile, punctele de plecare, echipamentul și echiparea, dacă este necesară și
 obținută o autorizație, prognoza, linkul grupului de discuție și persoana de contact.
 
+### Deschiderea unui plan
+
+O tură care nu a avut loc încă se deschide cu **Planifică o tură** — din meniul de lângă *Jurnal
+de tură nou* pe lista de ture, sau cu butonul de pe *Turele mele*. Este același formular, cu o
+singură diferență: cine citește tura când nu spuneți nimic despre asta. Un jurnal este privat până
+îl lărgiți. Un plan este vizibil **grupului dvs. de speologie** când sunteți într-unul singur, iar
+formularul o spune lângă controlul de vizibilitate, numind grupul, înainte ca tura să existe. Dacă
+nu sunteți în niciun grup, sau sunteți în mai multe, nu se ghicește nimic: planul începe privat,
+formularul spune de ce, și îl lărgiți acolo dacă trebuie citit. O vizibilitate pe care o alegeți
+dvs. este păstrată așa cum ați ales-o.
+
 ### Punctul de întâlnire pe hartă
 
 Un punct, sau drumul de acces, desenat pe același fel de hartă ca schița turei.
@@ -200,6 +213,9 @@ desenați; o formă nouă o înlocuiește pe cea dinainte.
 > ⚠ Același avertisment. **Schița unei ture nu este niciodată aproximată** — este arătată exact
 > cum a fost desenată tuturor celor care pot citi tura, *indiferent ce protecție poartă peșterile
 > pe care tura le numește*.
+
+**Importă traseul (GPX)**, de pe pagina turei, înlocuiește schița cu traseul înregistrat de un
+GPS — toate traseele din fișier unite într-o singură linie. Nimic altceva din fișier nu este păstrat.
 
 ---
 

@@ -954,6 +954,8 @@
     "openTrip": "Deschide tura",
     "new": "Jurnal de tură nou",
     "edit": "Editare jurnal",
+    "notFound": "Nicio astfel de tură",
+    "notFoundDetail": "Fie nu există, fie nu o puteți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
     "tabReport": "Raport",
     "tabLinks": "Legături",
     "tabPhotos": "Fotografii",
@@ -964,6 +966,8 @@
       "title": "Cine vine",
       "invite": "Invită",
       "invitePlaceholder": "Cineva cunoscut clubului",
+      "signUp": "Înscrie-mă",
+      "signUpHint": "Nimeni nu v-a invitat încă, dar oricine poate citi asta se poate trece drept participant, în ordinea în care o spune.",
       "invited": "Adăugat pe listă.",
       "pickFromDirectory": "Alege pe cineva dintre sugestii. O persoană este invitată prin fișa ei din evidențele clubului, nu printr-un nume scris aici — un nume pe care nimeni nu îl poate identifica ar fi un nume pe care nimeni nu îl poate anunța.",
       "empty": "Nimeni nu a fost invitat în această tură încă.",
@@ -1231,6 +1235,24 @@
       "empty": "Nu ești încă în nicio tură. O tură apare aici după ce cineva te invită sau te trece în echipă.",
       "emptyFiltered": "Nicio tură de-a ta nu se potrivește cu aceste filtre.",
       "failed": "Turele tale nu au putut fi încărcate."
+    },
+    "track": {
+      "import": "Importă traseul (GPX)",
+      "imported": "Traseul înregistrat este acum schița turei.",
+      "problems": {
+        "file_empty": "Fișierul este gol.",
+        "file_too_large": "Fișierul este mai mare decât poate fi traseul unei ture.",
+        "format_unsupported": "Un traseu se importă dintr-un fișier GPX.",
+        "file_unreadable": "Fișierul nu a putut fi citit ca GPX.",
+        "no_track": "Fișierul nu conține niciun traseu — punctele de reper singure nu sunt un traseu.",
+        "too_many_points": "Traseul are mai multe puncte decât poate purta schița unei ture; scurtați-l înainte de import."
+      }
+    },
+    "plan": {
+      "new": "Planifică o tură",
+      "createMenu": "Alte moduri de a crea o tură",
+      "audienceFromGroup": "Dacă nu alegi altfel, acest plan este vizibil grupului tău de speologie, {{group}} — un plan pe care îl poate citi doar autorul este un plan pentru nimeni.",
+      "audiencePrivate": "Acest plan începe privat: nu ești într-un singur grup de speologie, așa că aplicația nu ghicește care club ar trebui să îl citească. Lărgește audiența aici dacă trebuie citit."
     },
     "expectedReturnAt": "Ieșire estimată",
     "calloutAlarmAt": "Dă alarma la",
@@ -4305,6 +4327,8 @@
       "title": "Cine vine",
       "invite": "Invită",
       "invitePlaceholder": "Cineva cunoscut clubului",
+      "signUp": "Înscrie-mă",
+      "signUpHint": "Nimeni nu v-a invitat încă, dar oricine poate citi asta se poate trece drept participant, în ordinea în care o spune.",
       "invited": "Adăugat pe listă.",
       "pickFromDirectory": "Alege pe cineva dintre sugestii. O persoană este invitată prin fișa ei din evidențele clubului, nu printr-un nume scris aici — un nume pe care nimeni nu îl poate identifica ar fi un nume pe care nimeni nu îl poate anunța.",
       "empty": "Nimeni nu a fost invitat la acest eveniment încă.",
