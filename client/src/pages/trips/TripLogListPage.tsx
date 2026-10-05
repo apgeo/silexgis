@@ -245,12 +245,16 @@ export default function TripLogListPage() {
           leaves, out of how many this account may read at all — so the fraction never implies the
           filter is hiding what access is hiding. */}
       <Flex gap={8} align="center" style={{ marginBottom: 8 }}>
-        <Typography.Text type="secondary" data-testid="trip-list-count">
-          {t('trips.filters.showing', {
-            matching: facets?.matching ?? data?.totalItems ?? 0,
-            overall: facets?.overall ?? data?.totalItems ?? 0,
-          })}
-        </Typography.Text>
+        {/* Only once there is an answer to count: before the first one lands, "0 of 0" would
+            claim this account may read no trips at all, about a request still in flight. */}
+        {(facets !== undefined || data !== undefined) && (
+          <Typography.Text type="secondary" data-testid="trip-list-count">
+            {t('trips.filters.showing', {
+              matching: facets?.matching ?? data?.totalItems ?? 0,
+              overall: facets?.overall ?? data?.totalItems ?? 0,
+            })}
+          </Typography.Text>
+        )}
         {/* The second reset, where the eye already is. The one in the panel is for somebody who
             went there to change something; this one is for somebody reading the count and
             wondering why it is small. */}
