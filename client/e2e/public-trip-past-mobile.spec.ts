@@ -192,21 +192,35 @@ async function dragRail(page: Page, by: number) {
   const box = (await handle.boundingBox())!;
   const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   const finger = (x: number, y: number) => [{ x, y, radiusX: 4, radiusY: 4, force: 1, id: 1 }];
+  const steps = 12;
+  // The times the events carry: a move every 16 ms, as a touch screen reports them, and a 60 ms
+  // rest before the thumb lifts. Written onto the events rather than waited out, because the
+  // browser reads the gesture's speed off these times. Laid out in the past and ending now, since a
+  // time ahead of the clock would put whatever the test does next before the end of this gesture.
+  let at = Date.now() - steps * 16 - 60;
+  const stamp = (after: number) => {
+    at += after;
+    return at / 1000;
+  };
   const cdp = await page.context().newCDPSession(page);
   try {
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
       touchPoints: finger(start.x, start.y),
+      timestamp: stamp(0),
     });
-    const steps = 12;
     for (let step = 1; step <= steps; step += 1) {
       await cdp.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
         touchPoints: finger(start.x + (by * step) / steps, start.y),
+        timestamp: stamp(16),
       });
     }
-    await page.waitForTimeout(60);
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: [],
+      timestamp: stamp(60),
+    });
   } finally {
     await cdp.detach();
   }
