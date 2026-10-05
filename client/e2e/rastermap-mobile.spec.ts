@@ -11,6 +11,7 @@ import {
   relationId,
   uploadMapPng,
 } from './rastermapApi.ts';
+import { settledScreenshot } from './settled.ts';
 
 /**
  * The mobile binding of the authoring flow: on a phone profile — coarse pointer, touch —
@@ -130,8 +131,7 @@ test('a pin is authored by finger at 360px, with finger-sized controls', async (
   expect(point.anchor?.shape).toBe('point');
 
   if (process.env.RASTERMAP_SHOTS) {
-    await page.waitForTimeout(600);
-    await viewer.screenshot({ path: `${process.env.RASTERMAP_SHOTS}/32-authoring-360px.png` });
+    await settledScreenshot(viewer, `${process.env.RASTERMAP_SHOTS}/32-authoring-360px.png`);
   }
 
   // Down again: model and cave through the API this run created them with. The page

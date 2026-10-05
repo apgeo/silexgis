@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { expect } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 // Straight from Playwright this spec would run unwatched: the guard is what records uncaught
 // errors, unhandled rejections and console errors across the whole browser context.
 import { test } from './consoleGuard.ts';
+import { asPerson, localDay, tryAsPerson, versionOf } from './arrange.ts';
 import { gotoRoute, login } from './helpers.ts';
 
 /**
@@ -44,6 +45,9 @@ test('the calendar opens on a window of its own and asks for both ends of it', a
 test('the sidebar offers the calendar and lands on it', async ({ page }) => {
   await login(page);
 
+  // The calendar is filed in the rail's Activity group, which stays shut until somebody opens it
+  // or arrives on a page inside it — and signing in arrives on the map, which is not.
+  await page.getByRole('menuitem', { name: /Activity$/ }).click();
   await page.getByRole('menuitem', { name: 'Calendar' }).click();
   await page.waitForURL((url) => url.pathname === '/calendar', { timeout: 60_000 });
   await expect(page.getByRole('heading', { name: 'Calendar' })).toBeVisible();
@@ -273,4 +277,385 @@ test('a repeating event is written as the evenings it is, and calling one off as
   // What is kept is said before anything is chosen: an occurrence that has already begun is the
   // record of an evening that happened, and is never removed by an act aimed at the rest of the run.
   await expect(page.getByText(/already begun are kept/)).toBeVisible();
+});
+
+/*
+ * The same window of days read four more ways: as a month of days, a week of columns, a year of
+ * months and an agenda read forwards. Each is driven the way somebody uses it — chosen, moved
+ * through a period at a time, and left by opening a record from where it is drawn.
+ *
+ * Every record read here is written by the run that reads it, through the API, on days chosen
+ * relative to today, and carries the run's stamp in its title: the grids draw everything in their
+ * window, so a record is found by its own title in its own day and never by being the only one
+ * there. What the readings are proved against is where a record is drawn and what the page asks
+ * the server for — the window of each period, read off the wire, because a grid drawn over a
+ * window that does not cover it would show empty days that are not empty.
+ */
+
+/** A club date written for this run, kept so the run can remove it again. */
+interface Written {
+  id: string;
+  title: string;
+}
+
+/**
+ * Writes one club event through the API, as the signed-in person, and starts organising it.
+ *
+ * An event is written as a draft, and a draft is somebody's workshop rather than a date anybody is
+ * keeping, so the calendar leaves it off. Organising it is what puts it on: the state it is moved
+ * to here is the first one a record is shown in as something coming up.
+ */
+async function writeEvent(
+  page: Page,
+  written: Written[],
+  title: string,
+  startDate: string,
+  extra: Record<string, unknown> = {},
+): Promise<Written> {
+  const event = await asPerson<{ id: string }>(page, 'POST', '/api/v1/events', {
+    title,
+    kind: 'clubMeeting',
+    startDate,
+    endDate: null,
+    startTime: null,
+    endTime: null,
+    place: null,
+    maxParticipants: null,
+    description: null,
+    visibility: 'authenticated',
+    cavingGroupId: null,
+    ...extra,
+  });
+  const version = await versionOf(page, `/api/v1/events/${event.id}`);
+  await asPerson(
+    page,
+    'POST',
+    `/api/v1/events/${event.id}/state`,
+    { state: 'planned' },
+    { 'If-Match': version },
+  );
+  const row = { id: event.id, title };
+  written.push(row);
+  return row;
+}
+
+async function removeEvents(page: Page, written: Written[]) {
+  for (const row of written) {
+    await tryAsPerson(page, 'DELETE', `/api/v1/events/${row.id}`);
+  }
+}
+
+/** Chooses one of the page's readings from the switch above it. */
+async function chooseView(page: Page, name: 'Record' | 'Month' | 'Week' | 'Year' | 'Agenda') {
+  const views = page.getByTestId('calendar-view');
+  await views.getByText(name, { exact: true }).click();
+  await expect(views.locator('.ant-segmented-item-selected')).toHaveText(name);
+}
+
+/** The window a request asked for, as the pair of days it named. */
+async function windowAsked(asked: Promise<URLSearchParams>): Promise<[string | null, string | null]> {
+  const query = await asked;
+  return [query.get('from'), query.get('to')];
+}
+
+/** A record's chip inside one day of whichever grid is on screen, found by its title. */
+function chipIn(day: Locator, title: string): Locator {
+  return day.getByTestId('calendar-chip').filter({ hasText: title });
+}
+
+/** Opens an event from wherever it is drawn and checks the page it lands on is that event's. */
+async function opensEvent(page: Page, from: Locator, event: Written) {
+  await from.click();
+  await page.waitForURL((url) => url.pathname === `/events/${event.id}`, { timeout: 60_000 });
+  await expect(page.getByTestId('event-title')).toHaveText(event.title, { timeout: 15_000 });
+}
+
+/**
+ * Moves an open select's highlight one step and takes it, by keyboard.
+ *
+ * The calendar's own month and year pickers are lists that commit on mousedown, and a click that
+ * straddles a re-render loses the choice with the list left open; the highlight is asserted before
+ * the key that depends on it, so a lost step fails here rather than as a missing record later.
+ */
+async function stepSelect(page: Page, select: Locator, key: 'ArrowDown' | 'ArrowUp', label: string) {
+  await select.click();
+  // The list is open, on the value it holds, before any key moves anything.
+  await expect(
+    page.locator('.ant-select-dropdown:visible .ant-select-item-option-selected'),
+  ).toBeVisible();
+  const option = page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: new RegExp(`^${label}$`) });
+  await page.keyboard.press(key);
+  await expect(option).toHaveClass(/ant-select-item-option-active/);
+  await page.keyboard.press('Enter');
+  await expect(select).toContainText(label);
+}
+
+test('the month reading draws a record on its day, moves a month at a time, and opens a record from its day', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const written: Written[] = [];
+  await login(page);
+
+  const today = new Date();
+  // The neighbouring month the header can reach without changing year: forward, except in
+  // December, where the month picker's next step is the year's own first month.
+  const forward = today.getMonth() < 11;
+  const target = new Date(today.getFullYear(), today.getMonth() + (forward ? 1 : -1), 1);
+  // A day of that month the current month's grid does not draw and its window does not reach, so
+  // the record can only be on screen once the page has asked for the month it is in.
+  const elsewhere = new Date(target.getFullYear(), target.getMonth(), forward ? 20 : 1);
+
+  try {
+    const tonight = await writeEvent(page, written, `E2E Month Tonight ${stamp}`, localDay(0), {
+      startTime: '19:00:00',
+    });
+    const later = await writeEvent(
+      page,
+      written,
+      `E2E Month Elsewhere ${stamp}`,
+      localDay(0, elsewhere),
+    );
+
+    await gotoRoute(page, '/calendar');
+    await expect(page.getByTestId('calendar-toggle-trips')).toBeVisible({ timeout: 30_000 });
+
+    // A month's grid asks for the month it shows and a fortnight either side, so the days of the
+    // neighbouring months drawn in its corners are answered too — not the window the record used.
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const asked = askedFor(page);
+    await chooseView(page, 'Month');
+    expect(await windowAsked(asked)).toEqual([localDay(-14, monthStart), localDay(14, monthEnd)]);
+    await expect(page.getByTestId('calendar-grid')).toBeVisible();
+    // The window control belongs to the readings that are lists; a grid's window is its month.
+    await expect(page.getByTestId('calendar-window')).toHaveCount(0);
+
+    // Tonight's meeting sits in today's cell, with the time it starts in front of its title.
+    const chip = chipIn(page.getByTestId(`calendar-day-${localDay(0)}`), tonight.title);
+    await expect(chip).toBeVisible({ timeout: 30_000 });
+    await expect(chip).toHaveText(`19:00 ${tonight.title}`);
+    await expect(chip).toHaveAttribute('data-source', 'event');
+    await expect(page.getByTestId('calendar-chip').filter({ hasText: later.title })).toHaveCount(0);
+
+    // A month at a time, through the grid's own month picker.
+    const targetStart = new Date(target.getFullYear(), target.getMonth(), 1);
+    const targetEnd = new Date(target.getFullYear(), target.getMonth() + 1, 0);
+    const movedTo = askedFor(page);
+    await stepSelect(
+      page,
+      page.locator('.ant-picker-calendar-month-select'),
+      forward ? 'ArrowDown' : 'ArrowUp',
+      target.toLocaleString('en', { month: 'short' }),
+    );
+    expect(await windowAsked(movedTo)).toEqual([
+      localDay(-14, targetStart),
+      localDay(14, targetEnd),
+    ]);
+
+    const elsewhereChip = chipIn(
+      page.getByTestId(`calendar-day-${localDay(0, elsewhere)}`),
+      later.title,
+    );
+    await expect(elsewhereChip).toBeVisible({ timeout: 30_000 });
+    // A record that claims no time of day is drawn as its title alone.
+    await expect(elsewhereChip).toHaveText(later.title);
+
+    await opensEvent(page, elsewhereChip, later);
+  } finally {
+    await removeEvents(page, written);
+  }
+});
+
+test('the week reading stands the days side by side, steps a week at a time, and opens a record from its day', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const written: Written[] = [];
+  await login(page);
+
+  // The page reads English, whose week begins on a Sunday: the strip and the window it asks for
+  // are that week, worked out by the application's date library rather than by this test.
+  const today = new Date();
+  const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
+  const monday = localDay(1, sunday);
+  const tuesday = localDay(2, sunday);
+  const nextWednesday = localDay(10, sunday);
+
+  try {
+    // Two days long, so it stands in both columns and is marked where it begins and where it ends.
+    const twoDays = await writeEvent(page, written, `E2E Week Weekend ${stamp}`, monday, {
+      endDate: tuesday,
+      startTime: '18:00:00',
+      kind: 'training',
+    });
+    const nextWeek = await writeEvent(page, written, `E2E Week Next ${stamp}`, nextWednesday);
+
+    await gotoRoute(page, '/calendar');
+    await expect(page.getByTestId('calendar-toggle-trips')).toBeVisible({ timeout: 30_000 });
+
+    const asked = askedFor(page);
+    await chooseView(page, 'Week');
+    expect(await windowAsked(asked)).toEqual([localDay(0, sunday), localDay(6, sunday)]);
+    await expect(page.getByTestId('calendar-week')).toBeVisible();
+    for (let offset = 0; offset < 7; offset++) {
+      await expect(page.getByTestId(`calendar-week-day-${localDay(offset, sunday)}`)).toBeVisible();
+    }
+
+    // In both of its columns, marked as the first and the last of its days. The time it starts is
+    // said where it starts and nowhere else: it began at six once, not at six on each day.
+    const first = chipIn(page.getByTestId(`calendar-week-day-${monday}`), twoDays.title);
+    const last = chipIn(page.getByTestId(`calendar-week-day-${tuesday}`), twoDays.title);
+    await expect(first).toBeVisible({ timeout: 30_000 });
+    await expect(first).toHaveAttribute('data-span-start', 'true');
+    await expect(first).toHaveAttribute('data-span-end', 'false');
+    await expect(first).toHaveText(`18:00 ${twoDays.title}`);
+    await expect(last).toHaveAttribute('data-span-start', 'false');
+    await expect(last).toHaveAttribute('data-span-end', 'true');
+    await expect(last).toHaveText(twoDays.title);
+    // Drawn by its own kind rather than by its family, in the words a hover reads out.
+    await expect(first).toHaveAttribute('title', `Training — ${twoDays.title}`);
+    await expect(page.getByTestId('calendar-chip').filter({ hasText: nextWeek.title })).toHaveCount(0);
+
+    // A week forward: the strip and its window move together, and next week's record is there.
+    const range = page.getByTestId('calendar-week-range');
+    const thisWeek = await range.textContent();
+    const forwardAsked = askedFor(page);
+    await page.getByTestId('calendar-week-next').click();
+    expect(await windowAsked(forwardAsked)).toEqual([localDay(7, sunday), localDay(13, sunday)]);
+    await expect(range).not.toHaveText(thisWeek ?? '');
+    await expect(
+      chipIn(page.getByTestId(`calendar-week-day-${nextWednesday}`), nextWeek.title),
+    ).toBeVisible({ timeout: 30_000 });
+
+    // Back to this week by its own button, and a week back from there.
+    await page.getByTestId('calendar-week-today').click();
+    await expect(range).toHaveText(thisWeek ?? '');
+    await expect(first).toBeVisible({ timeout: 30_000 });
+    const backAsked = askedFor(page);
+    await page.getByTestId('calendar-week-previous').click();
+    expect(await windowAsked(backAsked)).toEqual([localDay(-7, sunday), localDay(-1, sunday)]);
+    await page.getByTestId('calendar-week-today').click();
+
+    await opensEvent(page, first, twoDays);
+  } finally {
+    await removeEvents(page, written);
+  }
+});
+
+test('the year reading counts each month, steps a year at a time, and opens a month to the records in it', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const written: Written[] = [];
+  await login(page);
+
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = `${year}-${`${today.getMonth() + 1}`.padStart(2, '0')}`;
+
+  try {
+    const meeting = await writeEvent(page, written, `E2E Year Meeting ${stamp}`, localDay(0));
+
+    await gotoRoute(page, '/calendar');
+    await expect(page.getByTestId('calendar-toggle-trips')).toBeVisible({ timeout: 30_000 });
+
+    // A year asks for the whole of itself, and says how much is in each month rather than naming
+    // any of it — this month holds at least the meeting just written.
+    const asked = askedFor(page);
+    await chooseView(page, 'Year');
+    expect(await windowAsked(asked)).toEqual([`${year}-01-01`, `${year}-12-31`]);
+    const thisMonth = page.getByTestId(`calendar-month-${month}`);
+    await expect(thisMonth.getByTestId('calendar-month-count')).toHaveText(/^\d+ records$/, {
+      timeout: 30_000,
+    });
+    // A year's cells name nothing, so no record is drawn as a chip anywhere on it.
+    await expect(page.getByTestId('calendar-chip')).toHaveCount(0);
+
+    // A year at a time, through the grid's own year picker — back one, and forward again.
+    const yearSelect = page.locator('.ant-picker-calendar-year-select');
+    const backAsked = askedFor(page);
+    await stepSelect(page, yearSelect, 'ArrowUp', `${year - 1}`);
+    expect(await windowAsked(backAsked)).toEqual([`${year - 1}-01-01`, `${year - 1}-12-31`]);
+    // Attached rather than visible: a month with nothing in it is an empty cell, drawn at no size.
+    await expect(page.getByTestId(`calendar-month-${year - 1}-01`)).toBeAttached();
+    await stepSelect(page, yearSelect, 'ArrowDown', `${year}`);
+    await expect(thisMonth.getByTestId('calendar-month-count')).toBeVisible({ timeout: 30_000 });
+
+    // Opening a month: choose it in the year, then read it as a month through the grid's own
+    // switch. The page follows the grid there, so the reading above it says Month too.
+    await thisMonth.click();
+    const monthAsked = askedFor(page);
+    await page.locator('.ant-picker-calendar-mode-switch').getByText('Month', { exact: true }).click();
+    const monthStart = new Date(year, today.getMonth(), 1);
+    const monthEnd = new Date(year, today.getMonth() + 1, 0);
+    expect(await windowAsked(monthAsked)).toEqual([localDay(-14, monthStart), localDay(14, monthEnd)]);
+    await expect(
+      page.getByTestId('calendar-view').locator('.ant-segmented-item-selected'),
+    ).toHaveText('Month');
+
+    const chip = chipIn(page.getByTestId(`calendar-day-${localDay(0)}`), meeting.title);
+    await expect(chip).toBeVisible({ timeout: 30_000 });
+    await opensEvent(page, chip, meeting);
+  } finally {
+    await removeEvents(page, written);
+  }
+});
+
+test('the agenda reads a window forwards, one entry to a line, and opens a record from its line', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const written: Written[] = [];
+  await login(page);
+
+  // Days of their own, well ahead, so the window chosen below holds these and next to nothing
+  // else, and the lines are read in the order the days come.
+  const first = localDay(45);
+  const second = localDay(46);
+
+  try {
+    const training = await writeEvent(page, written, `E2E Agenda Training ${stamp}`, first, {
+      kind: 'training',
+      startTime: '18:30:00',
+      endTime: '21:00:00',
+    });
+    const meeting = await writeEvent(page, written, `E2E Agenda Meeting ${stamp}`, second);
+
+    await gotoRoute(page, '/calendar');
+    await expect(page.getByTestId('calendar-toggle-trips')).toBeVisible({ timeout: 30_000 });
+    await chooseView(page, 'Agenda');
+    // One column of whole entries has nothing to head.
+    await expect(page.locator('.ant-table-thead')).toHaveCount(0);
+
+    // The agenda keeps the window control the record has, and asks for exactly what is picked.
+    const pick = async (placeholder: string, value: string) => {
+      // The test id is on both of the range's fields; the placeholder tells them apart.
+      const field = page.getByTestId('calendar-window').and(page.getByPlaceholder(placeholder));
+      await field.click();
+      await field.fill(value);
+      await page.keyboard.press('Enter');
+      await expect(field).toHaveValue(value);
+    };
+    const asked = askedFor(page);
+    await pick('Start date', first);
+    await pick('End date', second);
+    expect(await windowAsked(asked)).toEqual([first, second]);
+
+    const lines = page.getByTestId('calendar-agenda-row').filter({ hasText: `${stamp}` });
+    await expect(lines).toHaveCount(2, { timeout: 30_000 });
+    await expect(lines.nth(0)).toContainText(training.title);
+    await expect(lines.nth(1)).toContainText(meeting.title);
+    // A line says what it is, of which kind, and when — the time only where the record has one.
+    await expect(lines.nth(0)).toContainText('Training');
+    await expect(lines.nth(0)).toContainText('· 18:30–21:00');
+    await expect(lines.nth(1)).toContainText('Club meeting');
+    await expect(lines.nth(1)).not.toContainText('·');
+
+    await opensEvent(page, lines.nth(0), training);
+  } finally {
+    await removeEvents(page, written);
+  }
 });

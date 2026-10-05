@@ -248,21 +248,40 @@ export default function LayerPanel({
     return { baseGroups: b.grouped, looseBases: b.loose, overlayGroups: o.grouped, looseOverlays: o.loose };
   }, [layers]);
 
-  /**
-   * Which base group starts open: the one holding the basemap currently drawn, and no other.
-   *
-   * Computed rather than remembered, so that a viewer who restores a saved view using a source
-   * from a collapsed group can see which source is active without opening groups one at a time —
-   * a checked radio inside a closed panel is a state with nothing on screen to explain it.
-   */
-  const openBaseGroups = useMemo(() => {
+  /** The group holding the basemap currently drawn, if the catalogue put it in one. */
+  const activeBaseGroup = useMemo(() => {
     for (const [name, entries] of baseGroups) {
       if (entries.some((l) => Number(l.id) === activeBaseId)) {
-        return [name];
+        return name;
       }
     }
-    return [];
+    return undefined;
   }, [baseGroups, activeBaseId]);
+
+  /**
+   * Which base groups are open. A group opens whenever the drawn basemap moves into it, so that a
+   * viewer who restores a saved view using a source from a collapsed group can see which source is
+   * active without opening groups one at a time — a checked radio inside a closed panel is a state
+   * with nothing on screen to explain it.
+   *
+   * Opened on the move, not derived on every render: the map page receives the catalogue before it
+   * picks the default basemap out of it, so an opening state read once at mount would keep every
+   * group shut; and a group somebody folded by hand stays folded while its source stays drawn,
+   * because folding is about room on screen and nothing else. Opening one group never closes
+   * another.
+   */
+  const [openBaseGroups, setOpenBaseGroups] = useState<string[]>(() =>
+    activeBaseGroup ? [activeBaseGroup] : [],
+  );
+  const [openedForGroup, setOpenedForGroup] = useState(activeBaseGroup);
+  if (activeBaseGroup !== openedForGroup) {
+    // Adjusted during render rather than in an effect, so the panel never paints the drawn
+    // basemap's group shut for a frame before opening it.
+    setOpenedForGroup(activeBaseGroup);
+    if (activeBaseGroup && !openBaseGroups.includes(activeBaseGroup)) {
+      setOpenBaseGroups([...openBaseGroups, activeBaseGroup]);
+    }
+  }
 
   const baseRow = (l: MapLayerInfo) => {
     const id = Number(l.id);
@@ -379,7 +398,10 @@ export default function LayerPanel({
             ghost
             size="small"
             className="layer-group-collapse"
-            defaultActiveKey={openBaseGroups}
+            activeKey={openBaseGroups}
+            onChange={(keys) =>
+              setOpenBaseGroups(Array.isArray(keys) ? keys.map(String) : [String(keys)])
+            }
             items={[...baseGroups].map(([name, entries]) => ({
               key: name,
               label: `${name} (${entries.length})`,

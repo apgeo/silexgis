@@ -6,7 +6,9 @@ import { centreOnDemoCave, deleteFeature, gotoRoute, login, overlayTreeNode } fr
 
 test('login, map workspace and cave registry work end to end', async ({ page }) => {
   await login(page);
-  await expect(page.getByRole('radio', { name: 'OpenStreetMap' })).toBeChecked();
+  // Exact: the drawn default's group is open, and it also holds "OpenStreetMap Humanitarian" and
+  // "OpenStreetMap France", so all three are on screen.
+  await expect(page.getByRole('radio', { name: 'OpenStreetMap', exact: true })).toBeChecked();
 
   // The composer tree lists the entrance overlay with its checkbox on.
   await expect(overlayTreeNode(page, 'Cave entrances').locator('.ant-tree-checkbox-checked')).toBeVisible();
@@ -96,8 +98,13 @@ test('cluster click lists its member entrances in the panel', async ({ page }) =
     await expect(page.getByText(/entrances in this area/)).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
 
-  // Picking a member selects the entrance and the cave card takes over.
-  await page.getByRole('button', { name: /entrance|Peșter/i }).first().click();
+  // Picking a member selects the entrance and the cave card takes over. Named exactly rather than
+  // taken as the first: the members are listed alphabetically, and at this zoom the cluster holds
+  // the other demo caves' entrances too ("Avenul Demo Vântului entrance" sorts first), so "the
+  // first entrance" is whichever cave happens to sort ahead — not the one this test centred on.
+  // "Main entrance" is the demo cave's own; a second entrance by that name in the cluster fails
+  // here as ambiguous instead of quietly selecting the wrong cave.
+  await page.getByRole('button', { name: 'Main entrance', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Peștera Demo Mare/ })).toBeVisible({ timeout: 15_000 });
 });
 
@@ -386,8 +393,20 @@ test('the cave page controls that ask for a file open a file chooser', async ({ 
   await page.getByText('Peștera Demo Mare').click();
   await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
 
+  // A survey model does not go straight to a file chooser: it comes with questions about where
+  // the survey sits, so "Upload model" opens a dialog first and the drop zone inside that dialog is
+  // what asks for the file. Both presses are the person's, so both are made here.
+  await page.getByRole('button', { name: 'Upload model' }).click();
+  const modelDialog = page.getByRole('dialog');
+  const modelDropZone = modelDialog.locator('.ant-upload-drag');
+  await expect(modelDropZone).toBeVisible({ timeout: 15_000 });
+  const modelChooser = page.waitForEvent('filechooser', { timeout: 10_000 });
+  await modelDropZone.click();
+  await modelChooser;
+  await modelDialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(modelDialog).toBeHidden();
+
   const triggers = [
-    page.getByRole('button', { name: 'Upload model' }),
     page.getByRole('button', { name: 'Upload centerline' }),
     page.locator('.ant-upload-drag').first(),
   ];
@@ -429,10 +448,16 @@ test('3D survey model: upload, embedded viewer and cross-window 3D panel', async
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
 
-  // Upload the committed Survex .3d fixture; the row appears with its format tag.
+  // Upload the committed Survex .3d fixture; the row appears with its format tag. "Upload model"
+  // opens a dialog whose drop zone asks for the file; a Survex .3d may carry its own placement,
+  // so the dialog's submit is enabled with no position answered.
+  await page.getByRole('button', { name: 'Upload model' }).click();
+  const uploadDialog = page.getByRole('dialog');
+  await expect(uploadDialog.locator('.ant-upload-drag')).toBeVisible({ timeout: 15_000 });
   const fileChooserPromise = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: /Upload model/ }).click();
+  await uploadDialog.locator('.ant-upload-drag').click();
   await (await fileChooserPromise).setFiles('e2e/fixtures/P8_Master.3d');
+  await uploadDialog.getByRole('button', { name: 'Upload model' }).click();
   await expect(page.getByText('Survex .3d')).toBeVisible({ timeout: 15_000 });
 
   // The embedded viewer parses the survey: the canvas mounts and the spinner clears
@@ -709,7 +734,11 @@ test('layer composer: entrance heatmap toggle and per-base opacity', async ({ pa
 
   // Each base row carries its own opacity slider; dimming the active base (OSM)
   // drops its handle below 100% — the base is not radio-only anymore.
-  const osmRow = page.locator('.base-layer-row').filter({ hasText: 'OpenStreetMap' });
+  // Found by its radio's exact name: the rows of the other OpenStreetMap sources contain that
+  // text too, and their sliders are just as much at 100%.
+  const osmRow = page
+    .locator('.base-layer-row')
+    .filter({ has: page.getByRole('radio', { name: 'OpenStreetMap', exact: true }) });
   const handle = osmRow.locator('.ant-slider-handle');
   await expect(handle).toHaveAttribute('aria-valuenow', '100');
   await handle.click();

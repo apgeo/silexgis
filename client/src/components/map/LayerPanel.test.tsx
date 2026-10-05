@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LayerGroup from 'ol/layer/Group';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
-import type { LibraryPhotoHealth, LibraryPhotoProvider } from '../../api/hooks.ts';
+import type { LibraryPhotoHealth, LibraryPhotoProvider, MapLayerInfo } from '../../api/hooks.ts';
 import type { LibraryPhotoLoadState, LibraryPhotoLoadStates } from '../../map/libraryPhotoLayer.ts';
 import LayerPanel from './LayerPanel.tsx';
 
@@ -84,18 +84,24 @@ const answered: LibraryPhotoLoadState = {
   reach: 'ok',
 };
 
-function renderPanel(
-  overrides: {
-    photoLibraries?: LibraryPhotoProvider[];
-    unconfiguredPhotoLibraries?: LibraryPhotoProvider[];
-    suspendedPhotoLibraries?: LibraryPhotoProvider[];
-    visibleLibraryPhotoSources?: string[];
-  } = {},
-) {
-  render(
+interface PanelOverrides {
+  layers?: MapLayerInfo[];
+  activeBaseId?: number;
+  photoLibraries?: LibraryPhotoProvider[];
+  unconfiguredPhotoLibraries?: LibraryPhotoProvider[];
+  suspendedPhotoLibraries?: LibraryPhotoProvider[];
+  visibleLibraryPhotoSources?: string[];
+}
+
+function renderPanel(overrides: PanelOverrides = {}) {
+  return render(panel(overrides));
+}
+
+function panel(overrides: PanelOverrides = {}) {
+  return (
     <LayerPanel
-      layers={[]}
-      activeBaseId={undefined}
+      layers={overrides.layers ?? []}
+      activeBaseId={overrides.activeBaseId}
       onBaseChange={vi.fn()}
       baseOpacity={{}}
       onBaseOpacityChange={vi.fn()}
@@ -128,7 +134,7 @@ function renderPanel(
       tripFilter={{}}
       onTripFilterChange={vi.fn()}
       unappliedTripFilters={0}
-    />,
+    />
   );
 }
 
@@ -358,5 +364,69 @@ describe('the photo-library block of the layer panel', () => {
     renderPanel({ unconfiguredPhotoLibraries: [] });
 
     expect(screen.queryByTestId('library-photos-absent-photoprism')).toBeNull();
+  });
+});
+
+describe('the basemap groups of the layer panel', () => {
+  // An invented catalogue: one source outside any group, and two groups of two.
+  const base = (id: number, name: string, groupName: string | null): MapLayerInfo => ({
+    id,
+    name,
+    layerKind: 'xyz',
+    urlTemplate: `https://tiles.example.invalid/${id}/{z}/{x}/{y}.png`,
+    options: null,
+    attribution: null,
+    groupName,
+    minZoom: 0,
+    maxZoom: 19,
+    isBase: true,
+    isDefault: id === 2,
+    sortOrder: id,
+  });
+  const catalogue = [
+    base(1, 'Loose Base', null),
+    base(2, 'Street Base', 'Everyday'),
+    base(3, 'Plain Base', 'Everyday'),
+    base(4, 'Photo Base', 'Imagery'),
+    base(5, 'Satellite Base', 'Imagery'),
+  ];
+
+  it('opens the group holding the drawn basemap even when the basemap is chosen after the catalogue arrives', () => {
+    // The order the map page really goes through: the catalogue lands with nothing chosen yet, and
+    // the default is picked out of it on the next render. A panel that only read its opening state
+    // once would keep every group shut and hide the checked source inside one.
+    const view = renderPanel({ layers: catalogue, activeBaseId: undefined });
+    expect(screen.queryByRole('radio', { name: 'Street Base' })).toBeNull();
+
+    view.rerender(panel({ layers: catalogue, activeBaseId: 2 }));
+
+    expect(screen.getByRole('radio', { name: 'Street Base' })).toBeChecked();
+    // Only that group: the others stay folded away, which is what the groups are for.
+    expect(screen.queryByRole('radio', { name: 'Photo Base' })).toBeNull();
+  });
+
+  it('opens the group of a basemap chosen later, without closing the one already open', () => {
+    // A restored view naming a source from a folded group has to show which source is drawn; and
+    // a group somebody opened stays open rather than snapping shut behind them.
+    const view = renderPanel({ layers: catalogue, activeBaseId: 2 });
+    expect(screen.getByRole('radio', { name: 'Street Base' })).toBeChecked();
+
+    view.rerender(panel({ layers: catalogue, activeBaseId: 5 }));
+
+    expect(screen.getByRole('radio', { name: 'Satellite Base' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Street Base' })).not.toBeChecked();
+  });
+
+  it('lets a group be folded by hand while its basemap stays drawn', () => {
+    renderPanel({ layers: catalogue, activeBaseId: 2 });
+    const header = screen.getByRole('button', { name: /Everyday \(2\)/ });
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(header);
+
+    // Folding is about room on screen: the group stays shut although its source is still drawn,
+    // because the panel opens a group when the drawn basemap moves into it and not on every render.
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('radio', { name: 'Street Base', hidden: true })).toBeChecked();
   });
 });

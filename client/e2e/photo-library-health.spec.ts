@@ -33,8 +33,26 @@ test(`the panel reports a library that is ${expected}`, async ({ page }) => {
   // Ask again rather than waiting out the server's own window.
   const recheck = status.getByRole('button', { name: /check|recheck|again/i });
   if (await recheck.isVisible().catch(() => false)) {
+    // Done when the panel has re-read the library's state after the library was asked again: the
+    // status read that follows the recheck's answer, not one that happened to be in flight before it.
+    let answered = false;
+    const reread = page.waitForResponse(
+      (response) =>
+        answered && new URL(response.url()).pathname === '/api/v1/photo-libraries/status',
+      { timeout: 30_000 },
+    );
+    const asked = page
+      .waitForResponse(
+        (response) =>
+          /^\/api\/v1\/photo-libraries\/[^/]+\/recheck$/.test(new URL(response.url()).pathname),
+        { timeout: 30_000 },
+      )
+      .then(() => {
+        answered = true;
+      });
     await recheck.click();
-    await page.waitForTimeout(4000);
+    await asked;
+    await reread;
   }
 
   const text = await status.innerText();

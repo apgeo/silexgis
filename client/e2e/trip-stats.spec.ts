@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { chooseOption, gotoRoute, login, narrowingFacetOption } from './helpers.ts';
 
 /**
  * What the trips add up to, reached from the list that narrowed them.
@@ -26,12 +26,19 @@ test('totals the narrowed listing, says whose totals they are, and moves its tit
   await login(page);
   await gotoRoute(page, '/trip-logs');
 
-  // Narrow the listing first, so the page is reached the way it is actually reached.
+  // Narrow the listing first, so the page is reached the way it is actually reached — by an option
+  // that leaves some of the trips and not all, so that the charts can be seen to carry it.
+  const countLine = page.getByTestId('trip-list-count');
+  const overall = Number((((await countLine.textContent()) ?? '').match(/\d+/g) ?? [])[1]);
   const stateFilter = page.getByTestId('trip-facet-states');
-  await stateFilter.click();
-  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').first().click();
+  const { label, count } = await narrowingFacetOption(page, stateFilter, overall);
+  await chooseOption(page, stateFilter, label);
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(/[?&]states=/);
+  // The address moves the moment the option is taken and the page follows it a moment later; the
+  // button below carries the narrowing the page is showing, so it is pressed once the page shows
+  // it, as somebody reading the count before moving on would.
+  await expect(countLine).toContainText(`Showing ${count} of ${overall}`, { timeout: 15_000 });
 
   await page.getByTestId('trip-list-insights').click();
 
@@ -41,15 +48,16 @@ test('totals the narrowed listing, says whose totals they are, and moves its tit
   // The one sentence this page owes its reader: the totals are theirs, not the club's.
   await expect(page.getByTestId('trip-stats-access')).toContainText('trips you may read');
 
+  // The population the charts are of is the one the listing showed, in the same two numbers.
   const filtered = await titleNumbers(page);
-  expect(filtered).toMatch(/trips you can read/);
+  expect(filtered).toContain(`the ${count} of ${overall} trips you can read that this filter leaves`);
 
   // The scope control, and the thing the original of this page got wrong: the population in the
   // title has to move with it. Compared against itself rather than against a seeded number.
   await page.getByTestId('trip-stats-scope').getByText('All trips').click();
   await expect(page).toHaveURL(/[?&]scope=all/);
   await expect.poll(async () => titleNumbers(page), { timeout: 15_000 }).not.toBe(filtered);
-  expect(await titleNumbers(page)).toMatch(/all \d+ trips you can read/);
+  expect(await titleNumbers(page)).toContain(`all ${overall} trips you can read`);
 
   // The filter is still in the address, so switching back is not a lost narrowing.
   await expect(page).toHaveURL(/[?&]states=/);
