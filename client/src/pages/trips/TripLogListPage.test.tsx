@@ -141,6 +141,17 @@ describe('the trip listing', () => {
     expect(screen.getByTestId('trip-list-count').textContent).toContain('12');
   });
 
+  it('claims no count before anything has answered', () => {
+    // "Showing 0 of 0" over a request still in flight tells the reader they may read no trips at
+    // all, and a script reading the line takes it at its word.
+    listSpy.mockReturnValue({ data: undefined, isFetching: true, isError: false });
+    facetSpy.mockReturnValue({ data: undefined });
+
+    show();
+
+    expect(screen.queryByTestId('trip-list-count')).toBeNull();
+  });
+
   it('offers every option with what it would leave, translated where the client has the words', () => {
     show();
 

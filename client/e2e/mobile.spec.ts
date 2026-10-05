@@ -16,13 +16,7 @@ async function armType(page: Page, typeName: string) {
   await page.getByRole('button', { name: typeName }).click();
 }
 
-// PARKED — order-dependent, not broken: this passes on its own (`-g "docks become drawers"`)
-// and fails when the phone suite runs in order, so something an earlier spec leaves behind —
-// map view state or seeded rows the other specs add and remove — moves the cluster off the
-// view centre. The setup itself is sound now: the zoom-out burst before the first click is
-// what its desktop twin needed, and that twin passes in-suite. What is left is isolating the
-// leftover state, which wants a per-spec reset rather than another timeout.
-test.fixme('docks become drawers, and the details drawer opens when something is picked', async ({ page }) => {
+test('docks become drawers, and the details drawer opens when something is picked', async ({ page }) => {
   await login(page);
 
   // Neither dock is mounted at this width — the map gets the whole canvas.
@@ -71,8 +65,11 @@ test.fixme('docks become drawers, and the details drawer opens when something is
   await expect(page.locator('.ant-drawer-right')).toBeVisible();
   await expect(page.locator('.map-workspace-panel')).toHaveCount(0);
 
-  // The cluster's members are reachable and select their entrance from in there.
-  await page.getByRole('button', { name: /entrance|Peșter/i }).first().click();
+  // The cluster's members are reachable and select their entrance from in there. Named exactly
+  // rather than taken as the first: at this zoom the cluster holds the other demo caves' entrances
+  // too, listed alphabetically, so "the first entrance" is whichever cave sorts ahead and not the
+  // one this test centred on. "Main entrance" is the demo cave's own.
+  await page.getByRole('button', { name: 'Main entrance', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Peștera Demo Mare/ })).toBeVisible({ timeout: 15_000 });
 });
 
@@ -95,6 +92,11 @@ test('desktop-only chrome steps aside and the save cluster outlives the tool str
   await expect(search).toBeVisible();
   const searchWidth = (await search.boundingBox())!.width;
   expect(searchWidth).toBeGreaterThan(200);
+  // ...but not the zoom buttons' corner: both still take a press rather than sitting under the
+  // search strip or the collapsed menu's tab. A trial press runs every check a real one does,
+  // including what the point it would land on belongs to, and changes nothing.
+  await page.locator('.ol-zoom-in').click({ trial: true });
+  await page.locator('.ol-zoom-out').click({ trial: true });
 
   // The edit bar splits in two: a strip that scrolls, and a save cluster that does not.
   const strip = page.getByTestId('edit-tool-strip');
