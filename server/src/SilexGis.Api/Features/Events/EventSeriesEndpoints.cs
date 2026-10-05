@@ -5,6 +5,8 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Events;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Events;
@@ -323,6 +325,12 @@ public static class EventSeriesEndpoints
                 && doomedIds.Contains(e.ScopeId.Value))
             .ToListAsync(ct);
         db.AccessEntries.RemoveRange(anchored);
+
+        // Each occurrence is an ordinary event to everything that was already there, so each
+        // one may carry files, tags and a place in a relation of its own; they go with it, per
+        // occurrence, exactly as they would had each been deleted on its own.
+        await PolymorphicRowCleanup.RemoveRowsPointingAtAsync(db, AttachedEntityType.Event, doomedIds, ct);
+
         db.Events.RemoveRange(doomed);
         await db.SaveChangesAsync(ct);
 

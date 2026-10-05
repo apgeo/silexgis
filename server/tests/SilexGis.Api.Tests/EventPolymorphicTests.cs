@@ -96,6 +96,61 @@ public sealed class EventPolymorphicTests : IAsyncLifetime, IDisposable, IClassF
             .ShouldBe(HttpStatusCode.NotFound);
     }
 
+    /// <summary>
+    /// The rows that point at an event have no foreign key to follow, so nothing removes them
+    /// unless the delete does. Asked of the rows themselves, because once the event is gone no
+    /// surface asks about it again and a row still pointing at it is invisible until the
+    /// integrity check finds it.
+    /// </summary>
+    [Fact]
+    public async Task Deleting_an_event_takes_the_rows_that_pointed_at_it()
+    {
+        var ev = await CreateEventAsync("Evening about to go");
+        var fileId = await UploadAsync("minutes.txt");
+        (await owner.PostAsJsonAsync("/api/v1/attachments/", AttachBody(fileId, ev))).StatusCode
+            .ShouldBe(HttpStatusCode.Created);
+        (await owner.PostAsJsonAsync("/api/v1/taggings/", TagBody($"gone-{Guid.NewGuid():N}"[..16], ev))).StatusCode
+            .ShouldBe(HttpStatusCode.Created);
+        (await RowsPointingAtAsync(ev)).ShouldBe((1, 1));
+
+        var deleted = await owner.DeleteAsync($"/api/v1/events/{ev}");
+        deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await deleted.Content.ReadAsStringAsync());
+
+        (await RowsPointingAtAsync(ev)).ShouldBe((0, 0));
+    }
+
+    /// <summary>
+    /// Each occurrence of a run is an ordinary event and may carry files and tags of its own, so
+    /// calling off the rest of the run takes each removed occurrence's rows — per occurrence,
+    /// exactly as deleting it alone would — and leaves the occurrence that stays with everything
+    /// it carried.
+    /// </summary>
+    [Fact]
+    public async Task Calling_off_the_rest_of_a_run_takes_the_rows_of_each_removed_occurrence_and_no_others()
+    {
+        var first = await CreateEventAsync("Course", new DateOnly(2054, 10, 5),
+            recurrence: new { frequency = "weekly", count = 3, until = (string?)null, rule = "Weekly" });
+        var occurrences = await OccurrencesAsync(first);
+        occurrences.Count.ShouldBe(3);
+        var fileId = await UploadAsync("handout.txt");
+        foreach (var occurrence in occurrences)
+        {
+            (await owner.PostAsJsonAsync("/api/v1/attachments/", AttachBody(fileId, occurrence))).StatusCode
+                .ShouldBe(HttpStatusCode.Created);
+            (await owner.PostAsJsonAsync("/api/v1/taggings/", TagBody($"run-{Guid.NewGuid():N}"[..16], occurrence)))
+                .StatusCode.ShouldBe(HttpStatusCode.Created);
+        }
+
+        var calledOff = await owner.DeleteAsync($"/api/v1/events/{occurrences[1]}/series/following");
+        var payload = await calledOff.Content.ReadAsStringAsync();
+        calledOff.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        JsonDocument.Parse(payload).RootElement.GetProperty("deleted").GetInt32().ShouldBe(2);
+
+        (await RowsPointingAtAsync(occurrences[0])).ShouldBe((1, 1));
+        (await RowsPointingAtAsync(occurrences[1])).ShouldBe((0, 0));
+        (await RowsPointingAtAsync(occurrences[2])).ShouldBe((0, 0));
+    }
+
     private static object AttachBody(Guid fileId, Guid eventId) =>
         new { fileId, entityType = "event", entityId = eventId, role = "other", sortOrder = 0 };
 

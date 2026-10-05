@@ -8,6 +8,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Events;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Events;
@@ -367,6 +368,11 @@ public static class EventEndpoints
                 && e.ScopeId == row.Id)
             .ToListAsync(ct);
         db.AccessEntries.RemoveRange(anchored);
+
+        // The files attached to the event, the tags on it and its place in any relation have
+        // no foreign key to follow, so nothing removes them unless this does — the same sweep a
+        // camp's delete makes, under the same rule.
+        await PolymorphicRowCleanup.RemoveRowsPointingAtAsync(db, AttachedEntityType.Event, [row.Id], ct);
 
         db.Events.Remove(row);
         await db.SaveChangesAsync(ct);
