@@ -139,8 +139,11 @@ test('a rectangle drawn on the map becomes the area a build may be started for',
   await login(page);
   await gotoRoute(page, '/admin/terrain');
 
-  // Reached by address here, but the menu entry is what an operator actually finds.
-  await expect(page.getByRole('menuitem', { name: 'Terrain' })).toBeVisible();
+  // Reached by address here, but the menu entry is what an operator actually finds. The rail
+  // starts collapsed and a collapsed rail shows no group's entries; expanding it opens the group
+  // of the page being shown, which is where the entry then is.
+  await page.locator('.ant-layout-sider-trigger').click();
+  await expect(page.getByRole('menuitem', { name: 'Terrain' })).toBeVisible({ timeout: 15_000 });
 
   const start = page.getByRole('button', { name: 'Start build' });
   await expect(page.getByTestId('terrain-builds')).toBeVisible();
