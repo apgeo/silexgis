@@ -122,7 +122,7 @@ export default function EventResponsesTab({
         type="warning"
         showIcon
         data-testid="event-invitations-unavailable"
-        message={t('events.responses.unavailable')}
+        title={t('events.responses.unavailable')}
       />
     );
   }

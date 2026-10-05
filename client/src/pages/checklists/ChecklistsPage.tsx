@@ -63,11 +63,16 @@ export default function ChecklistsPage() {
   const remove = useDeleteChecklist();
   const [editing, setEditing] = useState<ChecklistInfo | null>(null);
   const [open, setOpen] = useState(false);
+  const [initial, setInitial] = useState<FormValues | undefined>(undefined);
   const [form] = Form.useForm<FormValues>();
 
   const openFor = (list: ChecklistInfo | null) => {
     setEditing(list);
-    form.setFieldsValue({
+    // Handed to the form as it mounts rather than written into it here. The dialog's body is
+    // destroyed while it is shut, so at this moment the form instance is attached to no form, and
+    // writing into it then made the form library report an error in the console on every opening.
+    // The dialog mounts a fresh form each time it opens, so these are what that form starts from.
+    setInitial({
       title: list?.title ?? '',
       description: list?.description ?? undefined,
       visibility: list?.visibility ?? 'private',
@@ -168,7 +173,12 @@ export default function ChecklistsPage() {
         confirmLoading={create.isPending || update.isPending}
         destroyOnHidden
       >
-        <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={initial}
+          onFinish={(values) => void submit(values)}
+        >
           <Form.Item
             name="title"
             label={t('checklists.fieldTitle')}

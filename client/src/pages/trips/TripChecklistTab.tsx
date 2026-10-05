@@ -77,7 +77,7 @@ export default function TripChecklistTab({
       </Flex>
 
       {/* Said in words, because a bar that fills up reads like a gate whatever the code does. */}
-      <Alert type="info" showIcon message={t('trips.checklistAdvisory')} />
+      <Alert type="info" showIcon title={t('trips.checklistAdvisory')} />
 
       <List
         dataSource={data.items}
