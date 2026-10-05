@@ -10,6 +10,7 @@ using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Trips;
@@ -933,6 +934,7 @@ public static class TripLogEndpoints
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         TripLogWriteService writes,
+        StoredContentRemover content,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -956,8 +958,11 @@ public static class TripLogEndpoints
 
         // What goes with a trip is stated in one place, because the undo that takes a whole
         // imported spreadsheet back has to remove a trip the same way this route does.
-        await writes.DeleteAsync(trip, ct);
+        var removed = await writes.DeleteAsync(trip, ct);
         await db.SaveChangesAsync(ct);
+
+        // The generated write-up's bytes, after the rows that pointed at them are gone.
+        await content.DropAsync(removed);
         return TypedResults.NoContent();
     }
 

@@ -31,9 +31,7 @@ namespace SilexGis.Infrastructure.Jobs;
 /// </summary>
 public sealed class DocumentPurgeHandler(
     SilexGisDbContext db,
-    IFileStore fileStore,
-    ThumbnailService thumbnails,
-    PageRenderService pages,
+    StoredContentRemover content,
     IOptions<DocumentRetentionOptions> options,
     ILogger<DocumentPurgeHandler> logger) : IProcessingJobHandler
 {
@@ -103,21 +101,8 @@ public sealed class DocumentPurgeHandler(
             await transaction.CommitAsync(ct);
         }
 
-        // Only now, and best effort. The rows are gone, so nothing can reach these bytes; a
-        // blob that will not delete is litter rather than a fault.
-        foreach (var file in files)
-        {
-            try
-            {
-                await fileStore.DeleteAsync(file.StoragePath, CancellationToken.None);
-                thumbnails.Purge(file.Id);
-                pages.Purge(file.Id);
-            }
-            catch (IOException e)
-            {
-                logger.LogWarning(e, "Could not delete the content of purged file {FileId}", file.Id);
-            }
-        }
+        // Only now, and best effort: the rows are gone, so nothing can reach these bytes.
+        await content.DropAsync(files);
     }
 }
 

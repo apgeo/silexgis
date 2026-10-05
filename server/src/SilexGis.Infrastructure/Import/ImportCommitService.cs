@@ -8,6 +8,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Import;
 using SilexGis.Domain;
 using SilexGis.Infrastructure.Features;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Import;
@@ -72,6 +73,7 @@ public sealed class ImportCommitService(
     ImportCandidateService candidates,
     IAccessService access,
     Trips.TripLogWriteService tripWrites,
+    StoredContentRemover content,
     IOptions<ImportLimitOptions> limits)
 {
     /// <summary>Entrance type a cave built around an imported waypoint gets when no rule said otherwise.</summary>
@@ -342,6 +344,7 @@ public sealed class ImportCommitService(
             .ToListAsync(ct);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var removedFiles = new List<StoredFile>();
 
         // Positions first, and they are removed rather than stamped: a report of something that
         // never happened is taken off the log, which is what the tracking surface itself does with
@@ -362,7 +365,7 @@ public sealed class ImportCommitService(
             var trips = await db.TripLogs.Where(t => tripIds.Contains(t.Id)).ToListAsync(ct);
             foreach (var trip in trips)
             {
-                await tripWrites.DeleteAsync(trip, ct);
+                removedFiles.AddRange(await tripWrites.DeleteAsync(trip, ct));
             }
 
             // The removals are polymorphic rows deleted by statement and a tracked delete of the
@@ -397,6 +400,10 @@ public sealed class ImportCommitService(
 
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+
+        // The generated write-ups of the trips that went: their bytes, once the rows that pointed
+        // at them are committed gone.
+        await content.DropAsync(removedFiles);
     }
 
     // ---------- one candidate ----------

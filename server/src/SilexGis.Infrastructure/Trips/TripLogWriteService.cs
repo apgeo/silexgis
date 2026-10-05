@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Trips;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -34,7 +35,8 @@ public sealed class TripLogWriteService(
     SilexGisDbContext db,
     FeatureProtection protection,
     TripSectionWriter sections,
-    ITripRosterAnnouncer announcer)
+    ITripRosterAnnouncer announcer,
+    DocumentWriteService documents)
 {
     /// <summary>
     /// The role a bare list of caves is written under. The list says the trip is about those
@@ -164,8 +166,34 @@ public sealed class TripLogWriteService(
     /// access rules and dangling links behind, and the only symptom would be an integrity report
     /// months later.
     /// </remarks>
-    public async Task DeleteAsync(TripLog trip, CancellationToken ct = default)
+    /// <returns>
+    /// The files whose rows went with the trip, so the caller can drop their bytes once the save
+    /// that removed the rows has landed. Nothing here touches the store: bytes go after rows.
+    /// </returns>
+    public async Task<IReadOnlyList<StoredFile>> DeleteAsync(TripLog trip, CancellationToken ct = default)
     {
+        // What the trip's report slot holds decides what goes with the trip. The write-up the
+        // application generated is a derivative of the trip — built from it, byte-identical for an
+        // unchanged trip, named after it, and regenerable from nothing else — and means nothing
+        // once the trip is gone, so its document, its version and its stored file go with it. A
+        // photograph, and a report a club wrote and uploaded by hand into the same slot, are
+        // library media that may be filed elsewhere and outlive the trip that first held them:
+        // only their attachment rows go, below, and the documents stay. A generated write-up that
+        // something else has since taken hold of — attached to another entity, filed in a cabinet
+        // — has become library material by that act and is kept the same way. Found before the
+        // attachment rows go, because they are what names it.
+        var generatedPrefix = TripReportNaming.GeneratedPrefix(trip.Id);
+        var generatedReportFileIds = await (
+            from attachment in db.Attachments.AsNoTracking()
+            join file in db.StoredFiles.AsNoTracking() on attachment.FileId equals file.Id
+            where attachment.EntityType == AttachedEntityType.TripLog
+                && attachment.EntityId == trip.Id
+                && attachment.Role == AttachmentRole.Report
+                && file.OriginalName.StartsWith(generatedPrefix)
+            select file.Id)
+            .Distinct()
+            .ToListAsync(ct);
+
         // Participant rows cascade; polymorphic rows are cleaned here.
         //
         // The trip's place in a camp goes with it, and the camp is otherwise untouched: a camp
@@ -194,6 +222,21 @@ public sealed class TripLogWriteService(
         await db.Taggings
             .Where(x => x.EntityType == AttachedEntityType.TripLog && x.EntityId == trip.Id)
             .ExecuteDeleteAsync(ct);
+
+        var removedFiles = new List<StoredFile>();
+        foreach (var fileId in generatedReportFileIds)
+        {
+            if (await HeldElsewhereAsync(fileId, ct))
+            {
+                continue;
+            }
+
+            // A tag on the file carries no foreign key and would be left pointing at nothing.
+            await db.Taggings
+                .Where(t => t.EntityType == AttachedEntityType.StoredFile && t.EntityId == fileId)
+                .ExecuteDeleteAsync(ct);
+            removedFiles.AddRange(await documents.DeleteDocumentOfFileAsync(fileId, ct));
+        }
         // The trip's memberships go, and so do the links that cannot mean anything without it.
         //
         // A link typed with one of the trip roles goes whole, however many features it still
@@ -251,6 +294,27 @@ public sealed class TripLogWriteService(
                 || (linkIds.Contains(l.Id) && db.ResLinkMembers.Count(m => m.ResLinkId == l.Id) < 2))
             .ExecuteDeleteAsync(ct);
         db.TripLogs.Remove(trip);
+        return removedFiles;
+    }
+
+    /// <summary>
+    /// Whether a generated write-up has been taken hold of by something other than the trip it
+    /// was written for: attached to another entity, or filed in a cabinet. Asked once the trip's
+    /// own attachment rows are gone, so any attachment left is somebody else's.
+    /// </summary>
+    private async Task<bool> HeldElsewhereAsync(Guid fileId, CancellationToken ct)
+    {
+        if (await db.Attachments.AsNoTracking().AnyAsync(a => a.FileId == fileId, ct))
+        {
+            return true;
+        }
+
+        var documentId = await db.StoredFiles.AsNoTracking()
+            .Where(f => f.Id == fileId)
+            .Join(db.DocumentVersions.AsNoTracking(), f => f.DocumentVersionId, v => v.Id, (f, v) => v.DocumentId)
+            .FirstOrDefaultAsync(ct);
+        return documentId != Guid.Empty
+            && await db.CabinetDocuments.AsNoTracking().AnyAsync(c => c.DocumentId == documentId, ct);
     }
 
     /// <summary>

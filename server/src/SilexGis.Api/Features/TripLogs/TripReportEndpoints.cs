@@ -182,7 +182,7 @@ internal static class TripReportEndpoints
         // slot, and it is reachable through the trip and nowhere else — taking it off the trip
         // would leave nobody but whoever uploaded it able to find it again, silently, because
         // somebody else generated a write-up.
-        var prefix = GeneratedNamePrefix(id);
+        var prefix = TripReportNaming.GeneratedPrefix(id);
         var superseded = await db.Attachments
             .Where(a => a.EntityType == AttachedEntityType.TripLog
                 && a.EntityId == id
@@ -301,7 +301,7 @@ internal static class TripReportEndpoints
             SectionTitles(tripType),
             await PlatesAsync(id, db, reading, thumbnails, ct));
 
-        var fileName = $"{GeneratedNamePrefix(id)}{DateTime.UtcNow:yyyyMMdd}.{writer.Extension}";
+        var fileName = $"{TripReportNaming.GeneratedPrefix(id)}{DateTime.UtcNow:yyyyMMdd}.{writer.Extension}";
         return new BuiltReport(writer.Write(TripReportDocument.Blocks(content, parts)), fileName, null);
     }
 
@@ -313,7 +313,6 @@ internal static class TripReportEndpoints
     /// a new one takes its place. Written down here rather than inferred, so the two can never
     /// come to mean different things.
     /// </remarks>
-    private static string GeneratedNamePrefix(Guid tripId) => $"trip-report-{tripId.ToString("N")[..8]}-";
 
     /// <summary>
     /// The pictures, obtained the way the gallery obtains them.
