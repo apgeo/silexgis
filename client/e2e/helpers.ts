@@ -38,7 +38,14 @@ export async function login(page: Page, email = adminEmail, password = adminPass
  */
 export async function gotoRoute(page: Page, path: string) {
   await page.goto(path);
-  await page.waitForURL((url) => url.pathname === path, { timeout: 60_000 });
+  // The address alone cannot say the round trip is over: the page first loads AT the route, finds
+  // no session and only then leaves for the authorization server, so a wait on the address can be
+  // satisfied before the trip has even begun. The application's frame can say it — it is drawn
+  // only for a signed-in session, on every route this is used for.
+  await expect(page.getByTestId('app-sider')).toBeAttached({ timeout: 60_000 });
+  // A query string is part of what was asked for, not of the route arrived at.
+  const pathname = new URL(path, 'http://route.invalid').pathname;
+  await page.waitForURL((url) => url.pathname === pathname, { timeout: 60_000 });
 }
 
 /** A named overlay row in the layer composer tree (left dock). */
@@ -105,7 +112,8 @@ export async function longPressMap(page: Page, x: number, y: number) {
   const box = (await viewport.boundingBox())!;
   const at = { pointerType: 'touch', isPrimary: true, clientX: box.x + x, clientY: box.y + y };
   await viewport.dispatchEvent('pointerdown', at);
-  await page.waitForTimeout(700); // comfortably past the 550ms the app waits
+  // Held until the app's own timer has opened the menu, which is what makes the press a long one.
+  await expect(page.getByRole('menuitem', { name: 'Copy coordinates' })).toBeVisible();
   await viewport.dispatchEvent('pointerup', at);
 }
 
@@ -189,9 +197,34 @@ function finger(x: number, y: number) {
  * scene and then tapping a button: released at speed, six taps in ten were lost; rested first,
  * none of ten were. Waiting after the release does not help — a fling is not a timer, it is
  * cancelled by the tap. Resting first is also simply what a finger does.
+ *
+ * The rest is written into the times the events carry, not waited out. The browser reads a
+ * gesture's speed off those times rather than off when the events happened to arrive, so a rest
+ * stated there is the same rest to it, and it is the same length on a loaded machine as on an idle
+ * one.
  */
 const GESTURE_REST_MILLISECONDS = 60;
 const GESTURE_REST_SAMPLES = 2;
+/** The time between two moves of a stepped gesture: how often a 60 Hz touch screen reports. */
+const GESTURE_STEP_MILLISECONDS = 16;
+
+/**
+ * The times one gesture's events carry, in the seconds the browser's input protocol takes.
+ *
+ * Laid out in the past and ending now. A time ahead of the clock would put whatever the test does
+ * next — the tap that follows a drag, above all — before the end of this gesture, and the browser
+ * would read the two out of order.
+ */
+function gestureClock(steps: number) {
+  let at =
+    Date.now() -
+    steps * GESTURE_STEP_MILLISECONDS -
+    (GESTURE_REST_SAMPLES + 1) * GESTURE_REST_MILLISECONDS;
+  return (after: number) => {
+    at += after;
+    return at / 1000;
+  };
+}
 
 /**
  * Drags one finger across the scene, stepped, from one point to another.
@@ -206,11 +239,13 @@ export async function dragScene3dWithFinger(
   steps = 10,
 ) {
   const box = (await scene3dSurface(page).boundingBox())!;
+  const clock = gestureClock(steps);
   const cdp = await page.context().newCDPSession(page);
   try {
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
       touchPoints: [finger(box.x + from.x, box.y + from.y)],
+      timestamp: clock(0),
     });
     for (let step = 1; step <= steps; step += 1) {
       const fraction = step / steps;
@@ -222,9 +257,10 @@ export async function dragScene3dWithFinger(
             box.y + from.y + (to.y - from.y) * fraction,
           ),
         ],
+        timestamp: clock(GESTURE_STEP_MILLISECONDS),
       });
     }
-    await restAndLift(page, cdp, () => [finger(box.x + to.x, box.y + to.y)]);
+    await restAndLift(cdp, clock, () => [finger(box.x + to.x, box.y + to.y)]);
   } finally {
     await cdp.detach();
   }
@@ -237,16 +273,22 @@ export async function dragScene3dWithFinger(
  * `GESTURE_REST_MILLISECONDS`.
  */
 async function restAndLift(
-  page: Page,
   cdp: CDPSession,
+  clock: (after: number) => number,
   at: () => ReturnType<typeof finger>[],
 ): Promise<void> {
   for (let sample = 0; sample < GESTURE_REST_SAMPLES; sample += 1) {
-    await page.waitForTimeout(GESTURE_REST_MILLISECONDS);
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at() });
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: at(),
+      timestamp: clock(GESTURE_REST_MILLISECONDS),
+    });
   }
-  await page.waitForTimeout(GESTURE_REST_MILLISECONDS);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+    timestamp: clock(GESTURE_REST_MILLISECONDS),
+  });
 }
 
 /**
@@ -262,16 +304,22 @@ export async function pinchScene3d(page: Page, from: number, to: number, steps =
     finger(middle.x - gap / 2, middle.y),
     finger(middle.x + gap / 2, middle.y),
   ];
+  const clock = gestureClock(steps);
   const cdp = await page.context().newCDPSession(page);
   try {
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pair(from) });
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: pair(from),
+      timestamp: clock(0),
+    });
     for (let step = 1; step <= steps; step += 1) {
       await cdp.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
         touchPoints: pair(from + ((to - from) * step) / steps),
+        timestamp: clock(GESTURE_STEP_MILLISECONDS),
       });
     }
-    await restAndLift(page, cdp, () => pair(to));
+    await restAndLift(cdp, clock, () => pair(to));
   } finally {
     await cdp.detach();
   }
@@ -439,4 +487,67 @@ export async function entranceToPick(page: Page) {
     lat: feature.geometry.coordinates[1],
     name: feature.properties.name as string,
   };
+}
+
+/**
+ * Chooses an option of a select by walking the keyboard highlight to it and taking it with Enter.
+ *
+ * The option lists commit on mousedown, so a click that straddles a re-render selects nothing and
+ * the control quietly keeps what it had — and the failure then surfaces much later, as whatever
+ * the choice was meant to cause not happening. The open list is waited for before any key is
+ * pressed, because a key pressed into a list that has not opened moves a highlight over nothing.
+ * Walked to rather than counted to: which row an option sits on is a fact about the vocabulary,
+ * and a fixed number of presses would choose its neighbour the day the vocabulary grows. The
+ * choice is read back off the control, so a lost one fails here, at its cause.
+ */
+export async function chooseOption(
+  page: Page,
+  select: ReturnType<Page['locator']>,
+  label: string,
+) {
+  await select.click();
+  // The whole label and nothing else: "Coming" must not also find "Not coming".
+  const literal = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const option = page
+    .locator('.ant-select-dropdown:visible .ant-select-item-option')
+    .filter({ hasText: new RegExp(`^${literal}$`) });
+  await expect(option).toBeVisible({ timeout: 15_000 });
+  for (let step = 0; step < 30; step++) {
+    if (await option.evaluate((el) => el.classList.contains('ant-select-item-option-active'))) {
+      break;
+    }
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(option).toHaveClass(/ant-select-item-option-active/);
+  await page.keyboard.press('Enter');
+  await expect(select).toContainText(label);
+}
+
+/**
+ * An option of a trip-listing facet that leaves some of the trips and not all of them, as the label
+ * it is offered under and the count that label promises.
+ *
+ * Not simply the first option: on an archive where every trip shares a value, choosing it leaves
+ * everything, and the listing then agrees with the promised count whether the filter was applied or
+ * ignored — a check that passes either way. Read off the open list and closed again, so that the
+ * choice itself can go through `chooseOption` and be read back off the control.
+ */
+export async function narrowingFacetOption(
+  page: Page,
+  facet: ReturnType<Page['locator']>,
+  overall: number,
+): Promise<{ label: string; count: number }> {
+  await facet.click();
+  const options = page.locator('.ant-select-dropdown:visible .ant-select-item-option');
+  await expect(options.first()).toBeVisible({ timeout: 15_000 });
+  const labels = (await options.allTextContents()).map((label) => label.trim());
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0);
+  for (const label of labels) {
+    const count = Number((label.match(/\((\d+)\)$/) ?? [])[1]);
+    if (count > 0 && count < overall) {
+      return { label, count };
+    }
+  }
+  throw new Error(`No option of this facet leaves some but not all of the ${overall} trips: ${labels.join(', ')}`);
 }

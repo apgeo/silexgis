@@ -1194,7 +1194,13 @@ export default function MapPage() {
       )}
       {!isMobile && <Separator className="map-workspace-handle" />}
       <Panel minSize="30%">
-        <div className={`map-canvas-wrap${mapChromeHidden ? ' map-chrome-hidden' : ''}`}>
+        <div
+          className={[
+            'map-canvas-wrap',
+            mapChromeHidden ? 'map-chrome-hidden' : '',
+            isMobile ? 'map-canvas-wrap-mobile' : '',
+          ].filter(Boolean).join(' ')}
+        >
           <div ref={mapTarget} className="map-canvas" data-testid="map-canvas" />
           {/* Search is the primary action on a phone: it gets the width the pop-out
               buttons no longer need. The selector sits beside it — search asks what mentions

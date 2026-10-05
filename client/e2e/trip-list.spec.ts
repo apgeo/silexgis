@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { chooseOption, gotoRoute, login, narrowingFacetOption } from './helpers.ts';
 
 /**
  * The trip listing as somebody actually uses it: narrow it, read what the narrowing did, look at
@@ -13,7 +13,10 @@ import { gotoRoute, login } from './helpers.ts';
  * demo instance happens to hold, and a count hard-coded here would be a test about the seed.
  */
 
-/** The "Showing N of M" line above the table, as the two numbers it holds. */
+/**
+ * The "Showing N of M" line above the table, as the two numbers it holds. The line is drawn only
+ * once there is an answer to count, so reading it waits for the listing's first one.
+ */
 async function showing(page: import('@playwright/test').Page): Promise<[number, number]> {
   const text = (await page.getByTestId('trip-list-count').textContent()) ?? '';
   const numbers = text.match(/\d+/g) ?? [];
@@ -32,14 +35,11 @@ test('narrows the listing, says what the narrowing did, groups what is left and 
   const [matchingAtFirst, overall] = await showing(page);
   expect(matchingAtFirst).toBe(overall);
 
-  // A facet value, chosen from the control that says how many trips each option would leave.
+  // A facet value, chosen from the control that says how many trips each option would leave. The
+  // count travels in the option's own label, which is the number this narrowing must produce.
   const stateFilter = page.getByTestId('trip-facet-states');
-  await stateFilter.click();
-  const firstOption = page.locator('.ant-select-dropdown:visible .ant-select-item-option').first();
-  const chosen = ((await firstOption.textContent()) ?? '').trim();
-  // The count travels in the option's own label, which is the number this narrowing must produce.
-  const promised = Number((chosen.match(/\((\d+)\)\s*$/) ?? [])[1]);
-  await firstOption.click();
+  const { label, count: promised } = await narrowingFacetOption(page, stateFilter, overall);
+  await chooseOption(page, stateFilter, label);
   await page.keyboard.press('Escape');
 
   // The filter is in the address, so this listing is a link somebody can send.
@@ -60,21 +60,23 @@ test('narrows the listing, says what the narrowing did, groups what is left and 
     .toBe(matchingAtFirst);
   await page.goForward();
 
-  // The shape above the table: sliced by year, each slice carrying its own count.
-  await page.getByTestId('trip-grouping-primary').click();
-  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: 'Year' }).first().click();
+  // The shape above the table: sliced by year, each slice carrying its own count. A trip has one
+  // year, so the slices share the narrowed listing out between them with nothing left over and
+  // nothing counted twice — and the panel does not warn of an overlap there is not.
+  const groupingPanel = page.getByTestId('trip-grouping-panel');
+  await chooseOption(page, page.getByTestId('trip-grouping-primary'), 'Year');
   await expect(page).toHaveURL(/[?&]groupBy=year/);
-  await expect(page.getByTestId('trip-grouping-panel')).toBeVisible();
+  const sliceCounts = groupingPanel.locator('.ant-table-tbody .ant-table-row td:nth-child(2)');
+  await expect(sliceCounts.first()).toBeVisible({ timeout: 15_000 });
+  const yearTotal = (await sliceCounts.allTextContents()).reduce((sum, cell) => sum + Number(cell), 0);
+  expect(yearTotal).toBe(promised);
+  await expect(page.getByTestId('trip-grouping-overlap')).toHaveCount(0);
 
   // Sliced by person instead, the totals legitimately exceed the trip count — a trip counts into
   // every person it holds — and the panel says so rather than leaving a reader to notice.
-  await page.getByTestId('trip-grouping-primary').click();
-  await page
-    .locator('.ant-select-dropdown:visible .ant-select-item-option')
-    .filter({ hasText: 'Person' })
-    .first()
-    .click();
+  await chooseOption(page, page.getByTestId('trip-grouping-primary'), 'Person');
   await expect(page).toHaveURL(/[?&]groupBy=participant/);
+  await expect(page.getByTestId('trip-grouping-overlap')).toBeVisible({ timeout: 15_000 });
 
   // The file is the filter and not the page, so the narrowing travels with the request.
   const exported = page.waitForResponse(
