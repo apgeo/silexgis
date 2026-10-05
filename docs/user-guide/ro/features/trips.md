@@ -184,6 +184,17 @@ Aceeași fișă, pentru ce stabilește o echipă înainte de plecare: ora și pu
 descris, șoferii, locurile, punctele de plecare, echipamentul și echiparea, dacă este necesară și
 obținută o autorizație, prognoza, linkul grupului de discuție și persoana de contact.
 
+### Deschiderea unui plan
+
+O tură care nu a avut loc încă se deschide cu **Planifică o tură** — din meniul de lângă *Jurnal
+de tură nou* pe lista de ture, sau cu butonul de pe *Turele mele*. Este același formular, cu o
+singură diferență: cine citește tura când nu spuneți nimic despre asta. Un jurnal este privat până
+îl lărgiți. Un plan este vizibil **grupului dvs. de speologie** când sunteți într-unul singur, iar
+formularul o spune lângă controlul de vizibilitate, numind grupul, înainte ca tura să existe. Dacă
+nu sunteți în niciun grup, sau sunteți în mai multe, nu se ghicește nimic: planul începe privat,
+formularul spune de ce, și îl lărgiți acolo dacă trebuie citit. O vizibilitate pe care o alegeți
+dvs. este păstrată așa cum ați ales-o.
+
 ### Punctul de întâlnire pe hartă
 
 Un punct, sau drumul de acces, desenat pe același fel de hartă ca schița turei.

@@ -184,6 +184,16 @@ The same card, for what a party settles before it sets off: meeting time and des
 meeting point, drivers, seats, departure points, equipment and rigging, whether a permit is
 required and obtained, the forecast, the group chat link, and the callout contact.
 
+### Opening a plan
+
+A trip that has not happened yet is opened with **Plan a trip** — in the menu beside *New trip
+log* on the trip list, or as the button on *My trips*. It is the same form, with one difference:
+who reads the trip when you say nothing about it. A report is private unless you widen it. A plan
+is shared with **your caving group** when you are in exactly one, and the form says so beside the
+visibility control, naming the group, before the trip exists. If you are in no group, or in
+several, nothing is guessed: the plan starts private, the form says why, and you widen it there if
+it should be read. A visibility you choose yourself is kept as chosen.
+
 ### The meeting point on the map
 
 A point, or the walk in to it, drawn on the same kind of map as the trip's sketch.
