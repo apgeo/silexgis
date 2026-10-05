@@ -66,6 +66,21 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
 
     public DateOnly? SurveyedAt { get; set; }
 
+    /// <summary>
+    /// Whether this is the model its cave is represented by, among the cave's models of the same
+    /// kind (<see cref="Surveys.SurveyModelKinds"/>): the line plot the map and the statistics read,
+    /// or the wall mesh the 3D scene draws. At most one per cave and kind, which the database
+    /// enforces.
+    ///
+    /// <para>
+    /// The newest upload of a kind takes the mark, because a person re-uploading a corrected export
+    /// means for it to replace the old one; an older model can be given the mark back by hand. The
+    /// readers that need one model per cave fall back to the newest finished one when no row of the
+    /// kind carries the mark, so a cave is never left unrepresented by the flag's absence.
+    /// </para>
+    /// </summary>
+    public bool IsCurrent { get; set; }
+
     public SurveyModelStatus Status { get; set; } = SurveyModelStatus.Ready;
 
     /// <summary>Why conversion failed, in words worth showing whoever uploaded the file.</summary>

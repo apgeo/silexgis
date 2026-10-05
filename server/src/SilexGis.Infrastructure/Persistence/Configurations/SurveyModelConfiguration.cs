@@ -28,5 +28,20 @@ public sealed class SurveyModelConfiguration : IEntityTypeConfiguration<SurveyMo
             .HasForeignKey(x => x.ConvertedFileId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => x.CaveFeatureId);
+
+        // At most one current model per cave and kind. Two partial indexes rather than one over a
+        // kind column, because the kind is a function of the format and a second column saying the
+        // same thing could disagree with the first. PostgreSQL checks these per statement, so the
+        // code that moves the mark demotes in one statement and promotes in the next.
+        // Named at declaration, because an index over the same column declared without a name is
+        // the plain index above, and a second unnamed declaration edits it rather than adding one.
+        builder.HasIndex(x => x.CaveFeatureId, "ix_survey_models_current_line_plot")
+            .HasDatabaseName("ix_survey_models_current_line_plot")
+            .HasFilter($"is_current AND format <> {(short)SurveyModelFormat.Stl}")
+            .IsUnique();
+        builder.HasIndex(x => x.CaveFeatureId, "ix_survey_models_current_wall_mesh")
+            .HasDatabaseName("ix_survey_models_current_wall_mesh")
+            .HasFilter($"is_current AND format = {(short)SurveyModelFormat.Stl}")
+            .IsUnique();
     }
 }

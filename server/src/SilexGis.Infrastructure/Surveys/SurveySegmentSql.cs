@@ -50,20 +50,31 @@ public static class SurveySegmentSql
     private const SurveyShotFlags NotPassage = SurveyShotFlags.Splay | SurveyShotFlags.Surface;
 
     /// <summary>
-    /// The sub-select naming the one survey model that answers for a cave: the model the cave's
-    /// current shape was read out of, and failing that the most recently uploaded model whose
-    /// reading finished. It selects a single column, <c>model_id</c>.
+    /// The sub-select naming the one survey model that answers for a cave: the line plot marked
+    /// as the cave's current one, failing that the model the cave's current shape was read out of,
+    /// and failing that the most recently uploaded model whose reading finished. It selects a
+    /// single column, <c>model_id</c>.
     /// </summary>
     /// <remarks>
     /// Exactly one model answers, and this is the only place that says which. Anything reading a
     /// figure derived from a survey — its legs, its wall distances, the shape of its network —
     /// resolves it through here rather than picking a model itself, because two figures about one
-    /// cave describe the same passage only if they were measured over the same file.
+    /// cave describe the same passage only if they were measured over the same file. The mark
+    /// comes first because it is the one answer somebody gave on purpose; a marked model whose
+    /// reading has not finished, or failed, is passed over rather than answering with nothing, so
+    /// a cave keeps its figures while a corrected upload is still being read.
     /// </remarks>
     /// <param name="caveParameter">The SQL parameter holding the cave feature's id, including its
     /// leading marker.</param>
     public static string ChosenModel(string caveParameter) => $"""
         SELECT COALESCE(
+            (SELECT m.id
+             FROM survey_models m
+             WHERE m.cave_feature_id = {caveParameter}
+               AND m.is_current
+               AND m.status = {(short)SurveyModelStatus.Ready}
+               AND m.format IN ({(short)SurveyModelFormat.Lox}, {(short)SurveyModelFormat.Survex3d})
+             LIMIT 1),
             (SELECT c.survey_model_id
              FROM centerlines c
              WHERE c.cave_feature_id = {caveParameter}

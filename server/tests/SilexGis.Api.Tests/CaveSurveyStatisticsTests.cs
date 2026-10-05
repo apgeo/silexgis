@@ -732,6 +732,32 @@ public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable, ICl
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
 
+    /// <summary>
+    /// The model marked as the cave's current one is the one the figures are measured over, ahead
+    /// of the newest upload — and a marked model whose reading has not finished is passed over
+    /// rather than answering with nothing.
+    /// </summary>
+    [Fact]
+    public async Task The_figures_are_measured_over_the_model_marked_current_and_a_mark_still_being_read_is_passed_over()
+    {
+        var caveId = await CreateCaveAsync();
+        var older = await UploadLocalLoxAsync(caveId, SplayedSurveyFile());
+        await RunQueuedGraphJobAsync(older);
+
+        // The newest upload takes the mark, and until it is read the figures still come from the
+        // survey that has been.
+        var newer = await UploadLocalLoxAsync(caveId, SplayedSurveyFile());
+        (await StatisticsAsync(owner, caveId)).GetProperty("surveyModelId").GetGuid().ShouldBe(older);
+
+        await RunQueuedGraphJobAsync(newer);
+        (await StatisticsAsync(owner, caveId)).GetProperty("surveyModelId").GetGuid().ShouldBe(newer);
+
+        // Giving the mark back to the older survey moves the figures with it.
+        var moved = await owner.PutAsync($"/api/v1/survey-models/{older}/current", null);
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+        (await StatisticsAsync(owner, caveId)).GetProperty("surveyModelId").GetGuid().ShouldBe(older);
+    }
+
     private async Task UploadCenterlineAsync(Guid caveId, string fileName, byte[] bytes)
     {
         using var form = BuildForm(fileName, bytes);
