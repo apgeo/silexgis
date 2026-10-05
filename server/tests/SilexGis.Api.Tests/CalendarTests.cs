@@ -9,6 +9,7 @@ using SilexGis.Api.Tests.Support;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Expeditions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Tests;
@@ -381,26 +382,45 @@ public sealed class CalendarTests : IAsyncLifetime, IDisposable, IClassFixture<P
 
     /// <summary>
     /// "Mine" is worked out from the request's own account and takes no argument naming a person,
-    /// so there is no way to ask this surface where somebody else has been. A camp records nobody
-    /// as being on it, so the narrowing empties that source rather than guessing from the trips
-    /// inside it — which is stated here rather than left to be found.
+    /// so there is no way to ask this surface where somebody else has been. Each of the three
+    /// sources has its own record of who is on a row — a trip's roster and its asks, a camp's
+    /// roster, an event's invitations — and the narrowing reads each one: a row the account is on
+    /// stays, a row it merely reads goes, in every family.
     /// </summary>
+    /// <remarks>
+    /// The declined event is the row that settles what "on an event" means. Nothing on a calendar
+    /// row carries the person's own answer, so a declined evening would read exactly like one they
+    /// are going to; it is left out, while an invitation still unanswered is in, because being
+    /// asked is being expected.
+    /// </remarks>
     [Fact]
-    public async Task Mine_narrows_to_the_trips_the_caller_is_on_and_names_nobody()
+    public async Task Mine_narrows_every_source_to_what_the_caller_is_on_and_names_nobody()
     {
         var window = "from=2060-10-01&to=2060-10-31";
 
         var hers = await TripAsync("Cal mine", "2060-10-04");
         var notHers = await TripAsync("Cal not mine", "2060-10-05", onIt: false);
-        var camp = await CampAsync("Cal mine camp", "2060-10-06", "2060-10-07");
+        var herCamp = await CampAsync("Cal mine camp", "2060-10-06", "2060-10-07");
+        var notHerCamp = await CampAsync("Cal not mine camp", "2060-10-08", "2060-10-09");
+        var asked = await EventAsync("Cal asked", "2060-10-10");
+        var declined = await EventAsync("Cal declined", "2060-10-11");
+        var notAsked = await EventAsync("Cal not asked", "2060-10-12");
         await MoveAsync(hers, "planned");
         await MoveAsync(notHers, "planned");
-        await MoveCampAsync(camp, "planned");
+        await MoveCampAsync(herCamp, "planned");
+        await MoveCampAsync(notHerCamp, "planned");
+        await MoveEventAsync(asked, "planned");
+        await MoveEventAsync(declined, "planned");
+        await MoveEventAsync(notAsked, "planned");
 
-        // She reads all three — the narrowing below is about being on them, not about reading them.
-        (await IdsAsync(ana, window)).ShouldBe([hers, notHers, camp]);
+        await StayAsync(herCamp, anaCaver, "2060-10-06");
+        await InviteAsync(asked);
+        await AnswerAsync(declined, "no");
 
-        (await IdsAsync(ana, $"{window}&mine=true")).ShouldBe([hers]);
+        // She reads all seven — the narrowing below is about being on them, not about reading them.
+        (await IdsAsync(ana, window)).ShouldBe([hers, notHers, herCamp, notHerCamp, asked, declined, notAsked]);
+
+        (await IdsAsync(ana, $"{window}&mine=true")).ShouldBe([hers, herCamp, asked]);
     }
 
     /// <summary>
@@ -682,6 +702,59 @@ public sealed class CalendarTests : IAsyncLifetime, IDisposable, IClassFixture<P
     {
         var moved = await ana.PostWithIfMatchAsync($"/api/v1/expeditions/{campId}/state", new { state });
         moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+    }
+
+    private async Task MoveEventAsync(Guid eventId, string state)
+    {
+        var moved = await ana.PostWithIfMatchAsync($"/api/v1/events/{eventId}/state", new { state });
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>A stay on a camp's roster: what being on a camp is.</summary>
+    private async Task StayAsync(Guid campId, Guid caverId, string from)
+    {
+        long roleId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            roleId = await db.ExpeditionRosterRoles
+                .Where(r => r.Code == ExpeditionRosterRoleSeeds.MemberCode).Select(r => r.Id).SingleAsync();
+        }
+
+        var response = await ana.PostAsJsonAsync($"/api/v1/expeditions/{campId}/roster/", new
+        {
+            caverId,
+            roleId,
+            fromDate = from,
+        });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+    }
+
+    private async Task<Guid> EventAsync(string title, string date)
+    {
+        var response = await ana.PostAsJsonAsync("/api/v1/events", new
+        {
+            title = $"{title} {Guid.NewGuid():N}",
+            kind = "clubMeeting",
+            startDate = date,
+            startTime = "19:00",
+            visibility = "private",
+        });
+        return await CreatedIdAsync(response);
+    }
+
+    private async Task InviteAsync(Guid eventId)
+    {
+        var response = await ana.PostAsJsonAsync($"/api/v1/events/{eventId}/invitations/", new { caverId = anaCaver });
+        response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+    }
+
+    private async Task AnswerAsync(Guid eventId, string answer)
+    {
+        await InviteAsync(eventId);
+        var response = await ana.PutAsJsonAsync(
+            $"/api/v1/events/{eventId}/invitations/{anaCaver}/response", new { response = answer });
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
     private async Task GrantTripReadAsync(Guid tripId)

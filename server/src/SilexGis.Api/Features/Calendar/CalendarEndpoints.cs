@@ -95,9 +95,11 @@ public static class CalendarEndpoints
     /// ever narrow what they could already read.
     /// </param>
     /// <param name="mine">
-    /// Narrows to the trips the caller is on. It takes no argument naming a person and never
-    /// will: who "mine" is comes from the request's own account, so there is no question here
-    /// about where somebody else has been.
+    /// Narrows to what the caller is on: the trips they are named on or were asked to, the camps
+    /// whose roster records a stay for them, and the events they were asked to and did not
+    /// decline. It takes no argument naming a person and never will: who "mine" is comes from
+    /// the request's own account, so there is no question here about where somebody else has
+    /// been.
     /// </param>
     /// <param name="includePast">
     /// When false, the window is narrowed to begin no earlier than today. Days are the rows' own
@@ -330,11 +332,14 @@ public static class CalendarEndpoints
                 camps = camps.Where(x => x.CavingGroupId == campGroup);
             }
 
-            // Nothing records who is on a camp, so there is nothing here for "mine" to mean and
-            // the source contributes nothing rather than guessing from the trips inside it.
+            // Being on a camp is what its roster records: a stay — a person, a role and the days
+            // they are there. One day of a ten-day camp is being on the camp, exactly as being
+            // named on one day of a trip is being on the trip, so the roster is read as a whole
+            // and not for the window's days.
             if (mine == true)
             {
-                camps = camps.Where(_ => false);
+                var onThese = ExpeditionAudience.ExpeditionIdsTheAccountIsOn(db, user.UserId);
+                camps = camps.Where(x => onThese.Contains(x.Id));
             }
 
             found += await camps.CountAsync(ct);
@@ -400,11 +405,14 @@ public static class CalendarEndpoints
                 events = events.Where(x => x.CavingGroupId == eventGroup);
             }
 
-            // Nothing records who is coming to an event, so there is nothing here for "mine" to
-            // mean and the source contributes nothing rather than guessing from who may read it.
+            // Being on an event is having been asked and not having declined — its invitation
+            // row, read the way the trip branch reads a trip's roster and asks. Somebody asked
+            // and still silent is in, because being asked is being expected; a declined evening
+            // is out, because nothing on the row would say it was declined.
             if (mine == true)
             {
-                events = events.Where(_ => false);
+                var onThese = EventAudience.EventIdsTheAccountIsOn(db, user.UserId);
+                events = events.Where(x => onThese.Contains(x.Id));
             }
 
             found += await events.CountAsync(ct);
