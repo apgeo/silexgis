@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { chooseOption, gotoRoute, login } from './helpers.ts';
 
 /**
  * The three registry explorers, checked on what no server test can reach.
@@ -37,8 +37,7 @@ test('shows a distribution, names the intervals it joined, and exports the same 
   // one — while a set of a hundred split evenly across two intervals certainly has none. The
   // counts sentence on the page says which of the two this registry is, so the assertion is made
   // where it holds and named where it cannot be.
-  await page.goto('/statistics/distribution?bins=2&minimumBinCaveCount=50');
-  await page.waitForURL((url) => url.pathname === '/statistics/distribution', { timeout: 60_000 });
+  await gotoRoute(page, '/statistics/distribution?bins=2&minimumBinCaveCount=50');
 
   // The figures arrive: the counts the distribution was taken over, and the registry's own
   // sentence about which caves those were.
@@ -99,15 +98,31 @@ test('shows a relationship with what it is worth, and exports the pair on screen
 
   // Change the vertical measurement, so the export is asked after the screen has moved: an export
   // wired to the question the page opened with would pass a test taken on the opening question.
-  await page.getByTestId('registry-correlation-y').click();
-  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').first().click();
+  // Moved to a measurement other than the one shown, whichever row of the list that is: choosing
+  // the one already chosen changes nothing, and which row comes first is a fact about the list.
+  const vertical = page.getByTestId('registry-correlation-y');
+  const shownBefore = ((await vertical.textContent()) ?? '').trim();
+  await vertical.click();
+  const offered = page.locator('.ant-select-dropdown:visible .ant-select-item-option');
+  await expect(offered.first()).toBeVisible();
+  const other = (await offered.allTextContents())
+    .map((label) => label.trim())
+    .find((label) => label !== shownBefore);
+  await page.keyboard.press('Escape');
+  expect(other, 'a second vertical measurement to move to').toBeDefined();
+  await chooseOption(page, vertical, other!);
   await expect(page).toHaveURL(/[?&]y=/);
 
+  // The file is offered only for the answer on screen, so the button stands disabled while the new
+  // answer is on its way, and a press made then is a press on nothing. It is pressed once the
+  // screen has caught up, as the person reading it would.
+  const exportButton = page.getByTestId('registry-correlation-export');
+  await expect(exportButton).toBeEnabled({ timeout: 15_000 });
   const exported = page.waitForResponse(
     (response) =>
       response.url().includes('/stats/registry/correlation/export') && response.status() === 200,
   );
-  await page.getByTestId('registry-correlation-export').click();
+  await exportButton.click();
   const fileQuery = asked((await exported).url());
   const screenQuery = asked(page.url());
   expect(fileQuery.get('y')).toBe(screenQuery.get('y'));
@@ -132,6 +147,12 @@ test('breaks the registry down by region and exports the narrowing on screen', a
   await region.fill(firstRegion);
   await region.press('Enter');
   await expect(page).toHaveURL(/[?&]region=/);
+  // The address moves the moment Enter is pressed and the table follows it a moment later; the
+  // file is asked for once the screen shows the narrowing, as the person reading it would. A
+  // region is matched whole, so the narrowed table is that one region's row.
+  const rows = table.locator('tbody tr.ant-table-row');
+  await expect(rows).toHaveCount(1, { timeout: 15_000 });
+  await expect(rows.locator('td').first()).toHaveText(firstRegion);
 
   const exported = page.waitForResponse(
     (response) =>

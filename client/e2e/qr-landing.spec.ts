@@ -47,13 +47,19 @@ test.describe('printed cave codes', () => {
   test('a cave is published and withdrawn from its own page', async ({ page }) => {
     await login(page);
 
-    await page.goto('/caves');
-    // Reached by the name the registry actually shows, which is the cave's name and not its
-    // identification code. An unprotected cave on purpose: publishing must be provable on the
-    // caves whose coordinates are not withheld from anyone, since those are the ones a leaking
-    // implementation would expose at full precision.
-    await expect(page.getByText('Peștera Demo Mare')).toBeVisible({ timeout: 20_000 });
-    await page.getByText('Peștera Demo Mare').click();
+    // A cave of this run's own. The claim below is about every cave there is — one nobody has
+    // decided about is not published — and only a cave made a moment ago is certainly one nobody
+    // has decided about: a shared demo cave carries whatever an earlier run, stopped between its
+    // publish and its withdrawal, last left on it. Unprotected, as a new cave is unless somebody
+    // classes it: publishing must be provable on the caves whose coordinates are withheld from
+    // nobody, since those are the ones a leaking implementation would expose at full precision.
+    const caveName = `E2E Printed Codes Cave ${Date.now()}`;
+    await page.goto('/caves/new');
+    await page.getByLabel('Name', { exact: true }).fill(caveName);
+    await page.getByLabel('Type', { exact: true }).click();
+    await page.locator('.ant-select-item-option').first().click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Printed codes' })).toBeVisible({ timeout: 20_000 });
 
     await page.getByRole('button', { name: 'Printed codes' }).click();
@@ -73,7 +79,16 @@ test.describe('printed cave codes', () => {
     await expect(dialog.getByTestId('qr-code-square')).toHaveCount(0);
 
     await dialog.getByRole('button', { name: 'Stop publishing' }).click();
-    await page.getByRole('button', { name: 'OK' }).click();
+    // Exact: the cave page behind the dialog offers "Look this cave up in Grottocenter", whose name
+    // holds "ok" too.
+    await page.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(dialog.getByTestId('qr-state-unpublished')).toBeVisible({ timeout: 15_000 });
+
+    // Clean up: the cave this run made.
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await page.locator('button', { hasText: 'Delete' }).click();
+    await page.getByRole('button', { name: 'OK', exact: true }).click();
+    await page.waitForURL(/\/caves$/);
   });
 });

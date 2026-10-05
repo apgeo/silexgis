@@ -94,10 +94,19 @@
   align-items: flex-start;
 }
 
-/* Phone: search is the primary action and takes the strip, clearing the corner toggle. */
+/* Phone: search is the primary action and takes the strip, clearing the corner toggle on the
+   right. On the left it keeps the desktop edge, which clears the tab the collapsed navigation
+   menu hangs off the screen edge just under the header: run from the edge, the strip (two rows
+   deep here, search over the selector) lay over that tab and over the zoom buttons, and a finger
+   could press neither. */
 .map-search-overlay-mobile {
-  left: 12px;
   right: 56px;
+}
+
+/* Phone: the zoom buttons step down out of the corner where that navigation tab sits. Left in
+   OpenLayers' own corner, the tab covered "zoom out", and pressing it opened the menu instead. */
+.map-canvas-wrap-mobile .ol-zoom {
+  top: 96px;
 }
 
 .map-edit-overlay {
