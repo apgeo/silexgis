@@ -6,16 +6,24 @@ import { describe, expect, it, vi } from 'vitest';
 
 // The transport is stubbed rather than the network: what is under test is which caches a
 // successful write empties, and standing a server up to prove that would test the server.
+// What was PUT is kept, because the section that offers one of these writes mocks the hook away
+// and this is the only place the route it reaches is ever read.
+const transport = vi.hoisted(() => ({ puts: [] as [string, unknown][] }));
 vi.mock('./client.ts', () => ({
   api: {
     POST: () => Promise.resolve({ data: { id: 'c1' }, response: new Response(null, { status: 200 }) }),
     DELETE: () => Promise.resolve({ data: undefined, response: new Response(null, { status: 204 }) }),
+    PUT: (path: string, init: { params?: { path?: unknown } }) => {
+      transport.puts.push([path, init.params?.path]);
+      return Promise.resolve({ data: { id: 'm1' }, response: new Response(null, { status: 200 }) });
+    },
   },
   ApiError: class ApiError extends Error {},
   lastReadETag: () => undefined,
 }));
 
-const { queryKeys, useUploadCenterline, useDeleteSurveyModel } = await import('./hooks.ts');
+const { queryKeys, useUploadCenterline, useDeleteSurveyModel, useMakeSurveyModelCurrent } =
+  await import('./hooks.ts');
 
 /**
  * A cave's survey figures are worked out from its line work every time they are asked for, but
@@ -71,5 +79,22 @@ describe("the figures computed from a cave's line work", () => {
     expect(asked).toContain(JSON.stringify(queryKeys.caveSurveyStatistics('cave-2')));
     expect(asked).toContain(JSON.stringify(queryKeys.caveOrientation('cave-2')));
     expect(asked).toContain(JSON.stringify(queryKeys.caveTopology('cave-2')));
+  });
+
+  it('are asked for again when an older model is made the current one', async () => {
+    // The current line plot is what the measurements are read off, so handing the mark to another
+    // plot changes every figure on the cave's page without a single row being uploaded or removed.
+    const { wrapper, invalidate } = harness();
+    const { result } = renderHook(() => useMakeSurveyModelCurrent(), { wrapper });
+
+    await result.current.mutateAsync({ caveId: 'cave-3', id: 'model-2' });
+
+    expect(transport.puts).toEqual([['/api/v1/survey-models/{id}/current', { id: 'model-2' }]]);
+    await waitFor(() => expect(invalidate).toHaveBeenCalled());
+    const asked = keysAskedFor(invalidate);
+    expect(asked).toContain(JSON.stringify(queryKeys.surveyModels('cave-3')));
+    expect(asked).toContain(JSON.stringify(queryKeys.caveSurveyStatistics('cave-3')));
+    expect(asked).toContain(JSON.stringify(queryKeys.caveOrientation('cave-3')));
+    expect(asked).toContain(JSON.stringify(queryKeys.caveTopology('cave-3')));
   });
 });

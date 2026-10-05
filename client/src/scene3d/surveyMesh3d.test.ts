@@ -89,6 +89,8 @@ function model(overrides: Partial<SurveyModelInfo> = {}): SurveyModelInfo {
     anchorLatitude: 46.5,
     anchorHeightM: 1100,
     triangleCount: 4200,
+    meshSizeBytes: null,
+    isCurrent: false,
     sourcePrecisionLost: false,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
@@ -118,12 +120,40 @@ describe('drawableSurveyMesh', () => {
     expect(drawableSurveyMesh([])).toBeUndefined();
   });
 
-  it('takes the most recently uploaded mesh when a cave holds several', () => {
+  it('takes the most recently uploaded mesh when none of them carries the current mark', () => {
+    // Rows written before the mark existed carry none; the newest is still the one an uploader
+    // who has just replaced a survey expects to see.
     const older = model({ id: 'older', createdAt: '2026-01-01T00:00:00Z' });
     const newer = model({ id: 'newer', createdAt: '2026-07-01T00:00:00Z' });
 
     expect(drawableSurveyMesh([newer, older])?.id).toBe('newer');
     expect(drawableSurveyMesh([older, newer])?.id).toBe('newer');
+  });
+
+  it('draws the mesh that carries the current mark, even when a newer one exists', () => {
+    // The mark is a choice somebody made on the cave's page, and it overrides age: that is the
+    // whole point of being able to hand it back to an older upload.
+    const current = model({ id: 'current', isCurrent: true, createdAt: '2026-01-01T00:00:00Z' });
+    const newer = model({ id: 'newer', createdAt: '2026-07-01T00:00:00Z' });
+
+    expect(drawableSurveyMesh([newer, current])?.id).toBe('current');
+    expect(drawableSurveyMesh([current, newer])?.id).toBe('current');
+  });
+
+  it('does not let a current mesh with nothing to draw win over one that has walls', () => {
+    // The newest upload takes the mark the moment it arrives, before its conversion has run; a
+    // scene that honoured the mark alone would show nothing while an older mesh sits ready.
+    const currentUnconverted = model({
+      id: 'current',
+      isCurrent: true,
+      meshUrl: null,
+      status: 'processing',
+      createdAt: '2026-07-01T00:00:00Z',
+    });
+    const older = model({ id: 'older', createdAt: '2026-01-01T00:00:00Z' });
+
+    expect(drawableSurveyMesh([currentUnconverted, older])?.id).toBe('older');
+    expect(drawableSurveyMesh([currentUnconverted])).toBeUndefined();
   });
 
   it('ignores the line-plot models a cave also holds', () => {

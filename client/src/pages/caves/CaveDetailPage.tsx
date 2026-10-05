@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import {
   AimOutlined,
+  CodeSandboxOutlined,
   DeleteOutlined,
   EditOutlined,
   EnvironmentOutlined,
@@ -45,6 +46,7 @@ import {
 } from '../../api/hooks.ts';
 import { formatLonLat } from '../../geo/coords.ts';
 import { APPROXIMATE_MAX_ZOOM, fitGeoJsonGeometry } from '../../map/mapContext.ts';
+import { requestReveal3d } from '../../scene3d/pendingReveal3d.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import AttachmentSection from '../../components/attachments/AttachmentSection.tsx';
 import HistoryPanel, { type HistoryRestore } from '../../components/history/HistoryPanel.tsx';
@@ -172,6 +174,21 @@ export default function CaveDetailPage() {
     navigate('/map');
   };
 
+  /**
+   * Opens the 3D scene on this cave.
+   *
+   * The scene draws the walls of the selected cave and of no other, so the selection is what makes
+   * it load them. Where to put the camera cannot be sent the way a hyperlink sends it — the page
+   * the scene lives on is not mounted yet, so there is no view control to answer — and is parked
+   * for the scene to take once its engine is up. A cave is a feature on the wire, which is the
+   * reference the scene knows how to frame.
+   */
+  const openIn3d = () => {
+    setSelection({ kind: 'cave', caveId: cave.id });
+    requestReveal3d({ targetType: 'feature', targetId: cave.id, label: cave.name });
+    navigate('/map3d');
+  };
+
   // The write DTO addresses containment by primary-parent id, which the read DTO carries
   // as the parents breadcrumb — map it back so an update/restore keeps the cave where it is.
   const caveAsWrite = (): CaveWrite => ({
@@ -227,6 +244,9 @@ export default function CaveDetailPage() {
           </Typography.Title>
         </Flex>
         <Flex gap={8} wrap justify="end">
+          <Button icon={<CodeSandboxOutlined />} onClick={openIn3d}>
+            {t('caves.openIn3d')}
+          </Button>
           {canShare && (
             <Button icon={<ShareAltOutlined />} onClick={() => setShareOpen(true)}>
               {t('shares.button')}

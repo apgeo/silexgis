@@ -1566,6 +1566,23 @@ export function useDeleteSurveyModel() {
   });
 }
 
+/**
+ * Makes a model the one its cave is represented by, among the cave's models of the same kind: a
+ * line plot (.lox/.3d) or a wall mesh (.stl). The newest upload of a kind takes the mark on
+ * arrival; this hands it back to an older one.
+ *
+ * The same invalidation as a delete, figures included: the current line plot is what the
+ * measurements are read off, so choosing another one changes every number on the cave's page.
+ */
+export function useMakeSurveyModelCurrent() {
+  const invalidate = useInvalidateSurveyModels();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; caveId: string }): Promise<SurveyModelInfo> =>
+      unwrap(api.PUT('/api/v1/survey-models/{id}/current', { params: { path: { id } } })),
+    onSuccess: (_, { caveId }) => invalidate(caveId),
+  });
+}
+
 export type SurveySourceInfo = components['schemas']['SurveySourceDto'];
 export type SurveySourceKind = SurveySourceInfo['kind'];
 

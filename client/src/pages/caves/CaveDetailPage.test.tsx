@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { CaveDetail, CaveSummary, Entrance } from '../../api/hooks.ts';
+import { takePendingReveal3d } from '../../scene3d/pendingReveal3d.ts';
 
 /**
  * The entrances table, and specifically what it says about a position it is not allowed to state
@@ -193,6 +194,26 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+describe('CaveDetailPage open in 3D', () => {
+  it('selects the cave, leaves the scene a place to fly to, and goes there', () => {
+    entrances = [];
+    show();
+
+    fireEvent.click(screen.getByRole('button', { name: /Open in 3D/ }));
+
+    // The scene loads the walls of whatever is selected, so the selection is set before the page
+    // is left; the camera's destination waits in the one-shot slot because the scene is not
+    // mounted yet and nothing else could carry it there.
+    expect(setSelection).toHaveBeenCalledWith({ kind: 'cave', caveId: 'cave-1' });
+    expect(takePendingReveal3d()).toEqual({
+      targetType: 'feature',
+      targetId: 'cave-1',
+      label: 'Test cave',
+    });
+    expect(navigate).toHaveBeenCalledWith('/map3d');
+  });
+});
 
 describe('CaveDetailPage entrances table', () => {
   it('frames a surveyed entrance at the ordinary zoom and goes to the map', () => {

@@ -17,6 +17,7 @@ import type { TrackingMovieDialogProps } from '../../components/caveview/movie/T
 
 const uploadMutate = vi.fn();
 const deleteMutate = vi.fn();
+const makeCurrentMutate = vi.fn();
 
 function model(overrides: Partial<SurveyModelInfo> = {}): SurveyModelInfo {
   return {
@@ -35,6 +36,8 @@ function model(overrides: Partial<SurveyModelInfo> = {}): SurveyModelInfo {
     anchorLatitude: 45.5,
     anchorHeightM: 1100,
     triangleCount: 40120,
+    meshSizeBytes: null,
+    isCurrent: false,
     sourcePrecisionLost: false,
     createdAt: '2026-08-18T06:00:00Z',
     updatedAt: '2026-08-18T06:00:00Z',
@@ -81,6 +84,7 @@ vi.mock('../../api/hooks.ts', async () => {
     useCaveSummary: () => ({ data: summary }),
     useUploadSurveyModel: () => ({ mutateAsync: uploadMutate, isPending: false }),
     useDeleteSurveyModel: () => ({ mutateAsync: deleteMutate, isPending: false }),
+    useMakeSurveyModelCurrent: () => ({ mutateAsync: makeCurrentMutate, isPending: false }),
     // The viewer opened from this section reads the model's links, to show over the model the
     // photographs somebody has hung on its stations. Nothing here is about those, so there are
     // none — but the mock lists what it answers, so a hook left out of it is a crash.
@@ -139,6 +143,7 @@ async function openUpload(fileName: string) {
 beforeEach(() => {
   uploadMutate.mockReset().mockResolvedValue(model());
   deleteMutate.mockReset().mockResolvedValue(undefined);
+  makeCurrentMutate.mockReset().mockResolvedValue(model());
   models = [];
   summary = summaryWith(true);
   navigate.mockClear();
@@ -165,6 +170,47 @@ describe('the survey model list', () => {
     show();
     expect(await screen.findByText('Ready')).toBeInTheDocument();
     expect(screen.getByText('40120 triangles')).toBeInTheDocument();
+  });
+
+  it('says how big a converted mesh is, beside how many triangles it has', async () => {
+    models = [model({ meshSizeBytes: 2_621_440 })];
+    show();
+
+    // Two elements rather than one sentence: the triangle count is what the scene's chrome
+    // repeats, the bytes are what a viewer on a slow link wants before turning the walls on.
+    expect(await screen.findByText('40120 triangles')).toBeInTheDocument();
+    expect(screen.getByText('2.5 MB')).toBeInTheDocument();
+  });
+
+  it('marks the model each kind is represented by, and lets a writer pick another', async () => {
+    models = [
+      model({ id: 'mesh', isCurrent: true }),
+      model({ id: 'plot', format: 'lox', name: 'Grind plot', isCurrent: true }),
+      model({ id: 'old', format: 'lox', name: 'Older plot', isCurrent: false }),
+    ];
+    show();
+    await screen.findByText('Older plot');
+
+    // One mark per kind: the mesh and the newer plot carry it, the older plot does not — and only
+    // the row without it is offered the action, since taking the mark from itself means nothing.
+    expect(screen.getAllByText('Current')).toHaveLength(2);
+    const offered = screen.getAllByText('Make current');
+    expect(offered).toHaveLength(1);
+    expect(screen.getByText(/The newest upload of each kind becomes current/)).toBeInTheDocument();
+
+    fireEvent.click(offered[0].closest('button')!);
+    await waitFor(() =>
+      expect(makeCurrentMutate).toHaveBeenCalledWith({ id: 'old', caveId: 'c1' }),
+    );
+  });
+
+  it('shows everybody which model is current, and offers the choice only to a writer', async () => {
+    models = [model({ id: 'mesh', isCurrent: true }), model({ id: 'old', name: 'Older walls' })];
+    show(false);
+    await screen.findByText('Older walls');
+
+    expect(screen.getAllByText('Current')).toHaveLength(1);
+    expect(screen.queryByText('Make current')).toBeNull();
   });
 
   it("shows a failed conversion in the server's own words, which are the only ones that fit", async () => {

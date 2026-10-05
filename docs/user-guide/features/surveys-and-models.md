@@ -25,6 +25,16 @@ State: *Waiting its turn → In progress → Ready*, or *Could not be processed*
 A model is drawn in the **survey viewer** (CaveView.js) and, for walls, in the
 [3D scene](3d-view.md).
 
+### The current model
+
+A cave keeps every model ever uploaded — uploads are never overwritten, so a corrected re-export
+is a second model beside the first. One of them carries the **Current** mark, per kind: the
+current **line plot** (`.lox` / `.3d`) is what the map's extracted centerline and the
+[measurements](measurements-and-statistics.md) read; the current **walls** (`.stl`) are what the
+3D scene draws. The newest upload of a kind becomes current on arrival, which is what re-uploading
+a corrected survey means; **Make current** on an older model gives it the mark back. Deleting the
+current model passes the mark to the newest one left.
+
 ### Reading a survey into rows
 
 A compiled survey is not left as a file the browser draws. It is **read into its stations and
@@ -86,7 +96,9 @@ Also note: the heights in these files are measured from the export's own origin,
 level.
 
 Once converted, the walls are drawn in the [3D scene](3d-view.md#walls-of-the-selected-cave)
-for the selected cave only.
+for the selected cave only. The model list shows the converted mesh's size in megabytes beside
+its triangle count, and the scene names the size while it fetches, so a fifty-megabyte mesh on a
+metered connection is a choice rather than a surprise.
 
 ---
 

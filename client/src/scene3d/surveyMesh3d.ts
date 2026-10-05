@@ -113,12 +113,16 @@ export function isDrawableSurveyMesh(model: SurveyModelInfo): boolean {
  * The one model of a cave whose walls are drawn.
  *
  * A cave may hold any number of models — several line plots, an older mesh and a newer one — and
- * nothing on the record says which is preferred, so the most recently uploaded drawable mesh wins.
- * That is the one an uploader who has just replaced a survey expects to see.
+ * the record says which is preferred: one wall mesh per cave carries the current mark, given to
+ * the newest upload when it arrives and handed to an older one on purpose from the cave's page.
+ * A drawable mesh with the mark wins. Without one — rows written before the mark existed, or a
+ * current mesh whose conversion has not finished or failed — the most recently uploaded drawable
+ * mesh is drawn instead, which is the one an uploader who has just replaced a survey expects to
+ * see.
  *
- * A row that has an anchor but no mesh yet is not drawable: a file declared in local coordinates
- * is given its anchor at upload, before anything has been converted, so the anchor alone proves
- * nothing.
+ * A row that has an anchor but no mesh yet is not drawable, mark or no mark: a file declared in
+ * local coordinates is given its anchor at upload, before anything has been converted, so the
+ * anchor alone proves nothing.
  */
 export function drawableSurveyMesh(
   models: readonly SurveyModelInfo[] | undefined,
@@ -128,11 +132,19 @@ export function drawableSurveyMesh(
     if (!isDrawableSurveyMesh(model)) {
       continue;
     }
-    if (!best || model.createdAt > best.createdAt) {
+    if (!best || preferredMesh(model, best)) {
       best = model;
     }
   }
   return best;
+}
+
+/** Whether `candidate` should be drawn rather than `best`: the current mark first, then age. */
+function preferredMesh(candidate: SurveyModelInfo, best: SurveyModelInfo): boolean {
+  if (candidate.isCurrent !== best.isCurrent) {
+    return candidate.isCurrent;
+  }
+  return candidate.createdAt > best.createdAt;
 }
 
 /**

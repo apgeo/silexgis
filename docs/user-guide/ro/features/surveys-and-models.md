@@ -25,6 +25,16 @@ Stare: *În așteptare → În curs → Gata*, sau *Nu a putut fi procesat*.
 Un model este desenat în **vizualizatorul topografic** (CaveView.js) și, pentru pereți, în
 [scena 3D](3d-view.md).
 
+### Modelul curent
+
+O peșteră păstrează fiecare model încărcat vreodată — încărcările nu se suprascriu, așa că un
+export corectat este un al doilea model lângă primul. Unul dintre ele poartă marcajul **Curent**,
+pe fel: **poligonația** curentă (`.lox` / `.3d`) este cea citită de poligonația extrasă pe hartă și
+de [măsurători](measurements-and-statistics.md); **pereții** curenți (`.stl`) sunt cei desenați de
+scena 3D. Cea mai nouă încărcare a unui fel devine curentă la sosire, căci asta înseamnă reîncărcarea
+unei topografii corectate; **Fă curent** pe un model mai vechi îi dă marcajul înapoi. Ștergerea
+modelului curent trece marcajul la cel mai nou rămas.
+
 ### Citirea unei topografii în rânduri
 
 O topografie compilată nu este lăsată ca un fișier pe care îl desenează browserul. Este **citită
@@ -88,7 +98,9 @@ De reținut și: înălțimile din aceste fișiere se măsoară de la originea p
 de la nivelul mării.
 
 Odată convertiți, pereții sunt desenați în [scena 3D](3d-view.md#pereții-peșterii-selectate)
-numai pentru peștera selectată.
+numai pentru peștera selectată. Lista de modele arată mărimea rețelei convertite în megaocteți
+lângă numărul de triunghiuri, iar scena spune mărimea cât timp o descarcă, așa că o rețea de
+cincizeci de megaocteți pe o conexiune contorizată este o alegere, nu o surpriză.
 
 ---
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
 import {
+  CheckCircleOutlined,
   DeleteOutlined,
   ExportOutlined,
   EyeOutlined,
@@ -15,9 +16,11 @@ import {
   surveyModelReadableByViewer,
   surveyModelUnsettled,
   useDeleteSurveyModel,
+  useMakeSurveyModelCurrent,
   useSurveyModels,
   type SurveyModelInfo,
 } from '../../api/hooks.ts';
+import { formatSize } from '../../components/attachments/fileFormat.ts';
 import SurveyModelViewerModal from '../../components/caveview/SurveyModelViewerModal.tsx';
 import LazyTrackingMovieDialog from '../../components/caveview/movie/LazyTrackingMovieDialog.tsx';
 import { openModelWindow } from '../../caveview/openModelWindow.ts';
@@ -50,6 +53,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
   const navigate = useNavigate();
   const { data: models } = useSurveyModels(caveId);
   const remove = useDeleteSurveyModel();
+  const makeCurrent = useMakeSurveyModelCurrent();
   const [viewing, setViewing] = useState<SurveyModelInfo | null>(null);
   /** The model a movie is being made on, or null while the movie dialog is closed. */
   const [movieModelId, setMovieModelId] = useState<string | null>(null);
@@ -87,9 +91,18 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
       <Flex vertical gap={2}>
         <Tag color="success">{t('surveyModels.statusValues.ready')}</Tag>
         {model.triangleCount !== null && (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {t('surveyModels.triangles', { count: model.triangleCount })}
-          </Typography.Text>
+          <Flex gap={6}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('surveyModels.triangles', { count: model.triangleCount })}
+            </Typography.Text>
+            {/* The bytes the scene will download, which is what a viewer on a slow link wants
+                to know; the triangle count alone says nothing about that. */}
+            {model.meshSizeBytes !== null && (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {formatSize(model.meshSizeBytes)}
+              </Typography.Text>
+            )}
+          </Flex>
         )}
         {model.sourcePrecisionLost && (
           <Tooltip title={t('surveyModels.precisionLostHint')}>
@@ -122,7 +135,20 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
         pagination={false}
         locale={{ emptyText: t('surveyModels.empty') }}
         columns={[
-          { title: t('caves.name'), dataIndex: 'name' },
+          {
+            title: t('caves.name'),
+            dataIndex: 'name',
+            render: (name: string, model) => (
+              <Flex gap={6} align="center" wrap>
+                <span>{name}</span>
+                {/* One mark per kind: the line plot the map and the measurements read, and the
+                    wall mesh the 3D scene draws. Shown to everybody, because a reader puzzled
+                    by which of two plots the figures came from needs the answer as much as a
+                    writer does. */}
+                {model.isCurrent && <Tag color="blue">{t('surveyModels.current')}</Tag>}
+              </Flex>
+            ),
+          },
           {
             title: t('surveyModels.format'),
             dataIndex: 'format',
@@ -138,7 +164,7 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           },
           {
             key: 'actions',
-            width: 260,
+            width: 320,
             render: (_, model) => (
               <Flex gap={4}>
                 {surveyModelReadableByViewer(model) && (
@@ -181,6 +207,24 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                     </Tooltip>
                   </>
                 )}
+                {canEdit && !model.isCurrent && (
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<CheckCircleOutlined />}
+                    onClick={async () => {
+                      try {
+                        await makeCurrent.mutateAsync({ id: model.id, caveId });
+                      } catch (error) {
+                        message.error(
+                          surveyModelProblemMessage(error, t, 'surveyModels.makeCurrentFailed'),
+                        );
+                      }
+                    }}
+                  >
+                    {t('surveyModels.makeCurrent')}
+                  </Button>
+                )}
                 {canEdit && (
                   <Popconfirm
                     title={t('surveyModels.deleteConfirm')}
@@ -206,6 +250,14 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
           },
         ]}
       />
+      {(models?.length ?? 0) > 0 && (
+        <Typography.Paragraph
+          type="secondary"
+          style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}
+        >
+          {t('surveyModels.currentHint')}
+        </Typography.Paragraph>
+      )}
 
       {canEdit && (
         <SurveyModelUploadModal
