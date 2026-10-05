@@ -276,6 +276,7 @@ export const queryKeys = {
   tripLogStats: (params: TripLogFacetParams) => ['trip-logs', 'stats', params] as const,
   myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
+  tripPlanDefault: ['trip-logs', 'plan-default'] as const,
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
   tripChecklist: (id: string) => ['trip-logs', 'checklist', id] as const,
   tripTracking: (id: string) => ['trip-logs', 'tracking', id] as const,
@@ -2776,7 +2777,8 @@ export type EntityType =
   | 'georeferencedMap'
   | 'mapView'
   | 'expedition'
-  | 'event';
+  | 'event'
+  | 'checklist';
 // Stored files additionally carry taggings (never attachments or grants) — the tag
 // endpoints accept the extra target; the server rejects it everywhere else.
 export type AttachedEntityType = EntityType | 'storedFile';
@@ -3819,6 +3821,37 @@ export function useCreateTripLog() {
   });
 }
 
+/**
+ * The second of the two doors a trip is created through. Same body as the report door above and
+ * the same trip afterwards; the one difference is the audience a request that names none falls
+ * back to — the author's caving group rather than private, because a proposal only its author
+ * can read is a proposal to nobody. The rule itself lives on the server; a caller that wants it
+ * applied leaves `visibility` null.
+ */
+export function useCreateTripPlan() {
+  const invalidate = useInvalidateTripLogs();
+  return useMutation({
+    mutationFn: (body: TripLogWrite) => unwrap(api.POST('/api/v1/trip-logs/plans', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export type TripPlanDefault = components['schemas']['TripPlanDefaultDto'];
+
+/**
+ * The audience a trip this caller plans would get if they named none — the plan door's own rule,
+ * answered before the trip exists so a form can say who will see it instead of reciting the rule.
+ * It names the caller's own membership and nothing else, and is only worth asking while a plan is
+ * being written, which is what `enabled` says.
+ */
+export function useTripPlanDefault(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.tripPlanDefault,
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/plan-default')),
+    enabled,
+  });
+}
+
 export function useUpdateTripLog() {
   const readBack = useReadTripLogsBack();
   const invalidateHistory = useInvalidateHistory();
@@ -3829,6 +3862,32 @@ export function useUpdateTripLog() {
       invalidateHistory();
       // Handed back rather than started and forgotten: the next write on this trip is checked
       // against the version this one produced, and only the read records it.
+      return readBack();
+    },
+  });
+}
+
+/**
+ * Replaces the trip's sketch with the track in a GPX file, in one request. A trip write like
+ * the update above, and finished the same way: the trip is read back before the mutation
+ * settles, because the write moved the row version the next save is checked against.
+ */
+export function useImportTripTrack() {
+  const readBack = useReadTripLogsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }): Promise<TripLogInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      // Multipart: hand the FormData through untouched (the browser sets the boundary).
+      return unwrap(api.POST('/api/v1/trip-logs/{id}/geometry/gpx', {
+        params: { path: { id } },
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    onSuccess: () => {
+      invalidateHistory();
       return readBack();
     },
   });

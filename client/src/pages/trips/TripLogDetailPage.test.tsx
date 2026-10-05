@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
@@ -9,7 +9,11 @@ import TripLogDetailPage from './TripLogDetailPage.tsx';
 
 const TRIP = '33333333-4444-5555-6666-777777777777';
 
-const { tripSpy, canSpy } = vi.hoisted(() => ({ tripSpy: vi.fn(), canSpy: vi.fn() }));
+const { tripSpy, canSpy, importTrack } = vi.hoisted(() => ({
+  tripSpy: vi.fn(),
+  canSpy: vi.fn(),
+  importTrack: vi.fn(),
+}));
 
 vi.mock('../../api/hooks.ts', () => ({
   useTripLog: () => tripSpy(),
@@ -20,6 +24,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useStandDownTripCallout: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useArrangeTripCallout: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateTripLog: () => ({ mutateAsync: vi.fn() }),
+  useImportTripTrack: () => ({ mutateAsync: importTrack, isPending: false }),
   useEffectiveAccess: () => ({ data: undefined }),
   useCan: () => canSpy(),
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
@@ -137,6 +142,7 @@ afterEach(cleanup);
 beforeEach(() => {
   tripSpy.mockReturnValue({ data: trip(), isPending: false });
   canSpy.mockReturnValue(false);
+  importTrack.mockReset();
 });
 
 describe('the trip page', () => {
@@ -224,6 +230,23 @@ describe('the trip page', () => {
     expect(screen.getByTestId('trip-photo-import')).toBeTruthy();
   });
 
+  it('says "no such trip" for a trip the server refused, instead of loading forever', () => {
+    // The server answers 404 both for a trip that does not exist and for one the caller may not
+    // read, by design. The read then settles as an error and is not retried, so a refusal that
+    // left the page on its spinner would hold it there for good — which a reader reports as the
+    // application having hung, not as a permission. The page names the ambiguity in words rather
+    // than guessing which of the two it is.
+    tripSpy.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    renderPage();
+
+    expect(screen.getByText('No such trip')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Either it is not there, or it is not yours to read/),
+    ).toBeInTheDocument();
+    expect(document.querySelector('.ant-spin')).toBeNull();
+    expect(screen.queryByTestId('trip-open-report')).toBeNull();
+  });
+
   it('lets the row of page actions wrap rather than pushing the whole page sideways', () => {
     // Five buttons in a row come to 641px and a phone is 412px across. Unwrapped, this row was the
     // largest single reason the trip page scrolled sideways — larger than the tables under it —
@@ -237,4 +260,30 @@ describe('the trip page', () => {
     expect(actions).toHaveStyle({ flexWrap: 'wrap' });
   });
 
+
+  /**
+   * A recorded track becomes the sketch from the page, by choosing a file: the picker hands the
+   * file to the trip's own geometry route and uploads nothing itself. Offered where editing is,
+   * and to nobody else — a reader has no sketch to replace.
+   */
+  describe('importing a track', () => {
+    it('posts the chosen GPX file to the trip', async () => {
+      canSpy.mockReturnValue(true);
+      importTrack.mockResolvedValue(trip());
+      const { container } = renderPage();
+
+      const file = new File(['<gpx/>'], 'walk.gpx', { type: 'application/gpx+xml' });
+      const picker = container.querySelector('input[type="file"]') as HTMLInputElement;
+      fireEvent.change(picker, { target: { files: [file] } });
+
+      await waitFor(() => expect(importTrack).toHaveBeenCalledWith({ id: TRIP, file }));
+    });
+
+    it('offers no import to a reader', () => {
+      canSpy.mockReturnValue(false);
+      renderPage();
+
+      expect(screen.queryByTestId('trip-import-track')).toBeNull();
+    });
+  });
 });

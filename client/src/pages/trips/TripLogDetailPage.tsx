@@ -6,6 +6,7 @@ import {
   EditOutlined,
   FileTextOutlined,
   LockOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -15,19 +16,23 @@ import {
   Descriptions,
   Flex,
   Popconfirm,
+  Result,
   Spin,
   Tabs,
   Tag,
   Typography,
+  Upload,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ApiError } from '../../api/client.ts';
 import {
   parseAccessActions,
   useCan,
   useCavingGroups,
   useDeleteTripLog,
   useEffectiveAccess,
+  useImportTripTrack,
   useTripLog,
   useTripParticipantRoles,
   useTripTypes,
@@ -142,12 +147,26 @@ export default function TripLogDetailPage() {
   const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: trip, isPending } = useTripLog(id);
+  const { data: trip, isPending, isError } = useTripLog(id);
   const { data: cavingGroups } = useCavingGroups();
   const { data: tripTypes } = useTripTypes();
   const { data: participantRoles } = useTripParticipantRoles();
   const organizingCavingGroup = cavingGroups?.find((g) => g.id === trip?.organizingCavingGroupId);
   const deleteTrip = useDeleteTripLog();
+  const importTrack = useImportTripTrack();
+
+  // A recorded track becomes the sketch in one act. The refusals the route names are each
+  // worded for the person who chose the file; anything else is the ordinary failed save.
+  const importTrackFrom = async (file: File) => {
+    try {
+      await importTrack.mutateAsync({ id: trip!.id, file });
+      message.success(t('trips.track.imported'));
+    } catch (e) {
+      const code = e instanceof ApiError ? e.code : undefined;
+      const problem = code?.startsWith('trip_track.') ? code.slice('trip_track.'.length) : undefined;
+      message.error(problem ? t(`trips.track.problems.${problem}`) : t('common.saveFailed'));
+    }
+  };
   const updateTrip = useUpdateTripLog();
   // Per-object capabilities once the answer arrives; the coarse domain-level check only
   // bridges the first render (the server enforces regardless).
@@ -163,6 +182,25 @@ export default function TripLogDetailPage() {
   // order on every render whatever the trip's load state.
   const requested = searchParams.get('tab');
   const activeTab: TabKey = isTabKey(requested) ? requested : DEFAULT_TAB;
+
+  // The server answers 404 for a trip that does not exist and for one the caller may not read,
+  // by design, and a settled refusal is not retried. Without this branch the page would stay on
+  // its spinner for good, and a permission refusal reads as the application having hung. The
+  // wording names the ambiguity rather than guessing which of the two it is.
+  if (isError) {
+    return (
+      <Result
+        status="404"
+        title={t('trips.notFound')}
+        subTitle={t('trips.notFoundDetail')}
+        extra={
+          <Button type="primary" onClick={() => void navigate('/trip-logs')}>
+            {t('common.back')}
+          </Button>
+        }
+      />
+    );
+  }
 
   if (isPending || !trip) {
     return (
@@ -234,6 +272,27 @@ export default function TripLogDetailPage() {
             >
               {t('permissions.button')}
             </Button>
+          )}
+          {/* A day's recording becomes the sketch here rather than as a registry feature somebody
+              then redraws onto the trip. The picker hands the file over and uploads nothing
+              itself; the route is a trip write, so the act is offered where editing is. */}
+          {canEdit && (
+            <Upload
+              accept=".gpx"
+              showUploadList={false}
+              beforeUpload={(file) => {
+                void importTrackFrom(file);
+                return false;
+              }}
+            >
+              <Button
+                icon={<UploadOutlined />}
+                loading={importTrack.isPending}
+                data-testid="trip-import-track"
+              >
+                {t('trips.track.import')}
+              </Button>
+            </Upload>
           )}
           {(canEdit || canDelete) && (
             <>

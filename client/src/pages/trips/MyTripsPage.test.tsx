@@ -5,11 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { MyTripLogListParams, TripLogInfo } from '../../api/hooks.ts';
 
-const { listSpy } = vi.hoisted(() => ({ listSpy: vi.fn() }));
+const { listSpy, canSpy } = vi.hoisted(() => ({ listSpy: vi.fn(), canSpy: vi.fn() }));
 
 vi.mock('../../api/hooks.ts', () => ({
   useMyTripLogs: (params: MyTripLogListParams) => listSpy(params),
   useTripTypes: () => ({ data: undefined }),
+  useCan: () => canSpy(),
+}));
+
+// The form is a probe of its props: which door it was opened on is the whole claim here, and the
+// form's own behaviour on that door is asserted where the form is tested.
+vi.mock('./TripFormModal.tsx', () => ({
+  default: (props: { open: boolean; intent?: string }) => (
+    <div data-testid="trip-form" data-open={String(props.open)} data-intent={props.intent} />
+  ),
 }));
 
 const { default: MyTripsPage } = await import('./MyTripsPage.tsx');
@@ -58,6 +67,7 @@ function fails() {
 afterEach(cleanup);
 beforeEach(() => {
   listSpy.mockReset();
+  canSpy.mockReset().mockReturnValue(false);
   answer([trip()]);
 });
 
@@ -202,5 +212,30 @@ describe('my trips', () => {
     const empty = screen.getByTestId('my-trips-empty').textContent ?? '';
     expect(empty).toContain('could not be loaded');
     expect(empty).not.toContain('invites you');
+  });
+});
+
+/**
+ * Planning a trip from the page that lists the ones you are going on. The form is the trip
+ * list's, opened here on its plan door; this page adds nothing to it but the way in.
+ */
+describe('planning a trip from my trips', () => {
+  it('opens the one trip form on its plan door', () => {
+    canSpy.mockReturnValue(true);
+    show();
+    const form = screen.getByTestId('trip-form');
+    expect(form.dataset.open).toBe('false');
+
+    fireEvent.click(screen.getByTestId('my-trips-plan'));
+
+    expect(form.dataset.open).toBe('true');
+    expect(form.dataset.intent).toBe('plan');
+  });
+
+  it('offers no door to somebody who may not create a trip', () => {
+    show();
+
+    expect(screen.queryByTestId('my-trips-plan')).toBeNull();
+    expect(screen.queryByTestId('trip-form')).toBeNull();
   });
 });

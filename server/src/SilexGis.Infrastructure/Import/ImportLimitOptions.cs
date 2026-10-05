@@ -95,4 +95,21 @@ public sealed class ImportLimitOptions
     /// </para>
     /// </remarks>
     public long MaxArchiveDatabaseBytes { get; set; } = 64L * 1024 * 1024;
+
+    /// <summary>The largest GPX file a trip takes its recorded track from, in bytes.</summary>
+    /// <remarks>
+    /// The track becomes the trip's own sketch, read whole in the request that uploads it, so
+    /// this bounds one request's scratch file. A season of fixes from a handheld unit is a few
+    /// megabytes; the default leaves room for a verbose exporter and refuses an archive dropped
+    /// on the wrong button.
+    /// </remarks>
+    public long MaxTripTrackBytes { get; set; } = 20L * 1024 * 1024;
+
+    /// <summary>The most vertices a track written onto a trip may carry.</summary>
+    /// <remarks>
+    /// Refused rather than thinned: a line simplified by the server would be a line nobody
+    /// recorded, and a trip's sketch is handed exactly to everyone who may read the trip. A
+    /// hundred thousand fixes is a multi-day recording at one a second.
+    /// </remarks>
+    public int MaxTripTrackPoints { get; set; } = 100_000;
 }
