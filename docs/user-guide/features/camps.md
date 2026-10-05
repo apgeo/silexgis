@@ -24,9 +24,39 @@ the camp is what reads across them.
 
 A camp goes through the same states a trip does.
 
+## Creating a camp
+
+**Activity → Camps → New camp**, if you may create one. The form asks for the name, the days,
+who may read it (the caving group unless you say otherwise), the organising club, a description
+and the **working area** — a rough shape drawn on a small map. The working area carries no
+location protection: *"Shown exactly to everybody who may read the camp"*, so draw it roughly,
+never tightly around an entrance that must stay protected.
+
+A camp entered without touching the dates is a one-day camp today. Saving opens the camp.
+
+A new camp is a **draft**, and the page says so to anybody who could announce it: *"This is a
+draft. It has not been announced yet — announce it when the plan is settled, or record it as
+done once it has happened."*
+
+## Editing, the lifecycle, and deleting
+
+**Edit camp** opens the same form, filled in. If somebody else saved the camp while you had
+it open, your save is refused and you are asked to reload.
+
+The lifecycle buttons are the trip's — *Publish · Float it · Start organising · It is going
+ahead · Put it back · Settle a new date · Mark as done · Call it off · Back to draft* — and
+which of them are offered depends on the state the camp is in. Two are confirmed first:
+
+- **Publish** — *"Announce this camp? Nobody is notified by this; it marks the camp as
+  announced. Who may read it does not change."* Unlike a trip, announcing a camp tells nobody.
+- **Call it off** — the camp is kept, and can be reinstated as a draft.
+
+**Delete** asks *"Delete this camp? The trips it gathered stay; only the camp and its own rules
+go."* — a camp gathers trips rather than owning them.
+
 ## Tabs
 
-**Trips · Map · Leads · Who was there · Files · History**
+**Trips · Map · Leads · Who was there · Photographs · Files · History**
 
 ### Trips
 
@@ -96,9 +126,53 @@ Roles: Member · Organiser · Cook · Base camp · Driver · Medic · Equipment 
 If you may read the camp but not the people in this installation, the roster is withheld
 whole — names, count and all — rather than shown partially.
 
+The roles are a vocabulary of the camp's own, separate from the trip roles; an administrator
+edits it under **Configuration → Camp roles** (see [Vocabularies](../admin/vocabularies.md)).
+
+### Photographs
+
+The pictures filed against the camp and the ones on the trips it gathers that you may read,
+drawn as a grid with the gallery's own viewer. *Open in the gallery* narrows the gallery the
+same way.
+
+What is shown is one reader's answer — *"The photographs you may see, from the camp and the
+trips in it you may read. Somebody else may see more, or fewer."* A trip you may not open
+contributes no picture, and a camp you may not open shows none. If there is nothing: *"No
+photographs are filed against this camp or the trips in it that you may read."*
+
 ### Albums
 
-**Albums about this camp** — see [Photographs](photographs.md#albums).
+**Albums about this camp** — on the *Files* tab; see [Photographs](photographs.md#albums).
+
+---
+
+## The write-up
+
+**Write-up**, in the camp's header, opens the camp arranged to be read: *About the camp*, *The
+trips*, *Who was there* and the pictures, built from what **you** may see — the page says so:
+*"This write-up shows what you may see. Somebody else reading the same camp may see more, or
+less: the trips in it, the people, the pictures."*
+
+- **Download document** saves it as a Word document, in the standard layout or in one your club
+  keeps under **Configuration → Report layouts**.
+- **Save to the camp** files the document on the camp's *Files* tab. The copy saved there can
+  be opened by everybody who may read the camp, so it is built from what any account may see of
+  its trips; your own fuller copy is the download.
+- **Print** uses the browser, with the application's chrome left off the paper.
+
+## Permissions and sharing
+
+Two buttons in the header, both for somebody who may manage the camp's permissions:
+
+**Permissions** opens the camp's own access rules — who may read, write or delete this camp,
+person by person or group by group. See [Permissions](../admin/permissions.md).
+
+**Share** reaches further: *"Sharing a camp writes one rule onto each trip it gathers, marked
+as the camp's, so whoever it is shared with can read what the camp gathered."* It takes the
+right to manage permissions on every one of those trips — if any trip refuses, nothing is
+shared and you are told how many refused, never which. The dialog shows how many of the camp's
+trips each sharing covers, and says when trips have joined since it was last applied: apply it
+again to cover them, or withdraw it to take it back from every trip at once.
 
 ---
 

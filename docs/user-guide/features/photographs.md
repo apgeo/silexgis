@@ -99,7 +99,10 @@ takes it straight back off.
 **On a trip.** A trip has its own gallery, showing *"the photographs you may see. Somebody
 else may see more, or fewer."*
 
-**On a camp.** *Albums about this camp.*
+**On a camp.** A camp's *Photographs* tab shows the pictures filed against the camp and the
+ones on the trips it gathers that you may read — again *"the photographs you may see"*, because
+a trip you may not open contributes none. *Open in the gallery* narrows the gallery the same way.
+Albums about the camp are on its *Files* tab.
 
 **On the map.** The **Geotagged photos** layer draws photographs that carry a position.
 
