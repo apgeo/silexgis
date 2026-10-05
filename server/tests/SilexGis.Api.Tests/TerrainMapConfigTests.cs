@@ -261,6 +261,89 @@ public sealed class TerrainMapConfigTests : IAsyncLifetime, IDisposable, IClassF
             .ShouldBe($"/terrain/builds/{build:N}/");
     }
 
+    /// <summary>
+    /// Every checked build is offered to switch the scene's ground to, with the three things that
+    /// have to travel together, and the drawn one is marked so a switch can be switched back.
+    /// </summary>
+    /// <remarks>
+    /// An unchecked build is kept out of the list by the same term that keeps it off the screen:
+    /// a viewer offered a pyramid with holes in it would choose it and see plausible ground at the
+    /// wrong resolution, with nothing saying why.
+    /// </remarks>
+    [Fact]
+    public async Task Every_checked_build_is_offered_as_a_choice_and_the_drawn_one_is_marked()
+    {
+        await ClearBuildsAsync();
+
+        var older = await SeedPublishedBuildAsync(
+            datum: TerrainHeightDatum.Ellipsoidal, geoidHeightM: 41.5, credits: ["Apuseni LiDAR 2019"]);
+        var newer = await SeedPublishedBuildAsync(
+            datum: TerrainHeightDatum.Orthometric, geoidHeightM: 0, credits: ["Copernicus DEM GLO-30"]);
+        var uncheckedBuild = await SeedPublishedBuildAsync(
+            datum: TerrainHeightDatum.Orthometric, geoidHeightM: 0, credits: [], version: null);
+        await ChooseAsync(older);
+
+        var config = await ConfigAsync(reader);
+        var terrain = config.GetProperty("terrain");
+        terrain.GetProperty("origin").GetString().ShouldBe("build");
+        terrain.GetProperty("buildId").GetGuid().ShouldBe(older);
+
+        var choices = config.GetProperty("terrainBuilds").EnumerateArray().ToList();
+        choices.Select(c => c.GetProperty("id").GetGuid()).ShouldBe([newer, older]);
+        choices.Select(c => c.GetProperty("id").GetGuid()).ShouldNotContain(uncheckedBuild);
+
+        var drawn = choices.Single(c => c.GetProperty("isDrawn").GetBoolean());
+        drawn.GetProperty("id").GetGuid().ShouldBe(older);
+        drawn.GetProperty("url").GetString().ShouldBe($"/terrain/builds/{older:N}/");
+        drawn.GetProperty("attribution").GetString().ShouldBe("Apuseni LiDAR 2019");
+        drawn.GetProperty("surveyHeightOffsetM").GetDouble().ShouldBe(41.5);
+        drawn.GetProperty("extent").GetProperty("type").GetString().ShouldBe("Polygon");
+        drawn.GetProperty("requestedMaxDepth").GetInt32().ShouldBe(13);
+
+        var other = choices.Single(c => c.GetProperty("id").GetGuid() == newer);
+        other.GetProperty("isDrawn").GetBoolean().ShouldBeFalse();
+        other.GetProperty("surveyHeightOffsetM").GetDouble().ShouldBe(0);
+        other.GetProperty("attribution").GetString().ShouldBe("Copernicus DEM GLO-30");
+    }
+
+    /// <summary>
+    /// When a pyramid named in the configuration is drawn over a chosen build, the answer says so
+    /// and names the build it overrides, so the administration page can tell somebody who just
+    /// chose a build why the scene did not change.
+    /// </summary>
+    [Fact]
+    public async Task A_configured_pyramid_says_where_it_came_from_and_names_the_build_it_overrides()
+    {
+        await ClearBuildsAsync();
+
+        var build = await SeedPublishedBuildAsync(
+            datum: TerrainHeightDatum.Orthometric, geoidHeightM: 0, credits: ["Copernicus DEM GLO-30"]);
+        await ChooseAsync(build);
+
+        var config = await ConfigAsync(mountedReader);
+        var terrain = config.GetProperty("terrain");
+        terrain.GetProperty("origin").GetString().ShouldBe("configured");
+        terrain.GetProperty("buildId").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        var fallback = config.GetProperty("terrainFallback");
+        fallback.GetProperty("origin").GetString().ShouldBe("build");
+        fallback.GetProperty("buildId").GetGuid().ShouldBe(build);
+
+        // The choice list is the same whichever place the drawn ground came from: the build is
+        // still there to switch to, still marked as the one that would be drawn.
+        config.GetProperty("terrainBuilds").EnumerateArray()
+            .Single().GetProperty("isDrawn").GetBoolean().ShouldBeTrue();
+    }
+
+    private static async Task<JsonElement> ConfigAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/v1/map/config");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        using var body = JsonDocument.Parse(payload);
+        return body.RootElement.Clone();
+    }
+
     private async Task ChooseAsync(Guid build)
     {
         var chosen = await chooser.PostAsync($"/api/v1/terrain/builds/{build}/active", null);

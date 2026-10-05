@@ -69,7 +69,58 @@ public sealed record TripLogFeatureCollection(
 /// rather than a datum it could apply backwards, and so swapping the source cannot leave a stale
 /// correction behind. Zero for a source whose heights are already the kind a survey carries.
 /// </param>
-public sealed record TerrainSourceDto(string Url, string? Attribution, double SurveyHeightOffsetM);
+/// <param name="Origin">
+/// Where this answer came from: a pyramid named in the installation's configuration, or a build
+/// made inside the application. Published because the two are chosen between by a fixed
+/// precedence that nothing on screen otherwise reveals — an administrator who chooses a build
+/// while a configured address exists sees the scene draw the configured ground and has no way to
+/// tell why.
+/// </param>
+/// <param name="BuildId">The build this source is, when <paramref name="Origin"/> says it is one.</param>
+public sealed record TerrainSourceDto(
+    string Url,
+    string? Attribution,
+    double SurveyHeightOffsetM,
+    TerrainSourceOrigin Origin,
+    Guid? BuildId);
+
+/// <summary>Which of the two places an installation can name an elevation model a source came from.</summary>
+public enum TerrainSourceOrigin
+{
+    /// <summary>A pyramid named in this installation's configuration.</summary>
+    Configured = 0,
+
+    /// <summary>A build made inside the application and checked whole.</summary>
+    Build = 1,
+}
+
+/// <summary>
+/// One elevation build the 3D scene may draw instead of the one it starts with. Everything a
+/// viewer needs in order to choose it and to draw it: where it is, how fine it is, and the three
+/// things that have to travel together when the ground changes under the caves.
+/// </summary>
+/// <remarks>
+/// Published to anyone who may see the scene, not only to the terrain right's holders, on the
+/// owner's ruling that a build's extent is a rectangle somebody drew on a world map and discloses
+/// nothing about any cave — the drawn build's tiles are already served to every viewer. This is
+/// the list behind a switch in the scene; the one build that is drawn without asking stays
+/// <see cref="MapConfigDto.Terrain"/>.
+/// </remarks>
+/// <param name="Extent">The ground the build covers, as drawn (WGS84).</param>
+/// <param name="RequestedMaxDepth">
+/// The tile depth it was built to, which is the only honest proxy for "finer" the record has: two
+/// builds of the same depth over the same ground are the same resolution whatever their size.
+/// </param>
+/// <param name="IsDrawn">Whether this is the build the scene draws when nobody chooses.</param>
+public sealed record TerrainBuildChoiceDto(
+    Guid Id,
+    GeoJsonGeometry Extent,
+    int RequestedMaxDepth,
+    string Url,
+    string? Attribution,
+    double SurveyHeightOffsetM,
+    bool IsDrawn,
+    DateTimeOffset? FinishedAt);
 
 /// <summary>Map rendering limits published to the client.</summary>
 /// <param name="MaxPoints">
@@ -82,6 +133,11 @@ public sealed record TerrainSourceDto(string Url, string? Attribution, double Su
 /// there is no second one. Only ever set when the first came from configuration and a checked
 /// build exists at a different address; see the resolver for why a second answer is needed at all.
 /// </param>
+/// <param name="TerrainBuilds">
+/// Every build whose tiles were checked whole and can be drawn, newest first, for a viewer to
+/// switch the scene's ground to. Empty when the installation has made none. The drawn one is in
+/// the list too, marked, so a switch can be switched back.
+/// </param>
 public sealed record MapConfigDto(
     int CenterlineDetailZoom,
     int CenterlineMaxPaths,
@@ -90,7 +146,8 @@ public sealed record MapConfigDto(
     int ClusterMaxZoom,
     int MaxPoints,
     TerrainSourceDto? Terrain,
-    TerrainSourceDto? TerrainFallback);
+    TerrainSourceDto? TerrainFallback,
+    IReadOnlyList<TerrainBuildChoiceDto> TerrainBuilds);
 
 /// <summary>
 /// GeoJSON layer endpoints for the map workspace. Always visibility-filtered; protected
@@ -165,7 +222,7 @@ public static class MapEndpoints
         }
 
         var options = mapOptions.Value;
-        var (terrain, terrainFallback) = await TerrainSourceResolver.ResolveAsync(terrainOptions.Value, db, ct);
+        var sources = await TerrainSourceResolver.ResolveAsync(terrainOptions.Value, db, ct);
         return TypedResults.Ok(new MapConfigDto(
             options.CenterlineDetailZoom,
             options.CenterlineMaxPaths,
@@ -173,8 +230,9 @@ public static class MapEndpoints
             options.CenterlineGateZoom,
             ClusterMaxZoom,
             options.MaxPoints,
-            terrain,
-            terrainFallback));
+            sources.Primary,
+            sources.Fallback,
+            sources.Drawable));
     }
 
     /// <summary>
