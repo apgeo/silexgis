@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Tests for the gate lock: taking it, queueing behind it, taking over a holder that died,
-// and the `run` form releasing it and recording a verdict whatever the command's outcome.
+// Tests for the gate lock: taking it, queueing behind it in arrival order, taking over a holder
+// that died or that is alive and doing nothing, honouring a lock an older copy of the tool took
+// under the temporary directory, refusing an unfiltered full suite, and the `run` form releasing
+// the lock and recording a verdict whatever the command's outcome.
 //
 // Run from the repository root with `node --test "scripts/**/*.test.mjs"`. Each test points
-// SILEXGIS_GATE_LOCK_DIR at its own temporary directory, so nothing here can collide with a
-// real integration run on the same machine.
+// SILEXGIS_GATE_LOCK_DIR at its own temporary directory, and the whole file points the legacy
+// location at an empty one, so nothing here can see or disturb a real integration run on the
+// same machine.
 
 import { strict as assert } from 'node:assert';
 import { spawn, spawnSync } from 'node:child_process';
@@ -15,13 +18,29 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, describe, it } from 'node:test';
 
-import { tryAcquire, release, readOwner, cpuSecondsOfTree, holderProgress } from './gate-lock.mjs';
+import {
+  tryAcquire,
+  release,
+  readOwner,
+  lockFile,
+  liveTickets,
+  legacyBlocker,
+  isUnfilteredApiSuite,
+  cpuSecondsOfTree,
+  holderProgress,
+} from './gate-lock.mjs';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'gate-lock.mjs');
 const scratch = mkdtempSync(join(tmpdir(), 'gate-lock-test-'));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 const freshDir = (name) => join(scratch, name);
+// The machine's real legacy lock may be held by a real run while these tests execute; every call
+// in this file, in-process or spawned, looks at an empty stand-in instead.
+process.env.SILEXGIS_GATE_LEGACY_DIR = freshDir('no-legacy-lock');
+const envFor = (dir, extra = {}) => ({ ...process.env, SILEXGIS_GATE_LOCK_DIR: dir, ...extra });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const deadPid = () => spawnSync(process.execPath, ['-e', '']).pid;
 
 describe('acquire and release', () => {
   it('a free lock is taken, a held lock is not, a released lock is free again', () => {
@@ -34,17 +53,35 @@ describe('acquire and release', () => {
     release(dir);
   });
 
+  it('the lock is one named file, and its directory outlives a release', () => {
+    const dir = freshDir('shape');
+    assert.equal(tryAcquire(dir, 'held'), true);
+    assert.ok(existsSync(lockFile(dir)), 'the claim is the file');
+    const record = JSON.parse(readFileSync(lockFile(dir), 'utf8'));
+    assert.equal(record.pid, process.pid);
+    assert.ok(record.cwd, 'the record names the worktree that holds it');
+    release(dir);
+    assert.equal(existsSync(lockFile(dir)), false, 'released means the file is gone');
+    assert.ok(existsSync(dir), 'the data directory is not the lock and is not removed');
+  });
+
   it('a holder whose process is gone is stale and is taken over', () => {
     const dir = freshDir('stale');
-    // A process that has already exited supplies a pid that is certainly not running.
-    const dead = spawnSync(process.execPath, ['-e', '']);
-    mkdirSync(dir);
+    mkdirSync(dir, { recursive: true });
     writeFileSync(
-      join(dir, 'owner.json'),
-      JSON.stringify({ pid: dead.pid, host: 'gone', label: 'crashed run', since: '2026-01-01T00:00:00Z' }),
+      lockFile(dir),
+      JSON.stringify({ pid: deadPid(), host: 'gone', label: 'crashed run', since: '2026-01-01T00:00:00Z' }),
     );
     assert.equal(tryAcquire(dir, 'successor'), true);
     assert.equal(readOwner(dir).label, 'successor');
+    release(dir);
+  });
+
+  it('a release by somebody who does not hold the lock changes nothing', () => {
+    const dir = freshDir('not-mine');
+    assert.equal(tryAcquire(dir, 'mine'), true);
+    assert.equal(release(dir, { heldByPid: 424242 }), false);
+    assert.equal(readOwner(dir).label, 'mine');
     release(dir);
   });
 
@@ -52,11 +89,198 @@ describe('acquire and release', () => {
     const dir = freshDir('cli');
     assert.equal(tryAcquire(dir, 'holder'), true);
     const r = spawnSync(process.execPath, [script, 'acquire', '--no-wait', '--label', 'late'], {
-      env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir },
+      env: envFor(dir),
       encoding: 'utf8',
     });
     assert.equal(r.status, 3);
     release(dir);
+  });
+});
+
+describe('a lock an older copy of the tool took under the temporary directory', () => {
+  // The changeover hazard: moving the lock while an older copy still holds the old one is two
+  // mutually invisible locks, which is the failure that produced sixteen phantom failures over
+  // three hours. So the old location is read and honoured until its holder is gone.
+  it('blocks while its holder lives, and is cleared once the holder is gone', () => {
+    const dir = freshDir('legacy');
+    const legacy = freshDir('legacy-dir');
+    const saved = process.env.SILEXGIS_GATE_LEGACY_DIR;
+    process.env.SILEXGIS_GATE_LEGACY_DIR = legacy;
+    try {
+      mkdirSync(legacy);
+      writeFileSync(join(legacy, 'owner.json'), JSON.stringify({ pid: process.pid, label: 'old tool', since: '2026-10-05T00:00:00Z' }));
+      assert.equal(tryAcquire(dir, 'new tool'), false, 'a live legacy holder is a running suite');
+      assert.equal(legacyBlocker().kind, 'legacy');
+      assert.equal(existsSync(lockFile(dir)), false, 'nothing was written over it');
+
+      writeFileSync(join(legacy, 'owner.json'), JSON.stringify({ pid: deadPid(), label: 'old tool', since: '2026-10-05T00:00:00Z' }));
+      assert.equal(tryAcquire(dir, 'new tool'), true, 'a dead legacy holder is no claim');
+      assert.equal(existsSync(legacy), false, 'and its corpse is cleared, because nothing else will');
+      release(dir);
+    } finally {
+      process.env.SILEXGIS_GATE_LEGACY_DIR = saved;
+    }
+  });
+});
+
+describe('waiting in turn', () => {
+  it('waiters take the lock in the order they arrived', async () => {
+    const dir = freshDir('fifo');
+    assert.equal(tryAcquire(dir, 'holder'), true);
+    const env = envFor(dir);
+    const order = [];
+    const waiter = (label) => {
+      const child = spawn(process.execPath, [script, 'acquire', '--label', label], { env });
+      const exited = new Promise((r) => child.on('exit', r));
+      child.stdout.on('data', (d) => {
+        if (String(d).includes('acquired')) order.push(label);
+      });
+      return exited;
+    };
+    const a = waiter('A');
+    await sleep(1500);
+    const b = waiter('B');
+    await sleep(1500);
+    assert.deepEqual(liveTickets(dir).map((t) => t.label), ['A', 'B'], 'both are queued, A first');
+
+    release(dir);
+    // A takes the lock and exits holding it; its claim is then stale, which is B's cue.
+    await a;
+    await b;
+    assert.deepEqual(order, ['A', 'B']);
+    assert.deepEqual(liveTickets(dir), [], 'nobody is left in the queue');
+    release(dir, { heldByPid: -1 });
+  });
+});
+
+describe('telling a wedged holder from a slow one', () => {
+  // The lock already takes over from a holder that died. What it could not see is a holder still
+  // running and doing nothing, which is what wedged this machine twice — eight and twelve hours
+  // on the lock at around two per cent of a core, with other sessions queued behind it. Age does
+  // not distinguish that from a full suite legitimately running for hours; CPU does.
+
+  it('accounts for the CPU of a process and everything under it', () => {
+    const own = cpuSecondsOfTree(process.pid);
+    if (own === null) return; // no /proc: the caller treats this as "cannot tell"
+    assert.ok(own >= 0, 'a running process has consumed some non-negative amount of CPU');
+    assert.ok(Number.isFinite(own));
+  });
+
+  it('answers null for a pid that is not there, rather than zero', () => {
+    if (cpuSecondsOfTree(process.pid) === null) return; // no /proc
+    // Zero would read as "present and idle", which is the one conclusion that must not be
+    // reached about a process that does not exist.
+    assert.equal(cpuSecondsOfTree(0x7ffffff0), null);
+  });
+
+  it('sees a busy process as busy', async () => {
+    const child = spawn(process.execPath, ['-e', 'const end = Date.now() + 5000; while (Date.now() < end);']);
+    try {
+      const p = await holderProgress(child.pid, { windowMs: 1500 });
+      if (!p.known) return; // no /proc
+      assert.ok(p.cpuSeconds > 0.2, `a spinning process should burn CPU, saw ${p.cpuSeconds}`);
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+
+  it('sees an idle process as idle', async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000);']);
+    try {
+      const p = await holderProgress(child.pid, { windowMs: 1500 });
+      if (!p.known) return; // no /proc
+      assert.ok(p.cpuSeconds < 0.05, `a sleeping process should burn none, saw ${p.cpuSeconds}`);
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+
+  it('refuses to steal from a holder whose pid the caller did not name', () => {
+    const dir = freshDir('steal-unnamed');
+    assert.ok(tryAcquire(dir, 'holder'));
+    const r = spawnSync(process.execPath, [script, 'steal', '--pid', '424242'], {
+      env: envFor(dir),
+      encoding: 'utf8',
+    });
+    assert.equal(r.status, 3, 'naming the wrong holder must not release anybody else\'s lock');
+    assert.ok(existsSync(lockFile(dir)), 'the lock is still held');
+    release(dir);
+  });
+
+  it('steals from a holder that is doing nothing, and leaves its process alone', async () => {
+    const dir = freshDir('steal-wedged');
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000);']);
+    try {
+      assert.ok(tryAcquire(dir, 'wedged'));
+      // Rewrite the owner so the recorded holder is the idle child rather than this test.
+      const owner = readOwner(dir);
+      writeFileSync(lockFile(dir), JSON.stringify({ ...owner, pid: child.pid }));
+      const r = spawnSync(process.execPath, [script, 'steal', '--pid', String(child.pid)], {
+        env: envFor(dir, { GATE_LOCK_PROBE_MS: '1500' }),
+        encoding: 'utf8',
+      });
+      if (cpuSecondsOfTree(process.pid) === null) return; // no /proc: steal cannot judge
+      assert.equal(r.status, 0, r.stderr);
+      assert.ok(!existsSync(lockFile(dir)), 'the lock is free');
+      assert.equal(child.killed, false, 'stealing the lock does not kill the holder');
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+
+  it('a waiter takes over from a holder that burns no CPU for the whole window, by itself', async () => {
+    const dir = freshDir('auto-takeover');
+    const sleeper = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000);']);
+    try {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        lockFile(dir),
+        JSON.stringify({ pid: sleeper.pid, host: 'here', label: 'wedged suite', since: new Date().toISOString() }),
+      );
+      const r = spawnSync(process.execPath, [script, 'acquire', '--label', 'late'], {
+        env: envFor(dir, { GATE_LOCK_WEDGED_MS: '2000', GATE_LOCK_PROBE_MS: '300' }),
+        encoding: 'utf8',
+        timeout: 40_000,
+      });
+      if (cpuSecondsOfTree(process.pid) === null) return; // no /proc: nothing can be judged wedged
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(r.stderr, /WEDGED/, 'the takeover is said out loud');
+      assert.equal(readOwner(dir).label, 'late');
+      assert.equal(sleeper.killed, false, 'the wedged process is left alone');
+    } finally {
+      sleeper.kill('SIGKILL');
+      release(dir, { heldByPid: -1 });
+    }
+  });
+});
+
+describe('the whole API suite is a deliberate act', () => {
+  it('knows the suite by its project, by its directory, and by the absence of a filter', () => {
+    assert.equal(isUnfilteredApiSuite(['dotnet', 'test', 'tests/SilexGis.Api.Tests', '--no-build']), true);
+    assert.equal(isUnfilteredApiSuite(['dotnet', 'test', 'tests/SilexGis.Api.Tests/']), true);
+    assert.equal(
+      isUnfilteredApiSuite(['C:\\Program Files\\dotnet\\dotnet.exe', 'test', 'C:\\x\\tests\\SilexGis.Api.Tests\\SilexGis.Api.Tests.csproj']),
+      true,
+    );
+    assert.equal(isUnfilteredApiSuite(['dotnet', 'test', 'tests/SilexGis.Api.Tests', '--filter', 'FullyQualifiedName~X']), false);
+    assert.equal(isUnfilteredApiSuite(['dotnet', 'test', 'tests/SilexGis.Api.Tests', '--list-tests']), false);
+    assert.equal(isUnfilteredApiSuite(['dotnet', 'test', 'tests/SilexGis.Domain.Tests']), false);
+    assert.equal(isUnfilteredApiSuite(['dotnet', 'build', 'tests/SilexGis.Api.Tests']), false);
+    assert.equal(isUnfilteredApiSuite([process.execPath, '-e', '1']), false);
+  });
+
+  it('refuses the whole suite without --full, before taking the lock or running anything', () => {
+    const dir = freshDir('refuse');
+    const result = join(scratch, 'refused.json');
+    const r = spawnSync(
+      process.execPath,
+      [script, 'run', '--result', result, '--', 'dotnet', 'test', 'server/tests/SilexGis.Api.Tests/SilexGis.Api.Tests.csproj', '--no-build'],
+      { env: envFor(dir), encoding: 'utf8' },
+    );
+    assert.equal(r.status, 3);
+    assert.match(r.stderr, /--full/, 'it says what to type when the full suite is meant');
+    assert.equal(existsSync(lockFile(dir)), false, 'no lock was taken');
+    assert.equal(existsSync(result), false, 'no verdict was written');
   });
 });
 
@@ -67,14 +291,15 @@ describe('run', () => {
     const r = spawnSync(
       process.execPath,
       [script, 'run', '--label', 'probe', '--result', result, '--', process.execPath, '-e', 'process.exit(3)'],
-      { env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir }, encoding: 'utf8' },
+      { env: envFor(dir), encoding: 'utf8' },
     );
     assert.equal(r.status, 3);
     const verdict = JSON.parse(readFileSync(result, 'utf8'));
     assert.equal(verdict.exitCode, 3);
     assert.equal(verdict.label, 'probe');
+    assert.equal(verdict.lock, lockFile(dir), 'the verdict names the lock it ran under');
     assert.ok(verdict.startedAt <= verdict.endedAt);
-    assert.equal(existsSync(dir), false, 'the lock must be released after the run');
+    assert.equal(existsSync(lockFile(dir)), false, 'the lock must be released after the run');
   });
 
   it('a green command reports exit 0 the same way', () => {
@@ -82,19 +307,31 @@ describe('run', () => {
     const result = join(scratch, 'result-green.json');
     const r = spawnSync(
       process.execPath,
-      [script, 'run', '--result', result, '--', process.execPath, '-e', ''],
-      { env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir }, encoding: 'utf8' },
+      [script, 'run', '--result', result, '--', process.execPath, '-e', 'process.exit(0)'],
+      { env: envFor(dir), encoding: 'utf8' },
     );
     assert.equal(r.status, 0);
     assert.equal(JSON.parse(readFileSync(result, 'utf8')).exitCode, 0);
-    assert.equal(existsSync(dir), false);
+    assert.equal(existsSync(lockFile(dir)), false);
+  });
+
+  it('a second run waits for the first and both record verdicts', async () => {
+    const dir = freshDir('run-queue');
+    const r1 = join(scratch, 'q1.json');
+    const r2 = join(scratch, 'q2.json');
+    const env = envFor(dir);
+    const first = spawn(process.execPath, [script, 'run', '--result', r1, '--', process.execPath, '-e', 'setTimeout(() => {}, 2500)'], { env });
+    await sleep(800);
+    const second = spawn(process.execPath, [script, 'run', '--result', r2, '--', process.execPath, '-e', 'process.exit(0)'], { env });
+    await new Promise((r) => first.on('exit', r));
+    await new Promise((r) => second.on('exit', r));
+    const v1 = JSON.parse(readFileSync(r1, 'utf8'));
+    const v2 = JSON.parse(readFileSync(r2, 'utf8'));
+    assert.ok(v2.startedAt >= v1.endedAt, 'the second started only once the first had finished');
+    assert.equal(existsSync(lockFile(dir)), false);
   });
 });
 
-// An exit code cannot tell a passing run from one that ran nothing, and both have been collected
-// here as verdicts: a targeted run whose thirty-six tests all failed to reach the database wrote
-// exitCode 0, and a filter matching no class wrote the same. The result file now carries what the
-// runner said it executed, and a verdict that cannot read as green without it.
 describe('a result file says what actually ran', () => {
   const runWith = (name, output) => {
     const dir = freshDir(`verdict-${name}`);
@@ -102,7 +339,7 @@ describe('a result file says what actually ran', () => {
     spawnSync(
       process.execPath,
       [script, 'run', '--result', result, '--', process.execPath, '-e', `console.log(${JSON.stringify(output)})`],
-      { env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir }, encoding: 'utf8' },
+      { env: envFor(dir), encoding: 'utf8' },
     );
     return JSON.parse(readFileSync(result, 'utf8'));
   };
@@ -156,82 +393,6 @@ describe('a result file says what actually ran', () => {
   });
 });
 
-describe('telling a wedged holder from a slow one', () => {
-  // The lock already takes over from a holder that died. What it could not see is a holder still
-  // running and doing nothing, which is what wedged this machine twice — eight and twelve hours
-  // on the lock at around two per cent of a core, with other sessions queued behind it. Age does
-  // not distinguish that from a full suite legitimately running for hours; CPU does.
-
-  it('accounts for the CPU of a process and everything under it', () => {
-    const own = cpuSecondsOfTree(process.pid);
-    if (own === null) return; // no /proc: the caller treats this as "cannot tell"
-    assert.ok(own >= 0, 'a running process has consumed some non-negative amount of CPU');
-    assert.ok(Number.isFinite(own));
-  });
-
-  it('answers null for a pid that is not there, rather than zero', () => {
-    if (cpuSecondsOfTree(process.pid) === null) return; // no /proc
-    // Zero would read as "present and idle", which is the one conclusion that must not be
-    // reached about a process that does not exist.
-    assert.equal(cpuSecondsOfTree(0x7ffffff0), null);
-  });
-
-  it('sees a busy process as busy', async () => {
-    const child = spawn(process.execPath, ['-e', 'const end = Date.now() + 5000; while (Date.now() < end);']);
-    try {
-      const p = await holderProgress(child.pid, { windowMs: 1500 });
-      if (!p.known) return; // no /proc
-      assert.ok(p.cpuSeconds > 0.2, `a spinning process should burn CPU, saw ${p.cpuSeconds}`);
-    } finally {
-      child.kill('SIGKILL');
-    }
-  });
-
-  it('sees an idle process as idle', async () => {
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000);']);
-    try {
-      const p = await holderProgress(child.pid, { windowMs: 1500 });
-      if (!p.known) return; // no /proc
-      assert.ok(p.cpuSeconds < 0.05, `a sleeping process should burn none, saw ${p.cpuSeconds}`);
-    } finally {
-      child.kill('SIGKILL');
-    }
-  });
-
-  it('refuses to steal from a holder whose pid the caller did not name', () => {
-    const dir = freshDir('steal-unnamed');
-    assert.ok(tryAcquire(dir, 'holder'));
-    const r = spawnSync(process.execPath, [script, 'steal', '--pid', '424242'], {
-      env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir },
-      encoding: 'utf8',
-    });
-    assert.equal(r.status, 3, 'naming the wrong holder must not release anybody else\'s lock');
-    assert.ok(existsSync(dir), 'the lock is still held');
-    release(dir);
-  });
-
-  it('steals from a holder that is doing nothing, and leaves its process alone', async () => {
-    const dir = freshDir('steal-wedged');
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000);']);
-    try {
-      assert.ok(tryAcquire(dir, 'wedged'));
-      // Rewrite the owner so the recorded holder is the idle child rather than this test.
-      const owner = readOwner(dir);
-      writeFileSync(join(dir, 'owner.json'), JSON.stringify({ ...owner, pid: child.pid }));
-      const r = spawnSync(process.execPath, [script, 'steal', '--pid', String(child.pid)], {
-        env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir },
-        encoding: 'utf8',
-      });
-      if (cpuSecondsOfTree(process.pid) === null) return; // no /proc: steal cannot judge
-      assert.equal(r.status, 0, r.stderr);
-      assert.ok(!existsSync(dir), 'the lock is free');
-      assert.equal(child.killed, false, 'stealing the lock does not kill the holder');
-    } finally {
-      child.kill('SIGKILL');
-    }
-  });
-});
-
 // Two full runs were destroyed by this and neither reported anything wrong: another worktree's
 // build rewrote the `.dll` files a run was executing, hours in, and the run carried on and produced
 // a verdict describing a mixture of two builds. It was only ever visible afterwards, by noticing
@@ -257,7 +418,7 @@ describe('assemblies swapped under a run', () => {
       [script, 'run', '--label', 'swap', '--result', result, '--',
         process.execPath, '-e', `setTimeout(() => {}, 4000); require('fs').writeFileSync(${JSON.stringify(p.dll)}, 'build two')`],
       {
-        env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir, GATE_LOCK_ASSEMBLY_CHECK_MS: '150' },
+        env: envFor(dir, { GATE_LOCK_ASSEMBLY_CHECK_MS: '150' }),
         cwd: p.root,
         encoding: 'utf8',
       },
@@ -270,7 +431,29 @@ describe('assemblies swapped under a run', () => {
     assert.notEqual(r.status, 0, 'a void run must not exit 0, or a caller checking only the status reads a pass');
     assert.match(r.stderr, /GATE RUN VOID/, 'it must say so where somebody watching would see it');
     assert.match(r.stderr, new RegExp('Suite\\.dll'), 'the message must name the file');
-    assert.equal(existsSync(dir), false, 'the lock is still released');
+    assert.equal(existsSync(lockFile(dir)), false, 'the lock is still released');
+  });
+
+  // The project named by its DIRECTORY, from somewhere else, is the shape every batch brief uses.
+  // It used to fall through to the working directory's bin/, which does not exist, so those runs
+  // had no guard at all and nothing said so.
+  it('is caught when the project is named by its directory from another working directory', () => {
+    const dir = freshDir('swap-dir');
+    const result = join(scratch, 'result-swap-dir.json');
+    const p = project('SwappedByDir');
+    const r = spawnSync(
+      process.execPath,
+      [script, 'run', '--result', result, '--',
+        process.execPath, '-e', `setTimeout(() => {}, 4000); require('fs').writeFileSync(${JSON.stringify(p.dll)}, 'build two')`,
+        p.root],
+      {
+        env: envFor(dir, { GATE_LOCK_ASSEMBLY_CHECK_MS: '150' }),
+        cwd: scratch,
+        encoding: 'utf8',
+      },
+    );
+    assert.equal(JSON.parse(readFileSync(result, 'utf8')).verdict, 'void');
+    assert.equal(r.status, 75);
   });
 
   // The twin: without this, a guard that flagged every run would pass the test above and make the
@@ -283,7 +466,7 @@ describe('assemblies swapped under a run', () => {
       process.execPath,
       [script, 'run', '--result', result, '--', process.execPath, '-e', 'setTimeout(() => {}, 500)'],
       {
-        env: { ...process.env, SILEXGIS_GATE_LOCK_DIR: dir, GATE_LOCK_ASSEMBLY_CHECK_MS: '100' },
+        env: envFor(dir, { GATE_LOCK_ASSEMBLY_CHECK_MS: '100' }),
         cwd: p.root,
         encoding: 'utf8',
       },

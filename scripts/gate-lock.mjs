@@ -6,43 +6,82 @@
 // not share the box — they poison each other: file-watcher handles run out, load quadruples,
 // and a suite that passes alone fails wholesale. Every worktree therefore takes this lock
 // before a full or targeted integration run, and queued runs execute in turn instead of
-// concurrently. The lock is a directory created atomically; the holder records itself inside
-// it, and a holder whose process is gone is stale and may be taken over.
+// concurrently.
+//
+// What the lock IS matters as much as that it exists, because a lock two programs disagree
+// about is not a lock: two copies of this tool once locked two different places, each reported
+// `free` while the other was held, and two full suites ran side by side for three hours. So:
+//
+//   * the lock is ONE NAMED FILE, <dir>/gate.lock, created with the exclusive-create flag so two
+//     processes racing cannot both win, holding the holder's pid, label and worktree as JSON;
+//   * <dir> is the persistent data directory (/srv/data/silexgis where it exists), deliberately
+//     NOT the system temporary directory — on the development machine that is a 16 GB tmpfs,
+//     i.e. memory, and a lock that lives in memory is also one that vanishes on reboot while the
+//     tool still believes in it; SILEXGIS_GATE_LOCK_DIR overrides it, and must then name the
+//     same place for every worktree on the machine;
+//   * a holder whose process is gone is stale and is taken over; a holder whose process is alive
+//     but has burned no CPU for a quarter of an hour is wedged — twice this machine sat for eight
+//     and twelve hours behind one — and the next waiter takes over from it, loudly, leaving the
+//     process itself alone;
+//   * waiters queue on numbered tickets in <dir>/queue and may only claim the lock while holding
+//     the oldest live ticket, so a run that has waited longest goes next instead of whichever
+//     process happened to poll first after a release.
+//
+// Changeover: older copies of this tool, still present in older worktrees, lock a DIRECTORY
+// under the system temporary directory. A suite one of them started is still a suite, so that
+// location is read — never written — and honoured while its holder lives. Once the last of those
+// copies is gone this paragraph and `legacyBlocker` can go with it.
 //
 // Usage, from anywhere:
-//   node scripts/gate-lock.mjs status
+//   node scripts/gate-lock.mjs status [--probe]
 //   node scripts/gate-lock.mjs acquire [--no-wait] [--label <text>]
 //   node scripts/gate-lock.mjs release
-//   node scripts/gate-lock.mjs run [--label <text>] [--result <file>] -- <command> [args...]
-//
-// A `run` also fingerprints the test assemblies it is about to execute and re-checks them while it
-// goes. If another worktree's build overwrites them mid-run the run is killed, the result file says
-// `verdict: "void"`, and it exits 75 — because a verdict assembled from two builds proves nothing in
-// either direction, and the failure is otherwise silent for as long as the suite takes.
+//   node scripts/gate-lock.mjs steal --pid <holder> [--force]
+//   node scripts/gate-lock.mjs run [--label <text>] [--result <file>] [--full] -- <command> [args...]
 //
 // `run` is the normal form: take the lock (waiting in line by default), run the command with
 // inherited stdio, write a small JSON result file when it ends (so a detached caller can
 // collect the verdict later), release, and exit with the command's exit code. `acquire` with
 // --no-wait exits 3 when the lock is held, so scripts can branch without parsing output.
 //
-// The lock directory defaults to the system temp dir and can be pointed elsewhere with
-// SILEXGIS_GATE_LOCK_DIR — it must name the same place for every worktree that shares the
-// machine, which the default already does.
+// A `run` also fingerprints the test assemblies it is about to execute and re-checks them while
+// it goes. If another worktree's build overwrites them mid-run the run is killed, the result file
+// says `verdict: "void"`, and it exits 75 — because a verdict assembled from two builds proves
+// nothing in either direction, and the failure is otherwise silent for as long as the suite takes.
+//
+// A `run` of the whole API integration suite — `dotnet test` naming the Api.Tests project with
+// no --filter — is refused unless --full is given. Four consecutive batches started one by
+// accident despite a brief forbidding it, three of them at once, which at the suite's length
+// would have serialised more than a day of lock behind every other effort on the machine. An
+// instruction did not stop that; a flag that has to be typed on purpose does.
 
-import { mkdirSync, rmSync, readFileSync, readdirSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { spawn } from 'node:child_process';
-import { hostname, tmpdir } from 'node:os';
-import { join, dirname, resolve } from 'node:path';
+import { homedir, hostname, tmpdir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import process from 'node:process';
 
-/** How much of a run's output is kept to find the summary in. */
 /**
  * How often a run re-checks that nobody has rebuilt the assemblies it is executing. Overridable
  * only so the guard's own test can drive it; a minute is right for a suite measured in hours.
  */
 const AssemblyCheckMs = Number(process.env.GATE_LOCK_ASSEMBLY_CHECK_MS || 60_000);
+/** How long a live holder may burn no CPU at all before the next waiter takes over. */
+const WedgedAfterMs = Number(process.env.GATE_LOCK_WEDGED_MS || 15 * 60_000);
+/** The window over which a holder's CPU is sampled when a waiter looks at it. */
+const ProbeWindowMs = Number(process.env.GATE_LOCK_PROBE_MS || 4_000);
+/** How much of a run's output is kept to find the summary in. */
 const OutputTailBytes = 64 * 1024;
+const LockFileName = 'gate.lock';
 
 /**
  * What a run actually executed, read off the runner's own summary line.
@@ -105,23 +144,37 @@ export function summarise(output) {
   return { ...counts, verdict: 'green' };
 }
 
+/**
+ * The directory the lock file and the ticket queue live in.
+ *
+ * The persistent data directory where the machine has one, and the user's home otherwise — both
+ * survive a reboot, and neither is the temporary directory. The override exists so every copy of
+ * this tool can be pointed at one place, and so the tests can point each case at a scratch one.
+ */
 export function lockDir() {
-  return process.env.SILEXGIS_GATE_LOCK_DIR || join(tmpdir(), 'silexgis-gate-lock');
+  if (process.env.SILEXGIS_GATE_LOCK_DIR) return process.env.SILEXGIS_GATE_LOCK_DIR;
+  const data = '/srv/data/silexgis';
+  return existsSync(data) ? data : join(homedir(), '.silexgis-gate');
 }
 
-function ownerFile(dir) {
-  return join(dir, 'owner.json');
+export function lockFile(dir) {
+  return join(dir, LockFileName);
+}
+
+function queueDir(dir) {
+  return join(dir, 'queue');
 }
 
 export function readOwner(dir) {
   try {
-    return JSON.parse(readFileSync(ownerFile(dir), 'utf8'));
+    return JSON.parse(readFileSync(lockFile(dir), 'utf8'));
   } catch {
     return null;
   }
 }
 
 function pidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -191,7 +244,7 @@ export function cpuSecondsOfTree(pid) {
  * hundred megabytes resident, while several other sessions queued behind it and the box idled.
  * Neither age nor the process still existing distinguishes the two, which is why this samples.
  */
-export async function holderProgress(pid, { windowMs = 4000 } = {}) {
+export async function holderProgress(pid, { windowMs = ProbeWindowMs } = {}) {
   const before = cpuSecondsOfTree(pid);
   if (before === null) return { known: false };
   await new Promise((r) => setTimeout(r, windowMs));
@@ -201,31 +254,98 @@ export async function holderProgress(pid, { windowMs = 4000 } = {}) {
 }
 
 /**
- * Try once to take the lock. Returns true when taken, false when genuinely held.
- * A directory whose recorded holder is no longer running is stale and is taken over;
- * a directory with no readable owner yet is a holder mid-write and counts as held.
+ * The directory an older copy of this tool locks, read for the changeover and never written.
+ * Overridable so the tests can stand a legacy lock up without touching the machine's real one.
  */
-export function tryAcquire(dir, label) {
+function legacyDir() {
+  return process.env.SILEXGIS_GATE_LEGACY_DIR || join(tmpdir(), 'silexgis-gate-lock');
+}
+
+/**
+ * A run started by an older copy of this tool, or null. A legacy holder whose process is gone is
+ * cleared here, because nothing else will ever clear it.
+ */
+export function legacyBlocker() {
+  const dir = legacyDir();
+  if (!existsSync(dir)) return null;
+  let owner = null;
   try {
-    mkdirSync(dir, { recursive: false });
+    owner = JSON.parse(readFileSync(join(dir, 'owner.json'), 'utf8'));
+  } catch {
+    owner = null;
+  }
+  if (!owner || !pidAlive(owner.pid)) {
+    rmSync(dir, { recursive: true, force: true });
+    return null;
+  }
+  return {
+    kind: 'legacy',
+    pid: owner.pid,
+    label: owner.label || 'unlabelled',
+    since: owner.since,
+    clear: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+/**
+ * Whoever currently stands between a caller and the lock: the persistent holder, a legacy
+ * holder, or null when the lock can be taken.
+ */
+export function blocker(dir) {
+  const owner = readOwner(dir);
+  if (owner && pidAlive(owner.pid)) {
+    return {
+      kind: 'persistent',
+      pid: owner.pid,
+      label: owner.label || 'unlabelled',
+      since: owner.since,
+      clear: () => rmSync(lockFile(dir), { force: true }),
+    };
+  }
+  return legacyBlocker();
+}
+
+/**
+ * Try once to take the lock. Returns true when taken, false when genuinely held.
+ * A file whose recorded holder is no longer running is stale and is taken over; a file with no
+ * readable owner is a holder mid-write and counts as held — unless it has sat unreadable for
+ * longer than any write takes, in which case it is a corpse from an interrupted write.
+ */
+export function tryAcquire(dir, label, { cwd = process.cwd() } = {}) {
+  mkdirSync(dir, { recursive: true });
+  if (legacyBlocker()) return false;
+  const file = lockFile(dir);
+  const record = {
+    pid: process.pid,
+    host: hostname(),
+    label: label || '',
+    since: new Date().toISOString(),
+    cwd,
+  };
+  try {
+    writeFileSync(file, JSON.stringify(record, null, 2), { flag: 'wx' });
+    return true;
   } catch (e) {
     if (e.code !== 'EEXIST') throw e;
     const owner = readOwner(dir);
     if (owner && !pidAlive(owner.pid)) {
-      rmSync(dir, { recursive: true, force: true });
-      return tryAcquire(dir, label);
+      rmSync(file, { force: true });
+      return tryAcquire(dir, label, { cwd });
+    }
+    if (!owner) {
+      let ageMs = 0;
+      try {
+        ageMs = Date.now() - statSync(file).mtimeMs;
+      } catch {
+        return tryAcquire(dir, label, { cwd }); // vanished between the two reads: free now
+      }
+      if (ageMs > 30_000) {
+        rmSync(file, { force: true });
+        return tryAcquire(dir, label, { cwd });
+      }
     }
     return false;
   }
-  writeFileSync(
-    ownerFile(dir),
-    JSON.stringify(
-      { pid: process.pid, host: hostname(), label: label || '', since: new Date().toISOString() },
-      null,
-      2,
-    ),
-  );
-  return true;
 }
 
 /**
@@ -237,145 +357,138 @@ export function tryAcquire(dir, label) {
  * cascades, because the dispossessed run releases again when it finishes and carries off the
  * new holder's claim in turn. Observed 2026-09-04, from a single hand-typed release.
  *
- * A holder that is gone, or a directory with no readable owner, is not a claim anybody is
- * relying on, so both are still removed — otherwise a crashed run would wedge the machine.
+ * A holder that is gone, or a file with no readable owner, is not a claim anybody is relying
+ * on, so both are still removed — otherwise a crashed run would wedge the machine.
  * Returns true when the lock is now free.
  */
 export function release(dir, { heldByPid = process.pid } = {}) {
   const owner = readOwner(dir);
   if (owner && owner.pid !== heldByPid && pidAlive(owner.pid)) return false;
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(lockFile(dir), { force: true });
   return true;
 }
 
-async function acquireWaiting(dir, label) {
-  let lastReport = 0;
-  for (;;) {
-    if (tryAcquire(dir, label)) return;
-    const now = Date.now();
-    if (now - lastReport > 60_000) {
-      const o = readOwner(dir);
-      if (!o) {
-        console.error('waiting for the gate lock');
-      } else {
-        // Whether the holder is working decides whether waiting is worth anything, so say which
-        // it is rather than repeating the same line for hours against a process doing nothing.
-        const p = await holderProgress(o.pid);
-        const how = !p.known
-          ? ''
-          : p.cpuSeconds < 0.05
-            ? ' — HOLDER IS BURNING NO CPU; if it is wedged, clear it with'
-              + ` \`gate-lock.mjs steal --pid ${o.pid}\` after checking`
-            : ` — holder is working (${p.cpuSeconds.toFixed(1)}s CPU in ${p.windowMs / 1000}s)`;
-        console.error(
-          `waiting for the gate lock, held by pid ${o.pid} (${o.label || 'unlabelled'})`
-            + ` since ${o.since}${how}`,
-        );
-      }
-      lastReport = now;
+/** Joins the queue: a ticket whose name sorts by arrival, holding the waiter's pid. */
+function takeTicket(dir, label) {
+  const q = queueDir(dir);
+  mkdirSync(q, { recursive: true });
+  const name = `${String(Date.now()).padStart(15, '0')}-${String(process.pid).padStart(8, '0')}.json`;
+  const file = join(q, name);
+  writeFileSync(
+    file,
+    JSON.stringify({ pid: process.pid, label: label || '', since: new Date().toISOString() }),
+  );
+  return file;
+}
+
+/** Live tickets, oldest first. A ticket whose process is gone is pruned on the way past. */
+export function liveTickets(dir) {
+  const q = queueDir(dir);
+  if (!existsSync(q)) return [];
+  const live = [];
+  for (const name of readdirSync(q).filter((f) => f.endsWith('.json')).sort()) {
+    const file = join(q, name);
+    let ticket;
+    try {
+      ticket = JSON.parse(readFileSync(file, 'utf8'));
+    } catch {
+      continue; // being written by its owner right now
     }
-    await new Promise((r) => setTimeout(r, 5000));
+    if (pidAlive(ticket.pid)) live.push({ ...ticket, file });
+    else rmSync(file, { force: true });
+  }
+  return live;
+}
+
+function describeBlocker(b) {
+  const where = b.kind === 'legacy' ? ' [under the temporary directory, by an older copy of this tool]' : '';
+  return `pid ${b.pid} (${b.label}) since ${b.since}${where}`;
+}
+
+/**
+ * Wait for the lock, in turn. Returns once it is held.
+ *
+ * Two things decide whether waiting is worth anything, and both are said out loud once a minute
+ * rather than repeating one line for hours: the holder's CPU, and the caller's place in the
+ * queue. A holder that burns nothing for `WedgedAfterMs` is taken over here, on the spot — the
+ * machine has sat idle behind one for twelve hours while four sessions waited politely.
+ */
+async function acquireWaiting(dir, label, { cwd = process.cwd() } = {}) {
+  const ticket = takeTicket(dir, label);
+  const dropTicket = () => rmSync(ticket, { force: true });
+  process.on('exit', dropTicket);
+  let lastReport = 0;
+  let idleSince = null;
+  let idleBlocker = null;
+  try {
+    for (;;) {
+      const queue = liveTickets(dir);
+      const myTurn = queue.length === 0 || queue[0].pid === process.pid;
+      if (myTurn && tryAcquire(dir, label, { cwd })) return;
+
+      const b = blocker(dir);
+      const now = Date.now();
+      let how = '';
+      if (b && myTurn) {
+        const p = await holderProgress(b.pid);
+        if (p.known) {
+          if (p.cpuSeconds < 0.05) {
+            if (idleBlocker !== b.pid) {
+              idleBlocker = b.pid;
+              idleSince = now;
+            }
+            const idleFor = Date.now() - idleSince;
+            how = ` — holder is burning no CPU (${Math.round(idleFor / 1000)}s so far; taken over at ${Math.round(WedgedAfterMs / 1000)}s)`;
+            if (idleFor >= WedgedAfterMs) {
+              console.error(
+                `gate-lock: holder ${describeBlocker(b)} has burned no CPU for ${Math.round(idleFor / 60000)} min`
+                  + ' — WEDGED; taking the lock over and leaving its process alone',
+              );
+              b.clear();
+              idleBlocker = null;
+              idleSince = null;
+              continue;
+            }
+          } else {
+            idleBlocker = null;
+            idleSince = null;
+            how = ` — holder is working (${p.cpuSeconds.toFixed(1)}s CPU in ${p.windowMs / 1000}s)`;
+          }
+        }
+      }
+
+      if (now - lastReport > 60_000) {
+        const position = queue.findIndex((t) => t.pid === process.pid);
+        const place = position > 0 ? `; ${position} ahead in the queue` : '';
+        console.error(
+          b
+            ? `waiting for the gate lock, held by ${describeBlocker(b)}${how}${place}`
+            : `waiting for the gate lock${place}`,
+        );
+        lastReport = now;
+      }
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  } finally {
+    dropTicket();
+    process.off('exit', dropTicket);
   }
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const cmd = args.shift();
-  const take = (flag) => {
-    const i = args.indexOf(flag);
-    if (i === -1) return undefined;
-    const v = args[i + 1];
-    args.splice(i, 2);
-    return v;
-  };
-  const has = (flag) => {
-    const i = args.indexOf(flag);
-    if (i === -1) return false;
-    args.splice(i, 1);
-    return true;
-  };
-
-  const dir = lockDir();
-
-  if (cmd === 'status') {
-    const o = existsSync(dir) ? readOwner(dir) : null;
-    if (!o) {
-      console.log('free');
-    } else {
-      const gone = !pidAlive(o.pid);
-      let note = gone ? '  [STALE — holder is gone]' : '';
-      if (!gone && has('--probe')) {
-        const p = await holderProgress(o.pid);
-        if (p.known) {
-          note = p.cpuSeconds < 0.05
-            ? `  [WEDGED — no CPU in ${p.windowMs / 1000}s; ${p.total.toFixed(0)}s used in total]`
-            : `  [working — ${p.cpuSeconds.toFixed(1)}s CPU in ${p.windowMs / 1000}s]`;
-        }
-      }
-      console.log(
-        `held by pid ${o.pid} (${o.label || 'unlabelled'}) on ${o.host} since ${o.since}` + note,
-      );
-    }
-    return;
-  }
-
-  if (cmd === 'acquire') {
-    const label = take('--label');
-    if (has('--no-wait')) {
-      if (!tryAcquire(dir, label)) {
-        const o = readOwner(dir);
-        console.error(`held by pid ${o?.pid} (${o?.label || 'unlabelled'}) since ${o?.since}`);
-        process.exit(3);
-      }
-    } else {
-      await acquireWaiting(dir, label);
-    }
-    console.log('acquired');
-    return;
-  }
-
-  if (cmd === 'steal') {
-    const pid = Number(take('--pid'));
-    const o = existsSync(dir) ? readOwner(dir) : null;
-    if (!o) {
-      console.log('free');
-      return;
-    }
-    if (!Number.isFinite(pid) || pid !== o.pid) {
-      console.error(
-        `refusing: name the holder you checked. The lock is held by pid ${o.pid}`
-          + ` (${o.label || 'unlabelled'}) since ${o.since}.`,
-      );
-      process.exit(3);
-    }
-    const p = await holderProgress(o.pid, { windowMs: 10_000 });
-    if (p.known && p.cpuSeconds >= 0.05 && !has('--force')) {
-      console.error(
-        `refusing: pid ${o.pid} is working (${p.cpuSeconds.toFixed(1)}s CPU in`
-          + ` ${p.windowMs / 1000}s). Use --force only if you mean to discard its run.`,
-      );
-      process.exit(3);
-    }
-    rmSync(dir, { recursive: true, force: true });
-    console.log(
-      `stolen from pid ${o.pid} (${o.label || 'unlabelled'}); its process is left alone`,
-    );
-    return;
-  }
-
-  if (cmd === 'release') {
-    if (release(dir)) {
-      console.log('released');
-      return;
-    }
-    const o = readOwner(dir);
-    console.error(
-      `refusing: the lock is held by pid ${o.pid} (${o.label || 'unlabelled'}) since ${o.since}, ` +
-        'which is still running. Wait for it, or stop that run deliberately.',
-    );
-    process.exit(3);
-  }
-
+/**
+ * Whether a command is the whole API integration suite: `dotnet test` naming the Api.Tests
+ * project or its directory, with nothing narrowing it. Purely lexical, on purpose — the point
+ * is to refuse before anything runs.
+ */
+export function isUnfilteredApiSuite(command) {
+  if (command.length < 2) return false;
+  const tool = basename(command[0].replaceAll('\\', '/')).replace(/\.exe$/i, '');
+  if (tool !== 'dotnet' || command[1] !== 'test') return false;
+  const namesSuite = command.some((a) => /Api\.Tests(\.csproj)?$/.test(a.replaceAll('\\', '/').replace(/\/+$/, '')));
+  if (!namesSuite) return false;
+  const narrowed = command.some((a) => a === '--filter' || a.startsWith('--filter=') || a === '--list-tests' || a === '-t');
+  return !narrowed;
+}
 
 /**
  * The assemblies a run is about to test, fingerprinted so nobody can swap them out from under it.
@@ -392,12 +505,29 @@ async function main() {
  * hard-working suite.
  */
 function outputDirsFor(command, cwd) {
-  // `dotnet test <path>` is the shape every caller uses; the assemblies live under that project's
-  // bin/. Anything else falls back to the working directory, which over-collects rather than
-  // under-collects — a false alarm costs a re-run, a miss costs a day.
-  const target = command.find((a) => a.endsWith('.csproj') || a.endsWith('.slnx') || a.endsWith('.sln'));
-  const base = target ? dirname(resolve(cwd, target)) : cwd;
-  const bin = join(base, 'bin');
+  // `dotnet test <project file>` and `dotnet test <project directory>` are the two shapes every
+  // caller uses; the assemblies live under that project's bin/. The directory shape used to fall
+  // through to the working directory, which has no bin/ of its own, so a run started that way had
+  // no guard at all. Anything else still falls back to the working directory, which over-collects
+  // rather than under-collects — a false alarm costs a re-run, a miss costs a day.
+  for (const a of command) {
+    if (/\.(csproj|slnx|sln)$/i.test(a)) {
+      const bin = join(dirname(resolve(cwd, a)), 'bin');
+      if (existsSync(bin)) return [bin];
+    }
+  }
+  for (const a of command.slice(2)) {
+    const p = resolve(cwd, a);
+    try {
+      if (statSync(p).isDirectory() && readdirSync(p).some((f) => f.endsWith('.csproj'))) {
+        const bin = join(p, 'bin');
+        if (existsSync(bin)) return [bin];
+      }
+    } catch {
+      /* not a path at all: a flag or a filter */
+    }
+  }
+  const bin = join(cwd, 'bin');
   return existsSync(bin) ? [bin] : [];
 }
 
@@ -456,15 +586,135 @@ function reportSwap(change, startedAt) {
   console.error('');
 }
 
+async function main() {
+  const args = process.argv.slice(2);
+  const cmd = args.shift();
+  const take = (flag) => {
+    const i = args.indexOf(flag);
+    if (i === -1) return undefined;
+    const v = args[i + 1];
+    args.splice(i, 2);
+    return v;
+  };
+  const has = (flag) => {
+    const i = args.indexOf(flag);
+    if (i === -1) return false;
+    args.splice(i, 1);
+    return true;
+  };
+
+  const dir = lockDir();
+
+  if (cmd === 'status') {
+    const owner = readOwner(dir);
+    const legacy = legacyBlocker();
+    if (!owner && !legacy) {
+      console.log(`free (${lockFile(dir)})`);
+    }
+    if (owner) {
+      const gone = !pidAlive(owner.pid);
+      let note = gone ? '  [STALE — holder is gone]' : '';
+      if (!gone && has('--probe')) {
+        const p = await holderProgress(owner.pid);
+        if (p.known) {
+          note = p.cpuSeconds < 0.05
+            ? `  [WEDGED? — no CPU in ${p.windowMs / 1000}s; ${p.total.toFixed(0)}s used in total]`
+            : `  [working — ${p.cpuSeconds.toFixed(1)}s CPU in ${p.windowMs / 1000}s]`;
+        }
+      }
+      console.log(
+        `held by pid ${owner.pid} (${owner.label || 'unlabelled'}) on ${owner.host} since ${owner.since}`
+          + `${owner.cwd ? ` in ${owner.cwd}` : ''}${note}`,
+      );
+    }
+    if (legacy) {
+      console.log(`held ${describeBlocker(legacy)}`);
+    }
+    const queue = liveTickets(dir);
+    for (const [i, t] of queue.entries()) {
+      console.log(`  waiting ${i + 1}: pid ${t.pid} (${t.label || 'unlabelled'}) since ${t.since}`);
+    }
+    return;
+  }
+
+  if (cmd === 'acquire') {
+    const label = take('--label');
+    if (has('--no-wait')) {
+      if (!tryAcquire(dir, label)) {
+        const b = blocker(dir);
+        console.error(b ? `held by ${describeBlocker(b)}` : 'held');
+        process.exit(3);
+      }
+    } else {
+      await acquireWaiting(dir, label);
+    }
+    console.log('acquired');
+    return;
+  }
+
+  if (cmd === 'steal') {
+    const pid = Number(take('--pid'));
+    const o = readOwner(dir);
+    if (!o) {
+      console.log('free');
+      return;
+    }
+    if (!Number.isFinite(pid) || pid !== o.pid) {
+      console.error(
+        `refusing: name the holder you checked. The lock is held by pid ${o.pid}`
+          + ` (${o.label || 'unlabelled'}) since ${o.since}.`,
+      );
+      process.exit(3);
+    }
+    const p = await holderProgress(o.pid, { windowMs: Math.max(ProbeWindowMs, 10_000) });
+    if (p.known && p.cpuSeconds >= 0.05 && !has('--force')) {
+      console.error(
+        `refusing: pid ${o.pid} is working (${p.cpuSeconds.toFixed(1)}s CPU in`
+          + ` ${p.windowMs / 1000}s). Use --force only if you mean to discard its run.`,
+      );
+      process.exit(3);
+    }
+    rmSync(lockFile(dir), { force: true });
+    console.log(
+      `stolen from pid ${o.pid} (${o.label || 'unlabelled'}); its process is left alone`,
+    );
+    return;
+  }
+
+  if (cmd === 'release') {
+    if (release(dir)) {
+      console.log('released');
+      return;
+    }
+    const o = readOwner(dir);
+    console.error(
+      `refusing: the lock is held by pid ${o.pid} (${o.label || 'unlabelled'}) since ${o.since}, ` +
+        'which is still running. Wait for it, or stop that run deliberately.',
+    );
+    process.exit(3);
+  }
+
   if (cmd === 'run') {
     const label = take('--label');
     const resultFile = take('--result');
+    const full = has('--full');
     const sep = args.indexOf('--');
     if (sep === -1 || sep === args.length - 1) {
       console.error('run needs a command after --');
       process.exit(1);
     }
     const command = args.slice(sep + 1);
+
+    if (isUnfilteredApiSuite(command) && !full) {
+      console.error(
+        'gate-lock: refusing to start the whole API integration suite without --full.\n'
+          + '  This command names the Api.Tests project and carries no --filter, so it is the full\n'
+          + '  suite — hours of the machine-wide lock. If that is what you mean, say so:\n'
+          + '    gate-lock.mjs run --full ... -- ' + command.join(' ') + '\n'
+          + '  For a targeted tier, add the --filter that scripts/gate-affected.mjs printed.',
+      );
+      process.exit(3);
+    }
 
     await acquireWaiting(dir, label);
     const startedAt = new Date();
@@ -534,6 +784,8 @@ function reportSwap(change, startedAt) {
             label: label || '',
             command: command.join(' '),
             cwd: process.cwd(),
+            full,
+            lock: lockFile(dir),
             exitCode,
             ...counts,
             startedAt: startedAt.toISOString(),
@@ -561,7 +813,7 @@ function reportSwap(change, startedAt) {
     process.exit(swap ? 75 : exitCode);
   }
 
-  console.error('usage: gate-lock.mjs status [--probe] | acquire [--no-wait] [--label X] | release | steal --pid N [--force] | run [--label X] [--result F] -- cmd...');
+  console.error('usage: gate-lock.mjs status [--probe] | acquire [--no-wait] [--label X] | release | steal --pid N [--force] | run [--label X] [--result F] [--full] -- cmd...');
   process.exit(1);
 }
 
