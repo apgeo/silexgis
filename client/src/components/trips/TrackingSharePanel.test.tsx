@@ -38,6 +38,12 @@ function view(canEdit = true, publishesRealNames = true, published = true) {
 }
 
 beforeEach(() => {
+  // The fixtures below are dated September 2026 and the panel reads them against today's clock,
+  // so today is pinned beside them. Left to the real clock, every "live" link lapses on its own
+  // expiry date and three assertions turn red that morning with nothing in the code changed —
+  // which is what happened on 2026-10-01. Only Date is faked: timers stay real so waitFor works.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-09-14T12:00:00Z'));
   shares = { data: [], error: null };
   mint.mockReset();
   revoke.mockReset();
@@ -50,7 +56,10 @@ beforeEach(() => {
   revoke.mockResolvedValue(undefined);
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.useRealTimers();
+  cleanup();
+});
 
 describe('publishing a tracked trip', () => {
   it('is offered to nobody who cannot write the trip', () => {
