@@ -5,7 +5,13 @@ import { Alert, Button, Popover, Result, Spin, Typography } from 'antd';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { useFeatureTypes, useMapConfig, useMapLayers, useRasterMaps } from '../../api/hooks.ts';
+import {
+  useFeatureTypes,
+  useGeofiles,
+  useMapConfig,
+  useMapLayers,
+  useRasterMaps,
+} from '../../api/hooks.ts';
 import {
   onFeatureTypeCatalogChanged,
   setFeatureTypeCatalog,
@@ -36,6 +42,12 @@ import {
   type OverburdenHighlight3DHandle,
 } from '../../scene3d/overburdenHighlight3d.ts';
 import { geoJsonBounds } from '../../scene3d/geoJson3d.ts';
+import {
+  attachGeofileTracks3d,
+  EMPTY_GEOFILE_TRACKS_3D_STATE,
+  type GeofileTracks3DHandle,
+  type GeofileTracks3DState,
+} from '../../scene3d/geofileTracks3d.ts';
 import type { OverlayRect } from '../../scene3d/overlayPlacement.ts';
 import { activePreset, presetCamera, type Camera3DPreset } from '../../scene3d/presets3d.ts';
 import { claimSceneSurface, sceneSurfaceElement } from '../../scene3d/sceneSurface.ts';
@@ -271,6 +283,14 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const { data: rasterPage } = useRasterMaps({ pageSize: 100 });
   const rasters = useMemo(() => rasterPage?.items ?? [], [rasterPage]);
 
+  // The installation's imported files, and the flat map's own choice of which are on: a viewer
+  // moving between the views finds the same tracks drawn in both, rather than two selections of
+  // one thing. The page size is the one the flat map asks for, so the two offer the same list.
+  const visibleGeofileIds = useWorkspaceStore((s) => s.visibleGeofileIds);
+  const setGeofileVisible = useWorkspaceStore((s) => s.setGeofileVisible);
+  const { data: geofilePage } = useGeofiles({ pageSize: 100 });
+  const geofiles = useMemo(() => geofilePage?.items ?? [], [geofilePage]);
+
   // After the basemap effect above and never before it, because a globe composites its imagery in
   // the order the layers were added: an overlay created first would be drawn under an opaque
   // picture of the ground, which nothing reports and nothing on screen explains.
@@ -345,6 +365,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const meshRef = useRef<SurveyMesh3DHandle | null>(null);
   const [meshState, setMeshState] = useState<SurveyMesh3DState>(EMPTY_SURVEY_MESH_3D_STATE);
 
+  // Lines from imported files: camera-driven like the cave data, but chosen file by file, and
+  // nothing else in the scene is derived from them — so a loader of their own.
+  const tracksRef = useRef<GeofileTracks3DHandle | null>(null);
+  const [tracksState, setTracksState] = useState<GeofileTracks3DState>(
+    EMPTY_GEOFILE_TRACKS_3D_STATE,
+  );
+
   // The view exchange, held in a ref for the same reason as the handles above: the effect that
   // owns it must not re-run when coupling is switched, so the switch reaches it from outside.
   const syncRef = useRef<ViewSync3dHandle | null>(null);
@@ -371,6 +398,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     dataRef.current = data;
     const mesh = attachSurveyMesh3d(engine);
     meshRef.current = mesh;
+    const tracks = attachGeofileTracks3d(engine);
+    tracksRef.current = tracks;
+    const unsubscribeTracks = tracks.subscribe(setTracksState);
     // The tops are read through the loader rather than copied out of it: they change with every
     // load, and a line hung from the tops of a moment ago would drift away from the surveys it
     // joins.
@@ -503,6 +533,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       approachRef.current = null;
       overburden.detach();
       overburdenRef.current = null;
+      unsubscribeTracks();
+      tracks.detach();
+      tracksRef.current = null;
+      setTracksState(EMPTY_GEOFILE_TRACKS_3D_STATE);
       data.detach();
       dataRef.current = null;
       // Releases the graphics memory the walls hold; a scene handed back with a mesh still on it
@@ -767,6 +801,9 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     approachRef.current?.setAltitudePlacement(placement);
     // And the mark on a passage, which hangs from one cave's top under the same rule.
     overburdenRef.current?.setAltitudePlacement(placement);
+    // And the tracks from imported files, which go from lying on the smooth globe to sitting at
+    // their recorded altitudes on the hillside — a redraw of what is held, nothing fetched.
+    tracksRef.current?.setAltitudePlacement(placement);
   }, [placement, engineVersion, showingHere]);
 
   // Which cave's walls are held. The selection names a cave both when a cave was picked and when
@@ -803,6 +840,26 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       data.setLayerOpacity(layer, overlayOpacity[layer] ?? 1);
     }
   }, [overlayVisible, overlayOpacity, engineVersion]);
+
+  // Which files are drawn, keyed on the same counters the loader is attached on, so a rebuilt
+  // scene — or a mount that takes the surface back — comes up with the viewer's files on it.
+  useEffect(() => {
+    tracksRef.current?.setFiles(geofiles, new Set(visibleGeofileIds));
+  }, [geofiles, visibleGeofileIds, engineVersion, showingHere]);
+
+  // Each file's fade, read from under the key the flat map keeps it by — the file's own id, which
+  // is how that map stores every imported file's fade beside the built-in overlays'. Applied to
+  // every listed file and not only the drawn ones, so a file turned on later comes up at the fade
+  // it was set.
+  useEffect(() => {
+    const tracks = tracksRef.current;
+    if (!tracks) {
+      return;
+    }
+    for (const geofile of geofiles) {
+      tracks.setOpacity(geofile.id, overlayOpacity[geofile.id] ?? 1);
+    }
+  }, [geofiles, overlayOpacity, engineVersion, showingHere]);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -970,6 +1027,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
                 onOverlayVisibleChange={setOverlayVisible}
                 overlayOpacity={overlayOpacity}
                 onOverlayOpacityChange={setOverlayOpacity}
+                geofiles={geofiles}
+                visibleGeofileIds={visibleGeofileIds}
+                onGeofileVisibleChange={setGeofileVisible}
+                onGeofileOpacityChange={setOverlayOpacity}
                 meshVisible={meshVisible}
                 onMeshVisibleChange={(visible) => setOverlayVisible(SURVEY_MESH_LAYER_ID, visible)}
                 meshState={meshState}
@@ -993,7 +1054,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       <div
         className="scene3d-data-state"
         data-testid="scene3d-data"
-        data-loading={dataState.loading || meshLoading ? 'true' : 'false'}
+        data-loading={dataState.loading || meshLoading || tracksState.loading ? 'true' : 'false'}
       >
         {notices.map((notice) => (
           <span key={notice} className="scene3d-notice">

@@ -9,6 +9,7 @@ import {
   type CaveData3DLayer,
 } from '../../scene3d/caveData3d.ts';
 import { CENTERLINE_DEPTH_BANDS } from '../../scene3d/centerlines3d.ts';
+import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceMode, Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import type { SurveyMesh3DState } from '../../scene3d/surveyMesh3d.ts';
 import { cutawayPauseMessage } from './surfaceMessages.ts';
@@ -45,9 +46,21 @@ export interface Scene3DLayerPanelProps {
   /** Keyed by layer; a missing key means shown. */
   overlayVisible: Record<string, boolean>;
   onOverlayVisibleChange: (layer: CaveData3DLayer, visible: boolean) => void;
-  /** Keyed by layer; a missing key means fully opaque. */
+  /**
+   * Keyed by layer; a missing key means fully opaque. An imported file's fade is under the file's
+   * own id, which is the key the flat map keeps it under, so a file faded in one view is faded
+   * in both.
+   */
   overlayOpacity: Record<string, number>;
   onOverlayOpacityChange: (layer: CaveData3DLayer, opacity: number) => void;
+  /**
+   * This installation's imported files, and which of them have their tracks drawn — the same
+   * choice the flat map shows, so a viewer moving between the views finds the same files on.
+   */
+  geofiles: GeofileTrack3DFile[];
+  visibleGeofileIds: string[];
+  onGeofileVisibleChange: (id: string, visible: boolean) => void;
+  onGeofileOpacityChange: (id: string, opacity: number) => void;
   /**
    * Whether the walls of the selected cave are drawn. Its own prop rather than another entry in
    * the overlay records above, because it is not one of the layers those are keyed by: the walls
@@ -81,6 +94,10 @@ export default function Scene3DLayerPanel({
   onOverlayVisibleChange,
   overlayOpacity,
   onOverlayOpacityChange,
+  geofiles,
+  visibleGeofileIds,
+  onGeofileVisibleChange,
+  onGeofileOpacityChange,
   meshVisible,
   onMeshVisibleChange,
   meshState,
@@ -159,6 +176,9 @@ export default function Scene3DLayerPanel({
   // georeferenced-maps screen with their status; offering them here would be offering a switch
   // that does nothing and says nothing about why.
   const readyRasters = rasters.filter((raster) => raster.status === 'ready' && raster.cogUrl);
+  // Only files whose import has finished have anything to draw; the others are listed with
+  // their status on the geodata screen, and a switch here would draw nothing and say nothing.
+  const importedGeofiles = geofiles.filter((geofile) => geofile.importStatus === 'imported');
 
   const tileOverlayRow = (layer: MapLayerInfo) => {
     const id = Number(layer.id);
@@ -410,6 +430,44 @@ export default function Scene3DLayerPanel({
           )}
         </div>
       </div>
+
+      {importedGeofiles.length > 0 && (
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          {/* The flat map's own heading for the same files, so the list reads as the same list.
+              What differs is said once underneath: on the globe a file is its lines, and a track
+              that recorded no altitude lies on the ground rather than at sea level. */}
+          <Typography.Text strong>{t('map.geofiles')}</Typography.Text>
+          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
+            {t('scene3d.geofileTracksHint')}
+          </Typography.Paragraph>
+          <div className="scene3d-layer-rows" data-testid="scene3d-geofile-rows">
+            {importedGeofiles.map((geofile) => {
+              const shown = visibleGeofileIds.includes(geofile.id);
+              return (
+                <div key={geofile.id} className="scene3d-layer-row">
+                  <Checkbox
+                    checked={shown}
+                    onChange={(e) => onGeofileVisibleChange(geofile.id, e.target.checked)}
+                  >
+                    {geofile.name}
+                  </Checkbox>
+                  <Slider
+                    className="scene3d-layer-opacity"
+                    min={0}
+                    max={100}
+                    disabled={!shown}
+                    value={percent(overlayOpacity[geofile.id])}
+                    onChange={(value) => onGeofileOpacityChange(geofile.id, value / 100)}
+                    tooltip={opacityTooltip}
+                    ariaLabelForHandle={t('map.baseOpacity', { name: geofile.name })}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       <Divider style={{ margin: '12px 0' }} />
 

@@ -25,6 +25,11 @@ vi.mock('../../api/hooks.ts', () => ({
   // This installation has no georeferenced maps in these tests, which is the case the scene must
   // handle without asking for one.
   useRasterMaps: () => ({ data: undefined }),
+  useGeofiles: () => ({ data: geofilePage }),
+  fetchGeofileFeatureCollection: (id: string, bbox: string) => {
+    geofileRequests.push([id, bbox]);
+    return Promise.resolve(geofileResponses[id] ?? emptyCollection);
+  },
   fetchCenterlineFeatures: (...args: unknown[]) => {
     centerlineRequests.push(args);
     return Promise.resolve(centerlineResponse);
@@ -63,6 +68,10 @@ let featureResponse: unknown = emptyCollection;
 /** Which caves the wall-mesh loader asked about, and what it was told they hold. */
 let surveyModelRequests: string[] = [];
 let surveyModels: unknown[] = [];
+/** This installation's imported files, which of them were asked for, and what each answers. */
+let geofilePage: { items: unknown[] } | undefined;
+let geofileRequests: [string, string][] = [];
+let geofileResponses: Record<string, unknown> = {};
 
 /** A converted wall mesh of cave-1, whose own zero plane sits at 500 m. */
 function aWallMesh(overrides: Record<string, unknown> = {}) {
@@ -83,6 +92,8 @@ function aWallMesh(overrides: Record<string, unknown> = {}) {
     anchorHeightM: 500,
     triangleCount: 1_234_567,
     sourcePrecisionLost: false,
+    isCurrent: false,
+    meshSizeBytes: null,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-01T00:00:00Z',
     ...overrides,
@@ -149,6 +160,9 @@ beforeEach(() => {
   featureResponse = emptyCollection;
   surveyModelRequests = [];
   surveyModels = [];
+  geofilePage = undefined;
+  geofileRequests = [];
+  geofileResponses = {};
   centerlineResponse = {
     type: 'FeatureCollection',
     features: [],
@@ -160,6 +174,7 @@ beforeEach(() => {
     selection: null,
     overlayVisible: {},
     overlayOpacity: {},
+    visibleGeofileIds: [],
     baseOpacity: {},
     scene3dSurfaceMode: 'overlay',
     scene3dCoupledToMap: true,
@@ -920,7 +935,14 @@ describe('the ground the caves are drawn against', () => {
     mapConfig = {
       centerlineDetailZoom: 18,
       centerlineMaxPaths: 25000,
-      terrain: { url: '/terrain/', attribution: '© Copernicus', surveyHeightOffsetM: 0 },
+      terrainBuilds: [],
+      terrain: {
+        url: '/terrain/',
+        attribution: '© Copernicus',
+        surveyHeightOffsetM: 0,
+        origin: 'build',
+        buildId: null,
+      },
     };
 
     renderView();
@@ -940,9 +962,16 @@ describe('the ground the caves are drawn against', () => {
     mapConfig = {
       centerlineDetailZoom: 18,
       centerlineMaxPaths: 25000,
+      terrainBuilds: [],
       // A pyramid converted to heights above the ellipsoid when it was baked. The server worked
       // this number out from the datum the source declares; the client is handed the answer.
-      terrain: { url: '/terrain/', attribution: null, surveyHeightOffsetM: 43.03 },
+      terrain: {
+        url: '/terrain/',
+        attribution: null,
+        surveyHeightOffsetM: 43.03,
+        origin: 'build',
+        buildId: null,
+      },
     };
 
     renderView();
@@ -960,7 +989,14 @@ describe('the ground the caves are drawn against', () => {
     mapConfig = {
       centerlineDetailZoom: 18,
       centerlineMaxPaths: 25000,
-      terrain: { url: '/terrain/', attribution: null, surveyHeightOffsetM: 0 },
+      terrainBuilds: [],
+      terrain: {
+        url: '/terrain/',
+        attribution: null,
+        surveyHeightOffsetM: 0,
+        origin: 'build',
+        buildId: null,
+      },
     };
 
     renderView();
@@ -983,7 +1019,14 @@ describe('the ground the caves are drawn against', () => {
     mapConfig = {
       centerlineDetailZoom: 18,
       centerlineMaxPaths: 25000,
-      terrain: { url: '/terrain/', attribution: null, surveyHeightOffsetM: 0 },
+      terrainBuilds: [],
+      terrain: {
+        url: '/terrain/',
+        attribution: null,
+        surveyHeightOffsetM: 0,
+        origin: 'build',
+        buildId: null,
+      },
     };
 
     const view = renderView();
@@ -1005,7 +1048,13 @@ describe('the ground the caves are drawn against', () => {
     );
     mapConfig = {
       ...mapConfig,
-      terrain: { url: '/elevation/', attribution: null, surveyHeightOffsetM: 0 },
+      terrain: {
+        url: '/elevation/',
+        attribution: null,
+        surveyHeightOffsetM: 0,
+        origin: 'build',
+        buildId: null,
+      },
     };
     view.rerender(
       <Around>
@@ -1034,7 +1083,14 @@ describe('the ground the caves are drawn against', () => {
     mapConfig = {
       centerlineDetailZoom: 18,
       centerlineMaxPaths: 25000,
-      terrain: { url: '/terrain/', attribution: null, surveyHeightOffsetM: 0 },
+      terrainBuilds: [],
+      terrain: {
+        url: '/terrain/',
+        attribution: null,
+        surveyHeightOffsetM: 0,
+        origin: 'build',
+        buildId: null,
+      },
     };
 
     renderView();
@@ -1167,5 +1223,182 @@ describe('the walls of the selected cave', () => {
       useWorkspaceStore.setState({ overlayVisible: { 'survey-mesh': true } });
     });
     await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(2));
+  });
+});
+
+describe('tracks from imported files', () => {
+  /** A web server holding a pyramid at `/terrain/`, the way the ground tests above arrange one. */
+  function servingTerrain() {
+    const layerJson = {
+      format: 'quantized-mesh-1.0',
+      available: [[{ startX: 0, endX: 2, startY: 0, endY: 1 }]],
+    };
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+      const bytes = String(input).endsWith('layer.json')
+        ? new TextEncoder().encode(JSON.stringify(layerJson))
+        : new Uint8Array([0x8d, 0x97, 0x6e, 0x3f]);
+      return { ok: true, status: 200, arrayBuffer: async () => bytes.buffer } as Response;
+    });
+  }
+
+  const aGeofile = { id: 'file-1', name: 'Ridge walk.gpx', style: null, importStatus: 'imported' };
+  /** A GPS track with recorded altitudes. */
+  const aHike = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [25.44, 45.53, 1100],
+            [25.441, 45.531, 1150],
+          ],
+        },
+        properties: { id: 'row-1' },
+      },
+    ],
+  };
+  /** A track written by a receiver that recorded no altitude at all. */
+  const aPlanOnly = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [25.45, 45.54],
+            [25.451, 45.541],
+          ],
+        },
+        properties: { id: 'row-2' },
+      },
+    ],
+  };
+  const isTrack = (id: unknown) => (id as { kind?: string } | null)?.kind === 'geofile-track';
+  /** Every line drawn for an imported file at a height of its own, out of the ordinary batches. */
+  function trackLines() {
+    return engine.engineState.widgets[0].scene.primitives.items
+      .filter(
+        (item): item is InstanceType<typeof engine.PolylineCollection> =>
+          item instanceof engine.PolylineCollection,
+      )
+      .flatMap((collection) => collection.polylines)
+      .filter((line) => isTrack(line.id));
+  }
+  /** Every line laid along the ground for an imported file, which only exists once the ground has a shape. */
+  function drapedTracks() {
+    return (
+      engine.engineState.widgets[0].scene.groundPrimitives.items as InstanceType<
+        typeof engine.GroundPolylinePrimitive
+      >[]
+    )
+      .flatMap((primitive) => primitive.geometryInstances)
+      .filter((instance) => isTrack(instance.id));
+  }
+
+  it('draws the files the flat map has on, and takes a file out when it is turned off', async () => {
+    withWebGl2(true);
+    geofilePage = { items: [aGeofile] };
+    geofileResponses = { 'file-1': aHike };
+    useWorkspaceStore.setState({ visibleGeofileIds: ['file-1'] });
+    renderView();
+
+    await waitFor(() => expect(geofileRequests).toHaveLength(1));
+    // The same request the flat map makes for the file: its id, and the box in view.
+    expect(geofileRequests[0][0]).toBe('file-1');
+    await waitFor(() => expect(trackLines()).toHaveLength(1));
+
+    act(() => useWorkspaceStore.getState().setGeofileVisible('file-1', false));
+
+    await waitFor(() => expect(trackLines()).toHaveLength(0));
+    // A file that is off is not fetched either; nothing asked about it on the way out.
+    expect(geofileRequests).toHaveLength(1);
+  });
+
+  it('lays a track on the smooth globe, where the entrances it walks past also sit', async () => {
+    withWebGl2(true);
+    geofilePage = { items: [aGeofile] };
+    geofileResponses = { 'file-1': aHike };
+    useWorkspaceStore.setState({ visibleGeofileIds: ['file-1'] });
+    renderView();
+
+    await waitFor(() => expect(trackLines()).toHaveLength(1));
+    // No hillside to place 1100 m against: drawn there the track would float a kilometre over
+    // the sphere, above the markers of the caves it visits.
+    expect(trackLines()[0].positions.map((position) => position.height)).toEqual([0, 0]);
+  });
+
+  it('puts a track at its altitudes on real ground, and a track without any on the ground itself', async () => {
+    withWebGl2(true);
+    servingTerrain();
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrainBuilds: [],
+      terrain: {
+        url: '/terrain/',
+        attribution: null,
+        surveyHeightOffsetM: 43,
+        origin: 'build',
+        buildId: null,
+      },
+    };
+    geofilePage = { items: [aGeofile, { ...aGeofile, id: 'file-2', name: 'Plan.kml' }] };
+    geofileResponses = { 'file-1': aHike, 'file-2': aPlanOnly };
+    useWorkspaceStore.setState({ visibleGeofileIds: ['file-1', 'file-2'] });
+    renderView();
+
+    await waitFor(() => expect(engine.engineState.terrainRequests).toHaveLength(1));
+    // The hike goes where it was recorded, raised by the same correction the surveys get, so it
+    // sits on the same ground as the caves it visits.
+    await waitFor(() =>
+      expect(trackLines().map((line) => line.positions[0].height)).toEqual([1143]),
+    );
+    // The plan has no altitude to be placed at, and lies along the hillside instead of at sea
+    // level under it: a draped line, whose heights are ignored by definition.
+    await waitFor(() => expect(drapedTracks()).toHaveLength(1));
+    expect(drapedTracks()[0].id).toMatchObject({ geofileId: 'file-2' });
+  });
+
+  it('fades a file by the key the flat map fades it under', async () => {
+    withWebGl2(true);
+    geofilePage = { items: [aGeofile] };
+    geofileResponses = { 'file-1': aHike };
+    useWorkspaceStore.setState({
+      visibleGeofileIds: ['file-1'],
+      // The file's own id: the flat map writes a file's fade under it, beside the built-in
+      // overlays', and this view has to read the same key or a fade set there is lost here.
+      overlayOpacity: { 'file-1': 0.25 },
+    });
+    renderView();
+
+    await waitFor(() => expect(trackLines()).toHaveLength(1));
+    const color = trackLines()[0].material.uniforms.color as { alpha: number };
+    expect(color.alpha).toBeCloseTo(0.25, 6);
+  });
+
+  it('counts a file still arriving as the view still filling itself in', async () => {
+    withWebGl2(true);
+    let release: ((value: unknown) => void) | undefined;
+    geofilePage = { items: [aGeofile] };
+    geofileResponses = {
+      'file-1': new Promise((resolve) => {
+        release = resolve;
+      }),
+    };
+    useWorkspaceStore.setState({ visibleGeofileIds: ['file-1'] });
+    renderView();
+
+    await waitFor(() => expect(geofileRequests).toHaveLength(1));
+    expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'true');
+
+    act(() => release!(aHike));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false'),
+    );
+    expect(trackLines()).toHaveLength(1);
   });
 });

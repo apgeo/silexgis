@@ -61,6 +61,16 @@ describe('pickPayload', () => {
     expect(pickPayload(null)).toBeUndefined();
   });
 
+  it('reads a line from an imported file as nothing to select, rather than failing on it', () => {
+    // Tracks from imported files share the scene with the survey lines and are hit the same way.
+    // A track has no page to open and no selection kind to become, so a click on one has to read
+    // as a click on bare ground — and the hover that precedes it must not throw once per frame.
+    const track = { id: { kind: 'geofile-track', geofileId: 'g1', featureId: 'row-1' } };
+
+    expect(pickPayload(track)).toBeUndefined();
+    expect(selectionFromPick(track)).toBeNull();
+  });
+
   it('refuses a payload of the right kind carrying the wrong fields', () => {
     // Anything at all can end up in a scene, and a click handler that trusted the discriminator
     // alone would put a half-built selection into the store rather than ignoring the click.

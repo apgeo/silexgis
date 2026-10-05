@@ -102,6 +102,19 @@ Foile raster georeferențiate pot fi întinse pe glob. Observați diferența fa�
 mare. Harta plană citește fișierul însuși. Dacă examinați detalii pe o foaie geologică, folosiți
 harta 2D.
 
+## Trasee din fișiere importate
+
+Fișierele importate din ecranul de geodate — un traseu GPX, un contur KML — pot fi afișate și în
+vizualizarea 3D. Deschideți panoul de straturi și bifați fișierul la **Fișiere importate**;
+fiecare fișier are propria estompare. Alegerea este comună cu harta plană: un fișier pornit
+într-o vizualizare este pornit și în cealaltă, desenat în aceeași culoare.
+
+Pe glob un fișier înseamnă liniile lui — trasee și contururi; punctele lui nu sunt desenate. Un
+traseu care a înregistrat altitudini este desenat la ele, pe același teren ca topografiile, când
+instalarea are relief. Un traseu care nu a înregistrat niciuna, sau ale cărui altitudini sunt
+toate zero, este **așezat pe teren**: urmează versantul în loc să stea la nivelul mării, sub el.
+Un clic pe un traseu nu selectează nimic — nu are o pagină proprie.
+
 ---
 
 Înrudite: [Relief](terrain.md) · [Spațiul de lucru al hărții](map-workspace.md) ·

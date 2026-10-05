@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { MapLayerInfo } from '../../api/hooks.ts';
+import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import { EMPTY_SURVEY_MESH_3D_STATE } from '../../scene3d/surveyMesh3d.ts';
 import Scene3DLayerPanel, { type Scene3DLayerPanelProps } from './Scene3DLayerPanel.tsx';
@@ -28,6 +29,14 @@ const drawingTheCutaway: Scene3DSurfaceState = {
   hasFootprint: true,
 };
 
+/** One imported file whose tracks the scene can draw. */
+const aGeofile: GeofileTrack3DFile = {
+  id: 'g1',
+  name: 'Ridge walk.gpx',
+  style: null,
+  importStatus: 'imported',
+};
+
 function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
   const props: Scene3DLayerPanelProps = {
     layers,
@@ -46,6 +55,10 @@ function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
     onOverlayVisibleChange: vi.fn(),
     overlayOpacity: {},
     onOverlayOpacityChange: vi.fn(),
+    geofiles: [],
+    visibleGeofileIds: [],
+    onGeofileVisibleChange: vi.fn(),
+    onGeofileOpacityChange: vi.fn(),
     meshVisible: true,
     onMeshVisibleChange: vi.fn(),
     meshState: EMPTY_SURVEY_MESH_3D_STATE,
@@ -198,6 +211,59 @@ describe('Scene3DLayerPanel', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Walls of the selected cave' }));
 
     expect(props.onMeshVisibleChange).toHaveBeenCalledWith(false);
+  });
+
+  it('lists the imported files under the heading the flat map lists them under', () => {
+    renderPanel({
+      geofiles: [aGeofile, { ...aGeofile, id: 'g2', name: 'Still arriving.kml', importStatus: 'importing' }],
+      visibleGeofileIds: ['g1'],
+    });
+
+    // The same words as the flat map's own list of these files, so it reads as the same list.
+    expect(screen.getByText('Imported files')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Ridge walk.gpx' })).toBeChecked();
+    // A file still importing has nothing to draw; a switch for it would draw nothing and explain
+    // nothing, while the geodata screen already shows its status.
+    expect(screen.queryByRole('checkbox', { name: 'Still arriving.kml' })).not.toBeInTheDocument();
+    // The one thing about these that differs from the flat map, said once.
+    expect(screen.getByText(/laid on the ground/)).toBeInTheDocument();
+  });
+
+  it('offers no section for imported files when the installation has none', () => {
+    renderPanel();
+
+    expect(screen.queryByText('Imported files')).not.toBeInTheDocument();
+  });
+
+  it('reports a file being turned on by its own id, which is what both views share', () => {
+    const props = renderPanel({ geofiles: [aGeofile] });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Ridge walk.gpx' }));
+
+    expect(props.onGeofileVisibleChange).toHaveBeenCalledWith('g1', true);
+  });
+
+  it("reads a file's fade from under the key the flat map keeps it under", () => {
+    renderPanel({
+      geofiles: [aGeofile],
+      visibleGeofileIds: ['g1'],
+      // The file's own id, which is how the flat map stores every imported file's fade.
+      overlayOpacity: { g1: 0.4 },
+    });
+
+    expect(screen.getByRole('slider', { name: 'Opacity of Ridge walk.gpx' })).toHaveAttribute(
+      'aria-valuenow',
+      '40',
+    );
+  });
+
+  it('shows the fade of a file that is off as unusable, like any hidden layer', () => {
+    renderPanel({ geofiles: [aGeofile] });
+
+    expect(screen.getByRole('slider', { name: 'Opacity of Ridge walk.gpx' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('says how big a mesh is while it is still arriving, not only once it is there', () => {

@@ -102,6 +102,19 @@ map: **on the globe each sheet is flattened to a single picture**, so it softens
 zoom. The flat map reads the file itself. If you are examining detail on a geological sheet,
 use the 2D map.
 
+## Tracks from imported files
+
+Files imported on the geodata screen — a GPX track, a KML outline — can be shown in the 3D
+view too. Open the layer panel and tick the file under **Imported files**; each file has its
+own fade. The choice is shared with the flat map: a file switched on in one view is on in the
+other, drawn in the same colour.
+
+On the globe a file is its lines — tracks and outlines; its waypoints are not drawn. A track
+that recorded altitudes is drawn at them, on the same ground as the surveys, when the
+installation has terrain. A track that recorded none, or whose altitudes are all zero, is
+**laid on the ground**: it follows the hillside rather than sitting at sea level underneath
+it. Clicking a track selects nothing — it has no page of its own.
+
 ---
 
 Related: [Terrain](terrain.md) · [Map workspace](map-workspace.md) ·

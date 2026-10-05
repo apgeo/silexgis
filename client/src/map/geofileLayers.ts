@@ -8,22 +8,24 @@ import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style';
 import type { FeatureLike } from 'ol/Feature';
 import { fetchGeofileFeatureCollection, type GeofileInfo } from '../api/hooks.ts';
 import { declutterOption } from './declutter.ts';
-import { GEOFILE_LABEL_PROPERTY } from './geofileProperties.ts';
+import {
+  GEOFILE_LABEL_PROPERTY,
+  GEOFILE_LAYER_PREFIX,
+  geofileStrokeColour,
+  geofileStyleOverrides,
+  type GeofileStyleOverrides,
+} from './geofileProperties.ts';
 import { getOverlayGroup } from './mapContext.ts';
 
 // One vector layer per visible geofile, keyed by geofile id, living in the shared
 // overlay group. Layers share a single moveend-driven bbox loader; style overrides
 // come from the geofile's style jsonb.
 
-export const GEOFILE_LAYER_PREFIX = 'geofile:';
+// The prefix lives with the other facts both views share about an imported file; it is
+// re-exported here because this module is where the flat map's readers have always found it.
+export { GEOFILE_LAYER_PREFIX };
 const RASTER_LAYER_ID_PREFIX = 'raster:';
 const format = new GeoJSON();
-
-interface GeofileStyleOverrides {
-  stroke?: string;
-  fill?: string;
-  point?: string;
-}
 
 /**
  * The zoom from which an imported point is drawn with its name beside it.
@@ -76,10 +78,14 @@ function labelStyle(feature: FeatureLike, colour: string): Text | undefined {
  * and the view (whether there is room for it). Geometry other than a point is left unlabelled: a
  * track's name would be drawn at the middle of a line that may run off both edges of the screen.
  */
-function layerStyle(overrides: GeofileStyleOverrides | null): (feature: FeatureLike, resolution: number) => Style {
-  const stroke = overrides?.stroke ?? '#2f54eb';
+function layerStyle(
+  geofile: GeofileInfo,
+  overrides: GeofileStyleOverrides | null,
+): (feature: FeatureLike, resolution: number) => Style {
+  // The line colour is the one rule both views share, so a track is the same colour on the globe.
+  const stroke = geofileStrokeColour(geofile);
   const fill = overrides?.fill ?? 'rgba(47, 84, 235, 0.12)';
-  const point = overrides?.point ?? overrides?.stroke ?? '#2f54eb';
+  const point = overrides?.point ?? stroke;
 
   // Built once and reused across every feature and every frame. A style object allocated per
   // feature per redraw is what turns a few thousand waypoints into a map that will not pan.
@@ -108,11 +114,6 @@ function layerStyle(overrides: GeofileStyleOverrides | null): (feature: FeatureL
     base.setText(labelled);
     return base;
   };
-}
-
-function parseOverrides(geofile: GeofileInfo): GeofileStyleOverrides | null {
-  const style = geofile.style;
-  return typeof style === 'object' && style !== null ? (style as GeofileStyleOverrides) : null;
 }
 
 /**
@@ -145,7 +146,7 @@ export function syncGeofileLayers(
     const existing = overlays.getArray()
       .find((l) => l.get('id') === layerId) as VectorLayer | undefined;
     if (existing) {
-      existing.setStyle(layerStyle(parseOverrides(geofile)));
+      existing.setStyle(layerStyle(geofile, geofileStyleOverrides(geofile)));
       existing.setOpacity(opacity);
       continue;
     }
@@ -153,7 +154,7 @@ export function syncGeofileLayers(
     const layer = new VectorLayer({
       source: new VectorSource(),
       opacity,
-      style: layerStyle(parseOverrides(geofile)),
+      style: layerStyle(geofile, geofileStyleOverrides(geofile)),
       // Read at construction because that is the only time it can be given, and read from the
       // shared setting rather than passed in, so a file made visible while decluttering is on
       // comes up under the same rule as everything already drawn.
