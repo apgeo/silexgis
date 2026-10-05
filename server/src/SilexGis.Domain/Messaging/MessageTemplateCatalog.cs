@@ -831,7 +831,7 @@ public static class MessageTemplateCatalog
 
                     {actorName} asked {inviteeName} on a trip to {caveName}, which {inviteeName} has
                     no access to. Being asked on a trip grants none: only somebody who may change
-                    that cave's permissions can.
+                    that cave's permissions can, and the link below opens them.
 
                     {url}
 
@@ -848,7 +848,8 @@ public static class MessageTemplateCatalog
 
                     {actorName} a invitat pe {inviteeName} la o tură în {caveName}, la care
                     {inviteeName} nu are acces. Invitația la o tură nu acordă acces: numai cineva
-                    care poate schimba permisiunile peșterii poate face asta.
+                    care poate schimba permisiunile peșterii poate face asta, iar legătura de mai
+                    jos le deschide.
 
                     {url}
 
