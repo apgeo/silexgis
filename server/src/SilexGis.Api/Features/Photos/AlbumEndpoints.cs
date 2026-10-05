@@ -493,7 +493,7 @@ public static class AlbumEndpoints
     /// </summary>
     private static async Task<Results<Created<AlbumShareDto>, UnauthorizedHttpResult, ProblemHttpResult>> ShareAsync(
         Guid id,
-        FeatureShareMode? mode,
+        string? mode,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -503,6 +503,19 @@ public static class AlbumEndpoints
         if (ctx is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        // Text on the wire, parsed by name: binding the enum directly would refuse the camelCase
+        // spelling the responses use, and refuse it as a server fault. Absent means public.
+        var shareMode = FeatureShareMode.Public;
+        if (!string.IsNullOrWhiteSpace(mode))
+        {
+            if (!RouteEnums.TryParse<FeatureShareMode>(mode, out var parsedMode))
+            {
+                return RouteEnums.Invalid<FeatureShareMode>(nameof(mode));
+            }
+
+            shareMode = parsedMode;
         }
 
         if (await AlbumAccess.ReadableAsync(db, access, ctx, id, ct) is null)
@@ -523,7 +536,7 @@ public static class AlbumEndpoints
         {
             AlbumId = id,
             TokenHash = HashToken(token),
-            Mode = mode ?? FeatureShareMode.Public,
+            Mode = shareMode,
             CreatedBy = ctx.UserId,
         };
         db.AlbumShares.Add(share);

@@ -421,7 +421,7 @@ public static class TrackingCsvImportEndpoints
 
         foreach (var (name, header) in dto.Columns ?? new Dictionary<string, string>())
         {
-            if (Enum.TryParse<TrackingCsvField>(name, ignoreCase: true, out var field)
+            if (RouteEnums.TryParse<TrackingCsvField>(name, out var field)
                 && !string.IsNullOrWhiteSpace(header))
             {
                 mapping = mapping.With(field, header);

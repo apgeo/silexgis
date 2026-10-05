@@ -156,7 +156,7 @@ public static class SearchEndpoints
         FeatureKind? kindFilter = null;
         if (!string.IsNullOrWhiteSpace(kind))
         {
-            if (!Enum.TryParse<FeatureKind>(kind, ignoreCase: true, out var kindValue) || !Enum.IsDefined(kindValue))
+            if (!RouteEnums.TryParse<FeatureKind>(kind, out var kindValue))
             {
                 return ApiProblems.BadRequest("feature.kind_invalid", $"Unknown feature kind '{kind}'.");
             }

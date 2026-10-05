@@ -1210,16 +1210,16 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable, IClassFixture
         // from — the route a trip run before any of this existed still takes.
         (await TransitionAsync(owner, tripId, "draft")).GetProperty("state").GetString().ShouldBe("draft");
 
-        // A word the vocabulary does not have at all is refused too, and the trip stays where it
-        // was. What is asserted here is the refusal and not its code: reading a body whose enum
-        // carries an unknown word is the framework's own step, before any of this application's
-        // filters run, and it answers 500 rather than 400 on every route in the application that
-        // takes an enum in a body — the same answer this trip's own create gives a bad visibility,
-        // asserted just below so the two are known to be one behaviour and not this route's.
-        // Pinning 400 here would fail today; pinning 500 would record a defect as the contract.
+        // A word the vocabulary does not have at all is refused as validation, and the trip stays
+        // where it was. Reading a body whose enum carries an unknown word is the framework's own
+        // step, before any of this application's filters run; one handler turns that failure
+        // into the same 400 on every route that takes an enum in a body — the answer this trip's
+        // own create gives a bad visibility, asserted just below so the two are known to be one
+        // behaviour and not this route's.
         var nonsense = await owner.PostWithIfMatchAsync(
             $"/api/v1/trip-logs/{tripId}/state", new { state = "abandoned" });
-        nonsense.IsSuccessStatusCode.ShouldBeFalse(await nonsense.Content.ReadAsStringAsync());
+        nonsense.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await nonsense.Content.ReadAsStringAsync());
+        (await nonsense.Content.ReadAsStringAsync()).ShouldContain("validation.invalid_enum");
         (await ReadTripAsync(owner, tripId)).GetProperty("state").GetString().ShouldBe("draft");
 
         var badVisibility = await owner.PostAsJsonAsync("/api/v1/trip-logs/", new
@@ -1230,7 +1230,8 @@ public sealed class TripAndTagTests : IAsyncLifetime, IDisposable, IClassFixture
             participants = Array.Empty<object>(),
             visibility = "nonsense",
         });
-        badVisibility.StatusCode.ShouldBe(nonsense.StatusCode, await badVisibility.Content.ReadAsStringAsync());
+        badVisibility.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await badVisibility.Content.ReadAsStringAsync());
+        (await badVisibility.Content.ReadAsStringAsync()).ShouldContain("validation.invalid_enum");
 
         // The positive half, and proof the refusals above were about the move and not the caller:
         // the same caller, on the same trip, asking for a state the table reaches from where it

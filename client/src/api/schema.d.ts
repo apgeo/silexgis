@@ -8963,7 +8963,7 @@ export interface paths {
                     relativePath?: string;
                     attachEntityType?: string;
                     attachEntityId?: string;
-                    attachRole?: components["schemas"]["AttachmentRole"];
+                    attachRole?: string;
                     batchId?: string;
                     allowDuplicate?: boolean;
                     expandArchive?: boolean;
@@ -9653,7 +9653,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    outcome?: components["schemas"]["UploadItemOutcome"];
+                    outcome?: string;
                     page?: number;
                     pageSize?: number;
                 };
@@ -11325,7 +11325,7 @@ export interface paths {
         post: {
             parameters: {
                 query?: {
-                    mode?: components["schemas"]["FeatureShareMode"];
+                    mode?: string;
                 };
                 header?: never;
                 path: {

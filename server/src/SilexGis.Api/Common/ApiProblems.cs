@@ -10,6 +10,30 @@ namespace SilexGis.Api.Common;
 /// </summary>
 public static class ApiProblems
 {
+    /// <summary>
+    /// A value that has to be one of a closed list of names and is not — a word the enum does not
+    /// have, or a null where the shape has no room for one. One code wherever the value arrived:
+    /// a request body, a query string or a route segment.
+    /// </summary>
+    public const string InvalidEnumCode = "validation.invalid_enum";
+
+    /// <summary>
+    /// The refusal for a closed-vocabulary value that named no member. It names the member the
+    /// way the validators do and lists what it takes; the offending input is not echoed back.
+    /// </summary>
+    public static ProblemHttpResult InvalidEnum(string member, IReadOnlyList<string> accepted)
+    {
+        var sentence = $"Must be one of: {string.Join(", ", accepted)}.";
+        return TypedResults.Problem(
+            detail: $"'{member}' must be one of: {string.Join(", ", accepted)}.",
+            statusCode: StatusCodes.Status400BadRequest,
+            extensions: new Dictionary<string, object?>
+            {
+                ["code"] = InvalidEnumCode,
+                ["errors"] = new Dictionary<string, string[]> { [member] = [sentence] },
+            });
+    }
+
     public static ProblemHttpResult Forbidden(string code = "acl.forbidden", string? detail = null) =>
         TypedResults.Problem(detail: detail, statusCode: StatusCodes.Status403Forbidden,
             extensions: new Dictionary<string, object?> { ["code"] = code });

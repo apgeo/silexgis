@@ -108,8 +108,7 @@ internal static class TripListQuery
         var stateValues = new List<ActivityState>();
         foreach (var word in Split(states))
         {
-            if (!Enum.TryParse<ActivityState>(word, ignoreCase: true, out var state)
-                || !Enum.IsDefined(state)
+            if (!RouteEnums.TryParse<ActivityState>(word, out var state)
                 || !ActivityStates.IsTripLogState(state))
             {
                 problem = ApiProblems.BadRequest(StateInvalidCode, $"Unknown state '{word}'.");
@@ -122,7 +121,7 @@ internal static class TripListQuery
         var visibilityValues = new List<Visibility>();
         foreach (var word in Split(visibilities))
         {
-            if (!Enum.TryParse<Visibility>(word, ignoreCase: true, out var visibility) || !Enum.IsDefined(visibility))
+            if (!RouteEnums.TryParse<Visibility>(word, out var visibility))
             {
                 problem = ApiProblems.BadRequest(VisibilityInvalidCode, $"Unknown visibility '{word}'.");
                 return false;

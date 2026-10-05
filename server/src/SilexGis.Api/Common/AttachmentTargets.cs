@@ -36,7 +36,7 @@ public static class AttachmentTargets
             return true;
         }
 
-        if (Enum.TryParse<AttachedEntityType>(value, ignoreCase: true, out var parsed) && IsAttachable(parsed))
+        if (RouteEnums.TryParse<AttachedEntityType>(value, out var parsed) && IsAttachable(parsed))
         {
             entityType = parsed;
             return true;

@@ -395,8 +395,7 @@ public static class NotificationHealthEndpoints
             return true;
         }
 
-        if (!Enum.TryParse<NotificationDeliveryStatus>(value, ignoreCase: true, out var parsed)
-            || !Enum.IsDefined(parsed))
+        if (!RouteEnums.TryParse<NotificationDeliveryStatus>(value, out var parsed))
         {
             return false;
         }

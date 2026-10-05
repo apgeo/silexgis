@@ -278,7 +278,7 @@ public static class HistoryEndpoints
                     && a.RootEntityId != null && keys.Contains(a.RootEntityId)));
         }
 
-        if (!Enum.TryParse<AttachedEntityType>(entityType, ignoreCase: true, out var type)
+        if (!RouteEnums.TryParse<AttachedEntityType>(entityType, out var type)
             || !await FileAccessRules.CanReadEntityAsync(db, access, ctx, type, entityId, ct))
         {
             return null;

@@ -778,8 +778,7 @@ public static class MapEndpoints
 
         foreach (var word in SplitFilter(states))
         {
-            if (!Enum.TryParse<ActivityState>(word, ignoreCase: true, out var state)
-                || !Enum.IsDefined(state)
+            if (!RouteEnums.TryParse<ActivityState>(word, out var state)
                 || !ActivityStates.IsTripLogState(state))
             {
                 problem = ApiProblems.BadRequest("map.invalid_trip_filter", $"Unknown state '{word}'.");
@@ -791,7 +790,7 @@ public static class MapEndpoints
 
         foreach (var word in SplitFilter(visibilities))
         {
-            if (!Enum.TryParse<Visibility>(word, ignoreCase: true, out var visibility) || !Enum.IsDefined(visibility))
+            if (!RouteEnums.TryParse<Visibility>(word, out var visibility))
             {
                 problem = ApiProblems.BadRequest("map.invalid_trip_filter", $"Unknown visibility '{word}'.");
                 return false;
@@ -970,8 +969,7 @@ public static class MapEndpoints
         FeatureCategory? categoryFilter = null;
         if (!string.IsNullOrWhiteSpace(category))
         {
-            if (!Enum.TryParse<FeatureCategory>(category, ignoreCase: true, out var parsedCategory)
-                || !Enum.IsDefined(parsedCategory))
+            if (!RouteEnums.TryParse<FeatureCategory>(category, out var parsedCategory))
             {
                 return ApiProblems.BadRequest("map.invalid_category", $"Unknown category '{category}'.");
             }
@@ -1184,7 +1182,7 @@ public static class MapEndpoints
         var result = new List<FeatureKind>();
         foreach (var token in kinds.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
-            if (!Enum.TryParse<FeatureKind>(token, ignoreCase: true, out var kind)
+            if (!RouteEnums.TryParse<FeatureKind>(token, out var kind)
                 || kind is not (FeatureKind.Generic or FeatureKind.CaveEntrance))
             {
                 parsed = [];

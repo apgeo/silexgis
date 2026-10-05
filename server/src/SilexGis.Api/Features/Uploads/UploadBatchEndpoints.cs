@@ -138,7 +138,7 @@ public static class UploadBatchEndpoints
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         CancellationToken ct,
-        UploadItemOutcome? outcome = null,
+        string? outcome = null,
         int? page = null,
         int? pageSize = null)
     {
@@ -146,6 +146,19 @@ public static class UploadBatchEndpoints
         if (ctx is null)
         {
             return TypedResults.Unauthorized();
+        }
+
+        // Text on the wire, parsed by name: binding the enum directly would refuse the camelCase
+        // spelling the responses use, and refuse it as a server fault.
+        UploadItemOutcome? wanted = null;
+        if (!string.IsNullOrWhiteSpace(outcome))
+        {
+            if (!RouteEnums.TryParse<UploadItemOutcome>(outcome, out var parsedOutcome))
+            {
+                return RouteEnums.Invalid<UploadItemOutcome>(nameof(outcome));
+            }
+
+            wanted = parsedOutcome;
         }
 
         if (await OwnAsync(db, ctx, id, ct) is null)
@@ -156,7 +169,7 @@ public static class UploadBatchEndpoints
         var (p, size) = Paging.Normalize(page, pageSize);
         var rows = db.UploadBatchItems.AsNoTracking()
             .Where(i => i.UploadBatchId == id)
-            .Where(i => outcome == null || i.Outcome == outcome)
+            .Where(i => wanted == null || i.Outcome == wanted)
             .OrderBy(i => i.Id);
 
         var paged = await rows.ToPagedAsync(

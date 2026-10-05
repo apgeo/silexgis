@@ -104,8 +104,7 @@ public static class EventEndpoints
         EventKind? kindFilter = null;
         if (!string.IsNullOrWhiteSpace(kind))
         {
-            if (!Enum.TryParse<EventKind>(kind, ignoreCase: true, out var kindValue)
-                || !Enum.IsDefined(kindValue))
+            if (!RouteEnums.TryParse<EventKind>(kind, out var kindValue))
             {
                 return ApiProblems.BadRequest(KindInvalidCode, $"Unknown kind '{kind}'.");
             }
@@ -119,8 +118,7 @@ public static class EventEndpoints
             // Two questions, and the second is the one the camp's list forgets to ask: a word
             // the vocabulary has but an event may never hold names no row, so it is refused
             // here rather than answered with an empty page that reads as "there are none".
-            if (!Enum.TryParse<ActivityState>(state, ignoreCase: true, out var stateValue)
-                || !Enum.IsDefined(stateValue)
+            if (!RouteEnums.TryParse<ActivityState>(state, out var stateValue)
                 || !ActivityStates.IsEventState(stateValue))
             {
                 return ApiProblems.BadRequest(StateInvalidCode, $"Unknown state '{state}'.");

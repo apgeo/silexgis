@@ -240,7 +240,7 @@ public static class FileEndpoints
         string? relativePath,
         string? attachEntityType,
         Guid? attachEntityId,
-        AttachmentRole? attachRole,
+        string? attachRole,
         Guid? batchId,
         bool? allowDuplicate,
         bool? expandArchive,
@@ -266,9 +266,22 @@ public static class FileEndpoints
             return createProblem;
         }
 
+        // Text on the wire, parsed by name: binding the enum directly would refuse the camelCase
+        // spelling the responses use, and refuse it as a server fault.
+        AttachmentRole? role = null;
+        if (!string.IsNullOrWhiteSpace(attachRole))
+        {
+            if (!RouteEnums.TryParse<AttachmentRole>(attachRole, out var parsedRole))
+            {
+                return RouteEnums.Invalid<AttachmentRole>(nameof(attachRole));
+            }
+
+            role = parsedRole;
+        }
+
         var (destination, destinationProblem) = await UploadDestinationBinding.ResolveAsync(
             new UploadDestinationRequest(
-                cabinetId, relativePath, attachEntityType, attachEntityId, attachRole, cavingGroupId),
+                cabinetId, relativePath, attachEntityType, attachEntityId, role, cavingGroupId),
             ctx,
             db,
             ingest,

@@ -105,8 +105,7 @@ public static class ExpeditionEndpoints
         ActivityState? stateFilter = null;
         if (!string.IsNullOrWhiteSpace(state))
         {
-            if (!Enum.TryParse<ActivityState>(state, ignoreCase: true, out var stateValue)
-                || !Enum.IsDefined(stateValue))
+            if (!RouteEnums.TryParse<ActivityState>(state, out var stateValue))
             {
                 return ApiProblems.BadRequest(StateInvalidCode, $"Unknown state '{state}'.");
             }

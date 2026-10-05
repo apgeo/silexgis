@@ -91,7 +91,7 @@ public static class FeatureEndpoints
         // parse case-insensitively (route binding's Enum.TryParse would not).
         if (!string.IsNullOrWhiteSpace(kind))
         {
-            if (!Enum.TryParse<FeatureKind>(kind, ignoreCase: true, out var kindValue) || !Enum.IsDefined(kindValue))
+            if (!RouteEnums.TryParse<FeatureKind>(kind, out var kindValue))
             {
                 return ApiProblems.BadRequest("feature.kind_invalid", $"Unknown feature kind '{kind}'.");
             }
@@ -101,8 +101,7 @@ public static class FeatureEndpoints
 
         if (!string.IsNullOrWhiteSpace(category))
         {
-            if (!Enum.TryParse<FeatureCategory>(category, ignoreCase: true, out var categoryValue)
-                || !Enum.IsDefined(categoryValue))
+            if (!RouteEnums.TryParse<FeatureCategory>(category, out var categoryValue))
             {
                 return ApiProblems.BadRequest("feature.category_invalid", $"Unknown feature category '{category}'.");
             }

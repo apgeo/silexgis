@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using SilexGis.Api.Common;
@@ -10,7 +11,20 @@ using SilexGis.Infrastructure.Identity;
 
 namespace SilexGis.Api.Auth;
 
-public sealed record TwoFactorSendRequest(TwoFactorMethod Method);
+/// <summary>
+/// Which second factor to send the code through. Nullable with a presence rule, as every request
+/// body made only of an enum is: the vocabulary's zero value is the authenticator, so a body
+/// naming nothing must be refused rather than read as asking for it.
+/// </summary>
+public sealed record TwoFactorSendRequest(TwoFactorMethod? Method);
+
+public sealed class TwoFactorSendRequestValidator : AbstractValidator<TwoFactorSendRequest>
+{
+    public TwoFactorSendRequestValidator()
+    {
+        RuleFor(x => x.Method).NotNull().IsInEnum();
+    }
+}
 
 /// <summary>Where the code went, masked, and how long it is good for.</summary>
 public sealed record TwoFactorSentDto(TwoFactorMethod Method, string Destination, int ExpiresMinutes);
@@ -54,7 +68,10 @@ public static class TwoFactorChallengeEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!TwoFactorProviders.IsDelivered(request.Method))
+        // Present because the validator filter runs before this and requires it; a body that
+        // names no method is a 400 and never arrives here.
+        var method = request.Method!.Value;
+        if (!TwoFactorProviders.IsDelivered(method))
         {
             return ApiProblems.BadRequest(
                 "auth.mfa_method_not_delivered", "An authenticator code is not sent — read it from your app.");
@@ -66,7 +83,7 @@ public static class TwoFactorChallengeEndpoints
             policy,
             await emailDelivery.IsConfiguredAsync(ct),
             await smsDelivery.IsConfiguredAsync(ct));
-        if (!available.Contains(request.Method))
+        if (!available.Contains(method))
         {
             return ApiProblems.BadRequest(
                 "auth.mfa_method_unavailable", "That sign-in method is not available on this account.");
@@ -74,15 +91,15 @@ public static class TwoFactorChallengeEndpoints
 
         // Per account, not per address: the endpoint rate limit is per IP, which would still let
         // one account's address be flooded from a handful of them.
-        if (await SendThrottle.TooSoonAsync(userManager, user, request.Method, policy, SendThrottle.SignIn))
+        if (await SendThrottle.TooSoonAsync(userManager, user, method, policy, SendThrottle.SignIn))
         {
             return ApiProblems.BadRequest(
                 "auth.mfa_resend_too_soon", "A code was just sent. Wait a moment before asking for another.");
         }
 
-        var code = await userManager.GenerateTwoFactorTokenAsync(user, TwoFactorProviders.For(request.Method));
+        var code = await userManager.GenerateTwoFactorTokenAsync(user, TwoFactorProviders.For(method));
         var lifetime = Math.Clamp(policy.TwoFactorCodeLifetimeMinutes, 1, 60);
-        var result = await AccountMessages.SendTwoFactorCodeAsync(dispatcher, user, request.Method, code, lifetime, ct);
+        var result = await AccountMessages.SendTwoFactorCodeAsync(dispatcher, user, method, code, lifetime, ct);
 
         if (!result.Sent)
         {
@@ -90,8 +107,8 @@ public static class TwoFactorChallengeEndpoints
                 "auth.mfa_send_failed", "The code could not be sent. Try another method or ask an administrator.");
         }
 
-        await SendThrottle.MarkSentAsync(userManager, user, request.Method, SendThrottle.SignIn);
-        return TypedResults.Ok(new TwoFactorSentDto(request.Method, Mask(user, request.Method), lifetime));
+        await SendThrottle.MarkSentAsync(userManager, user, method, SendThrottle.SignIn);
+        return TypedResults.Ok(new TwoFactorSentDto(method, Mask(user, method), lifetime));
     }
 
     private static string Mask(SilexGisUser user, TwoFactorMethod method) =>

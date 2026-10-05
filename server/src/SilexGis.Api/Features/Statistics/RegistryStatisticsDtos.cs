@@ -132,29 +132,11 @@ public sealed record RegistryRegionsRequest(
 /// </remarks>
 public static class RegistryMeasures
 {
-    public static bool TryParse(string? text, out RegistryMeasure measure)
-    {
-        measure = default;
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        var written = text.Trim();
-        foreach (var declared in Enum.GetValues<RegistryMeasure>())
-        {
-            if (string.Equals(declared.ToString(), written, StringComparison.OrdinalIgnoreCase))
-            {
-                measure = declared;
-                return true;
-            }
-        }
-
-        return false;
-    }
+    public static bool TryParse(string? text, out RegistryMeasure measure) =>
+        SilexGis.Api.Common.RouteEnums.TryParse(text, out measure);
 
     /// <summary>Every accepted name, for the message that refuses a request naming none of them.</summary>
-    public static string Accepted { get; } = string.Join(", ", Enum.GetNames<RegistryMeasure>());
+    public static string Accepted { get; } = string.Join(", ", SilexGis.Api.Common.RouteEnums.WireNames<RegistryMeasure>());
 }
 
 /// <summary>

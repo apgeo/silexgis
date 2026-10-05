@@ -523,7 +523,7 @@ public static class PermissionGroupEndpoints
         // Taken as a string and parsed case-insensitively: the client echoes the
         // camelCase wire value ("user", "cavingGroup") back into the URL, which the
         // default enum route binding would reject as an unhandled 500.
-        if (!RouteEnums.TryParseSubjectKind(memberKind, out var parsedKind))
+        if (!RouteEnums.TryParse<AccessSubjectKind>(memberKind, out var parsedKind))
         {
             return ApiProblems.BadRequest(
                 "permission_group.member_kind_unknown", $"Unknown member kind '{memberKind}'.");

@@ -39,7 +39,7 @@ public static class ResLinkTargets
             return true;
         }
 
-        if (Enum.TryParse<AttachedEntityType>(value, ignoreCase: true, out var parsed)
+        if (RouteEnums.TryParse<AttachedEntityType>(value, out var parsed)
             && ResLinkRules.IsLinkableType(parsed))
         {
             entityType = parsed;

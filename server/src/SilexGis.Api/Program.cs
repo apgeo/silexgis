@@ -109,9 +109,19 @@ try
     builder.Services.ConfigureHttpJsonOptions(options =>
     {
         options.SerializerOptions.Converters.Add(
-            new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase));
+            new System.Text.Json.Serialization.JsonStringEnumConverter(SilexGis.Api.Common.RouteEnums.WireNaming));
         options.SerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.Strict;
     });
+
+    // A request the framework cannot bind — a body naming a word an enum does not have, a null
+    // where the shape has no room for one, a query value that is not what the handler declares —
+    // fails before any filter or validator runs. The framework's default is to throw on that in
+    // development and to answer an empty 400 in production; it is made to throw everywhere, so
+    // that one handler turns every such failure into the 400 Problem Details with a stable code
+    // that the rest of the contract promises. Without the handler the throw would be a bare 500.
+    builder.Services.PostConfigure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(
+        options => options.ThrowOnBadRequest = true);
+    builder.Services.AddExceptionHandler<SilexGis.Api.Common.BindingProblemHandler>();
 
     // A large upload passes three independent ceilings before a handler sees it: the request
     // body limit, the multipart form limit, and the reverse proxy's own cap. The first two

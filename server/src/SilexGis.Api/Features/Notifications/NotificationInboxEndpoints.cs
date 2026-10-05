@@ -318,8 +318,7 @@ public static class NotificationInboxEndpoints
             return true;
         }
 
-        if (!Enum.TryParse<NotificationCategory>(value, ignoreCase: true, out var parsed)
-            || !Enum.IsDefined(parsed))
+        if (!RouteEnums.TryParse<NotificationCategory>(value, out var parsed))
         {
             return false;
         }

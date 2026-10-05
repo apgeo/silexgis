@@ -122,8 +122,7 @@ public static class TripReportTemplateEndpoints
             return true;
         }
 
-        if (!Enum.TryParse<ReportTemplateKind>(kind, ignoreCase: true, out var value)
-            || !Enum.IsDefined(value))
+        if (!RouteEnums.TryParse<ReportTemplateKind>(kind, out var value))
         {
             return false;
         }

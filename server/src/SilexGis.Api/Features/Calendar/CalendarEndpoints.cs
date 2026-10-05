@@ -172,8 +172,7 @@ public static class CalendarEndpoints
             var wanted = new HashSet<CalendarSource>();
             foreach (var word in source.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                if (!Enum.TryParse<CalendarSource>(word, ignoreCase: true, out var sourceValue)
-                    || !Enum.IsDefined(sourceValue))
+                if (!RouteEnums.TryParse<CalendarSource>(word, out var sourceValue))
                 {
                     return ApiProblems.BadRequest(SourceInvalidCode, $"Unknown source '{word}'.");
                 }
@@ -195,8 +194,7 @@ public static class CalendarEndpoints
         ActivityState? stateFilter = null;
         if (!string.IsNullOrWhiteSpace(state))
         {
-            if (!Enum.TryParse<ActivityState>(state, ignoreCase: true, out var stateValue)
-                || !Enum.IsDefined(stateValue)
+            if (!RouteEnums.TryParse<ActivityState>(state, out var stateValue)
                 || !CalendarMembership.ShowsOnCalendar(stateValue))
             {
                 return ApiProblems.BadRequest(

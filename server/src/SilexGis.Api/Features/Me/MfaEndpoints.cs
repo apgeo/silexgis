@@ -164,7 +164,7 @@ public static class MfaEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!RouteEnums.TryParseTwoFactorMethod(method, out var parsed))
+        if (!RouteEnums.TryParse<TwoFactorMethod>(method, out var parsed))
         {
             return ApiProblems.NotFound("auth.mfa_method_unknown");
         }
@@ -223,7 +223,7 @@ public static class MfaEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!RouteEnums.TryParseTwoFactorMethod(method, out var parsed))
+        if (!RouteEnums.TryParse<TwoFactorMethod>(method, out var parsed))
         {
             return ApiProblems.NotFound("auth.mfa_method_unknown");
         }
@@ -290,7 +290,7 @@ public static class MfaEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (!RouteEnums.TryParseTwoFactorMethod(method, out var parsed))
+        if (!RouteEnums.TryParse<TwoFactorMethod>(method, out var parsed))
         {
             return ApiProblems.NotFound("auth.mfa_method_unknown");
         }

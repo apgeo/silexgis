@@ -255,7 +255,7 @@ public static class ExportEndpoints
         FeatureKind? kindFilter = null;
         if (!string.IsNullOrWhiteSpace(kind))
         {
-            if (!Enum.TryParse<FeatureKind>(kind, ignoreCase: true, out var parsedKind) || !Enum.IsDefined(parsedKind))
+            if (!RouteEnums.TryParse<FeatureKind>(kind, out var parsedKind))
             {
                 return ApiProblems.BadRequest("export.kind_invalid", $"Unknown feature kind '{kind}'.");
             }
