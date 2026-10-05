@@ -425,6 +425,10 @@ export default function CaveViewPanel({
   // fresh closure, which is what the callbacks above already ride a ref to avoid.
   const crsLookupRef = useRef(crsLookup);
   crsLookupRef.current = crsLookup;
+  // Read off a ref at the moment a viewer is built, like the lookup above: a language switched
+  // while a model is open is not a reason to rebuild the viewer and reload the model.
+  const languageRef = useRef(i18n.language);
+  languageRef.current = i18n.language;
 
   /**
    * What the one marker drawn in place of a party standing together says.
@@ -498,8 +502,15 @@ export default function CaveViewPanel({
       // `crsLookup` points the viewer's coordinate-system resolution at this installation's
       // own registry instead of epsg.io — see loadCaveView.ts for why that matters. A caller with
       // no account cannot reach that registry and supplies its own; see the prop.
+      // `language` is the interface language this application is being read in, not the
+      // browser's: the viewer would otherwise pick its catalogue from `navigator.language`, so a
+      // member reading the application in English on a Romanian machine (or the other way round)
+      // got a viewer in the other language. Only the two-letter code is meaningful to it; English
+      // is built in, and any other code is fetched as `lib/lang-<code>.json` from the vendored
+      // directory, which carries the Romanian catalogue.
       const viewer = new cv2.CaveViewer(containerIdRef.current!, {
         home: CAVEVIEW_HOME,
+        language: languageRef.current.slice(0, 2),
         crsLookup: crsLookupRef.current ?? makeCrsLookup(),
       });
       viewer.addEventListener('newCave', () => {

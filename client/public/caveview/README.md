@@ -3,8 +3,8 @@
 Source: https://github.com/apgeo/CaveView.js — this project's fork of
 https://github.com/aardgoose/CaveView.js (MIT license, see `LICENSE` in this directory).
 
-Vendored build: distribution version **2.9.0-slx.12**, built from the fork's `silexgis`
-branch at commit `5f14d910` — the upstream **2.9.0 release tag** plus the fork's changes
+Vendored build: distribution version **2.9.0-slx.13**, built from the fork's `silexgis`
+branch at commit `f4c94bb2` — the upstream **2.9.0 release tag** plus the fork's changes
 (each also kept on its own dev-based `feature/*` branch so upstream can take them): the
 dispose-handler typo fix, the `crsLookup` configuration option the app uses to resolve
 coordinate systems locally instead of via epsg.io, a navigation and hover API
@@ -42,10 +42,11 @@ not to take up a feature:
 - **A label's first line is drawn in the colour of the marker it belongs to**, where it has one, so
   an application putting a group on the first line and its members under it has them told apart —
   and two markers' labels no longer read alike. `liveMarkers.labelHeadingFromMarker` turns it off.
-- A **Romanian catalogue** (`lib/lang-ro.json`). Not vendored here, because this application
-  does not set the viewer's language and the subset below is only what it loads; a build that
-  did would take `lib/` with it. Worth revisiting — the viewer's own controls are English
-  inside an interface this application otherwise translates.
+- A **Romanian catalogue** (`lib/lang-ro.json`). Vendored since slx.13, when this application
+  started passing its interface language to the viewer (`CaveViewPanel` sets `language` from
+  i18next): the viewer fetches `lib/lang-<code>.json` from this directory for any language but
+  English, which is built in. The catalogue is a tracked file in the fork's `build/CaveView/lib/`
+  that the build never writes, so it is copied by hand when vendoring.
 
 **What slx.12 adds over slx.11**, for rendering the viewer into a movie and for labelling people
 by their own names:
@@ -90,20 +91,46 @@ turn asked for during a session changes no frame and leaves the controls off; an
 set by a pixel ratio of 1.1 are 13.2 again after a capture made at a ratio of 1. Each of those
 checks fails against the build this one replaced.
 
+**What slx.13 adds over slx.12** — maintenance the fork had been carrying as debt, each proved
+by the fork's own smoke test (`npm test` there, 16 assertions in headless Chromium):
+
+- A late `renderView()`, `resize()` or second `dispose()` after `dispose()` is a no-op rather than
+  a `null` dereference, and `getSnapshot()` after it throws a named error.
+- The keyboard shortcuts leave a key alone when it was typed into an input, a textarea, a select
+  or an editable element — the viewer used to swallow every key while the pointer rested on it.
+- A station picture whose load fails is dropped from the strip (`mediaError` event, with a
+  `console.warn` naming the address when unhandled) instead of an empty frame.
+- `prefers-reduced-motion: reduce` is honoured: flights jump to their target, a flight never
+  starts the auto rotation, and `focusStation(ref, { animate: true })` forces the animation.
+- `frameLiveMarkers({ margin, animate })` frames the live markers currently placed; `false` when
+  there are none.
+- A `fullscreenElement` option names the element that goes fullscreen (the container by default),
+  and the fullscreen getter reads `document.fullscreenElement` rather than comparing sizes.
+- The help page states the viewer's version. `npm run lint` passes in the fork (flat config) and
+  its lock file agrees with `package.json`, so `npm ci` works in a clean clone.
+
+Not taken: moving the `.3d` and `.lox` readers onto the worker path the `.ply` reader uses. They
+write into a shared survey graph (stations shared by identity between legs, a tree with methods,
+CRS resolution through the host's `crsLookup` during the parse), so a worker would need a flat
+intermediate format and a main-thread rebuild — a redesign of the survey's input contract, not a
+move. The fork's `feature/line-shader-r183` branch carries the three-line fix for upstream's r183
+line shader; it is offered upstream and not merged into `silexgis`, which stays on r171.
+
 The base is deliberately the release tag, not upstream `dev` HEAD: the two are
 source-identical, but `dev` bumps three.js r171 → r183, and a bundle built on r183 fails
 to compile the height-shading line shader (`vColor` became a vec4), leaving centerlines
 invisible — verified in a real browser before this choice was made. Rebasing onto a
-future upstream release re-tests exactly that.
+future upstream release re-tests exactly that, and the fork now carries the fix to offer.
 
 CaveView.js is not published on npm; it ships as a prebuilt browser bundle. This
 directory contains the runtime subset the app needs, under a directory named by the
 distribution version:
 
-- `v2.9.0-slx.12/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
-- `v2.9.0-slx.12/js/workers/` — web workers the bundle spawns at runtime (paths resolved
+- `v2.9.0-slx.13/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
+- `v2.9.0-slx.13/js/workers/` — web workers the bundle spawns at runtime (paths resolved
   against the viewer's `home` option, which the app points at this directory)
-- `v2.9.0-slx.12/css/caveview.css`, `v2.9.0-slx.12/images/logo.svg` — runtime assets
+- `v2.9.0-slx.13/css/caveview.css`, `v2.9.0-slx.13/images/logo.svg` — runtime assets
+- `v2.9.0-slx.13/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
 
 The version directory exists for cache correctness: these URLs are fetched outside the
 app bundle's hashed-asset pipeline, so a new build must arrive under new URLs or
@@ -122,17 +149,19 @@ turns that into a load failure until a full reload — then delete it in the rel
 after. (Earlier `2.9.0-slx.*` directories were removed rather than kept: none reached a release, so no
 browser can be holding it.) Do not edit the vendored files in place.
 
-`v2.9.0-slx.9/` is kept beside the current one under that rule: it is the last viewer to have
-reached a release, so it is the one a tab opened before an upgrade can still be asking for.
-`v2.9.0-slx.10/` and `v2.9.0-slx.11/` were each replaced before reaching a release, so no browser
-can be holding either and neither was kept. `v2.9.0-slx.6/` was removed when slx.10 landed,
-having already been superseded for a release. slx.12 itself was rebuilt in its own directory
-once, from `563b763b` to `5f14d910`, before it reached a release.
+`v2.9.0-slx.12/` is kept beside the current one under that rule, and `v2.9.0-slx.9/` went with
+slx.13 (it had been kept through slx.12). `v2.9.0-slx.10/` and `v2.9.0-slx.11/` were each
+replaced before reaching a release, so no browser could have been holding either and neither was
+kept. **A build is never replaced in place, either:** once a version directory has been vendored,
+any further change to the fork — a fix found while vendoring included — is a new distribution
+version and a new directory. slx.12 was rebuilt in its own directory once, from `563b763b` to
+`5f14d910`, before it reached a release; that was the last time.
 
-**This build was verified to reproduce.** `v2.9.0-slx.12/js/CaveView2.min.js` (SHA-256
-`b12cb7dac4edcdc740e8e17cdcb281e9709a2b4c82ab97b7a74609fbca4ccf04`) is byte-identical to a
-fresh `npm run build` of commit `5f14d910` in a clean checkout of the fork, made separately
-from the build it was copied from; the workers, the stylesheet and the logo are byte-identical
-to slx.9's. (An earlier build, from `ed0322e5`, was checked the same way against the bundle
+**This build was verified to reproduce.** `v2.9.0-slx.13/js/CaveView2.min.js` (SHA-256
+`31a2d6cd37dfa6c86738f3e5c8a3a43b148da89393003323cde6b68b87af2690`) is byte-identical to a
+fresh `npm ci && npm run build` of commit `f4c94bb2` in a clean clone of the fork, made
+separately from the build it was copied from; the workers, the stylesheet and the logo are
+byte-identical to slx.12's (and slx.12's bundle, `b12cb7da…`, reproduced the same way from
+`5f14d910`). (An earlier build, from `ed0322e5`, was checked the same way against the bundle
 serving the club's public pages.) That is worth re-checking on the next upgrade: it is the
 cheapest evidence that the vendored bytes are the fork's source and not a local accident.
