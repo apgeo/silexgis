@@ -401,6 +401,7 @@ export const queryKeys = {
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
   expeditionMap: (id: string) => ['expeditions', 'map', id] as const,
   expeditionLeads: (id: string) => ['expeditions', 'leads', id] as const,
+  expeditionSharing: (id: string) => ['expeditions', 'sharing', id] as const,
   events: (params: EventListParams) => ['events', 'list', params] as const,
   event: (id: string) => ['events', 'detail', id] as const,
   eventDefaults: ['events', 'defaults'] as const,
@@ -7229,6 +7230,84 @@ export function useMoveExpedition() {
       // finished until the version it produced has been read.
       return readBack();
     },
+  });
+}
+
+export type ExpeditionSharing = components['schemas']['ExpeditionSharingDto'];
+export type ExpeditionSharedRule = components['schemas']['ExpeditionSharedRuleDto'];
+export type ExpeditionShareEntry = components['schemas']['ExpeditionShareEntryWrite'];
+
+/**
+ * What a camp's sharing grants, and how many of its trips carry it.
+ *
+ * Sharing a camp is not a rule on the camp: it is one object-scoped rule written onto each trip
+ * the camp gathers, marked with the camp that wrote it, so a partner club given the camp can read
+ * what the camp gathered. The read takes the right to manage the camp's permissions, and a
+ * refusal is a settled answer about the caller rather than something to retry.
+ */
+export function useExpeditionSharing(expeditionId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.expeditionSharing(expeditionId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/expeditions/{id}/sharing', { params: { path: { id: expeditionId! } } })),
+    enabled: enabled && !!expeditionId,
+    retry: false,
+  });
+}
+
+function useInvalidateExpeditionSharing(expeditionId: string) {
+  const queryClient = useQueryClient();
+  const invalidateHistory = useInvalidateHistory();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.expeditionSharing(expeditionId) });
+    // The rules land on the trips, where each trip's own permissions dialog lists them.
+    void queryClient.invalidateQueries({ queryKey: ['object-access'] });
+    void queryClient.invalidateQueries({ queryKey: ['effective-access'] });
+    invalidateHistory();
+  };
+}
+
+/** Shares the camp: adds and restates one rule per member trip, and never removes. */
+export function useApplyExpeditionSharing(expeditionId: string) {
+  const invalidate = useInvalidateExpeditionSharing(expeditionId);
+  return useMutation({
+    mutationFn: (entries: ExpeditionShareEntry[]) =>
+      unwrap(
+        api.POST('/api/v1/expeditions/{id}/sharing', {
+          params: { path: { id: expeditionId } },
+          body: { entries },
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Carries the camp's sharing onto the trips that joined since it was applied. A trip joining is
+ * not covered by itself: coverage is an act somebody performs and the trail records.
+ */
+export function useReapplyExpeditionSharing(expeditionId: string) {
+  const invalidate = useInvalidateExpeditionSharing(expeditionId);
+  return useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.POST('/api/v1/expeditions/{id}/sharing/re-apply', {
+          params: { path: { id: expeditionId } },
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/** Withdraws every rule this camp's sharing wrote, and only those. */
+export function useWithdrawExpeditionSharing(expeditionId: string) {
+  const invalidate = useInvalidateExpeditionSharing(expeditionId);
+  return useMutation({
+    mutationFn: () =>
+      unwrapVoid(
+        api.DELETE('/api/v1/expeditions/{id}/sharing', { params: { path: { id: expeditionId } } }),
+      ),
+    onSuccess: invalidate,
   });
 }
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, EditOutlined, LockOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, LockOutlined, ShareAltOutlined } from '@ant-design/icons';
 import {
   Alert,
   App,
@@ -39,6 +39,7 @@ import ExpeditionFormModal from './ExpeditionFormModal.tsx';
 import ExpeditionLeadsTab from './ExpeditionLeadsTab.tsx';
 import ExpeditionMapTab from './ExpeditionMapTab.tsx';
 import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
+import ExpeditionSharingModal from './ExpeditionSharingModal.tsx';
 import ExpeditionStateControl from './ExpeditionStateControl.tsx';
 import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
 
@@ -80,6 +81,7 @@ export default function ExpeditionDetailPage() {
   const deleteCamp = useDeleteExpedition();
   const [editing, setEditing] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [sharingOpen, setSharingOpen] = useState(false);
 
   // An unrecognised key in the address falls back to the page's own tab rather than leaving antd
   // with an activeKey matching no pane, which renders the page with nothing under the tab strip.
@@ -148,6 +150,18 @@ export default function ExpeditionDetailPage() {
               data-testid="expedition-permissions"
             >
               {t('permissions.button')}
+            </Button>
+          )}
+          {/* Sharing reaches the trips the camp gathers, one marked rule each, and takes the
+              same right as the camp's own permissions: the camp is where a person asks, each
+              trip is what answers. */}
+          {canManagePermissions && (
+            <Button
+              icon={<ShareAltOutlined />}
+              onClick={() => setSharingOpen(true)}
+              data-testid="expedition-share"
+            >
+              {t('expeditions.sharing.button')}
             </Button>
           )}
           {(canEdit || canDelete) && (
@@ -282,12 +296,19 @@ export default function ExpeditionDetailPage() {
         <ExpeditionFormModal open={editing} camp={camp} onClose={() => setEditing(false)} />
       )}
       {canManagePermissions && (
-        <PermissionsModal
-          entityType="expedition"
-          entityId={camp.id}
-          open={permissionsOpen}
-          onClose={() => setPermissionsOpen(false)}
-        />
+        <>
+          <PermissionsModal
+            entityType="expedition"
+            entityId={camp.id}
+            open={permissionsOpen}
+            onClose={() => setPermissionsOpen(false)}
+          />
+          <ExpeditionSharingModal
+            expeditionId={camp.id}
+            open={sharingOpen}
+            onClose={() => setSharingOpen(false)}
+          />
+        </>
       )}
     </div>
   );

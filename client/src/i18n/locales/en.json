@@ -1812,7 +1812,32 @@
     "callOff": "Call it off",
     "callOffConfirm": "Call this camp off? It is kept, and it can be reinstated as a draft.",
     "deleteConfirm": "Delete this camp? The trips it gathered stay; only the camp and its own rules go.",
-    "draftNotice": "This is a draft. It has not been announced yet — announce it when the plan is settled, or record it as done once it has happened."
+    "draftNotice": "This is a draft. It has not been announced yet — announce it when the plan is settled, or record it as done once it has happened.",
+    "sharing": {
+      "title": "Share the camp",
+      "button": "Share",
+      "intro": "Sharing a camp writes one rule onto each trip it gathers, marked as the camp's, so whoever it is shared with can read what the camp gathered. It takes the right to manage permissions on every one of those trips: if any trip refuses, nothing is shared and you are told how many refused, never which. A trip that joins the camp later is not covered until the sharing is applied again.",
+      "memberTrips": "Trips in this camp: {{count}}.",
+      "notAllowed": "You cannot share this camp.",
+      "empty": "This camp is not shared with anybody yet.",
+      "actions": "Rights",
+      "coverage": "Trips covered",
+      "covered": "{{trips}} of {{total}}",
+      "behind": "Not every trip",
+      "behindHint": "Trips have joined this camp since its sharing was last applied, and they do not carry it. Apply the sharing again to cover them.",
+      "addTitle": "Share with somebody else",
+      "apply": "Apply sharing",
+      "applyHint": "Writes these rules onto every trip in the camp. Rules already applied are kept; nothing is removed.",
+      "applied": "The camp is shared.",
+      "reapply": "Apply again",
+      "reapplied": "The sharing now covers every trip in the camp.",
+      "withdraw": "Withdraw sharing",
+      "withdrawConfirm": "Withdraw this camp's sharing from every trip it gathers? Rules written on a trip's own permissions tab are kept.",
+      "withdrawn": "The camp's sharing was withdrawn.",
+      "incomplete": "Not shared: {{count}} of this camp's trips refused it, because you may not manage their permissions. Their owners have to delegate that first.",
+      "noTrips": "This camp gathers no trips yet, so there is nothing to share.",
+      "nothingShared": "This camp shares nothing to apply again."
+    }
   },
   "tags": {
     "title": "Tags",

@@ -1812,7 +1812,32 @@
     "callOff": "Anulează tabăra",
     "callOffConfirm": "Anulați această tabără? Se păstrează și poate fi readusă la ciornă.",
     "deleteConfirm": "Ștergeți această tabără? Turele adunate în ea rămân; dispar doar tabăra și regulile ei proprii.",
-    "draftNotice": "Aceasta este o ciornă. Nu a fost anunțată încă — anunțați-o când planul este stabilit sau marcați-o efectuată după ce a avut loc."
+    "draftNotice": "Aceasta este o ciornă. Nu a fost anunțată încă — anunțați-o când planul este stabilit sau marcați-o efectuată după ce a avut loc.",
+    "sharing": {
+      "title": "Partajează tabăra",
+      "button": "Partajează",
+      "intro": "Partajarea unei tabere scrie câte o regulă pe fiecare tură adunată în ea, marcată ca fiind a taberei, astfel încât cel cu care este partajată poate citi ce a adunat tabăra. Necesită dreptul de a gestiona permisiunile pe fiecare dintre aceste ture: dacă vreo tură refuză, nu se partajează nimic și vi se spune câte au refuzat, niciodată care. O tură care se alătură taberei mai târziu nu este acoperită până când partajarea este aplicată din nou.",
+      "memberTrips": "Ture în această tabără: {{count}}.",
+      "notAllowed": "Nu puteți partaja această tabără.",
+      "empty": "Această tabără nu este partajată încă cu nimeni.",
+      "actions": "Drepturi",
+      "coverage": "Ture acoperite",
+      "covered": "{{trips}} din {{total}}",
+      "behind": "Nu toate turele",
+      "behindHint": "S-au alăturat ture acestei tabere de când partajarea a fost aplicată ultima dată, iar ele nu o poartă. Aplicați din nou partajarea pentru a le acoperi.",
+      "addTitle": "Partajează cu altcineva",
+      "apply": "Aplică partajarea",
+      "applyHint": "Scrie aceste reguli pe fiecare tură din tabără. Regulile deja aplicate se păstrează; nimic nu este eliminat.",
+      "applied": "Tabăra este partajată.",
+      "reapply": "Aplică din nou",
+      "reapplied": "Partajarea acoperă acum fiecare tură din tabără.",
+      "withdraw": "Retrage partajarea",
+      "withdrawConfirm": "Retrageți partajarea acestei tabere de pe fiecare tură adunată în ea? Regulile scrise pe fila de permisiuni a unei ture se păstrează.",
+      "withdrawn": "Partajarea taberei a fost retrasă.",
+      "incomplete": "Nepartajat: {{count}} dintre turele acestei tabere au refuzat, pentru că nu le puteți gestiona permisiunile. Proprietarii lor trebuie să delege mai întâi acest drept.",
+      "noTrips": "Această tabără nu adună încă nicio tură, așa că nu este nimic de partajat.",
+      "nothingShared": "Această tabără nu partajează nimic de aplicat din nou."
+    }
   },
   "tags": {
     "title": "Etichete",

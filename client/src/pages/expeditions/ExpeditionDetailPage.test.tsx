@@ -39,6 +39,9 @@ vi.mock('../../components/reslinks/LinksSection.tsx', () => ({
 vi.mock('../../components/history/HistoryPanel.tsx', () => ({
   default: ({ entityType }: { entityType: string }) => <div>history for {entityType}</div>,
 }));
+vi.mock('./ExpeditionSharingModal.tsx', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div>sharing the camp</div> : null),
+}));
 vi.mock('./ExpeditionFormModal.tsx', () => ({
   default: ({ open }: { open: boolean }) => (open ? <div>the camp form</div> : null),
 }));
@@ -171,6 +174,9 @@ describe('the camp page', () => {
     renderPage();
     fireEvent.click(screen.getByTestId('expedition-permissions'));
     expect(screen.getByText('permissions for expedition')).toBeTruthy();
+    // Sharing takes the same right: the camp is where a person asks, each trip is what answers.
+    fireEvent.click(screen.getByTestId('expedition-share'));
+    expect(screen.getByText('sharing the camp')).toBeTruthy();
   });
 
   it('draws the editing controls for the rights the caller holds, and none for a reader', () => {
