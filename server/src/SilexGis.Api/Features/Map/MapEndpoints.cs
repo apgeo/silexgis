@@ -124,6 +124,9 @@ public static class MapEndpoints
         api.MapGet("/map/trip-logs", TripLogsAsync)
             .WithTags("Map")
             .WithSummary("Trip-log geometries as GeoJSON for the given bbox, date range and list filters; a trip with no shape of its own is placed at a cave it names when the caller may both read and place it, and counted as unlocated otherwise.");
+        api.MapGet("/map/expeditions", ExpeditionsAsync)
+            .WithTags("Map")
+            .WithSummary("Camps' own working areas as GeoJSON for the given bbox and date range — the shape drawn on each camp's plan, and nothing a camp's trips or caves would add.");
         api.MapGet("/map/cave-centerlines", CaveCenterlinesAsync)
             .WithTags("Map")
             .WithSummary("Cave centerlines as GeoJSON for the given bbox and zoom; splay-free below the detail zoom, protected caves' lines omitted. z=true opts in to altitudes, which the flat display skeleton cannot carry.");
@@ -639,6 +642,67 @@ public static class MapEndpoints
             ["tripDate"] = date.ToString("O"),
             ["kind"] = kind,
         };
+    }
+
+    /// <summary>
+    /// The working areas of the camps in a window that fall inside a rectangle, for a calendar
+    /// that draws its days over a map.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A camp's own map draws three things under three rules; this read answers with the first
+    /// alone. The working area is the shape somebody drew on the camp's plan — the camp's own
+    /// property, governed by the camp's own visibility and by nothing else, and no more a
+    /// position than a permit boundary is. The sketches of the camp's trips are the trips' own
+    /// and are read through the trip-log map beside this one; the entrances of the caves those
+    /// trips name are the only coordinates anybody is protected from, and they are left out here
+    /// entirely rather than decided again on a second route. So a camp whose row says it has a
+    /// position is drawn exactly where its own page would draw it, and nothing that its own page
+    /// withholds can leave by this door, because nothing withheld is asked for.
+    /// </para>
+    /// <para>
+    /// Read through the reader's own visibility first, as every map read is: a camp the caller
+    /// may not open is not in the answer, and the answer says nothing about it.
+    /// </para>
+    /// </remarks>
+    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> ExpeditionsAsync(
+        string bbox,
+        DateOnly? from,
+        DateOnly? to,
+        SilexGisDbContext db,
+        IAccessContextAccessor accessAccessor,
+        IOptions<MapOptions> mapOptions,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (!Bbox.TryParse(bbox, out var box))
+        {
+            return ApiProblems.BadRequest("map.invalid_bbox", "bbox must be 'west,south,east,north'.");
+        }
+
+        var polygon = box.ToPolygon();
+        var camps = await db.Expeditions.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.Expeditions)
+            .OverlappingDays(x => x.StartDate, x => x.EndDate, from, to)
+            .Where(x => x.Geom != null && x.Geom.Intersects(polygon))
+            .OrderBy(x => x.Id)
+            .Take(mapOptions.Value.MaxPoints)
+            .Select(x => new { x.Id, x.Name, x.StartDate, x.Geom })
+            .ToListAsync(ct);
+
+        var features = camps.Select(x => GeoFeature.Of(x.Geom!, new Dictionary<string, object?>
+        {
+            ["id"] = x.Id,
+            ["name"] = x.Name,
+            ["startDate"] = x.StartDate.ToString("O"),
+            ["kind"] = "area",
+        })).ToList();
+        return TypedResults.Ok(FeatureCollection.Of(features));
     }
 
     /// <summary>A trip that states no position of its own, and the little a map feature needs of it.</summary>

@@ -268,6 +268,8 @@ export const queryKeys = {
   calendar: (params: CalendarParams) => ['calendar', params] as const,
   tripLogMap: (bbox: string, from: string, to: string) =>
     ['map', 'trip-logs', bbox, from, to] as const,
+  campAreasMap: (bbox: string, from: string, to: string) =>
+    ['map', 'expeditions', bbox, from, to] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   tripLogFacets: (params: TripLogFacetParams) => ['trip-logs', 'facets', params] as const,
   tripLogGrouping: (params: TripLogGroupingParams) => ['trip-logs', 'grouping', params] as const,
@@ -8767,6 +8769,27 @@ export function useTripLogMap(
     retry: false,
     // Panning keeps the shapes already drawn on screen while the next rectangle is answered,
     // rather than blanking the map under whoever is moving it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * The working areas of the camps in a window that fall inside a rectangle — the shape drawn on
+ * each camp's plan and nothing a camp's trips or caves would add, read through the caller's own
+ * visibility. Asked beside the trip-log read by the calendar's map, under the same rectangle.
+ */
+export function useCampAreasMap(
+  bbox: string | undefined,
+  from: string,
+  to: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.campAreasMap(bbox ?? '', from, to),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/map/expeditions', { params: { query: { bbox: bbox!, from, to } } })),
+    enabled: enabled && !!bbox,
+    retry: false,
     placeholderData: keepPreviousData,
   });
 }

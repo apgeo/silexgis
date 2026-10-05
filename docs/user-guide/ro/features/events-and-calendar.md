@@ -92,7 +92,9 @@ fiecare este evidența a ceva ce s-a întâmplat.
 
 **Activitate → Calendar.** O fereastră peste **ture, tabere și evenimente** citite împreună.
 
-Se citește ca **lună, an, săptămână sau agendă**, peste o hartă.
+Se citește ca **lună, an, săptămână sau agendă**, peste o hartă. Harta desenează turele și taberele
+zilelor de pe ecran — o tură acolo unde a lucrat și unde s-a întâlnit echipa, o tabără ca zona de lucru
+trasată pe planul ei — și nimic pentru o dată a clubului, care nu are nicio formă.
 
 Puteți:
 

@@ -206,6 +206,54 @@ public sealed class ExpeditionMapTests : IAsyncLifetime, IDisposable, IClassFixt
             .EnumerateArray()
             .Select(x => x.GetDouble())];
 
+    /// <summary>
+    /// The calendar's map draws a camp's working area — the shape drawn on the camp's plan,
+    /// governed by the camp's own visibility and by nothing else — and draws it only to a reader
+    /// of the camp. The entrances a camp's own map withholds from a reader who may not place them
+    /// are not withheld here: they are not asked for at all, so there is no second place for a
+    /// coordinate to leave by.
+    /// </summary>
+    [Fact]
+    public async Task The_calendar_map_draws_a_camps_working_area_to_its_readers_and_nothing_to_anybody_else()
+    {
+        var camp = await CreateCampAsync("Calendar camp", withArea: true);
+        var shapeless = await CreateCampAsync("Camp with no area");
+        const string bbox = "25.3,45.4,25.7,45.8";
+        const string inWindow = "from=2026-07-01&to=2026-07-31";
+
+        using var anonymous = factory.CreateClient();
+        (await anonymous.GetAsync($"/api/v1/map/expeditions?bbox={bbox}&{inWindow}")).StatusCode
+            .ShouldBe(HttpStatusCode.Unauthorized);
+
+        var mine = await AreasAsync(owner, $"bbox={bbox}&{inWindow}");
+        mine.ShouldContain(camp);
+        mine.ShouldNotContain(shapeless);
+
+        // A window the camp is not in draws it nowhere, and a rectangle it is not in draws it nowhere.
+        (await AreasAsync(owner, $"bbox={bbox}&from=2026-08-01&to=2026-08-31")).ShouldNotContain(camp);
+        (await AreasAsync(owner, "bbox=26.0,46.0,26.5,46.5&" + inWindow)).ShouldNotContain(camp);
+
+        // The reader's own visibility first: a private camp is nobody else's to draw until they
+        // are let in, and the answer says nothing about it in the meantime.
+        (await AreasAsync(outsider, $"bbox={bbox}&{inWindow}")).ShouldNotContain(camp);
+        await GrantReadAsync("expedition", camp, outsiderId);
+        (await AreasAsync(outsider, $"bbox={bbox}&{inWindow}")).ShouldContain(camp);
+
+        (await owner.GetAsync("/api/v1/map/expeditions?bbox=nonsense")).StatusCode
+            .ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>The camps whose working areas a calendar-map read draws, and nothing else is in it.</summary>
+    private static async Task<List<Guid>> AreasAsync(HttpClient client, string query)
+    {
+        var response = await client.GetAsync($"/api/v1/map/expeditions?{query}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        var features = JsonDocument.Parse(payload).RootElement.GetProperty("features").EnumerateArray().ToList();
+        features.ShouldAllBe(f => Kind(f) == "area");
+        return [.. features.Select(f => f.GetProperty("properties").GetProperty("id").GetGuid())];
+    }
+
     private static async Task<List<JsonElement>> FeaturesAsync(HttpClient client, Guid campId)
     {
         var response = await client.GetAsync($"/api/v1/expeditions/{campId}/map");

@@ -4146,10 +4146,10 @@
     "weekDayEmpty": "Nothing",
     "monthCount": "{{count}} records",
     "mapToggle": "Map",
-    "mapEmpty": "No trip in view has a position recorded. Pan or zoom the map to look elsewhere.",
+    "mapEmpty": "No trip or camp in view has a position recorded. Pan or zoom the map to look elsewhere.",
     "mapFailed": "The map of these days could not be read, so nothing is drawn on it — which is not the same as there being nothing there. Try again in a moment.",
-    "mapDrawn": "{{count}} of the trips in these days are drawn here.",
-    "mapCaveat": "Only trips are drawn, and only the ones inside this view: camps and club dates carry no shape here, and a trip outside the view is drawn once you move to it. A hollow ring is where a party meets, a filled one is where it worked.",
+    "mapDrawn": "{{count}} of the trips and camps in these days are drawn here.",
+    "mapCaveat": "Only trips and camps are drawn, and only the ones inside this view: club dates carry no shape, a camp is its working area and nothing more, and a record outside the view is drawn once you move to it. A hollow ring is where a party meets, a filled one is where it worked.",
     "sourceValues": {
       "tripLog": "Trip",
       "expedition": "Camp",

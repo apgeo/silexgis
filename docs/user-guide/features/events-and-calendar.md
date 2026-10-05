@@ -90,7 +90,9 @@ each is the record of something that happened.
 
 **Activity → Calendar.** One window over **trips, camps and events** read together.
 
-It reads as a **month, a year, a week or an agenda**, over a map.
+It reads as a **month, a year, a week or an agenda**, over a map. The map draws the trips and the
+camps of the days on screen — a trip where it worked and where its party met, a camp as the working
+area drawn on its plan — and nothing for a club date, which has no shape.
 
 You can:
 
