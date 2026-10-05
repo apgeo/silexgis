@@ -62,6 +62,7 @@ using SilexGis.Api.Features.Uploads;
 using SilexGis.Api.Features.Users;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
+using SilexGis.Domain.Calendar;
 using SilexGis.Domain.Notifications;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure;
@@ -230,6 +231,11 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     // of its own and why it is not a confidentiality control.
     var publicTripPermitLimit = builder.Configuration.GetValue(
         PublicTripRateLimits.ConfigurationKey, PublicTripRateLimits.DefaultPerMinute);
+    // Cost control on the calendar feed, keyed on the feed's own token rather than on the
+    // address — see CalendarFeedRateLimits for why a surface polled by calendar services for ever
+    // cannot share the address-keyed shape above.
+    var calendarFeedPermitLimit = builder.Configuration.GetValue(
+        CalendarFeedRateLimits.ConfigurationKey, CalendarFeedRateLimits.DefaultPerMinute);
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -258,6 +264,21 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
                 {
                     Window = TimeSpan.FromMinutes(1),
                     PermitLimit = publicTripPermitLimit,
+                    QueueLimit = 0,
+                }));
+        options.AddPolicy(CalendarFeedRateLimits.PolicyName, context =>
+            System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+                // The token's stored form rather than the token, so the limiter's own table never
+                // holds a live credential; an address with no token at all falls back to the
+                // caller, which is the only thing left to key on.
+                context.Request.RouteValues[CalendarFeedRateLimits.TokenRouteValue] is string token
+                    && CalendarFeedTokens.IsPlausible(token)
+                    ? "token:" + CalendarFeedTokens.Hash(token)
+                    : "address:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+                _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+                {
+                    Window = TimeSpan.FromMinutes(1),
+                    PermitLimit = calendarFeedPermitLimit,
                     QueueLimit = 0,
                 }));
     });
@@ -326,6 +347,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapUiDefaultsEndpoints();
     api.MapMeDataExportEndpoints();
     api.MapMeCapabilityEndpoints();
+    api.MapMeCalendarFeedEndpoints();
     api.MapNotificationInboxEndpoints();
     api.MapNotificationConfigEndpoints();
     api.MapNotificationHealthEndpoints();
@@ -364,6 +386,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
     api.MapCalendarEndpoints();
+    api.MapCalendarFeedEndpoints();
     api.MapGeofileEndpoints();
     api.MapTermRuleEndpoints();
     api.MapStagedImportEndpoints();

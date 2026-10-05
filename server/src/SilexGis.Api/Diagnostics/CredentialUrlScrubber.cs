@@ -74,6 +74,9 @@ public static class CredentialUrlScrubber
         "/api/v1/shared/features/",
         "/api/v1/shared/views/",
         "/api/v1/public/albums/",
+        // An account's calendar subscription, polled by calendar services for as long as the
+        // address lives — the one of these a phone writes into its own logs too.
+        "/api/v1/calendar/feed/",
     ];
 
     /// <summary>
@@ -152,9 +155,19 @@ public static class CredentialUrlScrubber
                 return url;
             }
 
+            // A file extension on the segment is route shape rather than secret — the feed is
+            // addressed as `<token>.ics` so calendar applications recognise it — and it is kept
+            // outside the handle for the reason the tail is: the handle has to be a prefix of
+            // what the row stores, and a hash over the token and its extension together is a
+            // prefix of nothing.
+            var dot = segment.IndexOf('.', StringComparison.Ordinal);
+            var credential = dot > 0 ? segment[..dot] : segment;
+            var extension = dot > 0 ? segment[dot..] : string.Empty;
+
             return string.Concat(
                 url.AsSpan(0, start),
-                Handle(segment),
+                Handle(credential),
+                extension,
                 url.AsSpan(end));
         }
 

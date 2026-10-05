@@ -240,7 +240,11 @@ public static class AdminSettingsEndpoints
 
         await settings.SaveAsync(
             AppSettingSections.Protection,
-            new ProtectionSettings { RevealProtectedAssociations = request.RevealProtectedAssociations },
+            new ProtectionSettings
+            {
+                RevealProtectedAssociations = request.RevealProtectedAssociations,
+                CalendarFeedEnabled = request.CalendarFeedEnabled,
+            },
             ct);
 
         return TypedResults.Ok(await SnapshotAsync(settings, emailDelivery, smsDelivery, ct));
@@ -563,7 +567,7 @@ public static class AdminSettingsEndpoints
                 security.SmsTwoFactorEnabled,
                 security.TwoFactorCodeLifetimeMinutes,
                 security.TwoFactorResendIntervalSeconds),
-            new ProtectionSettingsDto(disclosure.RevealProtectedAssociations),
+            new ProtectionSettingsDto(disclosure.RevealProtectedAssociations, disclosure.CalendarFeedEnabled),
             new ImportSettingsDto(
                 import.AllowCreateWithoutReview,
                 import.DuplicateRadiusMeters,

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.EntityFrameworkCore;
+using SilexGis.Domain.Entities;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Infrastructure.Notifications;
@@ -38,4 +39,36 @@ public static class EventAudience
             where invitation.EventId == eventId && caver.UserId != null
             select caver.UserId!.Value)
             .ToListAsync(ct);
+
+    /// <summary>
+    /// The events one account is on, as a query rather than an answer, so a listing can narrow by
+    /// it without first knowing which events to ask about.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Whoever was asked about the event and has not said no, joined through the roster entry the
+    /// account owns — the same reading a trip takes of its answers, deliberately, so that "mine"
+    /// means one thing across every family the calendar shows. An event has no roster to union
+    /// in: who is coming is worked out from the answers, so the answers are the whole of it.
+    /// </para>
+    /// <para>
+    /// The declined answer is left out for the reason it is left out of a trip's: a diary fills up
+    /// with the evenings somebody turned down and nothing on the row carries their own answer, so
+    /// a declined meeting would read exactly like one they are going to. Somebody asked and still
+    /// silent is in, because being asked is being expected.
+    /// </para>
+    /// <para>
+    /// It takes the account and nothing else, on purpose. A version taking a person would answer
+    /// "which evenings has this named person been asked to" out of events the asker may never
+    /// open; because the only account it can be asked about is the one making the request, there
+    /// is no such question to ask.
+    /// </para>
+    /// </remarks>
+    public static IQueryable<Guid> EventIdsTheAccountIsOn(SilexGisDbContext db, Guid userId) =>
+        from invitation in db.TripInvitations.AsNoTracking()
+        join caver in db.Cavers.AsNoTracking() on invitation.CaverId equals caver.Id
+        where caver.UserId == userId
+            && invitation.Response != TripInvitationResponse.No
+            && invitation.EventId != null
+        select invitation.EventId!.Value;
 }

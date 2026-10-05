@@ -143,6 +143,18 @@ public sealed record ProtectionSettings
     /// stamped with coordinates of its own stays unpaired with a protected feature either way.
     /// </summary>
     public bool RevealProtectedAssociations { get; init; }
+
+    /// <summary>
+    /// Let an account mint a subscription address for its own calendar — a URL a phone or a
+    /// desktop calendar polls without signing in. Off by default: the address carries the
+    /// account's whole claim and is pasted into third-party services that keep it for years, and
+    /// an installation should have to choose that rather than inherit it. What a feed says is
+    /// fixed whatever this setting is — the title, the days and a link back for each trip, camp
+    /// and club date the account is on, and nothing else — so switching it on never discloses a
+    /// position, a place, a participant or a description to anybody. Switching it off again
+    /// stops every address already handed out, at the next poll.
+    /// </summary>
+    public bool CalendarFeedEnabled { get; init; }
 }
 
 /// <summary>How much an installation trusts a vector file to become registry objects on its own.</summary>
