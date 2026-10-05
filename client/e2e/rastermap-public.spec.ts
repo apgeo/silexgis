@@ -4,6 +4,7 @@ import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
 import { test } from './consoleGuard.ts';
 import { gotoRoute, login } from './helpers.ts';
 import { apiJson, bearerToken, relationId, uploadMapPng } from './rastermapApi.ts';
+import { settledScreenshot } from './settled.ts';
 
 /**
  * The map sheets on the published page — the one surface of this feature a stranger reads.
@@ -216,10 +217,7 @@ test('a follower sees the party on the sheet, and a revoked link closes it', asy
     await expect(pane.getByTestId('caveview-caver-card')).toContainText('E2E Ana');
 
     if (process.env.RASTERMAP_SHOTS) {
-      await pub.waitForTimeout(400);
-      await pub.screenshot({
-        path: `${process.env.RASTERMAP_SHOTS}/40-public-sheet-desktop.png`,
-      });
+      await settledScreenshot(pub, `${process.env.RASTERMAP_SHOTS}/40-public-sheet-desktop.png`);
     }
     await pane.getByTestId('caveview-caver-card-close').click();
 
@@ -232,8 +230,7 @@ test('a follower sees the party on the sheet, and a revoked link closes it', asy
       pub.getByTestId('public-sheet-pane').getByTestId('rastermap-map').locator('canvas').first(),
     ).toBeAttached({ timeout: 15_000 });
     if (process.env.RASTERMAP_SHOTS) {
-      await pub.waitForTimeout(400);
-      await pub.screenshot({ path: `${process.env.RASTERMAP_SHOTS}/41-public-sheet-embed.png` });
+      await settledScreenshot(pub, `${process.env.RASTERMAP_SHOTS}/41-public-sheet-embed.png`);
     }
 
     // The anonymous surface ran clean to here — asserted before the revocation because this

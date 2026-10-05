@@ -3,6 +3,7 @@ import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 import { uniquePng } from './png.ts';
+import { settledScreenshot } from './settled.ts';
 
 /**
  * The raster-map tabs beside the 3D survey viewer: a declared map appears as a tab, its
@@ -196,12 +197,10 @@ test('a declared map is a tab beside the 3D view, and switching never remounts t
   // width the mobile binding is designed for. Written only when the sink is present, so an
   // ordinary run in another checkout does not need the directory.
   if (process.env.RASTERMAP_SHOTS) {
-    await page.waitForTimeout(600);
-    await dialog.screenshot({ path: `${process.env.RASTERMAP_SHOTS}/20-rastermap-desktop.png` });
+    await settledScreenshot(dialog, `${process.env.RASTERMAP_SHOTS}/20-rastermap-desktop.png`);
     await page.setViewportSize({ width: 360, height: 780 });
     await expect(dialog.getByTestId('rastermap-map').locator('canvas').first()).toBeAttached();
-    await page.waitForTimeout(600);
-    await dialog.screenshot({ path: `${process.env.RASTERMAP_SHOTS}/21-rastermap-360px.png` });
+    await settledScreenshot(dialog, `${process.env.RASTERMAP_SHOTS}/21-rastermap-360px.png`);
     await page.setViewportSize({ width: 1280, height: 900 });
   }
 

@@ -29,8 +29,11 @@ test('a library can be looked through, and its pictures come from this applicati
   // configured independently and either may be the one whose credential an installation has not
   // finished setting up. The surface under test is the browsing, not which tab is first.
   // One library configured here, so the page opens on it. Where two are configured the page offers
-  // a chooser; which one it opens on is not what this check is about.
-  await page.waitForTimeout(3000);
+  // a chooser; which one it opens on is not what this check is about. Either answer will do here —
+  // its photographs, or the sentence saying why there are none, which the line below then prints.
+  await expect(
+    page.getByTestId('library-photo-grid').or(page.getByTestId('library-photo-problem')),
+  ).toBeVisible({ timeout: 20_000 });
 
   const body = await page.locator('body').innerText();
   // eslint-disable-next-line no-console

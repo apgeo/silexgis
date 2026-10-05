@@ -3,6 +3,7 @@ import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { gotoRoute, login } from './helpers.ts';
 import { apiJson, bearerToken, relationId, uploadMapPng } from './rastermapApi.ts';
+import { settledScreenshot } from './settled.ts';
 
 /**
  * The party on a scanned map sheet, inside the coordinator's tracking tab.
@@ -217,8 +218,7 @@ test('the watch draws its party on the sheet, and says who the sheet cannot plac
 
   // A record of the sheet as it stands: desk width, then the 360px phone binding.
   if (process.env.RASTERMAP_SHOTS) {
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: `${process.env.RASTERMAP_SHOTS}/30-sheet-party-desktop.png` });
+    await settledScreenshot(page, `${process.env.RASTERMAP_SHOTS}/30-sheet-party-desktop.png`);
   }
 
   // ---- A pinned station with nobody at it offers the very record-here a 3D press does ----
@@ -258,8 +258,7 @@ test('the watch draws its party on the sheet, and says who the sheet cannot plac
     await page.setViewportSize({ width: 360, height: 780 });
     await expect(sheet.locator('canvas').first()).toBeAttached();
     await sheet.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(600);
-    await page.screenshot({ path: `${process.env.RASTERMAP_SHOTS}/32-sheet-party-360.png` });
+    await settledScreenshot(page, `${process.env.RASTERMAP_SHOTS}/32-sheet-party-360.png`);
     await page.setViewportSize({ width: 1280, height: 720 });
   }
   await page.getByTestId('trip-tracking-replay-leave').click();

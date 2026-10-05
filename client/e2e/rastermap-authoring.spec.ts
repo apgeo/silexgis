@@ -9,6 +9,7 @@ import {
   uploadMapPng,
   uploadMapVersion,
 } from './rastermapApi.ts';
+import { settledScreenshot } from './settled.ts';
 
 /**
  * The whole authoring path, driven through the UI against the real server: declare a map
@@ -130,8 +131,7 @@ test('a pin is authored, moved, deleted and re-placed, and every write lands as 
   await expect(page.getByTestId('rastermap-armed')).toHaveCount(0);
 
   if (process.env.RASTERMAP_SHOTS) {
-    await page.waitForTimeout(600);
-    await viewer.screenshot({ path: `${process.env.RASTERMAP_SHOTS}/30-authoring-placed.png` });
+    await settledScreenshot(viewer, `${process.env.RASTERMAP_SHOTS}/30-authoring-placed.png`);
   }
 
   // ---- The duplicate warning: arming the same station and clicking elsewhere must not
@@ -191,8 +191,7 @@ test('a pin is authored, moved, deleted and re-placed, and every write lands as 
   await expect(viewer.getByTestId('rastermap-superseded-list')).toHaveCount(0);
 
   if (process.env.RASTERMAP_SHOTS) {
-    await page.waitForTimeout(600);
-    await viewer.screenshot({ path: `${process.env.RASTERMAP_SHOTS}/31-authoring-replaced.png` });
+    await settledScreenshot(viewer, `${process.env.RASTERMAP_SHOTS}/31-authoring-replaced.png`);
   }
 
   // ---- Take the run's own rows down again: the cave and model through the page that
