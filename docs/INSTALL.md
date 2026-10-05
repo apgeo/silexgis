@@ -1439,6 +1439,14 @@ type the origins straight into the `location ~ ^/shared/trips/` block of
 pages, every other kind of share — goes on refusing to be framed by anybody, and this setting
 cannot change that.
 
+**If your site already carried a paste-in block from before 29 September 2026, replace it.** The
+block changed on that date: the newer one greets the viewer until the viewer answers, and the viewer
+now tells the article what it is showing (`silexgis:ready` and `silexgis:focused` events, with a
+`past` member on a replay). A block pasted earlier keeps the old one-shot greeting, so a slow-loading
+frame can miss the hello and an article script can never learn whether what it sees is a replay. The
+fix is to open the share panel again and paste a fresh block over every older one in the article;
+nothing else on the installation needs changing.
+
 **Search engines are told not to index a published trip, and you need do nothing about it.** Both
 published addresses are served with `X-Robots-Tag: noindex, nofollow`. That matters because pasting
 the block into a public article puts the follow link — which *is* the credential — into a page
