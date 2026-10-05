@@ -756,6 +756,13 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   );
   /** The source actually on the globe; undefined while the ground is the bare ellipsoid. */
   const [drawnTerrain, setDrawnTerrain] = useState<TerrainCandidate3D>();
+  /**
+   * True from the moment a set of candidates is handed over until one is drawn or all are refused.
+   * While it holds, "what is drawn" is not yet an answer: the ground is the bare ellipsoid only
+   * because the check has not finished, and anything that compares builds against the drawn one
+   * would compare them against nothing and offer the very build about to appear.
+   */
+  const [terrainResolving, setTerrainResolving] = useState(false);
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -769,8 +776,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       void engine.setTerrainSource(undefined);
       setPlacement(ANCHORED_TO_SURFACE);
       setDrawnTerrain(undefined);
+      setTerrainResolving(false);
       return;
     }
+    setTerrainResolving(true);
 
     // Refusing an elevation model has to take any model already attached down with it, not merely
     // decline to attach this one. The two states this component holds are a description of what is
@@ -783,6 +792,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       setTerrainProblem({ problem, fellBack: false });
       setPlacement(ANCHORED_TO_SURFACE);
       setDrawnTerrain(undefined);
+      setTerrainResolving(false);
     };
 
     // In preference order. Without a choice that is what this installation named, then whatever
@@ -827,6 +837,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           // this whole chain of offsets exists to prevent.
           setPlacement({ absolute: true, offsetM: candidate.surveyHeightOffsetM });
           setDrawnTerrain(candidate);
+          setTerrainResolving(false);
           // A source that was fallen back to is still a source that failed. The notice stays up,
           // naming what went wrong with the one the operator has to fix.
           setTerrainProblem(firstProblem ? { problem: firstProblem, fellBack: true } : undefined);
@@ -854,7 +865,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
 
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine || !showingHere || terrainBuilds.length === 0) {
+    // Nothing is offered while the ground is still being resolved: at that moment the globe is
+    // bare only because the check has not finished, and every build would look finer than it —
+    // including the one about to be drawn, so the scene would open by offering its own ground.
+    if (!engine || !showingHere || terrainBuilds.length === 0 || terrainResolving) {
       setTerrainOffer(undefined);
       return;
     }
@@ -898,7 +912,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       window.clearTimeout(settleTimer);
       unsubscribe();
     };
-  }, [engineVersion, showingHere, terrainBuilds, drawnTerrain, terrainChoice]);
+  }, [engineVersion, showingHere, terrainBuilds, drawnTerrain, terrainChoice, terrainResolving]);
 
   const declineTerrainOffer = useCallback(() => {
     if (terrainOffer) {
