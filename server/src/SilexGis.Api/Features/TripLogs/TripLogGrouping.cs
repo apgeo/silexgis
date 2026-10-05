@@ -57,13 +57,6 @@ internal enum TripGroupDimension
 /// </remarks>
 internal static class TripLogGrouping
 {
-    /// <summary>
-    /// How many trips are sliced. A grouping is a shape somebody reads at a glance, so it is
-    /// bounded rather than streamed: past this the answer says it was cut short and the reader
-    /// narrows the filter, which is the honest response to a question too big to answer.
-    /// </summary>
-    public const int MaxGroupedTrips = 2000;
-
     /// <summary>How many types and people a slice names before it stops.</summary>
     private const int TopValuesPerGroup = 3;
 
@@ -117,6 +110,7 @@ internal static class TripLogGrouping
         TripLogListing listing,
         TripGroupDimension primary,
         TripGroupDimension secondary,
+        int maxGroupedTrips,
         CancellationToken ct)
     {
         var narrowed = listing.Narrowed();
@@ -125,13 +119,13 @@ internal static class TripLogGrouping
         var rows = await listing.Ordered(narrowed)
             .Select(x => new Row(
                 x.Id, x.TripDate, x.TripDateEnd, x.TripTypeId, x.State, x.Visibility, x.HadIncident))
-            .Take(MaxGroupedTrips + 1)
+            .Take(maxGroupedTrips + 1)
             .ToListAsync(ct);
 
-        var truncated = rows.Count > MaxGroupedTrips;
+        var truncated = rows.Count > maxGroupedTrips;
         if (truncated)
         {
-            rows = [.. rows.Take(MaxGroupedTrips)];
+            rows = [.. rows.Take(maxGroupedTrips)];
         }
 
         var tripIds = rows.Select(x => x.Id).ToList();

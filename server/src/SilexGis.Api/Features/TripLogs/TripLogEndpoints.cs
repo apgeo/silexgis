@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -29,21 +30,6 @@ public static class TripLogEndpoints
     // for both: what a client does about either is the same — put the grouping panel back to
     // something it can ask for — and a second code would only be a second thing to handle.
     private const string GroupInvalidCode = "trip_log.group_invalid";
-
-    // How many trips one exported file holds. A file that stopped at a limit and a file that
-    // ended look identical once it is saved, so the bound is stated inside the file rather than
-    // left to be inferred from a round number of rows.
-    private const int MaxExportedTrips = 2000;
-
-    // How many values the two open-ended facets — the people and the areas — hand back. A club's
-    // roster runs to hundreds and a panel listing all of them is the wall of names this one
-    // exists to replace; the ones worth offering are the ones the current filter actually
-    // reaches, longest count first. Whatever the caller has already chosen is offered on top of
-    // the cap, so a shared link naming somebody far down the roster still opens onto a control
-    // that says who it is. Somebody past the cap and not already chosen is not reachable from the
-    // panel at all: narrowing the rest of the filter until they surface is the way to them, and a
-    // roster search that would reach them directly is not built here.
-    private const int MaxOpenFacetValues = 50;
 
     public static RouteGroupBuilder MapTripLogEndpoints(this RouteGroupBuilder api)
     {
@@ -232,6 +218,7 @@ public static class TripLogEndpoints
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         FeatureProtection protection,
+        IOptions<TripListOptions> listOptions,
         DateOnly? from,
         DateOnly? to,
         Guid? caveId,
@@ -305,9 +292,10 @@ public static class TripLogEndpoints
             .Select(g => new { CaverId = g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
             .ToListAsync(ct);
-        var cappedParticipants = Capped(
+        var (cappedParticipants, moreParticipants) = Capped(
             [.. participantCounts.Select(x => (Value: x.CaverId, x.Count))],
-            filter.ParticipantIds);
+            filter.ParticipantIds,
+            listOptions.Value.MaxOpenFacetValues);
 
         var caverLabels = await CaverDirectory.ResolveLabelsAsync(
             db, user, cappedParticipants.Select(x => x.Value), ct);
@@ -319,9 +307,10 @@ public static class TripLogEndpoints
         // and then handed back every trip that named anything inside it.
         var areaReach = await TripAreaReach.BuildAsync(
             db, protection, ctx, listing.Narrowed(TripListFacet.Area).Select(x => x.Id), ct);
-        var areaCounts = Capped(
+        var (areaCounts, moreAreas) = Capped(
             [.. areaReach.Counts().Select(x => (Value: x.AreaId, x.Count))],
-            filter.AreaIds);
+            filter.AreaIds,
+            listOptions.Value.MaxOpenFacetValues);
         var chosenAreaNames = await AreaLabelsAsync(
             db, protection, ctx, areaReach.Names, [.. areaCounts.Select(x => x.Value)], ct);
 
@@ -339,30 +328,36 @@ public static class TripLogEndpoints
             [.. cappedParticipants.Select(x => new TripFacetValueDto(
                 x.Value.ToString(), caverLabels.GetValueOrDefault(x.Value), x.Count))],
             [.. areaCounts.Select(x => new TripFacetValueDto(
-                x.Value.ToString(), chosenAreaNames.GetValueOrDefault(x.Value), x.Count))]));
+                x.Value.ToString(), chosenAreaNames.GetValueOrDefault(x.Value), x.Count))],
+            moreParticipants,
+            moreAreas));
     }
 
     /// <summary>
     /// The values one open-ended facet offers: the most-reached first, plus whatever the caller
-    /// has already chosen.
+    /// has already chosen — and whether a counted value was left out.
     /// </summary>
     /// <remarks>
     /// A chosen value is kept whatever the cap says, and with the count it really has. Dropping it
     /// would leave a shared link opening onto a control displaying a bare identifier with nothing
-    /// able to translate it, and no way to let go of a choice the reader can no longer see.
+    /// able to translate it, and no way to let go of a choice the reader can no longer see. That
+    /// more exist is said rather than left to be noticed, because a list that stopped short reads
+    /// exactly like the whole roster; a chosen value past the cap is offered, so it is not what
+    /// the flag is about.
     /// </remarks>
-    private static IReadOnlyList<(Guid Value, int Count)> Capped(
-        IReadOnlyList<(Guid Value, int Count)> counted, IReadOnlyCollection<Guid> chosen)
+    private static (IReadOnlyList<(Guid Value, int Count)> Offered, bool More) Capped(
+        IReadOnlyList<(Guid Value, int Count)> counted, IReadOnlyCollection<Guid> chosen, int cap)
     {
-        var kept = counted.Take(MaxOpenFacetValues).ToList();
+        var kept = counted.Take(cap).ToList();
         var offered = kept.Select(x => x.Value).ToHashSet();
         foreach (var id in chosen.Where(id => !offered.Contains(id)))
         {
             var known = counted.FirstOrDefault(x => x.Value == id);
             kept.Add(known.Value == id ? known : (id, 0));
+            offered.Add(id);
         }
 
-        return kept;
+        return (kept, counted.Any(x => !offered.Contains(x.Value)));
     }
 
     /// <summary>
@@ -416,6 +411,7 @@ public static class TripLogEndpoints
         IUserContextAccessor userAccessor,
         FeatureProtection protection,
         ISpreadsheetWriter sheets,
+        IOptions<TripListOptions> listOptions,
         DateOnly? from,
         DateOnly? to,
         Guid? caveId,
@@ -447,19 +443,20 @@ public static class TripLogEndpoints
 
         var listing = await TripLogListing.ResolveAsync(db, protection, ctx, filter, ct);
 
+        var limit = listOptions.Value.MaxExportedTrips;
         var rows = listing.Blocked
             ? []
-            : await listing.Ordered(listing.Narrowed()).Take(MaxExportedTrips + 1).ToListAsync(ct);
-        var truncated = rows.Count > MaxExportedTrips;
+            : await listing.Ordered(listing.Narrowed()).Take(limit + 1).ToListAsync(ct);
+        var truncated = rows.Count > limit;
         if (truncated)
         {
-            rows = [.. rows.Take(MaxExportedTrips)];
+            rows = [.. rows.Take(limit)];
         }
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, rows, ct);
         var bytes = sheets.Write(
             TripLogExportWorkbook.SheetName,
-            TripLogExportWorkbook.Rows(items, truncated, MaxExportedTrips));
+            TripLogExportWorkbook.Rows(items, truncated, limit));
 
         // Named by what it is about and by when it was taken, never by anything in it: a file
         // name travels through mail clients and download folders that nothing here controls.
@@ -480,6 +477,7 @@ public static class TripLogEndpoints
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
         FeatureProtection protection,
+        IOptions<TripListOptions> listOptions,
         DateOnly? from,
         DateOnly? to,
         Guid? caveId,
@@ -543,7 +541,8 @@ public static class TripLogEndpoints
         }
 
         return TypedResults.Ok(
-            await TripLogGrouping.BuildAsync(db, protection, ctx, user, listing, primary, secondary, ct));
+            await TripLogGrouping.BuildAsync(
+                db, protection, ctx, user, listing, primary, secondary, listOptions.Value.MaxGroupedTrips, ct));
     }
 
     /// <summary>

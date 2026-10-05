@@ -14945,7 +14945,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["FeatureCollection"];
+                        "application/json": components["schemas"]["ExpeditionMapDto"];
                     };
                 };
             };
@@ -20523,6 +20523,11 @@ export interface components {
             leads: number;
             truncated: boolean;
         };
+        ExpeditionMapDto: {
+            type: string;
+            features: components["schemas"]["GeoFeature"][];
+            truncated: boolean;
+        };
         ExpeditionReportSavedDto: {
             /** Format: uuid */
             documentId: string;
@@ -25136,6 +25141,10 @@ export interface components {
             incident: components["schemas"]["TripFacetValueDto"][];
             participants: components["schemas"]["TripFacetValueDto"][];
             areas: components["schemas"]["TripFacetValueDto"][];
+            /** @default false */
+            moreParticipants: boolean;
+            /** @default false */
+            moreAreas: boolean;
         };
         TripListGroupingDto: {
             groupBy: string;

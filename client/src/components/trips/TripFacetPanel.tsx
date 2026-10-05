@@ -183,6 +183,14 @@ export default function TripFacetPanel({
         options={participantOptions}
         onChange={(values: string[]) => onChange({ participantIds: values })}
       />
+      {/* The two open-ended controls offer the most-reached values and stop; the server says
+          when it stopped short, and a control that ran out quietly would read as the whole
+          roster. Somebody past the cut is reached by narrowing the rest of the filter. */}
+      {facets?.moreParticipants && (
+        <Typography.Text type="secondary" data-testid="trip-facet-participant-more">
+          {t('trips.filters.moreParticipants')}
+        </Typography.Text>
+      )}
       <Select
         {...many}
         data-testid="trip-facet-area"
@@ -191,6 +199,11 @@ export default function TripFacetPanel({
         options={areaOptions}
         onChange={(values: string[]) => onChange({ areaIds: values })}
       />
+      {facets?.moreAreas && (
+        <Typography.Text type="secondary" data-testid="trip-facet-area-more">
+          {t('trips.filters.moreAreas')}
+        </Typography.Text>
+      )}
       {/* The window is an overlap, not a start date: a trip running across the end of a month is
           found by that month and by the next one. Either bound stands alone, and both clear. */}
       <DatePicker.RangePicker

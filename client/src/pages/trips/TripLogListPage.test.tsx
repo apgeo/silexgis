@@ -54,6 +54,8 @@ function facets(overrides: Partial<TripListFacets> = {}): TripListFacets {
     incident: [{ value: 'true', label: null, count: 1 }],
     participants: [{ value: 'p1', label: 'Ana Pop', count: 3 }],
     areas: [{ value: 'a1', label: 'Padis', count: 2 }],
+    moreParticipants: false,
+    moreAreas: false,
     ...overrides,
   };
 }

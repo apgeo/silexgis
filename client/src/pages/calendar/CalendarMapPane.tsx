@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Empty, Typography } from 'antd';
+import { Alert, Empty, Typography } from 'antd';
 import type { FeatureLike } from 'ol/Feature';
 import type Feature from 'ol/Feature';
 import Map from 'ol/Map';
@@ -262,6 +262,17 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
         style={{ width: '100%', height, borderRadius: 4, overflow: 'hidden' }}
       />
       {caption}
+      {/* The layer answers a viewport, and a viewport holding more trips than one answer carries
+          is drawn short. Said, because a map quietly missing its last trips looks complete. */}
+      {data?.truncated && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 8 }}
+          data-testid="calendar-map-truncated"
+          title={t('calendar.mapTruncated')}
+        />
+      )}
       <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
         {t('calendar.mapCaveat')}
       </Typography.Paragraph>

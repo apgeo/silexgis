@@ -40,8 +40,13 @@ public sealed class TripListFacetTests : IAsyncLifetime, IDisposable, IClassFixt
     private long participantRoleId;
     private long leaderRoleId;
 
-    public TripListFacetTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString, configureServices: JobWorkers.RemoveFrom);
+    private readonly string connectionString;
+
+    public TripListFacetTests(PostgresFixture postgres)
+    {
+        connectionString = postgres.ConnectionString;
+        factory = new SilexGisApiFactory(connectionString, configureServices: JobWorkers.RemoveFrom);
+    }
 
     public async Task InitializeAsync()
     {
@@ -446,6 +451,44 @@ public sealed class TripListFacetTests : IAsyncLifetime, IDisposable, IClassFixt
             .Where(x => x.GetProperty("value").GetString() == value)
             .Select(x => x.GetProperty("count").GetInt32())
             .FirstOrDefault();
+
+    /// <summary>
+    /// An open-ended facet says when it stopped short. It offers the most-reached values up to a
+    /// cap, and a list that ran out quietly reads as the whole roster; a chosen value past the cap
+    /// is offered on top of it, and once everything counted is on offer there is nothing more to
+    /// say. The cap is lowered to where two people reach it rather than seeding a roster.
+    /// </summary>
+    [Fact]
+    public async Task An_open_ended_facet_says_when_more_values_exist_than_it_offers()
+    {
+        using var capped = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?> { ["TripList:MaxOpenFacetValues"] = "1" },
+            JobWorkers.RemoveFrom);
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        await AuthHelper.CreateUserAsync(capped, GlobalRoles.Editor, $"tf-cap-{suffix}@t.local");
+        using var cappedReader = await AuthHelper.BearerClientAsync(capped, $"tf-cap-{suffix}@t.local");
+
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        var first = await CreateTripAsync(
+            $"Cap one {marker}", surveyTypeId, "authenticated", people: [("Ana Cap", participantRoleId)]);
+        var second = await CreateTripAsync(
+            $"Cap two {marker}", surveyTypeId, "authenticated", people: [("Dan Cap", participantRoleId)]);
+
+        var facets = await FacetsAsync(cappedReader, $"search={marker}");
+        facets.GetProperty("participants").GetArrayLength().ShouldBe(1);
+        facets.GetProperty("moreParticipants").GetBoolean().ShouldBeTrue();
+        facets.GetProperty("moreAreas").GetBoolean().ShouldBeFalse();
+
+        // The person left out, chosen: offered on top of the cap, and with both on offer the
+        // facet has nobody left to say more about.
+        var offered = facets.GetProperty("participants")[0].GetProperty("value").GetGuid();
+        var firstCaver = await SoleCaverIdAsync(first);
+        var other = firstCaver == offered ? await SoleCaverIdAsync(second) : firstCaver;
+        var chosen = await FacetsAsync(cappedReader, $"search={marker}&participantIds={other}");
+        chosen.GetProperty("participants").GetArrayLength().ShouldBe(2);
+        chosen.GetProperty("moreParticipants").GetBoolean().ShouldBeFalse();
+    }
 
     private static async Task<JsonElement> ReadAsync(HttpResponseMessage response)
     {

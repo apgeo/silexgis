@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using NetTopologySuite.Geometries;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
@@ -11,6 +12,14 @@ using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Expeditions;
+
+/// <summary>
+/// What one camp draws, as a GeoJSON collection with one word beside it: whether the camp names
+/// more cave entrances than one answer carries. A yes or no and never a count, because how many
+/// were left off would say how many caves the camp reached, which for a protected cave is exactly
+/// what this map withholds.
+/// </summary>
+public sealed record ExpeditionMapDto(string Type, IReadOnlyList<GeoFeature> Features, bool Truncated);
 
 /// <summary>
 /// Everything one camp draws on a map, decided here rather than assembled by whoever is drawing it.
@@ -38,13 +47,6 @@ namespace SilexGis.Api.Features.Expeditions;
 /// </summary>
 public static class ExpeditionMapEndpoints
 {
-    /// <summary>
-    /// Safety cap on entrance points in one answer. Ordered by id before the cap bites, so a camp
-    /// over the cap draws the same points every time it is opened rather than an arbitrary subset
-    /// that changes under the reader.
-    /// </summary>
-    private const int MaxPoints = 2000;
-
     public static RouteGroupBuilder MapExpeditionMapEndpoints(this RouteGroupBuilder api)
     {
         api.MapGroup("/expeditions").WithTags("Expeditions")
@@ -57,12 +59,13 @@ public static class ExpeditionMapEndpoints
         return api;
     }
 
-    private static async Task<Results<Ok<FeatureCollection>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
+    private static async Task<Results<Ok<ExpeditionMapDto>, UnauthorizedHttpResult, ProblemHttpResult>> GetAsync(
         Guid id,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
+        IOptions<ExpeditionMapOptions> options,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -119,8 +122,10 @@ public static class ExpeditionMapEndpoints
             }));
         }
 
-        features.AddRange(await EntrancePointsAsync(db, protection, ctx, [.. trips.Select(x => x.Id)], ct));
-        return TypedResults.Ok(FeatureCollection.Of(features));
+        var (entrances, truncated) = await EntrancePointsAsync(
+            db, protection, ctx, [.. trips.Select(x => x.Id)], options.Value.MaxPoints, ct);
+        features.AddRange(entrances);
+        return TypedResults.Ok(new ExpeditionMapDto("FeatureCollection", features, truncated));
     }
 
     /// <summary>
@@ -128,16 +133,17 @@ public static class ExpeditionMapEndpoints
     /// and place exactly. Role-agnostic over the trip roles: the question is which caves the camp
     /// went to, not what was done in them.
     /// </summary>
-    private static async Task<List<GeoFeature>> EntrancePointsAsync(
+    private static async Task<(List<GeoFeature> Features, bool Truncated)> EntrancePointsAsync(
         SilexGisDbContext db,
         FeatureProtection protection,
         AccessContext ctx,
         IReadOnlyCollection<Guid> tripIds,
+        int maxPoints,
         CancellationToken ct)
     {
         if (tripIds.Count == 0)
         {
-            return [];
+            return ([], false);
         }
 
         var namedIds = await TripRoleLinks
@@ -146,7 +152,7 @@ public static class ExpeditionMapEndpoints
             .ToListAsync(ct);
         if (namedIds.Count == 0)
         {
-            return [];
+            return ([], false);
         }
 
         // A cave's own row carries no position; its entrances do. The cave goes through the
@@ -164,7 +170,7 @@ public static class ExpeditionMapEndpoints
             .ToDictionaryAsync(f => f.Id, f => f.Name, ct);
         if (caves.Count == 0)
         {
-            return [];
+            return ([], false);
         }
 
         var caveIds = caves.Keys.ToList();
@@ -181,28 +187,38 @@ public static class ExpeditionMapEndpoints
                 f.Entrance!.IsMain,
             })
             .OrderBy(f => f.Id)
-            .Take(MaxPoints)
+            .Take(maxPoints + 1)
             .ToListAsync(ct);
+
+        // Whether the camp names more entrances than one answer carries, before the exact-view
+        // gate below decides which of them this caller may see: a yes or no about the size of
+        // the answer, never a count, because how many were left off would say how many caves the
+        // camp reached, which for a protected cave is exactly what the gate withholds.
+        var truncated = rows.Count > maxPoints;
+        if (truncated)
+        {
+            rows = [.. rows.Take(maxPoints)];
+        }
+
         if (rows.Count == 0)
         {
-            return [];
+            return ([], false);
         }
 
         var exactViewIds = await protection.ExactViewIdsAsync(ctx, [.. rows.Select(r => r.Id)], ct);
 
-        return
-        [
-            .. rows
-                .Where(row => exactViewIds.Contains(row.Id) && row.Geom is Point)
-                .Select(row => GeoFeature.Of(row.Geom!, new Dictionary<string, object?>
-                {
-                    ["kind"] = "entrance",
-                    ["id"] = row.Id,
-                    ["caveId"] = row.CaveId,
-                    ["name"] = row.Name ?? caves.GetValueOrDefault(row.CaveId),
-                    ["caveName"] = caves.GetValueOrDefault(row.CaveId),
-                    ["isMain"] = row.IsMain,
-                })),
-        ];
+        var points = rows
+            .Where(row => exactViewIds.Contains(row.Id) && row.Geom is Point)
+            .Select(row => GeoFeature.Of(row.Geom!, new Dictionary<string, object?>
+            {
+                ["kind"] = "entrance",
+                ["id"] = row.Id,
+                ["caveId"] = row.CaveId,
+                ["name"] = row.Name ?? caves.GetValueOrDefault(row.CaveId),
+                ["caveName"] = caves.GetValueOrDefault(row.CaveId),
+                ["isMain"] = row.IsMain,
+            }))
+            .ToList();
+        return (points, truncated);
     }
 }

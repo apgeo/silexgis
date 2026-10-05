@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
@@ -47,13 +48,6 @@ public static class CalendarEndpoints
     /// something nobody looks at.
     /// </summary>
     private const int MaxWindowDays = 400;
-
-    /// <summary>
-    /// Backstop on the rows one answer carries. It is not a page size — the window is what bounds
-    /// an ordinary answer — and it is not expected to bite; when it does, the answer says how many
-    /// rows it could not carry rather than ending quietly.
-    /// </summary>
-    private const int MaxRows = 2000;
 
     private const string WindowRequiredCode = "calendar.window_required";
     private const string WindowInvertedCode = "calendar.window_inverted";
@@ -127,8 +121,10 @@ public static class CalendarEndpoints
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         IUserContextAccessor userAccessor,
+        IOptions<CalendarOptions> options,
         CancellationToken ct)
     {
+        var maxRows = options.Value.MaxRows;
         var ctx = await accessAccessor.GetAsync(ct);
         var user = await userAccessor.GetAsync(ct);
         if (ctx is null || user is null)
@@ -269,7 +265,7 @@ public static class CalendarEndpoints
 
             var tripRows = await trips
                 .OrderBy(x => x.TripDate).ThenBy(x => x.Id)
-                .Take(MaxRows)
+                .Take(maxRows)
                 .Select(x => new
                 {
                     x.Id,
@@ -339,7 +335,7 @@ public static class CalendarEndpoints
 
             var campRows = await camps
                 .OrderBy(x => x.StartDate).ThenBy(x => x.Id)
-                .Take(MaxRows)
+                .Take(maxRows)
                 .Select(x => new
                 {
                     x.Id,
@@ -409,7 +405,7 @@ public static class CalendarEndpoints
 
             var eventRows = await events
                 .OrderBy(x => x.StartDate).ThenBy(x => x.Id)
-                .Take(MaxRows)
+                .Take(maxRows)
                 .Select(x => new
                 {
                     x.Id,
@@ -442,7 +438,7 @@ public static class CalendarEndpoints
                 false)));
         }
 
-        var answer = CalendarWindow.Merge(entries, found, MaxRows, sort);
+        var answer = CalendarWindow.Merge(entries, found, maxRows, sort);
         await snapshot.CommitAsync(ct);
         return TypedResults.Ok(answer);
     }

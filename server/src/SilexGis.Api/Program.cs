@@ -203,6 +203,14 @@ try
     // is over — and one class holding both would leave a careless read between them.
     builder.Services.AddOptions<TripPastTrackOptions>()
         .BindConfiguration(TripPastTrackOptions.SectionName);
+    // The sizes bounded answers are cut at, each a backstop that says when it bit: settings so an
+    // installation can move them and a test can lower them to where they bite.
+    builder.Services.AddOptions<SilexGis.Api.Features.TripLogs.TripListOptions>()
+        .BindConfiguration(SilexGis.Api.Features.TripLogs.TripListOptions.SectionName);
+    builder.Services.AddOptions<SilexGis.Api.Features.Calendar.CalendarOptions>()
+        .BindConfiguration(SilexGis.Api.Features.Calendar.CalendarOptions.SectionName);
+    builder.Services.AddOptions<SilexGis.Api.Features.Expeditions.ExpeditionMapOptions>()
+        .BindConfiguration(SilexGis.Api.Features.Expeditions.ExpeditionMapOptions.SectionName);
     builder.Services.AddScoped<IUserContextAccessor, UserContextAccessor>();
     builder.Services.AddScoped<AdminTestSendThrottle>();
 builder.Services.AddScoped<GroupAnnouncementThrottle>();

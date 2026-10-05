@@ -38,8 +38,13 @@ public sealed class TripListGroupingTests : IAsyncLifetime, IDisposable, IClassF
     private long participantRoleId;
     private long leaderRoleId;
 
-    public TripListGroupingTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString, configureServices: JobWorkers.RemoveFrom);
+    private readonly string connectionString;
+
+    public TripListGroupingTests(PostgresFixture postgres)
+    {
+        connectionString = postgres.ConnectionString;
+        factory = new SilexGisApiFactory(connectionString, configureServices: JobWorkers.RemoveFrom);
+    }
 
     public async Task InitializeAsync()
     {
@@ -256,6 +261,42 @@ public sealed class TripListGroupingTests : IAsyncLifetime, IDisposable, IClassF
 
     private static async Task<JsonElement> ListAsync(HttpClient client, string query) =>
         await ReadAsync(await client.GetAsync($"/api/v1/trip-logs/?pageSize=200&{query}"));
+
+    /// <summary>
+    /// A grouping and an export past their caps say so — the grouping in its answer, the file on
+    /// its first lines, because a file that stopped at a limit and a file that ended look identical
+    /// once it is saved. The caps are lowered to where two trips reach them.
+    /// </summary>
+    [Fact]
+    public async Task Past_the_cap_a_grouping_says_it_was_cut_short_and_an_export_says_so_in_the_file()
+    {
+        using var capped = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?>
+            {
+                ["TripList:MaxGroupedTrips"] = "1",
+                ["TripList:MaxExportedTrips"] = "1",
+            },
+            JobWorkers.RemoveFrom);
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        await AuthHelper.CreateUserAsync(capped, GlobalRoles.Editor, $"tg-cap-{suffix}@t.local");
+        using var cappedReader = await AuthHelper.BearerClientAsync(capped, $"tg-cap-{suffix}@t.local");
+
+        var marker = Guid.NewGuid().ToString("N")[..8];
+        await CreateTripAsync($"Cap one {marker}", surveyTypeId, "authenticated");
+        await CreateTripAsync($"Cap two {marker}", surveyTypeId, "authenticated");
+
+        var cut = await GroupingAsync(cappedReader, $"search={marker}&groupBy=type");
+        cut.GetProperty("truncated").GetBoolean().ShouldBeTrue();
+        cut.GetProperty("matching").GetInt32().ShouldBe(1);
+        (await SheetTextAsync(cappedReader, $"search={marker}")).ShouldContain("holds the first 1");
+
+        // Inside the cap neither says a word about it.
+        var whole = await GroupingAsync(cappedReader, $"search=Cap one {marker}&groupBy=type");
+        whole.GetProperty("truncated").GetBoolean().ShouldBeFalse();
+        whole.GetProperty("matching").GetInt32().ShouldBe(1);
+        (await SheetTextAsync(cappedReader, $"search=Cap one {marker}")).ShouldNotContain("holds the first");
+    }
 
     private static async Task<JsonElement> GroupingAsync(HttpClient client, string query) =>
         await ReadAsync(await client.GetAsync($"/api/v1/trip-logs/grouping?{query}"));

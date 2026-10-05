@@ -446,6 +446,12 @@ public sealed record TripFacetValueDto(string Value, string? Label, int Count);
 /// displaces.
 /// </para>
 /// </remarks>
+/// <param name="MoreParticipants">
+/// The people facet left out values that the filter reaches: it offers the most-reached up to a
+/// cap, plus whatever is chosen, and a list that stopped short reads exactly like the whole roster
+/// unless it says so.
+/// </param>
+/// <param name="MoreAreas">The same for the areas facet.</param>
 public sealed record TripListFacetsDto(
     int Matching,
     int Overall,
@@ -454,7 +460,9 @@ public sealed record TripListFacetsDto(
     IReadOnlyList<TripFacetValueDto> Visibilities,
     IReadOnlyList<TripFacetValueDto> Incident,
     IReadOnlyList<TripFacetValueDto> Participants,
-    IReadOnlyList<TripFacetValueDto> Areas)
+    IReadOnlyList<TripFacetValueDto> Areas,
+    bool MoreParticipants = false,
+    bool MoreAreas = false)
 {
     /// <summary>
     /// The answer when a filter named something the caller may not read. Every number is zero and

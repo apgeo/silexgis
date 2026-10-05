@@ -44,8 +44,13 @@ public sealed class ExpeditionMapTests : IAsyncLifetime, IDisposable, IClassFixt
     private long caveTypeId;
     private long entranceTypeId;
 
-    public ExpeditionMapTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString);
+    private readonly string connectionString;
+
+    public ExpeditionMapTests(PostgresFixture postgres)
+    {
+        connectionString = postgres.ConnectionString;
+        factory = new SilexGisApiFactory(connectionString);
+    }
 
     public async Task InitializeAsync()
     {
@@ -205,6 +210,54 @@ public sealed class ExpeditionMapTests : IAsyncLifetime, IDisposable, IClassFixt
             .GetProperty("geometry").GetProperty("coordinates")
             .EnumerateArray()
             .Select(x => x.GetDouble())];
+
+    /// <summary>
+    /// Past the cap the map says it was cut short — with a yes or no and never a count, because
+    /// how many entrances were left off would say how many caves the camp reached, which for a
+    /// protected cave is exactly what this map withholds. The cap is lowered to where two caves
+    /// reach it rather than seeding thousands.
+    /// </summary>
+    [Fact]
+    public async Task Past_the_cap_the_map_says_it_was_cut_short_and_never_by_how_much()
+    {
+        using var capped = new SilexGisApiFactory(
+            connectionString, new Dictionary<string, string?> { ["ExpeditionMap:MaxPoints"] = "1" });
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        await AuthHelper.CreateUserAsync(capped, GlobalRoles.Editor, $"xmap-cap-{suffix}@t.local");
+        using var cappedReader = await AuthHelper.BearerClientAsync(capped, $"xmap-cap-{suffix}@t.local");
+
+        var one = await CreateCaveAsync($"Capped one {suffix}", locationProtected: false);
+        await AddEntranceAsync(one, OpenLon, OpenLat);
+        var two = await CreateCaveAsync($"Capped two {suffix}", locationProtected: false);
+        await AddEntranceAsync(two, OpenLon + 0.01, OpenLat + 0.01);
+
+        // One cave fits under a cap of one, and the answer says nothing was left off.
+        var within = await CreateCampAsync("Within cap");
+        await AddTripAsync(within, await CreateTripAsync($"Within {suffix}", withSketch: false, caveIds: [one]));
+        var whole = await MapBodyAsync(cappedReader, within);
+        whole.GetProperty("truncated").GetBoolean().ShouldBeFalse();
+        EntrancesIn(whole).ShouldBe(1);
+
+        // Two do not, and the answer says so — and nothing beside the flag says by how much.
+        var past = await CreateCampAsync("Past cap");
+        await AddTripAsync(past, await CreateTripAsync($"Past {suffix}", withSketch: false, caveIds: [one, two]));
+        var cut = await MapBodyAsync(cappedReader, past);
+        cut.GetProperty("truncated").GetBoolean().ShouldBeTrue();
+        EntrancesIn(cut).ShouldBe(1);
+        cut.EnumerateObject().Select(p => p.Name).OrderBy(n => n).ShouldBe(["features", "truncated", "type"]);
+    }
+
+    private static int EntrancesIn(JsonElement collection) =>
+        collection.GetProperty("features").EnumerateArray()
+            .Count(f => f.GetProperty("properties").GetProperty("kind").GetString() == "entrance");
+
+    private static async Task<JsonElement> MapBodyAsync(HttpClient client, Guid campId)
+    {
+        var response = await client.GetAsync($"/api/v1/expeditions/{campId}/map");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement;
+    }
 
     private static async Task<List<JsonElement>> FeaturesAsync(HttpClient client, Guid campId)
     {

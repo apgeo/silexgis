@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { Empty, Spin, Typography } from 'antd';
+import { Alert, Empty, Spin, Typography } from 'antd';
 import type { FeatureLike } from 'ol/Feature';
 import Map from 'ol/Map';
 import View from 'ol/View';
@@ -168,6 +168,17 @@ export default function ExpeditionMapTab({ expeditionId, active, height = 420 }:
         data-testid="expedition-map"
         style={{ width: '100%', height, display: nothingToDraw ? 'none' : undefined }}
       />
+      {/* A yes or no and never a number: how many entrances were left off would say how many
+          caves the camp reached, which for a protected cave is exactly what is withheld. */}
+      {data?.truncated && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 8 }}
+          data-testid="expedition-map-truncated"
+          title={t('expeditions.mapTruncated')}
+        />
+      )}
       <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
         {t('expeditions.mapCaveat')}
       </Typography.Paragraph>

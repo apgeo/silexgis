@@ -48,8 +48,13 @@ public sealed class CalendarTests : IAsyncLifetime, IDisposable, IClassFixture<P
     private Guid anaId;
     private Guid anaCaver;
 
-    public CalendarTests(PostgresFixture postgres) =>
-        factory = new SilexGisApiFactory(postgres.ConnectionString);
+    private readonly string connectionString;
+
+    public CalendarTests(PostgresFixture postgres)
+    {
+        connectionString = postgres.ConnectionString;
+        factory = new SilexGisApiFactory(connectionString);
+    }
 
     public async Task InitializeAsync()
     {
@@ -533,6 +538,32 @@ public sealed class CalendarTests : IAsyncLifetime, IDisposable, IClassFixture<P
     }
 
     private static string Placement(JsonElement row) => row.GetProperty("placement").GetString()!;
+
+    /// <summary>
+    /// Past the cap the answer counts what it could not carry and keeps the window's chronological
+    /// head, so the same window answers with the same rows every time. The cap is lowered to where
+    /// two rows reach it rather than seeding a year.
+    /// </summary>
+    [Fact]
+    public async Task Past_the_cap_the_answer_counts_what_it_could_not_carry()
+    {
+        using var capped = new SilexGisApiFactory(
+            connectionString, new Dictionary<string, string?> { ["Calendar:MaxRows"] = "1" });
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        await AuthHelper.CreateUserAsync(capped, GlobalRoles.Editor, $"cal-cap-{suffix}@t.local");
+        using var cappedReader = await AuthHelper.BearerClientAsync(capped, $"cal-cap-{suffix}@t.local");
+
+        var window = "from=2057-03-01&to=2057-03-31";
+        var first = await TripAsync("Cap first", "2057-03-03");
+        var second = await TripAsync("Cap second", "2057-03-04");
+        await MoveAsync(first, "planned");
+        await MoveAsync(second, "planned");
+
+        var body = await BodyAsync(cappedReader, window);
+        body.GetProperty("entries").EnumerateArray()
+            .Select(x => x.GetProperty("id").GetGuid()).ShouldBe([first]);
+        body.GetProperty("omitted").GetInt32().ShouldBe(1);
+    }
 
     private static async Task<JsonElement> BodyAsync(HttpClient client, string query)
     {
