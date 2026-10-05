@@ -1806,7 +1806,13 @@
     "workingArea": "Working area",
     "workingAreaHint": "Roughly where the camp works: the shape drawn on the plan, not a position anybody navigates by, and not derived from the caves the camp's trips reach.",
     "workingAreaWarning": "Shown exactly to everybody who may read the camp.",
-    "workingAreaWarningDetail": "The working area carries no location protection — it is the shape somebody drew on the plan. Draw it roughly, and never tightly around an entrance that must stay protected."
+    "workingAreaWarningDetail": "The working area carries no location protection — it is the shape somebody drew on the plan. Draw it roughly, and never tightly around an entrance that must stay protected.",
+    "publishConfirm": "Announce this camp? Nobody is notified by this; it marks the camp as announced. Who may read it does not change: it stays readable by {{audience}}. Widening that is a separate edit.",
+    "publishSuccess": "Announced.",
+    "callOff": "Call it off",
+    "callOffConfirm": "Call this camp off? It is kept, and it can be reinstated as a draft.",
+    "deleteConfirm": "Delete this camp? The trips it gathered stay; only the camp and its own rules go.",
+    "draftNotice": "This is a draft. It has not been announced yet — announce it when the plan is settled, or record it as done once it has happened."
   },
   "tags": {
     "title": "Tags",

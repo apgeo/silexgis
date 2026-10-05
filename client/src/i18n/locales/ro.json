@@ -1806,7 +1806,13 @@
     "workingArea": "Zonă de lucru",
     "workingAreaHint": "Aproximativ unde lucrează tabăra: forma trasată pe plan, nu o poziție după care navighează cineva și nu derivată din peșterile la care ajung turele taberei.",
     "workingAreaWarning": "Arătată exact tuturor celor care pot citi tabăra.",
-    "workingAreaWarningDetail": "Zona de lucru nu are protecție de locație — este forma pe care a trasat-o cineva pe plan. Trasați-o aproximativ și niciodată strâns în jurul unei intrări care trebuie să rămână protejată."
+    "workingAreaWarningDetail": "Zona de lucru nu are protecție de locație — este forma pe care a trasat-o cineva pe plan. Trasați-o aproximativ și niciodată strâns în jurul unei intrări care trebuie să rămână protejată.",
+    "publishConfirm": "Anunțați această tabără? Nimeni nu este notificat prin aceasta; marchează tabăra ca anunțată. Cine o poate citi nu se schimbă: rămâne vizibilă pentru {{audience}}. Lărgirea accesului este o modificare separată.",
+    "publishSuccess": "Anunțată.",
+    "callOff": "Anulează tabăra",
+    "callOffConfirm": "Anulați această tabără? Se păstrează și poate fi readusă la ciornă.",
+    "deleteConfirm": "Ștergeți această tabără? Turele adunate în ea rămân; dispar doar tabăra și regulile ei proprii.",
+    "draftNotice": "Aceasta este o ciornă. Nu a fost anunțată încă — anunțați-o când planul este stabilit sau marcați-o efectuată după ce a avut loc."
   },
   "tags": {
     "title": "Etichete",

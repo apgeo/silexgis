@@ -1,13 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { LockOutlined } from '@ant-design/icons';
-import { Button, Card, Descriptions, Flex, Result, Spin, Tabs, Tag, Typography } from 'antd';
+import { DeleteOutlined, EditOutlined, LockOutlined } from '@ant-design/icons';
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Descriptions,
+  Flex,
+  Popconfirm,
+  Result,
+  Spin,
+  Tabs,
+  Tag,
+  Typography,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   parseAccessActions,
   useCan,
   useCavingGroups,
+  useDeleteExpedition,
   useEffectiveAccess,
   useExpedition,
 } from '../../api/hooks.ts';
@@ -21,9 +35,11 @@ import TagChips from '../../components/tags/TagChips.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates, isMultiDay } from '../../components/trips/tripDates.ts';
 import ExpeditionFilesTab from './ExpeditionFilesTab.tsx';
+import ExpeditionFormModal from './ExpeditionFormModal.tsx';
 import ExpeditionLeadsTab from './ExpeditionLeadsTab.tsx';
 import ExpeditionMapTab from './ExpeditionMapTab.tsx';
 import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
+import ExpeditionStateControl from './ExpeditionStateControl.tsx';
 import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
 
 /**
@@ -51,6 +67,7 @@ const isTabKey = (value: string | null): value is TabKey =>
 export default function ExpeditionDetailPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: camp, isPending, isError } = useExpedition(id);
@@ -60,6 +77,8 @@ export default function ExpeditionDetailPage() {
   const { data: effective } = useEffectiveAccess('expedition', id);
   const domainFallback = useCan('expeditions', 'write');
   const held = effective ? parseAccessActions(effective.actions) : null;
+  const deleteCamp = useDeleteExpedition();
+  const [editing, setEditing] = useState(false);
   const [permissionsOpen, setPermissionsOpen] = useState(false);
 
   // An unrecognised key in the address falls back to the page's own tab rather than leaving antd
@@ -91,12 +110,23 @@ export default function ExpeditionDetailPage() {
   }
 
   const canEdit = held ? held.has('write') : domainFallback;
+  const canDelete = held ? held.has('delete') : domainFallback;
   // Naming who may read a camp is its own right, held by the person who made it and by anybody
   // they hand it to — not implied by being able to edit it.
   const canManagePermissions = held ? held.has('managePermissions') : domainFallback;
   const organizingCavingGroup = cavingGroups?.find((group) => group.id === camp.cavingGroupId);
   const spansDays = isMultiDay(camp.startDate, camp.endDate);
   const dateText = formatTripDates(camp.startDate, camp.endDate, i18n.resolvedLanguage);
+
+  const onDelete = async () => {
+    try {
+      await deleteCamp.mutateAsync(camp.id);
+      message.success(t('common.deleted'));
+      void navigate('/expeditions');
+    } catch {
+      message.error(t('common.saveFailed'));
+    }
+  };
 
   return (
     <div style={{ padding: 24, maxWidth: 1000 }}>
@@ -120,8 +150,47 @@ export default function ExpeditionDetailPage() {
               {t('permissions.button')}
             </Button>
           )}
+          {(canEdit || canDelete) && (
+            <>
+              <ExpeditionStateControl
+                expeditionId={camp.id}
+                state={camp.state}
+                visibility={camp.visibility}
+                canEdit={canEdit}
+              />
+              {canEdit && (
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => setEditing(true)}
+                  data-testid="expedition-edit"
+                >
+                  {t('expeditions.edit')}
+                </Button>
+              )}
+              {canDelete && (
+                <Popconfirm title={t('expeditions.deleteConfirm')} onConfirm={() => void onDelete()}>
+                  <Button danger icon={<DeleteOutlined />} data-testid="expedition-delete">
+                    {t('features.delete')}
+                  </Button>
+                </Popconfirm>
+              )}
+            </>
+          )}
         </Flex>
       </Flex>
+
+      {/* Said in words as well as shown as a badge, and only to somebody who could act on it.
+          A draft is not hidden from anyone its visibility admits — being unfinished is not a
+          permission — so the organiser is told plainly that the camp has not been announced. */}
+      {camp.state === 'draft' && canEdit && (
+        <Alert
+          type="info"
+          showIcon
+          title={t('expeditions.draftNotice')}
+          style={{ marginBottom: 12 }}
+          data-testid="expedition-draft-notice"
+        />
+      )}
 
       <Card size="small">
         <Descriptions column={1} size="small">
@@ -209,6 +278,9 @@ export default function ExpeditionDetailPage() {
         ]}
       />
 
+      {canEdit && (
+        <ExpeditionFormModal open={editing} camp={camp} onClose={() => setEditing(false)} />
+      )}
       {canManagePermissions && (
         <PermissionsModal
           entityType="expedition"

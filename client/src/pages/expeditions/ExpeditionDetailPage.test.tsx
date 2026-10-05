@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,6 +17,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useExpedition: () => campSpy(),
   useCavingGroups: () => ({ data: [{ id: 'club-1', name: 'Clubul Speo' }] }),
   useEffectiveAccess: () => accessSpy(),
+  useDeleteExpedition: () => ({ mutateAsync: vi.fn() }),
   useCan: () => false,
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
 }));
@@ -36,6 +38,12 @@ vi.mock('../../components/reslinks/LinksSection.tsx', () => ({
 }));
 vi.mock('../../components/history/HistoryPanel.tsx', () => ({
   default: ({ entityType }: { entityType: string }) => <div>history for {entityType}</div>,
+}));
+vi.mock('./ExpeditionFormModal.tsx', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div>the camp form</div> : null),
+}));
+vi.mock('./ExpeditionStateControl.tsx', () => ({
+  default: ({ canEdit }: { canEdit: boolean }) => (canEdit ? <div>the lifecycle control</div> : null),
 }));
 vi.mock('./ExpeditionTripsTab.tsx', () => ({
   default: () => <div>the trips gathered into the camp</div>,
@@ -68,11 +76,13 @@ function camp(overrides: Partial<ExpeditionInfo> = {}): ExpeditionInfo {
 
 function renderPage(entry = `/expeditions/${CAMP}`) {
   return render(
-    <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route path="/expeditions/:id" element={<ExpeditionDetailPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <App>
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/expeditions/:id" element={<ExpeditionDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </App>,
   );
 }
 
@@ -161,6 +171,36 @@ describe('the camp page', () => {
     renderPage();
     fireEvent.click(screen.getByTestId('expedition-permissions'));
     expect(screen.getByText('permissions for expedition')).toBeTruthy();
+  });
+
+  it('draws the editing controls for the rights the caller holds, and none for a reader', () => {
+    accessSpy.mockReturnValue({ data: { actions: 'read' } });
+    renderPage();
+    expect(screen.queryByTestId('expedition-edit')).toBeNull();
+    expect(screen.queryByTestId('expedition-delete')).toBeNull();
+    expect(screen.queryByText('the lifecycle control')).toBeNull();
+
+    cleanup();
+    // Write without delete: the camp can be changed and moved, not removed.
+    accessSpy.mockReturnValue({ data: { actions: 'read,write' } });
+    renderPage();
+    expect(screen.getByText('the lifecycle control')).toBeTruthy();
+    expect(screen.queryByTestId('expedition-delete')).toBeNull();
+    fireEvent.click(screen.getByTestId('expedition-edit'));
+    expect(screen.getByText('the camp form')).toBeTruthy();
+  });
+
+  it('tells somebody who could announce a draft camp that it has not been announced', () => {
+    campSpy.mockReturnValue({ data: camp({ state: 'draft' }), isPending: false, isError: false });
+    accessSpy.mockReturnValue({ data: { actions: 'read' } });
+    renderPage();
+    // A reader is shown the badge and not the sentence: it is addressed to whoever can act.
+    expect(screen.queryByTestId('expedition-draft-notice')).toBeNull();
+
+    cleanup();
+    accessSpy.mockReturnValue({ data: { actions: 'read,write' } });
+    renderPage();
+    expect(screen.getByTestId('expedition-draft-notice')).toBeTruthy();
   });
 });
 
