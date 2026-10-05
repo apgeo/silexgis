@@ -2111,7 +2111,8 @@
     "scopeSubtree": "Acest obiect și tot ce conține",
     "viaExpedition": "Din tabără",
     "viaExpeditionHint": "Unele dintre aceste reguli au fost scrise de o tabără din care face parte această tură și se modifică acolo, nu aici. Sunt afișate pentru ca lista completă a celor care pot citi tura să fie într-un singur loc.",
-    "denyHint": "O interdicție cântărește mai greu decât orice permisiune de la același nivel, iar o regulă pusă direct pe obiect cântărește mai greu decât una moștenită. Verificați ce efect are înainte de a salva."
+    "denyHint": "O interdicție cântărește mai greu decât orice permisiune de la același nivel, iar o regulă pusă direct pe obiect cântărește mai greu decât una moștenită. Verificați ce efect are înainte de a salva.",
+    "viaNamedExpedition": "Acordată prin tabăra {{name}}"
   },
   "access": {
     "whyTitle": "Accesul dumneavoastră aici și motivul lui",
