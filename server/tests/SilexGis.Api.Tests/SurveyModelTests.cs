@@ -231,6 +231,72 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable, IClassFixtur
     // ---- helpers ----
 
     /// <summary>Uploads one survey model as the owner and returns its id.</summary>
+    /// <summary>
+    /// The newest upload of a kind is the model the cave is represented by; an older one can be
+    /// given the mark back; a wall mesh and a line plot hold their marks independently; and when
+    /// the current model goes, the mark moves to the newest one left.
+    /// </summary>
+    [Fact]
+    public async Task The_newest_upload_of_a_kind_is_current_and_the_mark_can_be_moved_back_and_survives_a_delete()
+    {
+        var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+
+        var first = await UploadAsync(caveId, "first.lox");
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = true });
+
+        var second = await UploadAsync(caveId, "second.lox");
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = false, [second] = true });
+
+        // The mark goes back to the older survey on request, and the newer one loses it.
+        var moved = await owner.PutAsync($"/api/v1/survey-models/{first}/current", null);
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+        (await moved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("isCurrent").GetBoolean().ShouldBeTrue();
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = true, [second] = false });
+
+        // Marking the holder again is not an error and changes nothing.
+        (await owner.PutAsync($"/api/v1/survey-models/{first}/current", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = true, [second] = false });
+
+        // A wall mesh is a different kind: it takes a mark of its own and leaves the line plot's alone.
+        using var form = BuildForm("Walls.stl", ProjectedStl());
+        form.Add(new StringContent("32635"), "sourceEpsg");
+        form.Add(new StringContent("1100"), "originHeightM");
+        var created = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-models", form);
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var mesh = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = true, [second] = false, [mesh] = true });
+
+        // Deleting the current line plot hands its mark to the newest line plot left, not to the mesh.
+        (await owner.DeleteAsync($"/api/v1/survey-models/{first}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [second] = true, [mesh] = true });
+    }
+
+    /// <summary>
+    /// Moving the mark is a write to the cave's surveys and is gated like one: refused to a
+    /// reader, and not even acknowledged where the cave's location is closed to the caller.
+    /// </summary>
+    [Fact]
+    public async Task Moving_the_current_mark_is_gated_like_every_other_write_to_a_survey_model()
+    {
+        var open = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
+        var model = await UploadAsync(open, "open.lox");
+        (await reader.PutAsync($"/api/v1/survey-models/{model}/current", null)).StatusCode
+            .ShouldBe(HttpStatusCode.Forbidden);
+
+        var closed = await CreateCaveAsync(visibility: "authenticated", locationProtected: true);
+        var withheld = await UploadAsync(closed, "closed.lox");
+        (await reader.PutAsync($"/api/v1/survey-models/{withheld}/current", null)).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>Each model of the cave and whether it carries the current mark.</summary>
+    private async Task<Dictionary<Guid, bool>> ListAsync(Guid caveId)
+    {
+        var models = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/survey-models");
+        return models.EnumerateArray()
+            .ToDictionary(m => m.GetProperty("id").GetGuid(), m => m.GetProperty("isCurrent").GetBoolean());
+    }
+
     private async Task<Guid> UploadAsync(Guid caveId, string fileName)
     {
         using var form = BuildForm(fileName, FakeLox());
@@ -324,6 +390,10 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable, IClassFixtur
         converted.GetProperty("anchorLatitude").GetDouble().ShouldBe(45.519, tolerance: 0.01);
         converted.GetProperty("anchorHeightM").GetDouble().ShouldBe(1100);
         converted.GetProperty("triangleCount").GetInt32().ShouldBe(2);
+        // How much there is to fetch, said before it is fetched: a glTF of two triangles is small,
+        // but it is not nothing, and it is the converted file's own length rather than the upload's.
+        model.GetProperty("meshSizeBytes").ValueKind.ShouldBe(JsonValueKind.Null);
+        converted.GetProperty("meshSizeBytes").GetInt64().ShouldBeGreaterThan(0);
 
         // The converted mesh is delivered by the same signed, anonymous URL as everything else.
         using var anonymous = factory.CreateClient();

@@ -15,6 +15,7 @@ using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.Caves;
 
@@ -26,6 +27,13 @@ public sealed record SurveyModelDto(
     Guid FileId,
     string? Description,
     DateOnly? SurveyedAt,
+    /// <summary>
+    /// Whether this is the model the cave is represented by, among the cave's models of the same
+    /// kind — the line plot the map and the statistics read, or the wall mesh the scene draws.
+    /// At most one per cave and kind. The newest upload takes it; an older model can be given it
+    /// back through the route that sets it.
+    /// </summary>
+    bool IsCurrent,
     /// <summary>Signed survey-file URL — fetch and hand to the 3D viewer as-is.</summary>
     string ModelUrl,
     SurveyModelStatus Status,
@@ -50,6 +58,13 @@ public sealed record SurveyModelDto(
     double? AnchorLatitude,
     double? AnchorHeightM,
     int? TriangleCount,
+    /// <summary>
+    /// How many bytes the drawable mesh is, so a viewer can see how big it is before it arrives;
+    /// null until a conversion has produced one. The triangle count above says how much there is
+    /// to draw, this says how much there is to fetch, and on a metered connection the second is
+    /// the one that costs.
+    /// </summary>
+    long? MeshSizeBytes,
     /// <summary>
     /// The uploaded file's coordinates were too large for the precision it stores them in, so the
     /// survey lost detail before it arrived. Re-exporting about a local origin recovers it.
@@ -288,6 +303,9 @@ public static class SurveyModelEndpoints
             .WithValidation<SurveyModelUpdateRequest>()
             .WithTags("SurveyModels")
             .WithSummary("Metadata update (Write on the cave).");
+        api.MapPut("/survey-models/{id:guid}/current", MakeCurrentAsync)
+            .WithTags("SurveyModels")
+            .WithSummary("Makes this the model its cave is represented by, among the cave's models of the same kind (Write on the cave).");
         api.MapDelete("/survey-models/{id:guid}", DeleteAsync)
             .WithTags("SurveyModels")
             .WithSummary("Deletes the survey model (Write on the cave); the stored file is kept. Refused while a trip's live tracking is armed on it.");
@@ -321,7 +339,8 @@ public static class SurveyModelEndpoints
             .Where(m => m.CaveFeatureId == caveId)
             .OrderBy(m => m.CreatedAt)
             .ToListAsync(ct);
-        return TypedResults.Ok(models.Select(m => m.ToDto(tokens)).ToList());
+        var sizes = await MeshSizesAsync(db, models, ct);
+        return TypedResults.Ok(models.Select(m => m.ToDto(tokens, sizes)).ToList());
     }
 
     private static async Task<Results<Created<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> UploadAsync(
@@ -457,9 +476,18 @@ public static class SurveyModelEndpoints
             RequestedBy = ctx.UserId,
         });
 
-        await db.SaveChangesAsync(ct);
+        // The newest upload of a kind is the one the cave is represented by: whoever re-uploads a
+        // corrected export means it to replace the old one. Demoting the previous holder is its
+        // own statement, so the two go inside one transaction — the file is already stored
+        // either way, and a row that was never written leaves nothing to clean up but bytes.
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            await SurveyModelCurrency.MakeCurrentAsync(db, model, ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
 
-        return TypedResults.Created($"/api/v1/survey-models/{model.Id}", model.ToDto(tokens));
+        return TypedResults.Created($"/api/v1/survey-models/{model.Id}", model.ToDto(tokens, null));
     }
 
     private static async Task<Results<Ok<SurveyModelDto>, ProblemHttpResult>> GetAsync(
@@ -481,7 +509,7 @@ public static class SurveyModelEndpoints
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.SurveyModels, model.Id, ct);
-        return TypedResults.Ok(model.ToDto(tokens));
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct)));
     }
 
     private static async Task<Ok<PagedResult<SurveyStationDto>>> StationsAsync(
@@ -599,7 +627,56 @@ public static class SurveyModelEndpoints
         model.Description = request.Description;
         model.SurveyedAt = request.SurveyedAt;
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(model.ToDto(tokens));
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct)));
+    }
+
+    /// <summary>
+    /// Gives this model the cave's current mark for its kind, taking it from whichever model of
+    /// that kind held it. Idempotent: marking the holder again changes nothing and still answers.
+    /// </summary>
+    /// <remarks>
+    /// The same gates as every other write to a model: the cave must be visible with its exact
+    /// location open, and writable. No version precondition is asked for, because this is not an
+    /// edit of the row's content that another edit could be lost under — it is a choice between
+    /// rows, and the last choice made is the one that was meant.
+    /// </remarks>
+    private static async Task<Results<Ok<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> MakeCurrentAsync(
+        Guid id,
+        SilexGisDbContext db,
+        IFileAccessTokenService tokens,
+        IAccessService access,
+        FeatureProtection protection,
+        IAccessContextAccessor accessAccessor,
+        CancellationToken ct)
+    {
+        var ctx = await accessAccessor.GetAsync(ct);
+        if (ctx is null)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        var model = await db.SurveyModels.FirstOrDefaultAsync(m => m.Id == id, ct);
+        var cave = model is null ? null : await CaveFeatureAsync(db, model.CaveFeatureId, ct);
+        if (model is null || cave is null
+            || !await SurveyModelAccess.VisibleAsync(access, protection, ctx, cave, ct))
+        {
+            return ApiProblems.NotFound("survey_model.not_found");
+        }
+
+        if (!await SurveyModelAccess.WritableAsync(access, ctx, cave, ct))
+        {
+            return ApiProblems.Forbidden();
+        }
+
+        if (!model.IsCurrent)
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await SurveyModelCurrency.MakeCurrentAsync(db, model, ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+
+        return TypedResults.Ok(model.ToDto(tokens, await MeshSizesAsync(db, [model], ct)));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
@@ -711,8 +788,18 @@ public static class SurveyModelEndpoints
         await db.ResLinkMembers
             .Where(m => m.EntityType == AttachedEntityType.SurveyModel && m.EntityId == model.Id)
             .ExecuteDeleteAsync(ct);
-        db.SurveyModels.Remove(model);
-        await db.SaveChangesAsync(ct);
+        // The mark moves on to the newest model of the kind that is left, so the cave stays
+        // represented by something named rather than by a fallback rule. Promotion is a separate
+        // statement after the removal is saved, for the per-statement index check, and the two
+        // share a transaction so a failure between them leaves the cave with its old model.
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            db.SurveyModels.Remove(model);
+            await db.SaveChangesAsync(ct);
+            await SurveyModelCurrency.PromoteSuccessorAsync(db, model.CaveFeatureId, model.Format, model.IsCurrent, ct);
+            await transaction.CommitAsync(ct);
+        }
+
         return TypedResults.NoContent();
     }
 
@@ -745,7 +832,26 @@ public static class SurveyModelEndpoints
         FeatureProtection protection, AccessContext? ctx, Guid caveFeatureId, CancellationToken ct) =>
         !await SurveyModelAccess.LocationOpenAsync(protection, ctx, caveFeatureId, ct);
 
-    private static SurveyModelDto ToDto(this SurveyModel m, IFileAccessTokenService tokens) => new(
+    /// <summary>
+    /// The byte length of each model's converted mesh, keyed by the converted file's id, for the
+    /// models that have one. One query for a whole list rather than one per row.
+    /// </summary>
+    private static async Task<IReadOnlyDictionary<Guid, long>> MeshSizesAsync(
+        SilexGisDbContext db, IReadOnlyList<SurveyModel> models, CancellationToken ct)
+    {
+        var converted = models.Where(m => m.ConvertedFileId is not null).Select(m => m.ConvertedFileId!.Value).ToList();
+        if (converted.Count == 0)
+        {
+            return new Dictionary<Guid, long>();
+        }
+
+        return await db.StoredFiles.AsNoTracking()
+            .Where(f => converted.Contains(f.Id))
+            .ToDictionaryAsync(f => f.Id, f => f.SizeBytes, ct);
+    }
+
+    private static SurveyModelDto ToDto(
+        this SurveyModel m, IFileAccessTokenService tokens, IReadOnlyDictionary<Guid, long>? meshSizes) => new(
         m.Id,
         m.CaveFeatureId,
         m.Name,
@@ -753,6 +859,7 @@ public static class SurveyModelEndpoints
         m.FileId,
         m.Description,
         m.SurveyedAt,
+        m.IsCurrent,
         FileUrl(tokens, m.FileId),
         m.Status,
         m.ProcessingError,
@@ -761,6 +868,7 @@ public static class SurveyModelEndpoints
         m.Anchor?.Y,
         m.AnchorHeightM,
         m.TriangleCount,
+        m.ConvertedFileId is { } sized && meshSizes is not null && meshSizes.TryGetValue(sized, out var bytes) ? bytes : null,
         m.SourcePrecisionLost,
         m.DroppedShotCount,
         m.MergedStationCount,
