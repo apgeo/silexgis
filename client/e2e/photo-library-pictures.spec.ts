@@ -4,6 +4,7 @@ import { expect } from '@playwright/test';
 
 import { test } from './consoleGuard.ts';
 import { login, overlayTreeNode } from './helpers.ts';
+import { wheelAndAwaitLibraries } from './libraryPhotos.ts';
 
 test.skip(
   !process.env.SILEXGIS_E2E_PHOTO_LIBRARY,
@@ -32,8 +33,7 @@ test('a library overlay draws its photographs, and asks this application for the
   for (let step = 0; step < 9; step += 1) {
     if (/\d+ photographs shown/.test(await page.locator('body').innerText())) break;
     await page.mouse.move(centre.x, centre.y);
-    await page.mouse.wheel(0, 400);
-    await page.waitForTimeout(1200);
+    await wheelAndAwaitLibraries(page, 400, ['photoprism']);
   }
 
   const status = page.getByTestId('library-photos-status-photoprism');
@@ -43,7 +43,8 @@ test('a library overlay draws its photographs, and asks this application for the
   expect(pictures).toHaveLength(0);
 
   await status.getByRole('checkbox', { name: /photographs themselves/i }).check();
-  await page.waitForTimeout(3000);
+  // Switching on is answered by the map asking for the pictures of the pins already on it.
+  await expect.poll(() => pictures.length, { timeout: 20_000 }).toBeGreaterThan(0);
 
   // eslint-disable-next-line no-console
   console.log(`picture requests after switching on: ${pictures.length}`);

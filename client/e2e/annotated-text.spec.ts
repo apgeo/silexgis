@@ -75,8 +75,20 @@ test.describe('link-annotated text', () => {
     // reaching into the renderer.
     await page.goto('/');
     await expect(page.locator('canvas, .ol-viewport').first()).toBeVisible({ timeout: 30_000 });
-    await page.waitForTimeout(2000);
-    const before = page.url();
+    // The map writes its position into the address a moment after it stops moving, so "before" is
+    // the address once it carries a position and has stopped changing.
+    let before = '';
+    await expect
+      .poll(
+        () => {
+          const now = page.url();
+          const settled = now === before && /#[\d.]+\/-?[\d.]+\/-?[\d.]+$/.test(now);
+          before = now;
+          return settled;
+        },
+        { timeout: 30_000, message: 'the map never wrote where it is looking into the address' },
+      )
+      .toBe(true);
 
     const text = await context.newPage();
     const documentId = await openSeededText(text);
