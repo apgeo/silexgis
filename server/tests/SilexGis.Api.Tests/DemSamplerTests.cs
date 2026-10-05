@@ -509,13 +509,25 @@ public sealed class DemSamplerTests : IDisposable
     /// to verify here — so what is checked is that a point in the middle of it comes back as a
     /// height at all, in a range that rules out the void marker and sea level standing in for one.
     /// Runs only where the machine has been pointed at such a directory; where it has been, an
-    /// unusable directory fails rather than passes quietly.
+    /// unusable directory fails rather than passes quietly. And where it has not been, the test
+    /// fails rather than passes quietly too: a run that never looked at a tile used to count as
+    /// green, which is a check that passes either way. A machine without tiles says so with the
+    /// value <c>none</c>, which is an acknowledgement rather than an omission.
     /// </remarks>
     [Fact]
     public void A_real_published_tile_can_be_prepared_and_read()
     {
         var directory = Environment.GetEnvironmentVariable(RealTileDirectoryVariable);
         if (string.IsNullOrWhiteSpace(directory))
+        {
+            Assert.Fail(
+                $"{RealTileDirectoryVariable} is not set. Point it at a directory of published elevation "
+                + "tiles to run this check (on the development machine: /srv/data/silexgis/dem), or set it "
+                + "to \"none\" to record that this machine has no such tiles. Unset, this test used to pass "
+                + "without reading anything.");
+        }
+
+        if (string.Equals(directory, "none", StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
