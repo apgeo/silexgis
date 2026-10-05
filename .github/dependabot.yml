@@ -1,0 +1,36 @@
+# Weekly notice of what the product ships having moved or gained an advisory: the client's npm
+# graph, the server's NuGet graph, the actions these workflows run, and the images the
+# deployment pins. Minor and patch updates are grouped into one pull request per ecosystem so
+# the noise stays readable; a major update and a security update each get their own.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /client
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: nuget
+    directory: /server
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /client
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /server
+    schedule:
+      interval: weekly

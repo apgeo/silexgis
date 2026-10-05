@@ -1,8 +1,15 @@
-# The fast tier: everything that answers in about a minute — build with warnings as errors,
-# Domain and Architecture tests, the whole client gate, the script tests, and the deployment
-# image build. The API integration suite deliberately does not run here: it is hours long,
-# outgrows the standard hosted runners, and has its own workflow (integration.yml) so that a
+# The fast tier: everything that answers in minutes — build with warnings as errors, Domain and
+# Architecture tests, the whole client gate, the script tests, the generated client's contract
+# against the server's OpenAPI document, the dependency audit, and the deployment images built
+# and smoke-tested. The API integration suite and the browser suite deliberately do not run
+# here: they are hours long and have workflows of their own (integration.yml, browser.yml), so a
 # pull request gets a fast honest verdict instead of a timeout.
+#
+# The server and client halves run on Linux AND Windows. The code is required to run on both,
+# development moved to Linux, and nothing else proves the Windows half any more: a path joined
+# with a slash, a shell-ism in a script or a case-only file rename now ships unnoticed unless a
+# Windows runner catches it. Only the halves a hosted Windows runner can run are mirrored; the
+# integration and browser suites need Linux containers.
 
 name: CI
 
@@ -13,7 +20,11 @@ on:
 
 jobs:
   server:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       # The survey-format readers live in a submodule. Without this the checkout lacks a project
       # file the solution names, and the build fails at restore with a message about a missing
@@ -35,7 +46,11 @@ jobs:
         working-directory: server
 
   client:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: client
@@ -66,6 +81,89 @@ jobs:
         run: node --test "scripts/**/*.test.mjs"
         working-directory: ${{ github.workspace }}
 
+  # The generated client is never hand-edited, and a route contract that changed without the
+  # client being regenerated is the drift this catches. The document is read from a running API
+  # exactly as `npm run generate:api` reads it on a developer's machine, against a throwaway
+  # database the API migrates on start-up — the same path, not a second one.
+  contract:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_DB: silexgis
+          POSTGRES_USER: silexgis
+          POSTGRES_PASSWORD: silexgis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U silexgis -d silexgis"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - name: Build
+        run: dotnet build SilexGis.slnx
+        working-directory: server
+      - name: Start the API against the throwaway database
+        working-directory: server/src/SilexGis.Api
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: http://127.0.0.1:5080
+          SILEXGIS__Db__ConnectionString: Host=localhost;Port=5432;Database=silexgis;Username=silexgis;Password=silexgis
+        run: |
+          nohup dotnet run --no-build --no-launch-profile > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fs -o /dev/null http://127.0.0.1:5080/openapi/v1.json; then exit 0; fi
+            sleep 2
+          done
+          echo "the API did not answer within three minutes"; tail -50 "$RUNNER_TEMP/api.log"; exit 1
+      - run: npm ci
+        working-directory: client
+      - name: Regenerate the client from the running API
+        run: npm run generate:api
+        working-directory: client
+      - name: The committed client must equal the regenerated one
+        run: git diff --exit-code -- client/src/api/schema.d.ts
+
+  # Whether anything the product ships has a published vulnerability. The .NET half fails on any
+  # finding; the npm half fails on high and critical findings that are not on the allow-list in
+  # client/.audit-allow.json, where every entry carries its reason and an expiry.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - name: Restore
+        run: dotnet restore SilexGis.slnx
+        working-directory: server
+      - name: NuGet packages with known vulnerabilities (fails on any)
+        run: node scripts/dotnet-audit.mjs
+      - run: npm ci
+        working-directory: client
+      - name: npm packages with known vulnerabilities (fails on high and critical not allowed)
+        run: node scripts/npm-audit.mjs
+
   docker:
     runs-on: ubuntu-latest
     needs: [server, client]
@@ -78,3 +176,15 @@ jobs:
         working-directory: deploy
         env:
           SILEXGIS_DB_PASSWORD: ci-build-only
+      # The images are then started and smoke-tested the way an operator's first `up` would be:
+      # the web front answers, the API's health answers, every module script is served as
+      # JavaScript, and the proxy accepts an upload as large as the configured limit while
+      # refusing a far larger one. Each of those is a failure that only ever shows in the packaged
+      # image and not in development.
+      - name: Start and verify the distribution
+        working-directory: deploy
+        run: |
+          sed -e 's/^SILEXGIS_DB_PASSWORD=.*/SILEXGIS_DB_PASSWORD=ci-build-only/' \
+              -e 's/^SILEXGIS_ADMIN_PASSWORD=.*/SILEXGIS_ADMIN_PASSWORD=ci-admin-only-1/' \
+              .env.example > .env
+          node verify-distribution.mjs --no-build --down

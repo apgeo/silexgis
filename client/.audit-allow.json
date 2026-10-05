@@ -1,0 +1,17 @@
+[
+  {
+    "package": "braces",
+    "reason": "Reached only through vite-plugin-static-copy's chokidar 3 at build time, never at run time in the served bundle; the fix npm offers is a downgrade of the plugin to a version that does not support this Vite. Re-judge when the plugin moves to chokidar 4.",
+    "until": "2026-12-31"
+  },
+  {
+    "package": "chokidar",
+    "reason": "Build-time file watcher under vite-plugin-static-copy; same path and same remedy as braces.",
+    "until": "2026-12-31"
+  },
+  {
+    "package": "vite-plugin-static-copy",
+    "reason": "The plugin that pins chokidar 3; a build-time dependency only.",
+    "until": "2026-12-31"
+  }
+]
