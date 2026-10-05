@@ -444,7 +444,11 @@ public static class CavingGroupEndpoints
         var memberUserId = await db.Cavers.Where(c => c.Id == caverId).Select(c => c.UserId).FirstOrDefaultAsync(ct);
 
         // Members may leave on their own — nobody is held in a club against their will;
-        // removing anyone else is a roster edit.
+        // removing anyone else is a roster edit. There is no "last owner" a group has to keep:
+        // the owner and admin roles label people on the roster and gate nothing (rights over
+        // the group flow from access entries alone), so a group may be left without one. The
+        // only refusal on the way out is the installation's lockout guard below, for a member
+        // whose seat here is the last live path into Full Administrators.
         var selfRemoval = memberUserId == user.UserId;
         if (!selfRemoval && !Holds(ctx, AccessAction.Write, id))
         {
