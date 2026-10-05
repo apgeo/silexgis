@@ -57,6 +57,9 @@ vi.mock('./ExpeditionFilesTab.tsx', () => ({
 vi.mock('./ExpeditionRosterTab.tsx', () => ({
   default: () => <div>who was at the camp</div>,
 }));
+vi.mock('./ExpeditionPhotosTab.tsx', () => ({
+  default: () => <div>the pictures of the camp</div>,
+}));
 
 function camp(overrides: Partial<ExpeditionInfo> = {}): ExpeditionInfo {
   return {
@@ -145,6 +148,10 @@ describe('the camp page', () => {
     cleanup();
     renderPage(`/expeditions/${CAMP}?tab=roster`);
     expect(screen.getByText('who was at the camp')).toBeTruthy();
+
+    cleanup();
+    renderPage(`/expeditions/${CAMP}?tab=photos`);
+    expect(screen.getByText('the pictures of the camp')).toBeTruthy();
   });
 
   it('falls back to its own tab when the address names one it does not have', () => {

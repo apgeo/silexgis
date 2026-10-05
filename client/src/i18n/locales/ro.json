@@ -1850,7 +1850,10 @@
       "whoWasThere": "Cine a participat",
       "areaPoint": "Zonă de lucru: un punct la {{position}}.",
       "areaShape": "Zonă de lucru: {{shape}}, {{count}} puncte, centrată pe {{position}}."
-    }
+    },
+    "tabPhotos": "Fotografii",
+    "noPhotographs": "Nicio fotografie nu este atașată acestei tabere sau turelor din ea pe care le puteți citi.",
+    "galleryVisibleToYou": "Fotografiile pe care le puteți vedea, din tabără și din turele ei pe care le puteți citi. Altcineva poate vedea mai multe sau mai puține."
   },
   "tags": {
     "title": "Etichete",

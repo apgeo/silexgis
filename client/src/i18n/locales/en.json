@@ -1850,7 +1850,10 @@
       "whoWasThere": "Who was there",
       "areaPoint": "Working area: a point at {{position}}.",
       "areaShape": "Working area: {{shape}}, {{count}} points, centred on {{position}}."
-    }
+    },
+    "tabPhotos": "Photographs",
+    "noPhotographs": "No photographs are filed against this camp or the trips in it that you may read.",
+    "galleryVisibleToYou": "The photographs you may see, from the camp and the trips in it you may read. Somebody else may see more, or fewer."
   },
   "tags": {
     "title": "Tags",

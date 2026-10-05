@@ -44,6 +44,7 @@ import ExpeditionFilesTab from './ExpeditionFilesTab.tsx';
 import ExpeditionFormModal from './ExpeditionFormModal.tsx';
 import ExpeditionLeadsTab from './ExpeditionLeadsTab.tsx';
 import ExpeditionMapTab from './ExpeditionMapTab.tsx';
+import ExpeditionPhotosTab from './ExpeditionPhotosTab.tsx';
 import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
 import ExpeditionSharingModal from './ExpeditionSharingModal.tsx';
 import ExpeditionStateControl from './ExpeditionStateControl.tsx';
@@ -55,7 +56,7 @@ import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
  * survives a reload. Adding a section to the camp is one more entry here and one more component —
  * nothing else about the page has to move.
  */
-const TAB_KEYS = ['trips', 'map', 'leads', 'roster', 'files', 'history'] as const;
+const TAB_KEYS = ['trips', 'map', 'leads', 'roster', 'photos', 'files', 'history'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 const DEFAULT_TAB: TabKey = 'trips';
 
@@ -285,6 +286,11 @@ export default function ExpeditionDetailPage() {
             key: 'roster',
             label: t('expeditions.tabRoster'),
             children: <ExpeditionRosterTab expeditionId={camp.id} />,
+          },
+          {
+            key: 'photos',
+            label: t('expeditions.tabPhotos'),
+            children: <ExpeditionPhotosTab expeditionId={camp.id} />,
           },
           {
             key: 'files',

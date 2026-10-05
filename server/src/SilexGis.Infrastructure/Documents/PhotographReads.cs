@@ -138,6 +138,54 @@ public static class PhotographReads
     }
 
     /// <summary>
+    /// Narrows a photograph query to the pictures of one camp: the ones filed against the camp
+    /// itself, and the ones hanging on the trips the camp gathers that this caller may read.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two readings compose into the one term, and both are the caller's own. The camp has to be
+    /// readable under its own access domain: a caller who may not read a camp answers empty here
+    /// exactly as naming a trip they may not read does, so the filter cannot be used to learn
+    /// which trips a camp holds by asking for their pictures. And the member trips are the ones
+    /// the caller's visibility over trips admits — the same walk the camp's own trip listing,
+    /// its map and its write-up apply — so a trip the caller could not open on the camp's page
+    /// contributes no picture to it either.
+    /// </para>
+    /// <para>
+    /// Whether each picture may then be shown is not decided here: this narrows the ordinary
+    /// photograph read, which already composes the document rule and the reach through an
+    /// attachment, and a narrowing can only ever remove. A camp a caller reads only through an
+    /// object grant lists the same pictures through this filter as its page and its trips' pages
+    /// would, and no more.
+    /// </para>
+    /// </remarks>
+    public static IQueryable<Document> AttachedToExpedition(
+        this IQueryable<Document> photographs, SilexGisDbContext db, AccessContext ctx, Guid expeditionId)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(ctx);
+
+        var campReadable = db.Expeditions.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.Expeditions)
+            .Where(x => x.Id == expeditionId)
+            .Select(x => x.Id);
+
+        var memberTripIds = db.TripLogs.AsNoTracking()
+            .VisibleTo(ctx, AccessDomain.TripLogs)
+            .Where(t => db.ExpeditionTrips.Any(m => m.ExpeditionId == expeditionId && m.TripLogId == t.Id))
+            .Select(t => t.Id);
+
+        return photographs.Where(d => campReadable.Any() && db.Attachments.Any(a =>
+            ((a.EntityType == AttachedEntityType.Expedition && a.EntityId == expeditionId)
+                || (a.EntityType == AttachedEntityType.TripLog
+                    && a.EntityId != null
+                    && memberTripIds.Contains(a.EntityId.Value)))
+            && db.StoredFiles.Any(f => f.Id == a.FileId
+                && db.DocumentVersions.Any(v =>
+                    v.Id == f.DocumentVersionId && v.IsCurrent && v.DocumentId == d.Id))));
+    }
+
+    /// <summary>
     /// Loads the rows a listing is drawn from: each photograph with its current file, what it
     /// says about itself, and its photographer's label.
     /// </summary>

@@ -47,7 +47,7 @@ internal static class PhotoQueries
     /// forbidden.
     /// </remarks>
     public static IQueryable<Document> Narrow(
-        this IQueryable<Document> photographs, SilexGisDbContext db, PhotoQuery query)
+        this IQueryable<Document> photographs, SilexGisDbContext db, AccessContext ctx, PhotoQuery query)
     {
         ArgumentNullException.ThrowIfNull(query);
 
@@ -79,6 +79,15 @@ internal static class PhotoQueries
         if (query.TripLogId is { } tripId)
         {
             photographs = photographs.AttachedToTrip(db, tripId);
+        }
+
+        if (query.ExpeditionId is { } expeditionId)
+        {
+            // The one narrowing that has to ask who is asking: which trips a camp gathers is
+            // itself a reading, taken through the caller's own visibility over trips and over
+            // the camp, so the filter reaches no trip the caller could not list on the camp's
+            // own page.
+            photographs = photographs.AttachedToExpedition(db, ctx, expeditionId);
         }
 
         if (query.CaverId is { } caverId)

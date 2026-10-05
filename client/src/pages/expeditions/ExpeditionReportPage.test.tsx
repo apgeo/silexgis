@@ -23,6 +23,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useEffectiveAccess: () => accessSpy(),
   useCan: (domain: string, action: string) => canSpy(domain, action),
   useKeepExpeditionReport: () => ({ mutate: keepMutate, isPending: false }),
+  usePhotos: () => ({ data: { items: [] }, isPending: false }),
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
 }));
 

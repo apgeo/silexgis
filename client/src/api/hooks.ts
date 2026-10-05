@@ -6180,6 +6180,12 @@ export interface PhotoQueryParams {
   caveId?: string;
   featureId?: string;
   tripLogId?: string;
+  /**
+   * One camp's pictures: those filed against the camp and those on the trips it gathers that the
+   * caller may read. A camp the caller may not read answers empty rather than refusing, so the
+   * id cannot be used to find out which trips a camp holds.
+   */
+  expeditionId?: string;
   caverId?: string;
   tagId?: number;
   albumId?: string;

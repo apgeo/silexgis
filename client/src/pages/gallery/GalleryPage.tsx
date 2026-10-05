@@ -65,6 +65,7 @@ export default function GalleryPage() {
     () => ({
       caveId: params.get('caveId') ?? undefined,
       tripLogId: params.get('tripLogId') ?? undefined,
+      expeditionId: params.get('expeditionId') ?? undefined,
       caverId: params.get('caverId') ?? undefined,
       tagId: params.get('tagId') ? Number(params.get('tagId')) : undefined,
       albumId: params.get('albumId') ?? undefined,

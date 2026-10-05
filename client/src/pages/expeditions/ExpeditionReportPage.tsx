@@ -7,6 +7,7 @@ import {
   Button,
   Descriptions,
   Divider,
+  Empty,
   Flex,
   Select,
   Spin,
@@ -24,6 +25,7 @@ import {
   useEffectiveAccess,
   useExpedition,
   useKeepExpeditionReport,
+  usePhotos,
   useReportTemplatesOfKind,
 } from '../../api/hooks.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
@@ -36,6 +38,12 @@ import TripGeometryField from '../trips/TripGeometryField.tsx';
 import { formatPosition, shapeLabelKey, tripGeometrySummary } from '../trips/tripGeometrySummary.ts';
 import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
 import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
+
+/**
+ * How many photographs the write-up carries — the server's own count for the document, so the
+ * screen and the file show the same plates. The rest are one click away on the camp's own tab.
+ */
+const PlateCount = 24;
 
 /** A drawn shape as this reader's language words it, or as it is stored when it has no wording. */
 function shapeLabel(type: string, t: TFunction): string {
@@ -92,6 +100,10 @@ export default function ExpeditionReportPage() {
   const [downloading, setDownloading] = useState(false);
   const keepReport = useKeepExpeditionReport();
   const { message } = App.useApp();
+  // The pictures come the way the gallery gets them, through the photographs request, which
+  // answers with what this caller may read of the camp and its trips and nothing else.
+  const mayReadPhotos = useCan('documents', 'read');
+  const photosQuery = usePhotos({ expeditionId: id, pageSize: PlateCount }, mayReadPhotos && !!id);
 
   // Printing has to leave the application's chrome behind, and the rules that do it are scoped to
   // this page rather than let loose over every screen that might one day be printed.
@@ -112,6 +124,7 @@ export default function ExpeditionReportPage() {
   const spansDays = isMultiDay(camp.startDate, camp.endDate);
   const dateText = formatTripDates(camp.startDate, camp.endDate, i18n.resolvedLanguage);
   const area = tripGeometrySummary(camp.geom);
+  const photos = photosQuery.data?.items ?? [];
 
   return (
     <div className="trip-report">
@@ -269,6 +282,42 @@ export default function ExpeditionReportPage() {
         <Part title={t('expeditions.report.whoWasThere')}>
           <ExpeditionRosterTab expeditionId={camp.id} />
         </Part>
+
+        {mayReadPhotos && (
+          <Part title={t('trips.gallery')}>
+            {photosQuery.isPending ? (
+              <Spin />
+            ) : photos.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('expeditions.noPhotographs')} />
+            ) : (
+              <>
+                {/* Two people printing the same write-up get two sets of pictures, and the
+                    document says so rather than letting the difference read as a fault. */}
+                <Typography.Paragraph type="secondary">
+                  {t('expeditions.galleryVisibleToYou')}
+                </Typography.Paragraph>
+                <div className="trip-report-plates" data-testid="expedition-report-plates">
+                  {photos.map((photo) => (
+                    <figure key={photo.documentId} className="trip-report-plate">
+                      {/* The rendering, never the stored file: a caller who may see the camp is
+                          not thereby entitled to the original, which carries where it was taken. */}
+                      {photo.thumbnailUrl && (
+                        <img src={photo.thumbnailUrl} alt={photo.credit.caption ?? photo.title} />
+                      )}
+                      <figcaption>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {[photo.credit.caption ?? photo.title, photo.credit.photographerName]
+                            .filter(Boolean)
+                            .join(' — ')}
+                        </Typography.Text>
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </>
+            )}
+          </Part>
+        )}
 
         <Divider />
         <Alert
