@@ -134,24 +134,11 @@ describe('the map cannot rot', () => {
   // does not exist is caught above, but a class nobody names simply never runs in the targeted
   // tier, and the change that stops running it looks like an ordinary addition to the map.
   //
-  // The exemptions are the classes no group named on the day this test was written. They are not
-  // all equally loose: some own areas that are whole-API triggers, so the full suite reaches them
-  // anyway, while others sit under an area whose group simply omits them and are skipped by the
-  // targeted tier today. Either way the list is a record of what is unowned, meant to shrink, and
-  // never the place to put a NEW class — a class added from here on must be named by a group or by
-  // a cross-cutting list, which is the whole point of the check above.
-  const unclaimedClasses = new Set([
-    'AdminTestSendRateLimitTests',
-    'CavingGroupAnnouncementPaidCapTests',
-    'DemoSeedIdempotencyTests',
-    'NotificationConfigTests',
-    'NotificationInboxTests',
-    'NotificationQuietHoursTests',
-    'PerformanceTests',
-    'PersistenceTests',
-    'PhoneCredentialTests',
-    'SmsNotificationChannelTests',
-  ]);
+  // Deliberately empty since 2026-10-05. It held the ten classes no group named on the day this
+  // test was written, and for a month they were skipped by the targeted tier whenever their own
+  // area changed. Every one now has an owner. The set stays so the check below keeps its shape —
+  // and so that putting a NEW class here, rather than in a group, is visibly the wrong move.
+  const unclaimedClasses = new Set([]);
 
   it('every integration test class is named by the map', () => {
     const named = new Set([

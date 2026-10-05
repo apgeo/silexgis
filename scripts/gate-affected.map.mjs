@@ -65,7 +65,8 @@ export const groups = {
   checklists: ['ChecklistAccessTests', 'ChecklistAuthoringTests', 'TripChecklistTickTests'],
   notifications: [
     'AccountEmailTests', 'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests',
-    'EmailVerificationTests', 'NotificationDeliveryTests', 'SmsNotificationChannelTests',
+    'EmailVerificationTests', 'NotificationConfigTests', 'NotificationDeliveryTests',
+    'NotificationInboxTests', 'NotificationQuietHoursTests', 'SmsNotificationChannelTests',
     'TripPlanNotificationTests',
   ],
   calendar: ['CalendarTests', 'CalendarWindowTests'],
@@ -77,8 +78,9 @@ export const groups = {
   caves: [
     'AssociationDisclosureTests', 'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests',
     'CaveListingSortStabilityTests', 'CaveOverburdenTests', 'CaveSubtypeMissingTests',
-    'CenterlineTests', 'EntrancePlacementGuardTests', 'HypsometryTests', 'ProtectionDepthTests',
-    'StructureComparisonTests', 'SurveyMeshTests', 'SurveyModelTests',
+    'CenterlineTests', 'EntrancePlacementGuardTests', 'HypsometryTests', 'PerformanceTests',
+    'PersistenceTests', 'ProtectionDepthTests', 'StructureComparisonTests', 'SurveyMeshTests',
+    'SurveyModelTests',
   ],
   cavers: ['CaverRosterTests', 'ProfileVisibilityTests'],
   cavingGroups: [
@@ -111,11 +113,11 @@ export const groups = {
     'BulkImportTests', 'DocumentConversionTests', 'EventReminderSweepTests',
     'NotificationDeliveryTests', 'TextExtractionPipelineTests', 'TripCalloutSweepTests',
   ],
-  map: ['ExpeditionMapTests', 'GeoJsonGeometryTests', 'TerrainOptionsTests'],
+  map: ['ExpeditionMapTests', 'GeoJsonGeometryTests', 'PerformanceTests', 'PersistenceTests', 'TerrainOptionsTests'],
   mapViews: ['MapViewTests'],
   me: [
     'AccountEmailTests', 'AccountSettingsTests', 'CredentialRevocationTests',
-    'TwoFactorChannelTests', 'UiDefaultsTests',
+    'PhoneCredentialTests', 'TwoFactorChannelTests', 'UiDefaultsTests',
   ],
   users: [
     'AuthFlowTests', 'CredentialRevocationTests', 'EmailVerificationTests', 'ExternalAuthTests',
@@ -126,7 +128,7 @@ export const groups = {
     'AnnotatedTextApiTests', 'ResLinkApiTests', 'ResLinkProtectionFloorTests',
     'ResLinkTargetPictureTests',
   ],
-  search: ['DocumentContentSearchSqlTests', 'DocumentContentSearchTests'],
+  search: ['DocumentContentSearchSqlTests', 'DocumentContentSearchTests', 'PersistenceTests'],
   statistics: [
     'DashboardTests', 'RegistryMeasureNameTests', 'RegistryStatisticsSqlTests',
     'RegistryStatisticsTests', 'TripStatisticsTests',
@@ -144,13 +146,13 @@ export const groups = {
   ],
   about: ['ApiSmokeTests'],
   audit: ['AccessHistoryTests', 'HistoryTests'],
-  admin: ['AdminMessagingTests', 'SeededGroupUpgradeTests'],
+  admin: ['AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'SeededGroupUpgradeTests'],
   settings: ['AccountSettingsTests', 'TerrainOptionsTests', 'UiDefaultsTests'],
   messaging: [
     'AdminMessagingTests', 'CavingGroupAnnouncementPaidCapTests', 'NotificationDeliveryTests',
     'SmsNotificationChannelTests',
   ],
-  sms: ['MfaAndRateLimitTests', 'TwoFactorChannelTests'],
+  sms: ['AdminTestSendRateLimitTests', 'MfaAndRateLimitTests', 'PhoneCredentialTests', 'TwoFactorChannelTests'],
   surveys: [
     'CaveOverburdenTests', 'CavePassageShapeTests', 'CaveSurveyStatisticsTests',
     'HypsometryTests', 'KarstnetGoldenTests', 'StructureComparisonTests',
