@@ -1,44 +1,120 @@
-# The API integration suite: the long pole, run on demand rather than on every push.
+# The API integration suite: the long pole, dealt into shards so hosted runners can carry it.
 #
-# This suite is measured in hours, not minutes, and GitHub's standard hosted runners
-# (4 cores) are slower than the machines it is developed on — on them it risks the job
-# time limit outright. So it runs here only when dispatched, and its intended permanent
-# home is a self-hosted runner triggered on push to trusted branches.
+# The suite is measured in hours, and GitHub's standard hosted runners (four cores, a six-hour
+# ceiling per job) cannot run it whole. They can run a twelfth of it: scripts/gate-shard.mjs
+# deals the test classes round-robin into shards, every class in exactly one, and each shard is
+# a job of its own. The verdict is the sum of the shards, and a red shard is a red run.
 #
-# If a self-hosted runner is registered: keep it OFF pull_request triggers. This repository
-# is public, and a pull_request workflow executes the contributor's code — on a self-hosted
-# runner that means a stranger's code running on the machine that hosts the runner. Restrict
-# any self-hosted trigger to `push` on branches only maintainers can write to, and leave
-# pull requests to the hosted fast tier in ci.yml.
+# Hosted rather than self-hosted on purpose. This repository is public, and a self-hosted runner
+# taking a pull-request trigger would execute a stranger's code on the machine that hosts it.
+# Hosted runners are GitHub's own throwaway machines, so this workflow may run on pushes to
+# master, nightly over whatever master holds, and on demand — and never needs a machine of the
+# project's own. If a self-hosted runner is ever registered, keep it OFF pull_request triggers.
+#
+# Every test class owns its database, so the shards cannot see each other and the deal can be
+# re-cut at will: change `shards` below and nothing else.
 
 name: Integration
 
 on:
+  push:
+    branches: [master]
+  schedule:
+    # Nightly over master, so a merge that only carried a targeted verdict gets its full one
+    # within a day without anybody remembering to ask.
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
-      runs-on:
-        description: Runner label (self-hosted once a runner is registered)
-        required: false
-        default: ubuntu-latest
       filter:
-        description: Optional dotnet test --filter expression (empty runs everything)
+        description: Optional dotnet test --filter expression; given, it runs as one job instead of the shards
         required: false
         default: ''
 
+env:
+  SHARDS: 12
+  # No published elevation tiles on a hosted runner; the DEM sampler's real-tile check wants that
+  # said rather than assumed, and fails when the variable is simply absent.
+  SILEXGIS_TEST_DEM_DIR: none
+
 jobs:
-  api-integration:
-    runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 350
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      indexes: ${{ steps.deal.outputs.indexes }}
+      count: ${{ steps.deal.outputs.count }}
     steps:
+      - id: deal
+        env:
+          FILTER: ${{ inputs.filter }}
+        run: |
+          if [ -n "$FILTER" ]; then
+            echo 'indexes=[0]' >> "$GITHUB_OUTPUT"
+            echo 'count=1' >> "$GITHUB_OUTPUT"
+          else
+            echo "indexes=[$(seq -s, 0 $((SHARDS - 1)))]" >> "$GITHUB_OUTPUT"
+            echo "count=$SHARDS" >> "$GITHUB_OUTPUT"
+          fi
+
+  shard:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        index: ${{ fromJSON(needs.plan.outputs.indexes) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    name: shard ${{ matrix.index }} of ${{ needs.plan.outputs.count }}
+    steps:
+      # The survey-format readers live in a submodule; without it the solution does not build.
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Build (warnings as errors)
         run: dotnet build SilexGis.slnx
         working-directory: server
+      - name: Choose this job's classes
+        id: classes
+        env:
+          FILTER: ${{ inputs.filter }}
+        run: |
+          if [ -n "$FILTER" ]; then
+            echo "filter=$FILTER" >> "$GITHUB_OUTPUT"
+          else
+            echo "filter=$(node scripts/gate-shard.mjs --index ${{ matrix.index }} --count ${{ needs.plan.outputs.count }})" >> "$GITHUB_OUTPUT"
+            node scripts/gate-shard.mjs --index ${{ matrix.index }} --count ${{ needs.plan.outputs.count }} --list
+          fi
+      # Four threads, not the eight the project file asks for: every test builds an application
+      # host, and eight at once on a four-core, sixteen-gigabyte runner is memory the runner does
+      # not have. The trx file is the per-test timing record; it is what a re-cut of the deal is
+      # based on.
       - name: API integration tests (Testcontainers)
         run: >
-          dotnet test tests/SilexGis.Api.Tests --no-build
-          ${{ inputs.filter != '' && format('--filter "{0}"', inputs.filter) || '' }}
+          dotnet test tests/SilexGis.Api.Tests/SilexGis.Api.Tests.csproj --no-build
+          --filter "${{ steps.classes.outputs.filter }}"
+          --results-directory "$RUNNER_TEMP/trx"
+          --logger "trx;LogFileName=shard-${{ matrix.index }}.trx"
+          -- xUnit.MaxParallelThreads=4
         working-directory: server
+      - name: Keep the per-test timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-trx-${{ matrix.index }}
+          path: ${{ runner.temp }}/trx/*.trx
+          if-no-files-found: ignore
+
+  verdict:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every shard must have passed
+        run: |
+          echo "shards: ${{ needs.shard.result }}"
+          test "${{ needs.shard.result }}" = "success"

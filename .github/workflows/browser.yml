@@ -1,0 +1,87 @@
+# The browser suite, through the same runner a developer uses: scripts/e2e.mjs stands a
+# throwaway database up in Docker, builds and seeds the API, starts the dev server and runs
+# Playwright against it, with every spec watched by the console guard. Nothing here is a second
+# way of running the suite; it is the first way, on a hosted machine.
+#
+# The desktop project is dealt into shards by Playwright itself. The three phone projects are
+# small enough to share one job, and that job is the only one that installs WebKit.
+#
+# Hosted runners on purpose (see integration.yml for why a self-hosted runner must never take a
+# pull-request trigger on a public repository). Pushes to master, nightly, and on demand.
+
+name: Browser
+
+on:
+  push:
+    branches: [master]
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    name: desktop ${{ matrix.shard }} of 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+        working-directory: client
+      - run: npx playwright install --with-deps chromium
+        working-directory: client
+      - name: Browser specs
+        run: node scripts/e2e.mjs --project=desktop --shard=${{ matrix.shard }}/4
+      - name: Keep the traces of what failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-desktop-${{ matrix.shard }}
+          path: |
+            client/test-results
+            client/playwright-report
+          if-no-files-found: ignore
+
+  phones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+        working-directory: client
+      - run: npx playwright install --with-deps chromium webkit
+        working-directory: client
+      - name: Phone, landscape and WebKit specs
+        run: node scripts/e2e.mjs --project=mobile-android --project=mobile-android-landscape --project=mobile-ios-smoke
+      - name: Keep the traces of what failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-phones
+          path: |
+            client/test-results
+            client/playwright-report
+          if-no-files-found: ignore
