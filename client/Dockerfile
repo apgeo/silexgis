@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-FROM node:22-alpine AS build
+# 24, not 22: @terrestris/react-geo declares node >=24, and the client's own tests run on 24. An
+# image built on an engine the dependencies do not support ships a bundle the test run never saw.
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
