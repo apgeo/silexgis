@@ -64,7 +64,8 @@ Two differences from a trip:
 
 ## Events that come round again
 
-**It comes round again** writes the whole run now, as ordinary events. Each one is then
+**It comes round again** writes the whole run now, as ordinary events. Each occurrence says how
+often the run comes round, in your own language, beside the words its author used. Each one is then
 edited, answered and called off on its own.
 
 - **How often**: every day · every week · every other week · every month.

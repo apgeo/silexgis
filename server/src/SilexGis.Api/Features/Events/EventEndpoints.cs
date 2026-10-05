@@ -42,6 +42,10 @@ public static class EventEndpoints
     // they have extended a series that never grew.
     internal const string RecurrenceCreateOnlyCode = "event.recurrence_create_only";
 
+    // A new repetition sent to the route that edits one event. One occurrence has no spacing to
+    // change; the rest of the run does, and the edit that reaches it is the one that takes this.
+    internal const string SeriesFrequencySeriesOnlyCode = "event.series_frequency_series_only";
+
     public static RouteGroupBuilder MapEventEndpoints(this RouteGroupBuilder api)
     {
         var events = api.MapGroup("/events").WithTags("Events");
@@ -293,6 +297,14 @@ public static class EventEndpoints
                 + "changes that occurrence.");
         }
 
+        if (request.SeriesFrequency is not null)
+        {
+            return ApiProblems.BadRequest(
+                SeriesFrequencySeriesOnlyCode,
+                "How often a run comes round is changed on the run — on this occurrence and every "
+                + "later one — not on one occurrence of it.");
+        }
+
         // Required, as it is on every other full update of a dated record: an edit written on
         // top of a version the author never saw silently discards whatever changed in between,
         // and two committee members correcting the same evening is the ordinary case rather than
@@ -447,6 +459,7 @@ public static class EventEndpoints
             occurrence.EndDate = DayRange.EndForStorage(day, day.AddDays(span));
             occurrence.SeriesId = seriesId;
             occurrence.SeriesRule = recurrence.Rule;
+            occurrence.SeriesFrequency = recurrence.Frequency;
             db.Events.Add(occurrence);
         }
 
@@ -624,6 +637,7 @@ public static class EventEndpoints
         PublishedAt = row.PublishedAt,
         SeriesId = row.SeriesId,
         SeriesRule = row.SeriesRule,
+        SeriesFrequency = row.SeriesFrequency,
         CreatedAt = row.CreatedAt,
         UpdatedAt = row.UpdatedAt,
     };

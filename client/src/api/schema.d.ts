@@ -20531,6 +20531,7 @@ export interface components {
             /** Format: uuid */
             seriesId?: null | string;
             seriesRule?: null | string;
+            seriesFrequency?: null | components["schemas"]["EventRecurrenceFrequency"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -20636,6 +20637,7 @@ export interface components {
             cavingGroupId?: null | string;
             visibility?: null | components["schemas"]["Visibility"];
             recurrence?: null | components["schemas"]["EventRecurrenceRequest"];
+            seriesFrequency?: null | components["schemas"]["EventRecurrenceFrequency"];
         };
         ExpeditionDto: {
             /** Format: uuid */

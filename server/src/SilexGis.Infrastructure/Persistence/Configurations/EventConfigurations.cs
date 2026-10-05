@@ -24,6 +24,8 @@ public sealed class EventConfiguration : IEntityTypeConfiguration<Event>
             // together or not at all.
             t.HasCheckConstraint(
                 "ck_events_series_rule", "series_rule IS NULL OR series_id IS NOT NULL");
+            t.HasCheckConstraint(
+                "ck_events_series_frequency", "series_frequency IS NULL OR series_id IS NOT NULL");
         });
 
         builder.Property(x => x.Id).ValueGeneratedNever();

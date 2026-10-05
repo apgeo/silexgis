@@ -158,6 +158,35 @@ describe('an occurrence of something that comes round again', () => {
     expect(screen.getByText(/every Tuesday in term time/)).toBeTruthy();
   });
 
+  it('says how often the run comes round in the reader\'s language, beside the author\'s words', () => {
+    // The author wrote the sentence in Romanian; the reader reads English. The sentence is shown
+    // as written, and the repetition the run was written under is rendered for the reader.
+    eventSpy.mockReturnValue({
+      data: anEvent({
+        seriesId: 'series-1',
+        seriesRule: 'în fiecare marți',
+        seriesFrequency: 'weekly',
+      } as Partial<EventInfo>),
+      isPending: false,
+      isError: false,
+    });
+    renderPage();
+
+    expect(screen.getByTestId('event-series-frequency').textContent).toBe('Comes round every week.');
+    expect(screen.getByText(/în fiecare marți/)).toBeTruthy();
+  });
+
+  it('renders no repetition line for a run written before the repetition was kept', () => {
+    eventSpy.mockReturnValue({
+      data: anEvent({ seriesId: 'series-1', seriesRule: 'every Tuesday' }),
+      isPending: false,
+      isError: false,
+    });
+    renderPage();
+
+    expect(screen.queryByTestId('event-series-frequency')).toBeNull();
+  });
+
   /**
    * An event standing on its own has one occurrence and nothing to choose between. This is the
    * positive half of the pair: without it a banner that never rendered at all would satisfy the

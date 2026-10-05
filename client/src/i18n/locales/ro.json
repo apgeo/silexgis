@@ -4230,6 +4230,14 @@
     "scopeFollowing": "Aceasta și toate cele următoare",
     "seriesBanner": "O apariție a ceva ce se repetă.",
     "seriesRule": "Descrisă ca: {{rule}}",
+    "seriesFrequency": "Revine {{frequency}}.",
+    "seriesFrequencyValues": {
+      "daily": "în fiecare zi",
+      "weekly": "în fiecare săptămână",
+      "fortnightly": "la două săptămâni",
+      "monthly": "în fiecare lună"
+    },
+    "seriesFrequencyChangeHelp": "Schimbarea redistribuie această apariție și toate cele următoare pornind de la ziua acesteia. Aparițiile anterioare își păstrează zilele.",
     "seriesOccurrences": "Vezi celelalte apariții",
     "seriesFilter": "Se afișează aparițiile unui singur eveniment care se repetă",
     "seriesEdited": "{{count}} apariții au fost modificate.",

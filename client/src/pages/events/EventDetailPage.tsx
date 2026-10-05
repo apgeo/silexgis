@@ -249,10 +249,12 @@ export default function EventDetailPage() {
         </Flex>
       </Flex>
 
-      {/* That this evening is one of a run, said once and in the words its author used. There is
-          no series to open: the run is the other events carrying the same grouping key, each a
-          whole event of its own. Nothing here is worked out from the sentence — it is shown
-          exactly as written, and the days were settled when the run was created. */}
+      {/* That this evening is one of a run, said once: how often it comes round, rendered in the
+          reader's own language from the repetition the run was written under, and then the words
+          its author used, shown exactly as written. There is no series to open: the run is the
+          other events carrying the same grouping key, each a whole event of its own. Nothing here
+          is worked out from the sentence, and the days were settled when the run was written or
+          last re-spaced. */}
       {event.seriesId && (
         <Alert
           type="info"
@@ -262,6 +264,13 @@ export default function EventDetailPage() {
           title={t('events.seriesBanner')}
           description={
             <Space orientation="vertical" size={4}>
+              {event.seriesFrequency && (
+                <span data-testid="event-series-frequency">
+                  {t('events.seriesFrequency', {
+                    frequency: t(`events.seriesFrequencyValues.${event.seriesFrequency}`),
+                  })}
+                </span>
+              )}
               {event.seriesRule && (
                 <span>{t('events.seriesRule', { rule: event.seriesRule })}</span>
               )}

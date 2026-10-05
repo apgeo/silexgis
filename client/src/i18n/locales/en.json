@@ -4230,6 +4230,14 @@
     "scopeFollowing": "This one and every later one",
     "seriesBanner": "One occurrence of something that comes round again.",
     "seriesRule": "Described as: {{rule}}",
+    "seriesFrequency": "Comes round {{frequency}}.",
+    "seriesFrequencyValues": {
+      "daily": "every day",
+      "weekly": "every week",
+      "fortnightly": "every other week",
+      "monthly": "every month"
+    },
+    "seriesFrequencyChangeHelp": "Changing this re-spaces this occurrence and every later one from this one's day. Earlier occurrences keep their days.",
     "seriesOccurrences": "See the other occurrences",
     "seriesFilter": "Showing one repeating event's occurrences",
     "seriesEdited": "{{count}} occurrences were changed.",

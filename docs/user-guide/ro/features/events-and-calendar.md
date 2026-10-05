@@ -65,7 +65,8 @@ Două diferențe față de o tură:
 
 ## Evenimente care revin
 
-**Revine periodic** scrie întreaga serie acum, ca evenimente obișnuite. Fiecare este apoi editat,
+**Revine periodic** scrie întreaga serie acum, ca evenimente obișnuite. Fiecare apariție spune cât de
+des revine seria, în limba dumneavoastră, lângă cuvintele autorului. Fiecare este apoi editat,
 răspuns și anulat pe cont propriu.
 
 - **Cât de des**: zilnic · săptămânal · o dată la două săptămâni · lunar.
