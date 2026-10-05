@@ -19,14 +19,41 @@ public static class Concurrency
     /// </summary>
     private static readonly string[] EncodingSuffixes = ["-gzip", "-br", "-deflate", "-zstd"];
 
-    /// <summary>Sets the ETag response header from the row's current version.</summary>
+    /// <summary>
+    /// Sets the ETag response header from the row's current version.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A read answers with the version it found; a write answers with the version it produced.
+    /// The second matters as much as the first: a write is checked against the version the caller
+    /// last held, and if only a read could hand one out, every write would leave its caller one
+    /// version behind the row they had just written, and a second save a moment later would be
+    /// refused as a conflict the caller cannot see. A client that is handed the version with the
+    /// answer can carry it on the next write without a read in between.
+    /// </para>
+    /// <para>
+    /// <paramref name="resourcePath"/> is for an answer to a request made on another path than
+    /// the resource's own — an action posted beside it, such as a state move. The path goes out as
+    /// <c>Content-Location</c>, which is how a response says whose representation it carries, so
+    /// that a client can file the version where its next write on that resource will look for it.
+    /// A read, a full update and a creation leave it out: the request path, or the
+    /// <c>Location</c> header of a 201, already names the resource.
+    /// </para>
+    /// </remarks>
     public static async Task EmitETagAsync(
-        HttpContext http, SilexGisDbContext db, VersionedTable table, Guid id, CancellationToken ct)
+        HttpContext http, SilexGisDbContext db, VersionedTable table, Guid id, CancellationToken ct,
+        string? resourcePath = null)
     {
         var version = await ConcurrencySql.VersionAsync(db, table, id, ct);
-        if (version is not null)
+        if (version is null)
         {
-            http.Response.Headers.ETag = $"\"{version}\"";
+            return;
+        }
+
+        http.Response.Headers.ETag = $"\"{version}\"";
+        if (resourcePath is not null)
+        {
+            http.Response.Headers.ContentLocation = resourcePath;
         }
     }
 

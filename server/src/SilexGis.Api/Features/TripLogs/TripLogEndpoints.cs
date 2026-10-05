@@ -750,6 +750,7 @@ public static class TripLogEndpoints
     /// <summary>Creates a trip written up after the event.</summary>
     private static Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
         TripLogWriteRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -758,12 +759,13 @@ public static class TripLogEndpoints
         TripLogWriteService writes,
         CancellationToken ct) =>
         CreateCoreAsync(
-            TripCreationIntent.Report, request, db, access, accessAccessor, userAccessor,
+            TripCreationIntent.Report, request, http, db, access, accessAccessor, userAccessor,
             protection, writes, ct);
 
     /// <summary>Creates a trip that has not happened yet.</summary>
     private static Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreatePlanAsync(
         TripLogWriteRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -772,7 +774,7 @@ public static class TripLogEndpoints
         TripLogWriteService writes,
         CancellationToken ct) =>
         CreateCoreAsync(
-            TripCreationIntent.Plan, request, db, access, accessAccessor, userAccessor,
+            TripCreationIntent.Plan, request, http, db, access, accessAccessor, userAccessor,
             protection, writes, ct);
 
     /// <summary>
@@ -784,6 +786,7 @@ public static class TripLogEndpoints
     private static async Task<Results<Created<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateCoreAsync(
         TripCreationIntent intent,
         TripLogWriteRequest request,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -812,7 +815,10 @@ public static class TripLogEndpoints
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
-        return TypedResults.Created($"/api/v1/trip-logs/{trip.Id}", items[0]);
+        // The version the new row has, so the first edit needs no read in between; the Location
+        // header already says which resource the tag belongs to.
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
+        return TypedResults.Created(TripPath(trip.Id), items[0]);
     }
 
     /// <summary>
@@ -914,6 +920,9 @@ public static class TripLogEndpoints
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
+        // The version this write produced: what the next write must carry, handed over here so
+        // that a second save a moment later is not refused against a version only a read knew.
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
         return TypedResults.Ok(items[0]);
     }
 
@@ -997,6 +1006,9 @@ public static class TripLogEndpoints
         await db.SaveChangesAsync(ct);
 
         var arranged = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
+        // The trip's version after this write, filed against the trip's own path rather than this
+        // route's, since that is where the next write on the trip will look for it.
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, TripPath(trip.Id));
         return TypedResults.Ok(arranged[0]);
     }
 
@@ -1030,6 +1042,7 @@ public static class TripLogEndpoints
     /// </remarks>
     private static async Task<Results<Ok<TripLogDto>, ProblemHttpResult>> StandDownCalloutAsync(
         Guid id,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -1077,10 +1090,20 @@ public static class TripLogEndpoints
         }
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
+        // No precondition on the way in, but the version on the way out all the same: a page that
+        // stood the check down and then saves the trip is saving over the version this produced.
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, TripPath(trip.Id));
         return TypedResults.Ok(items[0]);
     }
 
     // ---- shared pieces ----
+
+    /// <summary>
+    /// The path a trip is read and written at — what a creation answers in <c>Location</c>, and
+    /// what an action posted beside the trip names in <c>Content-Location</c> so the version it
+    /// answers is filed where the trip's next write will look for it.
+    /// </summary>
+    private static string TripPath(Guid id) => $"/api/v1/trip-logs/{id}";
 
     /// <summary>
     /// Moves a trip to another lifecycle state. Which moves exist is not decided here — the
@@ -1181,6 +1204,9 @@ public static class TripLogEndpoints
         await db.SaveChangesAsync(ct);
 
         var items = await MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
+        // The version the move produced, filed against the trip's own path: a page that moved the
+        // trip and then edits it is editing the version the move made.
+        await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct, TripPath(trip.Id));
         return TypedResults.Ok(items[0]);
     }
 

@@ -3747,20 +3747,40 @@ function useInvalidateTripLogs() {
 }
 
 /**
- * The same invalidation, but handed back so a caller can wait for the re-read it starts.
+ * What happens once a write that answers the trip has answered.
  *
- * A write on the trip is checked against the version the caller last *read*, and only a read
- * records a version. So the moment a write succeeds, the version this caller holds is one behind
- * the one their own write produced, and a second write sent before the re-read lands is refused
- * as a conflict — with two saves on the same card a second apart, which is ordinary use, not a
- * race anybody would think to look for. Refusing it is right: the caller really is writing
- * against a version that has moved. What is wrong is answering "saved" while that is still true.
+ * A write on the trip is checked against the version the caller holds, and the server hands the
+ * version a write produced back with the answer — as the entity tag the transport files under the
+ * trip's path, exactly as it files the one a read carries. So the cache takes the answer as the
+ * trip's current reading, every surface holding the trip redraws from it at once, and the next
+ * write carries the right version without a read in between. Everything else held under the trip
+ * prefix — the lists, the calendar readings, the tracking log — is marked stale and read again in
+ * the background; the mutation does not wait for that, because nothing a second save needs
+ * depends on it.
+ */
+function useTripLogWritten() {
+  const queryClient = useQueryClient();
+  return (trip: TripLogInfo) => {
+    queryClient.setQueryData(queryKeys.tripLog(trip.id), trip);
+    void queryClient.invalidateQueries({
+      queryKey: ['trip-logs'],
+      // The trip itself was just taken from the answer; asking for it again would read back
+      // what is already held.
+      predicate: ({ queryKey }) => !(queryKey[1] === 'detail' && queryKey[2] === trip.id),
+    });
+  };
+}
+
+/**
+ * The invalidation handed back so a caller can wait for the re-read it starts — for the one
+ * write on a trip whose answer is not the trip.
  *
- * So a write on the trip is not finished until the trip has been read back. The cost is that the
- * confirmation waits for the read, which takes as long as it takes; the alternative is a second
- * save that fails for a reason nobody can act on. This would be unnecessary if a write handed
- * back the version it produced, and it is only needed on the trip's own writes — a write on
- * something beside the trip carries no precondition on it.
+ * A write that answers the trip hands its version over with the answer and nothing waits on a
+ * read. A write that answers something else leaves the caller holding a trip that really is
+ * behind — the roster from before it was written in — and a save made from that copy would carry
+ * the old roster over the new one. The server lets a save through only against the version the
+ * write produced, and here only a read records it; so this write is not finished until the trip
+ * has been read back, and the precondition keeps doing exactly its job.
  */
 function useReadTripLogsBack() {
   const queryClient = useQueryClient();
@@ -3768,24 +3788,22 @@ function useReadTripLogsBack() {
 }
 
 export function useCreateTripLog() {
-  const invalidate = useInvalidateTripLogs();
+  const written = useTripLogWritten();
   return useMutation({
     mutationFn: (body: TripLogWrite) => unwrap(api.POST('/api/v1/trip-logs', { body })),
-    onSuccess: () => invalidate(),
+    onSuccess: written,
   });
 }
 
 export function useUpdateTripLog() {
-  const readBack = useReadTripLogsBack();
+  const written = useTripLogWritten();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: TripLogWrite }) =>
       unwrap(api.PUT('/api/v1/trip-logs/{id}', { params: { path: { id } }, body })),
-    onSuccess: () => {
+    onSuccess: (trip) => {
       invalidateHistory();
-      // Handed back rather than started and forgotten: the next write on this trip is checked
-      // against the version this one produced, and only the read records it.
-      return readBack();
+      written(trip);
     },
   });
 }
@@ -3874,13 +3892,14 @@ export function useKeepTripReport() {
  * Moving a trip to another lifecycle state, through the one route that names the state it moves
  * to rather than a verb per move.
  *
- * It is a write on the trip and is checked against the version the user was looking at, so it
- * carries the precondition the detail read captured. Which moves are legal from which state is
- * the server's to decide — the control only offers the ones a reader would expect, and a request
- * the rules refuse comes back as a conflict rather than being prevented here.
+ * It is a write on the trip and is checked against the version the user holds, so it carries
+ * the precondition filed under the trip's own path — by the detail read or by the last write,
+ * whichever came later. Which moves are legal from which state is the server's to decide — the
+ * control only offers the ones a reader would expect, and a request the rules refuse comes back
+ * as a conflict rather than being prevented here.
  */
 export function useMoveTripLog() {
-  const readBack = useReadTripLogsBack();
+  const written = useTripLogWritten();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, state }: { id: string; state: ActivityState }) => {
@@ -3893,11 +3912,9 @@ export function useMoveTripLog() {
         }),
       );
     },
-    onSuccess: () => {
+    onSuccess: (trip) => {
       invalidateHistory();
-      // As on the trip's own update: a move is checked against the version last read, so the
-      // move is not finished until the version it produced has been read.
-      return readBack();
+      written(trip);
     },
   });
 }
@@ -3917,7 +3934,7 @@ export type TripCalloutArrangement = components['schemas']['TripCalloutRequest']
  * The answer is the trip as it now stands, so the page redraws from it directly.
  */
 export function useArrangeTripCallout() {
-  const readBack = useReadTripLogsBack();
+  const written = useTripLogWritten();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, ...body }: { id: string } & TripCalloutArrangement) => {
@@ -3930,11 +3947,9 @@ export function useArrangeTripCallout() {
         }),
       );
     },
-    onSuccess: () => {
+    onSuccess: (trip) => {
       invalidateHistory();
-      // Checked against the version last read, as the trip's own update is, so the write is not
-      // finished until the version it produced has been read back.
-      return readBack();
+      written(trip);
     },
   });
 }
@@ -3948,13 +3963,13 @@ export function useArrangeTripCallout() {
  * The answer is the trip as it now stands, so the page redraws from it directly.
  */
 export function useStandDownTripCallout() {
-  const readBack = useReadTripLogsBack();
+  const written = useTripLogWritten();
   return useMutation({
     mutationFn: ({ id }: { id: string }) =>
       unwrap(
         api.POST('/api/v1/trip-logs/{id}/callout/stand-down', { params: { path: { id } } }),
       ),
-    onSuccess: () => readBack(),
+    onSuccess: written,
   });
 }
 
@@ -4117,8 +4132,9 @@ export function usePromoteTripInvitations() {
       ),
     onSuccess: () => {
       invalidateHistory();
-      // Waited for, as on the trip's own writes: this stamps the trip row, so a save sent
-      // between the confirmation and the re-read would be refused against the version it moved.
+      // Waited for, unlike the trip's own writes, which hand their version over with the trip:
+      // this stamps the trip row and answers a count, so the trip this page holds is behind
+      // until it is read back, and a save sent meanwhile would carry the roster from before.
       return readBack();
     },
   });

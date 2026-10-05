@@ -23,6 +23,7 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
 {
     private readonly SilexGisApiFactory factory;
     private HttpClient owner = null!;
+    private Guid ownerCaverId;
     private long caveTypeId;
     private long entranceTypeId;
 
@@ -32,12 +33,13 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"cc-own-{suffix}@t.local");
+        var ownerUserId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"cc-own-{suffix}@t.local");
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             caveTypeId = await db.CaveTypes.Select(t => t.Id).FirstAsync();
             entranceTypeId = await db.EntranceTypes.Select(t => t.Id).FirstAsync();
+            ownerCaverId = await db.Cavers.Where(c => c.UserId == ownerUserId).Select(c => c.Id).SingleAsync();
         }
 
         owner = await AuthHelper.BearerClientAsync(factory, $"cc-own-{suffix}@t.local");
@@ -218,6 +220,97 @@ public sealed class ConcurrencyTests : IAsyncLifetime, IDisposable, IClassFixtur
         response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
     }
+
+    /// <summary>
+    /// A write on a trip answers the version it produced, so the next write carries it without a
+    /// read in between.
+    /// </summary>
+    /// <remarks>
+    /// Only a read used to hand out a version, so every write left its caller one version behind
+    /// the row they had just written, and a second save a moment later was refused as a conflict
+    /// nobody could see; the client answered by not calling a save finished until it had read the
+    /// trip back, seconds with the button spinning. Each write here carries forward the tag the
+    /// previous write answered — never one a read supplied — and a read after each confirms it is
+    /// the row's version and not a number of the write's own. An action posted beside the trip
+    /// says whose version it answers in Content-Location, because its own path is not where the
+    /// trip's next write will look.
+    /// </remarks>
+    [Fact]
+    public async Task A_trip_write_answers_the_version_it_produced()
+    {
+        var created = await owner.PostAsJsonAsync("/api/v1/trip-logs/", TripBody("Versioned trip v1"));
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var path = created.Headers.Location!.OriginalString;
+        path.ShouldBe($"/api/v1/trip-logs/{(await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid()}");
+        var afterCreate = created.Headers.ETag!.Tag;
+        afterCreate.ShouldBe(await TripETagAsync(path));
+
+        // A full update carrying the tag the creation answered: the request path names the trip,
+        // so nothing else has to.
+        var updated = await owner.PutWithIfMatchAsync(path, TripBody("Versioned trip v2"), afterCreate);
+        updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+        updated.Content.Headers.ContentLocation.ShouldBeNull();
+        var afterUpdate = updated.Headers.ETag!.Tag;
+        afterUpdate.ShouldNotBe(afterCreate);
+        afterUpdate.ShouldBe(await TripETagAsync(path));
+
+        // An action posted beside the trip: the trip's version, and whose it is.
+        var moved = await owner.PostWithIfMatchAsync($"{path}/state", new { state = "proposed" }, afterUpdate);
+        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+        moved.Content.Headers.ContentLocation!.OriginalString.ShouldBe(path);
+        var afterMove = moved.Headers.ETag!.Tag;
+        afterMove.ShouldNotBe(afterUpdate);
+        afterMove.ShouldBe(await TripETagAsync(path));
+
+        var armed = await owner.PostWithIfMatchAsync(
+            $"{path}/callout",
+            new { expectedReturnAt = "2026-07-01T18:00:00Z", calloutAlarmAt = "2026-07-01T20:00:00Z" },
+            afterMove);
+        armed.StatusCode.ShouldBe(HttpStatusCode.OK, await armed.Content.ReadAsStringAsync());
+        armed.Content.Headers.ContentLocation!.OriginalString.ShouldBe(path);
+        var afterArming = armed.Headers.ETag!.Tag;
+        afterArming.ShouldNotBe(afterMove);
+        afterArming.ShouldBe(await TripETagAsync(path));
+
+        // Standing down carries no precondition in, and the version out all the same.
+        var stood = await owner.PostAsync($"{path}/callout/stand-down", null);
+        stood.StatusCode.ShouldBe(HttpStatusCode.OK, await stood.Content.ReadAsStringAsync());
+        stood.Content.Headers.ContentLocation!.OriginalString.ShouldBe(path);
+        var afterStandingDown = stood.Headers.ETag!.Tag;
+        afterStandingDown.ShouldNotBe(afterArming);
+        afterStandingDown.ShouldBe(await TripETagAsync(path));
+
+        // And what an action answered is what the next full update needs: the tag from before it
+        // is stale, the one it handed over goes through.
+        var stale = await owner.PutWithIfMatchAsync(path, TripBody("Versioned trip v3 (lost)"), afterArming);
+        stale.StatusCode.ShouldBe(HttpStatusCode.PreconditionFailed);
+        var current = await owner.PutWithIfMatchAsync(path, TripBody("Versioned trip v3"), afterStandingDown);
+        current.StatusCode.ShouldBe(HttpStatusCode.OK, await current.Content.ReadAsStringAsync());
+
+        // The plan door is the same create path and answers the same way.
+        var planned = await owner.PostAsJsonAsync("/api/v1/trip-logs/plans", TripBody("Versioned plan"));
+        planned.StatusCode.ShouldBe(HttpStatusCode.Created, await planned.Content.ReadAsStringAsync());
+        planned.Headers.ETag!.Tag.ShouldBe(await TripETagAsync(planned.Headers.Location!.OriginalString));
+    }
+
+    private async Task<string> TripETagAsync(string path)
+    {
+        var read = await owner.GetAsync(path);
+        read.StatusCode.ShouldBe(HttpStatusCode.OK, await read.Content.ReadAsStringAsync());
+        return read.Headers.ETag!.Tag;
+    }
+
+    /// <summary>
+    /// A trip the owner is named on, so that the owner is somebody the trip concerns and may say
+    /// its party is out.
+    /// </summary>
+    private object TripBody(string title) => new
+    {
+        title,
+        tripDate = "2026-07-01",
+        caveIds = Array.Empty<Guid>(),
+        participants = new[] { new { caverId = ownerCaverId } },
+    };
 
     private async Task<HttpResponseMessage> DeleteWithIfMatchAsync(string url, string ifMatch)
     {

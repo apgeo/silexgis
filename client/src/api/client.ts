@@ -130,10 +130,10 @@ export const sendsTheReadingLanguage = {
 
 api.use(sendsTheReadingLanguage);
 
-// Optimistic-concurrency threading: remember the ETag from each single-resource GET and
-// replay it as If-Match on the matching PUT/DELETE, so protected edits are checked against
-// the version the user actually loaded. Keyed by resource path — the GET and the write share
-// the same URL. Nothing is sent when no version was captured (last-write-wins).
+// Optimistic-concurrency threading: remember the version each answer carries and replay it as
+// If-Match on the matching PUT/DELETE, so protected edits are checked against the version the
+// user actually holds. Keyed by resource path. Nothing is sent when no version was captured
+// (last-write-wins).
 const etags = new Map<string, string>();
 
 function resourcePath(url: string): string {
@@ -144,8 +144,40 @@ function resourcePath(url: string): string {
   }
 }
 
-api.use({
-  onRequest({ request }) {
+/**
+ * Which resource an answer's entity tag belongs to, or nothing when the answer does not say.
+ *
+ * A read or a full update answers with the resource itself, so the tag is the request path's. A
+ * creation answers with the new resource, which Location names. An action posted beside a
+ * resource — a trip's state move, say — answers with the version of the resource it moved and
+ * names it in Content-Location; without that header the tag is nobody's and is not kept, because
+ * filing it under the action's own path would guard nothing and filing it under a guessed path
+ * could guard the wrong thing.
+ */
+function versionedResource(request: Request, response: Response): string | undefined {
+  const named = response.headers.get('Content-Location');
+  if (named) {
+    return resourcePath(named);
+  }
+  if (response.status === 201) {
+    const created = response.headers.get('Location');
+    return created ? resourcePath(created) : undefined;
+  }
+  if (request.method === 'GET' || request.method === 'PUT') {
+    return resourcePath(request.url);
+  }
+  return undefined;
+}
+
+/**
+ * Files the version each answer carries under the resource it is of, and replays it on the next
+ * full update or delete of that resource. A write's answer counts exactly as a read's does: the
+ * version a write produced is what the next write must carry, and a client that learned versions
+ * only from reads was one behind after every save, so a second save a moment later was refused as
+ * a conflict nobody could see.
+ */
+export const threadsVersions = {
+  onRequest({ request }: { request: Request }) {
     if (request.method === 'PUT' || request.method === 'DELETE') {
       const etag = etags.get(resourcePath(request.url));
       if (etag) {
@@ -154,16 +186,19 @@ api.use({
     }
     return request;
   },
-  onResponse({ request, response }) {
-    if (request.method === 'GET') {
-      const etag = response.headers.get('ETag');
-      if (etag) {
-        etags.set(resourcePath(request.url), etag);
+  onResponse({ request, response }: { request: Request; response: Response }) {
+    const etag = response.headers.get('ETag');
+    if (etag) {
+      const resource = versionedResource(request, response);
+      if (resource) {
+        etags.set(resource, etag);
       }
     }
     return response;
   },
-});
+};
+
+api.use(threadsVersions);
 
 /**
  * The version last read for a resource, for a write the replay above cannot thread by itself.

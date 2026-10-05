@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import i18n from '../i18n';
-import { ApiError, isSettledRefusal, retryQuery, sendsTheReadingLanguage } from './client.ts';
+import {
+  ApiError,
+  isSettledRefusal,
+  lastReadETag,
+  retryQuery,
+  sendsTheReadingLanguage,
+  threadsVersions,
+} from './client.ts';
 
 /**
  * <b>Whether the server has answered for good, which two different decisions now turn on.</b> The
@@ -77,5 +84,75 @@ describe('the language every request is made in', () => {
     // and every line the server wrote in English, on the one screen.
     expect(await headerSentWhileReadingIn('ro')).toBe('ro');
     expect(await headerSentWhileReadingIn('en')).toBe('en');
+  });
+});
+
+/**
+ * <b>The version an answer carries, and where it is kept.</b> A write is checked against the
+ * version the caller holds, and a client that learned versions only from reads was one behind
+ * after every save: the second of two saves a second apart was refused against the version the
+ * first had produced, and the page's answer was to call no save finished until it had read the
+ * trip back. The server now hands the version over with every answer that moved the row, and
+ * this is the one place that decides which resource an answer's tag belongs to.
+ */
+describe('the version an answer carries', () => {
+  const origin = 'http://localhost';
+
+  function answered(method: string, path: string, init: ResponseInit) {
+    threadsVersions.onResponse({
+      request: new Request(origin + path, { method }),
+      response: new Response(null, init),
+    });
+  }
+
+  /** What the middleware puts on a request about to be sent. */
+  function carriedOn(method: string, path: string) {
+    const request = new Request(origin + path, { method });
+    threadsVersions.onRequest({ request });
+    return request.headers.get('If-Match');
+  }
+
+  it("is filed under what was read and replayed on that resource's next full update or delete", () => {
+    answered('GET', '/api/v1/trip-logs/t-read', { status: 200, headers: { ETag: '"4"' } });
+    expect(lastReadETag('/api/v1/trip-logs/t-read')).toBe('"4"');
+    expect(carriedOn('PUT', '/api/v1/trip-logs/t-read')).toBe('"4"');
+    expect(carriedOn('DELETE', '/api/v1/trip-logs/t-read')).toBe('"4"');
+    // A post beside the resource is an action; it asks for the version itself when it wants one,
+    // so that an action route which never asked for a precondition is not handed one.
+    expect(carriedOn('POST', '/api/v1/trip-logs/t-read/state')).toBeNull();
+  });
+
+  it('is handed over by a write, so the next write needs no read in between', () => {
+    answered('GET', '/api/v1/trip-logs/t-write', { status: 200, headers: { ETag: '"4"' } });
+    answered('PUT', '/api/v1/trip-logs/t-write', { status: 200, headers: { ETag: '"5"' } });
+    expect(carriedOn('PUT', '/api/v1/trip-logs/t-write')).toBe('"5"');
+  });
+
+  it('is filed under the resource a creation names, not under the collection posted to', () => {
+    answered('POST', '/api/v1/trip-logs/', {
+      status: 201,
+      headers: { ETag: '"1"', Location: '/api/v1/trip-logs/t-new' },
+    });
+    expect(lastReadETag('/api/v1/trip-logs/t-new')).toBe('"1"');
+    expect(lastReadETag('/api/v1/trip-logs/')).toBeUndefined();
+  });
+
+  it('is filed where an action says it belongs, and nowhere when the action does not say', () => {
+    answered('GET', '/api/v1/trip-logs/t-act', { status: 200, headers: { ETag: '"4"' } });
+    answered('POST', '/api/v1/trip-logs/t-act/state', {
+      status: 200,
+      headers: { ETag: '"6"', 'Content-Location': '/api/v1/trip-logs/t-act' },
+    });
+    expect(lastReadETag('/api/v1/trip-logs/t-act')).toBe('"6"');
+    expect(lastReadETag('/api/v1/trip-logs/t-act/state')).toBeUndefined();
+
+    // A tag an answer does not attribute could be anybody's: it is dropped rather than guessed
+    // at, and what was held stays held.
+    answered('POST', '/api/v1/trip-logs/t-act/invitations/promote', {
+      status: 200,
+      headers: { ETag: '"7"' },
+    });
+    expect(lastReadETag('/api/v1/trip-logs/t-act')).toBe('"6"');
+    expect(lastReadETag('/api/v1/trip-logs/t-act/invitations/promote')).toBeUndefined();
   });
 });
