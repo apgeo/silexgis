@@ -110,6 +110,12 @@ const apiEnv = {
   // Off by default, and one flow needs it: nothing but self-registration mints the second
   // account that flow requires, and it fails rather than skipping without it.
   SILEXGIS__Auth__OpenRegistration: 'true',
+  // No grace after a watch closes. The archive of a cave's past trips lists a closed trip only once
+  // it has left the live window, which by default is two days after it closed; the spec that stands
+  // a real archive up closes its trip a moment before reading it, and fails rather than skipping
+  // with the default. An ordinary operator setting, not a test hook. Nothing else in the suite
+  // reads a closed trip's public link from the server, so nothing else notices the difference.
+  SILEXGIS__TripTracking__ShareGraceAfterClose: '00:00:00',
   // The SPA is served from the e2e dev port, so that is where the authorization server has to
   // be willing to send a browser back to. Without this every sign-in dies at the redirect.
   SILEXGIS__Auth__AdditionalRedirectUris__0: `http://localhost:${DEV_PORT}/auth/callback`,
@@ -138,6 +144,13 @@ async function waitFor(label, check, timeoutMs = 180_000) {
 }
 
 function teardown() {
+  if (reuse) {
+    // A reused stack belongs to whoever stood it up, and is reused precisely so the next run can be
+    // pointed at it too. Removing its database here would leave the API still answering on its port
+    // with nothing behind it, and the next run would fail at sign-in for no reason it could name.
+    console.log(`\nReused stack left standing: API :${API_PORT}, database :${DB_PORT} (${DB_NAME}).`);
+    return;
+  }
   if (keep) {
     console.log(`\nLeft standing (--keep): API :${API_PORT}, database :${DB_PORT} (${DB_NAME}).`);
     console.log(`Remove it with: docker rm -f ${DB_NAME}`);

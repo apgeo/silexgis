@@ -6,6 +6,9 @@ import { expect } from '@playwright/test';
 
 import { test } from './consoleGuard.ts';
 import { login, overlayTreeNode } from './helpers.ts';
+import { wheelAndAwaitLibraries, type LibrarySource } from './libraryPhotos.ts';
+
+const LIBRARIES: LibrarySource[] = ['photoprism', 'immich'];
 
 // What the fixture manifest declares inside the rectangle it generated into. Both libraries index
 // the same directory, so both must answer the same number for the same viewport — which is the
@@ -43,8 +46,7 @@ test('two neighbouring libraries, their photographs, and one of them opened', as
     );
     if (counts.length >= 2 && counts.every((n) => n > 0)) break;
     await page.mouse.move(centre.x, centre.y);
-    await page.mouse.wheel(0, 400);
-    await page.waitForTimeout(1200);
+    await wheelAndAwaitLibraries(page, 400, LIBRARIES);
   }
   // eslint-disable-next-line no-console
   console.log(`counts reported by the two layers: ${counts.join(', ')}`);
@@ -60,17 +62,23 @@ test('two neighbouring libraries, their photographs, and one of them opened', as
   // Open one photograph. The pin position is known because the zoom sequence is deterministic.
   for (let step = 0; step < 7; step += 1) {
     await page.mouse.move(413, 408);
-    await page.mouse.wheel(0, -400);
-    await page.waitForTimeout(900);
+    await wheelAndAwaitLibraries(page, -400, LIBRARIES);
   }
-  await page.waitForTimeout(1500);
 
   let opened = false;
   for (const [x, y] of [[546, 334], [616, 48], [560, 350]] as Array<[number, number]>) {
     await page.mouse.move(x, y);
     await page.mouse.click(x, y);
-    await page.waitForTimeout(2500);
-    opened = await page.locator('.map-library-photo-popup img').first().isVisible().catch(() => false);
+    // A pin that was hit opens its popup at once; one that was missed opens nothing, and the next
+    // position is tried.
+    opened = await page
+      .locator('.map-library-photo-popup img')
+      .first()
+      .waitFor({ state: 'visible', timeout: 2_500 })
+      .then(
+        () => true,
+        () => false,
+      );
     if (opened) break;
   }
   await page.screenshot({ path: 'test-results/photo-library-popup.png' });

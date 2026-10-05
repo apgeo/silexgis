@@ -4,6 +4,7 @@ import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
 import { test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
+import { settledScreenshot } from './settled.ts';
 
 /**
  * A cave's past trips, as somebody with no account reaches them.
@@ -302,8 +303,7 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     await expect(pub.getByTestId('public-trip-party')).toContainText(STATION_A);
 
     if (process.env.PAST_SHOTS) {
-      await pub.waitForTimeout(500);
-      await pub.screenshot({ path: `${process.env.PAST_SHOTS}/60-past-page-desktop.png` });
+      await settledScreenshot(pub, `${process.env.PAST_SHOTS}/60-past-page-desktop.png`);
     }
 
     // ---- At 360px, where this page is actually read ----
@@ -318,8 +318,7 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     );
     expect(overflow).toBeLessThanOrEqual(1);
     if (process.env.PAST_SHOTS) {
-      await pub.waitForTimeout(400);
-      await pub.screenshot({ path: `${process.env.PAST_SHOTS}/61-past-page-360.png`, fullPage: true });
+      await settledScreenshot(pub, `${process.env.PAST_SHOTS}/61-past-page-360.png`, { fullPage: true });
     }
     // A row pressed at the bottom of a phone page is answered at the top of it. The picker sits
     // under the whole party; without the page bringing the strip into view, the only visible
@@ -346,19 +345,37 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     // against a renderer that was gone, and this page threw an uncaught TypeError on each press —
     // on the one surface strangers read with nobody watching its console. Swept by the error
     // lists this test ends on.
+    //
+    // Each press waits only until a viewer for the drawing it asked for exists, and the next press
+    // takes that viewer down again — while it parses, or before the ask its dial makes half a
+    // second after. Sooner than that, the panel is re-pointed before it has built a viewer at all
+    // and the burst exercises nothing. The page's clock is in the test's hands for the burst, so
+    // that last ask can be made on demand rather than waited for.
+    const container = pub.getByTestId('caveview-container');
+    const pressForANewViewer = async (press: () => Promise<void>) => {
+      await container.locator('canvas').evaluateAll((canvases) => {
+        for (const canvas of canvases) canvas.dataset.seenBefore = '';
+      });
+      await press();
+      await expect(container.locator('canvas:not([data-seen-before])').first()).toBeAttached({
+        timeout: 20_000,
+      });
+    };
+    await pub.clock.install();
     for (let round = 0; round < 3; round += 1) {
       if (!(await row.isVisible())) {
         await pub.getByText('Past trips in this cave').click();
       }
-      await row.click();
-      await pub.waitForTimeout(150);
-      await pub.getByTestId('public-past-back').click();
-      await pub.waitForTimeout(150);
+      await pressForANewViewer(() => row.click());
+      await pressForANewViewer(() => pub.getByTestId('public-past-back').click());
     }
     await expect(pub.getByTestId('public-past-banner')).toHaveCount(0);
     await expect(pub.getByTestId('public-trip-party')).toContainText('E2E Carmen');
-    // The dial's last ask comes half a second after the load it belongs to ends.
-    await pub.waitForTimeout(1_000);
+    // The drawing asked for last has loaded, and the ones before it were handed over earlier, so
+    // every load of the burst has ended. Each has one ask left, half a second after its end; this
+    // makes them now.
+    await expect(pub.getByTestId('caveview-loading')).toHaveCount(0, { timeout: 30_000 });
+    await pub.clock.runFor(1_000);
 
     // ---- A hyperlink into the past, opened cold ----
     await pub.goto(`/shared/trips/${liveShare.token}?past=${past.id}&team=${survey.id}`);
@@ -376,8 +393,7 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     const embedRow = pub.getByRole('button', { name: new RegExp(pastTitle) });
     await expect(embedRow).toBeVisible({ timeout: 20_000 });
     if (process.env.PAST_SHOTS) {
-      await pub.waitForTimeout(400);
-      await pub.screenshot({ path: `${process.env.PAST_SHOTS}/64-past-embed-picker.png` });
+      await settledScreenshot(pub, `${process.env.PAST_SHOTS}/64-past-embed-picker.png`);
     }
     await embedRow.click();
     await expect(pub.getByTestId('public-past-banner')).toContainText('past trip', {
@@ -386,8 +402,7 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     // The frame itself is marked, which costs no height in a box a club chose the size of.
     await expect(pub.getByTestId('public-trip-embed')).toHaveClass(/public-trip-embed-past/);
     if (process.env.PAST_SHOTS) {
-      await pub.waitForTimeout(500);
-      await pub.screenshot({ path: `${process.env.PAST_SHOTS}/62-past-embed.png` });
+      await settledScreenshot(pub, `${process.env.PAST_SHOTS}/62-past-embed.png`);
     }
 
     // The frame at the width a club's article is actually read at. The drawing keeps the room the
@@ -399,8 +414,7 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     );
     expect(framedOverflow).toBeLessThanOrEqual(1);
     if (process.env.PAST_SHOTS) {
-      await pub.waitForTimeout(400);
-      await pub.screenshot({ path: `${process.env.PAST_SHOTS}/65-past-embed-360.png` });
+      await settledScreenshot(pub, `${process.env.PAST_SHOTS}/65-past-embed-360.png`);
     }
     await pub.setViewportSize({ width: 1280, height: 900 });
 
@@ -433,8 +447,7 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
     );
     await expect(pub.getByTestId('public-past-back')).toHaveText("Back to this link's trip");
     if (process.env.PAST_SHOTS) {
-      await pub.waitForTimeout(400);
-      await pub.screenshot({ path: `${process.env.PAST_SHOTS}/63-past-no-live-party.png` });
+      await settledScreenshot(pub, `${process.env.PAST_SHOTS}/63-past-no-live-party.png`);
     }
     // By predicate identity `unroute` would not match the arrow above, so the whole table goes.
     await pub.unrouteAll();
