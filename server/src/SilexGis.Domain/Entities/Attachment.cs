@@ -40,11 +40,13 @@ public enum AttachedEntityType : short
     Expedition = 15,
 
     /// <summary>
-    /// A calendar event — a meeting, a training weekend, a working day, a deadline. Present so
-    /// that per-object sharing can name one: the route that authors a rule against a single
+    /// A calendar event — a meeting, a training weekend, a working day, a deadline. Added so
+    /// that per-object sharing could name one: the route that authors a rule against a single
     /// object identifies it by this discriminator, so a governed kind with no member here can
-    /// have no sharing door at all. No attachment, tagging or resource-link surface offers this
-    /// value; adding one is a separate decision.
+    /// have no sharing door at all. Attachments and taggings accept it since, under the event's
+    /// own write right — the agenda, the minutes and the course material are what a club files
+    /// against a date. Resource links still do not: a relation needs a resolver and a matrix row
+    /// of its own, and that is a separate decision.
     /// </summary>
     Event = 16,
 }

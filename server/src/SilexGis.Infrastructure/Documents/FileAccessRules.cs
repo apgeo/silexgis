@@ -355,6 +355,13 @@ public static class FileAccessRules
             case AttachedEntityType.Expedition:
                 return await CanEntityAsync(db, access, ctx, db.Expeditions, entityId, AccessAction.Write, ct);
 
+            // Attaching a document to an event, or tagging one, takes the right to write the
+            // event and nothing besides — the same question its own edit route asks. The
+            // agenda, the minutes and the course material are what a club actually files against
+            // a date, and a reader who may not change the event may not change what it carries.
+            case AttachedEntityType.Event:
+                return await CanEntityAsync(db, access, ctx, db.Events, entityId, AccessAction.Write, ct);
+
             case AttachedEntityType.StoredFile:
                 // Writing a file's tags is governed by the file-write rule, evaluated against
                 // the file the document currently serves (the row attachments/taggings point
