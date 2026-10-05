@@ -58,8 +58,10 @@ built-in permission groups, and creates the admin account as a member of **Full
 Administrators**. Sign in at `SILEXGIS_PUBLIC_URL` with the admin credentials.
 
 To load a small demo dataset (six caves with their entrances, a containing karst area and two
-surface features, five trips with the people on them, two saved map views, plus a two-shelf
-archive holding a survey report and a link joining that report to the cave it describes):
+surface features, trips with the people on them, four camps with a roster and the trips they
+gathered, two leads on the camp's board, club dates including a series and one with answers, two
+saved map views, plus a two-shelf archive holding a survey report and a link joining that report
+to the cave it describes; re-running it puts back any row that was lost and leaves the rest alone):
 
 ```bash
 docker compose exec api dotnet SilexGis.Api.dll seed-demo

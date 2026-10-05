@@ -6,7 +6,9 @@ using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Documents;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Events;
 using SilexGis.Domain.Expeditions;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.ResLinks;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
@@ -52,17 +54,13 @@ public static class DemoSeeder
     {
         var writer = new FeatureWriteService(db, new JsonSchemaPropertiesValidator(), new AnonymousCurrentUser());
 
-        // Each section guards itself so re-running tops up data added in later versions.
-        var demoCaveId = await db.Caves
-            .Where(c => c.IdentificationCode == "DEMO-0001")
-            .Select(c => (Guid?)c.Id)
-            .FirstOrDefaultAsync(ct);
-        if (demoCaveId is null)
-        {
-            demoCaveId = await SeedCavesAsync(db, writer, ownerUserId, ct);
-        }
+        // Each section guards itself row by row, so re-running tops up data added in later
+        // versions and puts back a row that was lost. A block that stops at the first sign of
+        // itself never repairs a partial loss, and on a page the loss reads as the feature being
+        // empty rather than as the seed being stale.
+        var demoCaveId = await SeedCavesAsync(db, writer, ownerUserId, ct);
 
-        await SeedGenericFeaturesAsync(db, writer, ownerUserId, demoCaveId.Value, ct);
+        await SeedGenericFeaturesAsync(db, writer, ownerUserId, demoCaveId, ct);
         await db.SaveChangesAsync(ct);
 
         // Every kind of thing the selector offers needs something to find, or its button looks
@@ -84,9 +82,14 @@ public static class DemoSeeder
         await SeedTripInvitationsAsync(db, ct);
         await db.SaveChangesAsync(ct);
 
+        // After the camp's trips are joined, because a lead reaches the camp's board through them.
+        await SeedContinuationsAsync(db, writer, ownerUserId, ct);
+        await SeedEventsAsync(db, ownerUserId, ct);
+        await db.SaveChangesAsync(ct);
+
         if (documents is not null && fileStore is not null)
         {
-            await SeedDocumentsAsync(db, documents, fileStore, ownerUserId, demoCaveId.Value, ct);
+            await SeedDocumentsAsync(db, documents, fileStore, ownerUserId, demoCaveId, ct);
             await db.SaveChangesAsync(ct);
 
             // After the documents block and outside it, on a guard of its own. That block is
@@ -94,7 +97,7 @@ public static class DemoSeeder
             // again on a database that has already seen the demo — the dataset would quietly
             // stay as it was on every machine that had one, which is the same trap the camp
             // roster above is hoisted out of.
-            await SeedAnnotatedTextAsync(db, documents, fileStore, ownerUserId, demoCaveId.Value, ct);
+            await SeedAnnotatedTextAsync(db, documents, fileStore, ownerUserId, demoCaveId, ct);
             await db.SaveChangesAsync(ct);
         }
     }
@@ -119,23 +122,68 @@ public static class DemoSeeder
         CancellationToken ct)
     {
         const string cabinetName = "Demo archive";
-        if (await db.Cabinets.AnyAsync(c => c.Name == cabinetName && c.ParentId == null, ct))
-        {
-            return;
-        }
+        const string surveysName = "Survey reports";
+        const string reportTitle = "Peștera Demo Mare — 1987 survey report";
 
+        // Each piece on its own guard — the two cabinets, the report, its filing, its link — so a
+        // lost one comes back on the next run while the rest is left as it is.
+        //
         // Through the write service so the materialized path and the ancestor array are
         // stamped by the one thing that knows how, exactly as a cabinet made in the interface
         // would be. The parent has to reach the database before the child can be placed under
         // it, because placement is decided from the parent's stored path.
         var cabinets = new CabinetWriteService(db);
-        var archive = await cabinets.CreateAsync(
-            cabinetName, "Where the demonstration dataset files its paperwork.", null, ct);
-        await db.SaveChangesAsync(ct);
+        var archive = await db.Cabinets.FirstOrDefaultAsync(c => c.Name == cabinetName && c.ParentId == null, ct);
+        if (archive is null)
+        {
+            archive = await cabinets.CreateAsync(
+                cabinetName, "Where the demonstration dataset files its paperwork.", null, ct);
+            await db.SaveChangesAsync(ct);
+        }
 
-        var surveys = await cabinets.CreateAsync(
-            "Survey reports", "Reports written up after a survey trip.", archive.Id, ct);
+        var surveys = await db.Cabinets.FirstOrDefaultAsync(c => c.Name == surveysName && c.ParentId == archive.Id, ct)
+            ?? await cabinets.CreateAsync(surveysName, "Reports written up after a survey trip.", archive.Id, ct);
 
+        var reportId = await db.Documents
+            .Where(d => d.Title == reportTitle)
+            .Select(d => (Guid?)d.Id)
+            .FirstOrDefaultAsync(ct);
+        Guid reportFileId;
+        if (reportId is { } existingReportId)
+        {
+            reportFileId = await (from version in db.DocumentVersions.AsNoTracking()
+                                  join file in db.StoredFiles.AsNoTracking() on version.Id equals file.DocumentVersionId
+                                  where version.DocumentId == existingReportId && version.IsCurrent
+                                  select file.Id).FirstAsync(ct);
+        }
+        else
+        {
+            var (createdId, createdFileId) = await CreateReportAsync(db, documents, fileStore, ownerUserId, reportTitle, ct);
+            reportId = createdId;
+            reportFileId = createdFileId;
+        }
+
+        if (!await db.CabinetDocuments.AnyAsync(c => c.CabinetId == surveys.Id && c.DocumentId == reportId, ct))
+        {
+            db.CabinetDocuments.Add(new CabinetDocument
+            {
+                CabinetId = surveys.Id,
+                DocumentId = reportId.Value,
+            });
+        }
+
+        await SeedResourceLinkAsync(db, ownerUserId, demoCaveId, reportId.Value, reportFileId, ct);
+    }
+
+    /// <summary>The 1987 report as a stored document: its bytes, its row, and its kind.</summary>
+    private static async Task<(Guid DocumentId, Guid FileId)> CreateReportAsync(
+        SilexGisDbContext db,
+        DocumentWriteService documents,
+        IFileStore fileStore,
+        Guid ownerUserId,
+        string title,
+        CancellationToken ct)
+    {
         var bytes = DemoPdf.Build();
         var storagePath = await StoreAsync(fileStore, bytes, ".pdf", ct);
         var content = new StoredContent(
@@ -148,7 +196,7 @@ public static class DemoSeeder
 
         var report = documents.Create(
             content,
-            title: "Peștera Demo Mare — 1987 survey report",
+            title: title,
             ownerUserId: ownerUserId,
             uploadedBy: ownerUserId,
             documentDate: new DateOnly(1987, 8, 14));
@@ -167,13 +215,7 @@ public static class DemoSeeder
             .Select(t => (long?)t.Id)
             .FirstOrDefaultAsync(ct);
 
-        db.CabinetDocuments.Add(new CabinetDocument
-        {
-            CabinetId = surveys.Id,
-            DocumentId = report.Version.DocumentId,
-        });
-
-        await SeedResourceLinkAsync(db, ownerUserId, demoCaveId, report, ct);
+        return (report.Version.DocumentId, report.File.Id);
     }
 
     /// <summary>
@@ -391,8 +433,16 @@ public static class DemoSeeder
     /// hand-placed number.
     /// </remarks>
     private static async Task SeedResourceLinkAsync(
-        SilexGisDbContext db, Guid ownerUserId, Guid demoCaveId, DocumentFile report, CancellationToken ct)
+        SilexGisDbContext db, Guid ownerUserId, Guid demoCaveId, Guid reportDocumentId, Guid reportFileId, CancellationToken ct)
     {
+        // The link is the row here: one from this report, as its main member, is the one this
+        // seeds, and a second would say nothing the first did not.
+        if (await db.ResLinkMembers.AnyAsync(
+                m => m.EntityType == AttachedEntityType.Document && m.EntityId == reportDocumentId && m.IsMain, ct))
+        {
+            return;
+        }
+
         var relationTypeId = await db.ResLinkRelationTypes
             .Where(r => r.Code == "documents")
             .Select(r => (long?)r.Id)
@@ -425,13 +475,13 @@ public static class DemoSeeder
         {
             ResLinkId = link.Id,
             EntityType = AttachedEntityType.Document,
-            EntityId = report.Version.DocumentId,
+            EntityId = reportDocumentId,
             IsMain = true,
             AnchorKind = anchor is null ? AnchorKind.Whole : AnchorKind.TextRange,
             Anchor = anchor,
             // Measured against this file, which never changes; a later version re-anchors by
             // quote rather than silently pointing at whatever is now at those offsets.
-            AnchorFileId = anchor is null ? null : report.File.Id,
+            AnchorFileId = anchor is null ? null : reportFileId,
             SortOrder = 0,
             Note = "The passage describing the chamber beyond the second sump.",
             AddedBy = ownerUserId,
@@ -462,82 +512,130 @@ public static class DemoSeeder
         var limestoneId = await db.RockTypes.Where(t => t.Code == "limestone").Select(t => t.Id).SingleAsync(ct);
         var karstAreaTypeId = await db.FeatureTypes.Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync(ct);
 
-        // A containing karst area, so the demo exercises the hierarchy from day one.
-        var area = await writer.CreateGenericAsync(
-            new Feature
-            {
-                FeatureTypeId = karstAreaTypeId,
-                Name = "Platoul Demo",
-                Description = "Demonstration karst area containing the demo caves.",
-                Geom = new Polygon(new LinearRing(
-                [
-                    new Coordinate(25.42, 45.51), new Coordinate(25.46, 45.51),
-                    new Coordinate(25.46, 45.54), new Coordinate(25.42, 45.54),
-                    new Coordinate(25.42, 45.51),
-                ]))
-                { SRID = 4326 },
-                OwnerUserId = ownerUserId,
-                Visibility = Visibility.Public,
-            },
-            parents: [], ct);
+        // A containing karst area, so the demo exercises the hierarchy from day one. Each row of
+        // this block is looked for before it is written, so a lost area, cave or entrance comes
+        // back on the next run while the rest stays as it was.
+        var areaId = await db.Features
+            .Where(f => f.Name == "Platoul Demo")
+            .Select(f => (Guid?)f.Id)
+            .FirstOrDefaultAsync(ct);
+        if (areaId is null)
+        {
+            var area = await writer.CreateGenericAsync(
+                new Feature
+                {
+                    FeatureTypeId = karstAreaTypeId,
+                    Name = "Platoul Demo",
+                    Description = "Demonstration karst area containing the demo caves.",
+                    Geom = new Polygon(new LinearRing(
+                    [
+                        new Coordinate(25.42, 45.51), new Coordinate(25.46, 45.51),
+                        new Coordinate(25.46, 45.54), new Coordinate(25.42, 45.54),
+                        new Coordinate(25.42, 45.51),
+                    ]))
+                    { SRID = 4326 },
+                    OwnerUserId = ownerUserId,
+                    Visibility = Visibility.Public,
+                },
+                parents: [], ct);
+            areaId = area.Id;
+        }
 
         // Around Brașov / Piatra Craiului — plausible but fictional demo data.
-        var bigDemo = await writer.CreateCaveAsync(
-            new Feature
-            {
-                Name = "Peștera Demo Mare",
-                Description = "Demonstration cave with two entrances and public visibility.",
-                OwnerUserId = ownerUserId,
-                Visibility = Visibility.Public,
-            },
-            new Cave
-            {
-                OtherToponyms = "Big Demo Cave",
-                IdentificationCode = "DEMO-0001",
-                CaveTypeId = caveTypeId,
-                RockTypeId = limestoneId,
-                Region = "Brașov",
-                HydrographicBasin = "Olt",
-                Valley = "Valea Demo",
-                SurveyedLength = 1234.5m,
-                Depth = 87.2m,
-                Altitude = 950m,
-                ExplorationStatus = ExplorationStatus.Ongoing,
-            },
-            parents: [new ParentSpec(area.Id, IsPrimary: true)], ct);
+        var bigDemoId = await db.Caves
+            .Where(c => c.IdentificationCode == "DEMO-0001")
+            .Select(c => (Guid?)c.Id)
+            .FirstOrDefaultAsync(ct);
+        if (bigDemoId is null)
+        {
+            var bigDemo = await writer.CreateCaveAsync(
+                new Feature
+                {
+                    Name = "Peștera Demo Mare",
+                    Description = "Demonstration cave with two entrances and public visibility.",
+                    OwnerUserId = ownerUserId,
+                    Visibility = Visibility.Public,
+                },
+                new Cave
+                {
+                    OtherToponyms = "Big Demo Cave",
+                    IdentificationCode = "DEMO-0001",
+                    CaveTypeId = caveTypeId,
+                    RockTypeId = limestoneId,
+                    Region = "Brașov",
+                    HydrographicBasin = "Olt",
+                    Valley = "Valea Demo",
+                    SurveyedLength = 1234.5m,
+                    Depth = 87.2m,
+                    Altitude = 950m,
+                    ExplorationStatus = ExplorationStatus.Ongoing,
+                },
+                parents: [new ParentSpec(areaId.Value, IsPrimary: true)], ct);
+            bigDemoId = bigDemo.Id;
+        }
 
-        await AddEntranceAsync(writer, bigDemo.Id, ownerUserId, naturalEntranceId,
+        await EnsureEntranceAsync(db, writer, bigDemoId.Value, ownerUserId, naturalEntranceId,
             "Main entrance", 25.4472, 45.5312, 952m, isMain: true, ct);
-        await AddEntranceAsync(writer, bigDemo.Id, ownerUserId, naturalEntranceId,
+        await EnsureEntranceAsync(db, writer, bigDemoId.Value, ownerUserId, naturalEntranceId,
             "Upper entrance", 25.4481, 45.5325, 1010m, isMain: false, ct);
 
-        var protectedPit = await writer.CreateCaveAsync(
-            new Feature
-            {
-                Name = "Avenul Demo Protejat",
-                Description = "Protected demo pit — exact location restricted (bat colony).",
-                LocationProtected = true,
-                OwnerUserId = ownerUserId,
-                Visibility = Visibility.Authenticated,
-            },
-            new Cave
-            {
-                IdentificationCode = "DEMO-0002",
-                CaveTypeId = pitTypeId,
-                RockTypeId = limestoneId,
-                Region = "Brașov",
-                Depth = 154m,
-                ClosestAddress = "Forest road 12, km 3 (redacted for non-members)",
-            },
-            parents: [new ParentSpec(area.Id, IsPrimary: true)], ct);
+        var protectedPitId = await db.Caves
+            .Where(c => c.IdentificationCode == "DEMO-0002")
+            .Select(c => (Guid?)c.Id)
+            .FirstOrDefaultAsync(ct);
+        if (protectedPitId is null)
+        {
+            var protectedPit = await writer.CreateCaveAsync(
+                new Feature
+                {
+                    Name = "Avenul Demo Protejat",
+                    Description = "Protected demo pit — exact location restricted (bat colony).",
+                    LocationProtected = true,
+                    OwnerUserId = ownerUserId,
+                    Visibility = Visibility.Authenticated,
+                },
+                new Cave
+                {
+                    IdentificationCode = "DEMO-0002",
+                    CaveTypeId = pitTypeId,
+                    RockTypeId = limestoneId,
+                    Region = "Brașov",
+                    Depth = 154m,
+                    ClosestAddress = "Forest road 12, km 3 (redacted for non-members)",
+                },
+                parents: [new ParentSpec(areaId.Value, IsPrimary: true)], ct);
+            protectedPitId = protectedPit.Id;
+        }
 
-        await AddEntranceAsync(writer, protectedPit.Id, ownerUserId, naturalEntranceId,
-            "Shaft", 25.2101, 45.5187, 1420m, isMain: true, ct);
-        // The protection flag was set at creation; restamp the subtree now that the
-        // entrance exists.
-        await writer.SetLocationProtectedAsync(protectedPit.Id, true, ct);
+        if (await EnsureEntranceAsync(db, writer, protectedPitId.Value, ownerUserId, naturalEntranceId,
+                "Shaft", 25.2101, 45.5187, 1420m, isMain: true, ct))
+        {
+            // The protection flag was set at creation; restamp the subtree now that the
+            // entrance exists.
+            await writer.SetLocationProtectedAsync(protectedPitId.Value, true, ct);
+        }
 
-        return bigDemo.Id;
+        return bigDemoId.Value;
+    }
+
+    /// <summary>
+    /// An entrance by name under its cave, written only where the cave does not already have
+    /// one of that name. Answers whether anything was written, for a caller with something to
+    /// do only then.
+    /// </summary>
+    private static async Task<bool> EnsureEntranceAsync(
+        SilexGisDbContext db, FeatureWriteService writer, Guid caveFeatureId, Guid ownerUserId,
+        long entranceTypeId, string name, double lon, double lat, decimal altitude, bool isMain,
+        CancellationToken ct)
+    {
+        if (await db.Features.AnyAsync(
+                f => f.Kind == FeatureKind.CaveEntrance && f.Entrance!.CaveFeatureId == caveFeatureId && f.Name == name, ct))
+        {
+            return false;
+        }
+
+        await AddEntranceAsync(writer, caveFeatureId, ownerUserId, entranceTypeId, name, lon, lat, altitude, isMain, ct);
+        return true;
     }
 
     private static async Task AddEntranceAsync(
@@ -565,35 +663,49 @@ public static class DemoSeeder
     private static async Task SeedGenericFeaturesAsync(
         SilexGisDbContext db, FeatureWriteService writer, Guid ownerUserId, Guid demoCaveId, CancellationToken ct)
     {
-        if (await db.Features.AnyAsync(f => f.Name == "Dolina Demo", ct))
-        {
-            return;
-        }
-
         var sinkholeTypeId = await db.FeatureTypes.Where(t => t.Code == "sinkhole").Select(t => t.Id).SingleAsync(ct);
         var fractureTypeId = await db.FeatureTypes.Where(t => t.Code == "fracture_line").Select(t => t.Id).SingleAsync(ct);
         var associatedCaveKindId = await db.LinkKinds.Where(k => k.Code == "associated_cave").Select(k => k.Id).SingleAsync(ct);
 
-        var sinkhole = await writer.CreateGenericAsync(
-            new Feature
-            {
-                Name = "Dolina Demo",
-                FeatureTypeId = sinkholeTypeId,
-                Geom = new Point(25.4455, 45.5301) { SRID = 4326 },
-                Description = "Demo sinkhole above the main gallery.",
-                Properties = """{"depth_m": 12.5, "diameter_m": 30}""",
-                OwnerUserId = ownerUserId,
-                Visibility = Visibility.Public,
-            },
-            parents: [], ct);
+        // Each row on its own guard — the sinkhole, its link to the cave, the fracture — so a
+        // lost one comes back on the next run and the others are left as they are.
+        var sinkholeId = await db.Features
+            .Where(f => f.Name == "Dolina Demo")
+            .Select(f => (Guid?)f.Id)
+            .FirstOrDefaultAsync(ct);
+        if (sinkholeId is null)
+        {
+            var sinkhole = await writer.CreateGenericAsync(
+                new Feature
+                {
+                    Name = "Dolina Demo",
+                    FeatureTypeId = sinkholeTypeId,
+                    Geom = new Point(25.4455, 45.5301) { SRID = 4326 },
+                    Description = "Demo sinkhole above the main gallery.",
+                    Properties = """{"depth_m": 12.5, "diameter_m": 30}""",
+                    OwnerUserId = ownerUserId,
+                    Visibility = Visibility.Public,
+                },
+                parents: [], ct);
+            sinkholeId = sinkhole.Id;
+        }
 
         // The old hardcoded cave association is a typed, locating link now.
-        db.FeatureLinks.Add(new FeatureLink
+        if (!await db.FeatureLinks.AnyAsync(
+                l => l.FromId == sinkholeId && l.ToId == demoCaveId && l.LinkKindId == associatedCaveKindId, ct))
         {
-            FromId = sinkhole.Id,
-            ToId = demoCaveId,
-            LinkKindId = associatedCaveKindId,
-        });
+            db.FeatureLinks.Add(new FeatureLink
+            {
+                FromId = sinkholeId.Value,
+                ToId = demoCaveId,
+                LinkKindId = associatedCaveKindId,
+            });
+        }
+
+        if (await db.Features.AnyAsync(f => f.Name == "Falia Demo", ct))
+        {
+            return;
+        }
 
         await writer.CreateGenericAsync(
             new Feature
@@ -626,11 +738,6 @@ public static class DemoSeeder
     private static async Task SeedMoreCavesAsync(
         SilexGisDbContext db, FeatureWriteService writer, Guid ownerUserId, CancellationToken ct)
     {
-        if (await db.Caves.AnyAsync(c => c.IdentificationCode == "DEMO-0003", ct))
-        {
-            return;
-        }
-
         var caveTypeId = await db.CaveTypes.Where(t => t.Code == "cave").Select(t => t.Id).SingleAsync(ct);
         var pitTypeId = await db.CaveTypes.Where(t => t.Code == "pit").Select(t => t.Id).SingleAsync(ct);
         var limestoneId = await db.RockTypes.Where(t => t.Code == "limestone").Select(t => t.Id).SingleAsync(ct);
@@ -653,6 +760,18 @@ public static class DemoSeeder
 
         foreach (var (code, name, description, typeId, visibility, length, depth, region, lon, lat, altitude) in more)
         {
+            // Per cave, so a lost one comes back on the next run and the rest stay as they are.
+            var caveId = await db.Caves
+                .Where(c => c.IdentificationCode == code)
+                .Select(c => (Guid?)c.Id)
+                .FirstOrDefaultAsync(ct);
+            if (caveId is not null)
+            {
+                await EnsureEntranceAsync(db, writer, caveId.Value, ownerUserId, naturalEntranceId,
+                    name + " entrance", lon, lat, altitude, isMain: true, ct);
+                continue;
+            }
+
             var cave = await writer.CreateCaveAsync(
                 new Feature
                 {
@@ -919,11 +1038,6 @@ public static class DemoSeeder
     private static async Task SeedExpeditionsAsync(
         SilexGisDbContext db, Guid ownerUserId, CancellationToken ct)
     {
-        if (await db.Expeditions.AnyAsync(x => x.Name.StartsWith("Demo:"), ct))
-        {
-            return;
-        }
-
         // Fixed dates rather than relative to now, for the reason the trips above give: a demo
         // that drifts is a demo whose screenshots stop matching it.
         //
@@ -964,6 +1078,13 @@ public static class DemoSeeder
         var index = 0;
         foreach (var (name, description, start, end, visibility, state, publishedAt) in camps)
         {
+            // Per camp, so a lost one comes back on the next run and the rest stay as they are.
+            if (await db.Expeditions.AnyAsync(x => x.Name == name, ct))
+            {
+                index++;
+                continue;
+            }
+
             var camp = new Expedition
             {
                 Name = name,
@@ -999,15 +1120,15 @@ public static class DemoSeeder
     /// totals are captioned about.
     /// </para>
     /// <para>
-    /// Guarded on membership rows of its own rather than on the camps' absence, so a database
-    /// seeded before this block existed picks the rows up on the next run instead of being skipped
-    /// forever by a guard written about something else.
+    /// Guarded per membership rather than on the camps' absence or on any membership at all, so a
+    /// database seeded before this block existed picks the rows up on the next run, and one that
+    /// lost a membership gets it back.
     /// </para>
     /// </remarks>
     private static async Task SeedExpeditionTripsAsync(SilexGisDbContext db, CancellationToken ct)
     {
         var camp = await db.Expeditions.FirstOrDefaultAsync(x => x.Name == FortnightCampName, ct);
-        if (camp is null || await db.ExpeditionTrips.AnyAsync(m => m.ExpeditionId == camp.Id, ct))
+        if (camp is null)
         {
             return;
         }
@@ -1172,15 +1293,15 @@ public static class DemoSeeder
     /// where four were there.
     /// </para>
     /// <para>
-    /// Guarded on rows of its own rather than on the camps' absence, so a database seeded before
-    /// this block existed picks the rows up on the next run instead of being skipped forever by a
-    /// guard written about something else.
+    /// Guarded per row rather than on the camps' absence or on any row at all, so a database seeded
+    /// before this block existed picks the rows up on the next run, and one that lost a stay gets
+    /// it back.
     /// </para>
     /// </remarks>
     private static async Task SeedExpeditionRosterAsync(SilexGisDbContext db, CancellationToken ct)
     {
         var camp = await db.Expeditions.FirstOrDefaultAsync(x => x.Name == FortnightCampName, ct);
-        if (camp is null || await db.ExpeditionRoster.AnyAsync(r => r.ExpeditionId == camp.Id, ct))
+        if (camp is null)
         {
             return;
         }
@@ -1203,16 +1324,31 @@ public static class DemoSeeder
         var start = camp.StartDate;
         var end = camp.EndDate ?? camp.StartDate;
 
-        void Add(Guid caverId, string role, DateOnly from, DateOnly? to, string? note = null) =>
+        // A stay is one person, one role, from one day: that triple is what tells a row that was
+        // lost from one that was never there.
+        var held = await db.ExpeditionRoster
+            .Where(r => r.ExpeditionId == camp.Id)
+            .Select(r => new { r.CaverId, r.RoleId, r.FromDate })
+            .ToListAsync(ct);
+
+        void Add(Guid caverId, string role, DateOnly from, DateOnly? to, string? note = null)
+        {
+            var roleId = RoleId(role);
+            if (held.Any(h => h.CaverId == caverId && h.RoleId == roleId && h.FromDate == from))
+            {
+                return;
+            }
+
             db.ExpeditionRoster.Add(new ExpeditionRosterEntry
             {
                 ExpeditionId = camp.Id,
                 CaverId = caverId,
-                RoleId = RoleId(role),
+                RoleId = roleId,
                 FromDate = from,
                 ToDate = DayRange.EndForStorage(from, to),
                 Note = note,
             });
+        }
 
         // One person, two roles, over spans that overlap: nothing forbids it, and it is what a
         // count of rows gets wrong.
@@ -1241,11 +1377,6 @@ public static class DemoSeeder
     private static async Task SeedMapViewsAsync(
         SilexGisDbContext db, Guid ownerUserId, CancellationToken ct)
     {
-        if (await db.MapViews.AnyAsync(v => v.Name.StartsWith("Demo:"), ct))
-        {
-            return;
-        }
-
         var views = new[]
         {
             ("Demo: Platoul Demo", "The demo karst area, at plateau scale.", 25.44, 45.525, 13.0),
@@ -1254,6 +1385,12 @@ public static class DemoSeeder
 
         foreach (var (name, description, lon, lat, zoom) in views)
         {
+            // Per view, so a lost one comes back on the next run and the other stays as it is.
+            if (await db.MapViews.AnyAsync(v => v.Name == name, ct))
+            {
+                continue;
+            }
+
             db.MapViews.Add(new MapView
             {
                 Name = name,
@@ -1263,5 +1400,180 @@ public static class DemoSeeder
                 Visibility = Visibility.Public,
             });
         }
+    }
+
+    /// <summary>
+    /// Two ways on that the camp's trips found, so the camp's leads board has leads to show — one
+    /// still going and one that closed, since grouping by exactly that is what the board does.
+    /// </summary>
+    /// <remarks>
+    /// A lead reaches the board by being named by a member trip, so each is named by one of the
+    /// camp's trips under the objective role. Guarded per lead; the naming helper says nothing
+    /// twice, so the naming is its own guard.
+    /// </remarks>
+    private static async Task SeedContinuationsAsync(
+        SilexGisDbContext db, FeatureWriteService writer, Guid ownerUserId, CancellationToken ct)
+    {
+        var typeId = await db.FeatureTypes
+            .Where(t => t.Code == FeatureTypeSeeds.Continuation)
+            .Select(t => (long?)t.Id)
+            .FirstOrDefaultAsync(ct);
+        var campTripIds = await db.TripLogs
+            .Where(t => t.Title.StartsWith(CampTripPrefix))
+            .OrderBy(t => t.TripDate)
+            .Select(t => t.Id)
+            .ToListAsync(ct);
+        if (typeId is null || campTripIds.Count == 0)
+        {
+            return;
+        }
+
+        var leads = new[]
+        {
+            ("Demo: draughting rift", "A rift at the end of the upper series with a strong draught.", 25.4478, 45.5321,
+                """{"state":"continues","grade":"A","note":"Needs a hammer and a short ladder; the draught is strong."}"""),
+            ("Demo: choked crawl", "A low crawl off the main gallery that closed down in gravel.", 25.4466, 45.5309,
+                """{"state":"dead-end","grade":"D","note":"Dug for two hours; gravel all the way."}"""),
+        };
+
+        var index = 0;
+        foreach (var (name, description, lon, lat, properties) in leads)
+        {
+            var leadId = await db.Features
+                .Where(f => f.Name == name)
+                .Select(f => (Guid?)f.Id)
+                .FirstOrDefaultAsync(ct);
+            if (leadId is null)
+            {
+                var lead = await writer.CreateGenericAsync(
+                    new Feature
+                    {
+                        Name = name,
+                        Description = description,
+                        FeatureTypeId = typeId.Value,
+                        Geom = new Point(lon, lat) { SRID = 4326 },
+                        Properties = properties,
+                        OwnerUserId = ownerUserId,
+                        Visibility = Visibility.Public,
+                    },
+                    parents: [], ct);
+                leadId = lead.Id;
+            }
+
+            if (!await TripRoleLinks.NameFeatureAsync(
+                    db, campTripIds[index % campTripIds.Count], leadId.Value, "trip-objective", ownerUserId, ct))
+            {
+                throw new InvalidOperationException("Relation type 'trip-objective' is not seeded.");
+            }
+
+            index++;
+        }
+    }
+
+    /// <summary>
+    /// Club dates, so the calendar and the events surface show every reading they have: a date
+    /// on its own, a series of them, and one people have answered.
+    /// </summary>
+    /// <remarks>
+    /// Fixed dates, for the reason the trips give. Guarded per row — per occurrence of the series
+    /// and per answer — so a database seeded before this block existed picks them up on the next
+    /// run and one that lost a row gets it back. A lost occurrence rejoins its series, because the
+    /// series identity is read off the occurrences still present rather than minted afresh.
+    /// </remarks>
+    private static async Task SeedEventsAsync(SilexGisDbContext db, Guid ownerUserId, CancellationToken ct)
+    {
+        await EnsureEventAsync(db, ownerUserId, new DemoEvent(
+            "Demo: autumn general meeting", EventKind.ClubMeeting, new DateOnly(2026, 10, 20), new TimeOnly(19, 0),
+            "The club room", "Accounts, the winter programme and the new rope.", ActivityState.Confirmed), null, null, ct);
+
+        // Six Tuesday evenings of rope training, written out as the events route writes a series.
+        const string trainingTitle = "Demo: Tuesday rope training";
+        var plan = EventRecurrence.Plan(new DateOnly(2026, 9, 1), EventRecurrenceFrequency.Weekly, 6, null);
+        if (!plan.Refused)
+        {
+            var seriesId = await db.Events
+                .Where(e => e.Title == trainingTitle && e.SeriesId != null)
+                .Select(e => e.SeriesId)
+                .FirstOrDefaultAsync(ct) ?? Guid.CreateVersion7();
+            foreach (var day in plan.Days)
+            {
+                await EnsureEventAsync(db, ownerUserId, new DemoEvent(
+                    trainingTitle, EventKind.Training, day, new TimeOnly(18, 30),
+                    "The climbing wall", "Single-rope technique; bring your own harness.", ActivityState.Planned),
+                    seriesId, "Every Tuesday, six weeks", ct);
+            }
+        }
+
+        // One people have answered, with every answer in the vocabulary, as on the planned trip.
+        var gearCheck = await EnsureEventAsync(db, ownerUserId, new DemoEvent(
+            "Demo: gear check evening", EventKind.GearCheck, new DateOnly(2026, 9, 24), new TimeOnly(18, 0),
+            "The store", "Every rope and every harness, logged and inspected.", ActivityState.Planned), null, null, ct);
+        var caverIds = await db.Cavers
+            .Where(c => c.FullName.EndsWith(" Demo"))
+            .OrderBy(c => c.FullName)
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+        if (caverIds.Count < 4)
+        {
+            return;
+        }
+
+        var asked = new DateTimeOffset(2026, 9, 10, 9, 0, 0, TimeSpan.Zero);
+        var answers = new (int Caver, TripInvitationResponse Response, int Minutes)[]
+        {
+            (0, TripInvitationResponse.Yes, 0),
+            (1, TripInvitationResponse.Yes, 30),
+            (2, TripInvitationResponse.No, 60),
+            (3, TripInvitationResponse.Maybe, 90),
+        };
+        foreach (var (caver, response, minutes) in answers)
+        {
+            var caverId = caverIds[caver];
+            if (await db.TripInvitations.AnyAsync(x => x.EventId == gearCheck.Id && x.CaverId == caverId, ct))
+            {
+                continue;
+            }
+
+            db.TripInvitations.Add(new TripInvitation
+            {
+                EventId = gearCheck.Id,
+                CaverId = caverId,
+                Response = response,
+                InvitedAt = asked,
+                RespondedAt = asked.AddHours(26).AddMinutes(minutes),
+                Note = response == TripInvitationResponse.Maybe ? "If the car is back from the garage." : null,
+            });
+        }
+    }
+
+    private sealed record DemoEvent(
+        string Title, EventKind Kind, DateOnly Day, TimeOnly StartTime, string Place, string Description, ActivityState State);
+
+    /// <summary>An event by title and day, written only where the pair is not already there.</summary>
+    private static async Task<Event> EnsureEventAsync(
+        SilexGisDbContext db, Guid ownerUserId, DemoEvent demo, Guid? seriesId, string? seriesRule, CancellationToken ct)
+    {
+        var existing = await db.Events.FirstOrDefaultAsync(e => e.Title == demo.Title && e.StartDate == demo.Day, ct);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var row = new Event
+        {
+            Title = demo.Title,
+            Description = demo.Description,
+            Kind = demo.Kind,
+            StartDate = demo.Day,
+            StartTime = demo.StartTime,
+            Place = demo.Place,
+            OwnerUserId = ownerUserId,
+            Visibility = Visibility.Authenticated,
+            State = demo.State,
+            SeriesId = seriesId,
+            SeriesRule = seriesRule,
+        };
+        db.Events.Add(row);
+        return row;
     }
 }

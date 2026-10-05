@@ -16,6 +16,10 @@ amândouă sunt despre ca o echipă să știe unde se află.
 **Activitate → Liste de verificare.** Listele pe care le parcurge o echipă înainte de plecare:
 autorizație, cheie luată, echipament rezervat, ce verifică efectiv clubul.
 
+O listă, **Înainte de tură**, vine cu orice instalare: administratorul o deține și orice cont
+conectat o poate citi. Copiaz-o pentru turele tale sau cere unui administrator să o adapteze
+pentru toată lumea — este o listă obișnuită, iar modificările administratorului rămân.
+
 ## Scrierea uneia
 
 **Listă de verificare nouă**: un titlu, o descriere, **cine o poate citi** și **rândurile**.

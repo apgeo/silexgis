@@ -16,6 +16,10 @@ both of them are about a party knowing where it stands.
 **Activity → Checklists.** The lists a party works through before it sets off: permit, key
 collected, gear booked, whatever your club actually checks.
 
+One list, **Before a trip**, ships with every installation: the administrator owns it and every
+signed-in account can read it. Copy it for your own trips, or ask an administrator to adapt it
+for everybody — it is an ordinary list, and the administrator's edits stand.
+
 ## Writing one
 
 **New checklist**: a title, a description, **who may read it**, and the **lines**.

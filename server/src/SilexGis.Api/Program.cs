@@ -472,6 +472,16 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
         await IdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
         await TestLoginSeeder.SeedAsync(scope.ServiceProvider);
 
+        // The checklist the product ships, owned by the bootstrap administrator and published to
+        // every account. An installation with no administrator yet has nobody to own it, and gets
+        // it on the first start after one exists.
+        var administrators = await scope.ServiceProvider
+            .GetRequiredService<UserManager<SilexGisUser>>().GetUsersInRoleAsync(GlobalRoles.Admin);
+        if (administrators.Count > 0)
+        {
+            await ChecklistSeeder.SeedAsync(db, administrators[0].Id);
+        }
+
         // Registration joins new accounts to these groups by slug; a slug naming no
         // group would silently do nothing per signup, so it is called out once here.
         var configuredDefaults = scope.ServiceProvider

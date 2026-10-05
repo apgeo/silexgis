@@ -4,6 +4,7 @@ using Npgsql;
 using Shouldly;
 using SilexGis.Api.Tests.Support;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Features;
 using SilexGis.Domain.ResLinks;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Persistence;
@@ -94,6 +95,84 @@ public sealed class DemoSeedIdempotencyTests : IAsyncLifetime, IClassFixture<Pos
         await using var after = CreateContext();
         (await RowCountsAsync(after)).ShouldBe(afterFirst);
     }
+
+    /// <summary>
+    /// A row lost from the dataset comes back on the next run, whichever block it belongs to, and
+    /// nothing else moves. The guard every block used to carry — stop at the first sign of the
+    /// block — made a loss permanent: delete one camp and no run ever wrote it again, and on the
+    /// page that read as the feature being empty rather than as the seed being stale.
+    /// </summary>
+    [Theory]
+    [InlineData("features", "DELETE FROM features WHERE name = 'Falia Demo'")]
+    [InlineData("features", "DELETE FROM features WHERE name = 'Avenul Demo Vântului entrance'")]
+    [InlineData("features", "DELETE FROM features WHERE name = 'Demo: choked crawl'")]
+    [InlineData("expeditions", "DELETE FROM expeditions WHERE name = 'Demo: winter recce'")]
+    [InlineData("expedition_roster", "DELETE FROM expedition_roster WHERE id = (SELECT id FROM expedition_roster ORDER BY from_date, id LIMIT 1)")]
+    [InlineData("map_views", "DELETE FROM map_views WHERE name = 'Demo: Bihor caves'")]
+    [InlineData("events", "DELETE FROM events WHERE title = 'Demo: Tuesday rope training' AND start_date = (SELECT MIN(start_date) FROM events WHERE title = 'Demo: Tuesday rope training')")]
+    [InlineData("trip_invitations", "DELETE FROM trip_invitations WHERE id = (SELECT id FROM trip_invitations WHERE event_id IS NOT NULL ORDER BY id LIMIT 1)")]
+    public async Task A_row_lost_from_the_dataset_is_put_back_on_the_next_run(string table, string loss)
+    {
+        await using (var db = CreateContext())
+        {
+            await DemoSeeder.SeedAsync(db, Owner);
+        }
+
+        long seeded;
+        await using (var strip = CreateContext())
+        {
+            seeded = await CountAsync(strip, table);
+            seeded.ShouldBeGreaterThan(0);
+            await strip.Database.ExecuteSqlRawAsync(loss);
+            (await CountAsync(strip, table)).ShouldBe(seeded - 1);
+        }
+
+        await using (var again = CreateContext())
+        {
+            await DemoSeeder.SeedAsync(again, Owner);
+        }
+
+        await using var read = CreateContext();
+        (await CountAsync(read, table)).ShouldBe(seeded);
+
+        // And a series row that came back is in its series, not alone beside it.
+        if (table == "events")
+        {
+            (await read.Events.Where(e => e.Title == "Demo: Tuesday rope training")
+                .Select(e => e.SeriesId).Distinct().CountAsync()).ShouldBe(1);
+        }
+    }
+
+    /// <summary>
+    /// The dataset shows the surfaces built since the demo was first written: a camp's leads
+    /// board has leads, the calendar has club dates, and one of them has answers.
+    /// </summary>
+    [Fact]
+    public async Task The_dataset_has_leads_for_the_camp_board_and_club_dates_with_answers()
+    {
+        await using (var db = CreateContext())
+        {
+            await DemoSeeder.SeedAsync(db, Owner);
+        }
+
+        await using var read = CreateContext();
+        var continuationTypeId = await read.FeatureTypes
+            .Where(t => t.Code == FeatureTypeSeeds.Continuation).Select(t => t.Id).SingleAsync();
+        (await read.Features.CountAsync(f => f.FeatureTypeId == continuationTypeId && f.Name != null && f.Name.StartsWith("Demo:")))
+            .ShouldBe(2);
+
+        (await read.Events.CountAsync(e => e.Title == "Demo: Tuesday rope training")).ShouldBe(6);
+        (await read.Events.Where(e => e.Title == "Demo: Tuesday rope training").Select(e => e.SeriesId).Distinct().CountAsync()).ShouldBe(1);
+        (await read.Events.CountAsync(e => e.Title == "Demo: autumn general meeting")).ShouldBe(1);
+        var gearCheckId = await read.Events.Where(e => e.Title == "Demo: gear check evening").Select(e => e.Id).SingleAsync();
+        (await read.TripInvitations.CountAsync(i => i.EventId == gearCheckId)).ShouldBe(4);
+    }
+
+    /// <summary>Rows in a table named by this file's own constants — never by anything a caller typed.</summary>
+#pragma warning disable EF1003 // the table name is one of this file's literals, not input
+    private static Task<long> CountAsync(SilexGisDbContext db, string table) =>
+        db.Database.SqlQueryRaw<long>("SELECT count(*)::bigint AS \"Value\" FROM " + table).SingleAsync();
+#pragma warning restore EF1003
 
     /// <summary>
     /// Which caves the seeded trips are about, and what they did there, now that the pairing is
