@@ -33,9 +33,9 @@ import { formatTripDates, isMultiDay } from '../../components/trips/tripDates.ts
 // The one stylesheet about paper. Its rules are written for the trip's write-up and are the
 // same rules this document needs — a measure for prose, the chrome hidden on print, the map
 // replaced by its written form — so it is shared rather than copied under a second name.
-import '../trips/TripReport.css';
-import TripGeometryField from '../trips/TripGeometryField.tsx';
-import { formatPosition, shapeLabelKey, tripGeometrySummary } from '../trips/tripGeometrySummary.ts';
+import '../../components/trips/TripReport.css';
+import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
+import { formatPosition, shapeLabelKey, tripGeometrySummary } from '../../components/trips/tripGeometrySummary.ts';
 import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
 import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
 

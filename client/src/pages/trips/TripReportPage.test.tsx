@@ -71,7 +71,7 @@ vi.mock('../../api/download.ts', () => ({
 
 // The sketch is drawn by a real map, which wants a browser; the report's own contribution is what
 // it prints in the map's place, and that is what these tests are about.
-vi.mock('./TripGeometryField.tsx', () => ({
+vi.mock('../../components/trips/TripGeometryField.tsx', () => ({
   default: () => <div data-testid="stub-trip-map" />,
 }));
 vi.mock('./TripRoleFields.tsx', () => ({ default: () => <div data-testid="stub-role-fields" /> }));

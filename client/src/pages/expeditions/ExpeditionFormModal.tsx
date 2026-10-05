@@ -11,8 +11,8 @@ import {
   type ExpeditionWrite,
 } from '../../api/hooks.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
-import TripGeometryField from '../trips/TripGeometryField.tsx';
-import type { TripGeometry } from '../trips/tripGeometry.ts';
+import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
+import type { TripGeometry } from '../../components/trips/tripGeometry.ts';
 
 const { RangePicker } = DatePicker;
 

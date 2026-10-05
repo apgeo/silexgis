@@ -17,7 +17,7 @@ vi.mock('../../api/hooks.ts', () => ({
 // The working-area map builds an OpenLayers map against a container jsdom cannot size; the
 // field is a form control like any other here, so a stub that reports the value it holds is
 // what this test needs from it.
-vi.mock('../trips/TripGeometryField.tsx', () => ({
+vi.mock('../../components/trips/TripGeometryField.tsx', () => ({
   default: ({ value }: { value?: unknown }) => (
     <div data-testid="expedition-working-area">{value ? 'a shape' : 'no shape'}</div>
   ),
