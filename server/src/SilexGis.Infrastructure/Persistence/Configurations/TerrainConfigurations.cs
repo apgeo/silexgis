@@ -43,6 +43,15 @@ public sealed class TerrainBuildConfiguration : IEntityTypeConfiguration<Terrain
 
         // The sweep that finds builds still owed work after a restart.
         builder.HasIndex(x => x.Status).HasFilter("status in (0, 1)");
+
+        // The build this one extends. Set to null when that build goes, rather than holding it: an
+        // extension copies what it needs from its base when it bakes and carries the base's credit
+        // in its own sources, so once it has baked nothing it serves depends on the base. The one
+        // case that does — an extension that has not baked yet — is refused at the delete, where
+        // it can be explained, rather than by a constraint that would refuse for ever.
+        builder.HasOne<TerrainBuild>().WithMany().HasForeignKey(x => x.BaseBuildId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.BaseBuildId);
     }
 }
 
@@ -56,6 +65,7 @@ public sealed class TerrainBuildSourceConfiguration : IEntityTypeConfiguration<T
         builder.Property(x => x.Reference).HasMaxLength(2000);
         builder.Property(x => x.Attribution).HasMaxLength(500);
         builder.Property(x => x.Licence).HasMaxLength(200);
+        builder.Property(x => x.Inherited).HasDefaultValue(false);
 
         // A source line describes bytes that only exist because of its build, and the credit it
         // carries is meaningless apart from the pyramid it was baked into.

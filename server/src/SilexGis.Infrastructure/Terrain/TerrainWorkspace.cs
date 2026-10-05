@@ -353,7 +353,14 @@ public sealed class TerrainWorkspace(IOptions<TerrainBuildOptions> options, ILog
         Directory.Delete(source, recursive: true);
     }
 
-    private static void Copy(string source, string destination)
+    /// <summary>
+    /// Copies a directory tree, leaving the source exactly as it was.
+    /// </summary>
+    /// <remarks>
+    /// Public for the one caller that wants a copy and not a move: a build that extends another
+    /// starts from the base's published pyramid, and the base has to go on being served.
+    /// </remarks>
+    public static void Copy(string source, string destination)
     {
         Directory.CreateDirectory(destination);
 

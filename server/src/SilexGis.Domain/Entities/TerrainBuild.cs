@@ -155,6 +155,27 @@ public class TerrainBuild : ITimestamped, IAuditable
     /// </remarks>
     public int RequestedMaxDepth { get; set; }
 
+    /// <summary>
+    /// The finished build this one adds rasters to, when it is an extension rather than a bake
+    /// from nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An extension is a build of its own, kept and drawable like any other: it starts from a copy
+    /// of the base's published pyramid, has the tile-maker add its new rasters to that copy without
+    /// re-meshing what is already there, and publishes at an address of its own. The base stays
+    /// exactly as it was. That is the difference between minutes and hours when one fine survey is
+    /// added to a region already baked, and the reason the relationship is worth recording.
+    /// </para>
+    /// <para>
+    /// Null once the base is deleted, rather than a refusal to delete it: the extension copied what
+    /// it needed when it baked, and its sources carry the base's credit as their own, so nothing it
+    /// serves depends on the base afterwards. Deleting a base while an extension of it has not yet
+    /// baked is refused instead, because that extension still needs the base's pyramid.
+    /// </para>
+    /// </remarks>
+    public Guid? BaseBuildId { get; set; }
+
     public TerrainBuildStatus Status { get; set; } = TerrainBuildStatus.Queued;
 
     public TerrainBuildPhase Phase { get; set; } = TerrainBuildPhase.Pending;
@@ -285,6 +306,19 @@ public class TerrainBuildSource
 
     /// <summary>The licence the data is held under, recorded verbatim as the publisher states it.</summary>
     public string? Licence { get; set; }
+
+    /// <summary>
+    /// Whether this source came with the pyramid this build extends, rather than being a raster
+    /// this build obtains and meshes itself.
+    /// </summary>
+    /// <remarks>
+    /// An extension carries its base's sources as its own, because the pyramid it publishes holds
+    /// their tiles and owes their credit — and the credit has to survive the base being deleted.
+    /// What it must not do is obtain or convert them again: their tiles are already in the copy it
+    /// starts from, and meshing them a second time is the full re-bake the extension exists to
+    /// avoid. The step that gathers rasters therefore passes these over.
+    /// </remarks>
+    public bool Inherited { get; set; }
 }
 
 /// <summary>

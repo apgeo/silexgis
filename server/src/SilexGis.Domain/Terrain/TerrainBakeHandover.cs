@@ -99,11 +99,24 @@ public static class TerrainBakeHandover
 /// surveyed altitude to be corrected by the local geoid undulation before it will sit on the drawn
 /// ground; not converting leaves the two agreeing because they are wrong in the same direction.
 /// </param>
+/// <param name="Modify">
+/// Whether the rasters are added to a pyramid already in the output directory rather than meshed
+/// into an empty one. The tile-maker's own word for it, and the one option of its that this
+/// request can carry beyond the four facts above.
+/// <para>
+/// Used on its own the option is a trap: the tiles already there are kept and the manifest is
+/// rewritten from the new rasters alone, so every earlier tile is advertised nowhere and the
+/// pyramid draws nothing but the newest patch. The only thing that sets this is a build that
+/// extends another, and that build puts the base's coverage back into the manifest before anything
+/// reads it — so the option reaches the tile-maker through this field and no other way.
+/// </para>
+/// </param>
 public sealed record TerrainBakeRequest(
     string InputDirectory,
     string OutputDirectory,
     int MaxDepth,
-    TerrainHeightDatum Datum)
+    TerrainHeightDatum Datum,
+    bool Modify = false)
 {
     /// <summary>
     /// The request as the file holds it.
@@ -111,14 +124,16 @@ public sealed record TerrainBakeRequest(
     /// <remarks>
     /// Line endings are explicitly the single character, whatever the host writing this uses. The
     /// side reading it is a shell script, and a depth of "13" followed by a carriage return is not
-    /// a number.
+    /// a number. The line asking for an addition is written only when one is asked for, so the
+    /// request a fresh build writes is byte for byte what it was before additions existed.
     /// </remarks>
     public string ToText() =>
         string.Concat(
             "input=", InputDirectory, "\n",
             "output=", OutputDirectory, "\n",
             "maxDepth=", MaxDepth.ToString(CultureInfo.InvariantCulture), "\n",
-            "datum=", Datum == TerrainHeightDatum.Ellipsoidal ? "ellipsoidal" : "orthometric", "\n");
+            "datum=", Datum == TerrainHeightDatum.Ellipsoidal ? "ellipsoidal" : "orthometric", "\n",
+            Modify ? "modify=true\n" : "");
 }
 
 /// <summary>How a bake ended, as the other side reports it.</summary>

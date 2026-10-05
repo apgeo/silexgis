@@ -31,6 +31,15 @@ namespace SilexGis.Infrastructure.Terrain;
 /// nothing anywhere reports it. So the log is read, every time, and a bake that says it degraded is
 /// a failed bake however cleanly the tool exited.
 /// </para>
+/// <para>
+/// A build that extends another is meshed the same way with two differences at either end. Before
+/// the request is written, the base's published pyramid is copied into this build's own tiles
+/// directory and the request asks the tool to add to what is there rather than start from
+/// nothing. After the tool has answered well, the manifest it wrote — which describes the new
+/// rasters alone and un-advertises every tile of the base — is merged with the base's, so that the
+/// check which follows sees a pyramid advertising everything it holds. The tool's addition is never
+/// asked for by any other route.
+/// </para>
 /// </remarks>
 public sealed class TerrainBakePhase(
     ITerrainRasterPreparer preparer,
@@ -82,8 +91,14 @@ public sealed class TerrainBakePhase(
     /// pyramid and fails or accepts what the earlier bake produced.</item>
     /// <item>A request with no answer beside it: something may be meshing into this very directory
     /// right now, so there is nothing finished to accept and the step is run, which waits for it.</item>
-    /// <item>Nothing at all: the only thing that removes it is a run of this step that read the log
-    /// and found the bake good, so a pyramid beside an absent spool is an adjudicated one.</item>
+    /// <item>A directory with neither: a handover this application began and never issued, because
+    /// it was stopped between making the directory and writing the request. The step is run and
+    /// starts the handover over. This is the case a build that extends another makes real — the
+    /// base's pyramid is copied into the tiles directory before the request is written, so a
+    /// pyramid is on disk that no bake has touched, and read as adjudicated it would be checked,
+    /// published and drawn as the extension without the new rasters ever having been meshed.</item>
+    /// <item>No directory at all: the only thing that removes it is a run of this step that read
+    /// the log and found the bake good, so a pyramid beside an absent spool is an adjudicated one.</item>
     /// </list>
     /// </remarks>
     public async Task<bool> IsAlreadyDoneAsync(TerrainBuildContext context, CancellationToken ct)
@@ -94,11 +109,15 @@ public sealed class TerrainBakePhase(
         }
 
         var spool = workspace.SpoolFor(context.Build.Id);
-        var resultPath = Path.Combine(spool, TerrainBakeHandover.ResultFileName);
+        if (!Directory.Exists(spool))
+        {
+            return true;
+        }
 
+        var resultPath = Path.Combine(spool, TerrainBakeHandover.ResultFileName);
         if (!File.Exists(resultPath))
         {
-            return !File.Exists(Path.Combine(spool, TerrainBakeHandover.RequestFileName));
+            return false;
         }
 
         var result = TerrainBakeResult.Parse(await File.ReadAllTextAsync(resultPath, ct));
@@ -151,14 +170,35 @@ public sealed class TerrainBakePhase(
                 + "again. Everything it has done so far is kept, so it will start from here.");
         }
 
+        var baseId = context.Build.BaseBuildId;
         var request = new TerrainBakeRequest(
             context.Directories.Prepared,
             context.Directories.Tiles,
             depth,
-            context.Build.HeightDatum);
+            context.Build.HeightDatum,
+            Modify: baseId is not null);
 
         var spool = workspace.SpoolFor(context.Build.Id);
-        var alreadyRunning = Handover(spool, request);
+        var alreadyRunning = InFlight(spool);
+
+        if (!alreadyRunning)
+        {
+            // In this order and no other. The spool directory is made first, empty, so that a
+            // process stopped anywhere between here and the request being issued leaves a
+            // directory with no request in it — which the next run reads as a handover to start
+            // over, never as a bake adjudicated. Only then is the base's pyramid copied in, which
+            // for a large region takes long enough to be interrupted; and only once the copy is
+            // whole is the request written, because the other side starts meshing into the output
+            // directory the moment it sees one.
+            Begin(spool);
+
+            if (baseId is { } extended)
+            {
+                await SeedFromBaseAsync(context, extended, ct);
+            }
+
+            Issue(spool, request);
+        }
 
         await context.ReportAsync(
             5,
@@ -172,9 +212,12 @@ public sealed class TerrainBakePhase(
         {
             var what = FormattableString.Invariant(
                 $"{prepared.Count} prepared raster(s) down to level {depth}");
+            var into = baseId is { } extended
+                ? $", added to the pyramid of build {TerrainPyramid.PublishedName(extended)}"
+                : "";
 
             await context.LogAsync(
-                $"Asked for a mesh of {what}, heights measured from "
+                $"Asked for a mesh of {what}{into}, heights measured from "
                 + $"{Datum(context.Build.HeightDatum)}.",
                 ct);
         }
@@ -206,47 +249,150 @@ public sealed class TerrainBakePhase(
     }
 
     /// <summary>
-    /// Puts the request where the other side will find it, and says whether one was already there.
+    /// Whether a request from an earlier attempt is still waiting for its answer.
     /// </summary>
     /// <remarks>
-    /// <para>
     /// A request left over from an earlier attempt is two different situations. If it has an answer
     /// beside it, that answer is about a bake that has already been dealt with — read as this
     /// attempt's it would say a build succeeded seconds after it started, having meshed nothing —
     /// so the whole directory goes and a fresh request takes its place. If it has no answer, a bake
     /// may be running right now against the very directory this one would write into, and starting
     /// a second is how two programs come to be writing one pyramid. That one is waited for instead.
-    /// </para>
-    /// <para>
-    /// Written under another name and renamed into place. A rename is the only way the other side
-    /// can be sure it is reading a whole file, and it reads whatever it finds the moment it finds
-    /// it: half a request is a bake of the wrong thing, silently. The bytes are plain, with no
-    /// byte-order mark and single-character line endings, because what reads them is a shell
-    /// script — a mark on the front makes the first line unmatchable and a carriage return on the
-    /// end makes a depth not a number.
-    /// </para>
     /// </remarks>
-    private static bool Handover(string spool, TerrainBakeRequest request)
+    private static bool InFlight(string spool) =>
+        File.Exists(Path.Combine(spool, TerrainBakeHandover.RequestFileName))
+        && !File.Exists(Path.Combine(spool, TerrainBakeHandover.ResultFileName));
+
+    /// <summary>
+    /// Makes the directory the two sides will meet in, empty, taking away whatever an earlier
+    /// attempt left there.
+    /// </summary>
+    private static void Begin(string spool)
     {
-        var requestPath = Path.Combine(spool, TerrainBakeHandover.RequestFileName);
-        var resultPath = Path.Combine(spool, TerrainBakeHandover.ResultFileName);
-
-        if (File.Exists(requestPath) && !File.Exists(resultPath))
-        {
-            return true;
-        }
-
         if (Directory.Exists(spool))
         {
             Directory.Delete(spool, recursive: true);
         }
 
         Directory.CreateDirectory(spool);
+    }
 
+    /// <summary>
+    /// Puts the request where the other side will find it.
+    /// </summary>
+    /// <remarks>
+    /// Written under another name and renamed into place. A rename is the only way the other side
+    /// can be sure it is reading a whole file, and it reads whatever it finds the moment it finds
+    /// it: half a request is a bake of the wrong thing, silently. The bytes are plain, with no
+    /// byte-order mark and single-character line endings, because what reads them is a shell
+    /// script — a mark on the front makes the first line unmatchable and a carriage return on the
+    /// end makes a depth not a number.
+    /// </remarks>
+    private static void Issue(string spool, TerrainBakeRequest request)
+    {
+        var requestPath = Path.Combine(spool, TerrainBakeHandover.RequestFileName);
         var partial = requestPath + TerrainBakeHandover.PartialSuffix;
         File.WriteAllText(partial, request.ToText(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         File.Move(partial, requestPath);
-        return false;
+    }
+
+    /// <summary>
+    /// Starts this build's tiles directory as a copy of the base's published pyramid, so that the
+    /// tile-maker has something to add to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A copy and not a move, whatever it weighs: the base is a build in its own right, drawable
+    /// and kept until somebody deletes it, and an extension that consumed its base would be a
+    /// rename of the base's tiles that no row describes. Taken from the published address rather
+    /// than from the base's own folder, because publishing moves the pyramid out of that folder
+    /// and the published copy is the one whose manifest was checked and stamped.
+    /// </para>
+    /// <para>
+    /// Whatever the tiles directory already holds is swept first. It is either empty, or the
+    /// leavings of a copy that was interrupted — and a pyramid assembled from half of one copy and
+    /// all of another is whole and well-formed and wrong.
+    /// </para>
+    /// </remarks>
+    private async Task SeedFromBaseAsync(TerrainBuildContext context, Guid baseId, CancellationToken ct)
+    {
+        var published = workspace.PublishedFor(baseId);
+        if (!workspace.HasPublishedPyramid(baseId))
+        {
+            throw new TerrainBuildException(
+                TerrainBuildFailures.BaseUnavailable,
+                $"The build this one extends ({TerrainPyramid.PublishedName(baseId)}) no longer "
+                + "has a pyramid where terrain is served from, so there is nothing to add the new "
+                + "rasters to. Start a fresh build over the whole area instead.");
+        }
+
+        await context.ReportAsync(2, "Copying the base pyramid", ct);
+        Clear(context.Directories.Tiles);
+        TerrainWorkspace.Copy(published, context.Directories.Tiles);
+
+        await context.LogAsync(
+            $"Started from a copy of the pyramid of build {TerrainPyramid.PublishedName(baseId)}.",
+            ct);
+    }
+
+    /// <summary>
+    /// Puts back into the manifest everything the base pyramid advertised, which the tile-maker's
+    /// addition threw away.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// After adding to a pyramid the tool rewrites the manifest from the new rasters alone — their
+    /// bounds, and at every level only the rectangles they produced — so every tile of the base is
+    /// still on disk and advertised nowhere, and a viewer never asks for it. That is the one shape
+    /// which validates as damaged nowhere and draws nothing but the newest patch, and it is caught
+    /// by the check that follows this step; what this does is make the pyramid one that check can
+    /// pass, by merging the two manifests. The rule for that lives in the domain and is tested
+    /// there; this is the place that applies it.
+    /// </para>
+    /// <para>
+    /// The base's manifest is read from its published address now rather than kept from before
+    /// the copy, because the run that reads the tool's answer may not be the run that asked — a
+    /// restart in between is ordinary — and the published copy is the one thing both runs can find.
+    /// Deleting a base while an extension of it has not finished is refused for exactly this
+    /// reason. Merging is a no-op the second time, so a run stopped between the merge and the
+    /// sweep that follows it merges again without harm.
+    /// </para>
+    /// </remarks>
+    private async Task MergeWithBaseAsync(TerrainBuildContext context, Guid baseId, CancellationToken ct)
+    {
+        var tiles = context.Directories.Tiles;
+
+        var baseManifest = TerrainManifestFile.Read(workspace.PublishedFor(baseId));
+        if (baseManifest is null)
+        {
+            Clear(tiles);
+            throw new TerrainBuildException(
+                TerrainBuildFailures.BaseUnavailable,
+                $"The build this one extends ({TerrainPyramid.PublishedName(baseId)}) no longer "
+                + "has a readable manifest where terrain is served from, so the ground it covered "
+                + "cannot be put back into this build's. What the tile maker made was discarded; "
+                + "start a fresh build over the whole area instead.");
+        }
+
+        var written = TerrainManifestFile.Read(tiles);
+        if (written is null)
+        {
+            Clear(tiles);
+            throw new TerrainBuildException(
+                TerrainBuildFailures.BakeIncomplete,
+                "The tile maker finished adding to the pyramid and left a manifest that cannot be "
+                + "read, so nothing can find a single tile in it.");
+        }
+
+        var merged = TerrainManifest.Merge(baseManifest, written);
+        TerrainManifestFile.Write(tiles, merged);
+
+        var levels = TerrainManifest.Available(merged);
+        var rectangles = levels.Sum(l => l.Count).ToString(CultureInfo.InvariantCulture);
+        await context.LogAsync(
+            $"Put the base pyramid's coverage back into the manifest: {rectangles} rectangle(s) "
+            + $"over {levels.Count.ToString(CultureInfo.InvariantCulture)} level(s).",
+            ct);
     }
 
     /// <summary>
@@ -375,6 +521,11 @@ public sealed class TerrainBakePhase(
                 + "with no manifest, or with a manifest and no tiles, draws nothing at all and says "
                 + "nothing about it.",
                 LastLines(logPath, KeptLogLines));
+        }
+
+        if (context.Build.BaseBuildId is { } baseId)
+        {
+            await MergeWithBaseAsync(context, baseId, ct);
         }
 
         await context.LogAsync("Meshing finished; the pyramid is written.", ct);

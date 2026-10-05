@@ -101,6 +101,34 @@ above the ellipsoid there.
 
 ---
 
+## Adding a raster to a build you already have
+
+A new survey over ground that is already baked does not have to cost the whole region again. When
+you start a build, you can name a **finished build to extend**. The new build starts from a copy
+of that build's tiles, the tile-maker adds your new rasters to the copy without re-meshing what is
+already there, and the result is checked and published as a build of its own.
+
+**What it costs.** The new rasters' tiles, and a copy of the base's pyramid on disk. For one fine
+island over a baked region that is minutes rather than hours: the price follows what you add, not
+the size of the region.
+
+**The depth must be the base's.** The addition meshes only the new rasters; it cannot re-mesh the
+tiles already there at a different depth, so an extension asked for at another depth is refused
+rather than half done. The heights are measured the way the base's are, for the same reason.
+Coverage is not obtained again unless you ask for it — the base already holds it — so an
+extension has to name at least one raster, or ask for coverage of new ground.
+
+**The base is kept.** It stays in the list, drawable and unchanged; the extension is a separate
+build, at a separate address, carrying the base's sources and credit as its own together with
+whatever you added. You can delete the base once the extension has finished — not before, because
+until then the extension still reads the base's tiles.
+
+**A base has to be whole.** Only a build that finished its check and whose tiles are still where
+terrain is served from can be extended; one that is still running, stopped before its check, or
+has had its tiles removed is refused, and the message says which.
+
+---
+
 ## Watching a build
 
 Status: **Queued · Running · Finished · Failed.**
@@ -234,6 +262,8 @@ that resembles them.
 | *An elevation tile says where it is only by what it is called* | An `.hgt` must be named like `N45E024.hgt` for the square whose corner is 45°N 24°E |
 | *That rectangle is not a rectangle on the Earth* | Draw it again |
 | *That build has no surface to draw* | Its tiles were never read back and found whole, or they are no longer where terrain is served from |
+| *The build to add to was made to level N* | An extension is made at its base's depth; ask for that level, or start a fresh build |
+| *Another build is adding rasters to this one* | Wait for that build to stop, whichever way it stops, before deleting this one |
 
 ---
 

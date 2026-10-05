@@ -147,6 +147,19 @@ public static class TerrainBuildFailures
     /// </remarks>
     public const string BakeDegraded = "terrain_build.bake_degraded";
 
+    /// <summary>
+    /// The build this one extends has no pyramid where terrain is served from, so there is nothing
+    /// to add the new rasters to.
+    /// </summary>
+    /// <remarks>
+    /// A build that extends another starts from a copy of the base's published pyramid and, when
+    /// the tile-maker has added to it, puts the base's coverage back into the manifest from the
+    /// base's own. Both need the base to still be published. Refused when the build is asked for,
+    /// and asked again here, because the disk can change in between; the answer is to start a fresh
+    /// build rather than to try this one again.
+    /// </remarks>
+    public const string BaseUnavailable = "terrain_build.base_unavailable";
+
     /// <summary>The tile-maker ended cleanly and left no pyramid behind.</summary>
     /// <remarks>
     /// A pyramid with no manifest cannot be read at all, and one with a manifest and no tiles draws

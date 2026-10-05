@@ -17,12 +17,17 @@ using SilexGis.Infrastructure.Terrain;
 namespace SilexGis.Api.Features.Terrain;
 
 /// <summary>One raster a build was made from, and the credit the data it holds requires.</summary>
+/// <param name="Inherited">
+/// True when the raster came with the pyramid this build extends rather than being one this
+/// build obtained and meshed itself. Its credit is this build's all the same.
+/// </param>
 public sealed record TerrainBuildSourceDto(
     long Id,
     TerrainBuildSourceKind Kind,
     string Reference,
     string Attribution,
-    string? Licence);
+    string? Licence,
+    bool Inherited);
 
 /// <summary>
 /// A build as it appears in the list: what it covers, how far it got, what it costs on disk, and
@@ -33,6 +38,10 @@ public sealed record TerrainBuildSourceDto(
 /// Metres to add to a surveyed altitude so it sits on the ground this build draws. Served rather
 /// than left to the caller to work out, because the rule that decides it has exactly one home and
 /// a second copy of it in a browser would be a forty-metre error nothing on screen could explain.
+/// </param>
+/// <param name="BaseBuildId">
+/// The finished build this one added rasters to, when it is an extension of one; null for a build
+/// meshed from nothing, and null again once that base has been deleted.
 /// </param>
 public sealed record TerrainBuildDto(
     Guid Id,
@@ -52,7 +61,8 @@ public sealed record TerrainBuildDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset? StartedAt,
     DateTimeOffset? FinishedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    Guid? BaseBuildId);
 
 /// <summary>
 /// One build in full: everything the list carries, plus the rasters it was made from and the tail
@@ -119,6 +129,18 @@ public sealed record TerrainBuildSourceRequest(
 /// Rasters this installation already has — uploaded, or in a directory the operator listed as
 /// readable — to build from as well as, or instead of, the obtained coverage.
 /// </param>
+/// <param name="BaseBuildId">
+/// A finished build to add these rasters to, instead of meshing a pyramid from nothing. The new
+/// build starts from a copy of that build's pyramid and the tile-maker adds to it without
+/// re-meshing what is already there, which is minutes rather than hours when one fine survey is
+/// added to a region already baked. The rectangle then names the ground being added, and the new
+/// build covers it and the base's ground together; the base stays as it is.
+/// <para>
+/// The depth must be the base's: the addition cannot re-mesh the tiles already there at another
+/// one. Obtaining coverage is off unless asked for, because the base already holds it, and the
+/// heights are measured from whatever the base's are.
+/// </para>
+/// </param>
 public sealed record TerrainBuildSubmitRequest(
     double West,
     double South,
@@ -128,7 +150,8 @@ public sealed record TerrainBuildSubmitRequest(
     TerrainHeightDatum? HeightDatum,
     double? GeoidHeightM,
     bool? FetchCoverage = null,
-    IReadOnlyList<TerrainBuildSourceRequest>? Sources = null);
+    IReadOnlyList<TerrainBuildSourceRequest>? Sources = null,
+    Guid? BaseBuildId = null);
 
 /// <summary>What an upload of one raster answers with.</summary>
 /// <param name="Reference">What a build quotes to say it is made from this raster.</param>
@@ -162,6 +185,10 @@ public sealed class TerrainBuildSubmitRequestValidator : AbstractValidator<Terra
         RuleFor(x => x.Sources)
             .Must(s => s is null || s.Count <= 100)
             .WithMessage("A build may name at most 100 sources.");
+        RuleFor(x => x.BaseBuildId)
+            .NotEqual(Guid.Empty)
+            .When(x => x.BaseBuildId.HasValue)
+            .WithMessage("The build to extend must be named by its id.");
         RuleForEach(x => x.Sources).ChildRules(source =>
         {
             source.RuleFor(x => x.Kind).IsInEnum();
@@ -249,6 +276,49 @@ public static class TerrainBuildEndpoints
     /// <summary>The build is waiting to run or running, so its files are not anybody's to remove.</summary>
     public const string RunningCode = "terrain_build.running";
 
+    /// <summary>The build named as the one to extend does not exist.</summary>
+    public const string BaseNotFoundCode = "terrain_build.base_not_found";
+
+    /// <summary>
+    /// The build named as the one to extend never had its tiles read back and found whole, so
+    /// there is nothing known-good to add to.
+    /// </summary>
+    public const string BaseUncheckedCode = "terrain_build.base_unchecked";
+
+    /// <summary>
+    /// The build named as the one to extend was checked, and its pyramid is no longer where terrain
+    /// is served from.
+    /// </summary>
+    public const string BaseNotPublishedCode = "terrain_build.base_not_published";
+
+    /// <summary>The depth asked for is not the depth the base was built to.</summary>
+    /// <remarks>
+    /// Adding to a pyramid meshes the new rasters alone; the tiles already there are kept as they
+    /// are. A different depth would therefore apply to the new ground only, and a pyramid whose
+    /// detail stops at one level over half of it and another over the rest is not what anybody
+    /// asked for — so it is refused rather than half done.
+    /// </remarks>
+    public const string BaseDepthDiffersCode = "terrain_build.base_depth_differs";
+
+    /// <summary>The heights asked for are measured from a different surface than the base's.</summary>
+    /// <remarks>
+    /// The tiles already in the pyramid hold heights from the base's datum, and the added ones
+    /// would hold heights from the other — a step of some forty metres along the join, drawn as
+    /// ground. An extension's heights are the base's, and a request saying otherwise is refused.
+    /// </remarks>
+    public const string BaseDatumDiffersCode = "terrain_build.base_datum_differs";
+
+    /// <summary>
+    /// The build is the base of another build that has not finished, which still needs its pyramid.
+    /// </summary>
+    /// <remarks>
+    /// Only while the extension is unfinished: it copies the base's pyramid when it bakes and puts
+    /// the base's coverage back from the base's own manifest after, and both read the published
+    /// base. A finished extension needs nothing from its base, and deleting the base then only
+    /// clears the record of where the extension started.
+    /// </remarks>
+    public const string BeingExtendedCode = "terrain_build.being_extended";
+
     /// <summary>
     /// The largest single raster that may be sent through the browser.
     /// </summary>
@@ -315,6 +385,7 @@ public static class TerrainBuildEndpoints
         IAccessContextAccessor accessAccessor,
         ServerDirectorySource serverDirectories,
         TerrainUploads uploads,
+        TerrainWorkspace workspace,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -339,12 +410,47 @@ public static class TerrainBuildEndpoints
         var extent = TerrainBuildRequestRules.Rectangle(
             request.West, request.South, request.East, request.North);
 
+        // The build to add to, judged before anything else is resolved: every refusal here is
+        // about a fact the caller can see on the builds list, and is cheaper to hear now than
+        // after uploads have been named. Judged again under the lock below, because a base can
+        // be deleted between this read and the write.
+        TerrainBuild? baseBuild = null;
+        if (request.BaseBuildId is { } baseId)
+        {
+            baseBuild = await db.TerrainBuilds.AsNoTracking().FirstOrDefaultAsync(b => b.Id == baseId, ct);
+            if (RefuseBase(baseBuild, request, workspace) is { } refused)
+            {
+                return refused;
+            }
+
+            // The new build covers the base's ground and the ground being added, together. The
+            // rectangle asked for may lie entirely inside the base's — one fine survey in a baked
+            // region is the ordinary case — or reach beyond it; either way the union is what the
+            // new pyramid describes, and it is held to the same size limit as any other build.
+            var box = baseBuild!.Extent.EnvelopeInternal;
+            var west = Math.Min(box.MinX, request.West);
+            var south = Math.Min(box.MinY, request.South);
+            var east = Math.Max(box.MaxX, request.East);
+            var north = Math.Max(box.MaxY, request.North);
+
+            if (TerrainBuildRequestRules.Refuse(west, south, east, north, request.MaxDepth) is { } tooLarge)
+            {
+                return ApiProblems.BadRequest(tooLarge.Code, tooLarge.Detail);
+            }
+
+            extent = TerrainBuildRequestRules.Rectangle(west, south, east, north);
+        }
+
         // Every source is resolved before anything is written, so a request naming a directory that
         // cannot be read is refused outright instead of becoming a queued build that fails minutes
         // later with nobody watching. The same paths are resolved and judged again when the build
         // actually runs — the disk can change in between, and the check that counts is the one
         // nearest the read.
-        var fetchCoverage = request.FetchCoverage ?? true;
+        //
+        // Coverage is obtained unless the request says otherwise — except for an extension, whose
+        // base already holds it: obtained again it would be meshed again over the whole area, which
+        // is the full re-bake an extension exists to avoid.
+        var fetchCoverage = request.FetchCoverage ?? baseBuild is null;
         var declared = new List<TerrainBuildSource>();
         foreach (var source in request.Sources ?? [])
         {
@@ -395,8 +501,11 @@ public static class TerrainBuildEndpoints
         {
             return ApiProblems.BadRequest(
                 NoSourcesCode,
-                "A build has to be made from something: either obtain the coverage of the "
-                + "rectangle, or name rasters this installation already holds.");
+                baseBuild is null
+                    ? "A build has to be made from something: either obtain the coverage of the "
+                        + "rectangle, or name rasters this installation already holds."
+                    : "A build that extends another has to add something to it: name rasters this "
+                        + "installation already holds, or ask for the coverage of the new ground.");
         }
 
         // The check below and the write that follows it are one decision, so they are made inside
@@ -404,6 +513,21 @@ public static class TerrainBuildEndpoints
         // at once, and that is precisely the pair a read-then-write lets both through.
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await TerrainBuildSql.TakeSubmissionLockAsync(db, ct);
+
+        if (baseBuild is not null)
+        {
+            // The same lock a delete holds across its own read and write, so that a base judged
+            // good a moment ago cannot be taken away between that judgement and the row naming it
+            // — an extension queued against a base that is already gone would mesh the new
+            // rasters alone and publish them as the whole area.
+            await TerrainBuildSql.TakeActivationLockAsync(db, ct);
+            baseBuild = await db.TerrainBuilds.AsNoTracking()
+                .FirstOrDefaultAsync(b => b.Id == baseBuild.Id, ct);
+            if (RefuseBase(baseBuild, request, workspace) is { } refused)
+            {
+                return refused;
+            }
+        }
 
         // One rectangle at a time. Nothing here reports back while a build runs except the build's
         // own row, so an administrator who has waited a minute without seeing much has no way of
@@ -423,11 +547,39 @@ public static class TerrainBuildEndpoints
         {
             Extent = extent,
             RequestedMaxDepth = request.MaxDepth,
-            HeightDatum = request.HeightDatum ?? TerrainHeightDatum.Orthometric,
-            GeoidHeightM = request.GeoidHeightM ?? 0d,
+
+            // An extension's heights are its base's: the tiles it starts from already hold them.
+            HeightDatum = baseBuild?.HeightDatum ?? request.HeightDatum ?? TerrainHeightDatum.Orthometric,
+            GeoidHeightM = baseBuild?.GeoidHeightM ?? request.GeoidHeightM ?? 0d,
+            BaseBuildId = baseBuild?.Id,
         };
 
         db.TerrainBuilds.Add(build);
+
+        // An extension carries its base's sources as its own, first and marked as inherited: the
+        // pyramid it publishes holds their tiles and owes their credit, and that credit has to
+        // outlive the base. The step that gathers rasters passes them over — their tiles are
+        // already in the copy the extension starts from.
+        if (baseBuild is not null)
+        {
+            var inherited = await db.TerrainBuildSources.AsNoTracking()
+                .Where(s => s.TerrainBuildId == baseBuild.Id)
+                .OrderBy(s => s.Id)
+                .ToListAsync(ct);
+
+            foreach (var source in inherited)
+            {
+                db.TerrainBuildSources.Add(new TerrainBuildSource
+                {
+                    TerrainBuildId = build.Id,
+                    Kind = source.Kind,
+                    Reference = source.Reference,
+                    Attribution = source.Attribution,
+                    Licence = source.Licence,
+                    Inherited = true,
+                });
+            }
+        }
 
         // The sources are the build's declaration of what it is made from, written when it is asked
         // for; the step that obtains them makes each one real on disk. The obtained coverage is one
@@ -536,7 +688,7 @@ public static class TerrainBuildEndpoints
             ToDto(build),
             build.LogTail,
             [.. sources.Select(s => new TerrainBuildSourceDto(
-                s.Id, s.Kind, s.Reference, s.Attribution, s.Licence))]));
+                s.Id, s.Kind, s.Reference, s.Attribution, s.Licence, s.Inherited))]));
     }
 
     /// <summary>
@@ -828,6 +980,23 @@ public static class TerrainBuildEndpoints
                 + "asked, so it can be removed once it has stopped, whichever way it stops.");
         }
 
+        // A build another unfinished build is adding to still has that build reading its
+        // pyramid — copying it to start from, and reading its manifest back afterwards. Under the
+        // same lock the extension was queued under, so neither can slip past the other.
+        var extendedBy = await db.TerrainBuilds
+            .Where(b => b.BaseBuildId == id
+                && (b.Status == TerrainBuildStatus.Queued || b.Status == TerrainBuildStatus.Running))
+            .Select(b => b.Id)
+            .FirstOrDefaultAsync(ct);
+        if (extendedBy != Guid.Empty)
+        {
+            return ApiProblems.Conflict(
+                BeingExtendedCode,
+                $"Another build ({TerrainPyramid.PublishedName(extendedBy)}) is adding rasters to "
+                + "this one and has not finished; it still needs this build's tiles. Wait for it "
+                + "to stop, whichever way it stops, and then this build can be removed.");
+        }
+
         db.TerrainBuilds.Remove(build);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -865,6 +1034,71 @@ public static class TerrainBuildEndpoints
                 "That directory cannot be read from: it is not there, or it is not one this "
                 + "installation may read.");
 
+    /// <summary>
+    /// Why the build named as the one to extend cannot be, or null when it can.
+    /// </summary>
+    /// <remarks>
+    /// Each refusal is its own code because each is acted on differently: a build that is not
+    /// there was mistyped or deleted; one never checked may still be running or may have failed,
+    /// and a build that stopped before its check has nothing known-good in it; one checked and no
+    /// longer on disk has had its pyramid removed from the served directory by hand; and a depth or
+    /// a datum that differs is a fact about what was asked, fixed by asking for the base's.
+    /// </remarks>
+    private static ProblemHttpResult? RefuseBase(
+        TerrainBuild? baseBuild, TerrainBuildSubmitRequest request, TerrainWorkspace workspace)
+    {
+        if (baseBuild is null)
+        {
+            return ApiProblems.BadRequest(
+                BaseNotFoundCode,
+                "The build to add to does not exist. It may have been deleted since the list was "
+                + "read; choose another finished build, or start a fresh one over the whole area.");
+        }
+
+        if (string.IsNullOrWhiteSpace(baseBuild.PyramidVersion))
+        {
+            return ApiProblems.Conflict(
+                BaseUncheckedCode,
+                "The build to add to never had its tiles read back and found whole — it is still "
+                + "running, or it stopped before that check — so there is nothing known-good to add "
+                + "to. Only a build that finished its check can be extended.");
+        }
+
+        if (!workspace.HasPublishedPyramid(baseBuild.Id))
+        {
+            return ApiProblems.Conflict(
+                BaseNotPublishedCode,
+                "The build to add to was checked, but its pyramid is no longer where terrain is "
+                + "served from, so there is nothing on disk to add to. Start a fresh build over the "
+                + "whole area instead.");
+        }
+
+        if (request.MaxDepth != baseBuild.RequestedMaxDepth)
+        {
+            return ApiProblems.BadRequest(
+                BaseDepthDiffersCode,
+                FormattableString.Invariant(
+                    $"The build to add to was made to level {baseBuild.RequestedMaxDepth} and this asks for ")
+                + FormattableString.Invariant($"level {request.MaxDepth}. Adding to a pyramid meshes only the new rasters ")
+                + "and cannot re-mesh the tiles already in it at a different depth, so an extension "
+                + FormattableString.Invariant($"is made to the base's depth. Ask for level {baseBuild.RequestedMaxDepth}, ")
+                + "or start a fresh build over the whole area at the depth you want.");
+        }
+
+        if (request.HeightDatum is { } datum && datum != baseBuild.HeightDatum)
+        {
+            return ApiProblems.BadRequest(
+                BaseDatumDiffersCode,
+                "The build to add to measures its heights from "
+                + (baseBuild.HeightDatum == TerrainHeightDatum.Ellipsoidal ? "the ellipsoid" : "sea level")
+                + ", and the tiles added to it have to measure theirs from the same surface, or the "
+                + "ground steps by tens of metres where the two meet. Leave the datum unset, or set "
+                + "it to the base's.");
+        }
+
+        return null;
+    }
+
     private static TerrainBuildDto ToDto(TerrainBuild build) => new(
         build.Id,
         GeoJsonGeometry.From(build.Extent),
@@ -883,5 +1117,6 @@ public static class TerrainBuildEndpoints
         build.CreatedAt,
         build.StartedAt,
         build.FinishedAt,
-        build.UpdatedAt);
+        build.UpdatedAt,
+        build.BaseBuildId);
 }

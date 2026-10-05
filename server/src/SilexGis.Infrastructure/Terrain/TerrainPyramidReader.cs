@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using SilexGis.Domain.Terrain;
 
@@ -50,13 +49,13 @@ internal static class TerrainPyramidReader
     /// </summary>
     public static TerrainPyramidReport? Read(string tilesDirectory)
     {
-        var manifest = ReadManifest(tilesDirectory);
+        var manifest = TerrainManifestFile.Read(tilesDirectory);
         if (manifest is null)
         {
             return null;
         }
 
-        var available = Advertised(manifest);
+        var available = TerrainManifest.Available(manifest);
         var counts = new Dictionary<int, int>();
         var damaged = new List<string>();
         var unadvertised = new List<string>();
@@ -140,78 +139,4 @@ internal static class TerrainPyramidReader
             .Select(path => Path.GetRelativePath(tilesDirectory, path).Replace(Path.DirectorySeparatorChar, '/'))
             .Order(StringComparer.Ordinal);
     }
-
-    /// <summary>
-    /// The manifest, or nothing if it is absent or is not one.
-    /// </summary>
-    /// <remarks>
-    /// Unreadable and absent are one answer on purpose: both mean nothing can find a single tile in
-    /// this directory, whatever else is in it, and both are fixed the same way.
-    /// </remarks>
-    private static JsonObject? ReadManifest(string tilesDirectory)
-    {
-        var path = Path.Combine(tilesDirectory, TerrainPyramid.ManifestFileName);
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        try
-        {
-            return JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
-        }
-        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// What ground the manifest says it holds, level by level.
-    /// </summary>
-    /// <remarks>
-    /// A level is a list of rectangles rather than one, which is what lets a pyramid hold deep tiles
-    /// over two separate fine surveys without claiming the coarse ground between them. Anything in
-    /// the wrong shape is read as advertising nothing rather than as advertising everything: the
-    /// mistake that direction is a refused build, and the other direction is a build published with
-    /// tiles nothing will ever ask for.
-    /// </remarks>
-    private static IReadOnlyList<IReadOnlyList<TerrainTileRange>> Advertised(JsonObject manifest)
-    {
-        if (manifest["available"] is not JsonArray levels)
-        {
-            return [];
-        }
-
-        var advertised = new List<IReadOnlyList<TerrainTileRange>>(levels.Count);
-
-        foreach (var level in levels)
-        {
-            var ranges = new List<TerrainTileRange>();
-
-            if (level is JsonArray entries)
-            {
-                foreach (var entry in entries)
-                {
-                    if (entry is JsonObject range)
-                    {
-                        ranges.Add(new TerrainTileRange(
-                            Ordinate(range, "startX"),
-                            Ordinate(range, "startY"),
-                            Ordinate(range, "endX"),
-                            Ordinate(range, "endY")));
-                    }
-                }
-            }
-
-            advertised.Add(ranges);
-        }
-
-        return advertised;
-    }
-
-    private static int Ordinate(JsonObject range, string name) =>
-        range[name] is { } value && value.GetValueKind() == JsonValueKind.Number
-            ? value.GetValue<int>()
-            : 0;
 }

@@ -56,8 +56,13 @@ public sealed class TerrainFetchPhase(
     public async Task RunAsync(TerrainBuildContext context, CancellationToken ct)
     {
         var build = context.Build;
+
+        // A source inherited from the build this one extends is passed over: its tiles are already
+        // in the pyramid this build starts from, and obtaining and meshing it again is the full
+        // re-bake an extension exists to avoid. It is still one of this build's sources — the
+        // credit it owes is composed from the whole list — just not one this step has work for.
         var sources = await db.TerrainBuildSources.AsNoTracking()
-            .Where(s => s.TerrainBuildId == build.Id)
+            .Where(s => s.TerrainBuildId == build.Id && !s.Inherited)
             .OrderBy(s => s.Id)
             .ToListAsync(ct);
 

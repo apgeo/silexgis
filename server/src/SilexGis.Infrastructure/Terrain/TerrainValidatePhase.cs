@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 using System.Globalization;
-using System.Text;
-using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Terrain;
@@ -40,9 +38,6 @@ public sealed class TerrainValidatePhase(SilexGisDbContext db) : ITerrainPhase
     /// bounded column it is stored in anyway.
     /// </remarks>
     private const int NamedExamples = 5;
-
-    /// <summary>What a pyramid says about itself when nothing better is known.</summary>
-    private const string PlainDescription = "Elevation model baked for SilexGIS.";
 
     public TerrainBuildPhase Phase => TerrainBuildPhase.Validate;
 
@@ -84,9 +79,12 @@ public sealed class TerrainValidatePhase(SilexGisDbContext db) : ITerrainPhase
                 .Select(s => s.Attribution)
                 .ToListAsync(ct));
 
+        // The stamp is the same whether the pyramid was meshed from nothing or had rasters added
+        // to a base: the credit composes from every source the build carries, the base's included,
+        // and the version is read off the tiles as they now are.
         var version = TerrainPyramidCheck.VersionFrom(report.Digest);
-        Finish(report.Manifest, credit, version);
-        Write(Path.Combine(tiles, TerrainPyramid.ManifestFileName), report.Manifest);
+        TerrainManifest.Stamp(report.Manifest, credit, version);
+        TerrainManifestFile.Write(tiles, report.Manifest);
 
         var size = Occupied(context.Directories.Root);
         await TerrainBuildWrites.RecordPyramidAsync(db, context.Build.Id, size, version, ct);
@@ -182,66 +180,6 @@ public sealed class TerrainValidatePhase(SilexGisDbContext db) : ITerrainPhase
         }
     }
 
-    /// <summary>
-    /// Replaces what the tile-maker left behind with what is true, and stamps the version.
-    /// </summary>
-    /// <remarks>
-    /// The credit given for this build replaces whatever is in the manifest, including a real
-    /// looking credit left by an earlier bake into the same directory — otherwise ground remade
-    /// from different data keeps the first data's licence statement. The name travels with the
-    /// credit rather than being left alone, because a name kept from one bake beside a credit
-    /// written for another has the pyramid naming one source and crediting a different one.
-    /// </remarks>
-    private static void Finish(JsonObject manifest, string? credit, string version)
-    {
-        if (credit is not null)
-        {
-            manifest["attribution"] = credit;
-            manifest.Remove("name");
-        }
-        else
-        {
-            if (TerrainPyramidCheck.IsFiller(Text(manifest, "attribution")))
-            {
-                manifest.Remove("attribution");
-            }
-
-            if (TerrainPyramidCheck.IsFiller(Text(manifest, "name")))
-            {
-                manifest.Remove("name");
-            }
-        }
-
-        if (TerrainPyramidCheck.IsFiller(Text(manifest, "description")))
-        {
-            manifest["description"] = PlainDescription;
-        }
-
-        // A pointer to a legend the tile-maker puts in every manifest and this installation does not
-        // publish. Left in, it is an address a viewer may follow to nothing.
-        manifest.Remove("legend");
-
-        manifest["version"] = version;
-    }
-
-    /// <summary>
-    /// Writes the manifest back.
-    /// </summary>
-    /// <remarks>
-    /// Under another name and renamed into place, and with no mark on the front and single-character
-    /// line endings. A manifest is read by a browser while tiles are being asked for, and half of
-    /// one is a pyramid that cannot be read at all — with the previous whole one already gone.
-    /// </remarks>
-    private static void Write(string path, JsonObject manifest)
-    {
-        var partial = path + TerrainRasterFiles.PartialSuffix;
-        File.WriteAllText(
-            partial,
-            manifest.ToJsonString() + "\n",
-            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-        File.Move(partial, path, overwrite: true);
-    }
-
     /// <summary>What this build takes up: the pyramid and everything kept beside it.</summary>
     private static long Occupied(string root)
     {
@@ -267,9 +205,6 @@ public sealed class TerrainValidatePhase(SilexGisDbContext db) : ITerrainPhase
 
         return total;
     }
-
-    private static string? Text(JsonObject manifest, string name) =>
-        manifest[name] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     private static string Examples(IReadOnlyList<string> paths)
     {

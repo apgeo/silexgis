@@ -24,6 +24,16 @@
 #   maxDepth=13                                deepest tile level, always stated explicitly
 #   datum=orthometric                          or `ellipsoidal`, to convert the heights while
 #                                              baking
+#   modify=true                                optional: add the rasters to the pyramid already
+#                                              in the output directory instead of meshing into
+#                                              an empty one
+#
+# `modify` is the one option of the pre-baker's that a request can carry beyond those four
+# facts, and it is a trap on its own: the pre-baker keeps the tiles already there and rewrites
+# `layer.json` from the new rasters alone, so every earlier tile ends up advertised nowhere. The
+# side that wrote the request puts the earlier coverage back into the manifest once the result
+# is in; this loop only refuses to add to an output directory that holds no pyramid, because
+# then there is nothing to add to and the option can only have been asked for by mistake.
 #
 # `result` is the same shape:
 #
@@ -123,6 +133,7 @@ bake() {
     output="$(field "$request" output)"
     depth="$(field "$request" maxDepth)"
     datum="$(field "$request" datum)"
+    modify="$(field "$request" modify)"
 
     if ! contained "$input" || [ ! -d "$input" ]; then
         refuse "$directory" "input is not a directory inside $ROOT"
@@ -159,9 +170,27 @@ bake() {
             return 0
             ;;
     esac
+    case "$modify" in
+        '' | false) ;;
+        true)
+            if [ ! -f "$output/layer.json" ]; then
+                refuse "$directory" "modify asked of an output directory holding no pyramid"
+                return 0
+            fi
+            set -- "$@" -m
+            ;;
+        *)
+            refuse "$directory" "modify '$modify' is neither true nor false"
+            return 0
+            ;;
+    esac
 
     mkdir -p "$output"
-    say "baking $input into $output, to depth $depth"
+    if [ "$modify" = true ]; then
+        say "adding $input to the pyramid in $output, to depth $depth"
+    else
+        say "baking $input into $output, to depth $depth"
+    fi
 
     # These mirror the flags the base image's own entrypoint carries, which this supervisor
     # replaces. The heap one is load-bearing: the tool ships no -Xmx and takes its heap as a

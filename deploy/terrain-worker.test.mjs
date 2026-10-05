@@ -97,6 +97,19 @@ describe('what the supervisor puts on the pre-baker command line', () => {
   it('converts the heights only when the request asks for it', () => {
     assert.match(supervisor, /ellipsoidal\) set -- "\$@" -g EGM2008 ;;/);
   });
+
+  it('adds to a pyramid only when the request says so, and never to an output holding none', () => {
+    // The pre-baker's in-place addition keeps the tiles already there and rewrites the manifest
+    // from the new rasters alone, so the side that asked for it has to put the earlier coverage
+    // back afterwards. That makes the request the only way the option may reach the command line:
+    // a flag on by default, or a flag the supervisor added on its own judgement, would be a
+    // pyramid that validates clean and draws nothing but the newest patch.
+    assert.match(supervisor, /modify="\$\(field "\$request" modify\)"/);
+    assert.match(supervisor, /true\)\n\s+if \[ ! -f "\$output\/layer\.json" \]; then\n\s+refuse/);
+    assert.match(supervisor, /set -- "\$@" -m\n/);
+    assert.equal((supervisor.match(/ -m\b/g) ?? []).length, 1, 'the option appears on one line only');
+    assert.match(supervisor, /'' \| false\) ;;/);
+  });
 });
 
 describe('the overlay', () => {

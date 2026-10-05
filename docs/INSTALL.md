@@ -874,6 +874,31 @@ current; the 3D view then draws it, immediately, with no restart and no `.env` e
 current at a time, and the choice can be cleared again. A build that is current cannot be deleted
 until it is not.
 
+**Adding a raster to a build that already exists.** A new survey over ground that is already baked
+does not have to cost the whole region again. A build can name a finished build to **extend**: the
+new build starts from a copy of that build's published tiles, the tile-maker adds the new rasters
+to the copy without re-meshing what is already there, and the result is checked and published as a
+build of its own. What it costs is the new rasters' tiles and a copy of the base's pyramid on disk
+— minutes for one fine island, rather than the hours of a full re-bake — so the price follows what
+is added, not the size of the region. Three things follow from how the addition works:
+
+- **The depth must be the base's.** The addition meshes the new rasters alone; it cannot re-mesh
+  the tiles already there at a different depth, so an extension asked for at another depth is
+  refused rather than half done. The heights are the base's too — the tiles it starts from already
+  hold them — and coverage is not obtained again unless asked for, because the base already holds
+  it.
+- **The base is kept, drawable and unchanged.** The extension is a separate build at a separate
+  address, with the base's sources and credit carried as its own plus whatever was added. The base
+  can be deleted once the extension has finished — but not before, because until then the
+  extension still reads the base's tiles.
+- **The manifest is put right by the application, not by the tool.** Left to itself the tile-maker
+  rewrites the pyramid's manifest from the new rasters alone, which leaves every earlier tile on
+  disk and advertised nowhere — a pyramid that passes every check of its own and draws nothing but
+  the newest patch. A build that extends another merges the base's coverage back into the manifest
+  before the tiles are checked, and the check refuses any pyramid holding tiles its manifest does
+  not advertise. Nothing in the command-line route does this, which is why the command-line route
+  does not offer the addition.
+
 **What happens on a plain installation — which is to say, by default.** Turning rasters into tiles
 needs a service this stack does not start unless it is asked to, so on a default installation a
 build gets as far as the tile-making step and stops there. The page says so **before** the button
