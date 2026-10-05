@@ -19,7 +19,9 @@ import { useTranslation } from 'react-i18next';
 import {
   useCavingGroups,
   useCreateTripLog,
+  useCreateTripPlan,
   useTripParticipantRoles,
+  useTripPlanDefault,
   useTripTypes,
   useUpdateTripLog,
   type TripLogInfo,
@@ -35,9 +37,22 @@ import type { TripGeometry } from './tripGeometry.ts';
 
 const { RangePicker } = DatePicker;
 
+/**
+ * Which of the two creation doors a new trip goes through. The trip is the same afterwards; what
+ * differs is the audience it gets when the author names none — private for a report written up
+ * after the event, the author's caving group for a plan, because a proposal only its author can
+ * read is a proposal to nobody.
+ */
+export type TripCreationIntent = 'report' | 'plan';
+
 interface TripFormModalProps {
   open: boolean;
   trip: TripLogInfo | null; // null → create
+  /**
+   * Read only when creating. An existing trip is saved through its own route whatever it was
+   * created as, so the intent means nothing beside a `trip`.
+   */
+  intent?: TripCreationIntent;
   onClose: (savedId?: string) => void;
 }
 
@@ -243,12 +258,17 @@ function RosterField({
  * preserved on update. Attachments, incl. the completed report document, are managed on the
  * trip detail page (the entity must exist before files can be attached).
  */
-export default function TripFormModal({ open, trip, onClose }: TripFormModalProps) {
+export default function TripFormModal({ open, trip, intent = 'report', onClose }: TripFormModalProps) {
   const { t } = useTranslation();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
   const createTrip = useCreateTripLog();
+  const createPlan = useCreateTripPlan();
   const updateTrip = useUpdateTripLog();
+  const planning = trip === null && intent === 'plan';
+  // Who would read this plan if the author says nothing about it — asked so the form can name
+  // that audience rather than recite the rule, and asked only while a plan is being written.
+  const { data: planDefault } = useTripPlanDefault(open && planning);
 
   // The map inside the form can only be built once the dialog's open transition has put the
   // content in the document — a map built against a container with no size renders nothing.
@@ -292,12 +312,22 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           meetingGeom: null,
           participants: [],
           proposers: [],
-          visibility: 'private',
+          // What the door assumes: private for a report. A plan's default is the server's
+          // answer, and it is written in below as soon as it arrives.
+          visibility: planning ? (planDefault?.visibility ?? 'private') : 'private',
         });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reinitialize only when the modal opens
   }, [open]);
+
+  // The default audience usually lands after the form has opened. It is written into the control
+  // only while nobody has touched it, so an answer arriving mid-edit cannot take back a choice.
+  useEffect(() => {
+    if (open && planning && planDefault && !form.isFieldTouched('visibility')) {
+      form.setFieldsValue({ visibility: planDefault.visibility });
+    }
+  }, [open, planning, planDefault, form]);
 
   const onOk = async () => {
     const values = await form.validateFields();
@@ -308,6 +338,16 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
     const stored = form.getFieldsValue(true) as FormValues;
     const [start, end] = values.dates;
     const tripDate = start.format('YYYY-MM-DD');
+    // On the plan door an audience the author did not choose is sent as no audience at all, so
+    // the server's own rule — the one home of the plan default — supplies both the audience and
+    // the group it binds to. The same goes for a choice that merely restates the default: a
+    // stated "caving group" is honoured as sent, and this form has no group picker to say which
+    // group, so stating it here would be an audience with no group behind it. Only a different
+    // choice is a stated one. A report's audience is always stated, as it always was.
+    const leavesTheDefault =
+      planning &&
+      (!form.isFieldTouched('visibility') ||
+        (planDefault !== undefined && values.visibility === planDefault.visibility));
     const body: TripLogWrite = {
       title: values.title.trim(),
       tripTypeId: values.tripTypeId ?? null,
@@ -328,7 +368,7 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
       participants: toParticipants(stored.participants),
       proposers: toParticipants(stored.proposers),
       cavingGroupId: trip?.cavingGroupId ?? null,
-      visibility: values.visibility,
+      visibility: leavesTheDefault ? null : values.visibility,
       // Carried through untouched. This form does not offer the measured facts, and a write
       // sets every one of them, so sending blanks here would unmeasure a trip whose title
       // somebody corrected — and sending false would quietly say nothing went wrong on a trip
@@ -356,7 +396,9 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
     try {
       const saved = trip
         ? await updateTrip.mutateAsync({ id: trip.id, body })
-        : await createTrip.mutateAsync(body);
+        : planning
+          ? await createPlan.mutateAsync(body)
+          : await createTrip.mutateAsync(body);
       message.success(t('common.saved'));
       onClose(saved.id);
     } catch {
@@ -364,13 +406,23 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
     }
   };
 
+  // Where the pre-selected audience came from, said beside the control in words. The group is
+  // named rather than called "your group": a plan shared with a club the author had forgotten
+  // they were in is not what they thought they were doing.
+  const audienceNote =
+    planning && planDefault
+      ? planDefault.visibility === 'cavingGroup'
+        ? t('trips.plan.audienceFromGroup', { group: planDefault.cavingGroupName ?? '' })
+        : t('trips.plan.audiencePrivate')
+      : null;
+
   return (
     <Modal
-      title={trip ? t('trips.edit') : t('trips.new')}
+      title={trip ? t('trips.edit') : planning ? t('trips.plan.new') : t('trips.new')}
       open={open}
       onCancel={() => onClose()}
       onOk={() => void onOk()}
-      confirmLoading={createTrip.isPending || updateTrip.isPending}
+      confirmLoading={createTrip.isPending || createPlan.isPending || updateTrip.isPending}
       width={720}
       destroyOnHidden
       afterOpenChange={setShown}
@@ -394,7 +446,13 @@ export default function TripFormModal({ open, trip, onClose }: TripFormModalProp
           <Form.Item name="dates" label={t('trips.dates')} rules={[{ required: true }]} style={{ flex: 2 }}>
             <RangePicker style={{ width: '100%' }} allowClear={false} />
           </Form.Item>
-          <Form.Item name="visibility" label={t('features.visibility')} rules={[{ required: true }]} style={{ flex: 1 }}>
+          <Form.Item
+            name="visibility"
+            label={t('features.visibility')}
+            rules={[{ required: true }]}
+            style={{ flex: 1 }}
+            extra={audienceNote && <span data-testid="trip-plan-audience">{audienceNote}</span>}
+          >
             <Select
               options={(['private', 'cavingGroup', 'authenticated', 'public'] as const).map((v) => ({
                 value: v,

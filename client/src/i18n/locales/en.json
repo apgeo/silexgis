@@ -1233,6 +1233,12 @@
       "emptyFiltered": "No trip of yours matches these filters.",
       "failed": "Your trips could not be loaded."
     },
+    "plan": {
+      "new": "Plan a trip",
+      "createMenu": "Other ways to create a trip",
+      "audienceFromGroup": "Unless you choose otherwise, this plan is shared with your caving group, {{group}} — a plan only its author can read is a plan to nobody.",
+      "audiencePrivate": "This plan starts private: you are in no single caving group, so the application does not guess which club should read it. Widen the audience here if it should be read."
+    },
     "expectedReturnAt": "Expected back",
     "calloutAlarmAt": "Raise the alarm at",
     "calloutAlarmHelp": "If nobody has said the party is out by this time, everyone on the trip is told. It cannot be earlier than the time you expect to be back. Leave both empty for no callout.",

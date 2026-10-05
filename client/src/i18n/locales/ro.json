@@ -1233,6 +1233,12 @@
       "emptyFiltered": "Nicio tură de-a ta nu se potrivește cu aceste filtre.",
       "failed": "Turele tale nu au putut fi încărcate."
     },
+    "plan": {
+      "new": "Planifică o tură",
+      "createMenu": "Alte moduri de a crea o tură",
+      "audienceFromGroup": "Dacă nu alegi altfel, acest plan este vizibil grupului tău de speologie, {{group}} — un plan pe care îl poate citi doar autorul este un plan pentru nimeni.",
+      "audiencePrivate": "Acest plan începe privat: nu ești într-un singur grup de speologie, așa că aplicația nu ghicește care club ar trebui să îl citească. Lărgește audiența aici dacă trebuie citit."
+    },
     "expectedReturnAt": "Ieșire estimată",
     "calloutAlarmAt": "Dă alarma la",
     "calloutAlarmHelp": "Dacă nimeni nu confirmă până la ora asta că echipa a ieșit, toți cei din tură sunt anunțați. Nu poate fi mai devreme decât ora la care estimezi ieșirea. Lasă ambele goale dacă nu vrei apel de urgență.",

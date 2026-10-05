@@ -7,7 +7,10 @@ import '../../i18n';
 import type { TripLogInfo, TripLogWrite } from '../../api/hooks.ts';
 
 const createTrip = vi.fn();
+const createPlan = vi.fn();
 const updateTrip = vi.fn();
+// What the server says a plan's audience would be, as the plan-default read answers it.
+const planDefault = vi.fn();
 
 vi.mock('../../api/hooks.ts', () => ({
   useCavingGroups: () => ({ data: [] }),
@@ -20,6 +23,8 @@ vi.mock('../../api/hooks.ts', () => ({
   }),
   useSearch: () => ({ data: undefined }),
   useCreateTripLog: () => ({ mutateAsync: createTrip, isPending: false }),
+  useCreateTripPlan: () => ({ mutateAsync: createPlan, isPending: false }),
+  useTripPlanDefault: (enabled: boolean) => (enabled ? planDefault() : { data: undefined }),
   useUpdateTripLog: () => ({ mutateAsync: updateTrip, isPending: false }),
 }));
 
@@ -57,10 +62,10 @@ async function savedBody(mutation: typeof createTrip): Promise<TripLogWrite> {
   return 'body' in call ? call.body : call;
 }
 
-function show(subject: TripLogInfo | null) {
+function show(subject: TripLogInfo | null, intent?: 'report' | 'plan') {
   return render(
     <App>
-      <TripFormModal open trip={subject} onClose={() => {}} />
+      <TripFormModal open trip={subject} intent={intent} onClose={() => {}} />
     </App>,
   );
 }
@@ -372,5 +377,81 @@ describe('TripFormModal dates', () => {
     const body = await savedBody(updateTrip);
     expect(body.tripDate).toBe('2026-03-14');
     expect(body.tripDateEnd).toBeNull();
+  });
+});
+
+/**
+ * The same form on its other door. A plan is the same trip in every respect but the audience it
+ * gets when the author names none, and that rule lives on the server: what the form owes it is to
+ * say in advance who that will be, to leave an audience the author did not choose unstated so the
+ * rule can fire, and to post through the door the rule is behind.
+ */
+describe('TripFormModal as the plan door', () => {
+  beforeEach(() => {
+    createTrip.mockReset().mockResolvedValue({ id: 'new-trip' });
+    createPlan.mockReset().mockResolvedValue({ id: 'new-plan' });
+    planDefault.mockReset().mockReturnValue({
+      data: { visibility: 'cavingGroup', cavingGroupId: 'g-1', cavingGroupName: 'Silex' },
+    });
+  });
+  afterEach(cleanup);
+
+  it('says it is planning a trip, and names the group that will read it', () => {
+    show(null, 'plan');
+
+    expect(screen.getByRole('dialog', { name: 'Plan a trip' })).toBeInTheDocument();
+    expect(screen.getByTestId('trip-plan-audience').textContent).toContain('Silex');
+  });
+
+  it('pre-selects the audience the server answered with', () => {
+    show(null, 'plan');
+
+    // The select draws its chosen option's label; "Caving group" is the answer and "Private"
+    // is what a report would have shown here.
+    const audience = screen.getByLabelText('Visibility').closest('.ant-select');
+    expect(audience?.textContent).toContain('Caving group');
+  });
+
+  it('posts through the plan door with an untouched audience left unstated', async () => {
+    show(null, 'plan');
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Spring recce' } });
+
+    const body = await savedBody(createPlan);
+    expect(createTrip).not.toHaveBeenCalled();
+    // Null, not "cavingGroup": a stated caving-group audience with no group behind it would be
+    // an audience of nobody. Unstated, the server supplies the audience and binds the group.
+    expect(body.visibility).toBeNull();
+    expect(body.cavingGroupId).toBeNull();
+  });
+
+  it('sends an audience the author changed as a stated one', async () => {
+    show(null, 'plan');
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Open day' } });
+    fireEvent.mouseDown(screen.getByLabelText('Visibility'));
+    fireEvent.click(await screen.findByText('Public'));
+
+    const body = await savedBody(createPlan);
+    expect(body.visibility).toBe('public');
+  });
+
+  it('says the plan starts private when the author is in no single group', () => {
+    planDefault.mockReturnValue({
+      data: { visibility: 'private', cavingGroupId: null, cavingGroupName: null },
+    });
+    show(null, 'plan');
+
+    expect(screen.getByTestId('trip-plan-audience').textContent).toContain('starts private');
+  });
+
+  it('leaves the report door exactly as it was', async () => {
+    show(null);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Quick look' } });
+
+    expect(screen.getByRole('dialog', { name: 'New trip log' })).toBeInTheDocument();
+    expect(screen.queryByTestId('trip-plan-audience')).toBeNull();
+    const body = await savedBody(createTrip);
+    expect(createPlan).not.toHaveBeenCalled();
+    // A report's audience is always stated, private unless chosen otherwise.
+    expect(body.visibility).toBe('private');
   });
 });
