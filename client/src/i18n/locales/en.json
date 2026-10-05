@@ -1800,7 +1800,13 @@
       "checked": "Checked",
       "dead-end": "Dead end",
       "continues": "Continues"
-    }
+    },
+    "new": "New camp",
+    "edit": "Edit camp",
+    "workingArea": "Working area",
+    "workingAreaHint": "Roughly where the camp works: the shape drawn on the plan, not a position anybody navigates by, and not derived from the caves the camp's trips reach.",
+    "workingAreaWarning": "Shown exactly to everybody who may read the camp.",
+    "workingAreaWarningDetail": "The working area carries no location protection — it is the shape somebody drew on the plan. Draw it roughly, and never tightly around an entrance that must stay protected."
   },
   "tags": {
     "title": "Tags",

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DatePicker, Flex, Input, Select, Table, Tag, Typography } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { Button, DatePicker, Flex, Input, Select, Table, Tag, Typography } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
+  useCan,
   useExpeditions,
   type ActivityState,
   type ExpeditionInfo,
@@ -16,6 +18,7 @@ import { formatTripDates } from '../../components/trips/tripDates.ts';
 // One lifecycle, one list of its words: a camp offers all of them, and so does a trip.
 import { ACTIVITY_STATES } from '../../components/trips/tripStates.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
+import ExpeditionFormModal from './ExpeditionFormModal.tsx';
 
 const asDate = (value: Dayjs | null | undefined): string | undefined =>
   value ? value.format('YYYY-MM-DD') : undefined;
@@ -40,6 +43,10 @@ export default function ExpeditionListPage() {
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput);
   const { data, isFetching } = useExpeditions({ ...params, search: search || undefined });
+  // A domain-level hint for whether to draw the button at all; the server decides the create
+  // itself, and refuses it for anybody this check would have shown the form to by mistake.
+  const canCreate = useCan('expeditions', 'create');
+  const [creating, setCreating] = useState(false);
 
   const onTableChange = (pagination: TablePaginationConfig) => {
     setParams((p) => ({ ...p, page: pagination.current, pageSize: pagination.pageSize }));
@@ -56,6 +63,16 @@ export default function ExpeditionListPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('expeditions.title')}
         </Typography.Title>
+        {canCreate && (
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreating(true)}
+            data-testid="expedition-new"
+          >
+            {t('expeditions.new')}
+          </Button>
+        )}
       </Flex>
       <Flex gap={8} wrap style={{ marginBottom: 12 }}>
         <Input.Search
@@ -130,6 +147,20 @@ export default function ExpeditionListPage() {
           },
         ]}
       />
+      {/* Gated here as well as on the button: a form must not be handed to somebody the server
+          would refuse, whichever way it came to be opened. */}
+      {canCreate && (
+        <ExpeditionFormModal
+          open={creating}
+          camp={null}
+          onClose={(savedId) => {
+            setCreating(false);
+            if (savedId) {
+              void navigate(`/expeditions/${savedId}`);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

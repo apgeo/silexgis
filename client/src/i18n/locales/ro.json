@@ -1800,7 +1800,13 @@
       "checked": "Verificată",
       "dead-end": "Înfundătură",
       "continues": "Continuă"
-    }
+    },
+    "new": "Tabără nouă",
+    "edit": "Editare tabără",
+    "workingArea": "Zonă de lucru",
+    "workingAreaHint": "Aproximativ unde lucrează tabăra: forma trasată pe plan, nu o poziție după care navighează cineva și nu derivată din peșterile la care ajung turele taberei.",
+    "workingAreaWarning": "Arătată exact tuturor celor care pot citi tabăra.",
+    "workingAreaWarningDetail": "Zona de lucru nu are protecție de locație — este forma pe care a trasat-o cineva pe plan. Trasați-o aproximativ și niciodată strâns în jurul unei intrări care trebuie să rămână protejată."
   },
   "tags": {
     "title": "Etichete",

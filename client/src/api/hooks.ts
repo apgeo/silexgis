@@ -7150,6 +7150,88 @@ export function useExpedition(id: string | undefined) {
   });
 }
 
+export type ExpeditionWrite = components['schemas']['ExpeditionWriteRequest'];
+
+function useInvalidateExpeditions() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+}
+
+/**
+ * Hands the next write on a camp the version this one produced.
+ *
+ * A write is checked against the version the caller last read, and only a read records one, so
+ * a second save a second after the first would be refused unless the camp is read back in
+ * between. Returned rather than fired and forgotten, so the mutation resolves after the re-read
+ * and the surface that waits for it waits for the right thing.
+ */
+function useReadExpeditionsBack() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+}
+
+export function useCreateExpedition() {
+  const invalidate = useInvalidateExpeditions();
+  return useMutation({
+    mutationFn: (body: ExpeditionWrite) => unwrap(api.POST('/api/v1/expeditions', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateExpedition() {
+  const readBack = useReadExpeditionsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ExpeditionWrite }) =>
+      unwrap(api.PUT('/api/v1/expeditions/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => {
+      invalidateHistory();
+      return readBack();
+    },
+  });
+}
+
+export function useDeleteExpedition() {
+  const invalidate = useInvalidateExpeditions();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/expeditions/{id}', { params: { path: { id } } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * Moving a camp to another lifecycle state, through the one route that names the state it
+ * moves to rather than a verb per move — a camp has eight states and two dozen moves between
+ * them, and two dozen routes is not a surface.
+ *
+ * It is a write on the camp and is checked against the version the caller was looking at, so it
+ * carries the precondition the camp's own read captured. Which moves are legal from which state
+ * is the server's to decide; a move the rules refuse comes back as a conflict.
+ */
+export function useMoveExpedition() {
+  const readBack = useReadExpeditionsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, state }: { id: string; state: ActivityState }) => {
+      const etag = lastReadETag(`/api/v1/expeditions/${id}`);
+      return unwrap(
+        api.POST('/api/v1/expeditions/{id}/state', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body: { state },
+        }),
+      );
+    },
+    onSuccess: () => {
+      invalidateHistory();
+      // As on a full update: the move is checked against the version last read, so it is not
+      // finished until the version it produced has been read.
+      return readBack();
+    },
+  });
+}
+
 export type ExpeditionRoster = components['schemas']['ExpeditionRosterDto'];
 export type ExpeditionRosterEntry = components['schemas']['ExpeditionRosterEntryDto'];
 export type ExpeditionRosterRole = components['schemas']['ExpeditionRosterRoleDto'];
