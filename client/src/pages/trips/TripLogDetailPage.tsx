@@ -57,7 +57,7 @@ import { participantRoleLabel } from '../../components/trips/participantRoles.ts
 import { formatTripDates, formatUndergroundTime, isMultiDay } from '../../components/trips/tripDates.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import TripFormModal from './TripFormModal.tsx';
-import TripGeometryField from './TripGeometryField.tsx';
+import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import TripChecklistTab from './TripChecklistTab.tsx';
 import TripInvitationsTab from './TripInvitationsTab.tsx';
 import TripTrackingTab from './TripTrackingTab.tsx';

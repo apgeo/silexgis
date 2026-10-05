@@ -10912,7 +10912,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Photographs the caller may see, newest first, narrowed by cave, feature, trip, caver, tag, album, camera, date or map extent. */
+        /** Photographs the caller may see, newest first, narrowed by cave, feature, trip, camp, caver, tag, album, camera, date or map extent. */
         get: {
             parameters: {
                 query?: {
@@ -10929,6 +10929,7 @@ export interface paths {
                     From?: string;
                     To?: string;
                     Search?: string;
+                    ExpeditionId?: string;
                     page?: number;
                     pageSize?: number;
                 };

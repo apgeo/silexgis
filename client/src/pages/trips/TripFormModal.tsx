@@ -32,8 +32,8 @@ import { participantRoleLabel } from '../../components/trips/participantRoles.ts
 import { caverReference } from '../../components/trips/roster.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
 import { tripTypeLabel } from '../../components/trips/tripTypes.ts';
-import TripGeometryField from './TripGeometryField.tsx';
-import type { TripGeometry } from './tripGeometry.ts';
+import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
+import type { TripGeometry } from '../../components/trips/tripGeometry.ts';
 
 const { RangePicker } = DatePicker;
 

@@ -52,6 +52,7 @@ const EventListPage = lazy(() => import('./pages/events/EventListPage.tsx'));
 const EventDetailPage = lazy(() => import('./pages/events/EventDetailPage.tsx'));
 const ExpeditionListPage = lazy(() => import('./pages/expeditions/ExpeditionListPage.tsx'));
 const ExpeditionDetailPage = lazy(() => import('./pages/expeditions/ExpeditionDetailPage.tsx'));
+const ExpeditionReportPage = lazy(() => import('./pages/expeditions/ExpeditionReportPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const MessagingSettingsPage = lazy(() => import('./pages/admin/MessagingSettingsPage.tsx'));
 const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPage.tsx'));
@@ -61,6 +62,7 @@ const FeatureSetsPage = lazy(() => import('./pages/admin/FeatureSetsPage.tsx'));
 const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx'));
 const TripTypesPage = lazy(() => import('./pages/admin/TripTypesPage.tsx'));
 const TripParticipantRolesPage = lazy(() => import('./pages/admin/TripParticipantRolesPage.tsx'));
+const ExpeditionRosterRolesPage = lazy(() => import('./pages/admin/ExpeditionRosterRolesPage.tsx'));
 const TripReportTemplatesPage = lazy(() => import('./pages/admin/TripReportTemplatesPage.tsx'));
 const RelationTypesPage = lazy(() => import('./pages/admin/RelationTypesPage.tsx'));
 const TerrainPage = lazy(() => import('./pages/admin/TerrainPage.tsx'));
@@ -181,6 +183,7 @@ export const routes: RouteObject[] = [
           { path: '/events/:id', element: <Loadable><EventDetailPage /></Loadable> },
           { path: '/expeditions', element: <Loadable><ExpeditionListPage /></Loadable> },
           { path: '/expeditions/:id', element: <Loadable><ExpeditionDetailPage /></Loadable> },
+          { path: '/expeditions/:id/report', element: <Loadable><ExpeditionReportPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
           { path: '/admin/notification-health', element: <Loadable><NotificationHealthPage /></Loadable> },
@@ -190,6 +193,7 @@ export const routes: RouteObject[] = [
           { path: '/admin/document-types', element: <Loadable><DocumentTypesPage /></Loadable> },
           { path: '/admin/trip-types', element: <Loadable><TripTypesPage /></Loadable> },
           { path: '/admin/participant-roles', element: <Loadable><TripParticipantRolesPage /></Loadable> },
+          { path: '/admin/camp-roster-roles', element: <Loadable><ExpeditionRosterRolesPage /></Loadable> },
           { path: '/admin/report-templates', element: <Loadable><TripReportTemplatesPage /></Loadable> },
           { path: '/admin/relation-types', element: <Loadable><RelationTypesPage /></Loadable> },
           { path: '/admin/terrain', element: <Loadable><TerrainPage /></Loadable> },

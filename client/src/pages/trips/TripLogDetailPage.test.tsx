@@ -33,7 +33,7 @@ vi.mock('../../api/hooks.ts', () => ({
 // The panes are mounted by name here, not exercised: each has its own tests, and each asks the
 // server for something of its own that this page knows nothing about.
 vi.mock('./TripSections.tsx', () => ({ default: () => <div>what the trip recorded</div> }));
-vi.mock('./TripGeometryField.tsx', () => ({
+vi.mock('../../components/trips/TripGeometryField.tsx', () => ({
   default: ({ active }: { active?: boolean }) => (
     <div data-testid="sketch">the shape the trip drew, shown: {String(active)}</div>
   ),

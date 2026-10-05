@@ -1,15 +1,38 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Button, Card, Descriptions, Flex, Result, Spin, Tabs, Tag, Typography } from 'antd';
+import { useState } from 'react';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  FileTextOutlined,
+  LockOutlined,
+  ShareAltOutlined,
+} from '@ant-design/icons';
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Descriptions,
+  Flex,
+  Popconfirm,
+  Result,
+  Spin,
+  Tabs,
+  Tag,
+  Typography,
+} from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   parseAccessActions,
   useCan,
   useCavingGroups,
+  useDeleteExpedition,
   useEffectiveAccess,
   useExpedition,
 } from '../../api/hooks.ts';
 import HistoryPanel from '../../components/history/HistoryPanel.tsx';
+import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 import LinksSection from '../../components/reslinks/LinksSection.tsx';
 import TagChips from '../../components/tags/TagChips.tsx';
 // The camp shares the trips' lifecycle vocabulary and their date convention — an absent end
@@ -18,9 +41,13 @@ import TagChips from '../../components/tags/TagChips.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates, isMultiDay } from '../../components/trips/tripDates.ts';
 import ExpeditionFilesTab from './ExpeditionFilesTab.tsx';
+import ExpeditionFormModal from './ExpeditionFormModal.tsx';
 import ExpeditionLeadsTab from './ExpeditionLeadsTab.tsx';
 import ExpeditionMapTab from './ExpeditionMapTab.tsx';
+import ExpeditionPhotosTab from './ExpeditionPhotosTab.tsx';
 import ExpeditionRosterTab from './ExpeditionRosterTab.tsx';
+import ExpeditionSharingModal from './ExpeditionSharingModal.tsx';
+import ExpeditionStateControl from './ExpeditionStateControl.tsx';
 import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
 
 /**
@@ -29,7 +56,7 @@ import ExpeditionTripsTab from './ExpeditionTripsTab.tsx';
  * survives a reload. Adding a section to the camp is one more entry here and one more component —
  * nothing else about the page has to move.
  */
-const TAB_KEYS = ['trips', 'map', 'leads', 'roster', 'files', 'history'] as const;
+const TAB_KEYS = ['trips', 'map', 'leads', 'roster', 'photos', 'files', 'history'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 const DEFAULT_TAB: TabKey = 'trips';
 
@@ -48,6 +75,7 @@ const isTabKey = (value: string | null): value is TabKey =>
 export default function ExpeditionDetailPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: camp, isPending, isError } = useExpedition(id);
@@ -57,6 +85,10 @@ export default function ExpeditionDetailPage() {
   const { data: effective } = useEffectiveAccess('expedition', id);
   const domainFallback = useCan('expeditions', 'write');
   const held = effective ? parseAccessActions(effective.actions) : null;
+  const deleteCamp = useDeleteExpedition();
+  const [editing, setEditing] = useState(false);
+  const [permissionsOpen, setPermissionsOpen] = useState(false);
+  const [sharingOpen, setSharingOpen] = useState(false);
 
   // An unrecognised key in the address falls back to the page's own tab rather than leaving antd
   // with an activeKey matching no pane, which renders the page with nothing under the tab strip.
@@ -87,9 +119,23 @@ export default function ExpeditionDetailPage() {
   }
 
   const canEdit = held ? held.has('write') : domainFallback;
+  const canDelete = held ? held.has('delete') : domainFallback;
+  // Naming who may read a camp is its own right, held by the person who made it and by anybody
+  // they hand it to — not implied by being able to edit it.
+  const canManagePermissions = held ? held.has('managePermissions') : domainFallback;
   const organizingCavingGroup = cavingGroups?.find((group) => group.id === camp.cavingGroupId);
   const spansDays = isMultiDay(camp.startDate, camp.endDate);
   const dateText = formatTripDates(camp.startDate, camp.endDate, i18n.resolvedLanguage);
+
+  const onDelete = async () => {
+    try {
+      await deleteCamp.mutateAsync(camp.id);
+      message.success(t('common.deleted'));
+      void navigate('/expeditions');
+    } catch {
+      message.error(t('common.saveFailed'));
+    }
+  };
 
   return (
     <div style={{ padding: 24, maxWidth: 1000 }}>
@@ -100,7 +146,79 @@ export default function ExpeditionDetailPage() {
           </Typography.Title>
           <TripStateTag state={camp.state} />
         </Flex>
+        <Flex gap={8} wrap>
+          {/* The write-up as a document rather than a page of tabs, for anybody who may read
+              the camp: circulating one is not an act of editing it. */}
+          <Link to={`/expeditions/${camp.id}/report`}>
+            <Button icon={<FileTextOutlined />} data-testid="expedition-open-report">
+              {t('expeditions.report.open')}
+            </Button>
+          </Link>
+          {/* Who may read this camp, narrowed person by person — and, through the camp's own
+              sharing, the trips it gathers. A camp contains no features, so the dialog offers
+              reach over this camp alone. */}
+          {canManagePermissions && (
+            <Button
+              icon={<LockOutlined />}
+              onClick={() => setPermissionsOpen(true)}
+              data-testid="expedition-permissions"
+            >
+              {t('permissions.button')}
+            </Button>
+          )}
+          {/* Sharing reaches the trips the camp gathers, one marked rule each, and takes the
+              same right as the camp's own permissions: the camp is where a person asks, each
+              trip is what answers. */}
+          {canManagePermissions && (
+            <Button
+              icon={<ShareAltOutlined />}
+              onClick={() => setSharingOpen(true)}
+              data-testid="expedition-share"
+            >
+              {t('expeditions.sharing.button')}
+            </Button>
+          )}
+          {(canEdit || canDelete) && (
+            <>
+              <ExpeditionStateControl
+                expeditionId={camp.id}
+                state={camp.state}
+                visibility={camp.visibility}
+                canEdit={canEdit}
+              />
+              {canEdit && (
+                <Button
+                  icon={<EditOutlined />}
+                  onClick={() => setEditing(true)}
+                  data-testid="expedition-edit"
+                >
+                  {t('expeditions.edit')}
+                </Button>
+              )}
+              {canDelete && (
+                <Popconfirm title={t('expeditions.deleteConfirm')} onConfirm={() => void onDelete()}>
+                  <Button danger icon={<DeleteOutlined />} data-testid="expedition-delete">
+                    {t('features.delete')}
+                  </Button>
+                </Popconfirm>
+              )}
+            </>
+          )}
+        </Flex>
       </Flex>
+
+      {/* Said in words as well as shown as a badge, and only to somebody who could act on it.
+          A draft is not hidden from anyone its visibility admits — being unfinished is not a
+          permission — so the organiser is told plainly that the camp has not been announced. */}
+      {camp.state === 'draft' && canEdit && (
+        <Alert
+          type="info"
+          showIcon
+          title={t('expeditions.draftNotice')}
+          style={{ marginBottom: 12 }}
+          data-testid="expedition-draft-notice"
+        />
+      )}
 
       <Card size="small">
         <Descriptions column={1} size="small">
@@ -170,6 +288,11 @@ export default function ExpeditionDetailPage() {
             children: <ExpeditionRosterTab expeditionId={camp.id} />,
           },
           {
+            key: 'photos',
+            label: t('expeditions.tabPhotos'),
+            children: <ExpeditionPhotosTab expeditionId={camp.id} />,
+          },
+          {
             key: 'files',
             label: t('expeditions.tabFiles'),
             children: (
@@ -187,6 +310,25 @@ export default function ExpeditionDetailPage() {
           },
         ]}
       />
+
+      {canEdit && (
+        <ExpeditionFormModal open={editing} camp={camp} onClose={() => setEditing(false)} />
+      )}
+      {canManagePermissions && (
+        <>
+          <PermissionsModal
+            entityType="expedition"
+            entityId={camp.id}
+            open={permissionsOpen}
+            onClose={() => setPermissionsOpen(false)}
+          />
+          <ExpeditionSharingModal
+            expeditionId={camp.id}
+            open={sharingOpen}
+            onClose={() => setSharingOpen(false)}
+          />
+        </>
+      )}
     </div>
   );
 }

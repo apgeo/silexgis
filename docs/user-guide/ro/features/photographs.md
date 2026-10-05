@@ -96,7 +96,10 @@ imediat de acolo.
 **Pe o tură.** O tură are propria galerie, care arată *„fotografiile pe care le puteți vedea.
 Altcineva poate vedea mai multe sau mai puține."*
 
-**Pe o tabără.** *Albume despre această tabără.*
+**Pe o tabără.** Fila *Fotografii* a unei tabere arată pozele atașate taberei și cele de pe
+turele pe care le adună și pe care le puteți citi — din nou *„fotografiile pe care le puteți
+vedea"*, fiindcă o tură pe care nu o puteți deschide nu contribuie cu niciuna. *Deschide în
+galerie* restrânge galeria în același fel. Albumele despre tabără sunt pe fila *Fișiere*.
 
 **Pe hartă.** Stratul **Fotografii geolocalizate** desenează fotografiile care poartă o poziție.
 

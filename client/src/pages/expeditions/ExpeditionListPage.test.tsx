@@ -5,10 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { ExpeditionInfo, ExpeditionListParams } from '../../api/hooks.ts';
 
-const { listSpy } = vi.hoisted(() => ({ listSpy: vi.fn() }));
+const { listSpy, canCreate } = vi.hoisted(() => ({ listSpy: vi.fn(), canCreate: { value: false } }));
 
 vi.mock('../../api/hooks.ts', () => ({
   useExpeditions: (params: ExpeditionListParams) => listSpy(params),
+  useCan: () => canCreate.value,
+}));
+
+// The form is exercised by its own tests; here it only has to be the thing the button opens.
+vi.mock('./ExpeditionFormModal.tsx', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div>the camp form</div> : null),
 }));
 
 const { default: ExpeditionListPage } = await import('./ExpeditionListPage.tsx');
@@ -47,6 +53,7 @@ function show() {
 
 afterEach(cleanup);
 beforeEach(() => {
+  canCreate.value = false;
   listSpy.mockReset();
   listSpy.mockReturnValue({
     data: { items: [camp()], page: 1, pageSize: 20, totalItems: 60 },
@@ -100,5 +107,22 @@ describe('the camps', () => {
     fireEvent.click(screen.getByText('Done'));
 
     expect(lastParams().page).toBe(1);
+  });
+
+  /**
+   * The action is drawn only for somebody the domain-level hint says may create a camp. The
+   * server refuses the create regardless; what is avoided here is a form offered to somebody
+   * whose every save would fail.
+   */
+  it('offers a new camp only to somebody who may create one, and opens the form on it', () => {
+    show();
+    expect(screen.queryByTestId('expedition-new')).toBeNull();
+    expect(screen.queryByText('the camp form')).toBeNull();
+
+    cleanup();
+    canCreate.value = true;
+    show();
+    fireEvent.click(screen.getByTestId('expedition-new'));
+    expect(screen.getByText('the camp form')).toBeTruthy();
   });
 });
