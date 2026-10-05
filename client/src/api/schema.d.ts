@@ -25469,7 +25469,7 @@ export interface components {
         /** @enum {unknown} */
         TwoFactorMethod: "authenticator" | "email" | "sms" | null;
         TwoFactorSendRequest: {
-            method: components["schemas"]["TwoFactorMethod"];
+            method: null | components["schemas"]["TwoFactorMethod"];
         };
         TwoFactorSentDto: {
             method: components["schemas"]["TwoFactorMethod"];
