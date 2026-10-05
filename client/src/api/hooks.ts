@@ -7363,6 +7363,51 @@ export function useExpeditionRosterRoles() {
   });
 }
 
+/** A camp-roster role as an administrator authors it. */
+export interface ExpeditionRosterRoleWrite {
+  code: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+}
+
+function useInvalidateExpeditionRosterRoles() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.taxonomy('expedition-roster-roles') });
+    // Every roster row renders its role from this list, so a renamed or removed row leaves the
+    // camps already in cache showing wording that no longer exists.
+    void queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+  };
+}
+
+export function useCreateExpeditionRosterRole() {
+  const invalidate = useInvalidateExpeditionRosterRoles();
+  return useMutation({
+    mutationFn: (body: ExpeditionRosterRoleWrite) =>
+      unwrap(api.POST('/api/v1/expedition-roster-roles', { body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateExpeditionRosterRole() {
+  const invalidate = useInvalidateExpeditionRosterRoles();
+  return useMutation({
+    mutationFn: ({ id, ...body }: ExpeditionRosterRoleWrite & { id: number }) =>
+      unwrap(api.PUT('/api/v1/expedition-roster-roles/{id}', { params: { path: { id } }, body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteExpeditionRosterRole() {
+  const invalidate = useInvalidateExpeditionRosterRoles();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrapVoid(api.DELETE('/api/v1/expedition-roster-roles/{id}', { params: { path: { id } } })),
+    onSuccess: invalidate,
+  });
+}
+
 /**
  * Who was at a camp, and for which days.
  *

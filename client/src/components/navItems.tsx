@@ -39,6 +39,7 @@ import {
   ReadOutlined,
   SafetyCertificateOutlined,
   ScheduleOutlined,
+  SolutionOutlined,
   TagsOutlined,
   TeamOutlined,
   TableOutlined,
@@ -178,6 +179,9 @@ export function buildNavItems(t: TFunction, gates: NavGates): NavEntry[] {
           // And again for what somebody did on a trip: every roster row renders its job
           // from this list, so the wording here is what every trip reads by.
           { key: 'admin/participant-roles', icon: <IdcardOutlined />, label: t('nav.participantRoles') },
+          // And for what somebody was at a camp as — its own list, because a job at base camp
+          // is not a job underground, and the camp's roster renders every row from it.
+          { key: 'admin/camp-roster-roles', icon: <SolutionOutlined />, label: t('nav.campRosterRoles') },
           // And once more for the layout a trip is written up in: a club's own layout
           // decides what every write-up it circulates says, and how.
           { key: 'admin/report-templates', icon: <FileWordOutlined />, label: t('nav.reportTemplates') },

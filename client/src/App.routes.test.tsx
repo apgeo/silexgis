@@ -56,6 +56,12 @@ describe('the addresses this application hands out', () => {
     expect(matchRoutes(routes, '/admin/notification-health')).toBeTruthy();
   });
 
+  // The camp-roster vocabulary's page: offered by key from the configuration group and from the
+  // camps list, and the one of the three activity vocabularies that had routes and no page.
+  it('include the camp roles page the sidebar and the camps list offer', () => {
+    expect(matchRoutes(routes, '/admin/camp-roster-roles')).toBeTruthy();
+  });
+
   // Same reason, for the record of everything dated: the sidebar offers it by key.
   it('include the calendar the sidebar sends people to', () => {
     expect(matchRoutes(routes, '/calendar')).toBeTruthy();

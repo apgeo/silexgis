@@ -13,6 +13,7 @@ import {
   type ExpeditionInfo,
   type ExpeditionListParams,
 } from '../../api/hooks.ts';
+import ConfigureLink from '../../components/ConfigureLink.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
 // One lifecycle, one list of its words: a camp offers all of them, and so does a trip.
@@ -46,6 +47,7 @@ export default function ExpeditionListPage() {
   // A domain-level hint for whether to draw the button at all; the server decides the create
   // itself, and refuses it for anybody this check would have shown the form to by mistake.
   const canCreate = useCan('expeditions', 'create');
+  const canWriteTaxonomies = useCan('taxonomies', 'write');
   const [creating, setCreating] = useState(false);
 
   const onTableChange = (pagination: TablePaginationConfig) => {
@@ -63,16 +65,26 @@ export default function ExpeditionListPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('expeditions.title')}
         </Typography.Title>
-        {canCreate && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setCreating(true)}
-            data-testid="expedition-new"
-          >
-            {t('expeditions.new')}
-          </Button>
-        )}
+        <Flex gap={8}>
+          {/* What somebody may be recorded as having been at a camp as — reached from the list
+              the vocabulary governs, not only from the configuration group in the rail, the same
+              door the trip list offers for its own three. */}
+          <ConfigureLink
+            items={canWriteTaxonomies
+              ? [{ key: 'admin/camp-roster-roles', label: t('nav.campRosterRoles') }]
+              : []}
+          />
+          {canCreate && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setCreating(true)}
+              data-testid="expedition-new"
+            >
+              {t('expeditions.new')}
+            </Button>
+          )}
+        </Flex>
       </Flex>
       <Flex gap={8} wrap style={{ marginBottom: 12 }}>
         <Input.Search

@@ -32,7 +32,7 @@ export const NAV_SECTIONS = [
   'admin/terrain',
   // The three the rail offers under configuration. Missing here, they matched nothing and
   // fell through to the map, so opening trip purposes lit the map item instead.
-  'admin/trip-types', 'admin/participant-roles', 'admin/report-templates',
+  'admin/trip-types', 'admin/participant-roles', 'admin/camp-roster-roles', 'admin/report-templates',
   'settings', 'notifications',
 ] as const;
 

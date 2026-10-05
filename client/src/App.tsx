@@ -62,6 +62,7 @@ const FeatureSetsPage = lazy(() => import('./pages/admin/FeatureSetsPage.tsx'));
 const DocumentTypesPage = lazy(() => import('./pages/admin/DocumentTypesPage.tsx'));
 const TripTypesPage = lazy(() => import('./pages/admin/TripTypesPage.tsx'));
 const TripParticipantRolesPage = lazy(() => import('./pages/admin/TripParticipantRolesPage.tsx'));
+const ExpeditionRosterRolesPage = lazy(() => import('./pages/admin/ExpeditionRosterRolesPage.tsx'));
 const TripReportTemplatesPage = lazy(() => import('./pages/admin/TripReportTemplatesPage.tsx'));
 const RelationTypesPage = lazy(() => import('./pages/admin/RelationTypesPage.tsx'));
 const TerrainPage = lazy(() => import('./pages/admin/TerrainPage.tsx'));
@@ -192,6 +193,7 @@ export const routes: RouteObject[] = [
           { path: '/admin/document-types', element: <Loadable><DocumentTypesPage /></Loadable> },
           { path: '/admin/trip-types', element: <Loadable><TripTypesPage /></Loadable> },
           { path: '/admin/participant-roles', element: <Loadable><TripParticipantRolesPage /></Loadable> },
+          { path: '/admin/camp-roster-roles', element: <Loadable><ExpeditionRosterRolesPage /></Loadable> },
           { path: '/admin/report-templates', element: <Loadable><TripReportTemplatesPage /></Loadable> },
           { path: '/admin/relation-types', element: <Loadable><RelationTypesPage /></Loadable> },
           { path: '/admin/terrain', element: <Loadable><TerrainPage /></Loadable> },
