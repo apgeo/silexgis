@@ -243,7 +243,7 @@ internal static class ExpeditionReportEndpoints
         // A layout that was named and is not there — or is there and writes up trips rather than
         // camps — is a refusal rather than a quiet fall back to another one.
         var body = await ReportTemplateReads.BodyForAsync(
-            db, templateId, ReportTemplateKind.Expedition, ct);
+            db, templateId, ReportTemplateKind.Expedition, tripTypeId: null, ct);
         if (body is null)
         {
             return new BuiltReport(null, null, ApiProblems.NotFound(ReportTemplateReads.NotFoundCode));

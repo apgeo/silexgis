@@ -42,6 +42,15 @@ public class TripReportTemplate : ITimestamped, IAuditable
     /// </summary>
     public bool IsDefault { get; set; }
 
+    /// <summary>
+    /// The trip purpose this layout is the write-up of, when it is one purpose's own. A trip of
+    /// that purpose is written up in this layout unless somebody names another; null is a layout
+    /// for any trip. One layout per purpose, held by a partial unique index, and it goes back to
+    /// being an ordinary layout when the purpose is deleted. Only a trip layout carries one: a
+    /// camp has no purpose to be bound to.
+    /// </summary>
+    public long? TripTypeId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

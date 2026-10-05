@@ -273,10 +273,67 @@ public sealed class TripReportTemplateTests : IAsyncLifetime, IDisposable, IClas
         unsigned.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
-    private async Task<Guid> StoreAsync(HttpClient client, string name, string body, bool isDefault)
+    /// <summary>
+    /// A trip purpose carries its own layout: a trip of that purpose is written up in it without
+    /// anybody naming it, ahead of whatever the installation chose, and a trip of another purpose
+    /// is not. One layout per purpose, and only a trip layout may be bound to one.
+    /// </summary>
+    [Fact]
+    public async Task A_purposes_own_layout_is_what_its_trips_are_written_up_in_unasked()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var purpose = await CreateTripTypeAsync(suffix);
+        var marker = $"Survey bulletin {suffix}";
+        await StoreAsync(admin, $"Own {suffix}", $"title: {marker}\ntext: {{description}}\n", isDefault: false, tripTypeId: purpose);
+
+        var ofPurpose = await CreateTripAsync(body =>
+        {
+            body["tripTypeId"] = purpose;
+            body["description"] = "Two hours of survey.";
+        });
+        var other = await CreateTripAsync(body => body["description"] = "An afternoon elsewhere.");
+
+        var written = await DocumentTextAsync(owner, ofPurpose, null);
+        written.ShouldContain(marker);
+        written.ShouldContain("Two hours of survey.");
+        (await DocumentTextAsync(owner, other, null)).ShouldNotContain(marker);
+
+        // The answer names the binding, so the administration page can show it.
+        using var listed = await admin.GetAsync("/api/v1/trip-report-templates/?kind=trip");
+        JsonDocument.Parse(await listed.Content.ReadAsStringAsync()).RootElement.EnumerateArray()
+            .Where(x => x.GetProperty("tripTypeId").ValueKind == JsonValueKind.Number)
+            .Select(x => x.GetProperty("tripTypeId").GetInt64())
+            .ShouldContain(purpose);
+
+        // A second layout for the same purpose is refused with a code, as is a purpose this
+        // installation does not have, and a camp layout bound to a purpose is a validation fault.
+        using var second = await admin.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        {
+            name = $"Second {suffix}", body = "title: Again\n", isDefault = false, kind = "trip", tripTypeId = purpose,
+        });
+        second.StatusCode.ShouldBe(HttpStatusCode.Conflict, await second.Content.ReadAsStringAsync());
+        (await second.Content.ReadAsStringAsync()).ShouldContain("trip_report_template.type_taken");
+
+        using var unknown = await admin.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        {
+            name = $"Unknown {suffix}", body = "title: Nowhere\n", isDefault = false, kind = "trip", tripTypeId = 987654321L,
+        });
+        unknown.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await unknown.Content.ReadAsStringAsync());
+        (await unknown.Content.ReadAsStringAsync()).ShouldContain("trip_report_template.type_unknown");
+
+        using var camp = await admin.PostAsJsonAsync("/api/v1/trip-report-templates/", new
+        {
+            name = $"Camp {suffix}", body = "title: Camp\n", isDefault = false, kind = "expedition", tripTypeId = purpose,
+        });
+        camp.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await camp.Content.ReadAsStringAsync());
+        (await camp.Content.ReadAsStringAsync()).ShouldContain("validation.failed");
+    }
+
+    private async Task<Guid> StoreAsync(
+        HttpClient client, string name, string body, bool isDefault, long? tripTypeId = null)
     {
         using var response = await client.PostAsJsonAsync(
-            "/api/v1/trip-report-templates/", new { name, body, isDefault, kind = "trip" });
+            "/api/v1/trip-report-templates/", new { name, body, isDefault, kind = "trip", tripTypeId });
         var payload = await response.Content.ReadAsStringAsync();
         response.StatusCode.ShouldBe(HttpStatusCode.Created, payload);
         var id = JsonDocument.Parse(payload).RootElement.GetProperty("id").GetGuid();

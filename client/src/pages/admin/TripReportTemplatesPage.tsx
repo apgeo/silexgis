@@ -27,10 +27,12 @@ import {
   useCreateTripReportTemplate,
   useDeleteTripReportTemplate,
   useTripReportTemplates,
+  useTripTypes,
   useUpdateTripReportTemplate,
   type TripReportTemplate,
   type TripReportTemplateWrite,
 } from '../../api/hooks.ts';
+import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 
 /**
  * Which kind of thing a layout writes up. Named on every save rather than defaulted: the kind
@@ -40,7 +42,13 @@ import {
  */
 type ReportTemplateKind = NonNullable<TripReportTemplateWrite['kind']>;
 
-const emptyDraft: TripReportTemplateWrite = { name: '', body: '', isDefault: false, kind: 'trip' };
+const emptyDraft: TripReportTemplateWrite = {
+  name: '',
+  body: '',
+  isDefault: false,
+  kind: 'trip',
+  tripTypeId: null,
+};
 
 /**
  * The layouts a trip or a camp is written up in.
@@ -66,6 +74,7 @@ export default function TripReportTemplatesPage() {
   const canRead = hasAccessAction(capabilities?.domains.taxonomies, 'read');
   const canWrite = hasAccessAction(capabilities?.domains.taxonomies, 'write');
   const { data: templates, isLoading } = useTripReportTemplates();
+  const { data: tripTypes } = useTripTypes();
   const createTemplate = useCreateTripReportTemplate();
   const updateTemplate = useUpdateTripReportTemplate();
   const deleteTemplate = useDeleteTripReportTemplate();
@@ -80,6 +89,17 @@ export default function TripReportTemplatesPage() {
   ];
   const kindLabel = (kind: ReportTemplateKind) =>
     kindOptions.find((option) => option.value === kind)?.label ?? kind;
+  // A layout may be one trip purpose's own: a trip of that purpose is written up in it unless
+  // somebody names another, ahead of the layout chosen for everything. The purpose is shown by
+  // the same wording the trip form uses for it, and offered only on a trip layout — a camp has
+  // no purpose to be bound to.
+  const purposeOptions = (tripTypes ?? []).map((type) => ({
+    value: type.id,
+    label: tripTypeLabelOf(type.id, tripTypes, t),
+  }));
+  const purposeLabel = (tripTypeId: number | null | undefined) =>
+    tripTypeId == null ? '' : tripTypeLabelOf(tripTypeId, tripTypes, t);
+  const draftKind = Form.useWatch('kind', form);
 
   const open = editing !== null || creating;
   useEffect(() => {
@@ -91,6 +111,7 @@ export default function TripReportTemplatesPage() {
               body: editing.body,
               isDefault: editing.isDefault,
               kind: editing.kind,
+              tripTypeId: editing.tripTypeId ?? null,
             }
           : emptyDraft,
       );
@@ -109,6 +130,9 @@ export default function TripReportTemplatesPage() {
       body: values.body,
       isDefault: values.isDefault,
       kind: values.kind,
+      // Sent as null rather than left out for a camp layout, so switching a bound trip layout to
+      // a camp layout lets the binding go instead of being refused for carrying one.
+      tripTypeId: values.kind === 'trip' ? (values.tripTypeId ?? null) : null,
     };
 
     try {
@@ -206,6 +230,11 @@ export default function TripReportTemplatesPage() {
             render: (_: unknown, template: TripReportTemplate) => kindLabel(template.kind),
           },
           {
+            title: t('admin.reportTemplates.tripType'),
+            key: 'tripTypeId',
+            render: (_: unknown, template: TripReportTemplate) => purposeLabel(template.tripTypeId),
+          },
+          {
             title: t('admin.reportTemplates.used'),
             key: 'isDefault',
             render: (_: unknown, template: TripReportTemplate) =>
@@ -260,6 +289,20 @@ export default function TripReportTemplatesPage() {
           >
             <Select options={kindOptions} data-testid="report-template-kind" />
           </Form.Item>
+          {draftKind === 'trip' && (
+            <Form.Item
+              name="tripTypeId"
+              label={t('admin.reportTemplates.tripType')}
+              extra={t('admin.reportTemplates.tripTypeHint')}
+            >
+              <Select
+                allowClear
+                options={purposeOptions}
+                placeholder={t('admin.reportTemplates.tripTypeAny')}
+                data-testid="report-template-trip-type"
+              />
+            </Form.Item>
+          )}
           <Form.Item label={t('admin.reportTemplates.fromFile')} extra={t('admin.reportTemplates.fromFileHint')}>
             <Upload
               accept=".txt"

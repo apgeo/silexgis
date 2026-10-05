@@ -21,15 +21,17 @@ public static class ReportTemplateReads
     public const string NotFoundCode = "trip_report_template.not_found";
 
     /// <summary>
-    /// The layout a write-up should be built in: the one asked for, the one chosen as default, or
-    /// the one the product ships.
+    /// The layout a write-up should be built in: the one asked for, the one the trip's purpose
+    /// carries, the one chosen as the installation's default, or the one the product ships.
     /// </summary>
     /// <remarks>
     /// Returns null when a layout was named and there is no such row, so the caller can refuse
-    /// rather than quietly produce a document in a layout nobody asked for.
+    /// rather than quietly produce a document in a layout nobody asked for. Which stored layout
+    /// applies when none was named is the Domain's rule, applied here over the rows of the kind.
     /// </remarks>
+    /// <param name="tripTypeId">The purpose of the trip being written up; null for a camp.</param>
     public static async Task<string?> BodyForAsync(
-        SilexGisDbContext db, Guid? templateId, ReportTemplateKind kind, CancellationToken ct)
+        SilexGisDbContext db, Guid? templateId, ReportTemplateKind kind, long? tripTypeId, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(db);
 
@@ -42,8 +44,12 @@ public static class ReportTemplateReads
                 .Where(x => x.Id == id && x.Kind == kind).Select(x => x.Body).FirstOrDefaultAsync(ct);
         }
 
-        var chosen = await db.TripReportTemplates.AsNoTracking()
-            .Where(x => x.IsDefault && x.Kind == kind).Select(x => x.Body).FirstOrDefaultAsync(ct);
-        return chosen ?? ReportTemplateFormat.DefaultFor(kind);
+        var stored = await db.TripReportTemplates.AsNoTracking()
+            .Where(x => x.Kind == kind && (x.IsDefault || (tripTypeId != null && x.TripTypeId == tripTypeId)))
+            .Select(x => new { x.Id, x.TripTypeId, x.IsDefault, x.Body })
+            .ToListAsync(ct);
+        var picked = ReportTemplateChoice.Pick(
+            stored.Select(x => new ReportTemplateCandidate(x.Id, x.TripTypeId, x.IsDefault)), tripTypeId);
+        return stored.FirstOrDefault(x => x.Id == picked)?.Body ?? ReportTemplateFormat.DefaultFor(kind);
     }
 }

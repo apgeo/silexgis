@@ -25356,12 +25356,16 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** Format: int64 */
+            tripTypeId?: null | number;
         };
         TripReportTemplateRequest: {
             name: string;
             body: string;
             isDefault: boolean;
             kind: null | components["schemas"]["ReportTemplateKind"];
+            /** Format: int64 */
+            tripTypeId?: null | number;
         };
         TripStatisticsDto: {
             /** Format: int32 */

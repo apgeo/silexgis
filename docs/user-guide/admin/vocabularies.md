@@ -68,6 +68,10 @@ Somebody who did two jobs is recorded doing both rather than made to choose.
 Download the standard one — a short text file that explains itself in its own comments — edit
 it, upload it, and choose it.
 
+A layout can also be **one trip purpose's own** — the survey bulletin, say: a trip recorded under
+that purpose is written up in it unless somebody picks another, ahead of the layout chosen for
+everything else. One layout per purpose; leave the purpose empty for a layout any trip may use.
+
 Two properties that make this safe:
 
 - **A layout can only ask for things the reader was already given.** It cannot be used to

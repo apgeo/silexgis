@@ -243,7 +243,7 @@ internal static class TripReportEndpoints
         // Which layout the document is written in. A layout that was named and is not there is a
         // refusal rather than a quiet fall back to another one: somebody asking for the club's
         // bulletin layout and being handed the shipped one would not be told.
-        var body = await ReportTemplateReads.BodyForAsync(db, templateId, ReportTemplateKind.Trip, ct);
+        var body = await ReportTemplateReads.BodyForAsync(db, templateId, ReportTemplateKind.Trip, trip.TripTypeId, ct);
         if (body is null)
         {
             return new BuiltReport(null, null, ApiProblems.NotFound(ReportTemplateReads.NotFoundCode));

@@ -20,7 +20,8 @@ public sealed record TripReportTemplateDto(
     string Body,
     bool IsDefault,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    long? TripTypeId = null);
 
 /// <summary>A layout as somebody asks for it to be.</summary>
 /// <param name="Kind">
@@ -30,8 +31,13 @@ public sealed record TripReportTemplateDto(
 /// write, the chosen one would be stamped over the kind the stored layout already had, quietly
 /// retyping a camp layout as a trip layout and taking the trip default with it.
 /// </param>
+/// <param name="TripTypeId">
+/// The trip purpose this layout is the write-up of: a trip of that purpose is built in it unless
+/// another is named. Appended with a default so a caller that does not know of it saves a layout
+/// for any trip, which is what every layout was before.
+/// </param>
 public sealed record TripReportTemplateRequest(
-    string Name, string Body, bool IsDefault, ReportTemplateKind? Kind);
+    string Name, string Body, bool IsDefault, ReportTemplateKind? Kind, long? TripTypeId = null);
 
 public sealed class TripReportTemplateRequestValidator : AbstractValidator<TripReportTemplateRequest>
 {
@@ -41,6 +47,12 @@ public sealed class TripReportTemplateRequestValidator : AbstractValidator<TripR
         // Asked for rather than assumed. See the request's own note: a missing kind that fell back
         // to a default would rewrite the kind of the layout being saved.
         RuleFor(x => x.Kind).NotNull().IsInEnum();
+        // A camp has no purpose to be bound to; a trip-type binding on a camp layout would never
+        // be read and would sit there looking like a choice.
+        RuleFor(x => x.TripTypeId)
+            .Null()
+            .When(x => x.Kind != ReportTemplateKind.Trip)
+            .WithMessage("Only a trip layout can be bound to a trip purpose.");
         // Whether the body is a layout anything can be built from is decided by reading it, which
         // happens in the handler so the refusal can say which line is wrong. This only keeps an
         // unbounded blob out of the column.
@@ -79,6 +91,12 @@ public static class TripReportTemplateEndpoints
 
     /// <summary>A word that is not one of the kinds of thing a layout writes up.</summary>
     public const string KindInvalidCode = "trip_report_template.kind_invalid";
+
+    /// <summary>A layout bound to a trip purpose that does not exist.</summary>
+    public const string TypeUnknownCode = "trip_report_template.type_unknown";
+
+    /// <summary>A layout bound to a trip purpose another layout is already the own layout of.</summary>
+    public const string TypeTakenCode = "trip_report_template.type_taken";
 
     public static RouteGroupBuilder MapTripReportTemplateEndpoints(this RouteGroupBuilder api)
     {
@@ -202,9 +220,14 @@ public static class TripReportTemplateEndpoints
             return refusal;
         }
 
+        if (await TypeRefusalAsync(db, request.TripTypeId, null, ct) is { } typeRefusal)
+        {
+            return typeRefusal;
+        }
+
         var row = new TripReportTemplate
         {
-            Name = request.Name.Trim(), Body = request.Body, Kind = kind,
+            Name = request.Name.Trim(), Body = request.Body, Kind = kind, TripTypeId = request.TripTypeId,
         };
         db.TripReportTemplates.Add(row);
         await SaveWithDefaultAsync(db, row, request.IsDefault, ct);
@@ -236,9 +259,15 @@ public static class TripReportTemplateEndpoints
             return refusal;
         }
 
+        if (await TypeRefusalAsync(db, request.TripTypeId, row.Id, ct) is { } typeRefusal)
+        {
+            return typeRefusal;
+        }
+
         row.Name = request.Name.Trim();
         row.Body = request.Body;
         row.Kind = kind;
+        row.TripTypeId = request.TripTypeId;
         await SaveWithDefaultAsync(db, row, request.IsDefault, ct);
         return TypedResults.Ok(ToDto(row));
     }
@@ -299,6 +328,32 @@ public static class TripReportTemplateEndpoints
         await transaction.CommitAsync(ct);
     }
 
+    /// <summary>
+    /// A binding to a purpose that is not there, or to one another layout already holds, is
+    /// refused with a code rather than left to the foreign key and the unique index — which would
+    /// answer the same mistakes as a server fault.
+    /// </summary>
+    private static async Task<ProblemHttpResult?> TypeRefusalAsync(
+        SilexGisDbContext db, long? tripTypeId, Guid? exceptId, CancellationToken ct)
+    {
+        if (tripTypeId is not { } typeId)
+        {
+            return null;
+        }
+
+        if (!await db.TripTypes.AsNoTracking().AnyAsync(t => t.Id == typeId, ct))
+        {
+            return ApiProblems.BadRequest(TypeUnknownCode, "There is no such trip purpose.");
+        }
+
+        if (await db.TripReportTemplates.AsNoTracking().AnyAsync(x => x.TripTypeId == typeId && x.Id != exceptId, ct))
+        {
+            return ApiProblems.Conflict(TypeTakenCode, "Another layout is already this trip purpose's own.");
+        }
+
+        return null;
+    }
+
     private static ProblemHttpResult? Refusal(string body, ReportTemplateKind kind)
     {
         var read = ReportTemplateFormat.Parse(body, kind);
@@ -306,5 +361,5 @@ public static class TripReportTemplateEndpoints
     }
 
     private static TripReportTemplateDto ToDto(TripReportTemplate row) =>
-        new(row.Id, row.Name, row.Kind, row.Body, row.IsDefault, row.CreatedAt, row.UpdatedAt);
+        new(row.Id, row.Name, row.Kind, row.Body, row.IsDefault, row.CreatedAt, row.UpdatedAt, row.TripTypeId);
 }

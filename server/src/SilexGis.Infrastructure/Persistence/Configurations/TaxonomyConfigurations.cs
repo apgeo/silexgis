@@ -156,5 +156,15 @@ public sealed class TripReportTemplateConfiguration : IEntityTypeConfiguration<T
         builder.HasIndex(x => new { x.Kind, x.IsDefault }).IsUnique()
             .HasFilter("is_default")
             .HasDatabaseName("ux_trip_report_templates_default");
+
+        // A purpose carries at most one layout of its own, for the same reason: "which layout is
+        // a survey trip's" decided by whichever row was read first is not a rule. Deleting the
+        // purpose unbinds the layout rather than taking it — the text is the club's work and
+        // outlives the vocabulary word it was pinned to.
+        builder.HasOne<TripType>().WithMany().HasForeignKey(x => x.TripTypeId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(x => x.TripTypeId).IsUnique()
+            .HasFilter("trip_type_id IS NOT NULL")
+            .HasDatabaseName("ux_trip_report_templates_trip_type");
     }
 }

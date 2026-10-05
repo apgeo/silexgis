@@ -30,6 +30,9 @@ vi.mock('../../api/hooks.ts', async () => {
     hasAccessAction: actual.hasAccessAction,
     useCapabilities: () => ({ data: capabilities }),
     useTripReportTemplates: () => ({ data: templates, isLoading: false }),
+    // The purposes a trip layout may be bound to; none here, so the selector offers nothing and
+    // every row reads as a layout for any trip.
+    useTripTypes: () => ({ data: [] }),
     useCreateTripReportTemplate: () => ({ mutateAsync: createMutate, isPending: false }),
     useUpdateTripReportTemplate: () => ({ mutateAsync: updateMutate, isPending: false }),
     useDeleteTripReportTemplate: () => ({ mutateAsync: deleteMutate, isPending: false }),
