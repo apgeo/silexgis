@@ -224,6 +224,23 @@ describe('the trip page', () => {
     expect(screen.getByTestId('trip-photo-import')).toBeTruthy();
   });
 
+  it('says "no such trip" for a trip the server refused, instead of loading forever', () => {
+    // The server answers 404 both for a trip that does not exist and for one the caller may not
+    // read, by design. The read then settles as an error and is not retried, so a refusal that
+    // left the page on its spinner would hold it there for good — which a reader reports as the
+    // application having hung, not as a permission. The page names the ambiguity in words rather
+    // than guessing which of the two it is.
+    tripSpy.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    renderPage();
+
+    expect(screen.getByText('No such trip')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Either it is not there, or it is not yours to read/),
+    ).toBeInTheDocument();
+    expect(document.querySelector('.ant-spin')).toBeNull();
+    expect(screen.queryByTestId('trip-open-report')).toBeNull();
+  });
+
   it('lets the row of page actions wrap rather than pushing the whole page sideways', () => {
     // Five buttons in a row come to 641px and a phone is 412px across. Unwrapped, this row was the
     // largest single reason the trip page scrolled sideways — larger than the tables under it —

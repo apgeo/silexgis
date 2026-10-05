@@ -15,6 +15,7 @@ import {
   Descriptions,
   Flex,
   Popconfirm,
+  Result,
   Spin,
   Tabs,
   Tag,
@@ -142,7 +143,7 @@ export default function TripLogDetailPage() {
   const { message } = App.useApp();
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: trip, isPending } = useTripLog(id);
+  const { data: trip, isPending, isError } = useTripLog(id);
   const { data: cavingGroups } = useCavingGroups();
   const { data: tripTypes } = useTripTypes();
   const { data: participantRoles } = useTripParticipantRoles();
@@ -163,6 +164,25 @@ export default function TripLogDetailPage() {
   // order on every render whatever the trip's load state.
   const requested = searchParams.get('tab');
   const activeTab: TabKey = isTabKey(requested) ? requested : DEFAULT_TAB;
+
+  // The server answers 404 for a trip that does not exist and for one the caller may not read,
+  // by design, and a settled refusal is not retried. Without this branch the page would stay on
+  // its spinner for good, and a permission refusal reads as the application having hung. The
+  // wording names the ambiguity rather than guessing which of the two it is.
+  if (isError) {
+    return (
+      <Result
+        status="404"
+        title={t('trips.notFound')}
+        subTitle={t('trips.notFoundDetail')}
+        extra={
+          <Button type="primary" onClick={() => void navigate('/trip-logs')}>
+            {t('common.back')}
+          </Button>
+        }
+      />
+    );
+  }
 
   if (isPending || !trip) {
     return (

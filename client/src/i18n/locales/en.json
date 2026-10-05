@@ -953,6 +953,8 @@
     "openTrip": "Open trip log",
     "new": "New trip log",
     "edit": "Edit trip log",
+    "notFound": "No such trip",
+    "notFoundDetail": "Either it is not there, or it is not yours to read. This page cannot tell the two apart, and does not try.",
     "tabReport": "Report",
     "tabLinks": "Links",
     "tabPhotos": "Photographs",

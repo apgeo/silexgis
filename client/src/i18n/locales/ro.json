@@ -953,6 +953,8 @@
     "openTrip": "Deschide tura",
     "new": "Jurnal de tură nou",
     "edit": "Editare jurnal",
+    "notFound": "Nicio astfel de tură",
+    "notFoundDetail": "Fie nu există, fie nu o puteți citi. Această pagină nu poate deosebi cele două cazuri și nici nu încearcă.",
     "tabReport": "Raport",
     "tabLinks": "Legături",
     "tabPhotos": "Fotografii",
