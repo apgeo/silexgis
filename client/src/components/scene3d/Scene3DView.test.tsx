@@ -10,6 +10,7 @@ import {
   setFeatureTypeCatalog,
 } from '../../map/featureTypeCatalog.ts';
 import type { FeatureType } from '../../api/hooks.ts';
+import { requestReveal3d, takePendingReveal3d } from '../../scene3d/pendingReveal3d.ts';
 import { surfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera, viewFlyTo } from '../../workspace/viewCamera.ts';
 
@@ -43,6 +44,11 @@ vi.mock('../../api/hooks.ts', () => ({
     surveyModelRequests.push(caveId);
     return Promise.resolve(surveyModels);
   },
+  // What a reveal reads to find out where the thing it names is, through the query cache.
+  featureQuery: (id: string) => ({
+    queryKey: ['features', id],
+    queryFn: () => Promise.resolve(featureRows[id]),
+  }),
 }));
 
 const engine = await import('../../scene3d/cesiumTestDouble.ts');
@@ -72,6 +78,47 @@ let surveyModels: unknown[] = [];
 let geofilePage: { items: unknown[] } | undefined;
 let geofileRequests: [string, string][] = [];
 let geofileResponses: Record<string, unknown> = {};
+/** What a read of one feature answers with, by id — the envelope a reveal reads its geometry from. */
+let featureRows: Record<string, unknown> = {};
+
+/** A rectangle as a build's extent is drawn: [longitude, latitude] corners, closed. */
+function rectangle(west: number, south: number, east: number, north: number) {
+  return {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [west, south],
+        [east, south],
+        [east, north],
+        [west, north],
+        [west, south],
+      ],
+    ],
+  };
+}
+
+/** A coarse build over the whole region, which the installation draws by default. */
+const regionBuild = {
+  id: 'b-region',
+  extent: rectangle(24.0, 44.0, 27.0, 47.0),
+  requestedMaxDepth: 12,
+  url: '/terrain/region/',
+  attribution: null,
+  surveyHeightOffsetM: 0,
+  isDrawn: true,
+  finishedAt: '2026-03-02T08:00:00Z',
+};
+/** A finer build over one massif, baked later and converted to ellipsoidal heights. */
+const massifBuild = {
+  id: 'b-massif',
+  extent: rectangle(25.0, 45.0, 25.5, 45.3),
+  requestedMaxDepth: 14,
+  url: '/terrain/massif/',
+  attribution: '© Massif survey',
+  surveyHeightOffsetM: 43,
+  isDrawn: false,
+  finishedAt: '2026-08-12T10:00:00Z',
+};
 
 /** A converted wall mesh of cave-1, whose own zero plane sits at 500 m. */
 function aWallMesh(overrides: Record<string, unknown> = {}) {
@@ -163,6 +210,9 @@ beforeEach(() => {
   geofilePage = undefined;
   geofileRequests = [];
   geofileResponses = {};
+  featureRows = {};
+  // The slot is module state; a request a test left behind would send the next scene somewhere.
+  takePendingReveal3d();
   centerlineResponse = {
     type: 'FeatureCollection',
     features: [],
@@ -1098,6 +1148,272 @@ describe('the ground the caves are drawn against', () => {
     expect(await screen.findByText(/does not hold a terrain tile set/)).toBeInTheDocument();
     expect(engine.engineState.terrainRequests).toEqual([]);
   });
+
+  /** Opens the layer panel and picks a ground entry by its label. */
+  async function chooseGround(name: RegExp | string) {
+    fireEvent.click(await screen.findByTestId('scene3d-layers-trigger'));
+    fireEvent.click(await screen.findByRole('radio', { name }));
+  }
+
+  it('draws the build the viewer chose, and raises the caves by that build’s own correction', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    servingTerrain();
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrainBuilds: [massifBuild, regionBuild],
+      terrain: {
+        url: '/terrain/region/',
+        attribution: null,
+        surveyHeightOffsetM: 0,
+        origin: 'build',
+        buildId: 'b-region',
+      },
+      terrainFallback: null,
+    };
+    renderView();
+    await waitFor(() => expect(engine.engineState.terrainRequests).toHaveLength(1));
+    expect(engine.engineState.terrainRequests[0].url).toBe('/terrain/region/');
+    await waitFor(() => expect(Math.max(...drawnHeights())).toBe(700));
+
+    await chooseGround(/Level 14/);
+
+    await waitFor(() => expect(engine.engineState.terrainRequests).toHaveLength(2));
+    expect(engine.engineState.terrainRequests[1].url).toBe('/terrain/massif/');
+    // The placement moves with the switch: the chosen build's heights are ellipsoidal, so the
+    // survey is raised by its correction and not by the default build's.
+    await waitFor(() => expect(Math.max(...drawnHeights())).toBeCloseTo(743, 6));
+  });
+
+  it('goes back to the configured address when the viewer chooses it again', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    servingTerrain();
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrainBuilds: [massifBuild],
+      terrain: {
+        url: '/elevation/',
+        attribution: null,
+        surveyHeightOffsetM: 0,
+        origin: 'configured',
+        buildId: null,
+      },
+      terrainFallback: null,
+    };
+    renderView();
+    await waitFor(() => expect(engine.engineState.terrainRequests).toHaveLength(1));
+    await waitFor(() => expect(Math.max(...drawnHeights())).toBe(700));
+
+    await chooseGround(/Level 14/);
+    await waitFor(() => expect(Math.max(...drawnHeights())).toBeCloseTo(743, 6));
+
+    fireEvent.click(await screen.findByRole('radio', { name: 'The configured elevation model' }));
+
+    await waitFor(() => expect(engine.engineState.terrainRequests).toHaveLength(3));
+    expect(engine.engineState.terrainRequests[2].url).toBe('/elevation/');
+    await waitFor(() => expect(Math.max(...drawnHeights())).toBe(700));
+  });
+
+  it('refuses a chosen build it cannot draw, and says so, rather than drawing another', async () => {
+    // The viewer asked for this one by name. Quietly drawing the default instead would show them
+    // ground they did not ask for under a control still naming the one they did.
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const bytes = url.endsWith('layer.json')
+        ? new TextEncoder().encode(JSON.stringify(LAYER_JSON))
+        : url.includes('/terrain/massif/')
+          ? new Uint8Array([0x1f, 0x8b, 0x08, 0x00])
+          : new Uint8Array([0x8d, 0x97, 0x6e, 0x3f]);
+      return { ok: true, status: 200, arrayBuffer: async () => bytes.buffer } as Response;
+    });
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrainBuilds: [massifBuild, regionBuild],
+      terrain: {
+        url: '/terrain/region/',
+        attribution: null,
+        surveyHeightOffsetM: 0,
+        origin: 'build',
+        buildId: 'b-region',
+      },
+      terrainFallback: null,
+    };
+    renderView();
+    await waitFor(() => expect(Math.max(...drawnHeights())).toBe(700));
+
+    await chooseGround(/Level 14/);
+
+    expect(await screen.findByText(/compression that does not match/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(engine.engineState.widgets[0].scene.terrainProvider).toBeInstanceOf(
+        engine.EllipsoidTerrainProvider,
+      ),
+    );
+    // No second source was tried: the default build is not a fallback for a named choice.
+    expect(engine.engineState.terrainRequests).toHaveLength(1);
+    await waitFor(() => expect(drawnHeights()).toContain(0));
+  });
+});
+
+describe('finer ground under the camera', () => {
+  const LAYER_JSON = {
+    format: 'quantized-mesh-1.0',
+    available: [[{ startX: 0, endX: 2, startY: 0, endY: 1 }]],
+  };
+
+  function servingTerrain() {
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+      const bytes = String(input).endsWith('layer.json')
+        ? new TextEncoder().encode(JSON.stringify(LAYER_JSON))
+        : new Uint8Array([0x8d, 0x97, 0x6e, 0x3f]);
+      return { ok: true, status: 200, arrayBuffer: async () => bytes.buffer } as Response;
+    });
+  }
+
+  /** The region build drawn by default, with the massif build there to be offered. */
+  function twoBuilds() {
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrainBuilds: [massifBuild, regionBuild],
+      terrain: {
+        url: '/terrain/region/',
+        attribution: null,
+        surveyHeightOffsetM: 0,
+        origin: 'build',
+        buildId: 'b-region',
+      },
+      terrainFallback: null,
+    };
+  }
+
+  /** Moves the camera and lets it come to rest, which is when the scene looks at where it is. */
+  function flyAndSettle(longitude: number, latitude: number) {
+    act(() => {
+      viewFlyTo(longitude, latitude, 14);
+      engine.engineState.widgets[0].scene.camera.moveEnd.raise();
+    });
+  }
+
+  it('offers the finer build the camera has entered, and draws it only when asked', async () => {
+    withWebGl2(true);
+    servingTerrain();
+    twoBuilds();
+    renderView();
+    await waitFor(() => expect(engine.engineState.terrainRequests).toHaveLength(1));
+    await waitFor(() => expect(centerlineRequests.length).toBeGreaterThanOrEqual(1));
+    // The scene opens over the region, where the finer build covers nothing.
+    expect(screen.queryByTestId('scene3d-terrain-offer')).toBeNull();
+
+    flyAndSettle(25.25, 45.15);
+
+    const offer = await screen.findByTestId('scene3d-terrain-offer');
+    expect(offer.textContent).toMatch(/Finer terrain covers this area/);
+    // Offered, not done: a swap reloads the ground and moves the datum under the viewer, and
+    // nobody asked for that mid-pan.
+    expect(engine.engineState.terrainRequests).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draw it' }));
+
+    await waitFor(() => expect(engine.engineState.terrainRequests).toHaveLength(2));
+    expect(engine.engineState.terrainRequests[1].url).toBe('/terrain/massif/');
+    // Nothing finer than what is now drawn covers the place, so the offer comes down.
+    await waitFor(() => expect(screen.queryByTestId('scene3d-terrain-offer')).toBeNull());
+  });
+
+  it('stops offering a build the viewer waved away, for the rest of the session', async () => {
+    withWebGl2(true);
+    servingTerrain();
+    twoBuilds();
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    flyAndSettle(25.25, 45.15);
+    expect(await screen.findByTestId('scene3d-terrain-offer')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByTestId('scene3d-terrain-offer')).toBeNull();
+
+    // Leaving and coming back is the ordinary way a declined offer would nag; it must not.
+    flyAndSettle(26.5, 46.5);
+    flyAndSettle(25.3, 45.2);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    expect(screen.queryByTestId('scene3d-terrain-offer')).toBeNull();
+    expect(engine.engineState.terrainRequests).toHaveLength(1);
+  });
+
+  it('offers any build at all over the bare ellipsoid', async () => {
+    withWebGl2(true);
+    servingTerrain();
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrainBuilds: [massifBuild],
+      terrain: null,
+      terrainFallback: null,
+    };
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    flyAndSettle(25.25, 45.15);
+
+    expect(await screen.findByTestId('scene3d-terrain-offer')).toBeInTheDocument();
+  });
+});
+
+describe('arriving with a cave to reveal', () => {
+  /** A cave whose outline runs between two surveyed points, as a page would have the scene show. */
+  const aCaveRow = {
+    kind: 'cave',
+    feature: {
+      id: 'cave-1',
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [25.44, 45.53],
+          [25.45, 45.535],
+        ],
+      },
+      approximateLocation: false,
+    },
+  };
+
+  it('frames the cave a page asked for when the scene comes up, and only once', async () => {
+    withWebGl2(true);
+    featureRows = { 'cave-1': aCaveRow };
+    requestReveal3d({ targetType: 'feature', targetId: 'cave-1', label: 'Coiba Mare' });
+    const view = renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(1));
+
+    const { camera } = engine.engineState.widgets[0].scene;
+    await waitFor(() => expect(camera.framed).toHaveLength(1));
+    expect(camera.framed[0]).toMatchObject({ west: 25.44, south: 45.53, east: 25.45, north: 45.535 });
+    // Taken, so nothing else answers it.
+    expect(takePendingReveal3d()).toBeUndefined();
+
+    // A scene built again later — another visit, a rebuilt context — must not fly back to a cave
+    // the viewer has since left.
+    view.unmount();
+    renderView();
+    await waitFor(() => expect(engine.engineState.widgets).toHaveLength(2));
+    await waitFor(() => expect(centerlineRequests.length).toBeGreaterThanOrEqual(2));
+    expect(engine.engineState.widgets[1].scene.camera.framed).toHaveLength(0);
+  });
+
+  it('leaves the camera where the scene opens when nothing was asked for', async () => {
+    withWebGl2(true);
+    featureRows = { 'cave-1': aCaveRow };
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    expect(engine.engineState.widgets[0].scene.camera.framed).toHaveLength(0);
+  });
 });
 
 describe('the walls of the selected cave', () => {
@@ -1178,6 +1494,20 @@ describe('the walls of the selected cave', () => {
     await waitFor(() =>
       expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false'),
     );
+  });
+
+  it('says how big the walls are in bytes while they are on their way, once the server has measured them', async () => {
+    withWebGl2(true);
+    centerlineResponse = aSurvey;
+    surveyModels = [aWallMesh({ meshSizeBytes: 57_357_107 })];
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    selectCave('cave-1');
+
+    // Megabytes are what a viewer waits on; the triangle count stands in only for a mesh the
+    // server converted before it began measuring them.
+    expect(await screen.findByText(/54\.7 MB/)).toBeInTheDocument();
+    expect(screen.queryByText(/1,234,567/)).toBeNull();
   });
 
   it('says why the walls are missing rather than leaving the scene quietly empty', async () => {

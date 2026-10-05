@@ -6,6 +6,7 @@ import type { MapLayerInfo } from '../../api/hooks.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import { EMPTY_SURVEY_MESH_3D_STATE } from '../../scene3d/surveyMesh3d.ts';
+import type { TerrainBuildChoice } from '../../scene3d/terrainBuilds3d.ts';
 import Scene3DLayerPanel, { type Scene3DLayerPanelProps } from './Scene3DLayerPanel.tsx';
 
 const layers = [
@@ -37,6 +38,32 @@ const aGeofile: GeofileTrack3DFile = {
   importStatus: 'imported',
 };
 
+/** A build over about 39 by 33 km of the mountains, baked to level 14 and finished in August. */
+function aBuild(overrides: Partial<TerrainBuildChoice> = {}): TerrainBuildChoice {
+  return {
+    id: 'b-massif',
+    extent: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [25.0, 45.0],
+          [25.5, 45.0],
+          [25.5, 45.3],
+          [25.0, 45.3],
+          [25.0, 45.0],
+        ],
+      ],
+    } as TerrainBuildChoice['extent'],
+    requestedMaxDepth: 14,
+    url: '/terrain/b-massif/',
+    attribution: null,
+    surveyHeightOffsetM: 0,
+    isDrawn: false,
+    finishedAt: '2026-08-12T10:00:00Z',
+    ...overrides,
+  };
+}
+
 function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
   const props: Scene3DLayerPanelProps = {
     layers,
@@ -62,6 +89,10 @@ function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
     meshVisible: true,
     onMeshVisibleChange: vi.fn(),
     meshState: EMPTY_SURVEY_MESH_3D_STATE,
+    terrainBuilds: [],
+    terrainConfigured: false,
+    terrainChoice: undefined,
+    onTerrainChoiceChange: vi.fn(),
     surfaceMode: 'overlay',
     onSurfaceModeChange: vi.fn(),
     surfaceState: {
@@ -311,11 +342,127 @@ describe('Scene3DLayerPanel', () => {
     );
   });
 
+  it('says how many bytes the walls are while they load, once the server has measured them', () => {
+    // The size is the number a viewer waits on — fifty megabytes and three hundred kilobytes are
+    // different waits — and it is said instead of the triangle count, which is a modeller's
+    // number rather than a download's.
+    renderPanel({
+      meshState: {
+        status: 'loading',
+        name: 'Coiba Mare',
+        triangleCount: 1234567,
+        meshSizeBytes: 57_357_107,
+        precisionLost: false,
+      },
+    });
+
+    const said = screen.getByTestId('scene3d-mesh-status').textContent ?? '';
+    expect(said).toMatch(/54\.7 MB/);
+    expect(said).not.toMatch(/triangles/);
+  });
+
+  it('says both the size and the triangle count once the walls are drawn', () => {
+    renderPanel({
+      meshState: {
+        status: 'drawn',
+        name: 'Coiba Mare',
+        triangleCount: 1234567,
+        meshSizeBytes: 300 * 1024,
+        precisionLost: false,
+      },
+    });
+
+    expect(screen.getByTestId('scene3d-mesh-status').textContent).toMatch(
+      /300 KB, 1,234,567 triangles/,
+    );
+  });
+
   it('warns that a drawn mesh came from a file that had already lost detail', () => {
     renderPanel({
       meshState: { status: 'drawn', name: 'Coiba Mare', triangleCount: 12, precisionLost: true },
     });
 
     expect(screen.getByTestId('scene3d-mesh-precision').textContent).toMatch(/local origin/);
+  });
+});
+
+describe('the ground the scene is drawn from', () => {
+  it('offers no choice of ground where the installation has no builds', () => {
+    renderPanel();
+
+    expect(screen.queryByTestId('scene3d-terrain-rows')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ground')).not.toBeInTheDocument();
+  });
+
+  it('names each build by its level, its date and the ground it covers, newest first', () => {
+    renderPanel({
+      terrainBuilds: [
+        aBuild(),
+        aBuild({
+          id: 'b-region',
+          requestedMaxDepth: 12,
+          isDrawn: true,
+          finishedAt: '2026-03-02T08:00:00Z',
+          extent: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [24.0, 44.0],
+                [27.0, 44.0],
+                [27.0, 47.0],
+                [24.0, 47.0],
+                [24.0, 44.0],
+              ],
+            ],
+          } as TerrainBuildChoice['extent'],
+        }),
+      ],
+    });
+
+    expect(screen.getByText('Ground')).toBeInTheDocument();
+    const rows = screen.getAllByRole('radio').filter((radio) =>
+      radio.closest('[data-testid="scene3d-terrain-rows"]'),
+    );
+    // None of the three parts is a name; together they are what a viewer chooses by.
+    expect(rows.map((radio) => radio.closest('label')?.textContent)).toEqual([
+      'Level 14 · 8/12/2026 · 39 × 33 km',
+      'Level 12 · 3/2/2026 · 234 × 334 km',
+    ]);
+    // With nothing chosen, the entry marked as the installation's default is the one checked.
+    expect(screen.getByRole('radio', { name: /Level 12/ })).toBeChecked();
+    expect(screen.getByText(/moves the surveys onto the new surface/)).toBeInTheDocument();
+  });
+
+  it('reports a chosen build by its id, and the default entry as no choice at all', () => {
+    const props = renderPanel({
+      terrainBuilds: [aBuild(), aBuild({ id: 'b-region', requestedMaxDepth: 12, isDrawn: true })],
+      terrainChoice: 'b-massif',
+    });
+    expect(screen.getByRole('radio', { name: /Level 14/ })).toBeChecked();
+
+    fireEvent.click(screen.getByRole('radio', { name: /Level 12/ }));
+
+    // Going back to the default is reported as having no choice rather than as choosing the
+    // build that happens to be the default: the two are one state, drawing one ground.
+    expect(props.onTerrainChoiceChange).toHaveBeenCalledWith(undefined);
+  });
+
+  it('puts the configured elevation model first, so a viewer who left it can get back to it', () => {
+    const props = renderPanel({ terrainBuilds: [aBuild()], terrainConfigured: true });
+
+    // The configured address is what is drawn until the viewer says otherwise.
+    expect(screen.getByRole('radio', { name: 'The configured elevation model' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: /Level 14/ }));
+    expect(props.onTerrainChoiceChange).toHaveBeenCalledWith('b-massif');
+
+    cleanup();
+    const chosen = renderPanel({
+      terrainBuilds: [aBuild()],
+      terrainConfigured: true,
+      terrainChoice: 'b-massif',
+    });
+    expect(screen.getByRole('radio', { name: /Level 14/ })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'The configured elevation model' }));
+    expect(chosen.onTerrainChoiceChange).toHaveBeenCalledWith(undefined);
   });
 });

@@ -125,3 +125,12 @@ html[data-theme='dark'] .scene3d-notice {
 .scene3d-canvas .cesium-widget-errorPanel {
   display: none;
 }
+
+/* The one notice that can be pressed. The strip it sits in lets pointer events through to the
+   scene so a notice never blocks a drag; this one takes them back for its two buttons. */
+.scene3d-notice-offer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: auto;
+}

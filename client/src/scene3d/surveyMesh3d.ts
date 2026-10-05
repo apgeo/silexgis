@@ -53,6 +53,8 @@ export interface SurveyMesh3DState {
   name?: string;
   /** How big the mesh is, as the only magnitude the server publishes about one. */
   triangleCount?: number;
+  /** The converted file's size in bytes, when the server has measured it. */
+  meshSizeBytes?: number;
   /**
    * The uploaded file had already lost precision before it arrived, so the survey is degraded.
    * Worth saying: re-exporting about a local origin gets the detail back.
@@ -244,6 +246,7 @@ export function attachSurveyMesh3d(engine: SurveyMesh3DEngine): SurveyMesh3DHand
     const describe = {
       name: chosen.name,
       triangleCount: chosen.triangleCount ?? undefined,
+      meshSizeBytes: chosen.meshSizeBytes ?? undefined,
       precisionLost: chosen.sourcePrecisionLost,
     };
     held = { url, anchor };

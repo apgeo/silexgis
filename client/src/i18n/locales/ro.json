@@ -174,7 +174,10 @@
       "depthInvalid": "Adâncimea aceea este în afara a ceea ce generează această instalare.",
       "notPublished": "Generarea nu are nicio suprafață de desenat. Fie dalele nu au fost niciodată recitite și găsite întregi, fie nu mai sunt acolo de unde se servește relieful.",
       "active": "Generarea aceasta este relieful pe care îl desenează scena. Alege alt relief sau oprește desenarea acestuia înainte de a-l șterge.",
-      "running": "Generarea nu s-a încheiat. Fișierele ei se scriu chiar acum, așa că poate fi ștearsă după ce se oprește, oricum s-ar opri."
+      "running": "Generarea nu s-a încheiat. Fișierele ei se scriu chiar acum, așa că poate fi ștearsă după ce se oprește, oricum s-ar opri.",
+      "derivativeBuildNotFound": "Generarea nu mai există sau nu are din ce desena terenul.",
+      "derivativeNotFound": "Imaginea nu mai există.",
+      "derivativeNotReady": "Imaginea nu este încă gata, așa că nu este nimic de adus."
     },
     "derivatives": {
       "title": "Imagini ale terenului",
@@ -190,13 +193,103 @@
       },
       "kinds": {
         "hillshade": "Relief umbrit",
-        "slope": "Pantă",
-        "aspect": "Orientare",
+        "slope": "Pantă (aproximativă — grilă în grade, necorectată pentru latitudine)",
+        "aspect": "Orientare (aproximativă — grilă în grade, necorectată pentru latitudine)",
         "ruggednessIndex": "Asperitate",
         "positionIndex": "Poziție topografică",
         "roughness": "Rugozitate",
         "colourRelief": "Relief colorat"
       }
+    },
+    "derivativeForm": {
+      "title": "Imagini derivate",
+      "intro": "O imagine a terenului calculată dintr-o generare încheiată: relief umbrit, pantă, orientare, asperitate, poziție topografică, rugozitate sau un relief colorat. Oricine are dreptul de a citi relieful o găsește apoi în lista de straturi a hărții.",
+      "needsExecute": "Cererea unei imagini are nevoie de dreptul de execuție asupra reliefului, pe care acest cont nu îl are. Registrul de mai jos rămâne de citit.",
+      "noBuilds": "Nicio generare încheiată din care să se deseneze. O imagine se calculează dintr-o generare care a mers până la capăt.",
+      "build": "Generare",
+      "buildPlaceholder": "Alege o generare încheiată",
+      "buildRequired": "Alege generarea din care se desenează imaginea.",
+      "buildCurrent": "se desenează",
+      "kind": "Imagine",
+      "name": "Nume",
+      "nameHint": "Cum o numește lista de straturi.",
+      "nameRequired": "Dă imaginii un nume.",
+      "nameTooLong": "Un nume are cel mult {{max}} de caractere.",
+      "latitudeCaveat": "Aproximativă: calculată pe o grilă în grade cu o singură scară orizontală, așa că panta este subestimată pe terenul orientat spre est sau vest — cu vreo zece grade la latitudinile Carpaților — iar orientarea este trasă spre nord sau sud. Citește-o ca pe o imagine, nu ca pe o măsurătoare.",
+      "lighting": "Lumină",
+      "lightingHint": "Sub o singură lumină, orice versant întors de la ea este negru complet, iar o dolină din umbra aceea este invizibilă. Patru lumini o păstrează lizibilă.",
+      "lightings": {
+        "single": "O lumină",
+        "multidirectional": "Patru lumini"
+      },
+      "azimuth": "Lumina dinspre (°)",
+      "azimuthHint": "În sensul acelor de ceasornic de la nord. Nord-vestul este convenția: luminat de acolo de unde stă de fapt soarele dimineața, majoritatea cititorilor văd văile ca pe niște creste.",
+      "azimuthInvalid": "Direcția luminii se măsoară în sensul acelor de ceasornic de la nord, de la 0 până sub 360.",
+      "altitude": "Înălțimea luminii (°)",
+      "altitudeInvalid": "Lumina stă deasupra orizontului, așa că înălțimea ei este peste 0 și cel mult 90.",
+      "zFactor": "Exagerarea înălțimilor",
+      "zFactorHint": "Înmulțește fiecare înălțime înainte de calculul imaginii. Dincolo de câteva ori, un peisaj blând devine un perete de pixeli saturați.",
+      "zFactorInvalid": "Exagerarea înălțimilor este un număr peste zero și cel mult {{max}}.",
+      "surfaceFit": "Calculul pantei",
+      "surfaceFitHint": "Horn ponderează toți cei opt vecini și se potrivește altitudinilor reale, cu zgomot. Zevenbergen–Thorne folosește doar cei patru vecini cardinali: mai clar pe suprafețe curate, mai zgomotos pe orice eșantionat din fotografii.",
+      "surfaceFits": {
+        "horn": "Horn (opt vecini)",
+        "zevenbergenThorne": "Zevenbergen–Thorne (patru vecini)"
+      },
+      "slopeUnit": "Panta ca",
+      "slopeUnits": {
+        "degrees": "Grade față de orizontală",
+        "percent": "Procent (creștere pe distanță)"
+      },
+      "ruggednessFit": "Definiția asperității",
+      "ruggednessFitHint": "A lui Riley este cea față de care sunt enunțate clasele de asperitate publicate. A lui Wilson dă alte numere, așa că cele două nu sunt niciodată comparabile.",
+      "ruggednessFits": {
+        "riley": "Riley (rădăcina mediei pătratelor diferențelor)",
+        "wilson": "Wilson (media diferențelor absolute)"
+      },
+      "computeEdges": "Calculează celulele de la margine din vecinii pe care îi au",
+      "computeEdgesHint": "Oprit, fiecare rastru al generării se întâlnește cu vecinul lui printr-o linie goală. Pornit, marginea este ușor greșită — cu mai puțin decât o linie lipsă.",
+      "colourRamp": "Rampa de culori",
+      "colourRampHint": "O culoare la fiecare înălțime, în metri; terenul dintre două înălțimi se pictează cu amestecul lor. Cel puțin două trepte, niciodată două la aceeași înălțime.",
+      "stopElevation": "Înălțime (m)",
+      "stopColour": "Culoare",
+      "addStop": "Adaugă o treaptă",
+      "removeStop": "Scoate această treaptă",
+      "rampProblems": {
+        "tooShort": "Un relief colorat are nevoie de cel puțin două înălțimi între care să pună culori.",
+        "heightMissing": "Fiecare treaptă a rampei de culori stă la o înălțime reală.",
+        "duplicate": "Două trepte ale rampei de culori nu stau la aceeași înălțime."
+      },
+      "submit": "Cere imaginea",
+      "requested": "Imaginea a fost pusă la coadă. Apare în registrul de mai jos, iar în lista de straturi a hărții odată ce este gata."
+    },
+    "derivativeList": {
+      "title": "Registrul imaginilor derivate",
+      "empty": "Nicio imagine a terenului nu a fost calculată încă.",
+      "emptyHint": "Cere una mai sus, dintr-o generare încheiată.",
+      "picture": "Imagine",
+      "parameters": "Parametri",
+      "build": "Din generarea",
+      "buildGone": "o generare care nu mai este listată",
+      "state": "Stare",
+      "size": "Pe disc",
+      "sizeHint": "Rasterele calculate, câte unul pentru fiecare rastru al generării.",
+      "created": "Cerută",
+      "actions": "Acțiuni",
+      "delete": "Șterge",
+      "deleteConfirm": "Ștergi această imagine și cei {{size}} pe care îi ține pe disc?",
+      "params": {
+        "azimuth": "lumina dinspre {{degrees}}°",
+        "altitude": "{{degrees}}° deasupra orizontului",
+        "zFactor": "înălțimi ×{{factor}}",
+        "stops": "{{count}} trepte de culoare",
+        "edgesOff": "margini lăsate goale"
+      }
+    },
+    "configured": {
+      "title": "O adresă de relief din configurația acestei instalări are prioritate față de generarea aleasă",
+      "body": "Configurația numește o adresă de relief proprie, iar ea câștigă: scena desenează acea piramidă, nu generarea aleasă aici ({{build}}…). Generarea aleasă se desenează doar după ce setarea de mai jos este scoasă din configurația instalării și aplicația repornită.",
+      "setting": "Setarea de scos:"
     }
   },
   "dashboard": {
@@ -405,6 +498,7 @@
     "edit": "Editează",
     "delete": "Șterge",
     "deleteConfirm": "Ștergeți această peșteră?",
+    "openIn3d": "Deschide în 3D",
     "sections": {
       "identification": "Identificare",
       "localization": "Localizare",
@@ -2471,7 +2565,19 @@
     "contextLostTitle": "Vizualizarea 3D s-a oprit",
     "contextLostHint": "Browserul a eliberat resursele grafice folosite de această vizualizare, de două ori la scurt timp. De obicei, reîncărcarea paginii o restabilește.",
     "contextLostReload": "Reîncarcă",
-    "rasterOverlayHint": "Pe glob fiecare planșă este aplatizată într-o singură imagine, așa că devine mai neclară la apropiere. Harta plană citește fișierul în sine și rămâne clară."
+    "rasterOverlayHint": "Pe glob fiecare planșă este aplatizată într-o singură imagine, așa că devine mai neclară la apropiere. Harta plană citește fișierul în sine și rămâne clară.",
+    "geofileTracksHint": "Traseele și contururile din aceste fișiere sunt desenate ca linii, în culorile folosite pe harta plană. Un traseu care nu a înregistrat altitudini este așezat pe teren.",
+    "terrainTitle": "Terenul",
+    "terrainBuildsHint": "Fiecare generare acoperă o zonă la un nivel de detaliu. Schimbarea recitește terenul și mută topografiile pe noua suprafață.",
+    "terrainConfiguredEntry": "Modelul de altitudine configurat",
+    "terrainBuildLevel": "Nivelul {{level}}",
+    "terrainBuildSize": "{{width}} × {{height}} km",
+    "terrainFinerOffer": "Un relief mai fin acoperă această zonă — îl desenăm?",
+    "terrainFinerDraw": "Desenează-l",
+    "terrainFinerDismiss": "Nu acum",
+    "meshLoadingBytes": "Se încarcă pereții — {{size}}.",
+    "meshDrawnBytes": "Pereții sunt desenați — {{size}}.",
+    "meshDrawnBytesTriangles": "Pereții sunt desenați — {{size}}, {{triangles}} triunghiuri."
   },
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat",
@@ -2742,6 +2848,10 @@
     "converting": "Pereții sunt pregătiți pentru scena 3D. Lista se actualizează singură când sunt gata.",
     "conversionFailed": "Pereții nu au putut fi convertiți.",
     "triangles": "{{count}} triunghiuri",
+    "current": "Curent",
+    "makeCurrent": "Setează ca model curent",
+    "makeCurrentFailed": "Modelul nu a putut fi setat ca model curent",
+    "currentHint": "Planul de linii curent este cel pe care îl citesc harta și măsurătorile; pereții curenți sunt cei pe care îi desenează scena 3D. Cea mai nouă încărcare de fiecare fel devine curentă, iar una mai veche poate fi setată ca model curent aici.",
     "precisionLost": "Fișierul a pierdut precizie înainte să ajungă aici",
     "precisionLostHint": "Coordonatele din acest fișier au fost prea mari pentru numerele în care sunt stocate, așa că topografia este mai grosieră decât a fost cartată. Reexportă fișierul față de o origine locală ca să recuperezi detaliul.",
     "meshDeclaration": "Unde se află acești pereți în lume",

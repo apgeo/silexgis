@@ -43,6 +43,29 @@ naming which of *unreachable*, *not a terrain tile set*, or *served with the wro
 compression* it hit — and either falls back to a pyramid the installation holds, or draws a
 smooth globe. It does not pretend.
 
+### Choosing between builds
+
+An installation can hold more than one terrain build at a time — a coarse one over the whole
+region and a finer one over the massif you work in, say. The scene draws the one the
+installation marks as its default. To draw another, open the layer panel and look under
+**Ground**: each build is listed by its level, the date it finished and the area it covers
+(as width × height in km), with the configured elevation model first when there is one.
+
+Switching is a real reload of the ground, and the surveys move with it: each build has its own
+height datum, and the scene re-hangs every centerline, wall mesh and track from the surface it
+is now drawing. A build you chose that cannot be read is refused with the same notice a
+configured source gets — the scene does not quietly draw a different one under a control that
+still names the one you picked. The choice lasts for the session; it is not saved and not in the
+link.
+
+### When finer ground covers where you are
+
+When the camera comes to rest over an area that a finer build covers than the one drawn — or
+over any build at all while the globe is the smooth sphere — a small notice offers it: *Finer
+terrain covers this area — draw it?* **Draw it** makes the switch above; **Not now** puts that
+build away for the rest of the session. The scene never switches by itself: a swap reloads the
+ground while you are moving and changes the heights everything stands on.
+
 ---
 
 ## Seeing the cave through the ground
@@ -72,8 +95,12 @@ terrain, beside that cave's centerlines.
 - It is loaded **only for the cave you select**.
 - Switching it off in the layer list genuinely lets go of it — it does not sit in graphics
   memory pretending to be off.
-- The panel tells you what stage it is at: looking for a model, loading, drawn (with the
-  triangle count), still converting, none uploaded, or failed with a reason.
+- The panel tells you what stage it is at: looking for a model, loading, drawn, still
+  converting, none uploaded, or failed with a reason.
+- While the walls are fetched the scene says how big they are — *loading the walls — 54.7 MB* —
+  so a fifty-megabyte model and a three-hundred-kilobyte one are different waits rather than the
+  same silence. Once drawn, the size and the triangle count are both shown. A model converted
+  before the server began measuring sizes is described by its triangle count alone.
 
 See [Surveys, centerlines and 3D models](surveys-and-models.md#cave-walls-stl) for uploading
 and for the coordinate declaration a `.stl` needs.

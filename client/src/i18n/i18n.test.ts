@@ -31,6 +31,7 @@ import type {
   TripPositionEventKind,
   TripTrackingState,
   SurveyModelInfo,
+  TerrainDerivativeLayerInfo,
 } from '../api/hooks.ts';
 import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
 import { MOVIE_VIEW_DIRECTIONS, MOVIE_VIEW_LAYERS } from '../caveview/movie/movieSettings.ts';
@@ -61,6 +62,15 @@ import { SEEDED_PARTICIPANT_ROLE_CODES } from '../components/trips/participantRo
 import { TRACKING_CSV_PROBLEMS } from '../components/trips/trackingCsvProblems.ts';
 import { TRACKING_PROBLEM_MESSAGE_KEYS } from '../components/trips/trackingProblems.ts';
 import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
+import {
+  HILLSHADE_LIGHTINGS,
+  RUGGEDNESS_FITS,
+  SLOPE_UNITS,
+  SURFACE_FITS,
+  TERRAIN_DERIVATIVE_KINDS,
+  type ColourRampProblem,
+  type TerrainDerivativeKind,
+} from '../pages/admin/terrain/terrainDerivative.ts';
 import { TERRAIN_PROBLEM_MESSAGE_KEYS } from '../pages/admin/terrain/terrainProblems.ts';
 import { SURVEY_MODEL_PROBLEM_MESSAGE_KEYS } from '../pages/caves/surveyModelProblems.ts';
 import { SETTINGS_SECTIONS } from '../pages/settings/sections.ts';
@@ -312,6 +322,38 @@ const terrainSourceKinds: Record<TerrainBuildSourceKind, true> = {
   fetched: true,
   uploaded: true,
   serverDirectory: true,
+};
+
+/**
+ * The pictures that can be computed from a build, and the states each passes through. The
+ * request form offers every kind by name, the register and the map's layer list print the kind
+ * under each picture, and both look the state up from the value the server sent — all built from
+ * the value, so none of it is visible to the scan of written-out keys. A kind added on the server
+ * fails to compile here until it is named, in both languages, and the form's own list is held to
+ * the same set so that a kind it has stopped offering cannot keep its wording unnoticed.
+ */
+const terrainDerivativeKinds: Record<TerrainDerivativeKind, true> = {
+  hillshade: true,
+  slope: true,
+  aspect: true,
+  ruggednessIndex: true,
+  positionIndex: true,
+  roughness: true,
+  colourRelief: true,
+};
+
+const terrainDerivativeStatuses: Record<TerrainDerivativeLayerInfo['status'], true> = {
+  queued: true,
+  computing: true,
+  ready: true,
+  failed: true,
+};
+
+/** The three refusals a colour ramp can meet, each worded where the ramp is edited. */
+const colourRampProblems: Record<ColourRampProblem, true> = {
+  tooShort: true,
+  heightMissing: true,
+  duplicate: true,
 };
 
 /**
@@ -576,6 +618,42 @@ describe('i18n locales', () => {
       expect(Object.keys(enNames).sort()).toEqual(names.sort());
       expect(Object.keys(roNames).sort()).toEqual(names.sort());
     }
+  });
+
+  it('every kind of derived picture, its states and its choices are named in both locales', () => {
+    const kinds = Object.keys(terrainDerivativeKinds);
+    // The form offers exactly the kinds the server knows: one it stopped offering would keep its
+    // wording here unnoticed, and one it offered that the server lacks would be refused on send.
+    expect([...TERRAIN_DERIVATIVE_KINDS].sort()).toEqual([...kinds].sort());
+    const cases: [string[], Record<string, string>, Record<string, string>][] = [
+      [kinds, en.terrain.derivatives.kinds, ro.terrain.derivatives.kinds],
+      [Object.keys(terrainDerivativeStatuses), en.terrain.derivatives.statuses, ro.terrain.derivatives.statuses],
+      [[...HILLSHADE_LIGHTINGS], en.terrain.derivativeForm.lightings, ro.terrain.derivativeForm.lightings],
+      [[...SURFACE_FITS], en.terrain.derivativeForm.surfaceFits, ro.terrain.derivativeForm.surfaceFits],
+      [[...SLOPE_UNITS], en.terrain.derivativeForm.slopeUnits, ro.terrain.derivativeForm.slopeUnits],
+      [[...RUGGEDNESS_FITS], en.terrain.derivativeForm.ruggednessFits, ro.terrain.derivativeForm.ruggednessFits],
+      [Object.keys(colourRampProblems), en.terrain.derivativeForm.rampProblems, ro.terrain.derivativeForm.rampProblems],
+    ];
+    for (const [names, enNames, roNames] of cases) {
+      expect(names.filter((name) => !enNames[name])).toEqual([]);
+      expect(names.filter((name) => !roNames[name])).toEqual([]);
+      expect(Object.keys(enNames).sort()).toEqual([...names].sort());
+      expect(Object.keys(roNames).sort()).toEqual([...names].sort());
+    }
+  });
+
+  // The two pictures computed on a degree grid say so in their names, in both languages, so the
+  // layer list and the register never present them as measurements. Checked as text because it
+  // is the one wording a key check cannot see: the key exists either way.
+  it('names steepness and facing as approximate wherever they are listed', () => {
+    for (const locale of [en, ro]) {
+      expect(locale.terrain.derivatives.kinds.slope).toMatch(/\(/);
+      expect(locale.terrain.derivatives.kinds.aspect).toMatch(/\(/);
+    }
+    expect(en.terrain.derivatives.kinds.slope).toContain('not corrected for latitude');
+    expect(en.terrain.derivatives.kinds.aspect).toContain('not corrected for latitude');
+    expect(ro.terrain.derivatives.kinds.slope).toContain('necorectată pentru latitudine');
+    expect(ro.terrain.derivatives.kinds.aspect).toContain('necorectată pentru latitudine');
   });
 
   /**

@@ -49,6 +49,7 @@ import {
   type GeofileTracks3DState,
 } from '../../scene3d/geofileTracks3d.ts';
 import type { OverlayRect } from '../../scene3d/overlayPlacement.ts';
+import { takePendingReveal3d } from '../../scene3d/pendingReveal3d.ts';
 import { activePreset, presetCamera, type Camera3DPreset } from '../../scene3d/presets3d.ts';
 import { claimSceneSurface, sceneSurfaceElement } from '../../scene3d/sceneSurface.ts';
 import {
@@ -64,6 +65,13 @@ import type {
   Scene3DScreenPosition,
   Scene3DSurfaceState,
 } from '../../scene3d/scene3dEngine.ts';
+import {
+  boundsCentre,
+  finerBuildAt,
+  terrainCandidates,
+  type TerrainBuildChoice,
+  type TerrainCandidate3D,
+} from '../../scene3d/terrainBuilds3d.ts';
 import {
   checkTerrainSource,
   type TerrainSourceProblem,
@@ -83,12 +91,20 @@ import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
 import { APPROXIMATE_SPAN_DEGREES, geometryFor, isGeographic } from '../../viewlinks/geoTargets.ts';
+import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Scene3DCameraControls from './Scene3DCameraControls.tsx';
 import Scene3DLayerPanel from './Scene3DLayerPanel.tsx';
 import Scene3DOverlay from './Scene3DOverlay.tsx';
+import { meshProgressMessage } from './meshMessages.ts';
 import { cutawayPauseMessage, terrainProblemMessage } from './surfaceMessages.ts';
 import './Scene3DView.css';
+
+/** One empty list for every render in which the configuration has not arrived or has no builds. */
+const NO_TERRAIN_BUILDS: TerrainBuildChoice[] = [];
+
+/** How long the camera has to be still before finer ground is offered — the data loaders' own settle. */
+const TERRAIN_OFFER_SETTLE_MILLISECONDS = 250;
 
 export interface Scene3DViewProps {
   /** CSS height of the scene surface. */
@@ -133,17 +149,15 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   const [engineVersion, setEngineVersion] = useState(0);
   const queryClient = useQueryClient();
 
-  // Somewhere a hyperlink in a text panel can be sent, for as long as there is a scene to send
-  // it to. Off while another mount in this window holds the one scene, and off before the scene
-  // has arrived: a control that accepted a reveal it could not draw would look, to the reader,
-  // exactly like a link that does not work.
-  useViewControl({
-    id: 'scene3d',
-    kind: 'scene3d',
-    labelKey: 'viewLinks.controls.scene3d',
-    enabled: showingHere && engineVersion > 0,
-    canReveal: isGeographic,
-    reveal: (ref) => {
+  /**
+   * Frames whatever a reference names, once its position has been read.
+   *
+   * One function for the two ways a reveal arrives: sent to the view control below by a hyperlink
+   * while the scene is open, or parked before the scene existed by a page that opened it. Both
+   * must put the camera in the same place, so there is one way of putting it there.
+   */
+  const frameReveal = useCallback(
+    (ref: ResourceRef) => {
       void geometryFor(queryClient, ref).then((target) => {
         const engine = engineRef.current;
         const bounds = target === null ? undefined : geoJsonBounds(target.geometry);
@@ -158,7 +172,36 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
         }
       });
     },
+    [queryClient],
+  );
+
+  // Somewhere a hyperlink in a text panel can be sent, for as long as there is a scene to send
+  // it to. Off while another mount in this window holds the one scene, and off before the scene
+  // has arrived: a control that accepted a reveal it could not draw would look, to the reader,
+  // exactly like a link that does not work.
+  useViewControl({
+    id: 'scene3d',
+    kind: 'scene3d',
+    labelKey: 'viewLinks.controls.scene3d',
+    enabled: showingHere && engineVersion > 0,
+    canReveal: isGeographic,
+    reveal: frameReveal,
   });
+
+  // A page that opened this scene on a cave could not send the reveal the way a hyperlink does —
+  // there was no scene to send to — so it parked the request, and the scene takes it the moment
+  // its engine is up. Taking it empties the slot, so a scene rebuilt after a lost context, or
+  // mounted again minutes later, does not fly back to a cave the viewer has since left. The
+  // selection was set by the same page, so the walls load on their own.
+  useEffect(() => {
+    if (!engineRef.current || !showingHere) {
+      return;
+    }
+    const pending = takePendingReveal3d();
+    if (pending) {
+      frameReveal(pending);
+    }
+  }, [engineVersion, showingHere, frameReveal]);
 
   useEffect(() => {
     if (!webGl2) {
@@ -697,8 +740,22 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
    */
   const [placement, setPlacement] = useState<Altitude3DPlacement>(ANCHORED_TO_SURFACE);
 
-  const terrain = mapConfig?.terrain;
-  const terrainFallback = mapConfig?.terrainFallback;
+  /**
+   * The build the viewer chose to draw the ground from, or undefined for the server's default.
+   *
+   * Session state and nothing more: not saved with the viewer's layer settings and not written
+   * into the URL hash. A build is a thing an installation has today — the next re-bake replaces
+   * it — so a choice carried into next week would name ground that no longer exists, and a link
+   * carrying one would open for somebody else on a globe they never chose.
+   */
+  const [terrainChoice, setTerrainChoice] = useState<string>();
+  const terrainBuilds = mapConfig?.terrainBuilds ?? NO_TERRAIN_BUILDS;
+  const candidates = useMemo(
+    () => terrainCandidates(mapConfig, terrainChoice),
+    [mapConfig, terrainChoice],
+  );
+  /** The source actually on the globe; undefined while the ground is the bare ellipsoid. */
+  const [drawnTerrain, setDrawnTerrain] = useState<TerrainCandidate3D>();
 
   useEffect(() => {
     const engine = engineRef.current;
@@ -708,9 +765,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     let cancelled = false;
     setTerrainProblem(undefined);
 
-    if (!terrain) {
+    if (candidates.length === 0) {
       void engine.setTerrainSource(undefined);
       setPlacement(ANCHORED_TO_SURFACE);
+      setDrawnTerrain(undefined);
       return;
     }
 
@@ -724,14 +782,12 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
       void engine.setTerrainSource(undefined);
       setTerrainProblem({ problem, fellBack: false });
       setPlacement(ANCHORED_TO_SURFACE);
+      setDrawnTerrain(undefined);
     };
 
-    // In preference order: what this installation named, then whatever whole pyramid it has of
-    // its own. The second is almost always absent — it exists only when configuration named an
-    // address AND a checked build sits at a different one, which is the shape of a stale
-    // configuration line outliving the setup it described.
-    const candidates = [terrain, ...(terrainFallback ? [terrainFallback] : [])];
-
+    // In preference order. Without a choice that is what this installation named, then whatever
+    // whole pyramid it has of its own; with one it is the chosen build alone, and a build the
+    // viewer asked for by name is refused rather than silently replaced when it cannot be read.
     void (async () => {
       // Looked at before the engine is handed it, and this order is the whole point. A pyramid
       // served in a form the engine cannot parse produces a globe with no ground, every tile
@@ -770,6 +826,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           // the configured source while drawing the fallback's ground is the forty-metre error
           // this whole chain of offsets exists to prevent.
           setPlacement({ absolute: true, offsetM: candidate.surveyHeightOffsetM });
+          setDrawnTerrain(candidate);
           // A source that was fallen back to is still a source that failed. The notice stays up,
           // naming what went wrong with the one the operator has to fix.
           setTerrainProblem(firstProblem ? { problem: firstProblem, fellBack: true } : undefined);
@@ -784,7 +841,71 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     return () => {
       cancelled = true;
     };
-  }, [terrain, terrainFallback, engineVersion]);
+  }, [candidates, engineVersion]);
+
+  // ---- finer ground the camera has wandered into ----
+
+  /** A build worth offering for where the camera now looks; undefined when there is none. */
+  const [terrainOffer, setTerrainOffer] = useState<TerrainBuildChoice>();
+  // Builds the viewer waved away. A ref rather than state because declining is read inside the
+  // settle loop below and must not re-run it; the session forgets them with the page, which is
+  // right for an offer about ground that a re-bake may change tomorrow.
+  const declinedTerrainRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || !showingHere || terrainBuilds.length === 0) {
+      setTerrainOffer(undefined);
+      return;
+    }
+    // The level of what is drawn, for "finer" to mean anything. The bare ellipsoid has none, and
+    // any build improves on it. A configured address that is not one of the builds has an unknown
+    // one, and over that nothing is offered: "finer" is a comparison, and there is nothing to
+    // compare a build to without saying a pyramid nobody here measured is coarser.
+    const drawnDepth = drawnTerrain
+      ? terrainBuilds.find((build) => build.id === drawnTerrain.buildId)?.requestedMaxDepth
+      : undefined;
+    if (drawnTerrain && drawnDepth === undefined) {
+      setTerrainOffer(undefined);
+      return;
+    }
+    const consider = () => {
+      // The ground under the middle of the screen, or — with sky there — the middle of the ground
+      // the view is actually showing, which is the same point the data loaders are driven by.
+      const target = engine.getCameraTarget() ?? boundsCentre(engine.getVisibleBounds());
+      const excluded = new Set(declinedTerrainRef.current);
+      if (terrainChoice) {
+        // Never offer what was already chosen: a chosen build that could not be read leaves the
+        // bare ellipsoid drawn, and offering it again would be a button that does nothing.
+        excluded.add(terrainChoice);
+      }
+      setTerrainOffer(
+        target
+          ? finerBuildAt(terrainBuilds, target.longitude, target.latitude, drawnDepth, excluded)
+          : undefined,
+      );
+    };
+    // Offered once the camera has come to rest, never while it moves: the same settle the data
+    // loaders wait for, so the offer and the data it is about arrive together. Never acted on by
+    // itself — a swap reloads the ground mid-pan and changes the vertical datum under the viewer.
+    let settleTimer: number | undefined;
+    const unsubscribe = engine.onViewChanged(() => {
+      window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(consider, TERRAIN_OFFER_SETTLE_MILLISECONDS);
+    });
+    consider();
+    return () => {
+      window.clearTimeout(settleTimer);
+      unsubscribe();
+    };
+  }, [engineVersion, showingHere, terrainBuilds, drawnTerrain, terrainChoice]);
+
+  const declineTerrainOffer = useCallback(() => {
+    if (terrainOffer) {
+      declinedTerrainRef.current.add(terrainOffer.id);
+      setTerrainOffer(undefined);
+    }
+  }, [terrainOffer]);
 
   // Applied through its own effect rather than from the one above, so that a scene rebuilt — or a
   // second view taking the surface over — comes back with the caves where the ground is instead of
@@ -903,12 +1024,11 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   // to arrive would look exactly like a cave nobody has surveyed walls for. Only the two states
   // worth interrupting a viewer for are said out here; the panel says the rest.
   const meshNotice = () => {
-    const triangles = meshState.triangleCount?.toLocaleString(i18n.language);
     switch (meshState.status) {
       case 'looking':
         return t('scene3d.meshLooking');
       case 'loading':
-        return triangles ? t('scene3d.meshLoadingSized', { triangles }) : t('scene3d.meshLoading');
+        return meshProgressMessage(meshState, i18n.language, t);
       case 'failed':
         return meshState.message
           ? t('scene3d.meshFailedBecause', { reason: meshState.message })
@@ -1034,6 +1154,10 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
                 meshVisible={meshVisible}
                 onMeshVisibleChange={(visible) => setOverlayVisible(SURVEY_MESH_LAYER_ID, visible)}
                 meshState={meshState}
+                terrainBuilds={terrainBuilds}
+                terrainConfigured={mapConfig?.terrain?.origin === 'configured'}
+                terrainChoice={terrainChoice}
+                onTerrainChoiceChange={setTerrainChoice}
                 surfaceMode={surfaceMode}
                 onSurfaceModeChange={setSurfaceMode}
                 surfaceState={surfaceState}
@@ -1061,6 +1185,23 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
             {notice}
           </span>
         ))}
+        {/* The one notice with something to press. Offered, never done: the viewer decides whether
+            the ground under them is reloaded and the surveys re-hung from a different surface,
+            and a build waved away stays away for the session. */}
+        {terrainOffer && (
+          <span
+            className="scene3d-notice scene3d-notice-offer"
+            data-testid="scene3d-terrain-offer"
+          >
+            {t('scene3d.terrainFinerOffer')}
+            <Button size="small" type="link" onClick={() => setTerrainChoice(terrainOffer.id)}>
+              {t('scene3d.terrainFinerDraw')}
+            </Button>
+            <Button size="small" type="text" onClick={declineTerrainOffer}>
+              {t('scene3d.terrainFinerDismiss')}
+            </Button>
+          </span>
+        )}
       </div>
     </div>
   );

@@ -43,6 +43,31 @@ numind care dintre *inaccesibil*, *nu este un set de dale de relief* sau *servit
 greșită* a întâlnit — și fie revine la o piramidă pe care o deține instalarea, fie desenează un
 glob neted. Nu se preface.
 
+### Alegerea între generări
+
+O instalare poate deține mai multe generări de relief deodată — una grosieră peste întreaga
+regiune și una mai fină peste masivul în care lucrați, de pildă. Scena o desenează pe cea pe care
+instalarea o marchează ca implicită. Pentru a desena alta, deschideți panoul de straturi și
+căutați secțiunea **Terenul**: fiecare generare este listată după nivelul ei, data la care s-a
+încheiat și zona pe care o acoperă (ca lățime × înălțime în km), cu modelul de altitudine
+configurat pe primul loc, când există unul.
+
+Schimbarea este o reîncărcare reală a terenului, iar topografiile se mută odată cu el: fiecare
+generare are propriul reper de altitudine, iar scena reatârnă fiecare poligonație, model de
+pereți și traseu de suprafața pe care o desenează acum. O generare pe care ați ales-o și care nu
+poate fi citită este refuzată cu aceeași notificare pe care o primește o sursă configurată —
+scena nu desenează pe tăcute alta sub un control care încă o numește pe cea aleasă. Alegerea
+ține cât sesiunea; nu este salvată și nu intră în link.
+
+### Când un relief mai fin acoperă zona în care sunteți
+
+Când camera se oprește deasupra unei zone acoperite de o generare mai fină decât cea desenată —
+sau deasupra oricărei generări, câtă vreme globul este sfera netedă — o notificare mică o oferă:
+*Un relief mai fin acoperă această zonă — îl desenăm?* **Desenează-l** face schimbarea de mai
+sus; **Nu acum** pune acea generare deoparte pentru restul sesiunii. Scena nu schimbă niciodată
+singură: o schimbare reîncarcă terenul în timp ce vă mișcați și modifică altitudinile pe care
+stă totul.
+
 ---
 
 ## Vederea peșterii prin pământ
@@ -72,8 +97,13 @@ locul lui, sub relief, lângă poligonațiile acelei peșteri.
 - Se încarcă **numai pentru peștera pe care o selectați**.
 - Stingerea lui din lista de straturi chiar îl eliberează — nu rămâne în memoria grafică
   prefăcându-se stins.
-- Panoul vă spune la ce stadiu este: caută un model, se încarcă, desenat (cu numărul de
-  triunghiuri), încă se convertește, niciunul încărcat, sau eșuat cu un motiv.
+- Panoul vă spune la ce stadiu este: caută un model, se încarcă, desenat, încă se convertește,
+  niciunul încărcat, sau eșuat cu un motiv.
+- Cât timp pereții se descarcă, scena spune cât de mari sunt — *se încarcă pereții — 54.7 MB* —
+  astfel încât un model de cincizeci de megaocteți și unul de trei sute de kiloocteți sunt
+  așteptări diferite, nu aceeași tăcere. Odată desenați, se arată și mărimea, și numărul de
+  triunghiuri. Un model convertit înainte ca serverul să înceapă să măsoare mărimile este descris
+  doar prin numărul de triunghiuri.
 
 Vedeți [Topografii, poligonații și modele 3D](surveys-and-models.md#pereții-peșterii-stl) pentru
 încărcare și pentru declarația de coordonate de care are nevoie un `.stl`.

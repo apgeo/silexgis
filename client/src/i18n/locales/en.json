@@ -174,7 +174,10 @@
       "depthInvalid": "That depth is outside what this installation builds.",
       "notPublished": "That build has no surface to draw. Its tiles were either never read back and found whole, or they are no longer where terrain is served from.",
       "active": "That build is the terrain the scene is drawing. Choose other terrain, or stop drawing this one, before removing it.",
-      "running": "That build has not finished. Its files are being written right now, so it can be removed once it has stopped, whichever way it stops."
+      "running": "That build has not finished. Its files are being written right now, so it can be removed once it has stopped, whichever way it stops.",
+      "derivativeBuildNotFound": "That build is no longer here, or has nothing to draw the ground from.",
+      "derivativeNotFound": "That picture is no longer here.",
+      "derivativeNotReady": "That picture is not finished yet, so there is nothing to fetch."
     },
     "derivatives": {
       "title": "Ground pictures",
@@ -190,13 +193,103 @@
       },
       "kinds": {
         "hillshade": "Shaded relief",
-        "slope": "Steepness",
-        "aspect": "Facing",
+        "slope": "Steepness (approximate — degree grid, not corrected for latitude)",
+        "aspect": "Facing (approximate — degree grid, not corrected for latitude)",
         "ruggednessIndex": "Ruggedness",
         "positionIndex": "Topographic position",
         "roughness": "Roughness",
         "colourRelief": "Coloured relief"
       }
+    },
+    "derivativeForm": {
+      "title": "Derived pictures",
+      "intro": "A picture of the ground computed from a finished build: shaded relief, steepness, facing, ruggedness, topographic position, roughness or a coloured relief. Everybody who may read terrain then finds it in the map's layer list.",
+      "needsExecute": "Asking for a picture needs the right to execute on terrain, which this account does not hold. The register below is still yours to read.",
+      "noBuilds": "No finished build to draw from. A picture is computed from a build that has run to the end.",
+      "build": "Build",
+      "buildPlaceholder": "Choose a finished build",
+      "buildRequired": "Choose the build to draw the picture from.",
+      "buildCurrent": "being drawn",
+      "kind": "Picture",
+      "name": "Name",
+      "nameHint": "What the layer list calls it.",
+      "nameRequired": "Give the picture a name.",
+      "nameTooLong": "A name is at most {{max}} characters.",
+      "latitudeCaveat": "Approximate: computed on a degree grid with one horizontal scale, so steepness is understated on ground facing east or west — by around ten degrees at Carpathian latitudes — and facing is pulled towards north or south. Read it as a picture, not as a measurement.",
+      "lighting": "Light",
+      "lightingHint": "Under a single light every slope facing away from it is flat black, and a doline in that shadow is invisible. Four lights keep it readable.",
+      "lightings": {
+        "single": "One light",
+        "multidirectional": "Four lights"
+      },
+      "azimuth": "Light from (°)",
+      "azimuthHint": "Clockwise from north. The north-west is the convention: lit from where the morning sun actually stands, most readers see valleys as ridges.",
+      "azimuthInvalid": "The light's direction is measured clockwise from north, from 0 up to 360.",
+      "altitude": "Light height (°)",
+      "altitudeInvalid": "The light stands above the horizon, so its height is above 0 and at most 90.",
+      "zFactor": "Height exaggeration",
+      "zFactorHint": "Multiplies every height before the picture is computed. Past a few times, a gentle landscape is a wall of saturated pixels.",
+      "zFactorInvalid": "Height exaggeration is a number above zero and no more than {{max}}.",
+      "surfaceFit": "Slope arithmetic",
+      "surfaceFitHint": "Horn weights all eight neighbours and suits real, noisy elevation. Zevenbergen–Thorne uses the four cardinal ones: sharper on clean surfaces, noisier on anything sampled from photographs.",
+      "surfaceFits": {
+        "horn": "Horn (eight neighbours)",
+        "zevenbergenThorne": "Zevenbergen–Thorne (four neighbours)"
+      },
+      "slopeUnit": "Steepness as",
+      "slopeUnits": {
+        "degrees": "Degrees from horizontal",
+        "percent": "Rise over run, as a percentage"
+      },
+      "ruggednessFit": "Ruggedness definition",
+      "ruggednessFitHint": "Riley's is the one published ruggedness classes are stated against. Wilson's gives different numbers, so the two are never comparable.",
+      "ruggednessFits": {
+        "riley": "Riley (root mean square of the differences)",
+        "wilson": "Wilson (mean of the absolute differences)"
+      },
+      "computeEdges": "Compute the outermost cells from the neighbours they have",
+      "computeEdgesHint": "Off, every raster of the build meets its neighbour with a hairline gap. On, the edge is slightly wrong — by less than a missing line is.",
+      "colourRamp": "Colour ramp",
+      "colourRampHint": "A colour at each height, in metres; the ground between two heights is painted with the blend. At least two stops, no two at one height.",
+      "stopElevation": "Height (m)",
+      "stopColour": "Colour",
+      "addStop": "Add a stop",
+      "removeStop": "Remove this stop",
+      "rampProblems": {
+        "tooShort": "A colour relief needs at least two heights to put colours between.",
+        "heightMissing": "Every stop on a colour ramp sits at a real height.",
+        "duplicate": "No two stops on a colour ramp sit at the same height."
+      },
+      "submit": "Request picture",
+      "requested": "The picture has been queued. It appears in the register below, and in the map's layer list once it is ready."
+    },
+    "derivativeList": {
+      "title": "Register of derived pictures",
+      "empty": "No picture of the ground has been computed yet.",
+      "emptyHint": "Ask for one above, from a finished build.",
+      "picture": "Picture",
+      "parameters": "Parameters",
+      "build": "From build",
+      "buildGone": "a build no longer listed",
+      "state": "State",
+      "size": "On disk",
+      "sizeHint": "The computed rasters, one per raster of the build.",
+      "created": "Requested",
+      "actions": "Actions",
+      "delete": "Delete",
+      "deleteConfirm": "Remove this picture and the {{size}} it is keeping on disk?",
+      "params": {
+        "azimuth": "light from {{degrees}}°",
+        "altitude": "{{degrees}}° up",
+        "zFactor": "heights ×{{factor}}",
+        "stops": "{{count}} colour stops",
+        "edgesOff": "edges left blank"
+      }
+    },
+    "configured": {
+      "title": "A terrain address in this installation's configuration overrides the chosen build",
+      "body": "The configuration names a terrain address of its own, and it wins: the scene draws that pyramid, not the build chosen here ({{build}}…). The chosen build is drawn only once the setting below is removed from the installation's configuration and the application restarted.",
+      "setting": "The setting to remove:"
     }
   },
   "dashboard": {
@@ -405,6 +498,7 @@
     "edit": "Edit",
     "delete": "Delete",
     "deleteConfirm": "Delete this cave?",
+    "openIn3d": "Open in 3D",
     "sections": {
       "identification": "Identification",
       "localization": "Localization",
@@ -2471,7 +2565,19 @@
     "contextLostTitle": "The 3D view stopped",
     "contextLostHint": "The browser released the graphics resources this view was using, twice in quick succession. Reloading the page usually restores it.",
     "contextLostReload": "Reload",
-    "rasterOverlayHint": "On the globe each sheet is flattened to a single picture, so it softens under close zoom. The flat map reads the file itself and stays sharp."
+    "rasterOverlayHint": "On the globe each sheet is flattened to a single picture, so it softens under close zoom. The flat map reads the file itself and stays sharp.",
+    "geofileTracksHint": "Tracks and outlines from these files are drawn as lines, in the colours the flat map uses. A track that recorded no altitude is laid on the ground.",
+    "terrainTitle": "Ground",
+    "terrainBuildsHint": "Each build covers one area to one level of detail. Switching re-reads the ground and moves the surveys onto the new surface.",
+    "terrainConfiguredEntry": "The configured elevation model",
+    "terrainBuildLevel": "Level {{level}}",
+    "terrainBuildSize": "{{width}} × {{height}} km",
+    "terrainFinerOffer": "Finer terrain covers this area — draw it?",
+    "terrainFinerDraw": "Draw it",
+    "terrainFinerDismiss": "Not now",
+    "meshLoadingBytes": "Loading the walls — {{size}}.",
+    "meshDrawnBytes": "The walls are drawn — {{size}}.",
+    "meshDrawnBytesTriangles": "The walls are drawn — {{size}}, {{triangles}} triangles."
   },
   "caveview": {
     "loadError": "Failed to load the 3D model",
@@ -2742,6 +2848,10 @@
     "converting": "The walls are being prepared for the 3D scene. This list updates itself when they are ready.",
     "conversionFailed": "The walls could not be converted.",
     "triangles": "{{count}} triangles",
+    "current": "Current",
+    "makeCurrent": "Make current",
+    "makeCurrentFailed": "The model could not be made current",
+    "currentHint": "The current line plot is what the map and the measurements read; the current wall mesh is what the 3D scene draws. The newest upload of each kind becomes current, and an older one can be made current here.",
     "precisionLost": "The file lost precision before it arrived",
     "precisionLostHint": "The coordinates in this file were too large for the numbers it stores them in, so the survey is coarser than it was surveyed. Re-exporting it about a local origin recovers the detail.",
     "meshDeclaration": "Where these walls sit in the world",

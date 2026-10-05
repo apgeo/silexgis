@@ -12,6 +12,8 @@ import { CENTERLINE_DEPTH_BANDS } from '../../scene3d/centerlines3d.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceMode, Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import type { SurveyMesh3DState } from '../../scene3d/surveyMesh3d.ts';
+import { extentSizeKm, type TerrainBuildChoice } from '../../scene3d/terrainBuilds3d.ts';
+import { meshProgressMessage } from './meshMessages.ts';
 import { cutawayPauseMessage } from './surfaceMessages.ts';
 import './Scene3DLayerPanel.css';
 
@@ -71,11 +73,31 @@ export interface Scene3DLayerPanelProps {
   onMeshVisibleChange: (visible: boolean) => void;
   /** What the scene is doing about the selected cave's walls, said in words under the switch. */
   meshState: SurveyMesh3DState;
+  /**
+   * The elevation models this installation has baked, newest first, for the viewer to draw the
+   * ground from. Empty leaves the section out: there is nothing to switch between.
+   */
+  terrainBuilds: TerrainBuildChoice[];
+  /**
+   * True when the ground is drawn by default from an address the operator configured rather than
+   * from one of the builds, which puts an entry for that address first so a viewer who switched
+   * to a build can get back to it.
+   */
+  terrainConfigured: boolean;
+  /** The build the viewer chose to draw, or undefined for whatever the installation draws by default. */
+  terrainChoice: string | undefined;
+  onTerrainChoiceChange: (buildId: string | undefined) => void;
   surfaceMode: Scene3DSurfaceMode;
   onSurfaceModeChange: (mode: Scene3DSurfaceMode) => void;
   /** What the scene is actually doing about the ground; undefined until it has started. */
   surfaceState: Scene3DSurfaceState | undefined;
 }
+
+/**
+ * The radio entry standing for the address the operator configured, which is not a build and has
+ * no id of its own. A value no build id can collide with: build ids are UUIDs.
+ */
+const CONFIGURED_TERRAIN_ENTRY = 'configured';
 
 export default function Scene3DLayerPanel({
   layers,
@@ -101,6 +123,10 @@ export default function Scene3DLayerPanel({
   meshVisible,
   onMeshVisibleChange,
   meshState,
+  terrainBuilds,
+  terrainConfigured,
+  terrainChoice,
+  onTerrainChoiceChange,
   surfaceMode,
   onSurfaceModeChange,
   surfaceState,
@@ -137,26 +163,18 @@ export default function Scene3DLayerPanel({
    * What the walls of the selected cave are doing, in a sentence.
    *
    * A wall mesh is the one thing this scene draws that a viewer waits for, and the wait is worth
-   * a number: the ordinary export is a few hundred kilobytes and arrives before the sentence is
-   * read, while the case this was built for is fifty megabytes. The triangle count is the size the
-   * server publishes, and it is what tells those two apart before either arrives.
+   * a number — which number, and how it is worded, is decided once beside the scene's own notice
+   * so that the two never describe one load in two different measures.
    */
   const meshHint = () => {
-    const triangles =
-      meshState.triangleCount === undefined
-        ? undefined
-        : meshState.triangleCount.toLocaleString(i18n.language);
     switch (meshState.status) {
       case 'off':
         return meshVisible ? t('scene3d.meshNoCave') : t('scene3d.meshOff');
       case 'looking':
         return t('scene3d.meshLooking');
       case 'loading':
-        return triangles
-          ? t('scene3d.meshLoadingSized', { triangles })
-          : t('scene3d.meshLoading');
       case 'drawn':
-        return triangles ? t('scene3d.meshDrawnSized', { triangles }) : t('scene3d.meshDrawn');
+        return meshProgressMessage(meshState, i18n.language, t);
       case 'converting':
         return t('scene3d.meshConverting');
       case 'unavailable':
@@ -169,6 +187,38 @@ export default function Scene3DLayerPanel({
           : t('scene3d.meshFailed');
     }
   };
+
+  /**
+   * How a build is named in the list: its level, when it was finished, and how much ground it
+   * covers. None of the three is a name, and together they are what a viewer actually chooses by —
+   * "the finer one", "the recent one", "the one over the whole region".
+   */
+  const kilometres = (value: number) =>
+    value.toLocaleString(i18n.language, { maximumFractionDigits: value >= 10 ? 0 : 1 });
+  const buildLabel = (build: TerrainBuildChoice) => {
+    const parts = [t('scene3d.terrainBuildLevel', { level: build.requestedMaxDepth })];
+    if (build.finishedAt) {
+      parts.push(new Date(build.finishedAt).toLocaleDateString(i18n.language));
+    }
+    const size = extentSizeKm(build.extent);
+    if (size) {
+      parts.push(
+        t('scene3d.terrainBuildSize', {
+          width: kilometres(size.widthKm),
+          height: kilometres(size.heightKm),
+        }),
+      );
+    }
+    return parts.join(' \u00b7 ');
+  };
+  // What the ground is drawn from when the viewer has not said: the configured address when
+  // there is one, otherwise the build the server marks as its own default. Choosing that entry
+  // again is reported as no choice, so that "the default" and "the build that happens to be the
+  // default" are one state rather than two that draw the same ground.
+  const defaultTerrainEntry = terrainConfigured
+    ? CONFIGURED_TERRAIN_ENTRY
+    : terrainBuilds.find((build) => build.isDrawn)?.id;
+  const terrainEntry = terrainChoice ?? defaultTerrainEntry;
 
   const baseLayers = layers.filter((layer) => layer.isBase);
   const tileOverlays = layers.filter((layer) => !layer.isBase && layer.layerKind === 'xyz');
@@ -466,6 +516,38 @@ export default function Scene3DLayerPanel({
               );
             })}
           </div>
+        </>
+      )}
+
+      {terrainBuilds.length > 0 && (
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          {/* Which elevation model shapes the globe. Offered only where there is more than the
+              default to draw — an installation with no builds has a smooth sphere or a configured
+              address, and neither is a choice. A switch is a real reload of the ground, so the
+              hint says so: the viewer should expect the surveys to move with it. */}
+          <Typography.Text strong>{t('scene3d.terrainTitle')}</Typography.Text>
+          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0', fontSize: 12 }}>
+            {t('scene3d.terrainBuildsHint')}
+          </Typography.Paragraph>
+          <Radio.Group
+            className="scene3d-layer-rows"
+            data-testid="scene3d-terrain-rows"
+            value={terrainEntry}
+            onChange={(e) => {
+              const entry = e.target.value as string;
+              onTerrainChoiceChange(entry === defaultTerrainEntry ? undefined : entry);
+            }}
+          >
+            {terrainConfigured && (
+              <Radio value={CONFIGURED_TERRAIN_ENTRY}>{t('scene3d.terrainConfiguredEntry')}</Radio>
+            )}
+            {terrainBuilds.map((build) => (
+              <Radio key={build.id} value={build.id}>
+                {buildLabel(build)}
+              </Radio>
+            ))}
+          </Radio.Group>
         </>
       )}
 
