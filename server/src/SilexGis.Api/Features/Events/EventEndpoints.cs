@@ -417,19 +417,23 @@ public static class EventEndpoints
         EventRecurrenceRequest recurrence,
         Guid ownerUserId)
     {
-        // The frequency is present because the validator requires it and runs before this.
+        var span = first.EndDate is { } finish ? finish.DayNumber - first.StartDate.DayNumber : 0;
+
+        // The frequency is present because the validator requires it and runs before this. The
+        // span goes with it so that a plan whose occurrences would run into each other is refused
+        // here, before a single row is written.
         var plan = EventRecurrence.Plan(
-            first.StartDate, recurrence.Frequency!.Value, recurrence.Count, recurrence.Until);
+            first.StartDate, recurrence.Frequency!.Value, recurrence.Count, recurrence.Until, span);
         if (plan.Refused)
         {
             return ApiProblems.BadRequest(plan.RefusalCode!, plan.RefusalDetail);
         }
 
         var seriesId = Guid.CreateVersion7();
-        var span = first.EndDate is { } finish ? finish.DayNumber - first.StartDate.DayNumber : 0;
 
         first.SeriesId = seriesId;
         first.SeriesRule = recurrence.Rule;
+        first.SeriesFrequency = recurrence.Frequency;
 
         // The first day of the plan is the event already built, so the rest are written from the
         // second onwards. Written as full rows rather than copied from the first, so that a
