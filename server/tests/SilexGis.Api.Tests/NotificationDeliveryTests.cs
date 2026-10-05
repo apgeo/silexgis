@@ -259,18 +259,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
         await AddToCavingGroupAsync();
         factory.Messages.Clear();
 
-        try
-        {
-            // Aimed at this test's own recipient rather than at "the next send": the drain settles
-            // whatever is due in the shared database, so a one-shot failure could land on another
-            // class's message and leave this one delivered on the first pass.
-            factory.Messages.FailSendsTo = RecipientEmail;
-            await DrainAsync();
-        }
-        finally
-        {
-            factory.Messages.FailSendsTo = null;
-        }
+        await DrainWithTheirSendFailingAsync();
 
         var afterFailure = (await DeliveriesAsync()).ShouldHaveSingleItem();
         afterFailure.Status.ShouldBe(NotificationDeliveryStatus.Pending);
@@ -785,18 +774,7 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
         await AddToCavingGroupAsync();
         factory.Messages.Clear();
 
-        try
-        {
-            // Aimed at this test's own recipient rather than at "the next send": the drain settles
-            // whatever is due in the shared database, so a one-shot failure could land on another
-            // class's message and leave this one delivered on the first pass.
-            factory.Messages.FailSendsTo = RecipientEmail;
-            await DrainAsync();
-        }
-        finally
-        {
-            factory.Messages.FailSendsTo = null;
-        }
+        await DrainWithTheirSendFailingAsync();
 
         (await DeliveriesAsync()).ShouldHaveSingleItem().Status.ShouldBe(NotificationDeliveryStatus.Pending);
 
@@ -978,6 +956,41 @@ public sealed class NotificationDeliveryTests : IAsyncLifetime, IDisposable, ICl
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
         return await NotificationDeliverySql.ClaimDueAsync(db, 25, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// One drain during which every send to this test's recipient fails, so the delivery is left
+    /// backing off with exactly one attempt on it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Aimed at this test's own recipient rather than at "the next send": the drain settles whatever
+    /// is due in the shared database, so a one-shot failure could land on another class's message
+    /// and leave this one delivered on the first pass.
+    /// </para>
+    /// <para>
+    /// The clock is brought up to date first, and that line is load-bearing. The application stamps
+    /// the retry as <em>this clock</em> plus the first step of the ladder, one minute; whether the
+    /// row is due again is decided by the database's own <c>now()</c>. The clock was set when the
+    /// class was constructed, and under a full suite on a loaded machine the users, tokens and
+    /// group of this class's setup can take longer than that minute — after which the "one minute
+    /// from now" the first failure stamps is already in the past, the drain's next pass retries at
+    /// once, and so on up the ladder until a step outruns the drift. That is how a test asserting
+    /// one attempt came to see three, in full runs only, on five occasions.
+    /// </para>
+    /// </remarks>
+    private async Task DrainWithTheirSendFailingAsync()
+    {
+        clock.Now = DateTimeOffset.UtcNow;
+        try
+        {
+            factory.Messages.FailSendsTo = RecipientEmail;
+            await DrainAsync();
+        }
+        finally
+        {
+            factory.Messages.FailSendsTo = null;
+        }
     }
 
     private async Task<int> DrainAsync()

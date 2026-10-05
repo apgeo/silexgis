@@ -503,6 +503,8 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
         }
 
         (await EventCountAsync(trip)).ShouldBe(2);
+        var typedRows = await IdsAtAsync(trip, cavers[0], at);
+        typedRows.Count.ShouldBe(2);
 
         // The preview names the collision on the row, in Ion's name, and still plans Maria's
         // report from the same row and every report from the other rows.
@@ -520,12 +522,25 @@ public sealed class TrackingCsvImportTests : IAsyncLifetime, IDisposable, IClass
             .Select(d => d.GetProperty("problem").GetString())
             .ShouldBe(["AlreadyRecordedSeveralTimes"]);
 
-        // Both typed reports are still there, untouched: the importer chose neither.
+        // Both typed reports are still there, untouched — the same two rows, so the importer
+        // chose neither and rewrote neither. Counted for Ion alone: the refused row also names
+        // Maria, and her report at that same instant is one of the five creates, so a count of
+        // everything at 08:15 is three and says nothing about whether Ion's rows survived.
         (await EventCountAsync(trip)).ShouldBe(7);
+        (await IdsAtAsync(trip, cavers[0], at)).ShouldBe(typedRows);
+        (await IdsAtAsync(trip, cavers[1], at)).Count.ShouldBe(1);
+    }
+
+    /// <summary>The ids of one person's reports at one instant, in a stable order.</summary>
+    private async Task<List<Guid>> IdsAtAsync(Guid trip, Guid caver, DateTimeOffset at)
+    {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        (await db.TripPositionEvents.CountAsync(e => e.TripLogId == trip && e.RecordedAt == at))
-            .ShouldBe(2);
+        return await db.TripPositionEvents
+            .Where(e => e.TripLogId == trip && e.CaverId == caver && e.RecordedAt == at)
+            .OrderBy(e => e.Id)
+            .Select(e => e.Id)
+            .ToListAsync();
     }
 
     [Fact]
