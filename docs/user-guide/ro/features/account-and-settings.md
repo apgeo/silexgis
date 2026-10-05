@@ -55,6 +55,10 @@ administrator."*
 **Exportați-vă datele** — o copie a profilului, adreselor, setărilor și o listă a ce ați adăugat.
 Se pune la coadă, se pregătește în fundal, apoi se descarcă.
 
+**Flux de calendar** — se afișează doar când un administrator a pornit fluxurile. Creează adresa
+secretă la care se abonează un calendar de pe telefon sau de pe calculator, le listează pe cele pe
+care le aveți după nume și dată și revocă una. Vedeți [Abonarea la calendar](calendar-feed.md).
+
 ---
 
 ## E-mailuri

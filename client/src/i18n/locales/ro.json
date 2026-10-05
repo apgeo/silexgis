@@ -2827,6 +2827,23 @@
           "ready": "Gata",
           "failed": "Eșuat"
         }
+      },
+      "calendarFeed": {
+        "heading": "Flux de calendar",
+        "intro": "Abonați-vă la propriul calendar dintr-o aplicație de calendar de pe telefon sau de pe calculator. Un flux poartă titlul și datele turelor, taberelor și evenimentelor la care participați, plus o legătură înapoi către fiecare — nimic altceva.",
+        "label": "Nume pentru această adresă",
+        "labelPlaceholder": "Telefon, laptopul de la serviciu…",
+        "mint": "Creează o adresă de flux",
+        "mintedTitle": "Noua adresă a fluxului — copiați-o acum, se afișează o singură dată.",
+        "mintedHint": "Oricine deține această adresă vă poate citi calendarul, așa că tratați-o ca pe o parolă. Dacă ajunge la altcineva, revocați-o aici și creați alta.",
+        "mintFailed": "Adresa nu a putut fi creată.",
+        "unlabelled": "Adresă fără nume",
+        "createdOn": "Creată {{when}}",
+        "active": "Activă",
+        "revoked": "Revocată",
+        "revoke": "Revocă",
+        "revokeConfirm": "Revocați această adresă? Un calendar care o folosește încă nu se va mai actualiza.",
+        "revokedMessage": "Adresă revocată."
       }
     },
     "notifications": {
@@ -2951,6 +2968,8 @@
       "protectionIntro": "Documentele atașate unei peșteri protejate sunt întotdeauna servite — nu sunt niciodată ascunse și nu li se elimină textul. Această setare stabilește doar dacă cineva care nu are voie să vadă unde se află peștera află care documente trimit la ea.",
       "revealAssociations": "Arată atașamentele peșterilor protejate tuturor celor care le pot citi",
       "revealAssociationsHint": "Activarea nu dezvăluie niciodată o poziție: urmărirea legăturii duce tot la vizualizarea protejată. O fotografie care poartă propriul punct de captură rămâne neasociată cu o peșteră protejată în ambele cazuri, pentru că împerecherea celor două ar localiza peștera.",
+      "calendarFeedEnabled": "Permite membrilor să se aboneze la calendarul lor din exterior",
+      "calendarFeedEnabledHint": "Fiecare membru poate crea apoi adrese secrete pe care un calendar de pe telefon sau de pe calculator le citește fără autentificare. Un flux poartă doar titlurile, datele și legăturile a ceea la care participă membrul — niciodată un loc sau o poziție — și este citit prin permisiunile proprii ale membrului la fiecare interogare. Dezactivat implicit; dezactivarea ulterioară oprește toate adresele deja distribuite.",
       "enabled": "Activat",
       "host": "Server",
       "port": "Port",

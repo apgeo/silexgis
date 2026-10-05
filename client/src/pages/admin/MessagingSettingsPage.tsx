@@ -566,6 +566,14 @@ function ProtectionForm({ settings, onSaved }: SectionProps) {
       >
         <Switch />
       </Form.Item>
+      <Form.Item
+        name="calendarFeedEnabled"
+        label={t('admin.messaging.calendarFeedEnabled')}
+        valuePropName="checked"
+        extra={t('admin.messaging.calendarFeedEnabledHint')}
+      >
+        <Switch />
+      </Form.Item>
       <Button type="primary" htmlType="submit" loading={saving}>
         {t('common.save')}
       </Button>

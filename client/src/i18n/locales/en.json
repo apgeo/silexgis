@@ -2827,6 +2827,23 @@
           "ready": "Ready",
           "failed": "Failed"
         }
+      },
+      "calendarFeed": {
+        "heading": "Calendar feed",
+        "intro": "Subscribe to your own calendar from a phone or desktop calendar application. A feed carries the title and dates of the trips, camps and events you are on, and a link back to each — nothing else.",
+        "label": "Name for this address",
+        "labelPlaceholder": "Phone, work laptop…",
+        "mint": "Create a feed address",
+        "mintedTitle": "Your new feed address — copy it now, it is shown only once.",
+        "mintedHint": "Anyone holding this address can read your calendar, so treat it like a password. If it gets out, revoke it here and create another.",
+        "mintFailed": "The address could not be created.",
+        "unlabelled": "Unnamed address",
+        "createdOn": "Created {{when}}",
+        "active": "Active",
+        "revoked": "Revoked",
+        "revoke": "Revoke",
+        "revokeConfirm": "Revoke this address? A calendar still using it will stop updating.",
+        "revokedMessage": "Address revoked."
       }
     },
     "notifications": {
@@ -2951,6 +2968,8 @@
       "protectionIntro": "Documents attached to a protected cave are always served — they are never hidden or stripped of their text. What this setting controls is whether someone who may not see where the cave is gets told which documents point at it.",
       "revealAssociations": "Show attachments of protected caves to everyone who can read them",
       "revealAssociationsHint": "Turning this on never reveals a position: following the link still gives the protected view. A photo carrying its own capture point stays unpaired with a protected cave either way, because pairing the two would place the cave.",
+      "calendarFeedEnabled": "Let members subscribe to their calendar from outside",
+      "calendarFeedEnabledHint": "Each member can then create secret addresses that a phone or desktop calendar polls without signing in. A feed carries only the titles, dates and links of what that member is on — never a place or a position — and is read through the member's own permissions on every poll. Off by default; switching it off again stops every address already handed out.",
       "enabled": "Enabled",
       "host": "Server",
       "port": "Port",

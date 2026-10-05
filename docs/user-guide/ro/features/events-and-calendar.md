@@ -121,6 +121,14 @@ Trebuie să spuneți ce zile vreți, iar intervalul este plafonat. Dacă o ferea
 decât returnează pagina, vă spune **câte rânduri a lăsat deoparte**, în loc să vă arate tăcut mai
 puțin decât există.
 
+## Luați-l cu dumneavoastră
+
+Turele, taberele și evenimentele dumneavoastră pot apărea și în calendarul de pe telefon sau de pe
+calculator, printr-o **adresă de flux** pe care o creați în **Setări → Cont** — după ce un
+administrator a pornit fluxurile. Vedeți [Abonarea la calendar](calendar-feed.md): ce călătorește
+este titlul, zilele și o legătură înapoi, și nimic altceva.
+
 ---
 
-Înrudite: [Ture](trips.md) · [Tabere](camps.md) · [Notificări](notifications.md)
+Înrudite: [Ture](trips.md) · [Tabere](camps.md) · [Abonarea la calendar](calendar-feed.md) ·
+[Notificări](notifications.md)

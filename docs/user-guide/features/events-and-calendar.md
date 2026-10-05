@@ -119,7 +119,14 @@ You have to say which days you want, and the span is capped. If a window holds m
 page will return, it tells you **how many rows it left out** rather than quietly showing you
 less than there is.
 
+## Taking it with you
+
+Your own trips, camps and events can also appear in the calendar on your phone or desktop,
+through a **feed address** you create under **Settings → Account** — once an administrator has
+switched feeds on. See [Subscribing to your calendar](calendar-feed.md): what travels is the
+title, the days and a link back, and nothing else.
+
 ---
 
 Related: [Trips](trips.md) · [Camps](camps.md) ·
-[Notifications](notifications.md)
+[Subscribing to your calendar](calendar-feed.md) · [Notifications](notifications.md)

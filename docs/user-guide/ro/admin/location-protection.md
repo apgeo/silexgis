@@ -93,6 +93,19 @@ peșteră anume*, păstrând documentul lizibil. Pornirea comutatorului divulgă
 
 > **Pornirea lui nu dezvăluie niciodată o poziție.** Urmărirea linkului tot dă vederea protejată.
 
+### Setarea fluxului de calendar
+
+Al doilea comutator de pe aceeași filă — **„Permite membrilor să se aboneze la calendarul lor din
+exterior"** — este aici din același motiv: hotărăște cât de departe pot călători datele clubului.
+
+Oprit implicit. Pornit, fiecare membru poate crea adrese secrete pe care un calendar de pe telefon
+sau de pe calculator le interoghează fără autentificare ([Abonarea la
+calendar](../features/calendar-feed.md)). Un flux poartă **doar titlurile, datele și legăturile** a
+ceea la care participă membrul — niciodată un loc, o poziție sau un participant — și este citit prin
+permisiunile proprii ale membrului la fiecare interogare, așa că o peșteră protejată nu este mai
+accesibilă printr-un flux decât prin pagina de calendar. Oprirea lui din nou oprește toate adresele
+deja distribuite.
+
 ---
 
 ## Lucruri care în mod deliberat *nu* sunt aproximate

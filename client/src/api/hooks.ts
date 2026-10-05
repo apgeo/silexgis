@@ -102,6 +102,11 @@ export type UnreadNotificationCount = components['schemas']['UnreadNotificationC
 /** What an opt-out link switched off, as the server reports it back to the landing page. */
 export type UnsubscribeResult = components['schemas']['UnsubscribeResultDto'];
 export type DataExport = components['schemas']['DataExportDto'];
+/** One of the caller's calendar feed addresses — metadata only; the address itself is never listed. */
+export type CalendarFeed = components['schemas']['CalendarFeedDto'];
+export type CalendarFeedList = components['schemas']['CalendarFeedListDto'];
+/** The mint answer: the one time the subscription address is ever shown. */
+export type CalendarFeedCreated = components['schemas']['CalendarFeedCreatedDto'];
 export type MfaStatus = components['schemas']['MfaStatusDto'];
 export type MfaMethod = components['schemas']['MfaMethodDto'];
 export type TwoFactorMethod = components['schemas']['TwoFactorMethod'];
@@ -359,6 +364,7 @@ export const queryKeys = {
   uiPreferences: ['me', 'preferences'] as const,
   uiDefaults: ['ui-defaults'] as const,
   dataExport: ['me', 'data-export'] as const,
+  calendarFeeds: ['me', 'calendar-feeds'] as const,
   phone: ['me', 'phone'] as const,
   adminSettings: ['admin', 'settings'] as const,
   messageTemplates: ['admin', 'message-templates'] as const,
@@ -898,6 +904,42 @@ export function useRequestDataExport() {
   return useMutation({
     mutationFn: () => unwrap(api.POST('/api/v1/me/data-export')),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['me', 'data-export'] }),
+  });
+}
+
+/**
+ * The caller's calendar feed addresses, and whether the installation offers feeds at all. The
+ * second rides on the first because the settings page draws the section only where a mint can
+ * work: an installation with feeds switched off shows nothing rather than a button that refuses.
+ */
+export function useCalendarFeeds() {
+  return useQuery({
+    queryKey: queryKeys.calendarFeeds,
+    queryFn: () => unwrap(api.GET('/api/v1/me/calendar-feeds')),
+  });
+}
+
+/**
+ * Mints a subscription address for the caller's own calendar. The answer carries the whole
+ * address exactly once — the server keeps only a hash of it — so the page that calls this is
+ * the one place it can ever be read, and must show it before the next render loses it.
+ */
+export function useMintCalendarFeed() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (label: string | null) =>
+      unwrap(api.POST('/api/v1/me/calendar-feeds', { body: { label } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.calendarFeeds }),
+  });
+}
+
+/** Withdraws one address; a calendar still polling it is answered as though it never existed. */
+export function useRevokeCalendarFeed() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/me/calendar-feeds/{id}', { params: { path: { id } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.calendarFeeds }),
   });
 }
 

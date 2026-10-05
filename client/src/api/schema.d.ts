@@ -1806,6 +1806,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/calendar/feed/{token}.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One account's own calendar as an iCalendar feed: the trips, camps and club dates that account is on, each as a title, its days and a link back. The address is the credential; every refusal is the same 404. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/files/{id}/position": {
         parameters: {
             query?: never;
@@ -4640,6 +4676,102 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/calendar-feeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's calendar feed addresses — metadata only, never the address — and whether the installation offers feeds. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CalendarFeedListDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Mints a calendar feed address for the caller's own calendar; the address is returned once and never stored. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CalendarFeedCreatedDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/calendar-feeds/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Withdraws one of the caller's feed addresses. A calendar still polling it is answered as though it never existed. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -19240,6 +19372,30 @@ export interface components {
             cavingGroupId: null | string;
             hasPosition: boolean;
         };
+        CalendarFeedCreatedDto: {
+            /** Format: uuid */
+            id: string;
+            label: null | string;
+            url: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CalendarFeedCreateRequest: {
+            label: null | string;
+        };
+        CalendarFeedDto: {
+            /** Format: uuid */
+            id: string;
+            label: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt: null | string;
+        };
+        CalendarFeedListDto: {
+            enabled: boolean;
+            feeds: components["schemas"]["CalendarFeedDto"][];
+        };
         /** @enum {unknown} */
         CalendarPlacement: "off" | "ahead" | "behind" | "calledOff" | "putBack";
         CalendarResultDto: {
@@ -22908,6 +23064,7 @@ export interface components {
         ProtectedDisplay: "snapPoint" | "withhold";
         ProtectionSettingsDto: {
             revealProtectedAssociations: boolean;
+            calendarFeedEnabled: boolean;
         };
         PublicAlbumDto: {
             title: string;
