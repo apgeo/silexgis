@@ -11,6 +11,7 @@ const answer = vi.fn();
 const select = vi.fn();
 const removeRow = vi.fn();
 const promote = vi.fn();
+const me = vi.fn();
 
 const ANA = '11111111-1111-1111-1111-111111111111';
 const BOGDAN = '22222222-2222-2222-2222-222222222222';
@@ -25,6 +26,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useSelectForTrip: () => ({ mutateAsync: select, isPending: false }),
   useRemoveTripInvitation: () => ({ mutateAsync: removeRow, isPending: false }),
   usePromoteTripInvitations: () => ({ mutateAsync: promote, isPending: false }),
+  useMe: () => me(),
 }));
 
 const { default: TripInvitationsTab } = await import('./TripInvitationsTab.tsx');
@@ -75,9 +77,11 @@ function show(subject: TripLogInfo = trip(), canEdit = true) {
 }
 
 beforeEach(() => {
-  for (const spy of [list, invite, answer, select, removeRow, promote]) {
+  for (const spy of [list, invite, answer, select, removeRow, promote, me]) {
     spy.mockReset();
   }
+  // The reader is linked to nobody in the records unless a case says otherwise.
+  me.mockReturnValue({ data: { caverId: null } });
   for (const spy of [invite, answer, select, removeRow]) {
     spy.mockResolvedValue({});
   }
@@ -309,6 +313,59 @@ describe('TripInvitationsTab', () => {
   it('says nothing has been asked yet when the list is empty', () => {
     show();
     expect(screen.getByText('Nobody has been asked on this trip yet.')).toBeTruthy();
+  });
+
+  /**
+   * Somebody who was never asked may still say they are coming: the server writes a row where
+   * none exists for anybody who may read the trip and answers for themselves. Without a row there
+   * is no control to answer on, so the panel offers one act — a yes for oneself, with no note —
+   * through the same answer the row controls send.
+   */
+  it('lets a reader who was never asked put themselves down as coming', () => {
+    me.mockReturnValue({ data: { caverId: BOGDAN } });
+    list.mockReturnValue({
+      data: answers({ attendingCount: 1, invitations: [row({ caverId: ANA })] }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    show(trip(), false);
+
+    fireEvent.click(screen.getByTestId('trip-sign-up'));
+
+    expect(answer).toHaveBeenCalledWith({
+      tripLogId: 'trip-1',
+      caverId: BOGDAN,
+      response: 'yes',
+      note: null,
+    });
+  });
+
+  /** Once the reader has a row, that row carries their controls; a second place to answer would be a second place for one act. */
+  it('offers no sign-up once the reader has a row of their own', () => {
+    me.mockReturnValue({ data: { caverId: ANA } });
+    list.mockReturnValue({
+      data: answers({ invitations: [row({ caverId: ANA, response: 'pending', mayAnswer: true })] }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    show(trip(), false);
+
+    expect(screen.queryByTestId('trip-sign-up')).toBeNull();
+    expect(screen.getByTestId(`trip-invitation-answer-${ANA}`)).toBeTruthy();
+  });
+
+  /** An account linked to nobody in the records has nobody to sign up as, and one not yet read is not assumed linked. */
+  it('offers no sign-up to an account linked to nobody in the records', () => {
+    me.mockReturnValue({ data: { caverId: null } });
+    show(trip(), false);
+    expect(screen.queryByTestId('trip-sign-up')).toBeNull();
+
+    cleanup();
+    me.mockReturnValue({ data: undefined });
+    show(trip(), false);
+    expect(screen.queryByTestId('trip-sign-up')).toBeNull();
   });
 
   /** A list that could not be read is a state of the surface, not an empty one. */

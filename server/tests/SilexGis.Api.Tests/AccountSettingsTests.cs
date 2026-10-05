@@ -80,6 +80,38 @@ public sealed class AccountSettingsTests : IAsyncLifetime, IDisposable, IClassFi
         profile.GetProperty("email").GetString().ShouldBe(MyEmail);
     }
 
+    /// <summary>
+    /// The account names its own roster entry, and nothing else of the roster. A surface that
+    /// lets somebody act for themselves on a plan needs to know which caver they are, and the
+    /// roster list cannot answer that reliably: it is searched by name and capped. Every account
+    /// is given an entry when it is made, so the null case is an entry an administrator has since
+    /// unlinked, not a fresh account.
+    /// </summary>
+    [Fact]
+    public async Task Profile_names_the_callers_own_roster_entry_and_nothing_once_the_link_is_cut()
+    {
+        Guid linked;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            linked = await db.Cavers.Where(c => c.UserId == myId).Select(c => c.Id).SingleAsync();
+        }
+
+        (await GetMeAsync(me)).GetProperty("caverId").GetGuid().ShouldBe(linked);
+        // The link is about this account alone: another account names its own entry, never mine.
+        (await GetMeAsync(other)).GetProperty("caverId").GetGuid().ShouldNotBe(linked);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var caver = await db.Cavers.SingleAsync(c => c.Id == linked);
+            caver.UserId = null;
+            await db.SaveChangesAsync();
+        }
+
+        (await GetMeAsync(me)).GetProperty("caverId").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
     [Fact]
     public async Task Profile_round_trips_every_field_and_visibility_choice()
     {

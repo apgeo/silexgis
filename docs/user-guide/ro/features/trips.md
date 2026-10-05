@@ -76,6 +76,8 @@ prin fișa ei din listă.
 
 Fiecare răspunde pentru sine: **Vine · Nu vine · Poate · Fără răspuns**, cu o notă. Cine poate
 corecta tura poate răspunde în locul cuiva care a sunat.
+Dacă nimeni nu v-a invitat încă, **Înscrie-mă** vă trece drept participant — oricine poate citi
+tura o poate face, iar intrați în coadă în ordinea în care ați spus-o.
 
 Cu **Locuri** stabilite: *„n din m locuri ocupate, k în așteptare"* — **în ordinea în care au
 răspuns oamenii**. Primul venit; o răzgândire trece la coadă. Organizatorul poate **Alege** pe

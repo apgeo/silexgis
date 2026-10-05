@@ -5,6 +5,7 @@ import { ApiError } from '../../api/client.ts';
 import {
   useAnswerTripInvitation,
   useInviteToTrip,
+  useMe,
   usePromoteTripInvitations,
   useRemoveTripInvitation,
   useSelectForTrip,
@@ -43,6 +44,8 @@ export default function TripInvitationsTab({
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { data, isPending, error, refetch } = useTripInvitations(trip.id);
+  // Which caver the reader is, so they can put themselves down on a trip nobody asked them on.
+  const { data: me } = useMe();
 
   const invite = useInviteToTrip();
   const answer = useAnswerTripInvitation();
@@ -159,6 +162,7 @@ export default function TripInvitationsTab({
       keys="trips.invitations"
       idPrefix="trip"
       inviting={invite.isPending}
+      self={me?.caverId ? { caverId: me.caverId } : null}
       onInvite={onInvite}
       onAnswer={onAnswer}
       onSelect={onSelect}

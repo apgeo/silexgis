@@ -76,6 +76,8 @@ the roster.
 
 Each answers for themselves: **Coming · Not coming · Maybe · Not answered**, with a note.
 Somebody who may correct the trip may answer on behalf of a person who phoned in.
+If nobody has asked you yet, **Sign me up** puts you down as coming — anybody who can read the
+trip may, and you join the queue in the order you said so.
 
 With **Places** set: *"n of m places taken, k waiting"* — **in the order people answered**.
 First come; a change of mind goes to the back. The organiser can **Pick** somebody further

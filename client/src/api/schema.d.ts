@@ -21813,6 +21813,8 @@ export interface components {
             phoneNumber: null | string;
             /** Format: uuid */
             cavingClubId: null | string;
+            /** Format: uuid */
+            caverId: null | string;
             locale: string;
             avatarUrl: null | string;
             avatarPreset: null | string;

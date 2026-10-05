@@ -10,6 +10,7 @@ const invite = vi.fn();
 const answer = vi.fn();
 const select = vi.fn();
 const removeRow = vi.fn();
+const me = vi.fn();
 
 const EVENT = '55555555-5555-5555-5555-555555555555';
 const ANA = '11111111-1111-1111-1111-111111111111';
@@ -23,6 +24,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useAnswerEventInvitation: () => ({ mutateAsync: answer, isPending: false }),
   useSelectForEvent: () => ({ mutateAsync: select, isPending: false }),
   useRemoveEventInvitation: () => ({ mutateAsync: removeRow, isPending: false }),
+  useMe: () => me(),
 }));
 
 const { default: EventResponsesTab } = await import('./EventResponsesTab.tsx');
@@ -71,9 +73,11 @@ function show(canEdit = true) {
 }
 
 beforeEach(() => {
-  for (const spy of [list, invite, answer, select, removeRow]) {
+  for (const spy of [list, invite, answer, select, removeRow, me]) {
     spy.mockReset();
   }
+  // The reader is linked to nobody in the records unless a case says otherwise.
+  me.mockReturnValue({ data: { caverId: null } });
   for (const spy of [invite, answer, select, removeRow]) {
     spy.mockResolvedValue({});
   }
@@ -197,5 +201,51 @@ describe('EventResponsesTab', () => {
     show();
 
     expect(screen.getByTestId('event-invitations-unavailable')).toBeTruthy();
+  });
+
+  /**
+   * A member who sees an evening their club is running says they are coming without having
+   * been asked: the server writes the row for anybody who may read the event and answers for
+   * themselves, and the panel reaches that with one act — a yes for oneself, no note.
+   */
+  it('lets a reader who was never asked put themselves down as coming', () => {
+    me.mockReturnValue({ data: { caverId: BOGDAN } });
+    list.mockReturnValue({
+      data: answers({ attendingCount: 1, invitations: [row({ caverId: ANA })] }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    show(false);
+
+    fireEvent.click(screen.getByTestId('event-sign-up'));
+
+    expect(answer).toHaveBeenCalledWith({
+      eventId: EVENT,
+      caverId: BOGDAN,
+      response: 'yes',
+      note: null,
+    });
+  });
+
+  /** The reader's own row carries their controls; the sign-up is only for a reader with no row. */
+  it('offers no sign-up once the reader has a row of their own', () => {
+    me.mockReturnValue({ data: { caverId: ANA } });
+    list.mockReturnValue({
+      data: answers({ invitations: [row({ caverId: ANA, response: 'pending', mayAnswer: true })] }),
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    show(false);
+
+    expect(screen.queryByTestId('event-sign-up')).toBeNull();
+  });
+
+  /** An account linked to nobody in the records has nobody to sign up as. */
+  it('offers no sign-up to an account linked to nobody in the records', () => {
+    me.mockReturnValue({ data: { caverId: null } });
+    show(false);
+    expect(screen.queryByTestId('event-sign-up')).toBeNull();
   });
 });
