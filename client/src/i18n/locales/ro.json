@@ -1235,6 +1235,18 @@
       "emptyFiltered": "Nicio tură de-a ta nu se potrivește cu aceste filtre.",
       "failed": "Turele tale nu au putut fi încărcate."
     },
+    "track": {
+      "import": "Importă traseul (GPX)",
+      "imported": "Traseul înregistrat este acum schița turei.",
+      "problems": {
+        "file_empty": "Fișierul este gol.",
+        "file_too_large": "Fișierul este mai mare decât poate fi traseul unei ture.",
+        "format_unsupported": "Un traseu se importă dintr-un fișier GPX.",
+        "file_unreadable": "Fișierul nu a putut fi citit ca GPX.",
+        "no_track": "Fișierul nu conține niciun traseu — punctele de reper singure nu sunt un traseu.",
+        "too_many_points": "Traseul are mai multe puncte decât poate purta schița unei ture; scurtați-l înainte de import."
+      }
+    },
     "plan": {
       "new": "Planifică o tură",
       "createMenu": "Alte moduri de a crea o tură",

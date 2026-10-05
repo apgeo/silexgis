@@ -1235,6 +1235,18 @@
       "emptyFiltered": "No trip of yours matches these filters.",
       "failed": "Your trips could not be loaded."
     },
+    "track": {
+      "import": "Import track (GPX)",
+      "imported": "The recorded track is now the trip's sketch.",
+      "problems": {
+        "file_empty": "The file is empty.",
+        "file_too_large": "The file is larger than a trip's track may be.",
+        "format_unsupported": "A track is imported from a GPX file.",
+        "file_unreadable": "The file could not be read as GPX.",
+        "no_track": "The file holds no track or route — waypoints alone are not a track.",
+        "too_many_points": "The track has more points than a trip's sketch may carry; shorten it before importing."
+      }
+    },
     "plan": {
       "new": "Plan a trip",
       "createMenu": "Other ways to create a trip",

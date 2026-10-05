@@ -212,6 +212,9 @@ replaces the one before it.
 > ⚠ Same warning. **A trip's sketch is never approximated** — it is shown exactly as drawn to
 > everyone who may read the trip, *whatever protection the caves the trip names carry*.
 
+**Import track (GPX)**, on the trip's page, replaces the sketch with the track a GPS unit
+recorded — every track in the file joined into one line. Nothing else of the file is kept.
+
 ---
 
 ## The callout

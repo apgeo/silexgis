@@ -214,6 +214,9 @@ desenați; o formă nouă o înlocuiește pe cea dinainte.
 > cum a fost desenată tuturor celor care pot citi tura, *indiferent ce protecție poartă peșterile
 > pe care tura le numește*.
 
+**Importă traseul (GPX)**, de pe pagina turei, înlocuiește schița cu traseul înregistrat de un
+GPS — toate traseele din fișier unite într-o singură linie. Nimic altceva din fișier nu este păstrat.
+
 ---
 
 ## Apelul de urgență

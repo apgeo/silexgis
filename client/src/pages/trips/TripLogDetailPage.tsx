@@ -6,6 +6,7 @@ import {
   EditOutlined,
   FileTextOutlined,
   LockOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -20,15 +21,18 @@ import {
   Tabs,
   Tag,
   Typography,
+  Upload,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ApiError } from '../../api/client.ts';
 import {
   parseAccessActions,
   useCan,
   useCavingGroups,
   useDeleteTripLog,
   useEffectiveAccess,
+  useImportTripTrack,
   useTripLog,
   useTripParticipantRoles,
   useTripTypes,
@@ -149,6 +153,20 @@ export default function TripLogDetailPage() {
   const { data: participantRoles } = useTripParticipantRoles();
   const organizingCavingGroup = cavingGroups?.find((g) => g.id === trip?.organizingCavingGroupId);
   const deleteTrip = useDeleteTripLog();
+  const importTrack = useImportTripTrack();
+
+  // A recorded track becomes the sketch in one act. The refusals the route names are each
+  // worded for the person who chose the file; anything else is the ordinary failed save.
+  const importTrackFrom = async (file: File) => {
+    try {
+      await importTrack.mutateAsync({ id: trip!.id, file });
+      message.success(t('trips.track.imported'));
+    } catch (e) {
+      const code = e instanceof ApiError ? e.code : undefined;
+      const problem = code?.startsWith('trip_track.') ? code.slice('trip_track.'.length) : undefined;
+      message.error(problem ? t(`trips.track.problems.${problem}`) : t('common.saveFailed'));
+    }
+  };
   const updateTrip = useUpdateTripLog();
   // Per-object capabilities once the answer arrives; the coarse domain-level check only
   // bridges the first render (the server enforces regardless).
@@ -254,6 +272,27 @@ export default function TripLogDetailPage() {
             >
               {t('permissions.button')}
             </Button>
+          )}
+          {/* A day's recording becomes the sketch here rather than as a registry feature somebody
+              then redraws onto the trip. The picker hands the file over and uploads nothing
+              itself; the route is a trip write, so the act is offered where editing is. */}
+          {canEdit && (
+            <Upload
+              accept=".gpx"
+              showUploadList={false}
+              beforeUpload={(file) => {
+                void importTrackFrom(file);
+                return false;
+              }}
+            >
+              <Button
+                icon={<UploadOutlined />}
+                loading={importTrack.isPending}
+                data-testid="trip-import-track"
+              >
+                {t('trips.track.import')}
+              </Button>
+            </Upload>
           )}
           {(canEdit || canDelete) && (
             <>

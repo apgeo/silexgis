@@ -3823,6 +3823,32 @@ export function useUpdateTripLog() {
   });
 }
 
+/**
+ * Replaces the trip's sketch with the track in a GPX file, in one request. A trip write like
+ * the update above, and finished the same way: the trip is read back before the mutation
+ * settles, because the write moved the row version the next save is checked against.
+ */
+export function useImportTripTrack() {
+  const readBack = useReadTripLogsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }): Promise<TripLogInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      // Multipart: hand the FormData through untouched (the browser sets the boundary).
+      return unwrap(api.POST('/api/v1/trip-logs/{id}/geometry/gpx', {
+        params: { path: { id } },
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    onSuccess: () => {
+      invalidateHistory();
+      return readBack();
+    },
+  });
+}
+
 export function useDeleteTripLog() {
   const invalidate = useInvalidateTripLogs();
   return useMutation({
