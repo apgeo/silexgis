@@ -89,6 +89,21 @@ test('a list is written with its lines, reworded and lengthened, and deleted', a
   await expect(card).toContainText('Anyone signed in');
   await expect(card).toContainText('2 lines');
 
+  // Handing the list to one person by name is the lock on its card, which opens the same
+  // permissions dialog a trip has — on the list, as a target the sharing route resolves: the
+  // dialog's own read of the rules answering is what says the target is one the server knows.
+  const rulesRead = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      /\/api\/v1\/objects\/checklist\/[^/]+\/access$/.test(response.url()),
+  );
+  await card.getByRole('button', { name: 'Permissions' }).click();
+  const permissions = page.getByRole('dialog').filter({ hasText: 'Permissions' });
+  await expect(permissions).toBeVisible();
+  expect((await rulesRead).ok()).toBeTruthy();
+  await permissions.getByRole('button', { name: 'Cancel' }).click();
+  await expect(permissions).toBeHidden();
+
   // Reworded and lengthened. The lines come back into the form as they were written, in order.
   await card.getByRole('button', { name: 'Edit' }).click();
   const edit = listDialog(page, 'Edit checklist');

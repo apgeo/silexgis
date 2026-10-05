@@ -16431,7 +16431,7 @@ export interface paths {
         };
         /**
          * Rules anchored on this object (ManagePermissions). A rule carrying a camp was written by that camp's sharing: it is shown here and withdrawn there.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event', 'checklist' (case-insensitive).
          */
         get: {
             parameters: {
@@ -16458,7 +16458,7 @@ export interface paths {
         };
         /**
          * Replaces the rules authored here, bounded by what the caller holds. A rule a camp's sharing wrote is left exactly as it is.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event', 'checklist' (case-insensitive).
          */
         put: {
             parameters: {
@@ -16503,7 +16503,7 @@ export interface paths {
         };
         /**
          * What the caller may do here; ?explain=true names the deciding rule.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event', 'checklist' (case-insensitive).
          */
         get: {
             parameters: {

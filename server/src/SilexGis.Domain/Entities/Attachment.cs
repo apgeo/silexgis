@@ -47,6 +47,14 @@ public enum AttachedEntityType : short
     /// value; adding one is a separate decision.
     /// </summary>
     Event = 16,
+
+    /// <summary>
+    /// A checklist — the list a party works through before it sets off. Present for the same
+    /// reason an event is: a list is a shareable object with an access domain of its own, and
+    /// handing one list to one person by name goes through the route that identifies its target
+    /// by this discriminator. No attachment, tagging or resource-link surface offers this value.
+    /// </summary>
+    Checklist = 17,
 }
 
 /// <summary>Maps non-feature protected entity instances to their polymorphic discriminator.</summary>
@@ -60,6 +68,7 @@ public static class ProtectedEntityTypes
         MapView => AttachedEntityType.MapView,
         Expedition => AttachedEntityType.Expedition,
         Event => AttachedEntityType.Event,
+        Checklist => AttachedEntityType.Checklist,
         _ => throw new ArgumentException($"No entity-type mapping for {entity.GetType().Name}.", nameof(entity)),
     };
 }

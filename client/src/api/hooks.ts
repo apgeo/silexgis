@@ -2733,7 +2733,8 @@ export type EntityType =
   | 'georeferencedMap'
   | 'mapView'
   | 'expedition'
-  | 'event';
+  | 'event'
+  | 'checklist';
 // Stored files additionally carry taggings (never attachments or grants) — the tag
 // endpoints accept the extra target; the server rejects it everywhere else.
 export type AttachedEntityType = EntityType | 'storedFile';

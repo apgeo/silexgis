@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   App,
   Button,
@@ -20,15 +20,18 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
 import {
+  useCan,
   useCavingGroups,
   useChecklists,
   useCreateChecklist,
   useDeleteChecklist,
+  useMe,
   useUpdateChecklist,
   type ChecklistInfo,
   type ChecklistWrite,
 } from '../../api/hooks.ts';
 import List from '../../components/List.tsx';
+import PermissionsModal from '../../components/permissions/PermissionsModal.tsx';
 
 /** The audience a list is given, in the order they widen. */
 const visibilities = ['private', 'cavingGroup', 'authenticated', 'public'] as const;
@@ -58,6 +61,15 @@ export default function ChecklistsPage() {
   const { message } = App.useApp();
   const { data, isLoading } = useChecklists();
   const { data: cavingGroups } = useCavingGroups();
+
+  // Handing one list to one person by name is narrower than any audience the visibility control
+  // offers, and it goes through the same object-permissions dialog a trip or a cave has. The
+  // listing does not say per row who may manage a list's rules, so the lock is drawn for the
+  // list's owner — who always may — and for a caller holding that right over every list; the
+  // server decides for anybody else, and the dialog says so when it is refused.
+  const { data: me } = useMe();
+  const managesAnyList = useCan('checklists', 'managePermissions');
+  const [sharing, setSharing] = useState<ChecklistInfo | null>(null);
   const create = useCreateChecklist();
   const update = useUpdateChecklist();
   const remove = useDeleteChecklist();
@@ -140,6 +152,14 @@ export default function ChecklistsPage() {
                   </Space>
                 </Space>
                 <Space>
+                  {(managesAnyList || list.ownerUserId === me?.id) && (
+                    <Button
+                      icon={<LockOutlined />}
+                      onClick={() => setSharing(list)}
+                      aria-label={t('permissions.button')}
+                      data-testid={`checklist-permissions-${list.id}`}
+                    />
+                  )}
                   <Button
                     icon={<EditOutlined />}
                     onClick={() => openFor(list)}
@@ -162,6 +182,15 @@ export default function ChecklistsPage() {
               </Flex>
             </Card>
           )}
+        />
+      )}
+
+      {sharing && (
+        <PermissionsModal
+          entityType="checklist"
+          entityId={sharing.id}
+          open
+          onClose={() => setSharing(null)}
         />
       )}
 
