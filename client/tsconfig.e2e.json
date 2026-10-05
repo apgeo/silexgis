@@ -7,6 +7,7 @@
      Node globals and the DOM — Node because they run outside a browser, the DOM because the
      callbacks handed to `evaluate` run inside one. */
   "compilerOptions": {
+    "incremental": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
