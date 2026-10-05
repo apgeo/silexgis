@@ -162,6 +162,14 @@ describe('the camp page', () => {
     expect(screen.getByText('links for expedition')).toBeTruthy();
   });
 
+  it('offers the write-up to anybody who may read the camp', () => {
+    // Circulating a camp's write-up is not an act of editing it, so a plain reader gets the link.
+    renderPage();
+    expect(screen.getByTestId('expedition-open-report').closest('a')?.getAttribute('href')).toBe(
+      `/expeditions/${CAMP}/report`,
+    );
+  });
+
   it('offers the permissions dialog only to somebody who may manage them, over the camp itself', () => {
     // Naming who may read a camp is its own right: a reader, and even an editor, is not shown
     // the door. The server refuses regardless; what is avoided is a dialog that always fails.

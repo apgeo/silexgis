@@ -3810,6 +3810,19 @@ export function useTripReportTemplates(enabled = true) {
   });
 }
 
+/**
+ * The layouts of one kind — a trip's or a camp's — for the chooser on that kind's write-up page.
+ * Under the same key family as the full list, so a change to any layout refreshes both.
+ */
+export function useReportTemplatesOfKind(kind: 'trip' | 'expedition', enabled = true) {
+  return useQuery({
+    queryKey: [...queryKeys.tripReportTemplates, kind] as const,
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/trip-report-templates', { params: { query: { kind } } })),
+    enabled,
+  });
+}
+
 export type TripReportTemplateWrite = components['schemas']['TripReportTemplateRequest'];
 
 function useInvalidateTripReportTemplates() {
@@ -7308,6 +7321,26 @@ export function useWithdrawExpeditionSharing(expeditionId: string) {
         api.DELETE('/api/v1/expeditions/{id}/sharing', { params: { path: { id: expeditionId } } }),
       ),
     onSuccess: invalidate,
+  });
+}
+
+export type ExpeditionReportSaved = components['schemas']['ExpeditionReportSavedDto'];
+
+/**
+ * Files the camp's write-up against the camp. What is filed is built from the reading any
+ * account has, not the filer's own: a file on a camp is reachable by everybody who may read the
+ * camp, which is routinely wider than the trips gathered into it.
+ */
+export function useKeepExpeditionReport() {
+  const invalidateAttachments = useInvalidateAttachments();
+  return useMutation({
+    mutationFn: ({ id, templateId }: { id: string; templateId?: string }) =>
+      unwrap(
+        api.POST('/api/v1/expeditions/{id}/report', {
+          params: { path: { id }, query: templateId ? { templateId } : {} },
+        }),
+      ),
+    onSuccess: () => invalidateAttachments(),
   });
 }
 

@@ -32,6 +32,12 @@ describe('the addresses this application hands out', () => {
     expect(matchRoutes(routes, `/expeditions/${SOME_ID}`)).toBeTruthy();
   });
 
+  // The camp page offers its write-up by a link it builds itself, so the address is registered
+  // in two places and is exactly the kind that goes missing from one of them.
+  it('include the write-up the camp page sends people to', () => {
+    expect(matchRoutes(routes, `/expeditions/${SOME_ID}/report`)).toBeTruthy();
+  });
+
   // The sidebar offers this one by key, and a menu key with no route behind it lands whoever
   // clicked it on the router's error screen rather than failing to navigate.
   it('include the list of camps the sidebar sends people to', () => {

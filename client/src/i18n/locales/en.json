@@ -1837,6 +1837,19 @@
       "incomplete": "Not shared: {{count}} of this camp's trips refused it, because you may not manage their permissions. Their owners have to delegate that first.",
       "noTrips": "This camp gathers no trips yet, so there is nothing to share.",
       "nothingShared": "This camp shares nothing to apply again."
+    },
+    "report": {
+      "open": "Write-up",
+      "backToCamp": "Back to the camp",
+      "keep": "Save to the camp",
+      "kept": "The document was filed against the camp.",
+      "keepAudience": "The copy saved to the camp can be opened by everybody who may read the camp, so it is built from what any account may see of its trips. Your own fuller copy is the download.",
+      "audienceNotice": "This write-up shows what you may see. Somebody else reading the same camp may see more, or less: the trips in it, the people, the pictures.",
+      "account": "About the camp",
+      "trips": "The trips",
+      "whoWasThere": "Who was there",
+      "areaPoint": "Working area: a point at {{position}}.",
+      "areaShape": "Working area: {{shape}}, {{count}} points, centred on {{position}}."
     }
   },
   "tags": {

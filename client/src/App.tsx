@@ -52,6 +52,7 @@ const EventListPage = lazy(() => import('./pages/events/EventListPage.tsx'));
 const EventDetailPage = lazy(() => import('./pages/events/EventDetailPage.tsx'));
 const ExpeditionListPage = lazy(() => import('./pages/expeditions/ExpeditionListPage.tsx'));
 const ExpeditionDetailPage = lazy(() => import('./pages/expeditions/ExpeditionDetailPage.tsx'));
+const ExpeditionReportPage = lazy(() => import('./pages/expeditions/ExpeditionReportPage.tsx'));
 const AuditPage = lazy(() => import('./pages/admin/AuditPage.tsx'));
 const MessagingSettingsPage = lazy(() => import('./pages/admin/MessagingSettingsPage.tsx'));
 const MessageTemplatesPage = lazy(() => import('./pages/admin/MessageTemplatesPage.tsx'));
@@ -181,6 +182,7 @@ export const routes: RouteObject[] = [
           { path: '/events/:id', element: <Loadable><EventDetailPage /></Loadable> },
           { path: '/expeditions', element: <Loadable><ExpeditionListPage /></Loadable> },
           { path: '/expeditions/:id', element: <Loadable><ExpeditionDetailPage /></Loadable> },
+          { path: '/expeditions/:id/report', element: <Loadable><ExpeditionReportPage /></Loadable> },
           { path: '/admin/audit', element: <Loadable><AuditPage /></Loadable> },
           { path: '/admin/messaging', element: <Loadable><MessagingSettingsPage /></Loadable> },
           { path: '/admin/notification-health', element: <Loadable><NotificationHealthPage /></Loadable> },

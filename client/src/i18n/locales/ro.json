@@ -1837,6 +1837,19 @@
       "incomplete": "Nepartajat: {{count}} dintre turele acestei tabere au refuzat, pentru că nu le puteți gestiona permisiunile. Proprietarii lor trebuie să delege mai întâi acest drept.",
       "noTrips": "Această tabără nu adună încă nicio tură, așa că nu este nimic de partajat.",
       "nothingShared": "Această tabără nu partajează nimic de aplicat din nou."
+    },
+    "report": {
+      "open": "Raport",
+      "backToCamp": "Înapoi la tabără",
+      "keep": "Salvează la tabără",
+      "kept": "Documentul a fost atașat taberei.",
+      "keepAudience": "Copia salvată la tabără poate fi deschisă de toți cei care pot citi tabăra, așa că este construită din ce poate vedea orice cont din turele ei. Copia dumneavoastră completă este descărcarea.",
+      "audienceNotice": "Acest raport arată ceea ce puteți vedea dumneavoastră. Altcineva care citește aceeași tabără poate vedea mai mult sau mai puțin: turele din ea, persoanele, fotografiile.",
+      "account": "Despre tabără",
+      "trips": "Turele",
+      "whoWasThere": "Cine a participat",
+      "areaPoint": "Zonă de lucru: un punct la {{position}}.",
+      "areaShape": "Zonă de lucru: {{shape}}, {{count}} puncte, centrată pe {{position}}."
     }
   },
   "tags": {

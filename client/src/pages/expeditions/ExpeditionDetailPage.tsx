@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DeleteOutlined, EditOutlined, LockOutlined, ShareAltOutlined } from '@ant-design/icons';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  FileTextOutlined,
+  LockOutlined,
+  ShareAltOutlined,
+} from '@ant-design/icons';
 import {
   Alert,
   App,
@@ -16,7 +22,7 @@ import {
   Typography,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   parseAccessActions,
   useCan,
@@ -140,6 +146,13 @@ export default function ExpeditionDetailPage() {
           <TripStateTag state={camp.state} />
         </Flex>
         <Flex gap={8} wrap>
+          {/* The write-up as a document rather than a page of tabs, for anybody who may read
+              the camp: circulating one is not an act of editing it. */}
+          <Link to={`/expeditions/${camp.id}/report`}>
+            <Button icon={<FileTextOutlined />} data-testid="expedition-open-report">
+              {t('expeditions.report.open')}
+            </Button>
+          </Link>
           {/* Who may read this camp, narrowed person by person — and, through the camp's own
               sharing, the trips it gathers. A camp contains no features, so the dialog offers
               reach over this camp alone. */}
