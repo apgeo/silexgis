@@ -9,7 +9,7 @@ import { transformExtent } from 'ol/proj';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import { ApiError } from '../../api/client.ts';
-import type { TerrainBuild } from '../../api/hooks.ts';
+import type { MapConfig, TerrainBuild } from '../../api/hooks.ts';
 import type { TerrainBbox } from './terrain/terrainArea.ts';
 
 const submitMutate = vi.fn();
@@ -17,6 +17,26 @@ const uploadMutate = vi.fn();
 const directoriesEnabled = vi.fn();
 
 let builds: TerrainBuild[] = [];
+
+/** The map's answer about terrain: which source is served, and which would be instead. */
+function mapConfig(
+  terrain: MapConfig['terrain'],
+  terrainFallback: MapConfig['terrainFallback'],
+): MapConfig {
+  return {
+    centerlineDetailZoom: 14,
+    centerlineMaxPaths: 200,
+    centerlineMaxPathsLimit: 1000,
+    centerlineGateZoom: 10,
+    clusterMaxZoom: 12,
+    maxPoints: 5000,
+    terrain,
+    terrainFallback,
+    terrainBuilds: [],
+  };
+}
+
+let config: MapConfig | undefined;
 
 let capabilities: { domains: Record<string, string>; isFullAdmin: boolean } | undefined = {
   domains: { terrain: 'read, execute, delete' },
@@ -48,6 +68,12 @@ vi.mock('../../api/hooks.ts', async () => {
     useChooseTerrainBuild: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useStopDrawingTerrainBuild: () => ({ mutateAsync: vi.fn(), isPending: false }),
     useDeleteTerrainBuild: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    // The pictures drawn from a build sit under the list and have tests of their own; here they
+    // only have to render empty, and to show that the page hands them the right they are held under.
+    useTerrainDerivatives: () => ({ data: [], isLoading: false }),
+    useRequestTerrainDerivative: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useDeleteTerrainDerivative: () => ({ mutateAsync: vi.fn(), isPending: false }),
+    useMapConfig: () => ({ data: config }),
   };
 });
 
@@ -87,6 +113,7 @@ beforeEach(() => {
   uploadMutate.mockReset().mockResolvedValue({ reference: 'r1', sizeBytes: 1 });
   directoriesEnabled.mockReset();
   builds = [];
+  config = undefined;
   capabilities = { domains: { terrain: 'read, execute, delete' }, isFullAdmin: false };
   vi.spyOn(Map.prototype, 'addInteraction');
 });
@@ -121,6 +148,21 @@ describe('TerrainPage', () => {
     capabilities = { domains: { terrain: 'read, execute' }, isFullAdmin: false };
     show();
     expect(screen.getByRole('button', { name: /Start build/ })).toBeInTheDocument();
+  });
+
+  // The same bar, on the pictures drawn from a build: a reader sees the form and the register,
+  // and can send nothing; somebody who may execute can.
+  it('shows the derived-picture form to a reader without letting them send it', () => {
+    capabilities = { domains: { terrain: 'read' }, isFullAdmin: false };
+    const reader = show();
+    expect(screen.getByTestId('terrain-derivative-needs-execute')).toBeInTheDocument();
+    expect(screen.getByTestId('terrain-derivative-submit')).toBeDisabled();
+    expect(screen.getByTestId('terrain-derivatives')).toBeInTheDocument();
+    reader.unmount();
+
+    capabilities = { domains: { terrain: 'read, execute' }, isFullAdmin: false };
+    show();
+    expect(screen.queryByTestId('terrain-derivative-needs-execute')).not.toBeInTheDocument();
   });
 
   it('offers a directory on the server only to a full administrator, and asks for none otherwise', () => {
@@ -262,6 +304,44 @@ describe('TerrainPage', () => {
     expect(pending).not.toHaveTextContent('good.tif');
     expect(screen.getByRole('button', { name: /Start build/ })).toBeDisabled();
     expect(submitMutate).not.toHaveBeenCalled();
+  });
+
+  // A terrain address in the configuration wins over the chosen build, and the server refuses
+  // nothing: the row says "being drawn" while the scene draws something else. The page is the
+  // one place that can say so, and it has to name the setting rather than describe it.
+  it('says when a configured terrain address overrides the chosen build, and only then', () => {
+    const chosen = {
+      url: '/terrain/builds/0a1b2c3d4e5f/tiles',
+      attribution: null,
+      surveyHeightOffsetM: 0,
+      origin: 'build' as const,
+      buildId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+    };
+    const configured = {
+      url: 'https://terrain.example/tiles',
+      attribution: null,
+      surveyHeightOffsetM: 0,
+      origin: 'configured' as const,
+      buildId: null,
+    };
+
+    config = mapConfig(configured, chosen);
+    const overridden = show();
+    const notice = screen.getByTestId('terrain-configured-override');
+    expect(notice).toHaveTextContent('SILEXGIS__Terrain__Url');
+    expect(notice).toHaveTextContent('0a1b2c3d');
+    overridden.unmount();
+
+    // The chosen build is what the scene draws: nothing to say.
+    config = mapConfig(chosen, configured);
+    const drawn = show();
+    expect(screen.queryByTestId('terrain-configured-override')).not.toBeInTheDocument();
+    drawn.unmount();
+
+    // A configured address with no chosen build overrides nothing.
+    config = mapConfig(configured, null);
+    show();
+    expect(screen.queryByTestId('terrain-configured-override')).not.toBeInTheDocument();
   });
 
   it('turns a refusal into the sentence it deserves', async () => {

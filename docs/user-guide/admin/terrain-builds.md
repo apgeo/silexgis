@@ -140,9 +140,16 @@ Two refusals worth knowing:
 - **You cannot delete a running build.** Its files are being written right now; it can be
   removed once it has stopped, whichever way it stops.
 
+One state worth knowing about, because nothing refuses it: **if the installation's configuration
+names a terrain address of its own** (`SILEXGIS__Terrain__Url`), that address wins over whichever
+build is chosen here. The build is recorded as being drawn and the scene draws the configured
+pyramid instead. The Terrain page then shows a warning above the list naming the overridden build
+and the setting; the chosen build is drawn once that setting is removed and the application
+restarted.
+
 ---
 
-## Pictures drawn from a build
+## Derived pictures of the ground
 
 A finished build's elevation can also be turned into **pictures of the ground** — shaded relief,
 steepness, facing, ruggedness, topographic position, roughness, or a colour relief. They are
@@ -150,25 +157,70 @@ computed once by the installation, on the same worker that makes builds, and the
 permission to read terrain sees them in the map's layer list under **Ground pictures**: switch one
 on, and it draws beneath the caves.
 
+### Asking for one
+
+The **Derived pictures** card on the Terrain page, below the builds. Asking needs the right to
+**execute** on terrain — the same right that starts a build. Without it the card is still shown,
+greyed out, with a line saying which right is missing; the register beneath it stays readable.
+
+| Field | |
+|---|---|
+| **Build** | Which finished build to draw from. Only builds that ran to the end are offered, and the form opens on the one the scene is drawing — a picture of any other ground would be out of date the moment it was finished |
+| **Picture** | Which kind. Each kind shows only the settings it reads |
+| **Name** | What the layer list calls it. It follows the kind until you type one of your own |
+
+The settings, by kind:
+
+- **Shaded relief**: one light or four. Under a single light every slope facing away from it is
+  flat black, and a doline in that shadow is invisible; four lights keep it readable. For one
+  light, where it stands — clockwise from north, with the north-west as the convention — and how
+  high. **Height exaggeration** multiplies every height first; past a few times a gentle landscape
+  is a wall of saturated pixels, and the form refuses more than a hundred.
+- **Steepness** and **facing**: the slope arithmetic (Horn, for real and noisy elevation, or
+  Zevenbergen–Thorne, sharper on clean surfaces) and, for steepness, degrees or percent.
+- **Ruggedness**: Riley's definition, which published ruggedness classes are stated against, or
+  Wilson's, which gives different numbers — the two are never comparable.
+- **Coloured relief**: a colour at each height, in metres. At least two stops, no two at the same
+  height; the ground between two heights is painted with the blend.
+- Every kind: whether the outermost cells are computed from the neighbours they have. Off, every
+  raster of a build meets its neighbour with a hairline gap through the picture.
+
+**Request picture** queues it. Asking again for a picture the installation already holds — same
+build, same kind, same settings — answers with the one that exists rather than computing it twice.
+
+### Steepness and facing are approximate
+
+Both are computed on a **grid of degrees with one horizontal scale** for both axes. A degree of
+longitude at Carpathian latitudes is about seven tenths of a degree of latitude, so the arithmetic
+sees east–west ground as gentler than it is: **steepness is understated by around ten degrees on
+slopes facing east or west**, and **facing is pulled towards north or south**. Nothing cheap
+corrects it, so the product does not present those numbers as measurements. Both kinds carry the
+qualifier *approximate — degree grid, not corrected for latitude* in their names wherever they are
+listed, and the form says the same in plain words when either is chosen. Read them as pictures of
+where the ground is steep and which way it faces, not as figures to quote.
+
+### The register
+
+The **Register of derived pictures** lists every picture the installation holds: its name and
+kind, the **parameters** it was computed with (only those its kind reads), the **build** it came
+from, its **state** (*Queued · Computing · Ready · Failed* — a failure explains itself in the
+worker's own words), what it keeps **on disk**, and when it was requested. The list re-reads itself
+while anything is still being computed.
+
 Each picture belongs to the build it was drawn from. **When you activate a different build, every
-picture drawn from the old one is marked out of date** and says so beside its name in the layer
-list. It is still there and still draws — an out-of-date shaded relief is often better than none —
-but you can see at a glance that the ground beneath it has been replaced, which is the one thing
-that would otherwise look like a fault in the cave data.
+picture drawn from the old one is marked "Out of date"** — in the register and beside its name in
+the layer list. It is still there and still draws — an out-of-date shaded relief is often better
+than none — but you can see at a glance that the ground beneath it has been replaced, which is the
+one thing that would otherwise look like a fault in the cave data.
 
-Two notes on what this is and is not:
+**Delete**, behind a confirmation that names what it frees, removes the picture and its rasters.
+It needs the right to **delete** on terrain. The files sit under the build itself, so **deleting a
+build deletes its pictures with it**.
 
-- **Asking for a picture is currently done through the interface's programming interface, not from
-  a page.** The Terrain page does not yet have a form for it. Once a picture exists, everything a
-  reader does with it — switching it on, its transparency, its size, the out-of-date mark — is in
-  the layer list.
-- **Some things cannot be computed here and are not offered under a borrowed name.** Geomorphons,
-  curvature, and flow direction, flow accumulation and the wetness index are not produced by the
-  elevation library this installation uses, so they are absent rather than approximated by something
-  that resembles them.
-
-The files sit under the build itself, so **deleting a build deletes its pictures with it**, and
-their size is reported beside them in the layer list.
+**Some things cannot be computed here and are not offered under a borrowed name.** Geomorphons,
+curvature, and flow direction, flow accumulation and the wetness index are not produced by the
+elevation library this installation uses, so they are absent rather than approximated by something
+that resembles them.
 
 ---
 

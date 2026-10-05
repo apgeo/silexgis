@@ -140,34 +140,91 @@ Două refuzuri de reținut:
 - **Nu puteți șterge o generare în curs.** Fișierele ei se scriu chiar acum; poate fi eliminată
   după ce se oprește, indiferent cum se oprește.
 
+O stare de reținut, pentru că nimic nu o refuză: **dacă configurația instalării numește o adresă
+de relief proprie** (`SILEXGIS__Terrain__Url`), acea adresă are prioritate față de orice generare
+aleasă aici. Generarea este înregistrată ca fiind desenată, iar scena desenează în schimb piramida
+configurată. Pagina Relief arată atunci un avertisment deasupra listei, care numește generarea
+suprascrisă și setarea; generarea aleasă se desenează după ce setarea este scoasă și aplicația
+repornită.
+
 ---
 
-## Imagini desenate dintr-o generare
+## Imagini derivate ale terenului
 
 Altitudinile unei generări încheiate pot fi transformate și în **imagini ale terenului** — relief
-umbrit, pantă, orientare, rugozitate, poziție topografică, asperitate sau un relief colorat. Sunt
+umbrit, pantă, orientare, asperitate, poziție topografică, rugozitate sau un relief colorat. Sunt
 calculate o singură dată de instalare, pe același lucrător care face generările, iar apoi oricine
 are dreptul de a citi terenul le vede în lista de straturi a hărții, la **Imagini ale terenului**:
 activați una și se desenează sub peșteri.
 
+### Cum se cere una
+
+Cardul **Imagini derivate** de pe pagina Relief, sub generări. Cererea are nevoie de dreptul de
+**execuție** asupra reliefului — același drept care pornește o generare. Fără el, cardul se vede în
+continuare, dezactivat, cu un rând care spune ce drept lipsește; registrul de sub el rămâne de
+citit.
+
+| Câmp | |
+|---|---|
+| **Generare** | Din ce generare încheiată se desenează. Se oferă doar generările care au mers până la capăt, iar formularul se deschide pe cea pe care o desenează scena — o imagine a oricărui alt teren ar fi depășită din clipa în care s-ar termina |
+| **Imagine** | Ce fel. Fiecare fel arată doar setările pe care le citește |
+| **Nume** | Cum o numește lista de straturi. Urmează felul imaginii până scrieți unul al dumneavoastră |
+
+Setările, pe feluri:
+
+- **Relief umbrit**: o lumină sau patru. Sub o singură lumină, orice versant întors de la ea este
+  negru complet, iar o dolină din umbra aceea este invizibilă; patru lumini o păstrează lizibilă.
+  Pentru o lumină, de unde vine — în sensul acelor de ceasornic de la nord, cu nord-vestul drept
+  convenție — și cât de sus stă. **Exagerarea înălțimilor** înmulțește mai întâi fiecare înălțime;
+  dincolo de câteva ori, un peisaj blând devine un perete de pixeli saturați, iar formularul refuză
+  peste o sută.
+- **Pantă** și **orientare**: calculul pantei (Horn, pentru altitudini reale, cu zgomot, sau
+  Zevenbergen–Thorne, mai clar pe suprafețe curate) și, pentru pantă, grade sau procente.
+- **Asperitate**: definiția lui Riley, față de care sunt enunțate clasele de asperitate publicate,
+  sau a lui Wilson, care dă alte numere — cele două nu sunt niciodată comparabile.
+- **Relief colorat**: o culoare la fiecare înălțime, în metri. Cel puțin două trepte, niciodată
+  două la aceeași înălțime; terenul dintre două înălțimi se pictează cu amestecul lor.
+- Orice fel: dacă celulele de la margine se calculează din vecinii pe care îi au. Oprit, fiecare
+  rastru al generării se întâlnește cu vecinul lui printr-o linie goală prin imagine.
+
+**Cere imaginea** o pune la coadă. Cererea din nou a unei imagini pe care instalarea o are deja —
+aceeași generare, același fel, aceleași setări — răspunde cu cea existentă în loc să o calculeze de
+două ori.
+
+### Panta și orientarea sunt aproximative
+
+Ambele se calculează pe o **grilă în grade cu o singură scară orizontală** pentru ambele axe. Un
+grad de longitudine la latitudinile Carpaților este cam șapte zecimi dintr-un grad de latitudine,
+așa că aritmetica vede terenul est–vest mai blând decât este: **panta este subestimată cu vreo zece
+grade pe versanții orientați spre est sau vest**, iar **orientarea este trasă spre nord sau sud**.
+Nimic ieftin nu corectează asta, așa că produsul nu prezintă acele numere ca măsurători. Ambele
+feluri poartă precizarea *aproximativă — grilă în grade, necorectată pentru latitudine* în numele
+lor oriunde sunt listate, iar formularul spune același lucru în cuvinte simple când este ales unul
+dintre ele. Citiți-le ca imagini ale locului unde terenul e abrupt și încotro e întors, nu ca cifre
+de citat.
+
+### Registrul
+
+**Registrul imaginilor derivate** listează fiecare imagine pe care o are instalarea: numele și
+felul, **parametrii** cu care a fost calculată (doar cei pe care felul ei îi citește), **generarea**
+din care vine, **starea** (*La coadă · În calcul · Gata · Eșuată* — un eșec se explică singur, în
+cuvintele lucrătorului), cât ține **pe disc** și când a fost cerută. Lista se recitește singură cât
+timp ceva este încă în calcul.
+
 Fiecare imagine aparține generării din care a fost desenată. **Când activați o altă generare, orice
-imagine desenată din cea veche este marcată ca depășită** și o spune lângă numele ei în lista de
-straturi. Rămâne acolo și se desenează în continuare — un relief umbrit depășit este adesea mai bun
-decât niciunul — dar se vede dintr-o privire că terenul de sub ea a fost înlocuit, ceea ce altfel ar
-părea o problemă a datelor despre peșteri.
+imagine desenată din cea veche este marcată „Depășită"** — în registru și lângă numele ei în lista
+de straturi. Rămâne acolo și se desenează în continuare — un relief umbrit depășit este adesea mai
+bun decât niciunul — dar se vede dintr-o privire că terenul de sub ea a fost înlocuit, ceea ce
+altfel ar părea o problemă a datelor despre peșteri.
 
-Două precizări despre ce este și ce nu este aceasta:
+**Șterge**, în spatele unei confirmări care spune ce eliberează, elimină imaginea și rasterele ei.
+Are nevoie de dreptul de **ștergere** asupra reliefului. Fișierele stau sub generarea însăși, deci
+**ștergerea unei generări îi șterge și imaginile**.
 
-- **Cererea unei imagini se face deocamdată prin interfața de programare, nu dintr-o pagină.**
-  Pagina Teren nu are încă un formular pentru ea. Odată ce o imagine există, tot ce face un cititor
-  cu ea — activarea, transparența, dimensiunea, marcajul de depășire — se află în lista de straturi.
-- **Unele lucruri nu pot fi calculate aici și nu sunt oferite sub un nume împrumutat.** Geomorfonii,
-  curbura și direcția scurgerii, acumularea scurgerii și indicele de umiditate nu sunt produse de
-  biblioteca de altitudini folosită de această instalare, deci lipsesc în loc să fie aproximate prin
-  ceva care le seamănă.
-
-Fișierele stau sub generarea însăși, deci **ștergerea unei generări îi șterge și imaginile**, iar
-dimensiunea lor este raportată lângă ele în lista de straturi.
+**Unele lucruri nu pot fi calculate aici și nu sunt oferite sub un nume împrumutat.** Geomorfonii,
+curbura și direcția scurgerii, acumularea scurgerii și indicele de umiditate nu sunt produse de
+biblioteca de altitudini folosită de această instalare, deci lipsesc în loc să fie aproximate prin
+ceva care le seamănă.
 
 ---
 

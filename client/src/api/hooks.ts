@@ -9351,13 +9351,29 @@ export function useTerrainDerivatives(enabled = true) {
     queryKey: queryKeys.terrainDerivatives,
     queryFn: () => unwrap(api.GET('/api/v1/terrain/derivatives')),
     enabled,
-    refetchInterval: (query) =>
-      (query.state.data ?? []).some(
-        (layer) => layer.status === 'queued' || layer.status === 'computing',
-      )
-        ? 2000
-        : TERRAIN_DERIVATIVE_REFRESH_MS,
+    refetchInterval: (query) => terrainDerivativePollInterval(query.state.data),
   });
+}
+
+/** A picture that is still being drawn, or waiting its turn to be. */
+export function terrainDerivativeUnsettled(status: TerrainDerivativeLayerInfo['status']): boolean {
+  return status === 'queued' || status === 'computing';
+}
+
+/**
+ * How often the register of pictures is re-read: closely while any is still being computed, and
+ * slowly the rest of the time.
+ *
+ * Never off, unlike the builds list, because the addresses in each raster expire; and a rule of
+ * its own, exported, for the same reason that list's is — a register left open on finished
+ * pictures must drop to the slow rate, and that is only provable by naming the rule it uses.
+ */
+export function terrainDerivativePollInterval(
+  items: { status: TerrainDerivativeLayerInfo['status'] }[] | undefined,
+): number {
+  return (items ?? []).some((layer) => terrainDerivativeUnsettled(layer.status))
+    ? 2000
+    : TERRAIN_DERIVATIVE_REFRESH_MS;
 }
 
 /** Asks for a picture of the ground to be computed from one elevation build. */

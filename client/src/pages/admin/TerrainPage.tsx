@@ -5,6 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { hasAccessAction, useCapabilities } from '../../api/hooks.ts';
 import TerrainBuildForm from './terrain/TerrainBuildForm.tsx';
 import TerrainBuildList from './terrain/TerrainBuildList.tsx';
+import TerrainConfiguredNotice from './terrain/TerrainConfiguredNotice.tsx';
+import TerrainDerivativeForm from './terrain/TerrainDerivativeForm.tsx';
+import TerrainDerivativeList from './terrain/TerrainDerivativeList.tsx';
 import { TerrainWorkerNotice } from './terrain/TerrainWorkerMissing.tsx';
 
 /**
@@ -51,7 +54,20 @@ export default function TerrainPage() {
       */}
       <TerrainWorkerNotice />
       <TerrainBuildForm canExecute={canExecute} isFullAdmin={capabilities.isFullAdmin} />
+      {/*
+        Directly above the list whose "being drawn" badge it contradicts: a configured terrain
+        address wins over the chosen build without the server refusing anything, so the row would
+        otherwise say one thing and the scene do another.
+      */}
+      <TerrainConfiguredNotice />
       <TerrainBuildList canExecute={canExecute} canDelete={canDelete} />
+      {/*
+        Below the builds rather than among them: a picture is made from a build that has finished,
+        so somebody arrives here having first seen which builds there are. Asking for one is held
+        under execute, as starting a build is; removing one under delete, as removing a build is.
+      */}
+      <TerrainDerivativeForm canExecute={canExecute} />
+      <TerrainDerivativeList canDelete={canDelete} />
     </Flex>
   );
 }

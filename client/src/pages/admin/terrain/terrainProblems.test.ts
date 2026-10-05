@@ -29,6 +29,9 @@ const codes = [
   'terrain_build.not_published',
   'terrain_build.active',
   'terrain_build.running',
+  'terrain_derivative.build_not_found',
+  'terrain_derivative.not_found',
+  'terrain_derivative.not_ready',
 ];
 
 const enProblems: Record<string, string> = en.terrain.problems;

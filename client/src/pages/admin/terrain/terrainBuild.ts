@@ -18,6 +18,16 @@ export const TERRAIN_WORKER_COMMAND =
   'docker compose -f docker-compose.yml -f docker-compose.terrain-worker.yml up -d';
 
 /**
+ * The setting that names a terrain address of the installation's own.
+ *
+ * While it is set, the scene draws that pyramid whatever build an administrator chooses here, and
+ * nothing in the server's answer refuses the choice — the build is recorded as chosen and simply
+ * not drawn. Written out, as the other two are, because the only way out of that state is to
+ * remove this exact line from the environment file.
+ */
+export const TERRAIN_URL_SETTING = 'SILEXGIS__Terrain__Url';
+
+/**
  * Whether a build stopped because this installation has nothing that can turn rasters into tiles.
  *
  * This is the only signal there is. Nothing the server publishes says in advance whether the bake

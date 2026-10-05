@@ -34,6 +34,12 @@ export const TERRAIN_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   'terrain_build.not_published': 'terrain.problems.notPublished',
   'terrain_build.active': 'terrain.problems.active',
   'terrain_build.running': 'terrain.problems.running',
+  // The pictures computed from a build: asking for one over a build that is gone, and removing
+  // one that already is. The third is answered to a tile reader fetching a picture before it is
+  // finished, which the register never does — worded all the same, because the code exists.
+  'terrain_derivative.build_not_found': 'terrain.problems.derivativeBuildNotFound',
+  'terrain_derivative.not_found': 'terrain.problems.derivativeNotFound',
+  'terrain_derivative.not_ready': 'terrain.problems.derivativeNotReady',
 };
 
 export function terrainProblemMessage(
