@@ -32,6 +32,12 @@ export const TERRAIN_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   // The three the list's own actions run into: choosing a build that never published, and
   // deleting one that is either being drawn or still being written.
   'terrain_build.not_published': 'terrain.problems.notPublished',
+  'terrain_build.base_not_found': 'terrain.problems.baseNotFound',
+  'terrain_build.base_unchecked': 'terrain.problems.baseUnchecked',
+  'terrain_build.base_not_published': 'terrain.problems.baseNotPublished',
+  'terrain_build.base_depth_differs': 'terrain.problems.baseDepthDiffers',
+  'terrain_build.base_datum_differs': 'terrain.problems.baseDatumDiffers',
+  'terrain_build.being_extended': 'terrain.problems.beingExtended',
   'terrain_build.active': 'terrain.problems.active',
   'terrain_build.running': 'terrain.problems.running',
   // The pictures computed from a build: asking for one over a build that is gone, and removing

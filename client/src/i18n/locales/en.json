@@ -104,7 +104,12 @@
       "geoidHeightHint": "How far the local sea-level surface sits above the ellipsoid here. Used only for ellipsoidal heights.",
       "start": "Start build",
       "started": "The build has been queued.",
-      "bakeService": "Turning that data into tiles needs a service of its own, which a plain installation does not run. If this one does not, the build stops at that step and this page then says what to type to enable it; everything before that step still happens."
+      "bakeService": "Turning that data into tiles needs a service of its own, which a plain installation does not run. If this one does not, the build stops at that step and this page then says what to type to enable it; everything before that step still happens.",
+      "extend": "Extend a finished build",
+      "extendNone": "No — mesh a new pyramid",
+      "extendHint": "Add the new rasters to a build that is already baked instead of meshing the whole region again. The new build starts from a copy of that build’s tiles and costs only what is added; the base stays as it is.",
+      "extendOption": "{{id}} · level {{depth}} · {{area}}",
+      "extendLocked": "This build extends another, so its depth (level {{depth}}) and its heights are the base’s and cannot be changed; coverage is not obtained again unless asked for."
     },
     "statuses": {
       "queued": "Queued",
@@ -177,7 +182,13 @@
       "running": "That build has not finished. Its files are being written right now, so it can be removed once it has stopped, whichever way it stops.",
       "derivativeBuildNotFound": "That build is no longer here, or has nothing to draw the ground from.",
       "derivativeNotFound": "That picture is no longer here.",
-      "derivativeNotReady": "That picture is not finished yet, so there is nothing to fetch."
+      "derivativeNotReady": "That picture is not finished yet, so there is nothing to fetch.",
+      "baseNotFound": "The build to extend no longer exists.",
+      "baseUnchecked": "The build to extend never had its tiles read back and found whole, so there is nothing known-good to add to.",
+      "baseNotPublished": "The build to extend has no tiles where terrain is served from any more. Start a fresh build over the whole area instead.",
+      "baseDepthDiffers": "An extension is built to the depth of the build it extends; the addition cannot re-mesh the tiles already there at another one.",
+      "baseDatumDiffers": "An extension measures its heights the way the build it extends does; two datums in one pyramid meet in a step along the join.",
+      "beingExtended": "Another build that extends this one has not finished and still reads its tiles. Remove it once that build has stopped."
     },
     "derivatives": {
       "title": "Ground pictures",

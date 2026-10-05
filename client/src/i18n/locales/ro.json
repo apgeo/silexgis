@@ -104,7 +104,12 @@
       "geoidHeightHint": "Cât de sus se află aici suprafața locală a nivelului mării față de elipsoid. Se folosește doar pentru altitudini elipsoidale.",
       "start": "Pornește generarea",
       "started": "Generarea a fost pusă la coadă.",
-      "bakeService": "Transformarea acestor date în dale are nevoie de un serviciu separat, pe care o instalare obișnuită nu îl rulează. Dacă aceasta nu îl rulează, generarea se oprește la pasul acela, iar pagina spune atunci ce trebuie scris ca să fie pornit; tot ce se face înainte de pasul acela se face oricum."
+      "bakeService": "Transformarea acestor date în dale are nevoie de un serviciu separat, pe care o instalare obișnuită nu îl rulează. Dacă aceasta nu îl rulează, generarea se oprește la pasul acela, iar pagina spune atunci ce trebuie scris ca să fie pornit; tot ce se face înainte de pasul acela se face oricum.",
+      "extend": "Extinde o generare terminată",
+      "extendNone": "Nu — generează o piramidă nouă",
+      "extendHint": "Adaugă rasterele noi la o generare deja coaptă în loc să refaci toată regiunea. Noua generare pornește de la o copie a dalelor acelei generări și costă doar ce se adaugă; baza rămâne așa cum este.",
+      "extendOption": "{{id}} · nivelul {{depth}} · {{area}}",
+      "extendLocked": "Această generare o extinde pe alta, așa că adâncimea ei (nivelul {{depth}}) și înălțimile sunt ale bazei și nu pot fi schimbate; acoperirea nu se mai obține încă o dată decât la cerere."
     },
     "statuses": {
       "queued": "La coadă",
@@ -177,7 +182,13 @@
       "running": "Generarea nu s-a încheiat. Fișierele ei se scriu chiar acum, așa că poate fi ștearsă după ce se oprește, oricum s-ar opri.",
       "derivativeBuildNotFound": "Generarea nu mai există sau nu are din ce desena terenul.",
       "derivativeNotFound": "Imaginea nu mai există.",
-      "derivativeNotReady": "Imaginea nu este încă gata, așa că nu este nimic de adus."
+      "derivativeNotReady": "Imaginea nu este încă gata, așa că nu este nimic de adus.",
+      "baseNotFound": "Generarea de extins nu mai există.",
+      "baseUnchecked": "Generarea de extins nu a avut niciodată dalele citite înapoi și găsite întregi, așa că nu există nimic sigur la care să se adauge.",
+      "baseNotPublished": "Generarea de extins nu mai are dale acolo de unde se servește terenul. Pornește în schimb o generare nouă peste toată zona.",
+      "baseDepthDiffers": "O extensie se construiește la adâncimea generării pe care o extinde; adăugarea nu poate re-face dalele deja existente la alta.",
+      "baseDatumDiffers": "O extensie își măsoară înălțimile așa cum le măsoară generarea pe care o extinde; două referințe într-o singură piramidă se întâlnesc într-o treaptă de-a lungul îmbinării.",
+      "beingExtended": "O altă generare care o extinde pe aceasta nu s-a terminat și încă îi citește dalele. Șterge-o după ce acea generare s-a oprit."
     },
     "derivatives": {
       "title": "Imagini ale terenului",

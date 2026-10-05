@@ -21,13 +21,15 @@ import {
 import type { UploadFile } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
+  useTerrainBuilds,
   useSubmitTerrainBuild,
   useTerrainSourceDirectories,
   useUploadTerrainRaster,
   type TerrainBuildSourceRequest,
   type TerrainHeightDatum,
 } from '../../../api/hooks.ts';
-import { areaTooLarge, type TerrainBbox } from './terrainArea.ts';
+import { areaTooLarge, formatBbox, type TerrainBbox } from './terrainArea.ts';
+import { geometryBbox } from './terrainBuild.ts';
 import { DEFAULT_DEPTH, MAX_DEPTH, MIN_DEPTH, depthBand, depthExceedsCoverage } from './terrainDepth.ts';
 import { terrainProblemMessage } from './terrainProblems.ts';
 import TerrainAreaField from './TerrainAreaField.tsx';
@@ -44,8 +46,16 @@ const MAX_RASTER_BYTES = 512 * 1024 * 1024;
 /** The extensions the pipeline will try to open; anything else is a wasted upload. */
 const RASTER_EXTENSIONS = ['.asc', '.dem', '.hgt', '.img', '.tif', '.tiff'];
 
+/**
+ * How many finished builds the extension picker offers, newest first — its own page rather than
+ * the list's page of ten, so a build finished long ago stays extendable.
+ */
+const EXTENDABLE_BUILD_CHOICES = 100;
+
 interface FormValues {
   area: TerrainBbox | null;
+  /** The finished build to add the new rasters to, or null for a build meshed from nothing. */
+  baseBuildId: string | null;
   fetchCoverage: boolean;
   maxDepth: number;
   attribution: string;
@@ -57,6 +67,7 @@ interface FormValues {
 
 const emptyValues: FormValues = {
   area: null,
+  baseBuildId: null,
   fetchCoverage: true,
   maxDepth: DEFAULT_DEPTH,
   attribution: '',
@@ -92,6 +103,12 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
   const submit = useSubmitTerrainBuild();
   const upload = useUploadTerrainRaster();
   const directories = useTerrainSourceDirectories(canExecute && isFullAdmin);
+  const { data: builds } = useTerrainBuilds({ page: 1, pageSize: EXTENDABLE_BUILD_CHOICES }, canExecute);
+  // Only a build whose tiles were read back and found whole can be added to: the server refuses
+  // the rest, so the picker does not offer them.
+  const extendable = (builds?.items ?? []).filter(
+    (build) => build.status === 'succeeded' && !!build.pyramidVersion,
+  );
 
   const [files, setFiles] = useState<UploadFile[]>([]);
   // The references the server handed back for what has been sent, keyed by the file the browser
@@ -109,6 +126,29 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
   const maxDepth = values.maxDepth ?? emptyValues.maxDepth;
   const directory = values.directory ?? '';
   const heightDatum = values.heightDatum ?? emptyValues.heightDatum;
+  const base = extendable.find((build) => build.id === values.baseBuildId);
+
+  /**
+   * Names the build to extend, or clears it. An extension inherits the base's depth and heights —
+   * the addition cannot re-mesh the tiles already there at another depth, and tiles holding
+   * heights from two datums meet in a forty-metre step along the join — so those fields are set
+   * from the base and held, and coverage is not obtained again because the base already holds it.
+   * Clearing leaves the fields where they are: what was inherited is still a sensible build.
+   */
+  const chooseBase = (id: string | undefined) => {
+    const chosen = extendable.find((build) => build.id === id);
+    const next: Partial<FormValues> = chosen
+      ? {
+          baseBuildId: chosen.id,
+          maxDepth: chosen.requestedMaxDepth,
+          heightDatum: chosen.heightDatum,
+          geoidHeightM: chosen.geoidHeightM,
+          fetchCoverage: false,
+        }
+      : { baseBuildId: null };
+    form.setFieldsValue(next);
+    setValues((current) => ({ ...current, ...next }));
+  };
 
   const uploadedReferences = files
     .map((file) => references[file.uid])
@@ -147,7 +187,12 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
     const licence = (submitted.licence ?? '').trim() || null;
     const named = (submitted.directory ?? '').trim();
     const wantsCoverage = submitted.fetchCoverage ?? emptyValues.fetchCoverage;
-    const datum = submitted.heightDatum ?? emptyValues.heightDatum;
+    // An extension's depth and heights are the base's, read off the base rather than off the
+    // form: the heights fields sit in a panel that is closed by default, and a closed panel's
+    // fields are not part of what the form reports.
+    const datum = base?.heightDatum ?? submitted.heightDatum ?? emptyValues.heightDatum;
+    const geoidHeightM = base?.geoidHeightM ?? submitted.geoidHeightM ?? 0;
+    const depth = base?.requestedMaxDepth ?? submitted.maxDepth ?? emptyValues.maxDepth;
     const sources: TerrainBuildSourceRequest[] = [
       ...uploadedReferences.map((reference) => ({
         kind: 'uploaded' as const,
@@ -175,13 +220,14 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
         south,
         east,
         north,
-        maxDepth: submitted.maxDepth ?? emptyValues.maxDepth,
+        maxDepth: depth,
         heightDatum: datum,
         // Only meaningful when the heights are measured from the ellipsoid; sending anything else
         // for an orthometric build would record a correction that is never applied.
-        geoidHeightM: datum === 'ellipsoidal' ? (submitted.geoidHeightM ?? 0) : 0,
+        geoidHeightM: datum === 'ellipsoidal' ? geoidHeightM : 0,
         fetchCoverage: wantsCoverage,
         sources,
+        ...(submitted.baseBuildId ? { baseBuildId: submitted.baseBuildId } : {}),
       });
       message.success(t('terrain.form.started'));
       form.resetFields();
@@ -217,6 +263,38 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
             style={{ marginBottom: 16 }}
             data-testid="terrain-area-too-large"
             message={t('terrain.form.areaTooLarge')}
+          />
+        )}
+
+        {extendable.length > 0 && (
+          <Form.Item
+            name="baseBuildId"
+            label={t('terrain.form.extend')}
+            extra={t('terrain.form.extendHint')}
+          >
+            <Select
+              allowClear
+              placeholder={t('terrain.form.extendNone')}
+              data-testid="terrain-extend-base"
+              onChange={(id: string | undefined) => chooseBase(id)}
+              options={extendable.map((build) => ({
+                value: build.id,
+                label: t('terrain.form.extendOption', {
+                  id: build.id.slice(0, 8),
+                  depth: build.requestedMaxDepth,
+                  area: formatBbox(geometryBbox(build.extent)),
+                }),
+              }))}
+            />
+          </Form.Item>
+        )}
+        {base && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            data-testid="terrain-extend-locked"
+            message={t('terrain.form.extendLocked', { depth: base.requestedMaxDepth })}
           />
         )}
 
@@ -330,6 +408,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
         <Flex gap={16} align="start">
           <Form.Item name="maxDepth" style={{ flex: 1, marginBottom: 0 }}>
             <Slider
+              disabled={!!base}
               min={MIN_DEPTH}
               max={MAX_DEPTH}
               marks={{
@@ -341,6 +420,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
           </Form.Item>
           <Form.Item name="maxDepth" label={t('terrain.form.depth')} noStyle>
             <InputNumber
+              disabled={!!base}
               min={MIN_DEPTH}
               max={MAX_DEPTH}
               aria-label={t('terrain.form.depth')}
@@ -379,6 +459,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
                     style={{ flex: '1 1 240px' }}
                   >
                     <Select
+                      disabled={!!base}
                       options={[
                         { value: 'orthometric', label: t('terrain.heightDatums.orthometric') },
                         { value: 'ellipsoidal', label: t('terrain.heightDatums.ellipsoidal') },
@@ -392,7 +473,13 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
                       extra={t('terrain.form.geoidHeightHint')}
                       style={{ flex: '1 1 240px' }}
                     >
-                      <InputNumber min={-200} max={200} step={0.1} style={{ width: '100%' }} />
+                      <InputNumber
+                        disabled={!!base}
+                        min={-200}
+                        max={200}
+                        step={0.1}
+                        style={{ width: '100%' }}
+                      />
                     </Form.Item>
                   )}
                 </Flex>

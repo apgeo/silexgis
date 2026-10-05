@@ -24629,6 +24629,8 @@ export interface components {
             finishedAt: null | string;
             /** Format: date-time */
             updatedAt: string;
+            /** Format: uuid */
+            baseBuildId: null | string;
         };
         /** @enum {unknown} */
         TerrainBuildPhase: "pending" | "fetch" | "prepare" | "bake" | "validate" | "publish";
@@ -24639,6 +24641,7 @@ export interface components {
             reference: string;
             attribution: string;
             licence: null | string;
+            inherited: boolean;
         };
         /** @enum {unknown} */
         TerrainBuildSourceKind: "fetched" | "uploaded" | "serverDirectory";
@@ -24666,6 +24669,8 @@ export interface components {
             geoidHeightM: null | number;
             fetchCoverage?: null | boolean;
             sources?: null | components["schemas"]["TerrainBuildSourceRequest"][];
+            /** Format: uuid */
+            baseBuildId?: null | string;
         };
         TerrainColourStop: {
             /** Format: double */

@@ -101,6 +101,33 @@ a nivelului mării față de elipsoid.
 
 ---
 
+## Adăugarea unui raster la o generare pe care o aveți deja
+
+O topografie nouă peste un teren deja copt nu trebuie să coste din nou toată regiunea. Când porniți
+o generare, puteți numi o **generare terminată de extins**. Noua generare pornește de la o copie a
+dalelor acelei generări, utilitarul adaugă rasterele dumneavoastră noi la copie fără a reface ce
+există deja, iar rezultatul este verificat și publicat ca o generare de sine stătătoare.
+
+**Cât costă.** Dalele rasterelor noi și o copie a piramidei de bază pe disc. Pentru o insulă fină
+peste o regiune coaptă înseamnă minute, nu ore: prețul urmează ce adăugați, nu mărimea regiunii.
+
+**Adâncimea trebuie să fie a bazei.** Adăugarea face dale numai pentru rasterele noi; nu poate
+reface dalele existente la altă adâncime, așa că o extensie cerută la altă adâncime este refuzată,
+nu făcută pe jumătate. Înălțimile se măsoară la fel ca ale bazei, din același motiv. Acoperirea nu
+se mai obține încă o dată decât dacă o cereți — baza o are deja — așa că o extensie trebuie să
+numească cel puțin un raster sau să ceară acoperire pentru teren nou.
+
+**Baza se păstrează.** Rămâne în listă, desenabilă și neschimbată; extensia este o generare
+separată, la o adresă separată, care poartă sursele și creditul bazei ca ale ei împreună cu ce ați
+adăugat. Puteți șterge baza după ce extensia s-a terminat — nu înainte, pentru că până atunci
+extensia încă îi citește dalele.
+
+**O bază trebuie să fie întreagă.** Numai o generare care și-a terminat verificarea și ale cărei
+dale sunt încă acolo de unde se servește terenul poate fi extinsă; una care încă rulează, s-a oprit
+înaintea verificării sau i s-au șters dalele este refuzată, iar mesajul spune care este cazul.
+
+---
+
 ## Urmărirea unei generări
 
 Stare: **În așteptare · În rulare · Terminată · Eșuată.**

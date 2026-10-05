@@ -223,7 +223,7 @@ describe('the pipeline view', () => {
       build: failed,
       logTail: 'CRITICAL memory pressure\nstopping',
       sources: [
-        { id: 1, kind: 'fetched', reference: 'copernicus', attribution: 'Copernicus', licence: null },
+        { id: 1, kind: 'fetched', reference: 'copernicus', attribution: 'Copernicus', licence: null, inherited: false },
       ],
     };
     show();
