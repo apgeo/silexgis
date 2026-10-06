@@ -96,9 +96,13 @@ feature and walkthroughs of whole jobs.
   `.stl` exported from Therion: you say which coordinates the file is written in — a projected
   system, or plain metres about a point, which is normally the cave's own entrance and is
   offered pre-filled — and the installation converts it into a model the 3D view draws in place,
-  under the terrain, beside that cave's centerlines. It is loaded only for the cave you select,
-  and switching it off in the layer list genuinely lets go of it; its size is shown before it is
-  fetched. A cave keeps every model ever uploaded, and **one of each kind is marked current** —
+  under the terrain, beside that cave's centerlines. By default it is loaded only for the cave
+  you select, and its size is shown before it is fetched. The layer list can instead draw the
+  walls of **every cave in view**: once you are zoomed in far enough, nearest the middle of the
+  view first, up to a number of caves and a total download size the installation sets — and it
+  says how many of the caves in view it drew and what kept the rest out, never a silent subset.
+  Walls that leave the view are let go, and switching the walls off genuinely lets go of all of
+  them. A cave keeps every model ever uploaded, and **one of each kind is marked current** —
   the line plot the map and the measurements read, the walls the 3D view draws. The first stays
   current until you choose another, and choosing a line plot moves the cave's shape on the map
   with it, so the map and the figures never describe two different surveys.
@@ -117,7 +121,10 @@ feature and walkthroughs of whole jobs.
   configured, so an air-gapped install needs one it can reach. **Tracks from imported GPX, KML
   and GeoJSON files** are drawn there too, as lines at their recorded altitudes — or laid on the
   ground when the file recorded none — sharing the flat map's choice of which files are shown.
-  A cave's page opens the view on that cave, selected and framed.
+  A cave's page opens the view on that cave, selected and framed. When a layer of the scene
+  stopped at the installation's per-request limit, the scene says so rather than quietly showing
+  fewer features than the map. The view can be **saved as a picture**, with the credits of the
+  basemap and of the elevation model written along its bottom edge so they travel with it.
 - **Real relief, if you want it** — that globe is a smooth sphere out of the box, needing no
   elevation server and nothing downloaded. An operator who wants the caves under actual
   hillsides bakes free elevation data into a tile pyramid and serves it as static files from the
