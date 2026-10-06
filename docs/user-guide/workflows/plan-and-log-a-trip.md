@@ -97,8 +97,10 @@ A limit never refuses an answer. It only decides where in the queue an answer si
 > ### An invitation grants nothing
 >
 > Being asked onto a trip does not open a cave. When somebody asked onto a trip cannot read a
-> cave the trip is about, the **cave's owner and the full administrators** get a message with
-> a link to it.
+> cave the trip is about, the **cave's owner and the full administrators** get a message. Its
+> link opens that cave's **Permissions** with **Read** for that person already drafted, and
+> grants nothing until whoever follows it presses **OK** — see
+> [Trips](../features/trips.md#an-invitation-grants-nothing).
 >
 > That message is honest about its own reach: it says it went to the owner and the
 > administrators and nobody else, that somebody who could grant access another way — through

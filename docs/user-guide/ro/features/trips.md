@@ -102,10 +102,24 @@ Când cineva invitat pe o tură nu poate citi o peșteră despre care este tura,
 peșterii și administratorii compleți** primesc un mesaj, indiferent dacă peștera era deja pe tură
 sau a fost adăugată ulterior.
 
+**Linkul din acel mesaj este calea rapidă de a-i da acces.** Deschide **Permisiunile** peșterii
+despre acea persoană: o regulă pentru ea este deja pregătită — **Citire** pe acea peșteră și nimic
+mai mult, într-un rând marcat *propusă* — cu un rând deasupra tabelului care spune de ce este
+acolo.
+
+- **Nimic nu se acordă prin simpla urmare a linkului.** Apăsați **OK** și regula este salvată;
+  închideți dialogul, sau ștergeți rândul, și nu se schimbă nimic.
+- **Doar Citire este bifată.** Orice în plus — mai ales *Locație exactă* — rămâne de bifat de
+  dumneavoastră și nu este niciodată bifat în locul dumneavoastră.
+- **Dacă altcineva a ajuns primul**, dialogul spune că persoana are deja o regulă cu Citire și nu
+  adaugă nimic.
+- **Ce acordați durează până când cineva îl retrage.** Nu există încă acces care să se încheie
+  singur, așa că un acces dat pentru o singură tură trebuie retras de mână după aceea.
+
 Mesajul spune că a ajuns la proprietar și la administratori și la **nimeni altcineva**, că cineva
 care ar putea acorda acces pe altă cale **nu** a fost anunțat, și cere cititorului să-l transmită
 mai departe dacă nu este al lui de rezolvat. Cineva fără cont nu primește nimic și nu i se poate
-acorda nimic.
+acorda nimic, așa că nici despre el nu se trimite vreun mesaj.
 
 ---
 

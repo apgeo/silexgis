@@ -102,10 +102,24 @@ When somebody asked onto a trip cannot read a cave the trip is about, the **cave
 the full administrators** get a message, whether the cave was already on the trip or added
 afterwards.
 
+**The link in that message is the quick way to let them in.** It opens the cave's
+**Permissions** about that person: a rule for them is already drafted — **Read** on that cave
+and nothing more, in a row marked *proposed* — with a line above the table saying why the row
+is there.
+
+- **Nothing is granted by following the link.** Press **OK** and the rule is saved; close the
+  dialog, or remove the row, and nothing changes.
+- **Only Read is ticked.** Anything more — *Exact location* above all — is yours to tick, and
+  is never ticked for you.
+- **If somebody got there first**, the dialog says the person already has a rule with Read,
+  and adds nothing.
+- **What you grant lasts until somebody removes it.** There is no access that ends by itself
+  yet, so a grant meant for one trip has to be taken back by hand afterwards.
+
 That message says it went to the owner and the administrators and **nobody else**, that
 somebody who could grant access another way has **not** been told, and asks the reader to
 pass it on if it is not theirs to act on. Somebody with no account gets nothing and can be
-granted nothing.
+granted nothing, so no message is sent about them either.
 
 ---
 

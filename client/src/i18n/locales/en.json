@@ -2154,7 +2154,10 @@
     "viaExpedition": "From a camp",
     "viaExpeditionHint": "Some of these rules were written by a camp this trip belongs to, and are changed there rather than here. They are shown so the whole list of who may read this trip is in one place.",
     "denyHint": "A deny outweighs every allow at the same level, and a rule on the object itself outweighs anything inherited. Check what it costs before saving.",
-    "viaNamedExpedition": "Granted through camp {{name}}"
+    "viaNamedExpedition": "Granted through camp {{name}}",
+    "proposed": "proposed",
+    "proposedHint": "This was opened from a link about {{name}}. Read on this object, and nothing more, is proposed for them in the row marked “proposed”. Nothing is granted until you press OK.",
+    "proposedAlready": "This was opened from a link about {{name}}, who already has a rule here that includes Read. Nothing was added."
   },
   "access": {
     "whyTitle": "Your access here, and why",

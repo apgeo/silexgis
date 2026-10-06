@@ -152,6 +152,20 @@ Fiecare obiect are o filă **Permisiuni** (acolo unde aveți voie să administra
 Adăugați o regulă care numește un **utilizator** sau un **grup de speologie**, un efect, acțiuni și
 un cuprins de **doar acest obiect** sau **acest obiect și tot ce conține**.
 
+### Deschis despre cineva
+
+Mesajul care spune că cineva invitat pe o tură nu poate deschide o peșteră duce la
+**Permisiunile** acelei peșteri, deschise despre acea persoană. Dialogul conține atunci un rând
+pe care nu l-ați adăugat dumneavoastră — **Citire** pe acest obiect pentru ea, marcat *propusă* —
+și un rând deasupra tabelului care spune de ce este acolo.
+
+Este o ciornă. **Nimic nu se acordă până nu apăsați OK**, iar ce se salvează este o regulă
+obișnuită: mărginită, ca oricare alta, de ceea ce dețineți dumneavoastră înșivă, și în vigoare
+până când cineva o șterge. Ștergeți rândul ca să nu acordați nimic. Un link care numește pe cineva
+pe care aplicația nu îl găsește deschide dialogul obișnuit și nu spune nimic despre el.
+
+Vedeți [O invitație nu acordă nimic](../features/trips.md#o-invitație-nu-acordă-nimic).
+
 ### Reguli scrise de o tabără
 
 Pe o tură care aparține unei tabere, unele reguli apar ca **De la o tabără**. Au fost scrise de

@@ -101,7 +101,9 @@ O limită nu refuză niciodată un răspuns. Decide doar unde în coadă stă ac
 >
 > A fi invitat pe o tură nu deschide o peșteră. Când cineva invitat pe o tură nu poate citi o
 > peșteră despre care este tura, **proprietarul peșterii și administratorii compleți** primesc
-> un mesaj cu un link către ea.
+> un mesaj. Linkul lui deschide **Permisiunile** acelei peșteri cu **Citire** pentru acea
+> persoană deja pregătită și nu acordă nimic până când cel care îl urmează nu apasă **OK** —
+> vedeți [Ture](../features/trips.md#o-invitație-nu-acordă-nimic).
 >
 > Mesajul acela este sincer despre propria lui rază: spune că a ajuns la proprietar și la
 > administratori și la nimeni altcineva, că cineva care ar putea acorda acces pe altă cale —

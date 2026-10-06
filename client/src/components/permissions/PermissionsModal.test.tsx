@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { EntityType } from '../../api/hooks.ts';
+import { ACTION_ORDER } from './accessDisplay.ts';
 
 const replace = vi.fn();
 // The camp a cascade row names, as the reader's own read of it answers: a name when they may
@@ -19,12 +20,25 @@ let rules: {
   actions: string;
   grantedViaExpeditionId: string | null;
 }[] = [];
+// Whether the object's rules have come back yet; false is the moment before they do.
+let rulesArrived = true;
+// The accounts the reader's own lookup answers, by id. An id that is not here names nobody.
+let members: Record<string, { id: string; label: string }> = {};
+// Every id the dialog asked the directory about.
+const memberLookups = vi.fn();
 
 vi.mock('../../api/hooks.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../api/hooks.ts')>();
   return {
     parseAccessActions: actual.parseAccessActions,
-    useObjectAccess: () => ({ data: rules, isError: false }),
+    useObjectAccess: () => ({ data: rulesArrived ? rules : undefined, isError: false }),
+    // An empty id is the hook's own "ask nothing", exactly as the real one treats it.
+    useMember: (id: string) => {
+      if (id) {
+        memberLookups(id);
+      }
+      return { data: id ? members[id] : undefined };
+    },
     useReplaceObjectAccess: () => ({ mutateAsync: replace, isPending: false }),
     useCavingGroups: () => ({ data: [{ id: 'club-1', name: 'Speo Club' }] }),
     useEffectiveAccess: () => ({ data: undefined }),
@@ -35,14 +49,24 @@ vi.mock('../../api/hooks.ts', async (importOriginal) => {
 
 const { default: PermissionsModal } = await import('./PermissionsModal.tsx');
 
-function show(entityType: EntityType = 'tripLog') {
-  return render(
+function dialog(entityType: EntityType, grantTo?: string) {
+  return (
     <App>
       <MemoryRouter>
-        <PermissionsModal entityType={entityType} entityId="trip-1" open onClose={() => {}} />
+        <PermissionsModal
+          entityType={entityType}
+          entityId="trip-1"
+          open
+          onClose={() => {}}
+          grantTo={grantTo}
+        />
       </MemoryRouter>
-    </App>,
+    </App>
   );
+}
+
+function show(entityType: EntityType = 'tripLog', grantTo?: string) {
+  return render(dialog(entityType, grantTo));
 }
 
 /** The dialog's own save button, which antd draws as the modal's OK. */
@@ -50,14 +74,18 @@ function saveButton() {
   return screen.getAllByRole('button', { name: /OK/i })[0];
 }
 
+beforeEach(() => {
+  replace.mockReset();
+  replace.mockResolvedValue(undefined);
+  memberLookups.mockReset();
+  rules = [];
+  rulesArrived = true;
+  members = {};
+  campRead = { data: undefined };
+});
+afterEach(cleanup);
+
 describe('PermissionsModal on a trip', () => {
-  beforeEach(() => {
-    replace.mockReset();
-    replace.mockResolvedValue(undefined);
-    rules = [];
-    campRead = { data: undefined };
-  });
-  afterEach(cleanup);
 
   it('offers this trip alone, because a trip contains nothing to reach into', () => {
     show();
@@ -181,5 +209,230 @@ describe('PermissionsModal on a trip', () => {
     expect(replace).toHaveBeenCalledWith([
       { subjectKind: 'cavingGroup', subjectId: 'club-1', effect: 'allow', actions: 'read', scopeKind: 'object' },
     ]);
+  });
+});
+
+/**
+ * The dialog opened about one account — what an address in a message does, so that whoever is
+ * told somebody cannot open a cave does not have to find that person by hand.
+ *
+ * Everything here turns on the difference between drafting and granting. The dialog may put a
+ * row in its own table; nothing may reach the server until the person looking at it says so,
+ * and what reaches it then is Read on this object and nothing they did not tick themselves.
+ */
+describe('PermissionsModal opened about an account', () => {
+  const ana = '0b6f2c1e-5a51-4c0e-9d1b-3f6a8a2d7c11';
+  const nobody = '7d9d1f0a-0c55-4b7e-8a43-5e1f2b3c4d5e';
+
+  beforeEach(() => {
+    members = { [ana]: { id: ana, label: 'Ana Pop' } };
+  });
+
+  /** One rule of the object's own for Ana, as the server sends it. */
+  function anasRule(actions: string, scopeKind = 'object', grantedViaExpeditionId: string | null = null) {
+    return {
+      subjectKind: 'user' as const,
+      subjectId: ana,
+      subjectName: 'Ana Pop',
+      effect: 'allow' as const,
+      scopeKind,
+      actions,
+      grantedViaExpeditionId,
+    };
+  }
+
+  /** The table rows that name a subject, header left out. */
+  function rowsNaming(name: RegExp) {
+    return screen.getAllByRole('row').filter((row) => name.test(row.textContent ?? '') && within(row).queryAllByRole('checkbox').length > 0);
+  }
+
+  /** Which actions a row has ticked, by name, in the order the columns are drawn. */
+  function ticked(row: HTMLElement) {
+    const boxes = within(row).getAllByRole('checkbox') as HTMLInputElement[];
+    // A feature's row draws every action; the columns are the display order itself.
+    expect(boxes).toHaveLength(ACTION_ORDER.length);
+    return ACTION_ORDER.filter((_, index) => boxes[index].checked);
+  }
+
+  it('drafts Read on this object alone for the account, marks the row, and says why it is there', () => {
+    show('feature', ana);
+
+    const [row] = rowsNaming(/Ana Pop/);
+    expect(within(row).getByText('proposed')).toBeInTheDocument();
+    // Read and nothing else. In particular not the exact position of a protected cave, which
+    // is a decision of its own and never one an address makes for the person reading it.
+    expect(ticked(row)).toEqual(['read']);
+    expect(within(row).getByText('This object only')).toBeInTheDocument();
+
+    const why = screen.getByTestId('permissions-proposed');
+    expect(why).toHaveTextContent('Ana Pop');
+    expect(why).toHaveTextContent('Nothing is granted until you press OK');
+
+    // Opening the dialog wrote nothing.
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('grants when the reader confirms, and then what was proposed beside what was already there', async () => {
+    rules = [
+      {
+        subjectKind: 'cavingGroup',
+        subjectId: 'club-1',
+        subjectName: 'Speo Club',
+        effect: 'allow',
+        scopeKind: 'object',
+        actions: 'read, write',
+        grantedViaExpeditionId: null,
+      },
+    ];
+    show('feature', ana);
+
+    fireEvent.click(saveButton());
+
+    // One confirmation, one save: the drafted rule and the club's own, which a full replace
+    // would otherwise have dropped.
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+    expect(replace).toHaveBeenCalledWith([
+      { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read', scopeKind: 'object' },
+      { subjectKind: 'cavingGroup', subjectId: 'club-1', effect: 'allow', actions: 'read, write', scopeKind: 'object' },
+    ]);
+  });
+
+  it('grants nothing once the drafted row is removed, and stops saying anything is proposed', async () => {
+    show('feature', ana);
+
+    const [row] = rowsNaming(/Ana Pop/);
+    fireEvent.click(within(row).getByRole('button'));
+
+    expect(rowsNaming(/Ana Pop/)).toHaveLength(0);
+    expect(screen.queryByTestId('permissions-proposed')).not.toBeInTheDocument();
+
+    fireEvent.click(saveButton());
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+    expect(replace).toHaveBeenCalledWith([]);
+  });
+
+  it('drafts nothing for an id that names nobody, and says nothing about it', () => {
+    show('feature', nobody);
+
+    // The directory was asked, so the silence below is the dialog's own and not a lookup that
+    // never happened.
+    expect(memberLookups).toHaveBeenCalledWith(nobody);
+    expect(screen.queryByText('proposed')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('permissions-proposed')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('permissions-proposed-already')).not.toBeInTheDocument();
+    // Neither the id nor any word about an account that could not be found.
+    expect(document.body.textContent).not.toContain(nobody);
+    expect(rowsNaming(/./)).toHaveLength(0);
+  });
+
+  it('does not ask the directory about something that is not an account id', () => {
+    show('feature', "ana' or 1=1 --");
+
+    expect(memberLookups).not.toHaveBeenCalled();
+    expect(screen.queryByText('proposed')).not.toBeInTheDocument();
+  });
+
+  it('drafts nothing when the account already has a rule here with Read, and says so', async () => {
+    // The same message reaches the cave's owner and every full administrator, so the second
+    // of them to follow the link finds the first one's rule already in force.
+    rules = [anasRule('read')];
+    show('feature', ana);
+
+    expect(rowsNaming(/Ana Pop/)).toHaveLength(1);
+    expect(screen.queryByText('proposed')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('permissions-proposed')).not.toBeInTheDocument();
+    expect(screen.getByTestId('permissions-proposed-already')).toHaveTextContent('Ana Pop');
+
+    fireEvent.click(saveButton());
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+    expect(replace).toHaveBeenCalledWith([
+      { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read', scopeKind: 'object' },
+    ]);
+  });
+
+  it('counts a rule reaching everything inside this object as already giving Read on it', () => {
+    rules = [anasRule('read, write', 'subtree')];
+    show('feature', ana);
+
+    expect(rowsNaming(/Ana Pop/)).toHaveLength(1);
+    expect(screen.queryByText('proposed')).not.toBeInTheDocument();
+    expect(screen.getByTestId('permissions-proposed-already')).toBeInTheDocument();
+  });
+
+  it('proposes Read on the rule the account already has here rather than a second one', async () => {
+    // A subject has one rule per effect and reach; a second for the same account would be
+    // refused as a duplicate and take the whole save with it.
+    rules = [anasRule('write')];
+    show('feature', ana);
+
+    const rows = rowsNaming(/Ana Pop/);
+    expect(rows).toHaveLength(1);
+    expect(within(rows[0]).getByText('proposed')).toBeInTheDocument();
+    expect(ticked(rows[0])).toEqual(['read', 'write']);
+    expect(screen.getByTestId('permissions-proposed')).toBeInTheDocument();
+
+    fireEvent.click(saveButton());
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+    expect(replace).toHaveBeenCalledWith([
+      { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read, write', scopeKind: 'object' },
+    ]);
+  });
+
+  it('does not rely on a rule a camp wrote for the account', async () => {
+    // A camp's rule is withdrawn from the camp, by somebody else, without this object being
+    // asked. So the account is still drafted a rule of the object's own, and only that travels.
+    rules = [anasRule('read', 'object', 'camp-1')];
+    show('feature', ana);
+
+    const rows = rowsNaming(/Ana Pop/);
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText('proposed')).toBeInTheDocument();
+    expect(screen.queryByTestId('permissions-proposed-already')).not.toBeInTheDocument();
+
+    fireEvent.click(saveButton());
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+    expect(replace).toHaveBeenCalledWith([
+      { subjectKind: 'user', subjectId: ana, effect: 'allow', actions: 'read', scopeKind: 'object' },
+    ]);
+  });
+
+  it('drafts once the rules arrive when the account was known first', () => {
+    rulesArrived = false;
+    const view = show('feature', ana);
+    expect(screen.queryByText('proposed')).not.toBeInTheDocument();
+
+    rulesArrived = true;
+    view.rerender(dialog('feature', ana));
+
+    expect(rowsNaming(/Ana Pop/)).toHaveLength(1);
+    expect(screen.getByTestId('permissions-proposed')).toBeInTheDocument();
+  });
+
+  it('adds the draft to what is on screen when the account arrives second', async () => {
+    // The lookup is one request and the rules another, and either may land first. Whatever the
+    // reader has already done to the table in between is theirs and stays.
+    members = {};
+    const view = show('feature', ana);
+
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0]);
+    fireEvent.click(await screen.findByTitle('Caving group'));
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[1]);
+    fireEvent.click(await screen.findByTitle('Speo Club'));
+    fireEvent.click(screen.getByRole('button', { name: /Add/i }));
+    expect(rowsNaming(/Speo Club/)).toHaveLength(1);
+
+    members = { [ana]: { id: ana, label: 'Ana Pop' } };
+    view.rerender(dialog('feature', ana));
+
+    expect(rowsNaming(/Ana Pop/)).toHaveLength(1);
+    expect(rowsNaming(/Speo Club/)).toHaveLength(1);
+  });
+
+  it('drafts nothing on a dialog opened about nobody', () => {
+    show('feature');
+
+    expect(memberLookups).not.toHaveBeenCalled();
+    expect(screen.queryByText('proposed')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('permissions-proposed')).not.toBeInTheDocument();
   });
 });
