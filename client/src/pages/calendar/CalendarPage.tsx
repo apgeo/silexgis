@@ -432,10 +432,13 @@ export default function CalendarPage() {
         />
       ) : null}
       {!isList(view) ? (
-        nothingChosen || (data?.entries.length ?? 0) === 0 ? (
+        nothingChosen || isError || data?.entries.length === 0 ? (
           // A grid of empty cells cannot say why it is empty — whether nothing was asked for,
           // whether the read failed, or whether these really are days with nothing on them — so
-          // the sentence that can say it is drawn above the grid rather than instead of it.
+          // the sentence that can say it is drawn above the grid rather than instead of it. It
+          // is drawn once there is something to say: while the first answer is still coming
+          // there is neither an answer nor a failure, and "nothing is recorded in these days"
+          // is a claim a question still in flight has not earned.
           <Empty
             data-testid="calendar-empty"
             image={Empty.PRESENTED_IMAGE_SIMPLE}

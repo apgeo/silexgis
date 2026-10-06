@@ -369,6 +369,25 @@ describe('the calendar record', () => {
     expect(lastParams().sort).toBe('-title');
   });
 
+  /**
+   * And a fourth that gets no sentence at all. While the first answer is still coming there are
+   * no rows, which is not the same as there being nothing: "nothing is recorded in these days" is
+   * a claim about the days, and a question still in flight has not earned it — over the list, or
+   * above a grid.
+   */
+  it('claims nothing about the days while the first answer is still coming', () => {
+    calendarSpy.mockReturnValue({ data: undefined, isFetching: true, isError: false });
+    show();
+    expect(screen.queryByTestId('calendar-empty')).toBeNull();
+
+    fireEvent.click(screen.getByText('Month'));
+    expect(screen.getByTestId('calendar-grid')).toBeTruthy();
+    expect(screen.queryByTestId('calendar-empty')).toBeNull();
+
+    fireEvent.click(screen.getByText('Week'));
+    expect(screen.queryByTestId('calendar-empty')).toBeNull();
+  });
+
   /** Three situations, three sentences: only one of them is a fact about the calendar. */
   it('separates a failed read from a narrowed one and from an empty stretch of days', () => {
     fails();
