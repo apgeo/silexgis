@@ -120,10 +120,12 @@ const NARROW_LARGE_HEIGHT = 560;
  * phone's address bar collapses and `vh` keeps quoting the taller measurement — the fraction is
  * here to guarantee what is left over, so it has to be a fraction of what is actually on screen.
  *
- * It also puts the viewer's own fullscreen button back in working order as a side effect, and that
- * is not a coincidence: the viewer decides whether it is already fullscreen by comparing its height
- * to the window's, and a height that is a fraction of the viewport can never be mistaken for the
- * whole of it.
+ * It also keeps the viewer's own fullscreen button in working order in a browser that has no
+ * Fullscreen API to ask, as a phone's may not. There, and only there, the viewer falls back to
+ * comparing its own size with the window's to decide whether it is already fullscreen, and a
+ * height that is a fraction of the viewport can never be mistaken for the whole of it. Where the
+ * API exists the viewer asks the document which element is in fullscreen, and this share has no
+ * bearing on the button.
  */
 const VIEWPORT_SHARE = '60dvh';
 

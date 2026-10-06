@@ -123,19 +123,29 @@
    to press. Measured in a 412x915 portrait context: the surface covers 412x839 at 0,0, every probe
    into the viewport lands on the canvas, and a 200px swipe moves the page zero pixels.
 
-   The viewer cannot get itself out of that, either, and the reason is worth recording because it
-   makes the state unrecoverable rather than merely awkward. Its `fullscreen` getter is
-   `window.innerHeight === container.clientHeight && window.innerWidth === container.clientWidth` —
-   it decides whether it is fullscreen by measuring itself against the window. Under the rule above
-   that is true before anybody asks, so the toolbar button toggles it to false, removes a class that
-   was never added and exits a fullscreen that was never entered. Nothing changes, and reloading the
-   page is the only way back.
+   The viewer cannot get itself out of that, either, and how it fails depends on the browser.
+
+   Where there is a Fullscreen API the viewer asks the document which element is in fullscreen, and
+   counts its own class as fullscreen for as long as the document names none. With the surface
+   covering the screen by default it therefore reads false, and a press of the toolbar button sets
+   the class and asks the browser. Granted, the surface covers the screen as it already did, and
+   leaving puts it back under the rule above. Refused — the ordinary case inside an embedded frame —
+   the class is all there is, and under the rule above the class is what takes the surface *out* of
+   covering: the button shows pressed with the model small, and unpressed with it over everything.
+
+   Where there is no such API to ask — a phone's browser may have none — the state is unrecoverable
+   rather than merely backwards. The viewer then falls back to measuring itself against the window
+   (`window.innerHeight === container.clientHeight && window.innerWidth === container.clientWidth`).
+   Under the rule above that is true before anybody asks, so the button toggles it to false, removes
+   a class that was never added and exits a fullscreen that was never entered. Nothing changes, and
+   reloading the page is the only way back.
 
    So the breakpoint's inversion is undone for this panel and the wide-screen pair is restored:
    in the flow at the size it was given, covering the screen when — and only when — the viewer's own
    button says so. Undone rather than sidestepped through the rule's `:not(.toggle-fullscreen)`
-   hatch, because that class is the viewer's own word for "I am in fullscreen" and setting it
-   without being in fullscreen is a lie the viewer reads back out of the DOM.
+   hatch, because that class is the viewer's own to set and to take off — it is how the viewer
+   displays itself large where the browser will not — and one set here as well would be taken off
+   under this file at the viewer's next change of fullscreen.
 
    Both selectors name one class more than the vendored rule does, and they have to: the viewer's
    stylesheet is injected into the head when the bundle loads, so it always comes after this file

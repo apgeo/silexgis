@@ -627,14 +627,16 @@ export default function CaveViewPanel({
       viewerRef.current = null;
       ui?.dispose();
       ui = null;
-      // A disposed viewer is asked to draw once more, and it throws. The load handed to it above
-      // is not awaited — nothing here can await it — so this panel is routinely pointed at another
-      // file while the last one is still parsing: every pick of a past trip and every way back on
-      // the public page re-keys it. The viewer's own progress dial goes on calling `renderView` on
-      // each progress event of that parse and once more half a second after it ends, against a
-      // renderer that `dispose()` has already nulled — an uncaught TypeError on the one surface
-      // strangers read with nobody watching its console. There is nothing left to draw, so the
-      // late asks are answered with nothing.
+      // A disposed viewer is asked to draw once more. The load handed to it above is not awaited —
+      // nothing here can await it — so this panel is routinely pointed at another file while the
+      // last one is still parsing: every pick of a past trip and every way back on the public page
+      // re-keys it. The viewer's own progress dial goes on calling `renderView` on each progress
+      // event of that parse and once more half a second after it ends, against a renderer that
+      // `dispose()` has already let go of. The viewer loaded now returns from such a call without
+      // effect; an earlier build threw — an uncaught TypeError on the one surface strangers read
+      // with nobody watching its console. There is nothing left to draw either way, so the late
+      // asks are still answered with nothing here, and this panel does not rest on the viewer's own
+      // guard alone.
       if (built !== null) {
         built.renderView = () => {};
         built = null;

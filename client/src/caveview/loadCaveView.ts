@@ -405,8 +405,11 @@ export interface CaveViewer extends CaveViewLayers {
    *
    * An own property of each instance, and the viewer's own progress dial reaches it through the
    * property: on every progress event of a load and on a timer half a second after the load ends —
-   * including after `dispose()`, when the renderer it would draw with has been nulled and the call
-   * throws. A host that disposes a viewer mid-load replaces it with a no-op for that reason.
+   * including after `dispose()`, when the renderer it would draw with has been let go of. A disposed
+   * viewer returns from the call without drawing and without throwing. An earlier build of it
+   * threw, and the panel that disposes a viewer mid-load still replaces this property with a no-op:
+   * with the build loaded now that is a precaution, no longer the only thing between a late call
+   * and an uncaught error.
    */
   renderView(): void;
   /**
