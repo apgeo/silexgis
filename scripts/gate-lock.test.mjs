@@ -40,6 +40,21 @@ const freshDir = (name) => join(scratch, name);
 process.env.SILEXGIS_GATE_LEGACY_DIR = freshDir('no-legacy-lock');
 const envFor = (dir, extra = {}) => ({ ...process.env, SILEXGIS_GATE_LOCK_DIR: dir, ...extra });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/**
+ * Waits for something to become true, and fails by name when it does not.
+ *
+ * The cases below start several processes and need them to have reached a known point — a ticket
+ * taken, a lock held — before the next one starts. A fixed pause is right on an idle machine and
+ * wrong on a busy one, where starting a process alone can outlast it; and this suite runs beside
+ * whatever else the machine is doing.
+ */
+const until = async (what, check, timeoutMs = 30_000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    assert.ok(Date.now() < deadline, `timed out waiting for ${what}`);
+    await sleep(50);
+  }
+};
 const deadPid = () => spawnSync(process.execPath, ['-e', '']).pid;
 
 describe('acquire and release', () => {
@@ -137,11 +152,12 @@ describe('waiting in turn', () => {
       });
       return exited;
     };
+    const queued = () => liveTickets(dir).map((t) => t.label);
     const a = waiter('A');
-    await sleep(1500);
+    await until('A to join the queue', () => queued().includes('A'));
     const b = waiter('B');
-    await sleep(1500);
-    assert.deepEqual(liveTickets(dir).map((t) => t.label), ['A', 'B'], 'both are queued, A first');
+    await until('B to join the queue', () => queued().includes('B'));
+    assert.deepEqual(queued(), ['A', 'B'], 'both are queued, A first');
 
     release(dir);
     // A takes the lock and exits holding it; its claim is then stale, which is B's cue.
@@ -321,7 +337,7 @@ describe('run', () => {
     const r2 = join(scratch, 'q2.json');
     const env = envFor(dir);
     const first = spawn(process.execPath, [script, 'run', '--result', r1, '--', process.execPath, '-e', 'setTimeout(() => {}, 2500)'], { env });
-    await sleep(800);
+    await until('the first run to hold the lock', () => readOwner(dir)?.pid === first.pid);
     const second = spawn(process.execPath, [script, 'run', '--result', r2, '--', process.execPath, '-e', 'process.exit(0)'], { env });
     await new Promise((r) => first.on('exit', r));
     await new Promise((r) => second.on('exit', r));
