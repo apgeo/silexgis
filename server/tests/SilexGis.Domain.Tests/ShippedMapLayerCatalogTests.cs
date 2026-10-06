@@ -77,6 +77,54 @@ public class ShippedMapLayerCatalogTests
             "the default basemap ships switched off, so a viewer who has chosen nothing gets nothing");
     }
 
+    /// <summary>
+    /// What the shipped file lets a document copy is a licensing statement this project makes on
+    /// behalf of everybody who installs it, so the edit that widens it by accident has to fail
+    /// here rather than be found in somebody's bulletin.
+    /// </summary>
+    [Fact]
+    public void No_shipped_source_with_restricted_terms_or_an_access_key_may_be_copied_into_a_document()
+    {
+        var marked = Shipped().Layers.Where(l => l.InDocuments).ToList();
+
+        // Something is marked, or the two assertions below would pass on an empty list and say
+        // nothing about the file.
+        Assert.NotEmpty(marked);
+
+        foreach (var layer in marked)
+        {
+            // The group the restricted sources ship under is named in the file's own words; a
+            // source filed there has terms that forbid even the way it is displayed.
+            Assert.False(
+                (layer.GroupName ?? string.Empty).Contains("Restricted", StringComparison.OrdinalIgnoreCase),
+                $"{layer.Name}: filed under restricted terms and marked as copyable into a document");
+
+            // A keyed source is used under an account's agreement with its provider, which is
+            // the installation's to read; the shipped file takes no position for it.
+            Assert.True(
+                layer.ApiKeyName is null,
+                $"{layer.Name}: needs an access key and ships marked as copyable into a document");
+
+            // The reader already refuses these two, and would have reported them above; stated
+            // again here so the reason is next to the list it protects.
+            Assert.True(layer.IsBase, $"{layer.Name}: an overlay cannot be a document's background");
+            Assert.False(
+                string.IsNullOrWhiteSpace(layer.Attribution),
+                $"{layer.Name}: nothing to write under the picture");
+        }
+    }
+
+    [Fact]
+    public void The_default_basemap_may_be_copied_into_a_document()
+    {
+        // Not a law of the format — an installation may choose a default that may not be copied,
+        // and its documents then take the first source that may. It is asserted of the SHIPPED
+        // file because a stock installation should draw the write-up's map over the same
+        // background its readers see on the screen, and losing that silently is a regression
+        // nobody would report: the picture would simply come out over a different map.
+        Assert.True(Shipped().Layers.Single(l => l.IsDefault).InDocuments);
+    }
+
     // There is deliberately no test here that no source is named twice. One was written, and it
     // could not fail: the reader collapses duplicates by name before returning them, so the list
     // a test reads has already had the second copy removed. The duplicate is caught instead by

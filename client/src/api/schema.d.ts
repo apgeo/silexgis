@@ -22132,6 +22132,7 @@ export interface components {
             isDefault: boolean;
             /** Format: int32 */
             sortOrder: number;
+            inDocuments: boolean;
         };
         /** @enum {unknown} */
         MapLayerKind: "xyz" | "wmts" | "wms" | "vector" | "cog";

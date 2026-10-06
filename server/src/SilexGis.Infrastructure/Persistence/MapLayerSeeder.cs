@@ -96,6 +96,7 @@ public static class MapLayerSeeder
         row.MaxZoom = entry.MaxZoom;
         row.SortOrder = entry.SortOrder;
         row.Enabled = enabled;
+        row.InDocuments = entry.InDocuments;
         return row;
     }
 }

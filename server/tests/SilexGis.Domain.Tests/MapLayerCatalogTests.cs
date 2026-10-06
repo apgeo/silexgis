@@ -36,6 +36,55 @@ public class MapLayerCatalogTests
         Assert.Equal(0, layer.MinZoom);
         Assert.Equal(19, layer.MaxZoom);
         Assert.Null(layer.ApiKeyName);
+        // And it may not be copied into a document. That one is the default that matters most
+        // to get right: every source an operator added before the mark existed, and every one
+        // they add without reading about it, has to come out as "no".
+        Assert.False(layer.InDocuments);
+    }
+
+    [Fact]
+    public void Marks_a_source_for_documents_only_when_the_entry_says_so()
+    {
+        var result = MapLayerCatalog.Read(Doc(
+            """
+            <layer name="Open" url="https://a.example/{z}/{x}/{y}.png" attribution="© Somebody" inDocuments="true" />
+            <layer name="Said no" url="https://b.example/{z}/{x}/{y}.png" attribution="© Somebody" inDocuments="false" />
+            <layer name="Said nothing" url="https://c.example/{z}/{x}/{y}.png" attribution="© Somebody" />
+            """));
+
+        Assert.Empty(result.Problems);
+        Assert.True(result.Layers.Single(l => l.Name == "Open").InDocuments);
+        Assert.False(result.Layers.Single(l => l.Name == "Said no").InDocuments);
+        Assert.False(result.Layers.Single(l => l.Name == "Said nothing").InDocuments);
+    }
+
+    [Fact]
+    public void Takes_the_mark_off_a_source_with_no_credit_to_write_under_a_picture_and_says_so()
+    {
+        // Terms that allow a copy allow it with the credit beside the picture. A source marked
+        // without one cannot be copied honestly, and is still a perfectly good thing to look at —
+        // so it stays in the catalogue and only the mark goes.
+        var result = MapLayerCatalog.Read(Doc(
+            """<layer name="Uncredited" url="https://a.example/{z}/{x}/{y}.png" inDocuments="true" />"""));
+
+        var layer = Assert.Single(result.Layers);
+        Assert.False(layer.InDocuments);
+        Assert.True(layer.Enabled);
+        Assert.Contains(result.Problems, p => p.Message.Contains("Uncredited") && p.Message.Contains("attribution"));
+    }
+
+    [Fact]
+    public void Takes_the_mark_off_an_overlay_and_says_so()
+    {
+        // A document's picture is drawn over one background, and an overlay is not one. Left
+        // marked it would do nothing, silently, which is the outcome this file never allows.
+        var result = MapLayerCatalog.Read(Doc(
+            """<layer name="Routes" url="https://a.example/{z}/{x}/{y}.png" attribution="© Somebody" base="false" inDocuments="true" />"""));
+
+        var layer = Assert.Single(result.Layers);
+        Assert.False(layer.InDocuments);
+        Assert.False(layer.IsBase);
+        Assert.Contains(result.Problems, p => p.Message.Contains("Routes") && p.Message.Contains("overlay"));
     }
 
     [Fact]

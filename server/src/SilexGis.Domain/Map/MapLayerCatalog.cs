@@ -18,6 +18,13 @@ namespace SilexGis.Domain.Map;
 /// this application would consume them ship declared and switched off, so that turning one on is
 /// a deliberate act by somebody who can read the licence note beside it.
 /// </param>
+/// <param name="InDocuments">
+/// Whether this source's tiles may be copied into a document the application produces. False
+/// unless the entry says otherwise: showing a tile on a screen and putting it into a file that is
+/// then circulated are different uses, most providers' terms treat them differently, and nothing
+/// about a tile address says which kind of terms stand behind it. Only somebody who has read
+/// them can.
+/// </param>
 public sealed record MapLayerEntry(
     string Name,
     string UrlTemplate,
@@ -29,7 +36,8 @@ public sealed record MapLayerEntry(
     bool Enabled,
     int MinZoom,
     int MaxZoom,
-    int SortOrder);
+    int SortOrder,
+    bool InDocuments = false);
 
 /// <summary>Why a catalogue file could not be read.</summary>
 public sealed record MapLayerCatalogProblem(string Message);
@@ -134,18 +142,44 @@ public static class MapLayerCatalog
                 continue;
             }
 
+            var attribution = Trimmed(element.Attribute("attribution"));
+            var isBase = Bool(element.Attribute("base"), true);
+            var inDocuments = Bool(element.Attribute("inDocuments"), false);
+
+            // The mark is taken off rather than the entry dropped: in both cases below the source
+            // is still a perfectly good thing to look at, and only the claim that it may be put
+            // into a file cannot be honoured. Said out loud, because the alternative reading of a
+            // picture that comes out with no background is that the application is broken.
+            if (inDocuments && attribution is null)
+            {
+                // Terms that allow a copy allow it with the credit beside the picture, and a
+                // credit nobody wrote down cannot be put there.
+                problems.Add(new MapLayerCatalogProblem(
+                    $"'{name}' is marked inDocuments but has no attribution to write under a picture; kept, without the mark"));
+                inDocuments = false;
+            }
+
+            if (inDocuments && !isBase)
+            {
+                // A document's picture is drawn over one background. An overlay is not one.
+                problems.Add(new MapLayerCatalogProblem(
+                    $"'{name}' is marked inDocuments but is an overlay, and a document's picture takes one basemap; kept, without the mark"));
+                inDocuments = false;
+            }
+
             layers.Add(new MapLayerEntry(
                 name.Trim(),
                 url.Trim(),
-                Trimmed(element.Attribute("attribution")),
+                attribution,
                 Trimmed(element.Attribute("group")),
                 apiKeyName,
-                Bool(element.Attribute("base"), true),
+                isBase,
                 Bool(element.Attribute("default"), false),
                 Bool(element.Attribute("enabled"), true),
                 minZoom,
                 maxZoom,
-                index));
+                index,
+                inDocuments));
         }
 
         // A name declared twice is one source the operator edited into the file twice, so the last
