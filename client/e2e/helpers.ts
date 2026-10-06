@@ -13,8 +13,10 @@ export const adminPassword = 'dev-admin-pass-1';
  */
 export async function login(page: Page, email = adminEmail, password = adminPassword) {
   await page.goto('/');
-  // Unauthenticated → OIDC authorize → SPA login page with returnUrl.
-  await page.waitForURL(/\/login\?returnUrl=/);
+  // Unauthenticated → OIDC authorize → SPA login page with returnUrl. Bounded: a page that never
+  // started redirects nowhere, and without a bound the test waits out its whole time for it —
+  // six minutes in the specs that ask for that long — to report the same thing a minute would.
+  await page.waitForURL(/\/login\?returnUrl=/, { timeout: 60_000 });
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
