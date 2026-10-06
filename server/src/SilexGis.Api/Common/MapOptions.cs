@@ -56,6 +56,36 @@ public sealed class MapOptions
     public int CenterlineGatePaths { get; set; } = 20000;
 
     /// <summary>
+    /// The zoom from which the 3D scene may ask for the wall meshes of every cave in its view
+    /// rather than of the one selected cave.
+    /// </summary>
+    /// <remarks>
+    /// A floor rather than a courtesy. A wall mesh is fetched and held whole — there is no coarser
+    /// form of one to serve to a wide view — so the only thing that bounds how many a view can
+    /// hold is how much ground the view covers. Below this a view is a district, not a hillside,
+    /// and the walls in it would be specks that each cost their full size.
+    /// </remarks>
+    public int MeshesInViewMinZoom { get; set; } = 14;
+
+    /// <summary>
+    /// The most caves one request for the wall meshes in a view answers with, nearest the middle
+    /// of the view first. The caves beyond it are counted in the answer and not described.
+    /// </summary>
+    public int MeshesInViewMaxCaves { get; set; } = 12;
+
+    /// <summary>
+    /// How many bytes of wall mesh the 3D scene may hold at once for the caves in its view.
+    /// </summary>
+    /// <remarks>
+    /// The number that actually protects a browser. Meshes are usually a few hundred kilobytes,
+    /// but the largest measured one is 54.7 MB to fetch and roughly twice that once it is on the
+    /// graphics card, so a count alone would let a dozen large caves ask for gigabytes. It is
+    /// spent by the client, nearest cave first, against the sizes the answer states; the server
+    /// publishes it so that every client of an installation spends the same budget.
+    /// </remarks>
+    public long MeshesInViewMaxBytes { get; set; } = 64L * 1024 * 1024;
+
+    /// <summary>
     /// Simplification tolerance in screen pixels. Nearly a no-op on splay-heavy surveys, whose
     /// components are single shots with no interior vertices to drop, but it does thin ordinary
     /// imported line work.

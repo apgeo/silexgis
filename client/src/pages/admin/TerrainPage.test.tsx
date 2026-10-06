@@ -33,6 +33,9 @@ function mapConfig(
     terrain,
     terrainFallback,
     terrainBuilds: [],
+    meshesInViewMinZoom: 14,
+    meshesInViewMaxCaves: 12,
+    meshesInViewMaxBytes: 64 * 1024 * 1024,
   };
 }
 

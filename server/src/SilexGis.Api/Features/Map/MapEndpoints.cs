@@ -138,6 +138,15 @@ public sealed record TerrainBuildChoiceDto(
 /// switch the scene's ground to. Empty when the installation has made none. The drawn one is in
 /// the list too, marked, so a switch can be switched back.
 /// </param>
+/// <param name="MeshesInViewMinZoom">
+/// The zoom from which a scene may ask for the wall meshes of every cave in its view.
+/// </param>
+/// <param name="MeshesInViewMaxCaves">The most caves one such request answers with.</param>
+/// <param name="MeshesInViewMaxBytes">
+/// How many bytes of wall mesh a scene may hold at once for the caves in its view. Published with
+/// the other two because the scene is what spends it — only it knows what it already holds — and
+/// a limit compiled into a client is a limit one installation cannot change.
+/// </param>
 public sealed record MapConfigDto(
     int CenterlineDetailZoom,
     int CenterlineMaxPaths,
@@ -147,7 +156,10 @@ public sealed record MapConfigDto(
     int MaxPoints,
     TerrainSourceDto? Terrain,
     TerrainSourceDto? TerrainFallback,
-    IReadOnlyList<TerrainBuildChoiceDto> TerrainBuilds);
+    IReadOnlyList<TerrainBuildChoiceDto> TerrainBuilds,
+    int MeshesInViewMinZoom,
+    int MeshesInViewMaxCaves,
+    long MeshesInViewMaxBytes);
 
 /// <summary>
 /// GeoJSON layer endpoints for the map workspace. Always visibility-filtered; protected
@@ -232,7 +244,10 @@ public static class MapEndpoints
             options.MaxPoints,
             sources.Primary,
             sources.Fallback,
-            sources.Drawable));
+            sources.Drawable,
+            options.MeshesInViewMinZoom,
+            options.MeshesInViewMaxCaves,
+            options.MeshesInViewMaxBytes));
     }
 
     /// <summary>

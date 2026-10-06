@@ -1761,6 +1761,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/map/cave-meshes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped; caves the caller may not read or may not place exactly are omitted and not counted. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CaveMeshesInViewDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search": {
         parameters: {
             query?: never;
@@ -19734,6 +19772,30 @@ export interface components {
             geom: null | components["schemas"]["GeoJsonPoint"];
             approximateLocation: boolean;
         };
+        CaveMeshesInViewDto: {
+            items: components["schemas"]["CaveMeshInViewDto"][];
+            /** Format: int32 */
+            total: number;
+        };
+        CaveMeshInViewDto: {
+            /** Format: uuid */
+            caveId: string;
+            caveName: null | string;
+            /** Format: uuid */
+            surveyModelId: string;
+            modelName: string;
+            meshUrl: string;
+            /** Format: double */
+            anchorLongitude: number;
+            /** Format: double */
+            anchorLatitude: number;
+            /** Format: double */
+            anchorHeightM: number;
+            /** Format: int32 */
+            triangleCount: null | number;
+            /** Format: int64 */
+            sizeBytes: number;
+        };
         CaveOrientationDto: {
             /** Format: uuid */
             caveId: string;
@@ -22039,6 +22101,12 @@ export interface components {
             terrain: null | components["schemas"]["TerrainSourceDto"];
             terrainFallback: null | components["schemas"]["TerrainSourceDto"];
             terrainBuilds: components["schemas"]["TerrainBuildChoiceDto"][];
+            /** Format: int32 */
+            meshesInViewMinZoom: number;
+            /** Format: int32 */
+            meshesInViewMaxCaves: number;
+            /** Format: int64 */
+            meshesInViewMaxBytes: number;
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";

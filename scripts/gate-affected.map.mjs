@@ -126,7 +126,10 @@ export const groups = {
     'BulkImportTests', 'DocumentConversionTests', 'EventReminderSweepTests',
     'NotificationDeliveryTests', 'TextExtractionPipelineTests', 'TripCalloutSweepTests',
   ],
-  map: ['ExpeditionMapTests', 'GeoJsonGeometryTests', 'PerformanceTests', 'PersistenceTests', 'TerrainOptionsTests'],
+  map: [
+    'CaveMeshesInViewTests', 'ExpeditionMapTests', 'GeoJsonGeometryTests', 'PerformanceTests',
+    'PersistenceTests', 'TerrainOptionsTests',
+  ],
   mapViews: ['MapViewTests'],
   me: [
     'AccountEmailTests', 'AccountSettingsTests', 'CredentialRevocationTests',
@@ -381,10 +384,10 @@ export const crossCutting = {
   locationClasses: [
     'AccessHistoryTests', 'AclAndCavingGroupTests', 'AreaKarstStatisticsTests',
     'AssociationDisclosureTests', 'AttachmentReachListingTests', 'CalendarTests',
-    'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests', 'CaveOverburdenTests',
-    'CavePassageShapeTests', 'CaveSurveyStatisticsTests', 'CenterlineTests',
-    'ClosestApproachTests', 'ConcurrencyTests', 'DashboardTests', 'DocumentAccessApiTests',
-    'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
+    'CaveDepthPlaceTests', 'CaveDomainTests', 'CaveExternalIdTests', 'CaveMeshesInViewTests',
+    'CaveOverburdenTests', 'CavePassageShapeTests', 'CaveSurveyStatisticsTests',
+    'CenterlineTests', 'ClosestApproachTests', 'ConcurrencyTests', 'DashboardTests',
+    'DocumentAccessApiTests', 'DocumentCommentNotificationTests', 'DocumentContentSearchTests',
     'DocumentSurfaceProtectionSweepTests', 'DocumentViewerBytesTests',
     'EntrancePlacementGuardTests', 'EnumBindingTests', 'ExpeditionDeleteCleanupTests',
     'ExpeditionLeadsTests', 'ExpeditionMapTests', 'ExpeditionReportTests',

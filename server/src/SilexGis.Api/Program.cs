@@ -401,6 +401,7 @@ builder.Services.AddScoped<GroupAnnouncementThrottle>();
     api.MapMapDataEndpoints();
     api.MapMapDensityEndpoints();
     api.MapMapPointPatternEndpoints();
+    api.MapMapCaveMeshEndpoints();
     api.MapSearchEndpoints();
     api.MapDashboardEndpoints();
     api.MapCalendarEndpoints();
