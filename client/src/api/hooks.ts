@@ -1332,7 +1332,20 @@ function invalidateCaveSurveyFigures(queryClient: QueryClient, caveId: string) {
   // Stored beside the survey rather than recomputed per request, but changed by exactly the same
   // events: the figures are rewritten when a file is read, and a cave whose answering upload was
   // deleted is measured from a different one or from none at all.
-  void queryClient.invalidateQueries({ queryKey: queryKeys.caveTopology(caveId) });
+  //
+  // From none at all is the case that needs care. This is the one figure the server refuses
+  // outright for a cave with no read line plot, and the panel showing it asks only of a cave that
+  // has one — but it learns that from the list of uploads as it last rendered it. Invalidated the
+  // moment the last survey is deleted, the reading is fetched again before the panel has rendered
+  // the list that says there is nothing left to measure, and the refusal lands on the console of a
+  // page that did nothing wrong. So when the list already says so, the reading is dropped instead
+  // of asked for again; the panel's next render finds no survey and does not ask.
+  const models = queryClient.getQueryData<SurveyModelInfo[]>(queryKeys.surveyModels(caveId));
+  if (models !== undefined && !caveHasMeasurableSurvey(models)) {
+    queryClient.removeQueries({ queryKey: queryKeys.caveTopology(caveId) });
+  } else {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.caveTopology(caveId) });
+  }
 }
 
 /**
@@ -1554,6 +1567,7 @@ export function useUploadSurveyModel() {
 }
 
 export function useDeleteSurveyModel() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateSurveyModels();
   return useMutation({
     mutationFn: async ({ id }: { id: string; caveId: string }) => {
@@ -1562,7 +1576,14 @@ export function useDeleteSurveyModel() {
         throw new Error(`API error ${response.status}`);
       }
     },
-    onSuccess: (_, { caveId }) => invalidate(caveId),
+    onSuccess: (_, { id, caveId }) => {
+      // Off the list at once, before anything is asked again: the upload is gone, and what the
+      // cave's figures may be asked next depends on which uploads are left.
+      queryClient.setQueryData<SurveyModelInfo[]>(queryKeys.surveyModels(caveId), (models) =>
+        models?.filter((model) => model.id !== id),
+      );
+      invalidate(caveId);
+    },
   });
 }
 
