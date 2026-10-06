@@ -218,12 +218,7 @@ test("a camp's leads board is a tab of its own and says whose board it is", asyn
  */
 test('a camp is made from the list, renamed, announced, opened for its permissions, written up and deleted', async ({
   page,
-  consoleErrors,
 }) => {
-  consoleErrors.allow(
-    /status of 404/,
-    'this flow deletes its own camp from the camp page, which refetches it once on the way out',
-  );
   await login(page);
 
   await gotoRoute(page, '/expeditions');

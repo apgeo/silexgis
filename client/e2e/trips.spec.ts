@@ -96,19 +96,6 @@ async function drawPoint(page: Page) {
 }
 
 /**
- * Deleting a trip from its own page leaves the page refetching the trip it just removed, and a
- * browser writes a console error for every request that answered 404 however well the page
- * handled it. Declared with its reason rather than left to the console sweep, which would
- * otherwise report the flow doing exactly what it was written to do.
- */
-function allowDeletedTripRefetch(consoleErrors: { allow: (p: RegExp, reason: string) => void }) {
-  consoleErrors.allow(
-    /status of 404/,
-    'this flow deletes its own trip from the trip page, which refetches it once on the way out',
-  );
-}
-
-/**
  * Picks an existing thing in the record-a-link dialog by typing part of its name.
  *
  * Typed rather than scrolled to: the picker asks the server as the reader types, and which
@@ -131,10 +118,8 @@ function roleField(page: Page, code: string): Locator {
 
 test('a trip records what it worked in, and the record survives a reload and can be struck out', async ({
   page,
-  consoleErrors,
 }) => {
   const title = `E2E Role Trip ${Date.now()}`;
-  allowDeletedTripRefetch(consoleErrors);
   await login(page);
 
   await page.goto('/trip-logs');
@@ -220,12 +205,10 @@ test('a trip records what it worked in, and the record survives a reload and can
 
 test('a trip spans several days, carries a shape of its own, and says the shape is exact', async ({
   page,
-  consoleErrors,
 }) => {
   const title = `E2E Trip ${Date.now()}`;
   const start = day(0);
   const end = day(2);
-  allowDeletedTripRefetch(consoleErrors);
   await login(page);
 
   await page.goto('/trip-logs');
@@ -268,10 +251,8 @@ test('a trip spans several days, carries a shape of its own, and says the shape 
 
 test('a trip is written as a draft and stays one until it is published', async ({
   page,
-  consoleErrors,
 }) => {
   const title = `E2E Draft Trip ${Date.now()}`;
-  allowDeletedTripRefetch(consoleErrors);
   await login(page);
 
   // Creating a trip no longer announces it. Whoever is named on it hears about it when the
@@ -322,10 +303,8 @@ test('a trip is written as a draft and stays one until it is published', async (
 
 test('a trip logged without touching the date control is a day trip today', async ({
   page,
-  consoleErrors,
 }) => {
   const title = `E2E Day Trip ${Date.now()}`;
-  allowDeletedTripRefetch(consoleErrors);
   await login(page);
 
   // The create form pre-fills both ends of the range with today, so a trip can still be written
@@ -354,12 +333,10 @@ test('a trip logged without touching the date control is a day trip today', asyn
 
 test('a photograph attached to a trip appears in the trip’s own gallery, and the person on it is counted', async ({
   page,
-  consoleErrors,
 }) => {
   const stamp = `${Date.now()}`;
   const title = `E2E Gallery Trip ${stamp}`;
   const person = `E2E Counted ${stamp}`;
-  allowDeletedTripRefetch(consoleErrors);
   await login(page);
 
   await page.goto('/trip-logs');
@@ -455,10 +432,8 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
 
 test('what a trip measured and what it found are stored on it, not held by the page', async ({
   page,
-  consoleErrors,
 }) => {
   const title = `E2E Report ${Date.now()}`;
-  allowDeletedTripRefetch(consoleErrors);
   await login(page);
 
   // A purpose is what carries the questions: the three sections are drawn from schemas the
@@ -512,10 +487,8 @@ test('what a trip measured and what it found are stored on it, not held by the p
 
 test('a trip records who was there, what one of them did, and when they came out', async ({
   page,
-  consoleErrors,
 }) => {
   const title = `E2E Roster Trip ${Date.now()}`;
-  allowDeletedTripRefetch(consoleErrors);
   await login(page);
 
   await page.goto('/trip-logs');
@@ -588,10 +561,8 @@ test('a trip records who was there, what one of them did, and when they came out
 
 test('a trip is written up as a document, and the document is filed against the trip', async ({
   page,
-  consoleErrors,
 }) => {
   const title = `E2E Report Trip ${Date.now()}`;
-  allowDeletedTripRefetch(consoleErrors);
   await login(page);
 
   await page.goto('/trip-logs');

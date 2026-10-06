@@ -95,18 +95,9 @@ async function move(page: Page, label: string, confirm = false) {
 
 test('an event is written with its day, its hours and its place, changed, taken from an idea to called off, and deleted', async ({
   page,
-  consoleErrors,
 }) => {
   const title = `E2E Event Page ${Date.now()}`;
   const day = localDay(12);
-  // Deleting an event from its own page leaves the page asking once more for the event and its
-  // list of who is coming on the way out, and the browser writes a console error for every request
-  // that answered 404 however well the page handled it. The trip page does the same and is
-  // declared the same way.
-  consoleErrors.allow(
-    /status of 404/,
-    'this flow deletes its own event from the event page, which refetches it once on the way out',
-  );
   await login(page);
 
   await gotoRoute(page, '/events');
