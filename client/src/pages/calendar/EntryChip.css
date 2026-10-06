@@ -1,0 +1,127 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+/* One record inside one day.
+
+   A stylesheet rather than a style object, for the one thing a style object cannot say: which
+   ends of the chip are closed and which run on, by where the day sits among the days its record
+   covers. Every colour and size is the theme's, handed in on the element as custom properties, so
+   the light, dark and compact themes each get their own.
+
+   Two marks, and they mean opposite things. A bar down an end, in the colour of the record's
+   family, closes it: the record begins here, or ends here. A thin rail along the chip, in the
+   same colour, says the record runs on that way. A record of one day is closed at both ends and
+   has no rail; a record of several is closed where it begins and where it ends and runs a rail
+   through every day between, which is what tells four days of one camp from four separate trips
+   that happen to share a title. */
+
+.calendar-chip {
+  /* How far an open end reaches past the chip's own box, towards the day beside it. */
+  --calendar-chip-run-start: 0px;
+  --calendar-chip-run-end: 0px;
+
+  display: flex;
+  align-items: center;
+  gap: var(--calendar-chip-gap);
+  box-sizing: border-box;
+  /* A button sizes itself to its contents even when it is laid out as a block, so the width is
+     stated: the day's own, plus whatever its open ends reach out by. */
+  inline-size: calc(100% + var(--calendar-chip-run-start) + var(--calendar-chip-run-end));
+  /* A day the record only passes through draws no words, and would otherwise be as tall as its
+     rail. */
+  min-block-size: var(--calendar-chip-line-height);
+  margin-block: 0 2px;
+  margin-inline: calc(-1 * var(--calendar-chip-run-start)) calc(-1 * var(--calendar-chip-run-end));
+  padding: 0 var(--calendar-chip-padding);
+  border: 0;
+  border-radius: 0;
+  background: var(--calendar-chip-background);
+  color: var(--calendar-chip-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--calendar-chip-font-size);
+  line-height: var(--calendar-chip-line-height);
+  text-align: start;
+}
+
+/* The record's own words. They give way before the rail does: a title cut short still reads as a
+   title, and a chip with no rail left no longer reads as running on. */
+.calendar-chip-label {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-chip[data-cancelled='true'] .calendar-chip-label {
+  text-decoration: line-through;
+}
+
+/* ---- A closed end: the family's bar and a rounded corner. */
+
+.calendar-chip[data-span='single'],
+.calendar-chip[data-span='start'] {
+  border-inline-start: var(--calendar-chip-cap) solid var(--calendar-chip-accent);
+  border-start-start-radius: var(--calendar-chip-radius);
+  border-end-start-radius: var(--calendar-chip-radius);
+}
+
+.calendar-chip[data-span='single'],
+.calendar-chip[data-span='end'] {
+  border-start-end-radius: var(--calendar-chip-radius);
+  border-end-end-radius: var(--calendar-chip-radius);
+}
+
+.calendar-chip[data-span='end'] {
+  border-inline-end: var(--calendar-chip-cap) solid var(--calendar-chip-accent);
+}
+
+/* ---- An open end: square, reaching out to the edge of the day, with the rail running to it.
+
+   It reaches only as far as the day's own padding. The days of a grid are laid out without
+   knowing about one another, so the same record may sit at a different height in the day beside
+   this one; a chip that reached all the way across the gap would join whatever happened to be
+   level with it, and that might be a different record. */
+
+.calendar-chip[data-span='start'],
+.calendar-chip[data-span='middle'] {
+  --calendar-chip-run-end: var(--calendar-chip-bleed);
+  padding-inline-end: 0;
+}
+
+.calendar-chip[data-span='middle'],
+.calendar-chip[data-span='end'] {
+  --calendar-chip-run-start: var(--calendar-chip-bleed);
+  padding-inline-start: 0;
+}
+
+.calendar-chip[data-span='end'] {
+  padding-inline-end: 0;
+}
+
+/* The rail itself: after the words, out to the open end or up to the closing bar. On a day that
+   draws no words it is the whole of the chip. */
+.calendar-chip[data-span='start']::after,
+.calendar-chip[data-span='middle']::after,
+.calendar-chip[data-span='end']::after {
+  content: '';
+  flex: 1 1 var(--calendar-chip-stub);
+  min-inline-size: var(--calendar-chip-stub);
+  border-block-start: var(--calendar-chip-rail) solid var(--calendar-chip-accent);
+}
+
+/* Where the record says its name on a day it did not begin on — the first day of a week it has
+   run on into — a short length of rail comes in ahead of the words, from the edge the record
+   arrived by. */
+.calendar-chip[data-span='middle'][data-named='true']::before,
+.calendar-chip[data-span='end'][data-named='true']::before {
+  content: '';
+  flex: 0 0 var(--calendar-chip-stub);
+  border-block-start: var(--calendar-chip-rail) solid var(--calendar-chip-accent);
+}
+
+/* Every day of the record a reader is pointing at, outlined together: on the days that draw no
+   words this is what says which record a length of rail belongs to. */
+.calendar-chip[data-linked='true'] {
+  box-shadow: inset 0 0 0 var(--calendar-chip-outline) var(--calendar-chip-accent);
+}

@@ -387,9 +387,20 @@ async function windowAsked(asked: Promise<URLSearchParams>): Promise<[string | n
   return [query.get('from'), query.get('to')];
 }
 
-/** A record's chip inside one day of whichever grid is on screen, found by its title. */
+/**
+ * A record's chip inside one day of whichever grid is on screen, found by what it is called.
+ *
+ * By its name and not by its words: a day a record only passes through draws its rail and no
+ * words at all, so there is nothing in it to read, while every chip is still named — for a reader
+ * who cannot see the drawing — by its kind, its title and which of its days it is.
+ */
 function chipIn(day: Locator, title: string): Locator {
-  return day.getByTestId('calendar-chip').filter({ hasText: title });
+  return day.getByRole('button', { name: title });
+}
+
+/** One property of the rail a chip draws along itself, read off the browser's own layout. */
+function railOf(chip: Locator, property: 'borderTopWidth' | 'width'): Promise<string> {
+  return chip.evaluate((el, name) => getComputedStyle(el, '::after')[name], property);
 }
 
 /** Opens an event from wherever it is drawn and checks the page it lands on is that event's. */
@@ -533,19 +544,42 @@ test('the week reading stands the days side by side, steps a week at a time, and
       await expect(page.getByTestId(`calendar-week-day-${localDay(offset, sunday)}`)).toBeVisible();
     }
 
-    // In both of its columns, marked as the first and the last of its days. The time it starts is
-    // said where it starts and nowhere else: it began at six once, not at six on each day.
+    // In both of its columns, and one record across them. It is named and timed where it begins
+    // and nowhere else — it began at six once, not at six on each day — and the day it ends on
+    // draws its rail and no words, because a title in both columns reads as two evenings that
+    // happen to share one.
     const first = chipIn(page.getByTestId(`calendar-week-day-${monday}`), twoDays.title);
     const last = chipIn(page.getByTestId(`calendar-week-day-${tuesday}`), twoDays.title);
     await expect(first).toBeVisible({ timeout: 30_000 });
-    await expect(first).toHaveAttribute('data-span-start', 'true');
-    await expect(first).toHaveAttribute('data-span-end', 'false');
+    await expect(first).toHaveAttribute('data-span', 'start');
     await expect(first).toHaveText(`18:00 ${twoDays.title}`);
-    await expect(last).toHaveAttribute('data-span-start', 'false');
-    await expect(last).toHaveAttribute('data-span-end', 'true');
-    await expect(last).toHaveText(twoDays.title);
-    // Drawn by its own kind rather than by its family, in the words a hover reads out.
-    await expect(first).toHaveAttribute('title', `Training — ${twoDays.title}`);
+    await expect(last).toBeVisible();
+    await expect(last).toHaveAttribute('data-span', 'end');
+    await expect(last).toHaveText('');
+    // What the drawing says, in words: its own kind rather than its family, when it starts where
+    // it starts, and which of its days each column is. A hover reads the same words out.
+    await expect(first).toHaveAccessibleName(`Training — ${twoDays.title}, 18:00, day 1 of 2`);
+    await expect(last).toHaveAccessibleName(`Training — ${twoDays.title}, day 2 of 2`);
+    await expect(first).toHaveAttribute('title', `Training — ${twoDays.title}, 18:00, day 1 of 2`);
+    // And the drawing itself, measured rather than assumed, because the marking this replaced was
+    // there in the page and could not be seen: the day it begins is closed on its leading side
+    // and open on the other, the day it ends is the reverse, and a rail of some length runs along
+    // both. A stylesheet that failed to load would leave every one of these at nothing.
+    const edges = (chip: Locator) =>
+      chip.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return [style.borderInlineStartWidth, style.borderInlineEndWidth];
+      });
+    expect(await edges(first)).toEqual(['3px', '0px']);
+    expect(await edges(last)).toEqual(['0px', '3px']);
+    for (const chip of [first, last]) {
+      expect(await railOf(chip, 'borderTopWidth')).toBe('2px');
+      expect(Number.parseFloat(await railOf(chip, 'width'))).toBeGreaterThanOrEqual(8);
+    }
+    // Pointing at either day marks both, which is what says whose rail the wordless one is.
+    await last.hover();
+    await expect(first).toHaveAttribute('data-linked', 'true');
+    await expect(last).toHaveAttribute('data-linked', 'true');
     await expect(page.getByTestId('calendar-chip').filter({ hasText: nextWeek.title })).toHaveCount(0);
 
     // A week forward: the strip and its window move together, and next week's record is there.

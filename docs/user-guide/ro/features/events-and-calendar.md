@@ -127,6 +127,23 @@ Cât timp **Evenimente** este stins, un tip nu are ce să îngusteze, așa că c
 folosit și spune de ce. Ce ați ales se păstrează și se aplică din nou când reporniți
 evenimentele.
 
+## O înregistrare care durează mai multe zile
+
+În citirile **Lună** și **Săptămână**, o tabără, un curs sau o tură care se întinde pe mai multe
+zile este desenată în fiecare zi pe care o acoperă — și se citește ca **o singură** înregistrare,
+nu ca mai multe care au același titlu:
+
+- o **bară** în culoarea înregistrării închide ziua în care **începe** și ziua în care **se
+  termină**;
+- o **linie** subțire trece prin zilele dintre ele, care nu poartă niciun cuvânt;
+- **numele** este scris în ziua în care începe și încă o dată la începutul fiecărei săptămâni
+  în care se prelungește.
+
+Arătați spre oricare zi a ei și **toate** zilele ei sunt conturate împreună, iar textul de la
+trecerea cu mausul spune în ce zi sunteți — *„ziua 2 din 4”*. Faceți clic pe oricare ca să
+deschideți înregistrarea. Ora la care începe o înregistrare se afișează doar în ziua în care
+începe.
+
 ## O vizualizare este o legătură
 
 Tot ce alegeți — zilele, familiile și tipurile, clubul, comutatoarele, ordinea și felul în care

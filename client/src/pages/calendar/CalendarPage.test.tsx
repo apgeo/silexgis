@@ -705,29 +705,91 @@ describe('the calendar as a grid of days', () => {
 
   /**
    * A record lasting four days is drawn in all four of them, because a grid answers "what is
-   * happening on this day". The first and the last cell are marked and the two between are not,
-   * which is what stops the repetition reading as four separate trips.
+   * happening on this day" — and it has to read as one record doing so. Its first day is closed
+   * and says its name, its last day is closed, the days between are open and draw only the rail;
+   * and the name is said again on the first day of the week it runs on into, for a reader who
+   * starts at that row. Said in all four it would read as four trips sharing a title.
+   *
+   * The month is named in the address, so the days are the same days whenever this runs: in
+   * September 2026 the 4th is a Friday and the 6th, a Sunday, begins a row of the grid.
    */
-  it('draws a record in every day it spans, marked where it starts and where it ends', () => {
-    const first = inThisMonth(3);
-    const last = inThisMonth(6);
-    answer([row({ title: 'Ponorul camp', start: first, end: last })]);
-    showMonth();
+  it('draws a record in every day it spans as one record, named once to a row', () => {
+    answer([row({ title: 'Ponorul camp', start: '2026-09-04', end: '2026-09-07' })]);
+    show('/calendar?view=month&day=2026-09-15');
 
-    const days = [3, 4, 5, 6].map((offset) => inThisMonth(offset));
-    const marks = days.map((day) => {
+    const chips = ['2026-09-04', '2026-09-05', '2026-09-06', '2026-09-07'].map((day) => {
       const chip = chipsOn(day)[0];
       expect(chip).toBeTruthy();
-      expect(chip.textContent).toBe('Ponorul camp');
-      return [chip.dataset.spanStart, chip.dataset.spanEnd];
+      return chip;
     });
 
-    expect(marks).toEqual([
+    expect(chips.map((chip) => chip.dataset.span)).toEqual(['start', 'middle', 'middle', 'end']);
+    expect(chips.map((chip) => chip.textContent)).toEqual(['Ponorul camp', '', 'Ponorul camp', '']);
+    // What the drawing says, in words, on every day — including the two that draw no words.
+    expect(chips.map((chip) => chip.getAttribute('aria-label'))).toEqual([
+      'Trip — Ponorul camp, day 1 of 4',
+      'Trip — Ponorul camp, day 2 of 4',
+      'Trip — Ponorul camp, day 3 of 4',
+      'Trip — Ponorul camp, day 4 of 4',
+    ]);
+    // The marks the first and last day carried before are still true of them.
+    expect(chips.map((chip) => [chip.dataset.spanStart, chip.dataset.spanEnd])).toEqual([
       ['true', 'false'],
       ['false', 'false'],
       ['false', 'false'],
       ['false', 'true'],
     ]);
+  });
+
+  /** A record of one day is closed at both ends, says its name, and is day nothing of nothing. */
+  it('draws a record of one day as itself', () => {
+    answer([row({ title: 'Coiba Mare recce', start: '2026-09-09', startTime: '08:30:00' })]);
+    show('/calendar?view=month&day=2026-09-15');
+
+    const chip = chipsOn('2026-09-09')[0];
+    expect(chip.dataset.span).toBe('single');
+    expect(chip.textContent).toBe('08:30 Coiba Mare recce');
+    expect(chip.getAttribute('aria-label')).toBe('Trip — Coiba Mare recce, 08:30');
+  });
+
+  /**
+   * The days that draw only the rail do not say whose rail it is, so pointing at any day of a
+   * record marks every day of it — and marks no other record, including one sharing those days.
+   */
+  it('marks every day of the record a reader is pointing at, and no other record', () => {
+    answer([
+      row({ id: 'camp', source: 'expedition', title: 'Ponorul camp', start: '2026-09-08', end: '2026-09-10' }),
+      row({ id: 'course', source: 'event', kind: 'training', title: 'Rope course', start: '2026-09-09', end: '2026-09-10' }),
+      row({ id: 'trip', title: 'Coiba Mare recce', start: '2026-09-09' }),
+    ]);
+    show('/calendar?view=month&day=2026-09-15');
+
+    const linkedOn = (day: string) =>
+      chipsOn(day).filter((chip) => chip.dataset.linked === 'true').map((chip) => chip.getAttribute('aria-label'));
+
+    // Wednesday holds all three; the camp's chip there draws no words.
+    const campOnWednesday = chipsOn('2026-09-09').find((chip) =>
+      chip.getAttribute('aria-label')?.includes('Ponorul camp'),
+    )!;
+    expect(campOnWednesday.textContent).toBe('');
+
+    fireEvent.mouseEnter(campOnWednesday);
+    expect(linkedOn('2026-09-08')).toEqual(['Camp — Ponorul camp, day 1 of 3']);
+    expect(linkedOn('2026-09-09')).toEqual(['Camp — Ponorul camp, day 2 of 3']);
+    expect(linkedOn('2026-09-10')).toEqual(['Camp — Ponorul camp, day 3 of 3']);
+
+    fireEvent.mouseLeave(campOnWednesday);
+    expect(linkedOn('2026-09-09')).toEqual([]);
+
+    // Reached by keyboard, the same.
+    fireEvent.focus(campOnWednesday);
+    expect(linkedOn('2026-09-10')).toEqual(['Camp — Ponorul camp, day 3 of 3']);
+    fireEvent.blur(campOnWednesday);
+
+    // A record of one day has no other days to be tied to.
+    const trip = chipsOn('2026-09-09').find((chip) => chip.dataset.span === 'single')!;
+    fireEvent.mouseEnter(trip);
+    expect(linkedOn('2026-09-09')).toEqual([]);
   });
 
   /**
@@ -869,11 +931,12 @@ describe('the calendar as a week of days', () => {
   });
 
   /**
-   * A record lasting several days stands in every column it covers, marked where it begins and
-   * where it ends, and states its time only in the column it begins in — it started once, not
-   * once a morning.
+   * A record lasting several days stands in every column it covers and reads as one record: it
+   * is closed and named in the column it begins in, closed again in the column it ends in, and
+   * the columns between draw its rail and no words. It states its time only where it begins — it
+   * started once, not once a morning — and says which of its days each column is.
    */
-  it('stands a record in every day of the week it covers', () => {
+  it('stands a record in every day of the week it covers, as one record', () => {
     const first = inThisWeek(1);
     const last = inThisWeek(4);
     answer([row({ title: 'Ponorul camp', start: first, end: last, startTime: '09:00:00' })]);
@@ -882,15 +945,42 @@ describe('the calendar as a week of days', () => {
     const marks = [1, 2, 3, 4].map((offset) => {
       const chip = chipsInColumn(inThisWeek(offset))[0];
       expect(chip).toBeTruthy();
-      return [chip.textContent, chip.dataset.spanStart, chip.dataset.spanEnd];
+      return [chip.textContent, chip.dataset.span, chip.getAttribute('aria-label')];
     });
 
     expect(marks).toEqual([
-      ['09:00 Ponorul camp', 'true', 'false'],
-      ['Ponorul camp', 'false', 'false'],
-      ['Ponorul camp', 'false', 'false'],
-      ['Ponorul camp', 'false', 'true'],
+      ['09:00 Ponorul camp', 'start', 'Trip — Ponorul camp, 09:00, day 1 of 4'],
+      ['', 'middle', 'Trip — Ponorul camp, day 2 of 4'],
+      ['', 'middle', 'Trip — Ponorul camp, day 3 of 4'],
+      ['', 'end', 'Trip — Ponorul camp, day 4 of 4'],
     ]);
+  });
+
+  /**
+   * A record that began before the week on show says its name in the strip's first column: it
+   * has no earlier column to have said it in. It did not begin there, so it is drawn open on the
+   * side it arrived by and claims no time, and the day it is on is counted from where it began.
+   */
+  it('names a record that arrived from the week before in the first column', () => {
+    answer([
+      row({
+        title: 'Ponorul camp',
+        start: inThisWeek(-2),
+        end: inThisWeek(1),
+        startTime: '09:00:00',
+      }),
+    ]);
+    showWeek();
+
+    const arriving = chipsInColumn(inThisWeek(0))[0];
+    expect(arriving.textContent).toBe('Ponorul camp');
+    expect(arriving.dataset.span).toBe('middle');
+    expect(arriving.dataset.named).toBe('true');
+    expect(arriving.getAttribute('aria-label')).toBe('Trip — Ponorul camp, day 3 of 4');
+
+    const ending = chipsInColumn(inThisWeek(1))[0];
+    expect(ending.textContent).toBe('');
+    expect(ending.dataset.span).toBe('end');
   });
 
   /** Moving a week moves the days drawn and the days asked for together. */

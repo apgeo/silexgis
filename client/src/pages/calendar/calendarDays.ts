@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import type { Dayjs } from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import type { CalendarEntry } from '../../api/hooks.ts';
 import { parseTripDay } from '../../components/trips/tripDates.ts';
 
@@ -8,14 +8,16 @@ import { parseTripDay } from '../../components/trips/tripDates.ts';
  *
  * A record that lasts more than one day is one row on the wire and appears in every cell it
  * covers, because a grid answers "what is happening on this day" and a row drawn only on the day
- * it began answers a different question. The two flags are what stop that repetition reading as
- * several separate records: the cell where it begins and the cell where it ends are marked, and
- * the cells between them are not, so the eye can tell a four-day trip from four one-day trips.
+ * it began answers a different question. What stops that repetition reading as several separate
+ * records is everything else carried here: which of the record's days a cell is and out of how
+ * many, whether it is the first or the last of them, and whether it is the cell where the record
+ * should say its name — so the eye can tell a four-day trip from four one-day trips, and a
+ * reader who cannot see the drawing is told "day 2 of 4".
  *
  * The repetition is the whole shape and it has a limit worth stating where it is implemented: the
  * cells of a grid are laid out independently of each other, so nothing here can draw one
- * continuous bar across a week, align the same record to the same height in consecutive cells, or
- * mark the point where a span wraps from a Sunday onto the next row.
+ * continuous bar across a week or hold the same record at the same height in consecutive cells.
+ * A cell knows where it sits in its own record's days; it does not know what is drawn beside it.
  */
 export interface DayEntry {
   entry: CalendarEntry;
@@ -23,10 +25,70 @@ export interface DayEntry {
   isStart: boolean;
   /** Whether this cell is the last day the record covers. */
   isEnd: boolean;
+  /**
+   * Which of the record's days this cell is, the day it begins being the first. Counted from the
+   * day the record really began, not from the first day of it the window happens to show: a camp
+   * met on its fifth day is on its fifth day.
+   */
+  dayNumber: number;
+  /** How many days the record runs for in all — one for a record that did not run on. */
+  dayCount: number;
+  /**
+   * Whether this is the first cell the record has in its row of days: the day it begins, the
+   * first day of a week it runs on into, or the first day the window shows of a record that was
+   * already under way. It is where the record says its name. Said once to a row, the name reads
+   * as one record running along it; said in every cell, it reads as that many records sharing a
+   * title, which is the reading this exists to prevent.
+   */
+  leadsRow: boolean;
 }
+
+/**
+ * Where a cell sits in the run of days its record covers: the only day, the first of several,
+ * the last of several, or one of the days between.
+ */
+export type SpanPosition = 'single' | 'start' | 'middle' | 'end';
+
+/**
+ * A record's first and last days are its two ends and are drawn closed; every other day is
+ * somewhere along it and is drawn open on both sides. A record cut short by the window is read
+ * by what its own days are, not by where the window stops — the last day shown of a camp that
+ * runs on past the window is a day in the middle of it, and is drawn as one.
+ */
+export function spanPosition(placed: Pick<DayEntry, 'isStart' | 'isEnd'>): SpanPosition {
+  if (placed.isStart) {
+    return placed.isEnd ? 'single' : 'start';
+  }
+  return placed.isEnd ? 'end' : 'middle';
+}
+
+/**
+ * What identifies a record wherever it is drawn. The identifier alone is not enough: the answer
+ * merges three families of record, each numbered by its own table.
+ */
+export const entryKey = (entry: CalendarEntry): string => `${entry.source}:${entry.id}`;
 
 /** A wire date reduced to its day, so an answer that ever grew a time part still keys correctly. */
 const asDay = (value: string): string => value.slice(0, 10);
+
+/**
+ * A calendar day as a count of days, so that two of them can be subtracted. Counted in a clock
+ * that has no daylight saving: between two local midnights either side of a clock change there
+ * are twenty-three or twenty-five hours, and a difference taken there and divided by a day is a
+ * fraction somebody then has to round the right way.
+ */
+const dayOrdinal = (value: string): number => {
+  const [year, month, date] = asDay(value).split('-').map(Number);
+  return Math.round(Date.UTC(year, month - 1, date) / 86_400_000);
+};
+
+/**
+ * Whether a day is the first of its week — the reader's language's week, which is where a row of
+ * the month grid begins and where the week strip does.
+ */
+export function startsWeek(day: string): boolean {
+  return dayjs(day).startOf('week').format('YYYY-MM-DD') === day;
+}
 
 /**
  * A local date written back as the calendar day it is. `toISOString` would answer in UTC, which
@@ -84,20 +146,37 @@ export function entriesByDay(
   entries: readonly CalendarEntry[],
   from: string,
   to: string,
+  // Which days begin a row of days. Both places that draw days draw them a week to a row, so
+  // the week is the default; it is an argument so the rule can be asked about a stated week
+  // rather than about whichever one the language in force happens to give.
+  startsRow: (day: string) => boolean = startsWeek,
 ): Map<string, DayEntry[]> {
   const byDay = new Map<string, DayEntry[]>();
   for (const entry of entries) {
     const start = asDay(entry.start);
     const end = entry.end ? asDay(entry.end) : start;
-    for (const day of coveredDays(entry.start, entry.end, from, to)) {
+    const first = dayOrdinal(start);
+    // An end before its start is not something the answer carries, and such a record covers no
+    // day and is drawn nowhere; the floor only keeps the count a count.
+    const dayCount = Math.max(1, dayOrdinal(end) - first + 1);
+    coveredDays(entry.start, entry.end, from, to).forEach((day, index) => {
       const cell = byDay.get(day);
-      const placed: DayEntry = { entry, isStart: day === start, isEnd: day === end };
+      const placed: DayEntry = {
+        entry,
+        isStart: day === start,
+        isEnd: day === end,
+        dayNumber: dayOrdinal(day) - first + 1,
+        dayCount,
+        // The first day the window shows of the record is either the day it begins or the day
+        // it is first met already under way; either way it is the first cell it has.
+        leadsRow: index === 0 || startsRow(day),
+      };
       if (cell) {
         cell.push(placed);
       } else {
         byDay.set(day, [placed]);
       }
-    }
+    });
   }
   return byDay;
 }
@@ -139,7 +218,7 @@ export function countByMonth(
  * claims no time there — which is also the truthful answer, because nothing on the wire says when
  * the second morning of a camp begins.
  */
-const timeIn = (placed: DayEntry): string | null =>
+const timeIn = (placed: Pick<DayEntry, 'entry' | 'isStart'>): string | null =>
   placed.isStart ? (placed.entry.startTime ?? null) : null;
 
 /**
@@ -156,7 +235,9 @@ const timeIn = (placed: DayEntry): string | null =>
  * carry no zone and no date, several records may claim the same minute, and none of them says how
  * long it lasts — so there is no interval to lay out and nothing to pack side by side.
  */
-export function orderedForDay(placed: readonly DayEntry[]): DayEntry[] {
+export function orderedForDay<T extends Pick<DayEntry, 'entry' | 'isStart'>>(
+  placed: readonly T[],
+): T[] {
   // Sorting is stable, so records that claim no time and records that claim the same minute keep
   // the order the answer merged them in.
   return [...placed].sort((a, b) => {

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { useState } from 'react';
 import { Calendar } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import type { CalendarEntry } from '../../api/hooks.ts';
 import { calendarDayContentStyle } from '../../theme.ts';
-import { countByMonth, entriesByDay, orderedForDay } from './calendarDays.ts';
+import { countByMonth, entriesByDay, entryKey, orderedForDay } from './calendarDays.ts';
 import EntryChip from './EntryChip.tsx';
 
 interface Props {
@@ -40,6 +41,9 @@ interface Props {
  * Within a day the records are put in the order a day is read — what claims no time first, then
  * what does, earliest first. The answer's own order is by day and breaks ties on an identifier
  * that means nothing, so it carries no order *inside* a day for this to preserve.
+ *
+ * A record lasting several days is drawn in each of them and says its name once to a row of the
+ * grid: on the day it begins, and again on the first day of each week it runs on into.
  */
 export default function CalendarGrid({
   mode,
@@ -51,6 +55,9 @@ export default function CalendarGrid({
   onOpen,
 }: Props) {
   const { t } = useTranslation();
+  // The record a reader is pointing at, so every day it is drawn in can show that it is the same
+  // one. Held here because the days are separate cells with nothing else in common.
+  const [linked, setLinked] = useState<string | null>(null);
 
   const byDay = entriesByDay(entries, from, to);
   const byMonth = countByMonth(entries, from, to);
@@ -67,9 +74,11 @@ export default function CalendarGrid({
         <div data-testid={`calendar-day-${key}`}>
           {placed.map((entry) => (
             <EntryChip
-              key={`${entry.entry.source}:${entry.entry.id}`}
+              key={entryKey(entry.entry)}
               placed={entry}
               onOpen={onOpen}
+              linked={linked === entryKey(entry.entry)}
+              onLink={setLinked}
             />
           ))}
         </div>

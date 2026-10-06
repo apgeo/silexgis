@@ -8,6 +8,8 @@ import {
   entriesByDay,
   formatDay,
   orderedForDay,
+  spanPosition,
+  startsWeek,
   weekDays,
 } from './calendarDays.ts';
 
@@ -132,6 +134,172 @@ describe('the answer arranged by day', () => {
     const byDay = entriesByDay([row()], '2026-09-01', '2026-09-30');
 
     expect(byDay.has('2026-09-06')).toBe(false);
+  });
+});
+
+/**
+ * A week that begins on a Monday, stated here so that no case below depends on which language
+ * the runner happened to start in. September 2026 begins on a Tuesday; its Mondays are the 7th,
+ * the 14th, the 21st and the 28th.
+ */
+const startsOnMonday = (day: string): boolean => new Date(`${day}T00:00:00Z`).getUTCDay() === 1;
+
+/** One record's cells across the days it covers, in order, as drawn by a Monday-first row. */
+function cellsOf(entry: CalendarEntry, from = '2026-09-01', to = '2026-09-30') {
+  const byDay = entriesByDay([entry], from, to, startsOnMonday);
+  return [...byDay.entries()].map(([day, placed]) => ({ day, ...placed[0] }));
+}
+
+describe('where a day sits in the record it belongs to', () => {
+  /**
+   * What a reader who cannot see the drawing is told — "day 2 of 4" — and what the drawing is
+   * made from. Counted from the day the record begins, both ends included.
+   */
+  it('numbers each day of a record, out of how many it runs for', () => {
+    const cells = cellsOf(row({ start: '2026-09-08', end: '2026-09-11' }));
+
+    expect(cells.map((cell) => [cell.day, cell.dayNumber, cell.dayCount])).toEqual([
+      ['2026-09-08', 1, 4],
+      ['2026-09-09', 2, 4],
+      ['2026-09-10', 3, 4],
+      ['2026-09-11', 4, 4],
+    ]);
+  });
+
+  it('reads the first and last days as the two ends, and every day between as along the way', () => {
+    const cells = cellsOf(row({ start: '2026-09-08', end: '2026-09-11' }));
+
+    expect(cells.map((cell) => spanPosition(cell))).toEqual(['start', 'middle', 'middle', 'end']);
+  });
+
+  /** A record of one day is both of its own ends, and is no span at all. */
+  it('reads a record of one day as a single day, whether it states an end or not', () => {
+    const unstated = cellsOf(row({ start: '2026-09-08', end: null }));
+    const restated = cellsOf(row({ start: '2026-09-08', end: '2026-09-08' }));
+
+    for (const cells of [unstated, restated]) {
+      expect(cells).toHaveLength(1);
+      expect(spanPosition(cells[0])).toBe('single');
+      expect(cells[0]).toMatchObject({ dayNumber: 1, dayCount: 1, leadsRow: true });
+    }
+  });
+
+  /**
+   * The name is said once to a row of days. Said in every cell, four days of one camp read as
+   * four trips sharing a title — so of a record that stays inside one week, only the day it
+   * begins says it.
+   */
+  it('says the name on the day a record begins and on no other day of that week', () => {
+    // Tuesday to Friday of one week.
+    const cells = cellsOf(row({ start: '2026-09-08', end: '2026-09-11' }));
+
+    expect(cells.map((cell) => cell.leadsRow)).toEqual([true, false, false, false]);
+  });
+
+  /**
+   * A record that runs on into the next week says its name again on that week's first day: a
+   * reader who starts at that row of the grid has not seen it. The day is still a day along the
+   * way — it is open at both ends — it is only where the name is repeated.
+   */
+  it('says the name again on the first day of each week a record runs on into', () => {
+    // Friday the 11th to Tuesday the 22nd: three rows of a Monday-first grid.
+    const cells = cellsOf(row({ start: '2026-09-11', end: '2026-09-22' }));
+
+    expect(cells.filter((cell) => cell.leadsRow).map((cell) => cell.day)).toEqual([
+      '2026-09-11',
+      '2026-09-14',
+      '2026-09-21',
+    ]);
+    const monday = cells.find((cell) => cell.day === '2026-09-14')!;
+    expect(spanPosition(monday)).toBe('middle');
+    expect(monday).toMatchObject({ dayNumber: 4, dayCount: 12 });
+  });
+
+  /**
+   * A record already under way when the window opens is met on the window's first day. It says
+   * its name there — it has no earlier cell to have said it in — but it does not begin there, and
+   * the day it is on is counted from the day it really began.
+   */
+  it('names a record on the first day the window shows of it, counted from where it began', () => {
+    const cells = cellsOf(row({ start: '2026-08-28', end: '2026-09-02' }));
+
+    expect(cells.map((cell) => [cell.day, cell.dayNumber, cell.dayCount, cell.leadsRow])).toEqual([
+      ['2026-09-01', 5, 6, true],
+      ['2026-09-02', 6, 6, false],
+    ]);
+    expect(cells.map((cell) => spanPosition(cell))).toEqual(['middle', 'end']);
+  });
+
+  /**
+   * The window stopping is not the record ending. The last day shown of a camp that runs on past
+   * the window is a day in the middle of it, and is drawn open towards the days nobody asked for.
+   */
+  it('reads the last day the window shows of a record that runs on as a day along the way', () => {
+    const cells = cellsOf(row({ start: '2026-09-28', end: '2026-10-03' }));
+
+    expect(cells.at(-1)).toMatchObject({ day: '2026-09-30', dayNumber: 3, dayCount: 6 });
+    expect(spanPosition(cells.at(-1)!)).toBe('middle');
+  });
+
+  /**
+   * Across the night the clocks change there are twenty-three hours between two midnights, and a
+   * count of days taken from hours comes up a day short or carries a fraction. The days are
+   * counted as days.
+   */
+  it('counts whole days across a change of the clocks', () => {
+    const spring = cellsOf(
+      row({ start: '2026-03-27', end: '2026-03-31' }),
+      '2026-03-01',
+      '2026-03-31',
+    );
+    const autumn = cellsOf(
+      row({ start: '2026-10-23', end: '2026-10-27' }),
+      '2026-10-01',
+      '2026-10-31',
+    );
+
+    expect(spring.map((cell) => cell.dayNumber)).toEqual([1, 2, 3, 4, 5]);
+    expect(spring.every((cell) => cell.dayCount === 5)).toBe(true);
+    expect(autumn.map((cell) => cell.dayNumber)).toEqual([1, 2, 3, 4, 5]);
+    expect(autumn.every((cell) => cell.dayCount === 5)).toBe(true);
+  });
+
+  /** Two records sharing days are each placed by their own days, not by each other's. */
+  it('places each of two overlapping records by its own days', () => {
+    const byDay = entriesByDay(
+      [
+        row({ id: 'camp', start: '2026-09-08', end: '2026-09-10' }),
+        row({ id: 'course', start: '2026-09-09', end: '2026-09-11' }),
+      ],
+      '2026-09-01',
+      '2026-09-30',
+      startsOnMonday,
+    );
+
+    const wednesday = byDay.get('2026-09-09')!;
+    expect(wednesday.map((placed) => [placed.entry.id, placed.dayNumber, spanPosition(placed)])).toEqual([
+      ['camp', 2, 'middle'],
+      ['course', 1, 'start'],
+    ]);
+  });
+
+  /**
+   * A row of days is a week, and the week is the reader's language's: unless told otherwise, the
+   * day a row begins on is the day the date library begins a week on.
+   */
+  it('takes a row of days to be the week of the language in force', () => {
+    const firstOfWeek = dayjs('2026-09-09').startOf('week').format('YYYY-MM-DD');
+
+    expect(startsWeek(firstOfWeek)).toBe(true);
+    expect(startsWeek(dayjs(firstOfWeek).add(1, 'day').format('YYYY-MM-DD'))).toBe(false);
+
+    const byDay = entriesByDay(
+      [row({ start: dayjs(firstOfWeek).subtract(2, 'day').format('YYYY-MM-DD'), end: firstOfWeek })],
+      '2026-08-01',
+      '2026-10-31',
+    );
+    expect(byDay.get(firstOfWeek)![0].leadsRow).toBe(true);
+    expect(byDay.get(dayjs(firstOfWeek).subtract(1, 'day').format('YYYY-MM-DD'))![0].leadsRow).toBe(false);
   });
 });
 

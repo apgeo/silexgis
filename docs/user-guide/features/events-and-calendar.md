@@ -124,6 +124,21 @@ While **Events** is switched off there is nothing for a kind to narrow, so the c
 be used and says why. What you had chosen is kept, and applies again when you switch events
 back on.
 
+## A record that lasts several days
+
+In the **Month** and **Week** readings a camp, a course or a trip that runs over several days
+is drawn in every day it covers — and reads as **one** record, not as several that share a
+title:
+
+- a **bar** in the record's colour closes the day it **begins** and the day it **ends**;
+- a thin **line** runs through the days in between, which carry no words;
+- its **name** is written on the day it begins, and once more at the start of each week it runs
+  on into.
+
+Point at any day of it and **all** of its days are outlined together, and the hover text says
+which day you are on — *"day 2 of 4"*. Click any of them to open the record. The time a record
+starts is shown only on the day it starts.
+
 ## A view is a link
 
 Everything you choose — the days, the families and kinds, the club, the switches, the order and

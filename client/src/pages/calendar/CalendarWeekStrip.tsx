@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { useState } from 'react';
 import { Button, Empty, Flex, Typography, theme } from 'antd';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import type { CalendarEntry } from '../../api/hooks.ts';
-import { entriesByDay, formatDay, orderedForDay, weekDays } from './calendarDays.ts';
+import { entriesByDay, entryKey, formatDay, orderedForDay, weekDays } from './calendarDays.ts';
 import EntryChip from './EntryChip.tsx';
 
 interface Props {
@@ -32,11 +33,12 @@ interface Props {
  * columns are therefore stacks in the order a day is read — what has no time first, then what has
  * one, earliest first — and the time is printed on the chip that has it.
  *
- * A record lasting several days appears in every column it covers, marked in the column where it
- * begins and in the column where it ends. It is not drawn as one bar across the week: the columns
- * are laid out independently of each other, so nothing here can promise the same record sits at
- * the same height in the column beside it, and a bar drawn without that promise would join two
- * different records together.
+ * A record lasting several days appears in every column it covers: closed and named in the column
+ * where it begins, closed again in the column where it ends, and a rail and nothing else in the
+ * columns between — or named once more in the strip's first column, when it began before this
+ * week. It is not drawn as one bar across the week: the columns are laid out independently of
+ * each other, so nothing here can promise the same record sits at the same height in the column
+ * beside it, and a bar drawn without that promise would join two different records together.
  */
 export default function CalendarWeekStrip({
   value,
@@ -48,6 +50,8 @@ export default function CalendarWeekStrip({
 }: Props) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
+  // The record a reader is pointing at, so every column it stands in can show it is the same one.
+  const [linked, setLinked] = useState<string | null>(null);
   const days = weekDays(value);
   const byDay = entriesByDay(entries, from, to);
   const today = formatDay(new Date());
@@ -121,9 +125,11 @@ export default function CalendarWeekStrip({
               ) : (
                 placed.map((entry) => (
                   <EntryChip
-                    key={`${entry.entry.source}:${entry.entry.id}`}
+                    key={entryKey(entry.entry)}
                     placed={entry}
                     onOpen={onOpen}
+                    linked={linked === entryKey(entry.entry)}
+                    onLink={setLinked}
                   />
                 ))
               )}
