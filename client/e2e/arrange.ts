@@ -93,7 +93,11 @@ export async function newEnglishContext(
  */
 export async function signedInElsewhere(
   browser: Browser,
-  account?: Account,
+  // An account with or without its id. A flow that registered its accounts itself holds their
+  // addresses, passwords and names without ever having been told their ids, and signing in reads
+  // none of them but the first two — requiring the id here would turn that flow away for want of
+  // a field this function never looks at.
+  account?: Omit<Account, 'id'> & Partial<Pick<Account, 'id'>>,
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await newEnglishContext(browser);
   const page = await context.newPage();
