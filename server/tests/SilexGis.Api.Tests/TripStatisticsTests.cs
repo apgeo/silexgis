@@ -569,6 +569,55 @@ public sealed class TripStatisticsTests : IAsyncLifetime, IClassFixture<Postgres
     }
 
     /// <summary>
+    /// A cave's saved file leaves out the two figures that are true of a cave and say nothing
+    /// about it. Every trip counted for a cave names that cave, so its places can only read one
+    /// and its first visits can only repeat its people — and a row that cannot differ from the
+    /// row above it still reads, in a file opened months later, as a second fact.
+    /// </summary>
+    /// <remarks>
+    /// The same fixture is read through a person and through a club, where both rows are still
+    /// written and still mean something, so the absence is the cave subject and not two rows that
+    /// stopped being written for everybody. The figures themselves are still on the answer the
+    /// page is given: nothing was taken out of the arithmetic, only off the two surfaces.
+    /// </remarks>
+    [Fact]
+    public async Task A_caves_saved_file_leaves_out_the_two_figures_that_can_only_repeat_another()
+    {
+        var caveId = await CreateCaveAsync();
+        var clubId = await CreateCavingGroupAsync();
+        var trip = await CreateTripAsync(new TripSpec
+        {
+            Title = "One cave, two people",
+            TripDate = "2026-05-21",
+            Visibility = "authenticated",
+            OrganizingCavingGroupId = clubId,
+            CaveIds = [caveId],
+            People = [new PersonSpec("Ana", participantRoleId), new PersonSpec("Bogdan", participantRoleId)],
+        });
+        var anaId = CaverIdByName(trip, "Ana");
+
+        var cave = await SheetAsync(owner, $"caves/{caveId}");
+        cave["Trips"].ShouldBe(1d);
+        cave["People"].ShouldBe(2d);
+        cave.ShouldNotContainKey("Places");
+        cave.ShouldNotContainKey("First visits");
+
+        // What was left off is exactly the degenerate pair: one place, and as many first visits
+        // as there were people. Read from the answer the page gets, which still carries them.
+        var seen = await StatsAsync(owner, $"caves/{caveId}");
+        seen.GetProperty("places").GetInt32().ShouldBe(1);
+        seen.GetProperty("firstVisits").GetInt32().ShouldBe(seen.GetProperty("people").GetInt32());
+
+        // A person's sheet and a club's keep both, over the very same trip.
+        var person = await SheetAsync(owner, $"cavers/{anaId}");
+        person["Places"].ShouldBe(1d);
+        person["First visits"].ShouldBe(1d);
+        var club = await SheetAsync(owner, $"caving-groups/{clubId}");
+        club["Places"].ShouldBe(1d);
+        club["First visits"].ShouldBe(2d);
+    }
+
+    /// <summary>
     /// The measured facts a trip records add up over the trips the caller may read, and a trip
     /// recording none of them contributes nothing rather than dragging the total anywhere.
     /// </summary>

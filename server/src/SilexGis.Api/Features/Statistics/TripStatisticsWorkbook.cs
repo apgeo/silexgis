@@ -78,10 +78,22 @@ internal static class TripStatisticsWorkbook
             rows.Add(Figure("People", totals.People));
         }
 
+        // Left off a cave's sheet, exactly as the screen leaves them off its panel. Every trip
+        // counted for a cave names that cave and its places are narrowed to that cave alone, so
+        // "places" can only read one, or none while nobody has been; and everybody on those
+        // trips reached the cave for the first time on one of them, so "first visits" can only
+        // repeat the people figure in the row above. A row that cannot differ from its neighbour
+        // still reads as a second fact — more so in a file, where nobody is beside the reader to
+        // say that it is the same number twice. Both stay wherever they can vary: for a person,
+        // a club and a camp.
+        if (subject != StatisticsSubject.Cave)
+        {
+            rows.Add(Figure("Places", totals.Places));
+            rows.Add(Figure("First visits", totals.FirstVisits));
+        }
+
         rows.AddRange(
         [
-            Figure("Places", totals.Places),
-            Figure("First visits", totals.FirstVisits),
             Figure("Trips with an incident", totals.Incidents),
 
             // Hours rather than minutes, and as a number rather than a written duration: a reader
