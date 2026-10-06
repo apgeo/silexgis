@@ -2,8 +2,14 @@
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import {
-  centreOnDemoCave, deleteFeature, login, longPressMap, overlayTreeNode, tapMap,
+  deleteFeature, gotoRoute, login, longPressMap, mapAddress, overlayTreeNode, pixelOnMap, tapMap,
 } from './helpers.ts';
+
+// Where the demonstration data puts the main entrance of Peștera Demo Mare.
+const DEMO_CAVE_ENTRANCE = { lat: 45.5312, lon: 25.4472 };
+// Far enough back that the server aggregates: it hands the map clusters below zoom eleven, in
+// cells some fifty kilometres across at this one, which holds every demonstration cave near here.
+const CLUSTERED_ZOOM = 7;
 
 // Runs in the `mobile-android` project only (Pixel 7, 412x915, touch). These cover the
 // phone layout — the docks-as-drawers swap and the chrome that has to step aside at this
@@ -41,23 +47,41 @@ test('docks become drawers, and the details drawer opens when something is picke
   await page.locator('.ant-drawer-mask').click({ position: { x: 370, y: 400 } });
   await expect(page.getByText('Base layers')).toBeHidden();
 
-  // Centre on the demo cave, then zoom out until its entrances aggregate at the view
-  // centre. Search cannot centre the map any more — its results carry no coordinates.
-  await centreOnDemoCave(page);
-
-  // Get below the clustering threshold before clicking: selecting a single entrance flies
-  // the map back to zoom 15, so zooming and clicking in the same loop undoes its own
-  // progress. "Show on map" fits a point, which lands at max zoom.
-  const canvas = page.locator('.map-canvas');
-  for (let i = 0; i < 12; i++) {
-    await page.locator('.ol-zoom-out').click();
-  }
+  // Stand back over the demo cave, to where the server hands the map clusters instead of single
+  // entrances — by address, so the camera is known exactly, and the cluster is then found from
+  // what the server said it drew. It used to be taken to be under the middle of the screen, which
+  // held only while the demonstration caves were alone out there: the day another spec left a
+  // cave eleven kilometres off, the cluster's centre moved and the middle of the screen was a
+  // different cave.
+  const camera = { ...DEMO_CAVE_ENTRANCE, zoom: CLUSTERED_ZOOM };
+  const answered = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === '/api/v1/map/cave-entrances' &&
+      url.searchParams.get('zoom') === String(CLUSTERED_ZOOM) &&
+      response.ok()
+    );
+  });
+  await gotoRoute(page, mapAddress(camera));
+  const drawn = (await (await answered).json()) as {
+    features: { properties: { cluster?: boolean }; geometry: { coordinates: [number, number] } }[];
+  };
+  const clusters = drawn.features
+    .filter((feature) => feature.properties.cluster === true)
+    .map((feature) => ({ lon: feature.geometry.coordinates[0], lat: feature.geometry.coordinates[1] }));
+  expect(clusters.length, 'the map should be handed clusters at this zoom').toBeGreaterThan(0);
+  // The cave's own cluster is the nearest one: a cluster stands at the middle of its members, and
+  // every member of this one is within a few pixels of the cave at this zoom.
+  const off = (place: { lon: number; lat: number }) =>
+    Math.hypot(place.lon - camera.lon, place.lat - camera.lat);
+  const cluster = clusters.reduce((nearest, place) => (off(place) < off(nearest) ? place : nearest));
+  const spot = await pixelOnMap(page, camera, cluster.lat, cluster.lon);
 
   // Picking on the map opens the details drawer by itself: with no dock on screen, a
-  // selection would otherwise appear to do nothing at all. Only the click is retried,
-  // for the zoom animation and the debounced bbox loader.
+  // selection would otherwise appear to do nothing at all. Only the tap is retried, for the
+  // frame between the server's answer arriving and the map having drawn it.
   await expect(async () => {
-    await canvas.click();
+    await page.touchscreen.tap(spot.x, spot.y);
     await expect(page.getByText(/entrances in this area/)).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
 

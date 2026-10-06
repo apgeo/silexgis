@@ -94,6 +94,44 @@ export async function centreOnDemoCave(page: Page) {
   await expect(page.locator('.map-canvas')).toBeVisible({ timeout: 15_000 });
 }
 
+/** Where the workspace map looks, and how closely. */
+export interface MapCamera {
+  lat: number;
+  lon: number;
+  zoom: number;
+}
+
+/**
+ * The map's address with its camera somewhere, in the form the map reads from its hash.
+ *
+ * Signing in again carries the hash through, so this can be gone to like any other route. A
+ * camera put somewhere this way is known exactly, which one read back off a map still moving is
+ * not.
+ */
+export function mapAddress({ lat, lon, zoom }: MapCamera): string {
+  return `/map#${zoom.toFixed(2)}/${lat.toFixed(5)}/${lon.toFixed(5)}`;
+}
+
+/**
+ * Where on the page the map draws a place, for a camera put there by `mapAddress`.
+ *
+ * The map keeps its own objects to itself, so a test cannot ask it where something is. It does
+ * not have to: the projection is the web's ordinary one, the camera is the middle of the map's
+ * box, and each step of zoom halves the ground a pixel covers.
+ */
+export async function pixelOnMap(page: Page, camera: MapCamera, lat: number, lon: number) {
+  const box = (await page.locator('.ol-viewport').boundingBox())!;
+  const halfTheWorld = 20037508.342789244;
+  const metresPerPixel = (2 * halfTheWorld) / 256 / 2 ** camera.zoom;
+  const east = (degrees: number) => (degrees * halfTheWorld) / 180;
+  const north = (degrees: number) =>
+    (Math.log(Math.tan(((90 + degrees) * Math.PI) / 360)) * halfTheWorld) / Math.PI;
+  return {
+    x: box.x + box.width / 2 + (east(lon) - east(camera.lon)) / metresPerPixel,
+    y: box.y + box.height / 2 - (north(lat) - north(camera.lat)) / metresPerPixel,
+  };
+}
+
 /** Taps the map at a viewport-relative point, the way a finger places a vertex. */
 export async function tapMap(page: Page, x: number, y: number) {
   const box = (await page.locator('.map-canvas').boundingBox())!;
