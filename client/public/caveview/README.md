@@ -3,8 +3,8 @@
 Source: https://github.com/apgeo/CaveView.js — this project's fork of
 https://github.com/aardgoose/CaveView.js (MIT license, see `LICENSE` in this directory).
 
-Vendored build: distribution version **2.9.0-slx.13**, built from the fork's `silexgis`
-branch at commit `f4c94bb2` — the upstream **2.9.0 release tag** plus the fork's changes
+Vendored build: distribution version **2.9.0-slx.15**, built from the fork's `silexgis`
+branch at commit `5647a5fd` — the upstream **2.9.0 release tag** plus the fork's changes
 (each also kept on its own dev-based `feature/*` branch so upstream can take them): the
 dispose-handler typo fix, the `crsLookup` configuration option the app uses to resolve
 coordinate systems locally instead of via epsg.io, a navigation and hover API
@@ -43,10 +43,15 @@ not to take up a feature:
   an application putting a group on the first line and its members under it has them told apart —
   and two markers' labels no longer read alike. `liveMarkers.labelHeadingFromMarker` turns it off.
 - A **Romanian catalogue** (`lib/lang-ro.json`). Vendored since slx.13, when this application
-  started passing its interface language to the viewer (`CaveViewPanel` sets `language` from
-  i18next): the viewer fetches `lib/lang-<code>.json` from this directory for any language but
-  English, which is built in. The catalogue is a tracked file in the fork's `build/CaveView/lib/`
-  that the build never writes, so it is copied by hand when vendoring.
+  started passing its interface language to the viewer: the viewer fetches `lib/lang-<code>.json`
+  from this directory for any language but English, which is built in. The catalogue is a tracked
+  file in the fork's `build/CaveView/lib/` that the build never writes, so it is copied by hand
+  when vendoring — and a unit test (`src/caveview/vendoredRuntime.test.ts`) fails when the current
+  directory lacks one for an interface language the application offers. Every viewer the
+  application builds is given the language by one function (`caveViewerOptions` in
+  `src/caveview/loadCaveView.ts`), because the catalogue is one object shared by all the viewers on
+  a page: a single viewer built without the option chooses the browser's language and changes it
+  under every other.
 
 **What slx.12 adds over slx.11**, for rendering the viewer into a movie and for labelling people
 by their own names:
@@ -91,8 +96,11 @@ turn asked for during a session changes no frame and leaves the controls off; an
 set by a pixel ratio of 1.1 are 13.2 again after a capture made at a ratio of 1. Each of those
 checks fails against the build this one replaced.
 
-**What slx.13 adds over slx.12** — maintenance the fork had been carrying as debt, each proved
-by the fork's own smoke test (`npm test` there, 16 assertions in headless Chromium):
+**What slx.13 adds over slx.12** — maintenance the fork had been carrying as debt. The fork's
+smoke test (`npm test` there, headless Chromium) had 16 assertions at the time, and several of
+them said less than this list does: reduced motion was a property read, the keyboard one text
+input, fullscreen a getter, the catalogue nothing. What the test asserts now is listed in the
+fork's `test/README.md`, and slx.14 is what it found:
 
 - A late `renderView()`, `resize()` or second `dispose()` after `dispose()` is a no-op rather than
   a `null` dereference, and `getSnapshot()` after it throws a named error.
@@ -108,6 +116,72 @@ by the fork's own smoke test (`npm test` there, 16 assertions in headless Chromi
   and the fullscreen getter reads `document.fullscreenElement` rather than comparing sizes.
 - The help page states the viewer's version. `npm run lint` passes in the fork (flat config) and
   its lock file agrees with `package.json`, so `npm ci` works in a clean clone.
+
+**What slx.14 changes over slx.13** — defects in what slx.13 added, and three older ones the
+same test turned up once it drove the viewer as a reader does. Only the bundle differs; the
+workers, the stylesheet, the logo and the catalogue are byte-identical to slx.13's.
+
+- **The shortcuts work again after one of the viewer's own controls was used.** slx.13 left a key
+  alone whenever it was typed into any `input` or `select`. The toolbar's shading chooser is a
+  select, and the side panel's settings are tick boxes, sliders and choosers; each keeps the focus
+  after use, so no key reached the viewer until the reader clicked outside it. A key is now left to
+  its target only for real text entry (a textarea, an editable element, an input whose type takes
+  text) and for a chooser or tick box of the host page; a control inside the viewer's container, or
+  inside a toolbar wherever the host put it, is the viewer's own.
+- **A fullscreen the browser refused is undone.** The class that displays the element large was
+  set before the browser was asked, and after a refusal nothing took it off: the state read false,
+  every further press asked again, and each left a rejection unhandled. The viewer now reads as
+  fullscreen while the class alone is displaying it large, the next press takes the class off,
+  `dispose()` does too, and a request made while another element is in fullscreen does nothing.
+- **A viewer disposed under a load ends the load silently.** A load completing after `dispose()`
+  — the long case is one waiting on `crsLookup` — built a survey from a context already let go of
+  and reported the error in an `alert()`; one disposed before the file was read alerted a failure
+  to load. Both now return at once, and `dispose()` aborts what is still being fetched or read.
+  This application disposes a viewer under a load whenever a panel is closed or pointed at another
+  model before the first has arrived.
+- **The toolbar's shading chooser follows the language.** It read the mode names once, when built,
+  while the catalogue is fetched as the viewer is created and often lands later — so a Romanian
+  viewer kept an English chooser. It now writes its list again when the language arrives.
+- **A disposed viewer stops listening for a change of language.** Each viewer subscribed to the
+  page-wide catalogue and never unsubscribed, so a later viewer changing the language made every
+  disposed one rebuild its scales from nothing and throw, and none could be collected.
+- **`frameLiveMarkers()` signals its end after it has returned**, including when the move takes one
+  frame (all a reduced-motion reader gets) or the camera already takes the markers in. `moved`
+  used to be dispatched inside the call, before a host told to wait for it could listen.
+- **Framing markers that share one station leaves the zoom a number.** With `margin: 0` under the
+  orthographic camera the box had no size, the fit was infinite and the zoom became NaN, which
+  nothing recovered.
+
+The fork's test went from 16 assertions to 38 with these: 26 pass and 12 fail against the slx.13
+bundle, and all 38 pass against slx.14's.
+
+**What slx.15 changes over slx.14** — defects slx.14 still had, fixed before it left the branch
+it was vendored on. Again only the bundle differs.
+
+- **A chooser or a slider of the viewer's own is stepped with the arrow keys again.** slx.14 took
+  every key pressed in one of the viewer's own controls for the viewer, so that its shortcuts
+  survive a control that keeps the focus — and cancelled each one, wanted or not. A slider of the
+  side panel or the toolbar's shading chooser, once pressed, could not be moved with the arrows for
+  as long as the pointer was over the viewer. The arrows, Home, End, Page Up and Page Down, which
+  the viewer does nothing with, are now left to a chooser, a slider or a radio button of its own.
+- **A fullscreen request counts from the moment it is made.** The class that displays the element
+  large is set before the browser is asked, and slx.14 knew the class was covering the page only
+  once the refusal had arrived: `fullscreen` set to false, or `dispose()`, in the turn of the
+  request left the class on an element that went on covering the page, with no viewer to take it
+  off. The viewer now reads as fullscreen from the request; taking the request back or disposing
+  takes the class off at once; and a fullscreen the browser grants to a request nobody is waiting
+  for any more is left as it arrives.
+- **A toolbar beside the container follows a refused fullscreen into it.** A bar a host mounted
+  outside the viewer's container was moved into it on the document's fullscreen event, which a
+  refusal never raises, so the covering container hid the bar and the one button that would have
+  uncovered the page. It now moves on the viewer's own report as well. This application mounts its
+  bar inside the container, where the case does not arise.
+
+The fork's test went from 38 assertions to 49 with these — four of the new ones hold behaviour
+slx.14 already had and nothing checked (a framing's signal given before a focus started in the
+same turn, a later real fullscreen taking over from a refused one, `dispose()` taking the class
+off, `dispose()` aborting the request of a load): 42 pass and 7 fail against the slx.14 bundle,
+and all 49 pass against this one.
 
 Not taken: moving the `.3d` and `.lox` readers onto the worker path the `.ply` reader uses. They
 write into a shared survey graph (stations shared by identity between legs, a tree with methods,
@@ -126,11 +200,11 @@ CaveView.js is not published on npm; it ships as a prebuilt browser bundle. This
 directory contains the runtime subset the app needs, under a directory named by the
 distribution version:
 
-- `v2.9.0-slx.13/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
-- `v2.9.0-slx.13/js/workers/` — web workers the bundle spawns at runtime (paths resolved
+- `v2.9.0-slx.15/js/CaveView2.min.js` — the viewer bundle (UMD, exposes the `CV2` global)
+- `v2.9.0-slx.15/js/workers/` — web workers the bundle spawns at runtime (paths resolved
   against the viewer's `home` option, which the app points at this directory)
-- `v2.9.0-slx.13/css/caveview.css`, `v2.9.0-slx.13/images/logo.svg` — runtime assets
-- `v2.9.0-slx.13/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
+- `v2.9.0-slx.15/css/caveview.css`, `v2.9.0-slx.15/images/logo.svg` — runtime assets
+- `v2.9.0-slx.15/lib/lang-ro.json` — the Romanian catalogue, fetched when the interface is Romanian
 
 The version directory exists for cache correctness: these URLs are fetched outside the
 app bundle's hashed-asset pipeline, so a new build must arrive under new URLs or
@@ -141,7 +215,8 @@ bundle or its startup cost.
 To upgrade: in the fork checkout, update the `silexgis` branch (rebase or merge its
 `feature/*` branches onto the wanted upstream state), bump the distribution version in
 `src/js/core/constants.js` and `package.json`, run `npm ci && npm run build`, copy the
-subset above from `build/CaveView/` into a new `v<version>/` directory here, and update
+subset above from `build/CaveView/` into a new `v<version>/` directory here (the workers without
+their `.min` twins, which nothing asks for; `lib/lang-*.json` for each interface language), and update
 `CAVEVIEW_HOME` and this README in the same commit. **Keep the previous version
 directory through one release** — a browser tab loaded before the upgrade still asks for
 the old paths when its user first opens the 3D viewer, and deleting them immediately
@@ -149,19 +224,24 @@ turns that into a load failure until a full reload — then delete it in the rel
 after. (Earlier `2.9.0-slx.*` directories were removed rather than kept: none reached a release, so no
 browser can be holding it.) Do not edit the vendored files in place.
 
-`v2.9.0-slx.12/` is kept beside the current one under that rule, and `v2.9.0-slx.9/` went with
-slx.13 (it had been kept through slx.12). `v2.9.0-slx.10/` and `v2.9.0-slx.11/` were each
-replaced before reaching a release, so no browser could have been holding either and neither was
-kept. **A build is never replaced in place, either:** once a version directory has been vendored,
+`v2.9.0-slx.12/` is kept beside the current one under that rule: it is the build the last release
+loads, so it is the one a browser can still be holding. `v2.9.0-slx.13/` went with slx.14 without
+being kept, because it never reached an installation, and `v2.9.0-slx.14/` went with slx.15 the
+same way, replaced on the branch it was vendored on before that branch was merged;
+`v2.9.0-slx.9/` went with slx.13 (it had
+been kept through slx.12); and `v2.9.0-slx.10/` and `v2.9.0-slx.11/` were each replaced before
+reaching a release, so no browser could have been holding either and neither was kept. There are
+never more than two version directories here, and a unit test counts them. **A build is never replaced in place, either:** once a version directory has been vendored,
 any further change to the fork — a fix found while vendoring included — is a new distribution
 version and a new directory. slx.12 was rebuilt in its own directory once, from `563b763b` to
 `5f14d910`, before it reached a release; that was the last time.
 
-**This build was verified to reproduce.** `v2.9.0-slx.13/js/CaveView2.min.js` (SHA-256
-`31a2d6cd37dfa6c86738f3e5c8a3a43b148da89393003323cde6b68b87af2690`) is byte-identical to a
-fresh `npm ci && npm run build` of commit `f4c94bb2` in a clean clone of the fork, made
-separately from the build it was copied from; the workers, the stylesheet and the logo are
-byte-identical to slx.12's (and slx.12's bundle, `b12cb7da…`, reproduced the same way from
-`5f14d910`). (An earlier build, from `ed0322e5`, was checked the same way against the bundle
+**This build was verified to reproduce.** `v2.9.0-slx.15/js/CaveView2.min.js` (SHA-256
+`0baf1d80911199e054e85e065ce8f821bd108f930f7d595414e82a91f2b8b387`) is byte-identical to a
+fresh `npm ci && npm run build` of commit `5647a5fd` in a clean clone of the fork, made
+separately from the build it was copied from — as is every other file that build writes; the
+workers, the stylesheet and the logo are byte-identical to slx.12's, and the catalogue to the
+fork's tracked file (slx.14's bundle, `7b6b4024…`, reproduced the same way from `4ff3ecbd`,
+slx.13's, `31a2d6cd…`, from `f4c94bb2`, and slx.12's, `b12cb7da…`, from `5f14d910`). (An earlier build, from `ed0322e5`, was checked the same way against the bundle
 serving the club's public pages.) That is worth re-checking on the next upgrade: it is the
 cheapest evidence that the vendored bytes are the fork's source and not a local accident.
