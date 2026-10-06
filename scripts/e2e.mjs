@@ -110,6 +110,15 @@ const apiEnv = {
   // Off by default, and one flow needs it: nothing but self-registration mints the second
   // account that flow requires, and it fails rather than skipping without it.
   SILEXGIS__Auth__OpenRegistration: 'true',
+  // Sign-in throttling allows sixty calls a minute per address, and the sixty-first is refused
+  // (measured: sixty answers, then 429). Every worker of a run reaches the API from this one
+  // machine, every test signs in afresh, and a sign-in is two of those calls — the credentials
+  // and the code exchange — so the whole run shares thirty sign-ins a minute. Two workers never
+  // get near that; the sixteen this machine starts by default do, and what a refused sign-in
+  // looks like from a test is a map that never appears, with nothing naming the throttle. The
+  // throttle is a property the integration tests prove with limits of their own; here it would
+  // only measure how fast the suite runs. The integration factory lifts it the same way.
+  SILEXGIS__Auth__RateLimitPerMinute: '100000',
   // No grace after a watch closes. The archive of a cave's past trips lists a closed trip only once
   // it has left the live window, which by default is two days after it closed; the spec that stands
   // a real archive up closes its trip a moment before reading it, and fails rather than skipping
@@ -204,8 +213,11 @@ try {
       spawnSync('docker', ['exec', DB_NAME, 'pg_isready', '-U', 'silexgis'],
         { stdio: 'ignore' }).status === 0, 60_000);
 
+    // The API project and what it references, not the solution: the browser leg runs no test
+    // assembly, and building them all costs a gigabyte of output and a third of the build's time
+    // on every run and every CI job for nothing it uses.
     step('Building the API');
-    if (run('dotnet', ['build', join(repoRoot, 'server', 'SilexGis.slnx')]) !== 0) {
+    if (run('dotnet', ['build', join(apiDir, 'SilexGis.Api.csproj')]) !== 0) {
       throw new Error('the API did not build');
     }
 

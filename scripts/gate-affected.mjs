@@ -17,12 +17,16 @@
 //   --json         machine-readable result (mode, classes, filter, reasons)
 //   --list         one class per line
 //   --filter       just the `dotnet test --filter` expression (empty when mode is full/none)
+//   --rederive     rewrite the map's two cross-cutting lists from the test sources and say what
+//                  changed; the map's own test fails until they match, and this is how they are
+//                  made to — by a command somebody runs and commits, never behind their back
 //
 // Exit code: 0 with mode "targeted" or "none"; 10 with mode "full" (so a caller can branch
 // on it without parsing anything); 1 on error.
 
 import { execFileSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -104,6 +108,57 @@ export function classify(changedPaths, map) {
   return { mode, classes: mode === 'full' ? [] : list, reasons };
 }
 
+/**
+ * The two cross-cutting lists as the test sources yield them today: every class that asserts a
+ * denial, and every class that asserts an obfuscated or protected position, by the patterns the
+ * map records. One copy of the rule — the map's own test compares the lists against this, and
+ * `--rederive` writes this into the map.
+ */
+export function deriveCrossCutting(map, testDirectory) {
+  const permission = new RegExp(
+    map.crossCutting.derivation.permission.source,
+    map.crossCutting.derivation.permission.flags,
+  );
+  const location = new RegExp(
+    map.crossCutting.derivation.location.source,
+    map.crossCutting.derivation.location.flags,
+  );
+  const permissionClasses = [];
+  const locationClasses = [];
+  for (const file of readdirSync(testDirectory).filter((f) => f.endsWith('Tests.cs')).sort()) {
+    const text = readFileSync(path.join(testDirectory, file), 'utf8');
+    const name = file.slice(0, -'.cs'.length);
+    if (permission.test(text)) permissionClasses.push(name);
+    if (location.test(text)) locationClasses.push(name);
+  }
+  return { permissionClasses, locationClasses };
+}
+
+/** The map's source with its two cross-cutting lists replaced. Exported for the tests. */
+export function withCrossCutting(mapSource, lists) {
+  const wrapped = (names) => {
+    const lines = [];
+    let line = '   ';
+    for (const name of names) {
+      const piece = ` '${name}',`;
+      if (line.length + piece.length > 96) {
+        lines.push(line);
+        line = '   ';
+      }
+      line += piece;
+    }
+    if (line.trim()) lines.push(line);
+    return lines.join('\n');
+  };
+  let out = mapSource;
+  for (const key of ['permissionClasses', 'locationClasses']) {
+    const list = new RegExp(`(\\n  ${key}: \\[\\n)[\\s\\S]*?(\\n  \\],)`);
+    if (!list.test(out)) throw new Error(`the map has no ${key} list in the shape this rewrites`);
+    out = out.replace(list, (_, open, close) => `${open}${wrapped(lists[key])}${close}`);
+  }
+  return out;
+}
+
 /** The `dotnet test --filter` expression selecting exactly these classes. */
 export function filterExpression(classes) {
   // The trailing dot pins the match to the class: FullyQualifiedName is Namespace.Class.Method,
@@ -135,8 +190,11 @@ async function main() {
   };
 
   const base = take('--base') ?? 'master';
-  const mapFile =
-    take('--map') ?? path.join(path.dirname(new URL(import.meta.url).pathname), 'gate-affected.map.mjs');
+  // Through fileURLToPath, not the URL's own pathname: on Windows that begins with a slash before
+  // the drive letter, and the path built from it names nothing.
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const mapFile = take('--map') ?? path.join(here, 'gate-affected.map.mjs');
+  const rederive = has('--rederive');
   const asJson = has('--json');
   const asList = has('--list');
   const asFilter = has('--filter');
@@ -146,6 +204,22 @@ async function main() {
   }
 
   const map = await import(pathToFileURL(mapFile).href);
+
+  if (rederive) {
+    const lists = deriveCrossCutting(map, path.join(here, '..', ...TEST_DIR.split('/').filter(Boolean)));
+    for (const key of ['permissionClasses', 'locationClasses']) {
+      const before = new Set(map.crossCutting[key]);
+      const after = new Set(lists[key]);
+      const added = lists[key].filter((c) => !before.has(c));
+      const removed = map.crossCutting[key].filter((c) => !after.has(c));
+      console.log(`${key}: ${lists[key].length} classes`);
+      for (const c of added) console.log(`  + ${c}`);
+      for (const c of removed) console.log(`  - ${c}`);
+    }
+    writeFileSync(mapFile, withCrossCutting(readFileSync(mapFile, 'utf8'), lists));
+    return;
+  }
+
   const files = changedFiles(base);
   const result = classify(files, map);
   const filter = filterExpression(result.classes);
