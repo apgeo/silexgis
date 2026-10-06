@@ -90,7 +90,9 @@ to showing the cave through the ground.
 ## Walls of the selected cave
 
 If a cave has an uploaded **`.stl` wall model**, the 3D view can draw it in place, under the
-terrain, beside that cave's centerlines.
+terrain, beside that cave's centerlines. A cave without one is drawn with the walls
+[built from its `.lox` or `.3d`](surveys-and-models.md#walls-from-a-lox-or-3d), where that survey
+holds scraps or measured passage dimensions to build them from.
 
 - By default it is loaded **only for the cave you select**. Under the **Cave walls** switch in
   the layer list you choose between that — *Selected cave* — and *Every cave in view*, described

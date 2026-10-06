@@ -92,7 +92,9 @@ peșterii prin teren.
 ## Pereții peșterii selectate
 
 Dacă o peșteră are un **model de pereți `.stl`** încărcat, vizualizarea 3D îl poate desena la
-locul lui, sub relief, lângă poligonațiile acelei peșteri.
+locul lui, sub relief, lângă poligonațiile acelei peșteri. O peșteră fără un asemenea model este
+desenată cu pereții [construiți din `.lox`-ul sau `.3d`-ul ei](surveys-and-models.md#pereți-dintr-un-lox-sau-3d),
+acolo unde topografia conține schițe sau dimensiuni de galerie măsurate din care să fie construiți.
 
 - Implicit se încarcă **numai pentru peștera pe care o selectați**. Sub comutatorul **Pereții
   peșterilor** din lista de straturi alegeți între aceasta — *Peștera selectată* — și *Toate

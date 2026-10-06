@@ -23,7 +23,8 @@ Everything here lives on a **cave's page**.
 State: *Waiting its turn → In progress → Ready*, or *Could not be processed*.
 
 A model is drawn in the **survey viewer** (CaveView.js) and, for walls, in the
-[3D scene](3d-view.md).
+[3D scene](3d-view.md). Walls are either a `.stl` you upload or, where the survey itself holds
+enough to build them, [made from the `.lox` or `.3d`](#walls-from-a-lox-or-3d).
 
 ### The current model
 
@@ -31,9 +32,10 @@ A cave keeps every model ever uploaded — uploads are never overwritten, so a c
 is a second model beside the first. One of them carries the **Current** mark, per kind: the
 current **line plot** (`.lox` / `.3d`) is what the map's extracted centerline and the
 [measurements](measurements-and-statistics.md) read; the current **walls** (`.stl`) are what the
-3D scene draws. The **first** model of a kind is current and stays so until you choose another —
-a second upload may be a corrected re-export or a survey of one side passage, and only you know
-which — so use **Make current** on the model that should take over, once it has finished
+3D scene draws — and where a cave has no current `.stl`, the scene draws the walls built from its
+current line plot instead. The **first** model of a kind is current and stays so until you choose
+another — a second upload may be a corrected re-export or a survey of one side passage, and only
+you know which — so use **Make current** on the model that should take over, once it has finished
 processing. For a line plot the choice also makes its centerline the cave's shape on the map, and
 making a survey's centerline the default does the same from the other side: the map and the
 figures always describe the same survey. Deleting the current model passes the mark to the newest
@@ -103,6 +105,36 @@ Once converted, the walls are drawn in the [3D scene](3d-view.md#walls-of-the-se
 for the selected cave only. The model list shows the converted mesh's size in megabytes beside
 its triangle count, and the scene names the size while it fetches, so a fifty-megabyte mesh on a
 metered connection is a choice rather than a surprise.
+
+---
+
+## Walls from a `.lox` or `.3d`
+
+You do not have to export an `.stl` to see walls. When a line plot is read, walls are built for
+that same model out of what the file itself holds, and out of nothing else:
+
+- **A `.lox` with scraps** — the wall surfaces Therion modelled from your drawings — is drawn with
+  exactly those surfaces.
+- **A `.lox` without scraps, or a `.3d`**, gets a tube along every leg whose **passage dimensions**
+  (left, right, up, down) were measured at both of its ends. Each measured station becomes a ring
+  through its four measured points — left and right laid level across the passage, up and down
+  plumb above and below the station — and consecutive rings are joined. On a leg steeper than 60°
+  the ring is laid across the leg instead, so a pitch is not drawn as a ribbon.
+
+**A leg nobody measured gets no walls.** There is no default passage size. A leg with no
+dimensions, or with dimensions at one end only, stays a bare line; a single distance that was not
+taken is drawn as no distance at all rather than guessed. Splays get no tube either — they are
+measurements *of* the wall, not passages. A survey with neither scraps nor dimensions simply has
+no walls: that is not an error, and the model is still **Ready**.
+
+The model list shows the triangle count and the size on the plot's own row, with the note *"Walls
+built from this survey's own scraps and passage dimensions"*. A very large system is drawn with
+four-sided rings instead of eight-sided ones; one too large even for that — more than two million
+triangles — gets no built walls, and an exported `.stl` is then the way to show it.
+
+**Which walls the 3D scene draws.** An uploaded `.stl` marked **Current** still wins: it is walls
+somebody made on purpose. Without one, the scene draws the walls of the **current line plot**;
+failing that, the newest model of the cave that has walls at all.
 
 ---
 

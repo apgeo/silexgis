@@ -65,6 +65,8 @@ odată cu ea — și apoi paginile.
 | Cave | Peșteră |
 | Cave entrance | Intrare în peșteră |
 | Centerline | Poligonație |
+| Scraps (Therion wall surfaces) | Schițe |
+| Splays | Vize laterale |
 | Feature | Element |
 | Surface feature | Fenomen de suprafață |
 | Work area | Zonă de lucru |

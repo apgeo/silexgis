@@ -23,7 +23,9 @@ Tot ce urmează trăiește pe **pagina unei peșteri**.
 Stare: *În așteptare → În curs → Gata*, sau *Nu a putut fi procesat*.
 
 Un model este desenat în **vizualizatorul topografic** (CaveView.js) și, pentru pereți, în
-[scena 3D](3d-view.md).
+[scena 3D](3d-view.md). Pereții sunt fie un `.stl` pe care îl încărcați, fie — acolo unde
+topografia însăși conține destul ca să fie construiți —
+[făcuți din `.lox` sau `.3d`](#pereți-dintr-un-lox-sau-3d).
 
 ### Modelul curent
 
@@ -31,13 +33,14 @@ O peșteră păstrează fiecare model încărcat vreodată — încărcările nu
 export corectat este un al doilea model lângă primul. Unul dintre ele poartă marcajul **Curent**,
 pe fel: **poligonația** curentă (`.lox` / `.3d`) este cea citită de poligonația extrasă pe hartă și
 de [măsurători](measurements-and-statistics.md); **pereții** curenți (`.stl`) sunt cei desenați de
-scena 3D. **Primul** model de un fel este curent și rămâne așa până alegeți altul — o a doua
-încărcare poate fi un export corectat sau topografia unei singure galerii laterale, și numai
-dumneavoastră știți care — așa că folosiți **Setează ca model curent** pe modelul care trebuie să
-preia, după ce s-a terminat procesarea. Pentru o poligonație, alegerea face și din poligonația ei
-forma peșterii pe hartă, iar setarea poligonației unei topografii ca implicită face același lucru
-din cealaltă parte: harta și cifrele descriu întotdeauna aceeași topografie. Ștergerea modelului
-curent trece marcajul la cel mai nou rămas.
+scena 3D — iar acolo unde o peșteră nu are un `.stl` curent, scena desenează în locul lor pereții
+construiți din poligonația ei curentă. **Primul** model de un fel este curent și rămâne așa până
+alegeți altul — o a doua încărcare poate fi un export corectat sau topografia unei singure galerii
+laterale, și numai dumneavoastră știți care — așa că folosiți **Setează ca model curent** pe
+modelul care trebuie să preia, după ce s-a terminat procesarea. Pentru o poligonație, alegerea
+face și din poligonația ei forma peșterii pe hartă, iar setarea poligonației unei topografii ca
+implicită face același lucru din cealaltă parte: harta și cifrele descriu întotdeauna aceeași
+topografie. Ștergerea modelului curent trece marcajul la cel mai nou rămas.
 
 ### Citirea unei topografii în rânduri
 
@@ -105,6 +108,39 @@ Odată convertiți, pereții sunt desenați în [scena 3D](3d-view.md#pereții-p
 numai pentru peștera selectată. Lista de modele arată mărimea rețelei convertite în megaocteți
 lângă numărul de triunghiuri, iar scena spune mărimea cât timp o descarcă, așa că o rețea de
 cincizeci de megaocteți pe o conexiune contorizată este o alegere, nu o surpriză.
+
+---
+
+## Pereți dintr-un `.lox` sau `.3d`
+
+Nu trebuie să exportați un `.stl` ca să vedeți pereți. Când o poligonație este citită, pentru
+același model se construiesc pereți din ce conține fișierul însuși, și din nimic altceva:
+
+- **Un `.lox` cu schițe (scraps)** — suprafețele de perete pe care Therion le-a modelat din
+  desenele dumneavoastră — este desenat exact cu acele suprafețe.
+- **Un `.lox` fără schițe, sau un `.3d`**, primește un tub de-a lungul fiecărei vize ale cărei
+  **dimensiuni de galerie** (stânga, dreapta, sus, jos) au fost măsurate la ambele capete. Fiecare
+  stație măsurată devine un inel prin cele patru puncte măsurate — stânga și dreapta așezate
+  orizontal, de-a curmezișul galeriei, sus și jos la verticala stației — iar inelele consecutive
+  sunt unite. Pe o viză mai înclinată de 60° inelul este așezat de-a curmezișul vizei, ca un puț
+  să nu fie desenat ca o panglică.
+
+**O viză pe care nu a măsurat-o nimeni nu primește pereți.** Nu există o mărime implicită de
+galerie. O viză fără dimensiuni, sau cu dimensiuni la un singur capăt, rămâne o linie simplă; o
+singură distanță care nu a fost luată este desenată ca nicio distanță, nu ghicită. Nici vizele
+laterale nu primesc tub — ele sunt măsurători *ale* peretelui, nu galerii. O topografie fără
+schițe și fără dimensiuni pur și simplu nu are pereți: nu este o eroare, iar modelul este tot
+**Gata**.
+
+Lista de modele arată numărul de triunghiuri și mărimea pe rândul poligonației, cu nota *„Pereți
+construiți din schițele și dimensiunile de galerie ale acestei ridicări"*. Un sistem foarte mare
+este desenat cu inele cu patru laturi în loc de opt; unul prea mare chiar și pentru atât — peste
+două milioane de triunghiuri — nu primește pereți construiți, iar atunci un `.stl` exportat este
+calea de a-l arăta.
+
+**Ce pereți desenează scena 3D.** Un `.stl` încărcat și marcat **Curent** câștigă în continuare:
+sunt pereți făcuți de cineva cu intenție. Fără el, scena desenează pereții **poligonației
+curente**; în lipsa lor, cel mai nou model al peșterii care are pereți.
 
 ---
 
