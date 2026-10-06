@@ -15,10 +15,11 @@ import { settledScreenshot } from './settled.ts';
  * the whole claim under test is that the envelope alone carries the sheets. At the end the
  * link is revoked and the same context watches the page close.
  *
- * The signed-in half runs in the suite's own context and is swept by the console guard as
- * usual. The anonymous context is created by this spec and sits outside that sweep, so its
- * errors are collected here and asserted empty — stricter than the guard's report mode, and
- * the only honest option: a surface read by strangers has no person watching its console.
+ * Both halves are swept by the console guard: the signed-in one in the suite's own context, the
+ * anonymous one in a context made through the guard. Its errors are collected here as well and
+ * asserted empty at the point the page is first up, before the link is revoked — a claim about
+ * a moment, which the guard's verdict at the end of the test cannot make — because a surface read
+ * by strangers has no person watching its console.
  */
 
 /** The pinned station Ana reports from: her dot must appear at this point of the sheet. */

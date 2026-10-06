@@ -14,10 +14,10 @@ import { settledScreenshot } from './settled.ts';
  * track, the survey and the refusal all come off the server.
  *
  * <b>The reader is a fresh browser context with no storage at all</b>, because the claim under test
- * is that one link is the whole of an anonymous visitor's claim. That context sits outside the
- * suite's console sweep, so its errors are collected here and asserted empty — stricter than the
- * guard's report mode, and the only honest setting for a surface strangers read with nobody
- * watching its console.
+ * is that one link is the whole of an anonymous visitor's claim. That context is made through the
+ * console guard and swept like any other; its errors are collected here as well and asserted
+ * empty at the points where the page should be silent, which the guard's one verdict at the end
+ * of the test cannot say — and a surface strangers read has nobody watching its console.
  *
  * <b>One thing is arranged rather than waited for: a closed trip stops being live only after the
  * installation's grace, which is two days by default.</b> The run is driven against an API started
