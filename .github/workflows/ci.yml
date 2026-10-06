@@ -181,10 +181,25 @@ jobs:
       # JavaScript, and the proxy accepts an upload as large as the configured limit while
       # refusing a far larger one. Each of those is a failure that only ever shows in the packaged
       # image and not in development.
+      #
+      # So is the last thing asked of them: a trip and a camp written up as word-processor
+      # documents. The API builds those itself, the tests that cover it run on a machine with the
+      # fonts and system libraries the runtime image does not carry, and nothing else in any
+      # workflow runs that code inside the image. `--reports` signs in as the administrator the
+      # rewritten lines below start the stack with — the check reads its credentials out of the
+      # stack's own settings, so there is nothing to pass a second time — makes one throwaway of
+      # each, asks for the documents and removes what it made.
       - name: Start and verify the distribution
         working-directory: deploy
         run: |
           sed -e 's/^SILEXGIS_DB_PASSWORD=.*/SILEXGIS_DB_PASSWORD=ci-build-only/' \
+              -e 's/^SILEXGIS_ADMIN_EMAIL=.*/SILEXGIS_ADMIN_EMAIL=ci-admin@example.com/' \
               -e 's/^SILEXGIS_ADMIN_PASSWORD=.*/SILEXGIS_ADMIN_PASSWORD=ci-admin-only-1/' \
               .env.example > .env
-          node verify-distribution.mjs --no-build --down
+          node verify-distribution.mjs --no-build --down --reports
+      # The check says which request failed and how it was answered; why it failed is in here,
+      # and the runner is discarded with the job, so this is the one chance to read it.
+      - name: Container logs, when the check did not pass
+        if: failure()
+        working-directory: deploy
+        run: docker compose logs --tail=200

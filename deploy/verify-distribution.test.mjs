@@ -31,6 +31,7 @@ const read = (...parts) => readFileSync(join(deployDir, ...parts), 'utf8');
 
 const script = read('verify-distribution.mjs');
 const composeFile = read('docker-compose.yml');
+const workflow = read('..', '.github', 'workflows', 'ci.yml');
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -663,5 +664,23 @@ describe('the check is asked for where it is meant to run', () => {
     const build = script.indexOf('run(`${compose} build');
     assert.ok(refusal > 0, 'the refusal is gone');
     assert.ok(refusal < build, 'the images are built before the request is refused');
+  });
+
+  it('is asked for by the job that builds the images', () => {
+    // No workflow run can be watched from a developer's machine, and a job that dropped the
+    // flag would go on passing — the check would be skipped, in a line of a green log nobody
+    // reads. So the command the job runs is pinned here, where a change to it fails a test.
+    assert.match(workflow, /^\s+node verify-distribution\.mjs --no-build --down --reports$/m);
+  });
+
+  it('is given an administrator to sign in as by that same job', () => {
+    assert.match(workflow, /s\/\^SILEXGIS_ADMIN_EMAIL=\.\*\/SILEXGIS_ADMIN_EMAIL=[^/]+\//);
+    assert.match(workflow, /s\/\^SILEXGIS_ADMIN_PASSWORD=\.\*\/SILEXGIS_ADMIN_PASSWORD=[^/]+\//);
+    // The lines those two expressions rewrite have to exist in the file they are applied to,
+    // or the stack starts with whatever the example shipped and the job's values go nowhere.
+    const example = read('.env.example');
+    assert.match(example, /^SILEXGIS_ADMIN_EMAIL=/m);
+    assert.match(example, /^SILEXGIS_ADMIN_PASSWORD=/m);
+    assert.match(example, /^SILEXGIS_DB_PASSWORD=/m);
   });
 });
