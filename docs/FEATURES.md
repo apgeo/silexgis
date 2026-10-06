@@ -97,7 +97,11 @@ feature and walkthroughs of whole jobs.
   system, or plain metres about a point, which is normally the cave's own entrance and is
   offered pre-filled — and the installation converts it into a model the 3D view draws in place,
   under the terrain, beside that cave's centerlines. It is loaded only for the cave you select,
-  and switching it off in the layer list genuinely lets go of it.
+  and switching it off in the layer list genuinely lets go of it; its size is shown before it is
+  fetched. A cave keeps every model ever uploaded, and **one of each kind is marked current** —
+  the line plot the map and the measurements read, the walls the 3D view draws. The first stays
+  current until you choose another, and choosing a line plot moves the cave's shape on the map
+  with it, so the map and the figures never describe two different surveys.
 - **Survey closure** — archive the compilation log beside the model and the cave page reports how
   well the survey closes, in the compiler's own words: every loop it found, with both its relative
   error and its absolute error in metres, its length, its stations and its per-axis components. The
@@ -110,17 +114,25 @@ feature and walkthroughs of whole jobs.
   only when it is opened. Needs WebGL 2; a browser without it gets an explanation rather
   than a dead canvas. No vendor terrain, imagery or geocoding service is contacted and the
   3D engine is served by your own installation; the basemap is whichever base layers you
-  configured, so an air-gapped install needs one it can reach.
+  configured, so an air-gapped install needs one it can reach. **Tracks from imported GPX, KML
+  and GeoJSON files** are drawn there too, as lines at their recorded altitudes — or laid on the
+  ground when the file recorded none — sharing the flat map's choice of which files are shown.
+  A cave's page opens the view on that cave, selected and framed.
 - **Real relief, if you want it** — that globe is a smooth sphere out of the box, needing no
   elevation server and nothing downloaded. An operator who wants the caves under actual
   hillsides bakes free elevation data into a tile pyramid and serves it as static files from the
   same installation — either from the command line in one documented step, or from inside the
   application: draw a rectangle on a map, and it obtains the data, converts it, bakes the tiles
   and checks them, saying where it has got to as it goes. That last route needs one extra service
-  a plain installation does not run. Everyone who wants none of it is unaffected.
+  a plain installation does not run. Everyone who wants none of it is unaffected. An installation
+  with several builds lets each viewer **switch the ground** between them in the 3D view, and
+  offers a finer build when the camera moves over one — offers, never swaps, because changing the
+  ground under somebody mid-pan moves every cave on screen. A new survey over ground already baked
+  does not cost the region again: a build can **extend a finished one**, adding only the new
+  rasters to a copy of its tiles.
 - **Pictures drawn from that elevation** — shaded relief, steepness, facing, ruggedness,
-  topographic position, roughness or a colour relief, computed once from a finished build and shown
-  to everyone who may read terrain as ordinary map layers. Each one belongs to the build it was
+  topographic position, roughness or a colour relief, requested from the terrain page, computed
+  once from a finished build and shown to everyone who may read terrain as ordinary map layers. Each one belongs to the build it was
   drawn from, so **activating a different build marks every picture of the old one as out of date**,
   where the reader sees it rather than in a log — a shaded relief that disagrees with the heights
   beneath it otherwise looks like a fault in the cave data. They live under their build and are
