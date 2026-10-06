@@ -212,6 +212,33 @@ nu sunteți în niciun grup, sau sunteți în mai multe, nu se ghicește nimic: 
 formularul spune de ce, și îl lărgiți acolo dacă trebuie citit. O vizibilitate pe care o alegeți
 dvs. este păstrată așa cum ați ales-o.
 
+### Când dreptul de a înregistra ture vine de la club
+
+Nu toată lumea are dreptul de a înregistra ture în general. De obicei, regulile unui grup de
+speologie le permit membrilor să înregistreze turele **grupului** și nimic mai larg. Cine are
+dreptul doar pe această cale primește aceleași două uși — pe lista de ture, pe *Turele mele* și pe
+panoul de bord — cu o singură diferență: tura trebuie să **aparțină grupului**, pentru că aceasta
+este singura tură pe care aplicația o acceptă de la acea persoană.
+
+| Puteți înregistra ture pentru | Ce face formularul |
+|---|---|
+| **Un singur grup** | O spune înainte ca tura să existe — *„Înregistrezi ture pentru «grup»; aceasta îi va aparține"* — și leagă tura de acel grup. Un jurnal începe tot **privat**; un plan începe vizibil acelui grup |
+| **Mai multe grupuri** | Întreabă **Grupul căruia îi aparține**, oferind exact grupurile pentru care puteți înregistra ture. Nu se ghicește nimic între ele, iar formularul nu se salvează până nu alegeți. Planul este apoi vizibil grupului ales |
+
+**Apartenența nu este vizibilitate.** O tură care aparține unui grup răspunde regulilor acelui
+grup. Cu regulile cu care pornește un grup, membrii lui pot citi și corecta orice tură care îi
+aparține — indiferent ce spune controlul **Vizibilitate**. Vizibilitatea hotărăște cine *altcineva*
+poate citi tura; nu ține grupul pe dinafară. Formularul o spune lângă grup, pentru că controlul de
+vizibilitate nu o poate spune.
+
+Cine are dreptul de a înregistra ture în general nu vede nimic din toate acestea: tura sa nu
+aparține niciunui grup, decât dacă o planifică fiind într-un singur grup, ca mai sus.
+
+Dacă nu vi se oferă nicio cale de a crea o tură, nu aveți dreptul nicăieri — întrebați pe cine
+administrează regulile grupului, sau un administrator. Iar cele două pagini de import (*Importă
+ture*, *Importă o înregistrare*) **nu** se deschid prin dreptul unui grup: cer dreptul de a
+înregistra ture în general.
+
 ### Punctul de întâlnire pe hartă
 
 Un punct, sau drumul de acces, desenat pe același fel de hartă ca schița turei.

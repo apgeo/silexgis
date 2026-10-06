@@ -91,6 +91,17 @@ Aceasta este partea care face sistemul practic în loc de plictisitor.
 Regulile au și un **nivel** — *global*, *colecție* sau *obiect* — în termenii căruia este
 formulată rezolvarea conflictelor de mai jos.
 
+**Ce îi dă unui membru *Creare* în cuprinsul unui grup de speologie.** Un grup de speologie nou
+pornește cu un grup de permisiuni care le permite membrilor să citească, să corecteze și să creeze
+**conținutul propriu al grupului**. Este un drept asupra înregistrărilor legate de grup, nu asupra
+întregului domeniu — așa că un astfel de membru poate crea o tură *care aparține grupului* și
+nimic nelegat. Pentru **ture**, aplicația îi oferă controalele de creare și leagă tura în locul lui
+([cum arată](../features/trips.md#când-dreptul-de-a-înregistra-ture-vine-de-la-club)). Pentru
+peșteri, elemente, tabere, geodate și documente, controalele de creare se desenează încă doar
+pentru cine are *Creare* asupra întregului domeniu; un membru fără acest drept nu vede deocamdată
+niciun buton acolo, orice ar spune regulile grupului. Scoateți *Creare* din regula grupului, sau
+refuzați-o, și dispar și controalele pentru ture: oferta urmează regula.
+
 ---
 
 ## Cum se rezolvă conflictele

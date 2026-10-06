@@ -24,6 +24,11 @@ salvare, știință, altul — plus ce a adăugat clubul) și date. O tură se �
 Stabiliți-i **vizibilitatea** — cine are voie să citească tura. Și observați bannerul: *„Aceasta
 este o ciornă. Nimeni nu a fost anunțat încă."* Ciornele sunt pentru scris; nu pleacă nimic.
 
+Dacă dreptul dvs. de a înregistra ture vine de la grupul de speologie, nu de la instalare,
+formularul vă spune și că tura **va aparține acelui grup** — sau vă întreabă căruia, dacă sunteți
+în mai multe. Este de așteptat, și nu este același lucru cu vizibilitatea: vedeți
+[Când dreptul de a înregistra ture vine de la club](../features/trips.md#când-dreptul-de-a-înregistra-ture-vine-de-la-club).
+
 Apoi **Lansează ideea** ca s-o propuneți, sau treceți direct la **Începe organizarea**.
 
 ## Etapa 2 — Planificați-o

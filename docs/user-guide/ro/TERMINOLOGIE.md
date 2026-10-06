@@ -122,6 +122,7 @@ odată cu ea — și apoi paginile.
 | Callout | Apel de urgență |
 | The party is out | Echipa a ieșit |
 | My trips | Turele mele |
+| Belongs to (the caving group a new trip is bound to) | Grupul căruia îi aparține |
 | Leader | Responsabil de tură |
 | Surveyor | Topograf |
 | Callout contact | Persoană de contact |

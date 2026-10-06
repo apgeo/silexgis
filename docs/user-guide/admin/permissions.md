@@ -89,6 +89,17 @@ This is the part that makes the system practical rather than tedious.
 Rules also have a **level** — *global*, *collection* or *object* — which is what the conflict
 resolution below is stated in terms of.
 
+**What *Create* at a caving group's scope gives a member.** A new caving group starts with a
+permission group that lets its members read, correct and create **the group's own content**.
+That is a right over records bound to the group, not a right over the whole domain — so such a
+member may create a trip *that belongs to the group*, and nothing unbound. For **trips** the
+application offers them its create controls and binds the trip for them
+([how that looks](../features/trips.md#when-your-right-to-record-trips-is-your-clubs)). For
+caves, features, camps, geodata and documents the create controls are still drawn only for
+somebody who holds *Create* over the whole domain; a member without it sees no button there yet,
+whatever the group's rules say. Take *Create* out of the group's rule, or deny it, and the trip
+controls go too: the offer follows the rule.
+
 ---
 
 ## How conflicts resolve

@@ -211,6 +211,33 @@ visibility control, naming the group, before the trip exists. If you are in no g
 several, nothing is guessed: the plan starts private, the form says why, and you widen it there if
 it should be read. A visibility you choose yourself is kept as chosen.
 
+### When your right to record trips is your club's
+
+Not everybody holds the right to record trips in general. A caving group's own rules usually let
+its members record **the group's** trips and nothing wider. Somebody whose right comes only that
+way is offered the same two doors — on the trip list, on *My trips* and on the dashboard — with
+one difference: the trip has to **belong to the group**, because that is the only trip the
+application accepts from them.
+
+| You may record trips for | What the form does |
+|---|---|
+| **One group** | Says so before the trip exists — *"You record trips for «group»; this one will belong to it"* — and binds the trip to that group. A report still starts **private**; a plan starts shared with that group |
+| **Several groups** | Asks **Belongs to**, offering exactly the groups you may record trips for. Nothing is guessed between them, and the form does not save until you choose. A plan is then shared with the group you chose |
+
+**Belonging is not visibility.** A trip that belongs to a group answers to that group's own
+rules. With the rules a group starts with, its members can read and correct every trip that
+belongs to it — whatever the **Visibility** control says. Visibility decides who *else* may read
+the trip; it does not keep the group out. The form says this beside the group, because the
+visibility control cannot.
+
+Somebody who holds the right to record trips in general sees none of this: their trip belongs to
+no group unless they plan it while in exactly one, as above.
+
+If you are offered no way to create a trip at all, you hold the right nowhere — ask whoever
+manages your group's rules, or an administrator. And the two import pages (*Import trips*,
+*Import a recording*) are **not** opened by a group's right: they need the right to record trips
+in general.
+
 ### The meeting point on the map
 
 A point, or the walk in to it, drawn on the same kind of map as the trip's sketch.

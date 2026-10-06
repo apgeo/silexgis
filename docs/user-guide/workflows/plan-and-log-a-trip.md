@@ -24,6 +24,11 @@ the **days it actually ran**, not a single date.
 Set its **visibility** — this is who may read the trip at all. And note the banner: *"This is
 a draft. Nobody has been notified about it yet."* Drafts are for writing; nothing goes out.
 
+If your right to record trips comes from your caving group rather than from the installation,
+the form also tells you the trip **will belong to that group** — or asks which, if you are in
+several. That is expected, and it is not the same thing as visibility: see
+[When your right to record trips is your club's](../features/trips.md#when-your-right-to-record-trips-is-your-clubs).
+
 Then **Float it** to propose it, or go straight to **Start organising**.
 
 ## Stage 2 — Plan it
