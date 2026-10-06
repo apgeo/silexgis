@@ -133,7 +133,10 @@ one:
 
 Each cave's walls sit on that cave's own centerlines, exactly as in the other mode. The three
 limits are settings of the installation; see `SILEXGIS__Map__MeshesInView…` in the
-[installation guide](../../INSTALL.md#configuration-reference).
+[installation guide](../../INSTALL.md#configuration-reference). Each person can change them for
+their own browser, up to the installation's ceiling, under
+[Settings › Advanced](account-and-settings.md#advanced) — the panel links there while this mode
+is chosen.
 
 ---
 

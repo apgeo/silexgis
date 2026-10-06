@@ -7,8 +7,8 @@
 
 ---
 
-**Settings** has seven pages: Profile · Account · Emails · Notifications · Security ·
-Accessibility · Sync.
+**Settings** has eight pages: Profile · Account · Emails · Notifications · Security ·
+Accessibility · Sync · Advanced.
 
 ---
 
@@ -158,6 +158,38 @@ OIDC provider** in addition to your password. Link and unlink from here.
 ## Sync
 
 For the companion phone app. See [Mobile and offline sync](mobile-sync.md).
+
+---
+
+## Advanced
+
+Numbers that decide how much the application asks of the machine in front of you. They are kept
+**in this browser only** and do not follow your account — a phone and a workstation want
+different answers.
+
+### Cave walls in the 3D view
+
+Three numbers bound the 3D view when it draws the
+[walls of every cave in view](3d-view.md#walls-of-every-cave-in-view):
+
+| | |
+|---|---|
+| **Show from zoom** | The zoom from which that mode draws anything; below it the scene asks you to zoom in. 1 to 22 |
+| **Caves at most** | How many caves' walls are drawn at once, nearest the middle of the view first |
+| **Megabytes at most** | How much wall model is downloaded and held for them. A browser needs roughly twice that in graphics memory |
+
+**An empty field follows your installation's default**, which is shown in grey in its place —
+14, 12 and 64 MB unless your administrator changed them. A number you type replaces the default
+in this browser: raise it on a machine with a real graphics card, lower it on a phone.
+
+The last two stop at a ceiling your administrator sets — 60 caves and 512 MB unless changed —
+and the page says what it is. If the ceiling is lowered later, a larger number you had stored is
+held to it.
+
+**Use this installation's defaults** empties all three.
+
+The numbers are in force the next time you open the 3D view. A 3D view already open in another
+window keeps the old ones until it is reloaded.
 
 ---
 

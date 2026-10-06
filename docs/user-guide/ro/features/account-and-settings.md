@@ -7,8 +7,8 @@
 
 ---
 
-**Setări** are șapte pagini: Profil · Cont · E-mailuri · Notificări · Securitate · Accesibilitate
-· Sincronizare.
+**Setări** are opt pagini: Profil · Cont · E-mailuri · Notificări · Securitate · Accesibilitate
+· Sincronizare · Avansat.
 
 ---
 
@@ -160,6 +160,39 @@ furnizor OIDC** pe lângă parolă. Legați și dezlegați de aici.
 
 Pentru aplicația de telefon. Vedeți
 [Telefon și sincronizare offline](mobile-sync.md).
+
+---
+
+## Avansat
+
+Numere care hotărăsc cât cere aplicația de la calculatorul din fața dumneavoastră. Se păstrează
+**doar în acest browser** și nu urmează contul — un telefon și o stație de lucru cer răspunsuri
+diferite.
+
+### Pereții peșterilor în vizualizarea 3D
+
+Trei numere limitează vizualizarea 3D atunci când desenează
+[pereții tuturor peșterilor din vedere](3d-view.md#pereții-tuturor-peșterilor-din-vedere):
+
+| | |
+|---|---|
+| **Arată de la zoom-ul** | Nivelul de zoom de la care acest mod desenează ceva; sub el scena vă cere să apropiați vederea. De la 1 la 22 |
+| **Peșteri cel mult** | Pentru câte peșteri se desenează pereții deodată, cele mai apropiate de mijlocul vederii întâi |
+| **Megaocteți cel mult** | Cât model de pereți se descarcă și se păstrează pentru ele. Un browser are nevoie de aproximativ dublu în memoria grafică |
+
+**Un câmp gol urmează valoarea implicită a instalării**, afișată cu gri în locul lui — 14, 12 și
+64 MB, dacă administratorul nu le-a schimbat. Un număr scris de dumneavoastră înlocuiește
+valoarea implicită în acest browser: măriți-l pe un calculator cu o placă grafică adevărată,
+micșorați-l pe un telefon.
+
+Ultimele două se opresc la un plafon stabilit de administrator — 60 de peșteri și 512 MB, dacă nu
+a fost schimbat — iar pagina spune care este. Dacă plafonul este coborât ulterior, un număr mai
+mare pe care îl aveați păstrat este adus la el.
+
+**Folosește valorile implicite ale instalării** golește toate cele trei câmpuri.
+
+Numerele sunt în vigoare data viitoare când deschideți vizualizarea 3D. O vizualizare 3D deja
+deschisă în altă fereastră le păstrează pe cele vechi până când este reîncărcată.
 
 ---
 

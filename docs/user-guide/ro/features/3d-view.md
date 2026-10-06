@@ -139,7 +139,10 @@ vă spune când a atins una:
 
 Pereții fiecărei peșteri stau pe poligonațiile acelei peșteri, exact ca în celălalt mod. Cele trei
 limite sunt setări ale instalării; vedeți `SILEXGIS__Map__MeshesInView…` în
-[ghidul de instalare](../../../INSTALL.md#configuration-reference).
+[ghidul de instalare](../../../INSTALL.md#configuration-reference). Fiecare persoană le poate
+schimba pentru propriul browser, până la plafonul instalării, în
+[Setări › Avansat](account-and-settings.md#avansat) — panoul trimite acolo cât timp acest mod
+este ales.
 
 ---
 
