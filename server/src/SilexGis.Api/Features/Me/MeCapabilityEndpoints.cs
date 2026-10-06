@@ -12,7 +12,7 @@ public sealed record MyPermissionGroupDto(Guid Id, string Name, string Slug, boo
 
 /// <summary>
 /// What the caller may do, in the shape a user interface needs: per domain, with no
-/// particular row in view.
+/// particular row in view — and, beside that, the caving groups a new row may be bound to.
 /// </summary>
 /// <remarks>
 /// Purely a hint for what to show. Every actual decision is made server-side on the row
@@ -26,7 +26,9 @@ public static class MeCapabilityEndpoints
     {
         api.MapGet("/me/capabilities", GetAsync)
             .WithTags("Me")
-            .WithSummary("The caller's domain-level rights, for interface gating.");
+            .WithSummary(
+                "The caller's domain-level rights, for interface gating, and the caller's own "
+                + "caving groups in which a new row of each group-bindable domain may be created.");
         api.MapGet("/me/permission-groups", GetGroupsAsync)
             .WithTags("Me")
             .WithSummary("The permission groups the caller reaches, directly or through a caving group.");
@@ -34,12 +36,12 @@ public static class MeCapabilityEndpoints
     }
 
     private static async Task<Results<Ok<CapabilitiesDto>, UnauthorizedHttpResult>> GetAsync(
-        IAccessContextAccessor accessAccessor, CancellationToken ct)
+        SilexGisDbContext db, IAccessContextAccessor accessAccessor, CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         return ctx is null
             ? TypedResults.Unauthorized()
-            : TypedResults.Ok(PermissionGroupEndpoints.CapabilitiesOf(ctx));
+            : TypedResults.Ok(await PermissionGroupEndpoints.CapabilitiesOfAsync(ctx, db, ct));
     }
 
     private static async Task<Results<Ok<List<MyPermissionGroupDto>>, UnauthorizedHttpResult>> GetGroupsAsync(

@@ -285,7 +285,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's domain-level rights, for interface gating. */
+        /** The caller's domain-level rights, for interface gating, and the caller's own caving groups in which a new row of each group-bindable domain may be created. */
         get: {
             parameters: {
                 query?: never;
@@ -19578,6 +19578,9 @@ export interface components {
                 [key: string]: components["schemas"]["AccessAction"];
             };
             isFullAdmin: boolean;
+            createInCavingGroups: {
+                [key: string]: components["schemas"]["CreatableCavingGroupDto"][];
+            };
         };
         CaveCrossSectionDto: {
             /** Format: uuid */
@@ -20269,6 +20272,11 @@ export interface components {
         };
         /** @enum {unknown} */
         ConversionState: "notApplicable" | "pending" | "converted" | "unavailable" | "failed" | "deferred";
+        CreatableCavingGroupDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         CrossSectionDistribution: {
             /** Format: int32 */
             count: number;
