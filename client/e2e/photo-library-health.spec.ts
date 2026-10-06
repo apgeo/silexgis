@@ -4,23 +4,31 @@
 // answering" and "the credential has been refused" are three different facts that all look like an
 // empty map. This drives one of them for real by stopping the container between runs.
 //
-// Needs a library running beside the application. SILEXGIS_E2E_LIBRARY_STATE says which state is
-// expected, so the same spec can be run either side of stopping it.
+// Runs through scripts/e2e-photo-libraries.mjs, against libraries of invented pictures.
+// SILEXGIS_E2E_LIBRARY_STATE says which state is expected, so the same spec is run either side of
+// that script stopping the library.
 import { expect } from '@playwright/test';
 
 import { test } from './consoleGuard.ts';
-import { login, overlayTreeNode } from './helpers.ts';
+import { gotoRoute, login, overlayTreeNode } from './helpers.ts';
+import { fixtureRectangle, mapOver, noLibrariesBecause } from './libraryPhotos.ts';
 
-test.skip(
-  !process.env.SILEXGIS_E2E_PHOTO_LIBRARY,
-  'set SILEXGIS_E2E_PHOTO_LIBRARY=1 with a photo library configured',
-);
+test.skip(noLibrariesBecause !== null, noLibrariesBecause ?? '');
 
 const expected = process.env.SILEXGIS_E2E_LIBRARY_STATE ?? 'healthy';
 
-test(`the panel reports a library that is ${expected}`, async ({ page }) => {
-  await login(page, 'admin@example.org', 'Photolib-Dev-1234!');
-  await page.goto('/map');
+test(`the panel reports a library that is ${expected}`, async ({ page, consoleErrors }) => {
+  if (expected !== 'healthy') {
+    consoleErrors.allow(
+      /the server responded with a status of 503/,
+      'the library was stopped for this run, and the application answers a request it cannot ' +
+        'pass on to it with 503 — which is what the panel then has to say in words',
+    );
+  }
+  const rectangle = fixtureRectangle();
+  await login(page);
+  // Over the rectangle that holds pictures, so that an empty map can only mean the library.
+  await gotoRoute(page, mapOver(rectangle));
   await expect(page.locator('.map-canvas')).toBeVisible({ timeout: 20_000 });
 
   const row = overlayTreeNode(page, 'Photo library (PhotoPrism)');
@@ -55,15 +63,11 @@ test(`the panel reports a library that is ${expected}`, async ({ page }) => {
     await reread;
   }
 
-  const text = await status.innerText();
-  // eslint-disable-next-line no-console
-  console.log(`panel said: ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 220))}`);
-
   if (expected === 'healthy') {
-    expect(text).not.toMatch(/did not answer/i);
+    await expect(status).toContainText(`${rectangle.count} photographs shown`, { timeout: 30_000 });
+    await expect(status).not.toContainText(/did not answer/i);
   } else {
-    // The whole reason this batch exists: a stopped library must not read as an empty one.
-    expect(text).toMatch(/did not answer|not answering|refused/i);
+    // The reason the panel says anything at all: a stopped library must not read as an empty one.
+    await expect(status).toContainText(/did not answer|not answering|refused/i, { timeout: 30_000 });
   }
-  await page.screenshot({ path: `test-results/photo-library-health-${expected}.png` });
 });

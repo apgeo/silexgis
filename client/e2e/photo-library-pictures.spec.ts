@@ -1,43 +1,37 @@
-// Checks that a photo-library overlay can draw the photographs themselves instead of pins.
-// Needs a library running beside the application with the invented fixture set indexed.
+// A photo-library overlay can draw the photographs themselves instead of pins, and asks this
+// application for them, never the library.
+// Runs through scripts/e2e-photo-libraries.mjs, against libraries of invented pictures.
 import { expect } from '@playwright/test';
 
 import { test } from './consoleGuard.ts';
-import { login, overlayTreeNode } from './helpers.ts';
-import { wheelAndAwaitLibraries } from './libraryPhotos.ts';
+import { gotoRoute, login, overlayTreeNode } from './helpers.ts';
+import { fixtureRectangle, mapOver, noLibrariesBecause, reachesALibrary } from './libraryPhotos.ts';
 
-test.skip(
-  !process.env.SILEXGIS_E2E_PHOTO_LIBRARY,
-  'set SILEXGIS_E2E_PHOTO_LIBRARY=1 with an indexed fixture library running',
-);
+test.skip(noLibrariesBecause !== null, noLibrariesBecause ?? '');
 
 test('a library overlay draws its photographs, and asks this application for them', async ({
   page,
 }) => {
   const pictures: string[] = [];
-  page.on('request', (r) => {
-    if (r.url().includes('/photo-libraries/') && r.url().includes('/thumbnails/')) {
-      pictures.push(r.url());
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    const url = request.url();
+    requests.push(url);
+    if (url.includes('/photo-libraries/') && url.includes('/thumbnails/')) {
+      pictures.push(url);
     }
   });
+  const rectangle = fixtureRectangle();
 
-  await login(page, 'admin@example.org', 'Photolib-Dev-1234!');
-  await page.goto('/map');
-  await expect(page.locator('.map-canvas')).toBeVisible({ timeout: 20_000 });
+  await login(page);
+  await gotoRoute(page, mapOver(rectangle));
 
   const row = overlayTreeNode(page, 'Photo library (PhotoPrism)');
   await expect(row).toBeVisible({ timeout: 20_000 });
   await row.getByRole('checkbox').check();
 
-  const centre = { x: 640, y: 380 };
-  for (let step = 0; step < 9; step += 1) {
-    if (/\d+ photographs shown/.test(await page.locator('body').innerText())) break;
-    await page.mouse.move(centre.x, centre.y);
-    await wheelAndAwaitLibraries(page, 400, ['photoprism']);
-  }
-
   const status = page.getByTestId('library-photos-status-photoprism');
-  await expect(status).toBeVisible();
+  await expect(status).toContainText(`${rectangle.count} photographs shown`, { timeout: 30_000 });
 
   // Pins until asked otherwise: nothing has been fetched for a picture yet.
   expect(pictures).toHaveLength(0);
@@ -46,12 +40,10 @@ test('a library overlay draws its photographs, and asks this application for the
   // Switching on is answered by the map asking for the pictures of the pins already on it.
   await expect.poll(() => pictures.length, { timeout: 20_000 }).toBeGreaterThan(0);
 
-  // eslint-disable-next-line no-console
-  console.log(`picture requests after switching on: ${pictures.length}`);
-  expect(pictures.length).toBeGreaterThan(0);
-  // Every one of them is asked of this application, never of the library.
-  for (const url of pictures) expect(url).toContain('/api/v1/photo-libraries/');
-  expect(pictures.every((u) => u.includes('size=small'))).toBe(true);
-
-  await page.screenshot({ path: 'test-results/photo-library-pictures.png' });
+  // Every one of them is asked of this application, in the small rendering a marker needs.
+  for (const url of pictures) {
+    expect(url).toContain('/api/v1/photo-libraries/');
+    expect(url).toContain('size=small');
+  }
+  expect(requests.filter(reachesALibrary)).toHaveLength(0);
 });

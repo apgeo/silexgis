@@ -4,7 +4,8 @@
 # way of running the suite; it is the first way, on a hosted machine.
 #
 # The desktop project is dealt into shards by Playwright itself. The three phone projects are
-# small enough to share one job, and that job is the only one that installs WebKit.
+# small enough to share one job, and that job is the only one that installs WebKit. The specs that
+# need a photo library beside the application have a job of their own, which brings two along.
 #
 # Hosted runners on purpose (see integration.yml for why a self-hosted runner must never take a
 # pull-request trigger on a public repository). Pushes to master, nightly, and on demand.
@@ -86,4 +87,45 @@ jobs:
             client/test-results
             client/test-results-again
             client/playwright-report
+          if-no-files-found: ignore
+
+  # The photo-library specs need two libraries of their own. scripts/e2e-photo-libraries.mjs
+  # stands them up from the deployment's own compose files, fills them with generated pictures,
+  # and runs the specs with both answering and then again with one of them stopped. Nightly and
+  # on demand only: the two libraries' images are gigabytes to fetch.
+  photo-libraries:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      # The picture generator is Python, and draws with Pillow.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install Pillow
+      - run: npm ci
+        working-directory: client
+      - run: npx playwright install --with-deps chromium
+        working-directory: client
+      - name: Photo-library specs, against libraries of generated pictures
+        run: node scripts/e2e-photo-libraries.mjs
+      - name: Keep the traces of what failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-photo-libraries
+          path: |
+            client/test-results
+            client/test-results-again
           if-no-files-found: ignore

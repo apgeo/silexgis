@@ -1,48 +1,38 @@
 // The browse surface: looking through a neighbouring library's photographs without a map.
-// Needs a library running beside the application with the invented fixture set indexed.
+// Runs through scripts/e2e-photo-libraries.mjs, against libraries of invented pictures.
 import { expect } from '@playwright/test';
 
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { gotoRoute, login } from './helpers.ts';
+import { noLibrariesBecause, reachesALibrary } from './libraryPhotos.ts';
 
-test.skip(
-  !process.env.SILEXGIS_E2E_PHOTO_LIBRARY,
-  'set SILEXGIS_E2E_PHOTO_LIBRARY=1 with an indexed fixture library running',
-);
+test.skip(noLibrariesBecause !== null, noLibrariesBecause ?? '');
 
 test('a library can be looked through, and its pictures come from this application', async ({
   page,
 }) => {
   const pictures: string[] = [];
-  const foreign: string[] = [];
-  page.on('request', (r) => {
-    const u = r.url();
-    if (u.includes('/photo-libraries/') && u.includes('/thumbnails/')) pictures.push(u);
-    if (u.includes(':2342') || u.includes(':2283')) foreign.push(u);
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    const url = request.url();
+    requests.push(url);
+    if (url.includes('/photo-libraries/') && url.includes('/thumbnails/')) {
+      pictures.push(url);
+    }
   });
 
-  await login(page, 'admin@example.org', 'Photolib-Dev-1234!');
-  await page.goto('/photo-library');
-  await page.waitForLoadState('networkidle');
+  await login(page);
+  await gotoRoute(page, '/photo-library');
 
-  // Choose the library deliberately rather than taking whichever the page opens on: the two are
-  // configured independently and either may be the one whose credential an installation has not
-  // finished setting up. The surface under test is the browsing, not which tab is first.
-  // One library configured here, so the page opens on it. Where two are configured the page offers
-  // a chooser; which one it opens on is not what this check is about. Either answer will do here —
-  // its photographs, or the sentence saying why there are none, which the line below then prints.
-  await expect(
-    page.getByTestId('library-photo-grid').or(page.getByTestId('library-photo-problem')),
-  ).toBeVisible({ timeout: 20_000 });
-
-  const body = await page.locator('body').innerText();
-  // eslint-disable-next-line no-console
-  console.log(`page said: ${JSON.stringify(body.replace(/\s+/g, ' ').slice(0, 260))}`);
+  // Two libraries are connected, so the page offers a choice and opens on one of them. Which one
+  // is not what this is about: either holds the same pictures, and the surface under test is the
+  // looking through.
+  await expect(page.getByTestId('library-photo-grid')).toBeVisible({ timeout: 30_000 });
 
   // Pictures are drawn, and every one of them is asked of this application rather than the library.
   await expect.poll(() => pictures.length, { timeout: 20_000 }).toBeGreaterThan(0);
-  for (const u of pictures) expect(u).toContain('/api/v1/photo-libraries/');
-  expect(foreign).toHaveLength(0);
-
-  await page.screenshot({ path: 'test-results/photo-library-browse.png' });
+  for (const url of pictures) {
+    expect(url).toContain('/api/v1/photo-libraries/');
+  }
+  expect(requests.filter(reachesALibrary)).toHaveLength(0);
 });
