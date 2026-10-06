@@ -102,14 +102,15 @@
 # an account made for this purpose, and share to that account exactly what this application should
 # be able to see.
 #
-#   IT NEEDS TWO PERMISSIONS: map.read (where the photographs are) and asset.view (the pictures
-#   themselves). A key minted without narrowing carries everything and is sufficient; a key
-#   narrowed to fewer than these two produces an empty map and no error anywhere, because a
-#   library that answers "you may not see that" and a library holding nothing draw the same blank
-#   patch. The application asks the key what it may do and names any of the two that are missing,
-#   by name, on the photo-library block of the map's layer panel — that block is also where a
-#   wrong address and a stopped container are told apart, and it carries the button that asks
-#   again after a fix.
+#   IT NEEDS FOUR PERMISSIONS: map.read (where the photographs are), asset.view (the pictures
+#   themselves), asset.read (the browse list and the search) and album.read (the album chooser).
+#   A key minted without narrowing carries everything and is sufficient; a key narrowed to fewer
+#   produces an empty map, an empty list or a chooser that says the library did not answer, and
+#   no error anywhere, because a library that answers "you may not see that" and a library
+#   holding nothing draw the same blank patch. The application asks the key what it may do and
+#   names any of the four that are missing, by name, on the photo-library block of the map's
+#   layer panel — that block is also where a wrong address and a stopped container are told
+#   apart, and it carries the button that asks again after a fix.
 # =============================================================================================
 name: silexgis
 
