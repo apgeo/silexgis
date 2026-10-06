@@ -50,14 +50,18 @@ parte. Marcajele se desenează întotdeauna — doar *etichetele* lor concureaz�
 
 Poligonațiile sunt stratul scump, așa că au controale proprii:
 
-- **Detaliu de la zoom-ul** — de la ce nivel apare detaliul topografic complet (inclusiv
+- **Detaliu de la nivelul** — de la ce nivel apare detaliul topografic complet (inclusiv
   radialele). Sub el vedeți conturul galeriilor, iar vizările de perete apar pe măsură ce
   apropiați.
-- **Buget de linii** — o limită a numărului de trasee desenate.
+- **Limită de linii** — o limită a numărului de trasee desenate.
 
 Lăsați-le goale ca să urmați valorile implicite ale instalării. Detaliul mai mare costă mai mult
 la desenare. Dacă se rețin poligonații, vi se spune: *„încă n poligonații neafișate la acest
 zoom"*.
+
+Amândouă se păstrează doar în acest browser. Aceleași două numere se află la
+[Setări › Avansat](account-and-settings.md#poligonațiile-de-pe-hartă), unde se spune și cât de
+sus lasă instalarea să urce limita de linii.
 
 ---
 

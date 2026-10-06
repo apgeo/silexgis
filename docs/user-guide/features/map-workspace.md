@@ -56,6 +56,10 @@ Centerlines are the expensive layer, so they have their own controls:
 Leave both empty to follow the installation's defaults. Higher detail costs more to draw. If
 centerlines are being withheld you are told: *"n more centerlines not shown at this zoom"*.
 
+Both are kept in this browser only. The same two numbers are under
+[Settings › Advanced](account-and-settings.md#survey-lines-on-the-map), which also says how
+high your installation lets the line budget go.
+
 ---
 
 ## Selecting things

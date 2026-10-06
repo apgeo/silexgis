@@ -148,10 +148,10 @@ OIDC provider** in addition to your password. Link and unlink from here.
 |---|---|
 | **Open the app on** | The map · The dashboard |
 | **Hide the on-map controls** | |
-| **Centerline detail from zoom** | See [Map workspace](map-workspace.md#centerline-detail) |
-| **Centerline path budget** | |
 
-**Reset these** puts the device-only settings back.
+**Reset these** puts back the two settings above together with the theme, the density and
+reduced motion. It leaves the language alone, and it does not touch the numbers under
+[Advanced](#advanced) — those have their own way back there.
 
 ---
 
@@ -186,10 +186,36 @@ The last two stop at a ceiling your administrator sets — 60 caves and 512 MB u
 and the page says what it is. If the ceiling is lowered later, a larger number you had stored is
 held to it.
 
-**Use this installation's defaults** empties all three.
+**Use this installation's defaults** in this card empties all three.
 
 The numbers are in force the next time you open the 3D view. A 3D view already open in another
 window keeps the old ones until it is reloaded.
+
+### Survey lines on the map
+
+Two numbers bound the survey lines the flat map draws. They are the same two the map's layer
+list shows while **Cave centerlines** is switched on — see
+[Map workspace](map-workspace.md#centerline-detail) — and a number set in either place is the
+one in force in both.
+
+| | |
+|---|---|
+| **Detail from zoom** | The zoom from which full survey detail appears, splays included; below it you get passage outlines. 1 to 22 |
+| **Line budget** | How many lines one view may hold. Past it the remaining centerlines are held back, and the map says how many |
+
+**An empty field follows your installation's default**, shown in grey in its place — 18 and
+25,000 unless your administrator changed them. Bring the detail in earlier and raise the budget
+on a fast machine; push both the other way on a phone.
+
+The line budget stops at a ceiling your administrator sets — 100,000 unless changed — and the
+page says what it is. If the ceiling is lowered later, a larger number you had stored is held to
+it.
+
+**Use this installation's defaults** in this card empties these two and leaves the walls' three
+as they are; the button in the walls' card does the reverse. Each card hands back only its own
+numbers, so undoing an experiment with one does not discard what you tuned for the other.
+
+These two bound the flat map only: the 3D view draws survey lines by the installation's numbers.
 
 ---
 

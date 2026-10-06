@@ -149,10 +149,10 @@ furnizor OIDC** pe lângă parolă. Legați și dezlegați de aici.
 |---|---|
 | **Deschide aplicația pe** | Hartă · Panou de bord |
 | **Ascunde controalele de pe hartă** | |
-| **Detaliul poligonațiilor de la zoom-ul** | Vedeți [Spațiul de lucru al hărții](map-workspace.md#detaliul-poligonațiilor) |
-| **Bugetul de trasee al poligonațiilor** | |
 
-**Resetează-le** readuce setările specifice dispozitivului.
+**Resetează** readuce cele două setări de mai sus împreună cu tema, densitatea și reducerea
+animațiilor. Limba rămâne cum este, iar numerele de la [Avansat](#avansat) nu sunt atinse —
+acelea au propriul drum înapoi acolo.
 
 ---
 
@@ -189,10 +189,38 @@ Ultimele două se opresc la un plafon stabilit de administrator — 60 de pește
 a fost schimbat — iar pagina spune care este. Dacă plafonul este coborât ulterior, un număr mai
 mare pe care îl aveați păstrat este adus la el.
 
-**Folosește valorile implicite ale instalării** golește toate cele trei câmpuri.
+**Folosește valorile implicite ale instalării** din acest card golește toate cele trei câmpuri.
 
 Numerele sunt în vigoare data viitoare când deschideți vizualizarea 3D. O vizualizare 3D deja
 deschisă în altă fereastră le păstrează pe cele vechi până când este reîncărcată.
+
+### Poligonațiile de pe hartă
+
+Două numere limitează poligonațiile pe care le desenează harta plană. Sunt aceleași două pe care
+le arată lista de straturi a hărții cât timp stratul **Poligonații peșteri** este afișat —
+vedeți [Spațiul de lucru al hărții](map-workspace.md#detaliul-poligonațiilor) — iar un număr
+stabilit în oricare dintre cele două locuri este cel în vigoare în amândouă.
+
+| | |
+|---|---|
+| **Detaliu de la nivelul** | Nivelul de zoom de la care apare detaliul topografic complet, inclusiv radialele; sub el vedeți conturul galeriilor. De la 1 la 22 |
+| **Limită de linii** | Câte linii poate conține o vedere. Peste ea, poligonațiile rămase sunt reținute, iar harta spune câte |
+
+**Un câmp gol urmează valoarea implicită a instalării**, afișată cu gri în locul lui — 18 și
+25.000, dacă administratorul nu le-a schimbat. Aduceți detaliul mai devreme și măriți limita pe
+un calculator rapid; împingeți-le pe amândouă în sens invers pe un telefon.
+
+Limita de linii se oprește la un plafon stabilit de administrator — 100.000, dacă nu a fost
+schimbat — iar pagina spune care este. Dacă plafonul este coborât ulterior, un număr mai mare pe
+care îl aveați păstrat este adus la el.
+
+**Folosește valorile implicite ale instalării** din acest card golește aceste două câmpuri și
+lasă neatinse cele trei ale pereților; butonul din cardul pereților face invers. Fiecare card
+dă înapoi doar numerele lui, astfel că renunțarea la o încercare într-unul nu aruncă ce ați
+reglat pentru celălalt.
+
+Acestea două limitează doar harta plană: vizualizarea 3D desenează poligonațiile după numerele
+instalării.
 
 ---
 
