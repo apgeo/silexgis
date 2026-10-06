@@ -7,9 +7,10 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Terrain;
 
 /// <summary>One computed picture of the ground, as a reader needs to be told about it.</summary>
-/// <param name="Stale">
-/// Whether the elevation this was drawn from is still the elevation the installation serves.
-/// Answered here rather than left to whatever displays it: a picture drawn from superseded ground
+/// <param name="Staleness">
+/// Why this picture is out of date, or null while it is current: the elevation it was drawn from
+/// is no longer the elevation the installation serves, or the arithmetic that drew it has since
+/// been corrected. Answered here rather than left to whatever displays it: an out-of-date picture
 /// is still shown, so the only thing standing between a reader and a shaded relief that disagrees
 /// with the heights beneath it is that somebody remembered to say so.
 /// </param>
@@ -24,17 +25,21 @@ public sealed record TerrainDerivativeLayerView(
     string? Message,
     int Version,
     long SizeBytes,
-    bool Stale,
+    TerrainDerivativeStaleness? Staleness,
     DateTimeOffset? ComputedAt,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt)
+{
+    /// <summary>Whether this picture is out of date, for whichever reason.</summary>
+    public bool Stale => Staleness is not null;
+}
 
 /// <summary>Reads the computed pictures of the ground, each with whether it is still current.</summary>
 /// <remarks>
 /// A reader of its own rather than a query at each caller, because the staleness of a picture is
-/// two facts joined — which build it came from, and which build is active — and a caller that
-/// fetched only the first would have no way to know it was missing the second. There is nothing to
-/// stop such a query returning perfectly correct-looking rows that quietly claim every picture is
-/// current.
+/// facts joined — which build it came from and which build is active, which arithmetic drew it and
+/// which arithmetic would draw it today — and a caller that fetched only the row would have no way
+/// to know it was missing the rest. There is nothing to stop such a query returning perfectly
+/// correct-looking rows that quietly claim every picture is current.
 /// </remarks>
 public sealed class TerrainDerivativeCatalogue(SilexGisDbContext db)
 {
@@ -97,7 +102,8 @@ public sealed class TerrainDerivativeCatalogue(SilexGisDbContext db)
             row.Message,
             row.Version,
             row.SizeBytes,
-            TerrainDerivativeRegistry.IsStale(row.TerrainBuildId, activeBuildId),
+            TerrainDerivativeRegistry.Staleness(
+                row.TerrainBuildId, activeBuildId, row.Derivative, row.Version, row.MethodRevision),
             row.ComputedAt,
             row.CreatedAt);
 }

@@ -43,6 +43,7 @@ function layerInfo(overrides: Partial<TerrainDerivativeLayerInfo> = {}): Terrain
     version: 1,
     sizeBytes: 1024,
     stale: false,
+    staleReason: null,
     computedAt: null,
     createdAt: '2026-01-01T00:00:00Z',
     rasters: [

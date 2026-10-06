@@ -10,7 +10,11 @@ import {
 } from '../../../api/hooks.ts';
 import { formatBbox } from './terrainArea.ts';
 import { formatBuildSize, geometryBbox } from './terrainBuild.ts';
-import { DERIVATIVE_BUILD_CHOICES, describeDerivativeSettings } from './terrainDerivative.ts';
+import {
+  DERIVATIVE_BUILD_CHOICES,
+  describeDerivativeSettings,
+  staleHintKey,
+} from './terrainDerivative.ts';
 import { terrainProblemMessage } from './terrainProblems.ts';
 
 /** Only a failure is an alarm, only a finished picture is a result; the rest is in progress. */
@@ -27,10 +31,11 @@ interface Props {
  *
  * The map's layer list shows the same pictures to anybody who may read terrain, but it shows them
  * as things to switch on. This is the register: what was asked for, from which build, with which
- * settings, what it cost on disk and whether the ground beneath it has since been replaced. A
- * picture that is out of date is still listed and still drawn — withdrawing it would leave a
- * reader with nothing over ground that has probably not changed — but it is never shown as
- * current, and the badge says so in the same words the layer list uses.
+ * settings, what it cost on disk and whether it is out of date — because the ground beneath it has
+ * since been replaced, or because the way it was worked out has since been corrected. A picture
+ * that is out of date is still listed and still drawn — withdrawing it would leave a reader with
+ * nothing over ground that has probably not changed — but it is never shown as current, and the
+ * badge says so, and why, in the same words the layer list uses.
  *
  * The query re-reads itself while any picture is still being computed and slowly afterwards; the
  * rule is the hook's own, so a register left open costs what the hook decided and nothing more.
@@ -123,7 +128,7 @@ export default function TerrainDerivativeList({ canDelete }: Props) {
               <Space size={4} wrap>
                 <Tag color={statusColour(status)}>{t(`terrain.derivatives.statuses.${status}`)}</Tag>
                 {picture.stale && (
-                  <Tooltip title={t('terrain.derivatives.staleHint')}>
+                  <Tooltip title={t(staleHintKey(picture.staleReason))}>
                     <Tag color="warning" data-testid={`terrain-derivative-stale-${picture.id}`}>
                       {t('terrain.derivatives.stale')}
                     </Tag>

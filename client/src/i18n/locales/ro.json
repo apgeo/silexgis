@@ -194,7 +194,10 @@
       "title": "Imagini ale terenului",
       "hint": "Relief umbrit, pantă și orientare, calculate dintr-o construcție de altitudini.",
       "stale": "Depășită",
-      "staleHint": "Calculată din altitudini pe care instalarea nu le mai servește. Este în continuare desenată, dar nu se va potrivi cu înălțimile de dedesubt.",
+      "staleHints": {
+        "elevationReplaced": "Calculată din altitudini pe care instalarea nu le mai servește. Este în continuare desenată, dar nu se va potrivi cu înălțimile de dedesubt.",
+        "methodRevised": "Calculată înainte ca modul în care se obține acest tip de imagine să fie corectat. Este în continuare desenată, dar nu este ceea ce ar da terenul astăzi. Cere din nou aceeași imagine și este calculată de la capăt."
+      },
       "totalSize": "{{size}} pe disc",
       "statuses": {
         "queued": "La coadă",
@@ -204,8 +207,8 @@
       },
       "kinds": {
         "hillshade": "Relief umbrit",
-        "slope": "Pantă (aproximativă — grilă în grade, necorectată pentru latitudine)",
-        "aspect": "Orientare (aproximativă — grilă în grade, necorectată pentru latitudine)",
+        "slope": "Pantă",
+        "aspect": "Orientare",
         "ruggednessIndex": "Asperitate",
         "positionIndex": "Poziție topografică",
         "roughness": "Rugozitate",
@@ -226,7 +229,6 @@
       "nameHint": "Cum o numește lista de straturi.",
       "nameRequired": "Dă imaginii un nume.",
       "nameTooLong": "Un nume are cel mult {{max}} de caractere.",
-      "latitudeCaveat": "Aproximativă: calculată pe o grilă în grade cu o singură scară orizontală, așa că panta este subestimată pe terenul orientat spre est sau vest — cu vreo zece grade la latitudinile Carpaților — iar orientarea este trasă spre nord sau sud. Citește-o ca pe o imagine, nu ca pe o măsurătoare.",
       "lighting": "Lumină",
       "lightingHint": "Sub o singură lumină, orice versant întors de la ea este negru complet, iar o dolină din umbra aceea este invizibilă. Patru lumini o păstrează lizibilă.",
       "lightings": {

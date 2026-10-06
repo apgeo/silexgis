@@ -38,11 +38,16 @@ public sealed record TerrainDerivativeRasterDto(
 /// it was drawn from is still the ground this installation serves.
 /// </summary>
 /// <param name="Stale">
-/// True when the elevation this was computed from is no longer the active build. Served rather
-/// than worked out in the browser, because it is two facts joined and a caller holding only one of
-/// them has no way to know it is missing the other. A stale picture is still shown — withdrawing
-/// it would leave a reader with nothing over ground that has probably not changed — but it must
-/// never be shown as current.
+/// True when this picture is out of date. Served rather than worked out in the browser, because it
+/// is facts joined and a caller holding only the row has no way to know it is missing the rest. A
+/// stale picture is still shown — withdrawing it would leave a reader with nothing over ground
+/// that has probably not changed — but it must never be shown as current.
+/// </param>
+/// <param name="StaleReason">
+/// Why, when it is: the elevation it was computed from is no longer the active build, or the
+/// arithmetic that computed it has since been corrected. Told apart because the remedies differ —
+/// a picture over the elevation now served in the first case, the same picture asked for again in
+/// the second.
 /// </param>
 public sealed record TerrainDerivativeLayerDto(
     Guid Id,
@@ -56,6 +61,7 @@ public sealed record TerrainDerivativeLayerDto(
     int Version,
     long SizeBytes,
     bool Stale,
+    TerrainDerivativeStaleness? StaleReason,
     DateTimeOffset? ComputedAt,
     DateTimeOffset CreatedAt,
     IReadOnlyList<TerrainDerivativeRasterDto> Rasters);
@@ -201,10 +207,18 @@ public static class TerrainDerivativeEndpoints
     /// Records the request and queues the run that answers it.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A request for a picture already asked for over the same build answers with the row that
     /// exists rather than a second one. Two pictures computed from the same elevation with the same
     /// settings are the same file twice, and terrain sits on a volume that is neither swept nor
     /// backed up.
+    /// </para>
+    /// <para>
+    /// With two exceptions, both of which queue a run over the row that exists: a picture whose
+    /// last run failed, and a finished picture whose arithmetic has since been corrected. The
+    /// second is the only way such a picture is ever put right — it is marked out of date, and
+    /// without this the answer to asking for it again would be the same wrong raster.
+    /// </para>
     /// </remarks>
     private static async Task<Results<Ok<TerrainDerivativeLayerDto>, UnauthorizedHttpResult, ProblemHttpResult>> CreateAsync(
         TerrainDerivativeCreateRequest request,
@@ -262,6 +276,14 @@ public static class TerrainDerivativeEndpoints
             existing.Status = TerrainDerivativeStatus.Queued;
             existing.ErrorCode = null;
             existing.Message = null;
+        }
+        else if (existing.Status == TerrainDerivativeStatus.Ready
+            && TerrainDerivativeRegistry.IsMethodRevised(
+                existing.Derivative, existing.Version, existing.MethodRevision))
+        {
+            // Finished, by arithmetic that has since been corrected. The rasters it has stay on
+            // disk until the run this queues has written the next version whole.
+            existing.Status = TerrainDerivativeStatus.Queued;
         }
         else
         {
@@ -415,6 +437,7 @@ public static class TerrainDerivativeEndpoints
             view.Version,
             view.SizeBytes,
             view.Stale,
+            view.Staleness,
             view.ComputedAt,
             view.CreatedAt,
             [.. rasters.Select(raster => ToDto(view.Id, raster, tokens))]);

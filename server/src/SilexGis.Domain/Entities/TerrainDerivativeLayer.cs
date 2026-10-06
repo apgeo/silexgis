@@ -111,6 +111,18 @@ public class TerrainDerivativeLayer : ITimestamped, IAuditable
     /// </remarks>
     public int Version { get; set; }
 
+    /// <summary>
+    /// Which revision of this kind's arithmetic wrote the rasters currently stored.
+    /// </summary>
+    /// <remarks>
+    /// A fact about the files, written in the same commit that records them, and not a flag saying
+    /// they are out of date: whether they are is still worked out when the row is read, by
+    /// comparing this with the revision the kind is computed by today. Zero on every row written
+    /// before revisions were recorded, which is what makes a picture drawn by arithmetic that has
+    /// since been corrected read as out of date without anything having to visit it.
+    /// </remarks>
+    public int MethodRevision { get; set; }
+
     /// <summary>Everything this picture takes on disk, in bytes.</summary>
     /// <remarks>
     /// Summed and stored rather than counted on demand, because it is the number that has to be

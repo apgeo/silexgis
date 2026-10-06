@@ -47,6 +47,7 @@ import {
   type TripLoadState,
 } from '../../map/tripLayer.ts';
 import { getOverlayGroup } from '../../map/mapContext.ts';
+import { staleHintKey } from '../../pages/admin/terrain/terrainDerivative.ts';
 
 /**
  * The refusal a library gives when it will not accept the credential this installation is
@@ -905,9 +906,10 @@ export default function LayerPanel({
                     from elevation that has since been replaced is still drawn, because withdrawing
                     it would leave bare map over ground that has probably not moved — but a reader
                     who is not told disagrees it with the heights beneath and reads the difference
-                    as a fault in the cave data. */}
+                    as a fault in the cave data. The same badge marks a picture whose arithmetic
+                    has since been corrected, and the hint under it says which of the two it is. */}
                 {derivative.stale && (
-                  <Tooltip title={t('terrain.derivatives.staleHint')}>
+                  <Tooltip title={t(staleHintKey(derivative.staleReason))}>
                     <Tag color="warning" data-testid="terrain-derivative-stale">
                       {t('terrain.derivatives.stale')}
                     </Tag>

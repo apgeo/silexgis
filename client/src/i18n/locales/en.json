@@ -194,7 +194,10 @@
       "title": "Ground pictures",
       "hint": "Shaded relief, steepness and facing, computed from an elevation build.",
       "stale": "Out of date",
-      "staleHint": "Computed from elevation this installation no longer serves. It is still drawn, but it will not agree with the heights beneath it.",
+      "staleHints": {
+        "elevationReplaced": "Computed from elevation this installation no longer serves. It is still drawn, but it will not agree with the heights beneath it.",
+        "methodRevised": "Computed before the way this kind of picture is worked out was corrected. It is still drawn, but it is not what the ground would give today. Ask for the same picture again and it is computed afresh."
+      },
       "totalSize": "{{size}} on disk",
       "statuses": {
         "queued": "Queued",
@@ -204,8 +207,8 @@
       },
       "kinds": {
         "hillshade": "Shaded relief",
-        "slope": "Steepness (approximate — degree grid, not corrected for latitude)",
-        "aspect": "Facing (approximate — degree grid, not corrected for latitude)",
+        "slope": "Steepness",
+        "aspect": "Facing",
         "ruggednessIndex": "Ruggedness",
         "positionIndex": "Topographic position",
         "roughness": "Roughness",
@@ -226,7 +229,6 @@
       "nameHint": "What the layer list calls it.",
       "nameRequired": "Give the picture a name.",
       "nameTooLong": "A name is at most {{max}} characters.",
-      "latitudeCaveat": "Approximate: computed on a degree grid with one horizontal scale, so steepness is understated on ground facing east or west — by around ten degrees at Carpathian latitudes — and facing is pulled towards north or south. Read it as a picture, not as a measurement.",
       "lighting": "Light",
       "lightingHint": "Under a single light every slope facing away from it is flat black, and a doline in that shadow is invisible. Four lights keep it readable.",
       "lightings": {

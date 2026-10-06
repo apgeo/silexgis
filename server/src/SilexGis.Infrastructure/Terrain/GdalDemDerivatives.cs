@@ -23,6 +23,15 @@ namespace SilexGis.Infrastructure.Terrain;
 /// that neither half can quietly grow a member the other cannot honour.
 /// </para>
 /// <para>
+/// The elevation these are computed from is a grid of degrees, whose cells are not square on the
+/// ground. The three pictures that depend on distance across the ground — shaded relief, steepness
+/// and facing — are therefore computed a run of rows at a time, each run told how far a degree
+/// really spans at its own latitude, and written out on the grid they were read from. Nothing is
+/// reprojected: that would resample the heights into a metric grid and the picture back out of it,
+/// softening the relief twice, and would leave a facing measured from the metric grid's north
+/// rather than from true north.
+/// </para>
+/// <para>
 /// The library is used in return-code mode throughout this assembly: nothing calls
 /// <c>Gdal.UseExceptions</c>, so a call that fails answers with <c>null</c> and leaves its reason in
 /// an error slot of its own that nothing reads unless it is asked to. Every call below therefore
@@ -86,26 +95,31 @@ public sealed class GdalDemDerivatives : ITerrainDerivativeComputer
         using var scratch = GdalScratchDirectory.At(directory);
 
         var partial = request.OutputPath + TerrainRasterFiles.PartialSuffix;
+        var rows = request.OutputPath + RowsSuffix + TerrainRasterFiles.PartialSuffix;
         var name = Path.GetFileName(request.SourcePath);
+        var sentence = $"The ground could not be pictured from {name}.";
         var ramp = request.Settings.Derivative == TerrainDerivative.ColourRelief
             ? WriteColourRamp(request.Settings.ColourRamp, directory)
             : null;
 
         Delete(partial);
+        Delete(rows);
 
         try
         {
             // Closed before the file is looked at or moved: what is written is not all on disk until
             // the handle that wrote it is gone.
             using (var source = OpenSource(request.SourcePath))
-            using (var options = new GDALDEMProcessingOptions([.. Arguments(request.Settings, source)]))
             {
-                using var written = Produce(
-                    () => Gdal.wrapper_GDALDEMProcessing(
-                        partial, source, Mode(request.Settings.Derivative), ramp, options, null, null),
-                    $"The ground could not be pictured from {name}.");
-
-                written.FlushCache();
+                if (MeasuredAcrossTheGround(request.Settings.Derivative)
+                    && Grid.Of(source) is { } grid)
+                {
+                    ComputeInRowBands(source, grid, rows, partial, request.Settings, sentence, ct);
+                }
+                else
+                {
+                    ComputeWhole(source, partial, request.Settings, ramp, sentence);
+                }
             }
 
             var computed = Describe(partial)
@@ -128,10 +142,299 @@ public sealed class GdalDemDerivatives : ITerrainDerivativeComputer
         }
         finally
         {
+            Delete(rows);
+
             if (ramp is not null)
             {
                 Delete(ramp);
             }
+        }
+    }
+
+    /// <summary>What the rows of a picture are gathered in while its runs are computed.</summary>
+    /// <remarks>
+    /// Beside the finished raster, under the name a file still being written always has here, so
+    /// that it lands on the disk somebody sized for terrain and is never picked up as a raster by
+    /// anything that reads the directory.
+    /// </remarks>
+    private const string RowsSuffix = ".rows";
+
+    /// <summary>The whole raster in one call, exactly as the library's own tool would compute it.</summary>
+    /// <remarks>
+    /// For the pictures that involve no distance across the ground — ruggedness, topographic
+    /// position and roughness are differences in height between a cell and its neighbours, and a
+    /// colour relief is a height looked up in a ramp — and for a raster already placed in metres,
+    /// whose cells the library measures correctly by itself.
+    /// </remarks>
+    private static void ComputeWhole(
+        Dataset source, string partial, TerrainDerivativeSettings settings, string? ramp, string sentence)
+    {
+        using var options = new GDALDEMProcessingOptions(
+            [.. ModeArguments(settings), .. CloudOptimised]);
+        using var written = Produce(
+            () => Gdal.wrapper_GDALDEMProcessing(
+                partial, source, Mode(settings.Derivative), ramp, options, null, null),
+            sentence);
+
+        written.FlushCache();
+    }
+
+    /// <summary>
+    /// A raster in degrees, computed a run of rows at a time so that every row is measured with
+    /// the width a cell really has at its own latitude.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each run is read with one row of its neighbours above and below, so the cells along its
+    /// edges are computed from the same nine heights they would be in a single pass over the whole
+    /// raster; those two extra rows are computed and thrown away. What is kept is written, in
+    /// order, into one plain raster beside the output, and that is then written out
+    /// cloud-optimised in a single step — the cloud-optimised writer cannot be appended to.
+    /// </para>
+    /// <para>
+    /// Steepness and shaded relief are given the two distances a degree spans at the middle of
+    /// the run, which is what the limit on a run's height is for. Facing is different, and not by
+    /// choice: the library's facing mode takes no distance at all — it reads a direction straight
+    /// off the differences between neighbouring cells as though every cell were square, refuses
+    /// the two scales when they are offered alongside its own switches and ignores them
+    /// otherwise, and takes no notice of the cell size the raster declares either. So the
+    /// direction it answers is corrected here for the shape of the cell, row by row, which is
+    /// exact and needs nothing from the ground but its latitude.
+    /// </para>
+    /// </remarks>
+    private static void ComputeInRowBands(
+        Dataset source,
+        Grid grid,
+        string rows,
+        string partial,
+        TerrainDerivativeSettings settings,
+        string sentence,
+        CancellationToken ct)
+    {
+        Dataset? gathered = null;
+        try
+        {
+            foreach (var band in TerrainGroundScale.RowBands(grid.Width, grid.Height, grid.CellHeight))
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var top = Math.Max(0, band.FirstRow - 1);
+                var bottom = Math.Min(grid.Height, band.FirstRow + band.RowCount + 1);
+                var middle = grid.North - ((band.FirstRow + (band.RowCount / 2d)) * grid.CellHeight);
+
+                using var window = Produce(
+                    () => Rows(source, top, bottom - top, grid.Width), sentence);
+                using var options = new GDALDEMProcessingOptions(
+                [
+                    .. ModeArguments(settings),
+                    .. GroundDistances(settings.Derivative, middle),
+                    .. InMemory,
+                ]);
+                using var pictured = Produce(
+                    () => Gdal.wrapper_GDALDEMProcessing(
+                        string.Empty, window, Mode(settings.Derivative), null, options, null, null),
+                    sentence);
+
+                gathered ??= Produce(() => Gathering(rows, source, pictured, grid), sentence);
+                Keep(pictured, gathered, band, band.FirstRow - top, grid, settings.Derivative, sentence);
+            }
+
+            if (gathered is null)
+            {
+                throw new TerrainBuildException(TerrainBuildFailures.DerivativeFailed, sentence);
+            }
+
+            gathered.FlushCache();
+
+            using var cloudOptimised = new GDALTranslateOptions(CloudOptimised);
+            using var written = Produce(
+                () => Gdal.wrapper_GDALTranslate(partial, gathered, cloudOptimised, null, null),
+                sentence);
+
+            written.FlushCache();
+        }
+        finally
+        {
+            // Before the caller deletes the file: a handle still open on it is a file that cannot
+            // be removed on one of the two systems this runs on.
+            gathered?.Dispose();
+        }
+    }
+
+    /// <summary>A run of whole rows of the source, copied into memory.</summary>
+    /// <remarks>
+    /// A copy rather than a view onto the file, because what is handed to the computation must
+    /// not outlive or share a handle with the raster it was cut from, and a run is bounded in
+    /// size by the rule that plans them.
+    /// </remarks>
+    private static Dataset? Rows(Dataset source, int firstRow, int rowCount, int width)
+    {
+        using var options = new GDALTranslateOptions(
+        [
+            .. InMemory,
+            "-srcwin",
+            "0",
+            Whole(firstRow),
+            Whole(width),
+            Whole(rowCount),
+        ]);
+
+        return Gdal.wrapper_GDALTranslate(string.Empty, source, options, null, null);
+    }
+
+    /// <summary>
+    /// The plain raster a picture's rows are gathered in: the source's grid, holding what the
+    /// computation produces.
+    /// </summary>
+    /// <remarks>
+    /// Its type and its marker for a hole are taken from the first run computed rather than
+    /// stated here, so that what is gathered is what the library would have written in one pass —
+    /// whole bytes with zero for a hole for a shaded relief, floating point with the library's own
+    /// marker for the rest.
+    /// </remarks>
+    private static Dataset? Gathering(string path, Dataset source, Dataset pictured, Grid grid)
+    {
+        using var first = pictured.GetRasterBand(1);
+        var driver = Gdal.GetDriverByName("GTiff");
+        var gathered = driver?.Create(
+            path, grid.Width, grid.Height, pictured.RasterCount, first.DataType, ["BIGTIFF=IF_SAFER"]);
+        if (gathered is null)
+        {
+            return null;
+        }
+
+        gathered.SetGeoTransform(grid.Transform);
+        gathered.SetProjection(source.GetProjection());
+
+        for (var index = 1; index <= pictured.RasterCount; index++)
+        {
+            using var from = pictured.GetRasterBand(index);
+            using var to = gathered.GetRasterBand(index);
+            from.GetNoDataValue(out var hole, out var marked);
+            if (marked != 0)
+            {
+                to.SetNoDataValue(hole);
+            }
+        }
+
+        return gathered;
+    }
+
+    /// <summary>
+    /// Writes the rows of a run that belong to it — everything but the neighbours read along
+    /// with it — into the raster the picture is gathered in.
+    /// </summary>
+    private static void Keep(
+        Dataset pictured,
+        Dataset gathered,
+        TerrainRowBand band,
+        int firstInWindow,
+        Grid grid,
+        TerrainDerivative derivative,
+        string sentence)
+    {
+        // Floating point whatever the band holds: the library converts on the way out and on the
+        // way in, and a shaded relief's whole bytes survive both exactly.
+        var cells = new float[grid.Width * band.RowCount];
+
+        for (var index = 1; index <= pictured.RasterCount; index++)
+        {
+            using var from = pictured.GetRasterBand(index);
+            using var to = gathered.GetRasterBand(index);
+
+            Gdal.ErrorReset();
+            if (from.ReadRaster(
+                    0, firstInWindow, grid.Width, band.RowCount, cells, grid.Width, band.RowCount, 0, 0)
+                != CPLErr.CE_None)
+            {
+                throw new TerrainBuildException(
+                    TerrainBuildFailures.DerivativeFailed, sentence, Reason(null));
+            }
+
+            if (derivative == TerrainDerivative.Aspect)
+            {
+                from.GetNoDataValue(out var hole, out var marked);
+                FaceTheGround(cells, band, grid, marked != 0 ? (float)hole : null);
+            }
+
+            Gdal.ErrorReset();
+            if (to.WriteRaster(
+                    0, band.FirstRow, grid.Width, band.RowCount, cells, grid.Width, band.RowCount, 0, 0)
+                != CPLErr.CE_None)
+            {
+                throw new TerrainBuildException(
+                    TerrainBuildFailures.DerivativeFailed, sentence, Reason(null));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Turns each facing computed as though its cell were square into the direction that ground
+    /// really faces, using the shape a cell has at its own row's latitude.
+    /// </summary>
+    /// <remarks>
+    /// A cell holding the marker for a hole is left holding it: it is not a direction, and turning
+    /// it would produce a perfectly plausible one.
+    /// </remarks>
+    private static void FaceTheGround(float[] cells, TerrainRowBand band, Grid grid, float? hole)
+    {
+        for (var row = 0; row < band.RowCount; row++)
+        {
+            var latitude = grid.North - ((band.FirstRow + row + 0.5d) * grid.CellHeight);
+            var stretch = TerrainGroundScale.CellStretch(latitude, grid.CellWidth, grid.CellHeight);
+            var start = row * grid.Width;
+
+            for (var column = 0; column < grid.Width; column++)
+            {
+                var counted = cells[start + column];
+                if (hole is { } marker && counted == marker)
+                {
+                    continue;
+                }
+
+                // Rounded to the precision it is stored at before it is compared: a direction a
+                // hair short of a full turn rounds up to one, and a full turn is north.
+                var facing = (float)TerrainGroundScale.FacingOnTheGround(counted, stretch);
+                cells[start + column] = facing >= 360f ? 0f : facing;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Where a raster in degrees sits and how large its cells are, or nothing when it is not a
+    /// north-up grid of degrees.
+    /// </summary>
+    /// <param name="Transform">The six numbers that place the grid, as the library holds them.</param>
+    private sealed record Grid(
+        int Width, int Height, double North, double CellWidth, double CellHeight, double[] Transform)
+    {
+        /// <remarks>
+        /// Asked of the file rather than assumed, even though everything this is pointed at today
+        /// is in longitude and latitude with north at the top. The scales depend on the answer,
+        /// and getting it wrong does not fail: it produces a complete picture of ground a hundred
+        /// thousand times steeper or flatter than it is. A raster that is rotated has rows that
+        /// are not parallels, so it has no latitude per row to be corrected by; it is computed in
+        /// one pass and judged by the check every computed raster goes through.
+        /// </remarks>
+        public static Grid? Of(Dataset source)
+        {
+            if (!IsGeographic(source))
+            {
+                return null;
+            }
+
+            var transform = new double[6];
+            source.GetGeoTransform(transform);
+
+            return transform[1] > 0 && transform[5] < 0 && transform[2] == 0 && transform[4] == 0
+                ? new Grid(
+                    source.RasterXSize,
+                    source.RasterYSize,
+                    transform[3],
+                    transform[1],
+                    -transform[5],
+                    transform)
+                : null;
         }
     }
 
@@ -152,35 +455,12 @@ public sealed class GdalDemDerivatives : ITerrainDerivativeComputer
         _ => throw new ArgumentOutOfRangeException(nameof(derivative), derivative, null),
     };
 
-    /// <summary>The computation's arguments, in the form the library's own tools take them.</summary>
-    internal static IEnumerable<string> Arguments(TerrainDerivativeSettings settings, Dataset source)
+    /// <summary>
+    /// The settings of one picture, in the form the library's own tools take them: everything
+    /// that decides what is computed, and nothing about where the ground is or how it is written.
+    /// </summary>
+    private static IEnumerable<string> ModeArguments(TerrainDerivativeSettings settings)
     {
-        // Steepness and shaded relief divide a height difference in metres by a distance across the
-        // ground, and the distance they use is whatever the raster's own coordinates say. Prepared
-        // rasters are in degrees of longitude and latitude, so without this the library would divide
-        // metres by degrees and report slopes of tens of thousands of per cent everywhere — a picture
-        // that is finished, valid, and uniformly saturated. The number converts one degree to metres.
-        //
-        // Only those two modes take it, and the library refuses the whole request rather than
-        // ignoring it if it is offered to one of the others: facing, ruggedness, position and
-        // roughness are either a direction or a height difference, and neither involves a distance
-        // across the ground at all.
-        //
-        // It is one number for both directions, and that is a real limit rather than a rounding: a
-        // degree of longitude shrinks with the cosine of the latitude, so away from the equator the
-        // east-west spacing this assumes is wider than the ground really is, and steepness measured
-        // across a hillside facing east or west comes out gentler than it is — by about a third at
-        // the latitude of the Carpathians. The same anisotropy tilts a facing that is not due north,
-        // south, east or west, and there is nowhere to put a correction for it: the modes take a
-        // single scale. Removing it would mean reprojecting the elevation into metres first, which
-        // is a different raster and a different decision. Recorded here because the picture itself
-        // gives no sign of it.
-        if (UsesGroundDistance(settings.Derivative) && IsGeographic(source))
-        {
-            yield return "-s";
-            yield return Invariant(TerrainRasterPreparation.MetresPerDegree);
-        }
-
         if (settings.ComputeEdges)
         {
             yield return "-compute_edges";
@@ -251,21 +531,57 @@ public sealed class GdalDemDerivatives : ITerrainDerivativeComputer
                 throw new ArgumentOutOfRangeException(
                     nameof(settings), settings.Derivative, null);
         }
-
-        // Written the same way the elevation it was computed from is: cloud-optimised, so that a
-        // browser can read the part of it that is on screen over a range request instead of the whole
-        // file, and compressed, because a shaded relief of a region is mostly smooth.
-        yield return "-of";
-        yield return "COG";
-        yield return "-co";
-        yield return "COMPRESS=DEFLATE";
-        yield return "-co";
-        yield return "BIGTIFF=IF_SAFER";
     }
 
-    /// <summary>Whether this computation divides a height by a distance across the ground.</summary>
-    private static bool UsesGroundDistance(TerrainDerivative derivative) =>
-        derivative is TerrainDerivative.Hillshade or TerrainDerivative.Slope;
+    /// <summary>
+    /// How far a degree spans in each direction at this latitude, for the two computations that
+    /// divide a height by a distance across the ground.
+    /// </summary>
+    /// <remarks>
+    /// Steepness and shaded relief divide a height difference in metres by a distance, and the
+    /// distance they use is whatever the raster's own coordinates say. Told nothing, the library
+    /// guesses a scale for a raster in degrees from the latitude of its middle, which is close
+    /// for a small raster and a degree and a half of steepness out at the top and bottom of one
+    /// five degrees tall. Stated here for the run of rows being computed, east–west and
+    /// north–south separately, it is the ground's own.
+    ///
+    /// Facing is given none. The library's facing mode has no use for a distance, refuses these
+    /// two alongside its own switches, and is corrected for the shape of a cell after it has
+    /// answered.
+    /// </remarks>
+    private static IEnumerable<string> GroundDistances(TerrainDerivative derivative, double latitude)
+    {
+        if (derivative is not (TerrainDerivative.Hillshade or TerrainDerivative.Slope))
+        {
+            yield break;
+        }
+
+        yield return "-xscale";
+        yield return Invariant(TerrainGroundScale.MetresPerDegreeOfLongitude(latitude));
+        yield return "-yscale";
+        yield return Invariant(TerrainGroundScale.MetresPerDegreeOfLatitude(latitude));
+    }
+
+    /// <summary>
+    /// How a finished picture is written: the same way the elevation it was computed from is.
+    /// </summary>
+    /// <remarks>
+    /// Cloud-optimised, so that a browser can read the part of it that is on screen over a range
+    /// request instead of the whole file, and compressed, because a shaded relief of a region is
+    /// mostly smooth.
+    /// </remarks>
+    private static readonly string[] CloudOptimised =
+        ["-of", "COG", "-co", "COMPRESS=DEFLATE", "-co", "BIGTIFF=IF_SAFER"];
+
+    /// <summary>A result held in memory rather than written anywhere.</summary>
+    private static readonly string[] InMemory = ["-of", "MEM"];
+
+    /// <summary>
+    /// Whether this picture depends on how far apart cells are on the ground, and so has to be
+    /// told when they are not as far apart east–west as they are north–south.
+    /// </summary>
+    private static bool MeasuredAcrossTheGround(TerrainDerivative derivative) =>
+        derivative is TerrainDerivative.Hillshade or TerrainDerivative.Slope or TerrainDerivative.Aspect;
 
     private static string Fit(TerrainSurfaceFit fit) =>
         fit == TerrainSurfaceFit.ZevenbergenThorne ? "ZevenbergenThorne" : "Horn";
@@ -304,12 +620,6 @@ public sealed class GdalDemDerivatives : ITerrainDerivativeComputer
     }
 
     /// <summary>Whether the raster places itself in degrees rather than in a projected unit.</summary>
-    /// <remarks>
-    /// Asked of the file rather than assumed, even though everything this is pointed at today is in
-    /// longitude and latitude. The scale below depends on the answer, and getting it wrong does not
-    /// fail: it produces a complete picture of ground a hundred thousand times steeper or flatter
-    /// than it is.
-    /// </remarks>
     private static bool IsGeographic(Dataset source)
     {
         try
@@ -489,6 +799,8 @@ public sealed class GdalDemDerivatives : ITerrainDerivativeComputer
     /// this machine happens to be set up to write them: a decimal comma turns one argument into two.
     /// </summary>
     private static string Invariant(double value) => value.ToString("R", CultureInfo.InvariantCulture);
+
+    private static string Whole(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     private static void RequireAbsolute(string path, string argument)
     {

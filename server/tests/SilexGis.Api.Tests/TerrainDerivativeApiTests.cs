@@ -136,13 +136,83 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
         var original = await SeedBuildAsync(active: true);
         var layerId = await SeedLayerAsync(original, TerrainDerivative.Slope, "steepness");
 
-        (await FindAsync(layerId)).GetProperty("stale").GetBoolean().ShouldBeFalse();
+        var before = await FindAsync(layerId);
+        before.GetProperty("stale").GetBoolean().ShouldBeFalse();
+        before.GetProperty("staleReason").ValueKind.ShouldBe(JsonValueKind.Null);
 
         await SeedBuildAsync(active: true); // a newer build takes over as the ground served
 
         var after = await FindAsync(layerId);
         after.GetProperty("stale").GetBoolean().ShouldBeTrue(after.ToString());
+        after.GetProperty("staleReason").GetString().ShouldBe("elevationReplaced");
         after.GetProperty("status").GetString().ShouldBe("ready");
+    }
+
+    /// <summary>
+    /// A picture computed before its arithmetic was corrected says so, and asking for it again
+    /// has it drawn again — once.
+    /// </summary>
+    /// <remarks>
+    /// The elevation beneath it has not changed, so nothing about the build would ever mark it;
+    /// and it is finished, so without the second half the answer to asking for it again would be
+    /// the same wrong raster for as long as the build lived. The kind beside it whose arithmetic
+    /// never changed is the control: a mark on every picture computed before today would teach
+    /// everybody to ignore the mark.
+    /// </remarks>
+    [Fact]
+    public async Task A_picture_drawn_by_superseded_arithmetic_says_so_and_is_drawn_again_when_asked_for()
+    {
+        var buildId = await SeedBuildAsync(active: true);
+        var steepness = await SeedLayerAsync(
+            buildId, TerrainDerivative.Slope, "steepness, as it used to be computed", methodRevision: 0);
+        var roughness = await SeedLayerAsync(
+            buildId, TerrainDerivative.Roughness, "roughness, computed the way it always was", methodRevision: 0);
+
+        var listed = await FindAsync(steepness);
+        listed.GetProperty("stale").GetBoolean().ShouldBeTrue(listed.ToString());
+        listed.GetProperty("staleReason").GetString().ShouldBe("methodRevised");
+        listed.GetProperty("status").GetString().ShouldBe("ready");
+
+        (await FindAsync(roughness)).GetProperty("stale").GetBoolean().ShouldBeFalse();
+
+        var request = new { terrainBuildId = buildId, derivative = "slope", name = "steepness" };
+
+        var asked = await holder.PostAsJsonAsync("/api/v1/terrain/derivatives", request);
+        asked.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var answer = await asked.Content.ReadFromJsonAsync<JsonElement>();
+        answer.GetProperty("id").GetGuid().ShouldBe(steepness);
+        answer.GetProperty("status").GetString().ShouldBe("queued");
+
+        // Still marked while the run is owed: what is on disk is still the old picture.
+        answer.GetProperty("stale").GetBoolean().ShouldBeTrue();
+
+        (await holder.PostAsJsonAsync("/api/v1/terrain/derivatives", request)).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TerrainDerivativeLayers.CountAsync(l => l.TerrainBuildId == buildId)).ShouldBe(2);
+
+        var queued = await db.ProcessingJobs
+            .Where(j => j.Kind == ProcessingJobKinds.TerrainDerivative)
+            .Select(j => j.Payload)
+            .ToListAsync();
+        queued.Count(p => p.Contains(steepness.ToString(), StringComparison.Ordinal)).ShouldBe(1);
+
+        // A picture that is finished and current is answered with itself and nothing is queued.
+        var current = await holder.PostAsJsonAsync("/api/v1/terrain/derivatives", new
+        {
+            terrainBuildId = buildId,
+            derivative = "roughness",
+            name = "roughness",
+        });
+        (await current.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString()
+            .ShouldBe("ready");
+        queued = await db.ProcessingJobs
+            .Where(j => j.Kind == ProcessingJobKinds.TerrainDerivative)
+            .Select(j => j.Payload)
+            .ToListAsync();
+        queued.Count(p => p.Contains(roughness.ToString(), StringComparison.Ordinal)).ShouldBe(0);
     }
 
     /// <summary>
@@ -394,7 +464,12 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>A finished picture with one raster, and bytes on disk behind it.</summary>
-    private async Task<Guid> SeedLayerAsync(Guid buildId, TerrainDerivative derivative, string name)
+    /// <param name="methodRevision">
+    /// Which revision of the kind's arithmetic the picture is recorded as computed by; left out,
+    /// the one it would be computed by today.
+    /// </param>
+    private async Task<Guid> SeedLayerAsync(
+        Guid buildId, TerrainDerivative derivative, string name, int? methodRevision = null)
     {
         var settings = TerrainDerivativeRegistry.Normalise(
             new TerrainDerivativeSettings { Derivative = derivative });
@@ -411,6 +486,7 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
             Name = name,
             Status = TerrainDerivativeStatus.Ready,
             Version = 1,
+            MethodRevision = methodRevision ?? TerrainDerivativeRegistry.MethodRevision(derivative),
             ComputedAt = DateTimeOffset.UtcNow,
         };
         db.TerrainDerivativeLayers.Add(layer);

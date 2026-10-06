@@ -120,6 +120,9 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
 
         // Counting from one, so that "never computed" and "computed once" are different answers.
         layer.Version.ShouldBe(1);
+
+        // And which arithmetic drew it, which is what a later correction is compared against.
+        layer.MethodRevision.ShouldBe(TerrainDerivativeRegistry.MethodRevision(TerrainDerivative.Hillshade));
         layer.ComputedAt.ShouldNotBeNull();
         layer.SizeBytes.ShouldBeGreaterThan(0);
 
@@ -189,6 +192,48 @@ public sealed class TerrainDerivativeRegistryTests : IAsyncLifetime, IDisposable
         var raster = await db.TerrainDerivativeRasters.AsNoTracking()
             .SingleAsync(r => r.TerrainDerivativeLayerId == layerId);
         File.Exists(raster.Path).ShouldBeTrue(raster.Path);
+    }
+
+    /// <summary>
+    /// A picture on record as drawn by arithmetic that has since been corrected is out of date
+    /// over ground that never changed, until it is drawn again.
+    /// </summary>
+    /// <remarks>
+    /// The row is written the way every row written before revisions were recorded reads: computed
+    /// once, at revision zero. Drawing it again is what clears the mark, and it clears it by
+    /// recording what drew the new files rather than by anything being told the picture is fine.
+    /// </remarks>
+    [Fact]
+    public async Task A_picture_drawn_by_superseded_arithmetic_is_stale_until_it_is_drawn_again()
+    {
+        var buildId = await SeedBuildAsync(active: true);
+        Raster(buildId, "ground.tif");
+        var layerId = await AskForAsync(buildId, new TerrainDerivativeSettings
+        {
+            Derivative = TerrainDerivative.Aspect,
+        });
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            await db.TerrainDerivativeLayers.Where(l => l.Id == layerId).ExecuteUpdateAsync(s => s
+                .SetProperty(l => l.Status, TerrainDerivativeStatus.Ready)
+                .SetProperty(l => l.Version, 1)
+                .SetProperty(l => l.MethodRevision, 0));
+        }
+
+        var old = await ViewAsync(layerId);
+        old.ShouldNotBeNull();
+        old.Staleness.ShouldBe(TerrainDerivativeStaleness.MethodRevised);
+        old.Stale.ShouldBeTrue();
+
+        await ComputeAsync(layerId);
+
+        var redrawn = await ViewAsync(layerId);
+        redrawn.ShouldNotBeNull();
+        redrawn.Status.ShouldBe(TerrainDerivativeStatus.Ready, redrawn.Message);
+        redrawn.Staleness.ShouldBeNull();
+        redrawn.Version.ShouldBe(2);
     }
 
     /// <summary>

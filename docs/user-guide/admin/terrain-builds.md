@@ -216,16 +216,14 @@ The settings, by kind:
 **Request picture** queues it. Asking again for a picture the installation already holds — same
 build, same kind, same settings — answers with the one that exists rather than computing it twice.
 
-### Steepness and facing are approximate
+### How steepness and facing are computed
 
-Both are computed on a **grid of degrees with one horizontal scale** for both axes. A degree of
-longitude at Carpathian latitudes is about seven tenths of a degree of latitude, so the arithmetic
-sees east–west ground as gentler than it is: **steepness is understated by around ten degrees on
-slopes facing east or west**, and **facing is pulled towards north or south**. Nothing cheap
-corrects it, so the product does not present those numbers as measurements. Both kinds carry the
-qualifier *approximate — degree grid, not corrected for latitude* in their names wherever they are
-listed, and the form says the same in plain words when either is chosen. Read them as pictures of
-where the ground is steep and which way it faces, not as figures to quote.
+Both are measured **on the ground, not on the grid of degrees the elevation is held in**: a degree
+of longitude is narrower than a degree of latitude — by nearly a third at Carpathian latitudes —
+so every row of a raster is computed with the two distances a degree really spans at that row's
+latitude, and a hillside facing east reads as steep as the same hillside facing north. Nothing is
+reprojected or resampled on the way, so the picture sits exactly on the elevation it was drawn
+from, and shaded relief is lit using the same two distances.
 
 ### The register
 
@@ -240,6 +238,12 @@ picture drawn from the old one is marked "Out of date"** — in the register and
 the layer list. It is still there and still draws — an out-of-date shaded relief is often better
 than none — but you can see at a glance that the ground beneath it has been replaced, which is the
 one thing that would otherwise look like a fault in the cave data.
+
+A picture is marked the same way when **the way its kind is computed has since been corrected**:
+shaded relief, steepness and facing computed before they were measured on the ground are. The hint
+under the badge says which of the two reasons it is. For this one the remedy is to **ask for the
+same picture again** — same build, same kind, same settings — which computes it afresh in place of
+the old one.
 
 **Delete**, behind a confirmation that names what it frees, removes the picture and its rasters.
 It needs the right to **delete** on terrain. The files sit under the build itself, so **deleting a

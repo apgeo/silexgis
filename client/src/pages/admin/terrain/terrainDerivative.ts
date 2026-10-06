@@ -3,6 +3,7 @@ import type { useTranslation } from 'react-i18next';
 import type { TerrainDerivativeCreate, TerrainDerivativeLayerInfo } from '../../../api/hooks.ts';
 
 export type TerrainDerivativeKind = TerrainDerivativeLayerInfo['derivative'];
+export type TerrainDerivativeStaleReason = NonNullable<TerrainDerivativeLayerInfo['staleReason']>;
 export type TerrainHillshadeLighting = NonNullable<TerrainDerivativeCreate['lighting']>;
 export type TerrainSurfaceFit = NonNullable<TerrainDerivativeCreate['surfaceFit']>;
 export type TerrainSlopeUnit = NonNullable<TerrainDerivativeCreate['slopeUnit']>;
@@ -93,20 +94,6 @@ export function readsColourRamp(kind: TerrainDerivativeKind): boolean {
   return kind === 'colourRelief';
 }
 
-/**
- * The two pictures whose numbers are not measurements.
- *
- * Both are computed on a grid of degrees with one horizontal scale for both axes. A degree of
- * longitude at Carpathian latitudes is about seven tenths of a degree of latitude, so the
- * arithmetic sees east–west ground as gentler than it is — steepness comes out around ten
- * degrees too low on slopes facing east or west, and the direction a slope faces is pulled
- * towards north or south. Nothing cheap corrects it, so the product says so wherever those two
- * are offered or named rather than presenting the numbers as measured.
- */
-export function latitudeUncorrected(kind: TerrainDerivativeKind): boolean {
-  return kind === 'slope' || kind === 'aspect';
-}
-
 /*
  * The bounds the server checks a request against, mirrored so the form refuses before sending
  * rather than after. Each bound is the server's exactly, including which end is open: a light
@@ -170,19 +157,25 @@ export const DEFAULT_COLOUR_RAMP: readonly ColourStopDraft[] = [
 ];
 
 /**
- * The name a picture opens with: its kind, without the caveat two of the kinds carry.
+ * Which sentence explains why a picture is out of date.
  *
- * The layer list shows a picture's name with its kind underneath, so a name that repeated the
- * kind's full label would show the caveat twice on one line pair. The caveat is kept where it
- * belongs, on the kind; the name is what somebody would have typed.
+ * The two reasons have two remedies — a picture over the elevation now served, or the same picture
+ * asked for again — so the hint under the badge has to be the one for the reason given. A listing
+ * that names no reason is read as replaced elevation, which was the only reason there was before
+ * the second was told apart.
  */
+export function staleHintKey(
+  reason: TerrainDerivativeLayerInfo['staleReason'] | undefined,
+): `terrain.derivatives.staleHints.${TerrainDerivativeStaleReason}` {
+  return `terrain.derivatives.staleHints.${reason ?? 'elevationReplaced'}`;
+}
+
+/** The name a picture opens with: what its kind is called. */
 export function defaultDerivativeName(
   kind: TerrainDerivativeKind,
   t: ReturnType<typeof useTranslation>['t'],
 ): string {
-  return t(`terrain.derivatives.kinds.${kind}`)
-    .replace(/\s*\([^)]*\)\s*$/, '')
-    .trim();
+  return t(`terrain.derivatives.kinds.${kind}`);
 }
 
 /** The settings a picture was computed with, as far as the register is able to read them. */

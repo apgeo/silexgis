@@ -44,7 +44,6 @@ import {
   colourRampProblem,
   defaultDerivativeName,
   hexToRgb,
-  latitudeUncorrected,
   readsColourRamp,
   readsLight,
   readsRuggednessFit,
@@ -267,16 +266,6 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
             <Input data-testid="terrain-derivative-name" maxLength={MAX_NAME_LENGTH} />
           </Form.Item>
         </Flex>
-
-        {latitudeUncorrected(kind) && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            data-testid="terrain-derivative-latitude-caveat"
-            title={t('terrain.derivativeForm.latitudeCaveat')}
-          />
-        )}
 
         {readsLight(kind) && (
           <Flex gap={16} wrap>

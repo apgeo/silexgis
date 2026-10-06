@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -14,9 +15,11 @@ using SilexGis.Infrastructure.Persistence;
 namespace SilexGis.Infrastructure.Migrations
 {
     [DbContext(typeof(SilexGisDbContext))]
-    partial class SilexGisDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261006030711_TerrainDerivativeMethodRevision")]
+    partial class TerrainDerivativeMethodRevision
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1063,52 +1066,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasDatabaseName("ix_cabinet_documents_cabinet_id_document_id");
 
                     b.ToTable("cabinet_documents", (string)null);
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.CalendarFeedToken", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Label")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("label");
-
-                    b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("revoked_at");
-
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("token_hash");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_calendar_feed_tokens");
-
-                    b.HasIndex("TokenHash")
-                        .IsUnique()
-                        .HasDatabaseName("ix_calendar_feed_tokens_token_hash");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_calendar_feed_tokens_user_id");
-
-                    b.ToTable("calendar_feed_tokens", (string)null);
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Cave", b =>
@@ -2435,10 +2392,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("published_at");
 
-                    b.Property<short?>("SeriesFrequency")
-                        .HasColumnType("smallint")
-                        .HasColumnName("series_frequency");
-
                     b.Property<Guid?>("SeriesId")
                         .HasColumnType("uuid")
                         .HasColumnName("series_id");
@@ -2493,8 +2446,6 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("events", null, t =>
                         {
                             t.HasCheckConstraint("ck_events_dates", "end_date IS NULL OR end_date > start_date");
-
-                            t.HasCheckConstraint("ck_events_series_frequency", "series_frequency IS NULL OR series_id IS NOT NULL");
 
                             t.HasCheckConstraint("ck_events_series_rule", "series_rule IS NULL OR series_id IS NOT NULL");
                         });
@@ -6958,21 +6909,12 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("character varying(120)")
                         .HasColumnName("name");
 
-                    b.Property<long?>("TripTypeId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("trip_type_id");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id")
                         .HasName("pk_trip_report_templates");
-
-                    b.HasIndex("TripTypeId")
-                        .IsUnique()
-                        .HasDatabaseName("ux_trip_report_templates_trip_type")
-                        .HasFilter("trip_type_id IS NOT NULL");
 
                     b.HasIndex("Kind", "IsDefault")
                         .IsUnique()
@@ -8120,16 +8062,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_cabinet_documents_documents_document_id");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.CalendarFeedToken", b =>
-                {
-                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_calendar_feed_tokens_users_user_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Cave", b =>
@@ -9332,15 +9264,6 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_trip_position_events_trip_logs_trip_log_id");
-                });
-
-            modelBuilder.Entity("SilexGis.Domain.Entities.TripReportTemplate", b =>
-                {
-                    b.HasOne("SilexGis.Domain.Entities.TripType", null)
-                        .WithMany()
-                        .HasForeignKey("TripTypeId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_trip_report_templates_trip_types_trip_type_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.TripTeam", b =>

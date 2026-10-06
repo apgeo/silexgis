@@ -117,18 +117,16 @@ describe('TerrainDerivativeForm', () => {
     expect(screen.getByTestId('terrain-derivative-submit')).toBeDisabled();
   });
 
-  // The two pictures whose numbers are not measurements say so on the form, in the one place
-  // somebody decides whether to ask for them; and a slope is sent with only what a slope reads,
-  // because what it does not read the server strips before deciding whether it already has it.
-  it('says a slope is approximate, and sends only what a slope reads', async () => {
+  // A slope is sent with only what a slope reads, because what it does not read the server strips
+  // before deciding whether it already has it. And it is offered under its plain name, with
+  // nothing on the form warning that its numbers are not measurements: they are.
+  it('offers a slope without a caveat, and sends only what a slope reads', async () => {
     show();
+
+    await chooseKind('Steepness');
+
     expect(screen.queryByTestId('terrain-derivative-latitude-caveat')).not.toBeInTheDocument();
-
-    await chooseKind('Steepness (approximate — degree grid, not corrected for latitude)');
-
-    expect(screen.getByTestId('terrain-derivative-latitude-caveat')).toHaveTextContent(
-      'not as a measurement',
-    );
+    expect(screen.queryByText(/approximate/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Light from (°)')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('terrain-derivative-submit'));
@@ -148,14 +146,16 @@ describe('TerrainDerivativeForm', () => {
     });
   });
 
-  it('says the same of facing, and nothing of the kinds it is not true of', async () => {
+  it('shows each kind the settings it reads and no others', async () => {
     show();
 
-    await chooseKind('Facing (approximate — degree grid, not corrected for latitude)');
-    expect(screen.getByTestId('terrain-derivative-latitude-caveat')).toBeInTheDocument();
+    await chooseKind('Facing');
+    expect(screen.queryByTestId('terrain-derivative-latitude-caveat')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Slope arithmetic')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Steepness as')).not.toBeInTheDocument();
 
     await chooseKind('Ruggedness');
-    expect(screen.queryByTestId('terrain-derivative-latitude-caveat')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Slope arithmetic')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Ruggedness definition')).toBeInTheDocument();
   });
 

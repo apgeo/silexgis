@@ -26,6 +26,7 @@ function picture(overrides: Partial<TerrainDerivativeLayerInfo>): TerrainDerivat
     version: 1,
     sizeBytes: 12 * 1024 * 1024,
     stale: false,
+    staleReason: null,
     computedAt: '2026-08-17T06:05:00Z',
     createdAt: '2026-08-17T06:00:00Z',
     rasters: [],
@@ -95,7 +96,7 @@ afterEach(cleanup);
 describe('TerrainDerivativeList', () => {
   it('shows what each picture was drawn from, what it cost, and which are out of date', () => {
     pictures = [
-      picture({ id: 'p1', stale: true }),
+      picture({ id: 'p1', stale: true, staleReason: 'elevationReplaced' }),
       picture({
         id: 'p2',
         derivative: 'slope',
@@ -114,8 +115,9 @@ describe('TerrainDerivativeList', () => {
     expect(screen.queryByText('0 B')).not.toBeInTheDocument();
     expect(screen.getByTestId('terrain-derivative-stale-p1')).toHaveTextContent('Out of date');
     expect(screen.queryByTestId('terrain-derivative-stale-p2')).not.toBeInTheDocument();
-    // The kind under the name is the same wording the layer list uses, caveat included.
-    expect(screen.getByTestId('terrain-derivative-kind-p2')).toHaveTextContent('not corrected for latitude');
+    // The kind under the name is the same wording the layer list uses, and it is the kind's plain
+    // name: steepness is a measurement and is not presented as anything less.
+    expect(screen.getByTestId('terrain-derivative-kind-p2')).toHaveTextContent(/^Steepness$/);
     expect(screen.getByTestId('terrain-derivative-params-p1')).toHaveTextContent(
       'One light · light from 315° · 45° up · Horn (eight neighbours)',
     );

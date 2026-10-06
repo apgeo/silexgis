@@ -70,6 +70,7 @@ import {
   TERRAIN_DERIVATIVE_KINDS,
   type ColourRampProblem,
   type TerrainDerivativeKind,
+  type TerrainDerivativeStaleReason,
 } from '../pages/admin/terrain/terrainDerivative.ts';
 import { TERRAIN_PROBLEM_MESSAGE_KEYS } from '../pages/admin/terrain/terrainProblems.ts';
 import { SURVEY_MODEL_PROBLEM_MESSAGE_KEYS } from '../pages/caves/surveyModelProblems.ts';
@@ -347,6 +348,12 @@ const terrainDerivativeStatuses: Record<TerrainDerivativeLayerInfo['status'], tr
   computing: true,
   ready: true,
   failed: true,
+};
+
+/** Why a picture is out of date; the hint under the badge is looked up from the reason sent. */
+const terrainDerivativeStaleReasons: Record<TerrainDerivativeStaleReason, true> = {
+  elevationReplaced: true,
+  methodRevised: true,
 };
 
 /** The three refusals a colour ramp can meet, each worded where the ramp is edited. */
@@ -628,6 +635,7 @@ describe('i18n locales', () => {
     const cases: [string[], Record<string, string>, Record<string, string>][] = [
       [kinds, en.terrain.derivatives.kinds, ro.terrain.derivatives.kinds],
       [Object.keys(terrainDerivativeStatuses), en.terrain.derivatives.statuses, ro.terrain.derivatives.statuses],
+      [Object.keys(terrainDerivativeStaleReasons), en.terrain.derivatives.staleHints, ro.terrain.derivatives.staleHints],
       [[...HILLSHADE_LIGHTINGS], en.terrain.derivativeForm.lightings, ro.terrain.derivativeForm.lightings],
       [[...SURFACE_FITS], en.terrain.derivativeForm.surfaceFits, ro.terrain.derivativeForm.surfaceFits],
       [[...SLOPE_UNITS], en.terrain.derivativeForm.slopeUnits, ro.terrain.derivativeForm.slopeUnits],
@@ -642,18 +650,24 @@ describe('i18n locales', () => {
     }
   });
 
-  // The two pictures computed on a degree grid say so in their names, in both languages, so the
-  // layer list and the register never present them as measurements. Checked as text because it
-  // is the one wording a key check cannot see: the key exists either way.
-  it('names steepness and facing as approximate wherever they are listed', () => {
+  // Steepness and facing were once computed with one distance for a degree in both directions
+  // and were named as approximate for as long as that was true. They are measured on the ground
+  // now, so no kind carries a qualifier in its name and the form says nothing of the sort —
+  // checked as text because it is the one wording a key check cannot see: the key exists either
+  // way, and a caveat left behind would go on telling readers not to trust a number they can.
+  it('names no kind of picture as approximate, in either language', () => {
     for (const locale of [en, ro]) {
-      expect(locale.terrain.derivatives.kinds.slope).toMatch(/\(/);
-      expect(locale.terrain.derivatives.kinds.aspect).toMatch(/\(/);
+      const names: Record<string, string> = locale.terrain.derivatives.kinds;
+      for (const name of Object.values(names)) {
+        expect(name).not.toMatch(/[()]/);
+        expect(name).not.toMatch(/approximate|aproximativ|latitud/i);
+      }
+      expect(Object.keys(locale.terrain.derivativeForm)).not.toContain('latitudeCaveat');
     }
-    expect(en.terrain.derivatives.kinds.slope).toContain('not corrected for latitude');
-    expect(en.terrain.derivatives.kinds.aspect).toContain('not corrected for latitude');
-    expect(ro.terrain.derivatives.kinds.slope).toContain('necorectată pentru latitudine');
-    expect(ro.terrain.derivatives.kinds.aspect).toContain('necorectată pentru latitudine');
+    expect(en.terrain.derivatives.kinds.slope).toBe('Steepness');
+    expect(en.terrain.derivatives.kinds.aspect).toBe('Facing');
+    expect(ro.terrain.derivatives.kinds.slope).toBe('Pantă');
+    expect(ro.terrain.derivatives.kinds.aspect).toBe('Orientare');
   });
 
   /**

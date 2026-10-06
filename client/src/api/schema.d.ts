@@ -24788,6 +24788,7 @@ export interface components {
             /** Format: int64 */
             sizeBytes: number;
             stale: boolean;
+            staleReason: null | components["schemas"]["TerrainDerivativeStaleness"];
             /** Format: date-time */
             computedAt: null | string;
             /** Format: date-time */
@@ -24815,6 +24816,8 @@ export interface components {
             sizeBytes: number;
             url: string;
         };
+        /** @enum {unknown} */
+        TerrainDerivativeStaleness: "elevationReplaced" | "methodRevised" | null;
         /** @enum {unknown} */
         TerrainDerivativeStatus: "queued" | "computing" | "ready" | "failed";
         TerrainFeatureProbeDto: {

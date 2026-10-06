@@ -128,9 +128,88 @@ public sealed class TerrainDerivativeRegistryRulesTests
     {
         var drawn = Guid.CreateVersion7();
         var replaced = Guid.CreateVersion7();
+        var today = TerrainDerivativeRegistry.MethodRevision(TerrainDerivative.Hillshade);
 
-        TerrainDerivativeRegistry.IsStale(drawn, drawn).ShouldBeFalse();
-        TerrainDerivativeRegistry.IsStale(drawn, replaced).ShouldBeTrue();
-        TerrainDerivativeRegistry.IsStale(drawn, null).ShouldBeTrue();
+        TerrainDerivativeRegistry.Staleness(drawn, drawn, TerrainDerivative.Hillshade, 1, today)
+            .ShouldBeNull();
+        TerrainDerivativeRegistry.Staleness(drawn, replaced, TerrainDerivative.Hillshade, 1, today)
+            .ShouldBe(TerrainDerivativeStaleness.ElevationReplaced);
+        TerrainDerivativeRegistry.Staleness(drawn, null, TerrainDerivative.Hillshade, 1, today)
+            .ShouldBe(TerrainDerivativeStaleness.ElevationReplaced);
     }
+
+    /// <summary>
+    /// A picture drawn by arithmetic that has since been corrected is out of date over ground
+    /// that has not changed at all.
+    /// </summary>
+    /// <remarks>
+    /// Steepness, facing and shaded relief were first computed with one distance for a degree in
+    /// both directions, and a row written then records revision zero. Nothing about the file
+    /// changed when the arithmetic did, so the revision is the only thing that can say the
+    /// picture is the old one.
+    /// </remarks>
+    [Theory]
+    [InlineData(TerrainDerivative.Slope)]
+    [InlineData(TerrainDerivative.Aspect)]
+    [InlineData(TerrainDerivative.Hillshade)]
+    public void A_picture_drawn_before_its_arithmetic_was_corrected_is_out_of_date(
+        TerrainDerivative derivative)
+    {
+        var build = Guid.CreateVersion7();
+
+        TerrainDerivativeRegistry.Staleness(build, build, derivative, version: 1, methodRevision: 0)
+            .ShouldBe(TerrainDerivativeStaleness.MethodRevised);
+
+        // And current once it has been drawn again, so the mark is about the file and not the kind.
+        TerrainDerivativeRegistry.Staleness(
+                build, build, derivative, 2, TerrainDerivativeRegistry.MethodRevision(derivative))
+            .ShouldBeNull();
+    }
+
+    /// <summary>
+    /// A kind whose arithmetic has not changed is not marked for the others having changed.
+    /// </summary>
+    [Theory]
+    [InlineData(TerrainDerivative.RuggednessIndex)]
+    [InlineData(TerrainDerivative.PositionIndex)]
+    [InlineData(TerrainDerivative.Roughness)]
+    [InlineData(TerrainDerivative.ColourRelief)]
+    public void A_picture_whose_arithmetic_never_changed_stays_current(TerrainDerivative derivative)
+    {
+        var build = Guid.CreateVersion7();
+
+        TerrainDerivativeRegistry.Staleness(build, build, derivative, version: 1, methodRevision: 0)
+            .ShouldBeNull();
+    }
+
+    /// <summary>
+    /// A picture that has never been computed has no rasters to be wrong.
+    /// </summary>
+    /// <remarks>
+    /// A row just asked for carries no revision yet, and a queued picture labelled out of date
+    /// before it has been drawn once would be a label that means nothing.
+    /// </remarks>
+    [Fact]
+    public void A_picture_not_yet_computed_is_not_out_of_date_for_its_arithmetic()
+    {
+        var build = Guid.CreateVersion7();
+
+        TerrainDerivativeRegistry.Staleness(build, build, TerrainDerivative.Slope, version: 0, methodRevision: 0)
+            .ShouldBeNull();
+        TerrainDerivativeRegistry.IsMethodRevised(TerrainDerivative.Slope, version: 0, methodRevision: 0)
+            .ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// Replaced elevation is the reason given when both hold.
+    /// </summary>
+    /// <remarks>
+    /// Because it is the one asking for the same picture again would not cure: the row is tied to
+    /// the build it was drawn from.
+    /// </remarks>
+    [Fact]
+    public void Replaced_elevation_is_named_before_corrected_arithmetic()
+        => TerrainDerivativeRegistry.Staleness(
+                Guid.CreateVersion7(), Guid.CreateVersion7(), TerrainDerivative.Aspect, 1, 0)
+            .ShouldBe(TerrainDerivativeStaleness.ElevationReplaced);
 }

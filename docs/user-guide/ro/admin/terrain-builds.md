@@ -218,17 +218,15 @@ Setările, pe feluri:
 aceeași generare, același fel, aceleași setări — răspunde cu cea existentă în loc să o calculeze de
 două ori.
 
-### Panta și orientarea sunt aproximative
+### Cum se calculează panta și orientarea
 
-Ambele se calculează pe o **grilă în grade cu o singură scară orizontală** pentru ambele axe. Un
-grad de longitudine la latitudinile Carpaților este cam șapte zecimi dintr-un grad de latitudine,
-așa că aritmetica vede terenul est–vest mai blând decât este: **panta este subestimată cu vreo zece
-grade pe versanții orientați spre est sau vest**, iar **orientarea este trasă spre nord sau sud**.
-Nimic ieftin nu corectează asta, așa că produsul nu prezintă acele numere ca măsurători. Ambele
-feluri poartă precizarea *aproximativă — grilă în grade, necorectată pentru latitudine* în numele
-lor oriunde sunt listate, iar formularul spune același lucru în cuvinte simple când este ales unul
-dintre ele. Citiți-le ca imagini ale locului unde terenul e abrupt și încotro e întors, nu ca cifre
-de citat.
+Ambele sunt măsurate **pe teren, nu pe grila în grade în care sunt ținute altitudinile**: un grad
+de longitudine este mai îngust decât un grad de latitudine — cu aproape o treime la latitudinile
+Carpaților — așa că fiecare rând al unui rastru se calculează cu cele două distanțe pe care le
+acoperă cu adevărat un grad la latitudinea acelui rând, iar un versant orientat spre est iese la
+fel de abrupt ca același versant orientat spre nord. Nimic nu este reproiectat sau reeșantionat pe
+drum, deci imaginea stă exact peste altitudinile din care a fost desenată, iar relieful umbrit
+este luminat folosind aceleași două distanțe.
 
 ### Registrul
 
@@ -243,6 +241,12 @@ imagine desenată din cea veche este marcată „Depășită"** — în registru
 de straturi. Rămâne acolo și se desenează în continuare — un relief umbrit depășit este adesea mai
 bun decât niciunul — dar se vede dintr-o privire că terenul de sub ea a fost înlocuit, ceea ce
 altfel ar părea o problemă a datelor despre peșteri.
+
+O imagine este marcată la fel și atunci când **modul în care se calculează felul ei a fost între
+timp corectat**: relieful umbrit, panta și orientarea calculate înainte de a fi măsurate pe teren
+sunt în această situație. Indiciul de sub etichetă spune care dintre cele două motive este. Pentru
+acesta, soluția este să **cereți din nou aceeași imagine** — aceeași generare, același fel,
+aceleași setări — ceea ce o calculează de la capăt, în locul celei vechi.
 
 **Șterge**, în spatele unei confirmări care spune ce eliberează, elimină imaginea și rasterele ei.
 Are nevoie de dreptul de **ștergere** asupra reliefului. Fișierele stau sub generarea însăși, deci
