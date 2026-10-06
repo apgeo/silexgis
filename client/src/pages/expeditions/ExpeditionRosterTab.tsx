@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, Empty, Spin, Tag, Typography } from 'antd';
+import { useState } from 'react';
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { Alert, App, Button, Empty, Flex, Popconfirm, Spin, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../../api/client.ts';
-import { useExpeditionRoster, useExpeditionRosterRoles } from '../../api/hooks.ts';
+import {
+  useDeleteExpeditionRosterEntry,
+  useExpeditionRoster,
+  useExpeditionRosterRoles,
+  type ExpeditionRosterEntry,
+} from '../../api/hooks.ts';
 import List from '../../components/List.tsx';
 import { expeditionRosterRoleLabel } from '../../components/expeditions/rosterRoles.ts';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
+import ExpeditionStayModal from './ExpeditionStayModal.tsx';
 
 /**
  * The refusal this tab is built around: the camp is readable, and the caller may not read people.
@@ -13,6 +21,28 @@ import { formatTripDates } from '../../components/trips/tripDates.ts';
  * whose roster came back blank would be indistinguishable from a camp nobody has been recorded at.
  */
 const PEOPLE_UNREADABLE = 'expedition_roster.people_unreadable';
+
+interface ExpeditionRosterTabProps {
+  expeditionId: string;
+  /**
+   * Given only for a caller who may write the camp, which is the whole of what recording,
+   * correcting and removing a stay take: a stay has no governance of its own, and the server
+   * asks the camp. The controls below are drawn when this is given and on nothing else — and it
+   * only decides what is offered, never what is allowed, which the server settles again on
+   * every write.
+   *
+   * It carries the camp's own days, because they are what a new stay starts out as; asking for
+   * them here is what stops the controls being switched on by a page that cannot fill the
+   * dialog in. Left out, the roster is read and nothing more — which is how the camp's write-up
+   * draws it, a page that is for circulating and offers no way to change what it shows.
+   */
+  editable?: {
+    /** The camp's first day. */
+    startDate: string;
+    /** Its last, where it ran on past the first. */
+    endDate?: string | null;
+  };
+}
 
 /**
  * Who was at the camp, and for which days.
@@ -27,11 +57,29 @@ const PEOPLE_UNREADABLE = 'expedition_roster.people_unreadable';
  *   people away has asked for exactly this.
  * - nothing recorded yet, which is drawn as such so that an empty camp looks deliberate rather than
  *   broken.
+ *
+ * Somebody who may write the camp also keeps the roster from here: a stay is added, corrected and
+ * removed in place. The withheld answer offers none of that, whoever is looking. Its reader has
+ * been refused the list, and a control for writing into a list they are not shown would be a way
+ * of working blind — the names it wrote could not be read back to be checked.
  */
-export default function ExpeditionRosterTab({ expeditionId }: { expeditionId: string }) {
+export default function ExpeditionRosterTab({ expeditionId, editable }: ExpeditionRosterTabProps) {
+  const canEdit = editable !== undefined;
   const { t, i18n } = useTranslation();
+  const { message } = App.useApp();
   const { data, isPending, error } = useExpeditionRoster(expeditionId);
   const { data: roles } = useExpeditionRosterRoles();
+  const removeStay = useDeleteExpeditionRosterEntry(expeditionId);
+  // The stay the dialog is about — one being corrected, or null for a new one — and, apart from
+  // it, whether the dialog is up. Kept apart so that closing leaves the dialog about what it was
+  // about: cleared together, a dialog closing on a correction would retitle itself as a new stay
+  // for the length of its own fade.
+  const [subject, setSubject] = useState<ExpeditionRosterEntry | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const openOn = (entry: ExpeditionRosterEntry | null) => {
+    setSubject(entry);
+    setDialogOpen(true);
+  };
 
   if (error instanceof ApiError && error.code === PEOPLE_UNREADABLE) {
     return (
@@ -56,45 +104,118 @@ export default function ExpeditionRosterTab({ expeditionId }: { expeditionId: st
     return <Spin />;
   }
 
-  if (data.entries.length === 0) {
-    return (
-      <div data-testid="expedition-roster-tab">
-        <Empty description={t('expeditions.rosterEmpty')} />
-      </div>
-    );
-  }
+  const onRemove = async (entry: ExpeditionRosterEntry) => {
+    try {
+      await removeStay.mutateAsync(entry.id);
+      message.success(t('common.deleted'));
+    } catch {
+      message.error(t('common.saveFailed'));
+    }
+  };
 
   const roleName = (roleId: number): string => {
     const role = roles?.find((r) => r.id === roleId);
     return role ? expeditionRosterRoleLabel(role, t) : '';
   };
 
+  const addButton = canEdit && (
+    <Button
+      icon={<PlusOutlined />}
+      onClick={() => openOn(null)}
+      data-testid="expedition-stay-add"
+    >
+      {t('expeditions.stay.add')}
+    </Button>
+  );
+
+  const stays =
+    data.entries.length === 0 ? (
+      <Empty description={t('expeditions.rosterEmpty')}>{addButton}</Empty>
+    ) : (
+      <>
+        <Flex justify="space-between" align="start" gap={12} wrap>
+          <Typography.Paragraph type="secondary" data-testid="expedition-roster-people">
+            {t('expeditions.rosterPeople', { count: data.people })}
+          </Typography.Paragraph>
+          {addButton}
+        </Flex>
+        <List
+          size="small"
+          dataSource={data.entries}
+          renderItem={(entry) => (
+            <List.Item
+              data-testid={`expedition-stay-${entry.id}`}
+              actions={
+                canEdit
+                  ? [
+                      <Button
+                        key="edit"
+                        size="small"
+                        icon={<EditOutlined />}
+                        title={t('expeditions.stay.edit')}
+                        aria-label={t('expeditions.stay.edit')}
+                        onClick={() => openOn(entry)}
+                        data-testid={`expedition-stay-edit-${entry.id}`}
+                      />,
+                      // Confirmed first, and in words that say what goes and what does not: the
+                      // stay, never the person, who is in the directory for other reasons too.
+                      <Popconfirm
+                        key="remove"
+                        title={t('expeditions.stay.removeConfirm')}
+                        onConfirm={() => void onRemove(entry)}
+                      >
+                        <Button
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                          title={t('expeditions.stay.remove')}
+                          aria-label={t('expeditions.stay.remove')}
+                          data-testid={`expedition-stay-remove-${entry.id}`}
+                        />
+                      </Popconfirm>,
+                    ]
+                  : undefined
+              }
+            >
+              <List.Item.Meta
+                title={
+                  <>
+                    {entry.caverName}
+                    {roleName(entry.roleId) && (
+                      <Tag style={{ marginLeft: 8 }}>{roleName(entry.roleId)}</Tag>
+                    )}
+                  </>
+                }
+                // An absent end is "they did not stay on past the day they arrived", not "we do
+                // not know when they left" — so a one-day stay reads as that day and never as a
+                // range of itself.
+                description={formatTripDates(entry.fromDate, entry.toDate, i18n.resolvedLanguage)}
+              />
+              {entry.note && <Typography.Text type="secondary">{entry.note}</Typography.Text>}
+            </List.Item>
+          )}
+        />
+      </>
+    );
+
   return (
     <div data-testid="expedition-roster-tab">
-      <Typography.Paragraph type="secondary" data-testid="expedition-roster-people">
-        {t('expeditions.rosterPeople', { count: data.people })}
-      </Typography.Paragraph>
-      <List
-        size="small"
-        dataSource={data.entries}
-        renderItem={(entry) => (
-          <List.Item>
-            <List.Item.Meta
-              title={
-                <>
-                  {entry.caverName}
-                  {roleName(entry.roleId) && <Tag style={{ marginLeft: 8 }}>{roleName(entry.roleId)}</Tag>}
-                </>
-              }
-              // An absent end is "they did not stay on past the day they arrived", not "we do not
-              // know when they left" — so a one-day stay reads as that day and never as a range of
-              // itself.
-              description={formatTripDates(entry.fromDate, entry.toDate, i18n.resolvedLanguage)}
-            />
-            {entry.note && <Typography.Text type="secondary">{entry.note}</Typography.Text>}
-          </List.Item>
-        )}
-      />
+      {stays}
+      {/* One dialog, in one place under both answers above. The first stay turns "nobody yet"
+          into a list while the dialog that recorded it is still closing, and a dialog drawn
+          inside either answer would be thrown away and made again in the middle of that.
+          Mounted only for somebody the controls were drawn for, so a reader's page carries no
+          dialog at all rather than a closed one. */}
+      {editable && (
+        <ExpeditionStayModal
+          open={dialogOpen}
+          expeditionId={expeditionId}
+          campStart={editable.startDate}
+          campEnd={editable.endDate}
+          entry={subject}
+          onClose={() => setDialogOpen(false)}
+        />
+      )}
     </div>
   );
 }
