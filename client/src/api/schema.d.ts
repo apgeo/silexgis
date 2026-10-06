@@ -15325,7 +15325,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Records that somebody was at this camp for a stretch of days (Write permission on the camp). Stays may overlap and one person may have several. */
+        /** Records that somebody was at this camp for a stretch of days (Write permission on the camp). The person is named by their entry in the directory or by a name, never both; a name already in the directory means that person and a new one adds them. Stays may overlap and one person may have several. */
         post: {
             parameters: {
                 query?: never;
@@ -15366,7 +15366,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Rewrites one recorded stay whole (Write permission on the camp). */
+        /** Rewrites one recorded stay whole (Write permission on the camp), naming the person exactly as when recording one. */
         put: {
             parameters: {
                 query?: never;
@@ -20912,7 +20912,8 @@ export interface components {
         };
         ExpeditionRosterEntryWriteRequest: {
             /** Format: uuid */
-            caverId?: string;
+            caverId?: null | string;
+            newCaverName?: null | string;
             /** Format: int64 */
             roleId?: number;
             /** Format: date */
