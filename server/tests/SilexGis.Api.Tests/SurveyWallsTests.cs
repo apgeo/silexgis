@@ -254,8 +254,8 @@ public sealed class SurveyWallsTests : IAsyncLifetime, IDisposable, IClassFixtur
         first.MeshFileId.ShouldNotBeNull();
         File.Exists(first.MeshPath).ShouldBeTrue();
 
-        // Read again — after a crash, or by hand.
-        await RunGraphJobAsync(modelId);
+        // Read again — a job delivered a second time after a crash, or queued by hand.
+        await ReadAgainAsync(modelId);
 
         var second = await MeshOfAsync(modelId);
         second.MeshFileId.ShouldNotBeNull();
@@ -326,7 +326,7 @@ public sealed class SurveyWallsTests : IAsyncLifetime, IDisposable, IClassFixtur
             await db.SaveChangesAsync();
         }
 
-        await RunGraphJobAsync(modelId);
+        await ReadAgainAsync(modelId);
 
         // The reading committed: it is ready, it failed nothing, and its rows are one reading's
         // worth rather than none or two.
@@ -630,21 +630,36 @@ public sealed class SurveyWallsTests : IAsyncLifetime, IDisposable, IClassFixtur
         await QueuedJob.RunAsync(factory.Services, mine[0].Id);
     }
 
-    /// <summary>Runs the reading again for one model, as a re-run after a crash would.</summary>
-    private async Task RunGraphJobAsync(Guid modelId)
+    /// <summary>
+    /// Queues the reading of one model again and carries it through as the worker would.
+    ///
+    /// <para>
+    /// Through the queue and not by calling the handler, because of what happens after the handler
+    /// returns: whoever ran it stamps the job as finished and saves — through the same unit of work
+    /// the handler has just used. A handler that left something half-staged behind it would have
+    /// that written, or refused, by a save it never made. So the job coming back succeeded is part
+    /// of what every re-reading here asserts.
+    /// </para>
+    /// </summary>
+    private async Task ReadAgainAsync(Guid modelId)
     {
-        using var scope = factory.Services.CreateScope();
-        var handler = scope.ServiceProvider.GetServices<IProcessingJobHandler>()
-            .Single(h => h.Kind == ProcessingJobKinds.SurveyGraph);
-
-        await handler.ExecuteAsync(
-            new ProcessingJob
+        long jobId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var job = new ProcessingJob
             {
                 Kind = ProcessingJobKinds.SurveyGraph,
                 Payload = JsonSerializer.Serialize(
                     new SurveyGraphPayload(modelId), JsonSerializerOptions.Web),
-            },
-            CancellationToken.None);
+            };
+            db.ProcessingJobs.Add(job);
+            await db.SaveChangesAsync();
+            jobId = job.Id;
+        }
+
+        var finished = await QueuedJob.RunAsync(factory.Services, jobId);
+        finished.Status.ShouldBe(ProcessingJobStatus.Succeeded, finished.Error);
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
