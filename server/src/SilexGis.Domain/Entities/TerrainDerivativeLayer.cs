@@ -49,12 +49,15 @@ public enum TerrainDerivativeStatus : short
 /// build is one output file per input file.
 /// </para>
 /// <para>
-/// Nothing here records whether the row is stale, on purpose. Staleness is
+/// Nothing here records whether the row is stale, on purpose. A picture is stale when
 /// <b>this row's build is not the build the installation currently serves</b>, and that is one
 /// query against a fact the database already holds under a unique index. A column saying the same
 /// thing would be written by whatever activated a build, and the first activation that failed
 /// between its two writes would leave a superseded picture flagged current — which is exactly the
-/// failure the flag was added to prevent.
+/// failure the flag was added to prevent. It is stale, too, when the arithmetic that drew it has
+/// since been corrected, and that is not a flag either: the row records which revision wrote its
+/// rasters, a fact that does not change until they are written again, and the comparison with
+/// the revision in use today is made when the row is read.
 /// </para>
 /// </remarks>
 public class TerrainDerivativeLayer : ITimestamped, IAuditable
