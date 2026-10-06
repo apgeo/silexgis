@@ -320,12 +320,19 @@ public sealed class FeatureFilterCompilerTests : IAsyncLifetime, IDisposable, IC
         {
             var predicate = compiler.Compile(
                 new ConditionNode(FeatureFilterFields.SurveyedLength, op, values));
-            return await db.Features.AsNoTracking()
+            var names = await db.Features.AsNoTracking()
                 .Where(predicate)
                 .Where(f => f.Name!.EndsWith(tag))
                 .Select(f => f.Name!)
-                .OrderBy(name => name)
                 .ToListAsync();
+
+            // Sorted here, by code point, and not by the database. Its collation passes over the
+            // space at the first level, so "Long f…" and "Longer f…" are compared as "Longf…" and
+            // "Longerf…" and change places whenever this run's random tag begins with "f" — one
+            // run in sixteen. What is asserted below is which caves a range holds, not how a
+            // server sorts their names.
+            names.Sort(StringComparer.Ordinal);
+            return names;
         }
 
         (await Matching(FilterOp.Between, [new NumberValue(100), new NumberValue(2_500.50)]))
