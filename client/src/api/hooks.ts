@@ -8,7 +8,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import type { QueryClient } from '@tanstack/react-query';
+import type { Query, QueryClient } from '@tanstack/react-query';
 import { clusterCellBbox } from '../geo/cluster.ts';
 import {
   defaultInboxTransport,
@@ -2514,6 +2514,60 @@ export function featureQuery(id: string) {
   };
 }
 
+/**
+ * What the cache does when a record has been deleted: everything under the record's kind is asked
+ * again, except what belongs to the record itself.
+ *
+ * A delete used to invalidate its kind by prefix, and the prefix also matches the deleted
+ * record's own readings — its detail, its summary, whatever hangs under it. The page showing the
+ * record is still mounted at that moment, because leaving it happens after the delete has
+ * answered, so every one of those readings was fetched once more and answered 404: wasted
+ * requests, errors in the console, and a reading left failed on a page about to go.
+ *
+ * So the record's own readings are passed over rather than asked again. They are not simply
+ * removed, which was tried first: a reading removed from under a page that is still showing it
+ * is built afresh the next time that page renders, and asked for all over again — and some
+ * deletes wait for their listings before they answer, which is plenty of time for a render.
+ * What is on screen stays as it is until the page lets go of it, and is dropped at that moment,
+ * so a later visit to the same address finds nothing cached to show before its own 404. What
+ * nothing is showing is dropped at once.
+ *
+ * A record's readings are the ones whose key names its id; a listing never does.
+ */
+function invalidateAfterDelete(queryClient: QueryClient, scope: readonly unknown[], id: string) {
+  const ofTheRecord = (query: Query) => query.queryKey.includes(id);
+  const cache = queryClient.getQueryCache();
+
+  const onScreen = new Set<Query>();
+  for (const query of cache.findAll({ queryKey: scope, predicate: ofTheRecord })) {
+    if (query.getObserversCount() === 0) {
+      cache.remove(query);
+    } else {
+      onScreen.add(query);
+    }
+  }
+  if (onScreen.size > 0) {
+    const stop = cache.subscribe((event) => {
+      if (
+        event.type === 'observerRemoved' &&
+        onScreen.has(event.query) &&
+        event.query.getObserversCount() === 0
+      ) {
+        onScreen.delete(event.query);
+        cache.remove(event.query);
+        if (onScreen.size === 0) {
+          stop();
+        }
+      }
+    });
+  }
+
+  return queryClient.invalidateQueries({
+    queryKey: scope,
+    predicate: (query) => !ofTheRecord(query),
+  });
+}
+
 function useInvalidateFeatures() {
   const queryClient = useQueryClient();
   return () => void queryClient.invalidateQueries({ queryKey: ['features'] });
@@ -2541,11 +2595,11 @@ export function useUpdateFeature() {
 
 /** Soft-deletes the feature and its containment subtree. */
 export function useDeleteFeature() {
-  const invalidate = useInvalidateFeatures();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrapVoid(api.DELETE('/api/v1/features/{id}', { params: { path: { id } } })),
-    onSuccess: () => invalidate(),
+    onSuccess: (_, id) => void invalidateAfterDelete(queryClient, ['features'], id),
   });
 }
 
@@ -3325,8 +3379,13 @@ export function useCabinets(enabled = true) {
  */
 function useInvalidateCabinets() {
   const queryClient = useQueryClient();
-  return () => {
-    void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
+  /** `deleted` is the cabinet that has just gone, when that is why this is being called. */
+  return (deleted?: string) => {
+    if (deleted) {
+      void invalidateAfterDelete(queryClient, ['cabinets'], deleted);
+    } else {
+      void queryClient.invalidateQueries({ queryKey: ['cabinets'] });
+    }
     // The rules editor lists cabinets as scope anchors from the catalog.
     void queryClient.invalidateQueries({ queryKey: queryKeys.accessCatalog });
     void queryClient.invalidateQueries({ queryKey: queryKeys.capabilities });
@@ -3356,7 +3415,7 @@ export function useDeleteCabinet() {
   return useMutation({
     mutationFn: (id: string) =>
       unwrapVoid(api.DELETE('/api/v1/cabinets/{id}', { params: { path: { id } } })),
-    onSuccess: () => invalidate(),
+    onSuccess: (_, id) => invalidate(id),
   });
 }
 
@@ -3947,10 +4006,10 @@ export function useImportTripTrack() {
 }
 
 export function useDeleteTripLog() {
-  const invalidate = useInvalidateTripLogs();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => unwrapVoid(api.DELETE('/api/v1/trip-logs/{id}', { params: { path: { id } } })),
-    onSuccess: () => invalidate(),
+    onSuccess: (_, id) => void invalidateAfterDelete(queryClient, ['trip-logs'], id),
   });
 }
 
@@ -4600,8 +4659,13 @@ export function useCaver(id: string | undefined) {
 
 function useInvalidateCavers() {
   const queryClient = useQueryClient();
-  return () => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.cavers });
+  /** `deleted` is the caver who has just been removed, when that is why this is being called. */
+  return (deleted?: string) => {
+    if (deleted) {
+      void invalidateAfterDelete(queryClient, queryKeys.cavers, deleted);
+    } else {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cavers });
+    }
     // A roster edit can change how a person is named on trips and group pages too.
     void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
   };
@@ -4634,7 +4698,7 @@ export function useDeleteCaver() {
         throw new Error(`API error ${response.status}`);
       }
     },
-    onSuccess: () => invalidate(),
+    onSuccess: (_, id) => invalidate(id),
   });
 }
 
@@ -5056,10 +5120,10 @@ export function useUpdateCave(id: string) {
 }
 
 export function useDeleteCave() {
-  const invalidate = useInvalidateCaves();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => unwrapVoid(api.DELETE('/api/v1/caves/{id}', { params: { path: { id } } })),
-    onSuccess: () => invalidate(),
+    onSuccess: (_, id) => void invalidateAfterDelete(queryClient, ['caves'], id),
   });
 }
 
@@ -6554,10 +6618,10 @@ export function useUpdateAlbum() {
 }
 
 export function useDeleteAlbum() {
-  const invalidate = useInvalidateAlbums();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => unwrapVoid(api.DELETE('/api/v1/albums/{id}', { params: { path: { id } } })),
-    onSuccess: () => invalidate(),
+    onSuccess: (_, id) => void invalidateAfterDelete(queryClient, ['albums'], id),
   });
 }
 
@@ -7365,11 +7429,11 @@ export function useUpdateExpedition() {
 }
 
 export function useDeleteExpedition() {
-  const invalidate = useInvalidateExpeditions();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       unwrapVoid(api.DELETE('/api/v1/expeditions/{id}', { params: { path: { id } } })),
-    onSuccess: () => invalidate(),
+    onSuccess: (_, id) => invalidateAfterDelete(queryClient, ['expeditions'], id),
   });
 }
 
@@ -9280,9 +9344,12 @@ export function useEventDefaults(enabled = true) {
  */
 function useInvalidateEvents() {
   const queryClient = useQueryClient();
-  return (id?: string) => {
+  /** `deleted` is the event that has just gone, when that is why this is being called. */
+  return (id?: string, deleted?: string) => {
     const pending = [
-      queryClient.invalidateQueries({ queryKey: ['events'] }),
+      deleted
+        ? invalidateAfterDelete(queryClient, ['events'], deleted)
+        : queryClient.invalidateQueries({ queryKey: ['events'] }),
       // An event is a row on the calendar, so writing one moves what that window answers.
       queryClient.invalidateQueries({ queryKey: ['calendar'] }),
     ];
@@ -9328,7 +9395,7 @@ export function useDeleteEvent() {
         throw new ApiError(response.status, error);
       }
     },
-    onSuccess: () => invalidate(),
+    onSuccess: (_, id) => invalidate(undefined, id),
   });
 }
 
@@ -9502,7 +9569,8 @@ export function useDeleteEventSeriesFollowing() {
       }
       return data as EventSeriesDeleteResult;
     },
-    onSuccess: () => invalidate(),
+    // The occurrence it was asked from is the first of the ones that went.
+    onSuccess: (_, id) => invalidate(undefined, id),
   });
 }
 
