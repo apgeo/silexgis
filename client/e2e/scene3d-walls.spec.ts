@@ -2,7 +2,7 @@
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { login, waitForScene3dReady } from './helpers.ts';
-import { bearerToken } from './rastermapApi.ts';
+import { apiJson, bearerToken } from './rastermapApi.ts';
 
 // The walls of a cave are the heaviest thing the product draws, and until now nothing in the
 // suite would have noticed if they stopped drawing. They load off the cave selection, which no
@@ -115,4 +115,117 @@ test('the walls of a cave are uploaded, converted, drawn in the scene from its p
   await page.getByTestId('scene3d-mesh-toggle').click();
   await expect(status).toHaveText(/not loaded/);
   expect(meshRequests.length).toBe(1);
+});
+
+/** Uploads the invented walls for a cave, declared in plain metres about a position, and answers the model's id. */
+async function uploadWalls(
+  page: Page,
+  token: string,
+  caveId: string,
+  longitude: number,
+  latitude: number,
+): Promise<string> {
+  const created = await page.request.post(`/api/v1/caves/${caveId}/survey-models`, {
+    headers: { Authorization: `Bearer ${token}` },
+    multipart: {
+      file: { name: 'walls.stl', mimeType: 'application/octet-stream', buffer: tinyStl() },
+      originLongitude: longitude.toFixed(5),
+      originLatitude: latitude.toFixed(5),
+      originHeightM: '1200',
+    },
+  });
+  expect(created.status(), await created.text()).toBe(201);
+  return ((await created.json()) as { id: string }).id;
+}
+
+/** Waits for the API's own worker to turn an upload into a mesh a scene can draw. */
+async function waitForMesh(page: Page, token: string, modelId: string) {
+  await expect
+    .poll(
+      async () => {
+        const model = (await apiJson(page, token, 'GET', `/api/v1/survey-models/${modelId}`)) as {
+          status: string;
+          meshUrl: string | null;
+        };
+        return model.status === 'ready' && model.meshUrl !== null;
+      },
+      { timeout: 90_000, message: 'the uploaded walls were never converted into a drawable mesh' },
+    )
+    .toBe(true);
+}
+
+test('the walls of every cave in view are drawn together, counted in words, and all released on request', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  const stamp = Date.now();
+  await login(page);
+  const firstName = `E2E Walls North ${stamp}`;
+  const firstId = await createCave(page, firstName);
+  const secondId = await createCave(page, `E2E Walls South ${stamp}`);
+  const token = await bearerToken(page);
+
+  // Two caves under three hundred metres apart, well away from the cave the test above anchors:
+  // the mode counts every cave in the view, and a neighbour left by another test would make the
+  // count this asserts depend on which tests ran before it.
+  const longitude = 25.352;
+  const latitude = 45.612;
+  const firstModel = await uploadWalls(page, token, firstId, longitude, latitude);
+  const secondModel = await uploadWalls(page, token, secondId, longitude, latitude - 0.0025);
+
+  // An entrance gives the first cave a position of its own, which is what its page's
+  // "Open in 3D" puts the camera on. Without one the scene would open wherever it opens, and
+  // "every cave in view" is a question about where the camera is.
+  const entranceTypes = (await apiJson(page, token, 'GET', '/api/v1/entrance-types')) as {
+    id: number;
+  }[];
+  await apiJson(page, token, 'POST', `/api/v1/caves/${firstId}/entrances`, {
+    name: 'E2E entrance',
+    entranceTypeId: entranceTypes[0].id,
+    isMain: true,
+    geom: { type: 'Point', coordinates: [longitude, latitude] },
+    altitude: 1200,
+    description: null,
+    positionQuality: 'gps',
+    surveyedAt: null,
+  });
+
+  await waitForMesh(page, token, firstModel);
+  await waitForMesh(page, token, secondModel);
+
+  const meshRequests: string[] = [];
+  page.on('request', (request) => {
+    if (/\/api\/v1\/files\/[0-9a-f-]+\/content/.test(request.url())) {
+      meshRequests.push(request.url());
+    }
+  });
+
+  await page.goto(`/caves/${firstId}`);
+  await expect(page.getByRole('heading', { name: firstName })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Open in 3D' }).click();
+  await page.waitForURL(/\/map3d/);
+  await waitForScene3dReady(page);
+
+  // The scene arrives in its default mode with the cave selected, so that one cave's walls are
+  // read first. Waited for, so the fetches counted below are the other mode's and only its.
+  await page.getByTestId('scene3d-layers-trigger').click();
+  const status = page.getByTestId('scene3d-mesh-status');
+  await expect(status).toHaveText(/walls are drawn/, { timeout: 60_000 });
+  const fetchedForTheSelectedCave = meshRequests.length;
+
+  await page.getByRole('radio', { name: 'Every cave in view' }).click();
+
+  // Both caves, said as a count out of a count and with nothing still on its way.
+  await expect(status).toHaveText(/^Walls of 2 of 2 caves in view — [\d.]+ (KB|MB)\.$/, {
+    timeout: 60_000,
+  });
+  expect(
+    meshRequests.length - fetchedForTheSelectedCave,
+    'one fetch per cave in view, and none for a mesh already asked for',
+  ).toBe(2);
+
+  // Off releases all of them, and the row says so in the words a viewer reads.
+  await page.getByTestId('scene3d-mesh-toggle').click();
+  await expect(status).toHaveText(/not loaded/);
+  expect(meshRequests.length - fetchedForTheSelectedCave).toBe(2);
 });

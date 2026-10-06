@@ -9,6 +9,7 @@ afterEach(() => {
     baseOpacity: {},
     overlayVisible: {},
     scene3dSurfaceMode: 'overlay',
+    scene3dWallsMode: 'selected',
   });
 });
 
@@ -89,5 +90,21 @@ describe('workspaceStore surface mode', () => {
     useWorkspaceStore.getState().setScene3dSurfaceMode('cutaway');
 
     expect(useWorkspaceStore.getState().scene3dSurfaceMode).toBe('cutaway');
+  });
+});
+
+describe('workspaceStore walls mode', () => {
+  it('starts on the selected cave, which reads one mesh rather than a view of them', () => {
+    expect(useWorkspaceStore.getState().scene3dWallsMode).toBe('selected');
+  });
+
+  it('remembers that every cave in view was asked for, apart from whether the walls are on', () => {
+    const store = useWorkspaceStore.getState();
+    store.setScene3dWallsMode('inView');
+    store.setOverlayVisible('survey-mesh', false);
+
+    // Two settings of one layer: turning the walls off does not forget which walls were wanted.
+    expect(useWorkspaceStore.getState().scene3dWallsMode).toBe('inView');
+    expect(useWorkspaceStore.getState().overlayVisible).toEqual({ 'survey-mesh': false });
   });
 });

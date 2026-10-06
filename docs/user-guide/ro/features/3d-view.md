@@ -94,7 +94,9 @@ peșterii prin teren.
 Dacă o peșteră are un **model de pereți `.stl`** încărcat, vizualizarea 3D îl poate desena la
 locul lui, sub relief, lângă poligonațiile acelei peșteri.
 
-- Se încarcă **numai pentru peștera pe care o selectați**.
+- Implicit se încarcă **numai pentru peștera pe care o selectați**. Sub comutatorul **Pereții
+  peșterilor** din lista de straturi alegeți între aceasta — *Peștera selectată* — și *Toate
+  peșterile din vedere*, descrisă mai jos.
 - Stingerea lui din lista de straturi chiar îl eliberează — nu rămâne în memoria grafică
   prefăcându-se stins.
 - Panoul vă spune la ce stadiu este: caută un model, se încarcă, desenat, încă se convertește,
@@ -107,6 +109,35 @@ locul lui, sub relief, lângă poligonațiile acelei peșteri.
 
 Vedeți [Topografii, poligonații și modele 3D](surveys-and-models.md#pereții-peșterii-stl) pentru
 încărcare și pentru declarația de coordonate de care are nevoie un `.stl`.
+
+## Pereții tuturor peșterilor din vedere
+
+Alegerea **Toate peșterile din vedere** sub comutatorul **Pereții peșterilor** desenează pereții
+peșterilor la care privește camera, nu doar ai celei selectate. Un model de pereți se descarcă
+întreg și se ține în memoria grafică atât timp cât este desenat — de obicei câteva sute de
+kiloocteți, zeci de megaocteți pentru un sistem mare — așa că acest mod lucrează între limite și
+vă spune când a atins una:
+
+- **Apropiați mai întâi.** Sub un anumit nivel de zoom (14, dacă administratorul nu l-a schimbat)
+  nu se încarcă nimic, iar scena spune *Apropie vederea pentru a vedea pereții peșterilor din ea*.
+  O vedere largă cuprinde peșterile unui întreg masiv, fiecare fiind un punct care ar costa cât
+  toată mărimea ei.
+- **Cele mai apropiate întâi, până la o limită.** Peșterile cele mai apropiate de mijlocul
+  vederii sunt luate primele, până când s-ar depăși fie un număr de peșteri (12), fie o mărime
+  totală de descărcat (64 MB). Peștera selectată este luată întotdeauna prima, oriunde s-ar afla
+  în vedere.
+- **Nu arată niciodată o parte în tăcere.** Panoul și un rând deasupra scenei spun pentru câte
+  peșteri sunt desenați pereții din câte sunt în vedere și ce le-a lăsat pe celelalte deoparte —
+  *Peșteri din vedere cu pereții desenați: 3 din 7 — restul ar depăși 64 MB*. Mutați sau apropiați
+  vederea spre peșterile care lipsesc și le vine rândul.
+- **Ce iese din vedere este eliberat.** Pereții peșterilor de la care vă îndepărtați sunt
+  eliberați, nu ascunși, iar stingerea pereților — sau revenirea la *Peștera selectată* — îi
+  eliberează pe toți.
+- O peșteră a cărei poziție exactă vă este închisă nu este desenată și nu este numărată.
+
+Pereții fiecărei peșteri stau pe poligonațiile acelei peșteri, exact ca în celălalt mod. Cele trei
+limite sunt setări ale instalării; vedeți `SILEXGIS__Map__MeshesInView…` în
+[ghidul de instalare](../../../INSTALL.md#configuration-reference).
 
 ---
 

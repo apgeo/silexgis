@@ -6,6 +6,10 @@ import type { MapLayerInfo } from '../../api/hooks.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import { EMPTY_SURVEY_MESH_3D_STATE } from '../../scene3d/surveyMesh3d.ts';
+import {
+  EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE,
+  type SurveyMeshesInView3DState,
+} from '../../scene3d/surveyMeshesInView3d.ts';
 import type { TerrainBuildChoice } from '../../scene3d/terrainBuilds3d.ts';
 import Scene3DLayerPanel, { type Scene3DLayerPanelProps } from './Scene3DLayerPanel.tsx';
 
@@ -88,7 +92,10 @@ function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
     onGeofileOpacityChange: vi.fn(),
     meshVisible: true,
     onMeshVisibleChange: vi.fn(),
+    wallsMode: 'selected',
+    onWallsModeChange: vi.fn(),
     meshState: EMPTY_SURVEY_MESH_3D_STATE,
+    meshesInViewState: EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE,
     terrainBuilds: [],
     terrainConfigured: false,
     terrainChoice: undefined,
@@ -223,23 +230,19 @@ describe('Scene3DLayerPanel', () => {
     expect(screen.getByText(/No survey is loaded to cut around/)).toBeInTheDocument();
   });
 
-  it('offers the walls of the selected cave as their own switch, with no fade beside them', () => {
+  it('offers the cave walls as their own switch, with no fade beside them', () => {
     renderPanel();
 
-    expect(
-      screen.getByRole('checkbox', { name: 'Walls of the selected cave' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Cave walls' })).toBeInTheDocument();
     // A fade over a mesh that cannot be faded would be a control wired to nothing, so there is
     // one slider per layer that has an opacity and none for this one.
-    expect(
-      screen.queryByRole('slider', { name: 'Opacity of Walls of the selected cave' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('slider', { name: 'Opacity of Cave walls' })).not.toBeInTheDocument();
   });
 
   it('reports the walls being turned off, which is what releases their graphics memory', () => {
     const props = renderPanel();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Walls of the selected cave' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Cave walls' }));
 
     expect(props.onMeshVisibleChange).toHaveBeenCalledWith(false);
   });
@@ -383,6 +386,124 @@ describe('Scene3DLayerPanel', () => {
     });
 
     expect(screen.getByTestId('scene3d-mesh-precision').textContent).toMatch(/local origin/);
+  });
+});
+
+describe('whose walls the scene draws', () => {
+  const MB = 1024 * 1024;
+  const limits = { minZoom: 14, maxCaves: 12, maxBytes: 64 * MB };
+
+  /** A view that has been answered: some caves' walls drawn, the rest accounted for. */
+  function inView(overrides: Partial<SurveyMeshesInView3DState> = {}): SurveyMeshesInView3DState {
+    return {
+      status: 'ready',
+      listing: false,
+      shown: 2,
+      loading: 0,
+      failed: 0,
+      inView: 2,
+      leftOut: 0,
+      heldBytes: 600 * 1024,
+      limits,
+      ...overrides,
+    };
+  }
+
+  const status = () => screen.getByTestId('scene3d-mesh-status').textContent ?? '';
+
+  it('offers the two ways of asking for walls beside the switch, starting on the selected cave', () => {
+    renderPanel();
+
+    const group = screen.getByRole('radiogroup', { name: "Which caves' walls are drawn" });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Selected cave' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Every cave in view' })).not.toBeChecked();
+  });
+
+  it('reports the other mode being chosen', () => {
+    const props = renderPanel();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Every cave in view' }));
+
+    expect(props.onWallsModeChange).toHaveBeenCalledWith('inView');
+  });
+
+  it('lets the mode be chosen while the walls are off, so nothing is read for the wrong one', () => {
+    const props = renderPanel({ meshVisible: false });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Every cave in view' }));
+
+    expect(props.onWallsModeChange).toHaveBeenCalledWith('inView');
+  });
+
+  it('says how many caves in view have their walls drawn, and how much that is', () => {
+    renderPanel({ wallsMode: 'inView', meshesInViewState: inView() });
+
+    expect(status()).toBe('Walls of 2 of 2 caves in view — 600 KB.');
+  });
+
+  it('never shows a subset silently: it names the byte budget that kept the rest out', () => {
+    renderPanel({
+      wallsMode: 'inView',
+      meshesInViewState: inView({ shown: 3, inView: 7, leftOut: 4, limitedBy: 'bytes' }),
+    });
+
+    expect(status()).toBe('Walls of 3 of 7 caves in view — the rest would exceed 64.0 MB.');
+  });
+
+  it('names the count instead when that is what kept the rest out', () => {
+    renderPanel({
+      wallsMode: 'inView',
+      meshesInViewState: inView({ shown: 12, inView: 31, leftOut: 19, limitedBy: 'count' }),
+    });
+
+    expect(status()).toBe(
+      'Walls of 12 of 31 caves in view — the rest are beyond the 12 drawn at once.',
+    );
+  });
+
+  it('says apart how many are still arriving and how many could not be read', () => {
+    renderPanel({
+      wallsMode: 'inView',
+      meshesInViewState: inView({ shown: 3, inView: 4, loading: 2, failed: 1 }),
+    });
+
+    expect(status()).toMatch(/^Walls of 3 of 4 caves in view/);
+    expect(status()).toMatch(/Still loading: 2\./);
+    expect(status()).toMatch(/Could not be read: 1\./);
+  });
+
+  it('tells a viewer looking at too wide a view to zoom in, rather than showing nothing unexplained', () => {
+    renderPanel({
+      wallsMode: 'inView',
+      meshesInViewState: { ...EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE, status: 'zoomIn', limits },
+    });
+
+    expect(status()).toBe('Zoom in to see the walls of the caves in view.');
+  });
+
+  it('says a view holds no cave with walls instead of counting none of none', () => {
+    renderPanel({ wallsMode: 'inView', meshesInViewState: inView({ shown: 0, inView: 0, heldBytes: 0 }) });
+
+    expect(status()).toBe('No cave in view has walls to draw.');
+  });
+
+  it('says the walls are not loaded when they are off, whichever mode is chosen', () => {
+    renderPanel({
+      meshVisible: false,
+      wallsMode: 'inView',
+      meshesInViewState: EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE,
+    });
+
+    expect(status()).toMatch(/not loaded/);
+  });
+
+  it('describes the selected cave only while that is the mode, not under the other one', () => {
+    // The selected cave's loader holds nothing in the other mode, and its "pick a cave" would be
+    // advice about a mode the viewer is not in.
+    renderPanel({ wallsMode: 'inView', meshesInViewState: inView() });
+
+    expect(status()).not.toMatch(/Pick a cave/);
   });
 });
 

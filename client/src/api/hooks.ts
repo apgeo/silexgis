@@ -1793,6 +1793,22 @@ export async function fetchCenterlineFeatures(
   }));
 }
 
+/** The wall meshes of the caves in a view, and how many caves there were in all. */
+export type CaveMeshesInView = components['schemas']['CaveMeshesInViewDto'];
+/** The one wall mesh a cave is drawn by, with what a scene needs to decide whether to fetch it. */
+export type CaveMeshInView = components['schemas']['CaveMeshInViewDto'];
+
+/**
+ * Imperative fetch used by the 3D scene's walls-in-view loader (not a hook).
+ *
+ * One mesh per cave, already chosen by the server, nearest the middle of the box first, and only
+ * for caves this caller may both read and place exactly — a cave left out for either reason is in
+ * neither the items nor the total, so nothing here can be used to work out that one is there.
+ */
+export async function fetchCaveMeshesInView(bbox: string): Promise<CaveMeshesInView> {
+  return unwrap(api.GET('/api/v1/map/cave-meshes', { params: { query: { bbox } } }));
+}
+
 /** Imperative fetch used by the OpenLayers photo overlay loader (not a hook). */
 export async function fetchPhotoFeatures(bbox: string): Promise<EntranceFeatureCollection> {
   return unwrap(api.GET('/api/v1/map/photos', { params: { query: { bbox } } }));

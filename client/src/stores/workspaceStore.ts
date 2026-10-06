@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { create } from 'zustand';
 import type { Scene3DSurfaceMode } from '../scene3d/scene3dEngine.ts';
+import type { SurveyWalls3DMode } from '../scene3d/surveyMeshesInView3d.ts';
 
 // Workspace UI state: serializable, carries references (ids),
 // never entity payloads — panels fetch their own data through TanStack Query.
@@ -131,6 +132,17 @@ interface WorkspaceState {
    */
   scene3dSurfaceMode: Scene3DSurfaceMode;
   setScene3dSurfaceMode: (mode: Scene3DSurfaceMode) => void;
+  /**
+   * Which caves' walls the 3D scene draws while the walls are switched on: the selected cave's,
+   * or those of every cave in view. Whether they are on at all stays in `overlayVisible`, under
+   * the walls' own key, so the switch and the choice beside it are two settings of one layer.
+   *
+   * It starts on the selected cave, which is the mode that reads one mesh because somebody picked
+   * a cave; the other reads a view's worth, and that is a thing to be asked for. Session state for
+   * the same reason as the surface mode above.
+   */
+  scene3dWallsMode: SurveyWalls3DMode;
+  setScene3dWallsMode: (mode: SurveyWalls3DMode) => void;
   /**
    * Whether the 3D scene's camera and the flat map's view move together. On by default: two views
    * showing different places is the surprising state, not the useful one.
@@ -267,6 +279,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set((state) => ({ overlayVisible: { ...state.overlayVisible, [key]: visible } })),
   scene3dSurfaceMode: 'overlay',
   setScene3dSurfaceMode: (scene3dSurfaceMode) => set({ scene3dSurfaceMode }),
+  scene3dWallsMode: 'selected',
+  setScene3dWallsMode: (scene3dWallsMode) => set({ scene3dWallsMode }),
   scene3dCoupledToMap: true,
   setScene3dCoupledToMap: (scene3dCoupledToMap) => set({ scene3dCoupledToMap }),
   baseOpacity: {},

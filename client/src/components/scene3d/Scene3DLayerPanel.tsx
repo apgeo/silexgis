@@ -12,8 +12,12 @@ import { CENTERLINE_DEPTH_BANDS } from '../../scene3d/centerlines3d.ts';
 import type { GeofileTrack3DFile } from '../../scene3d/geofileTracks3d.ts';
 import type { Scene3DSurfaceMode, Scene3DSurfaceState } from '../../scene3d/scene3dEngine.ts';
 import type { SurveyMesh3DState } from '../../scene3d/surveyMesh3d.ts';
+import type {
+  SurveyMeshesInView3DState,
+  SurveyWalls3DMode,
+} from '../../scene3d/surveyMeshesInView3d.ts';
 import { extentSizeKm, type TerrainBuildChoice } from '../../scene3d/terrainBuilds3d.ts';
-import { meshProgressMessage } from './meshMessages.ts';
+import { meshesInViewMessage, meshProgressMessage } from './meshMessages.ts';
 import { cutawayPauseMessage } from './surfaceMessages.ts';
 import './Scene3DLayerPanel.css';
 
@@ -64,15 +68,23 @@ export interface Scene3DLayerPanelProps {
   onGeofileVisibleChange: (id: string, visible: boolean) => void;
   onGeofileOpacityChange: (id: string, opacity: number) => void;
   /**
-   * Whether the walls of the selected cave are drawn. Its own prop rather than another entry in
-   * the overlay records above, because it is not one of the layers those are keyed by: the walls
-   * belong to one cave rather than to the view, and turning them off frees graphics memory rather
-   * than hiding a source that stays loaded.
+   * Whether cave walls are drawn. Its own prop rather than another entry in the overlay records
+   * above, because it is not one of the layers those are keyed by: turning the walls off frees
+   * graphics memory rather than hiding a source that stays loaded.
    */
   meshVisible: boolean;
   onMeshVisibleChange: (visible: boolean) => void;
+  /**
+   * Whose walls: the selected cave's, or those of every cave in view. A choice beside the switch
+   * rather than a second switch, because the two are one layer asked for in two ways and holding
+   * both would read the selected cave's mesh twice.
+   */
+  wallsMode: SurveyWalls3DMode;
+  onWallsModeChange: (mode: SurveyWalls3DMode) => void;
   /** What the scene is doing about the selected cave's walls, said in words under the switch. */
   meshState: SurveyMesh3DState;
+  /** What the scene holds of the walls of the caves in view, said in the same place in that mode. */
+  meshesInViewState: SurveyMeshesInView3DState;
   /**
    * The elevation models this installation has baked, newest first, for the viewer to draw the
    * ground from. Empty leaves the section out: there is nothing to switch between.
@@ -122,7 +134,10 @@ export default function Scene3DLayerPanel({
   onGeofileOpacityChange,
   meshVisible,
   onMeshVisibleChange,
+  wallsMode,
+  onWallsModeChange,
   meshState,
+  meshesInViewState,
   terrainBuilds,
   terrainConfigured,
   terrainChoice,
@@ -167,6 +182,11 @@ export default function Scene3DLayerPanel({
    * so that the two never describe one load in two different measures.
    */
   const meshHint = () => {
+    if (wallsMode === 'inView') {
+      // The other mode's own sentence: how many caves' walls are drawn out of how many, and what
+      // kept the rest out. With the walls off it is the same "not loaded" either mode says.
+      return meshesInViewMessage(meshesInViewState, t);
+    }
     switch (meshState.status) {
       case 'off':
         return meshVisible ? t('scene3d.meshNoCave') : t('scene3d.meshOff');
@@ -449,9 +469,9 @@ export default function Scene3DLayerPanel({
           );
         })}
 
-        {/* The walls of one cave, and no opacity beside them: a fading control over a mesh that
-            cannot be faded would be a switch wired to nothing. What the row does carry is the
-            state of the load, because this is the only thing in the scene a viewer waits for. */}
+        {/* Cave walls, and no opacity beside them: a fading control over a mesh that cannot be
+            faded would be a switch wired to nothing. What the row does carry is the state of the
+            load, because this is the only thing in the scene a viewer waits for. */}
         <div className="scene3d-layer-row">
           <Checkbox
             checked={meshVisible}
@@ -460,6 +480,19 @@ export default function Scene3DLayerPanel({
           >
             {t('scene3d.meshLayer')}
           </Checkbox>
+          {/* Whose walls. Left usable while the walls are off, so the choice can be made before
+              anything is read: switching on straight into "every cave in view" must not first
+              fetch the selected cave's mesh only to drop it a moment later. */}
+          <Radio.Group
+            className="scene3d-walls-mode"
+            aria-label={t('scene3d.meshMode')}
+            data-testid="scene3d-walls-mode"
+            value={wallsMode}
+            onChange={(e) => onWallsModeChange(e.target.value as SurveyWalls3DMode)}
+          >
+            <Radio value="selected">{t('scene3d.meshModeSelected')}</Radio>
+            <Radio value="inView">{t('scene3d.meshModeInView')}</Radio>
+          </Radio.Group>
           <Typography.Text
             type="secondary"
             className="scene3d-mesh-hint"
@@ -469,7 +502,7 @@ export default function Scene3DLayerPanel({
           </Typography.Text>
           {/* Said whenever the mesh is on screen, not only while it loads: the survey itself is
               degraded, and the person who can fix it is the one who exported the file. */}
-          {meshState.precisionLost && (
+          {wallsMode === 'selected' && meshState.precisionLost && (
             <Typography.Text
               type="warning"
               className="scene3d-mesh-hint"

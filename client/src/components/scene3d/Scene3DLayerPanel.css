@@ -90,3 +90,12 @@
   margin: 2px 8px 0 24px;
   font-size: 11px;
 }
+
+/* Whose walls are drawn, indented under the walls' switch the way a layer's fade is under its
+   own, and stacked: the two choices are too long to share a line at this panel's width. */
+.scene3d-walls-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 8px 0 24px;
+}

@@ -92,7 +92,9 @@ to showing the cave through the ground.
 If a cave has an uploaded **`.stl` wall model**, the 3D view can draw it in place, under the
 terrain, beside that cave's centerlines.
 
-- It is loaded **only for the cave you select**.
+- By default it is loaded **only for the cave you select**. Under the **Cave walls** switch in
+  the layer list you choose between that — *Selected cave* — and *Every cave in view*, described
+  below.
 - Switching it off in the layer list genuinely lets go of it — it does not sit in graphics
   memory pretending to be off.
 - The panel tells you what stage it is at: looking for a model, loading, drawn, still
@@ -104,6 +106,32 @@ terrain, beside that cave's centerlines.
 
 See [Surveys, centerlines and 3D models](surveys-and-models.md#cave-walls-stl) for uploading
 and for the coordinate declaration a `.stl` needs.
+
+## Walls of every cave in view
+
+Choosing **Every cave in view** under the **Cave walls** switch draws the walls of the caves the
+camera is looking at, not only of the one you selected. A wall model is downloaded whole and
+held in graphics memory for as long as it is drawn — usually a few hundred kilobytes, tens of
+megabytes for a large system — so this mode works within limits and tells you when it reached
+one:
+
+- **Zoom in first.** Below a set zoom (14 unless your administrator changed it) nothing is
+  loaded and the scene says *Zoom in to see the walls of the caves in view*. A wide view is a
+  whole district's caves, each of which would be a speck that cost its full size.
+- **Nearest first, up to a limit.** The caves nearest the middle of the view are taken first,
+  until either a number of caves (12) or a total download size (64 MB) would be passed. The
+  cave you have selected is always taken first, wherever in the view it is.
+- **It never shows a subset silently.** The panel, and a line over the scene, say how many
+  caves' walls are drawn out of how many are in view, and what kept the rest out — *Walls of 3
+  of 7 caves in view — the rest would exceed 64 MB*. Move or zoom toward the caves you are
+  missing and they take their turn.
+- **What leaves the view is let go.** Walls of caves you pan away from are released, not hidden,
+  and switching the walls off — or back to *Selected cave* — releases all of them.
+- A cave whose exact location is closed to you is not drawn and is not counted.
+
+Each cave's walls sit on that cave's own centerlines, exactly as in the other mode. The three
+limits are settings of the installation; see `SILEXGIS__Map__MeshesInView…` in the
+[installation guide](../../INSTALL.md#configuration-reference).
 
 ---
 

@@ -44,6 +44,11 @@ vi.mock('../../api/hooks.ts', () => ({
     surveyModelRequests.push(caveId);
     return Promise.resolve(surveyModels);
   },
+  // Named for the same reason: the loader for the walls of the caves in view asks through it.
+  fetchCaveMeshesInView: (bbox: string) => {
+    caveMeshRequests.push(bbox);
+    return Promise.resolve(caveMeshesInView);
+  },
   // What a reveal reads to find out where the thing it names is, through the query cache.
   featureQuery: (id: string) => ({
     queryKey: ['features', id],
@@ -74,6 +79,9 @@ let featureResponse: unknown = emptyCollection;
 /** Which caves the wall-mesh loader asked about, and what it was told they hold. */
 let surveyModelRequests: string[] = [];
 let surveyModels: unknown[] = [];
+/** Which views the walls-in-view loader asked about, and what it was told they hold. */
+let caveMeshRequests: string[] = [];
+let caveMeshesInView: { items: unknown[]; total: number } = { items: [], total: 0 };
 /** This installation's imported files, which of them were asked for, and what each answers. */
 let geofilePage: { items: unknown[] } | undefined;
 let geofileRequests: [string, string][] = [];
@@ -207,6 +215,8 @@ beforeEach(() => {
   featureResponse = emptyCollection;
   surveyModelRequests = [];
   surveyModels = [];
+  caveMeshRequests = [];
+  caveMeshesInView = { items: [], total: 0 };
   geofilePage = undefined;
   geofileRequests = [];
   geofileResponses = {};
@@ -228,6 +238,7 @@ beforeEach(() => {
     baseOpacity: {},
     scene3dSurfaceMode: 'overlay',
     scene3dCoupledToMap: true,
+    scene3dWallsMode: 'selected',
   });
 });
 
@@ -1553,6 +1564,242 @@ describe('the walls of the selected cave', () => {
       useWorkspaceStore.setState({ overlayVisible: { 'survey-mesh': true } });
     });
     await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(2));
+  });
+});
+
+describe('the walls of every cave in view', () => {
+  const MB = 1024 * 1024;
+
+  /** Two caves side by side, whose surveys top out at 700 m and at 900 m. */
+  const twoSurveys = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [25.44, 45.53, 700],
+            [25.45, 45.535, 420],
+          ],
+        },
+        properties: { id: 'line-1', caveId: 'cave-1', topAltitudeM: 700, hasZ: true },
+      },
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [25.46, 45.54, 900],
+            [25.47, 45.545, 810],
+          ],
+        },
+        properties: { id: 'line-2', caveId: 'cave-2', topAltitudeM: 900, hasZ: true },
+      },
+    ],
+    withheldCount: 0,
+    detail: true,
+    flatCount: 0,
+  };
+
+  /** One cave's mesh as the server lists it for a view. */
+  function aMeshInView(caveId: string, overrides: Record<string, unknown> = {}) {
+    return {
+      caveId,
+      caveName: `Peștera ${caveId}`,
+      surveyModelId: `model-${caveId}`,
+      modelName: 'Pereți',
+      meshUrl: `/files/${caveId}.glb`,
+      anchorLongitude: 25.44,
+      anchorLatitude: 45.53,
+      anchorHeightM: 500,
+      triangleCount: 1200,
+      sizeBytes: 300 * 1024,
+      ...overrides,
+    };
+  }
+
+  /** The installation's limits, with a floor low enough that the scene's opening view is above it. */
+  function publishLimits(overrides: Record<string, unknown> = {}) {
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrainBuilds: [],
+      meshesInViewMinZoom: 0,
+      meshesInViewMaxCaves: 12,
+      meshesInViewMaxBytes: 64 * MB,
+      ...overrides,
+    };
+  }
+
+  function chooseEveryCaveInView() {
+    act(() => {
+      useWorkspaceStore.setState({ scene3dWallsMode: 'inView' });
+    });
+  }
+
+  /** The models in the scene right now, which is what holds graphics memory. */
+  function modelsInScene() {
+    return engine.engineState.widgets[0].scene.primitives.items.filter(
+      (item): item is InstanceType<typeof engine.Model> => item instanceof engine.Model,
+    );
+  }
+
+  it('asks about the view only once that mode is chosen, and hangs each cave from its own top', async () => {
+    withWebGl2(true);
+    publishLimits();
+    centerlineResponse = twoSurveys;
+    caveMeshesInView = {
+      items: [aMeshInView('cave-1'), aMeshInView('cave-2', { anchorHeightM: 880 })],
+      total: 2,
+    };
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    // The default is the selected cave's walls, and with no cave selected that reads nothing.
+    expect(caveMeshRequests).toEqual([]);
+
+    chooseEveryCaveInView();
+
+    await waitFor(() => expect(caveMeshRequests).toHaveLength(1));
+    await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(2));
+    expect(engine.engineState.modelRequests.map((request) => request.url)).toEqual([
+      '/files/cave-1.glb',
+      '/files/cave-2.glb',
+    ]);
+    // On the bare ellipsoid each cave hangs from the surface by its own top: 500 under a top of
+    // 700, and 880 under a top of 900. One top for the whole view would put one of them a
+    // hillside away from the survey lines drawn inside it.
+    expect(
+      engine.engineState.modelRequests.map((request) => request.modelMatrix.origin.height),
+    ).toEqual([-200, -20]);
+  });
+
+  it('says over the scene that the walls drawn are some of the caves in view, and what kept the rest out', async () => {
+    withWebGl2(true);
+    publishLimits({ meshesInViewMaxBytes: 400 * 1024 });
+    caveMeshesInView = { items: [aMeshInView('cave-1'), aMeshInView('cave-2')], total: 2 };
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    chooseEveryCaveInView();
+
+    // Without the panel being opened: a subset drawn in silence reads as "these are the caves
+    // that have walls".
+    expect(
+      await screen.findByText(/Walls of 1 of 2 caves in view — the rest would exceed 400 KB\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('scene3d-layer-panel')).toBeNull();
+    expect(engine.engineState.modelRequests.map((request) => request.url)).toEqual([
+      '/files/cave-1.glb',
+    ]);
+  });
+
+  it('counts walls still arriving as the view still filling in, and says nothing once all of them are there', async () => {
+    withWebGl2(true);
+    publishLimits();
+    caveMeshesInView = { items: [aMeshInView('cave-1')], total: 1 };
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    chooseEveryCaveInView();
+
+    expect(await screen.findByText(/Still loading: 1\./)).toBeInTheDocument();
+    expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'true');
+
+    act(() => engine.Model.deliver('/files/cave-1.glb'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false'),
+    );
+    expect(screen.queryByText(/caves in view/)).toBeNull();
+  });
+
+  it('holds nothing below the installation’s zoom floor, and says to zoom in', async () => {
+    withWebGl2(true);
+    // No camera reaches this zoom, so every view is too wide.
+    publishLimits({ meshesInViewMinZoom: 25 });
+    caveMeshesInView = { items: [aMeshInView('cave-1')], total: 1 };
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    chooseEveryCaveInView();
+
+    expect(
+      await screen.findByText('Zoom in to see the walls of the caves in view.'),
+    ).toBeInTheDocument();
+    expect(caveMeshRequests).toEqual([]);
+    expect(engine.engineState.modelRequests).toEqual([]);
+  });
+
+  it('releases every cave’s walls when the walls are switched off', async () => {
+    withWebGl2(true);
+    publishLimits();
+    caveMeshesInView = { items: [aMeshInView('cave-1'), aMeshInView('cave-2')], total: 2 };
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    chooseEveryCaveInView();
+    await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(2));
+    act(() => {
+      engine.Model.deliver('/files/cave-1.glb');
+      engine.Model.deliver('/files/cave-2.glb');
+    });
+    await waitFor(() => expect(modelsInScene()).toHaveLength(2));
+
+    act(() => {
+      useWorkspaceStore.setState({ overlayVisible: { 'survey-mesh': false } });
+    });
+
+    await waitFor(() => expect(modelsInScene()).toHaveLength(0));
+  });
+
+  it('hands the walls back to the selected cave alone when that mode is chosen again', async () => {
+    withWebGl2(true);
+    publishLimits();
+    centerlineResponse = twoSurveys;
+    caveMeshesInView = { items: [aMeshInView('cave-1'), aMeshInView('cave-2')], total: 2 };
+    surveyModels = [aWallMesh()];
+    act(() => {
+      useWorkspaceStore.setState({
+        selection: { kind: 'cave', caveId: 'cave-1' },
+        scene3dWallsMode: 'inView',
+      });
+    });
+    renderView();
+    await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(2));
+    // In this mode the selected cave's walls come from the view's answer like every other
+    // cave's; reading them a second time on their own would hold one mesh twice.
+    expect(surveyModelRequests).toEqual([]);
+    act(() => {
+      engine.Model.deliver('/files/cave-1.glb');
+      engine.Model.deliver('/files/cave-2.glb');
+    });
+    await waitFor(() => expect(modelsInScene()).toHaveLength(2));
+
+    act(() => {
+      useWorkspaceStore.setState({ scene3dWallsMode: 'selected' });
+    });
+
+    await waitFor(() => expect(surveyModelRequests).toEqual(['cave-1']));
+    await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(3));
+    expect(engine.engineState.modelRequests[2].url).toBe('/files/walls.glb');
+    act(() => engine.Model.deliver('/files/walls.glb'));
+    // The view's two are gone and the one picked cave's mesh is what is left.
+    await waitFor(() => expect(modelsInScene()).toHaveLength(1));
+  });
+
+  it('offers the mode beside the walls switch, and remembers the choice where the other layer settings are', async () => {
+    withWebGl2(true);
+    publishLimits();
+    renderView();
+    fireEvent.click(await screen.findByTestId('scene3d-layers-trigger'));
+
+    fireEvent.click(await screen.findByRole('radio', { name: 'Every cave in view' }));
+
+    expect(useWorkspaceStore.getState().scene3dWallsMode).toBe('inView');
+    await waitFor(() => expect(caveMeshRequests).toHaveLength(1));
+    expect(await screen.findByTestId('scene3d-mesh-status')).toHaveTextContent(
+      'No cave in view has walls to draw.',
+    );
   });
 });
 
