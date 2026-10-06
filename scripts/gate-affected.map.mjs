@@ -30,6 +30,7 @@ export const groups = {
     'CredentialUrlScrubberTests',
     'TripOrganizingGroupGuardTests', 'TripsOfTheCallerTests',
     'EnumBindingTests', 'TripDeleteCleanupTests', 'TripTrackImportTests', 'TripWriteShapeTests',
+    'TripReportMapTests',
   ],
   events: [
     'EventAccessDomainTests', 'EventAuthoringTests', 'EventInvitationTests',
@@ -56,6 +57,9 @@ export const groups = {
     // What becomes of a generated write-up when the record it was written for is deleted is
     // decided beside the documents, for trips and camps alike, and these two are what ask it.
     'ExpeditionDeleteCleanupTests', 'TripDeleteCleanupTests',
+    // A picture a caller hands a write-up is read and redrawn beside the document writer; the
+    // first is that reader on its own, the second the route that passes it a real upload.
+    'SuppliedPictureTests', 'TripReportMapTests',
   ],
   photos: [
     'AlbumAndPublicGalleryTests', 'ExpeditionPhotographTests', 'PhotoBytesProtectionTests',
@@ -376,10 +380,10 @@ export const crossCutting = {
     'TripAttendanceLimitTests', 'TripCalloutStandDownTests', 'TripChecklistTickTests',
     'TripImportCommitTests', 'TripImportSessionTests', 'TripInvitationTests',
     'TripOrganizingGroupGuardTests', 'TripParticipantRoleVocabularyTests', 'TripPromotionTests',
-    'TripReportDocumentTests', 'TripReportTemplateTests', 'TripStatisticsTests',
-    'TripTrackImportTests', 'TripTrackingPicturesTests', 'TripTrackingPublicationTests',
-    'TripTrackingTests', 'TripTypeVocabularyTests', 'UiDefaultsTests', 'UploadDestinationTests',
-    'UserAdministrationTests',
+    'TripReportDocumentTests', 'TripReportMapTests', 'TripReportTemplateTests',
+    'TripStatisticsTests', 'TripTrackImportTests', 'TripTrackingPicturesTests',
+    'TripTrackingPublicationTests', 'TripTrackingTests', 'TripTypeVocabularyTests',
+    'UiDefaultsTests', 'UploadDestinationTests', 'UserAdministrationTests',
   ],
   locationClasses: [
     'AccessHistoryTests', 'AclAndCavingGroupTests', 'AreaKarstStatisticsTests',
