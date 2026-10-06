@@ -1016,6 +1016,53 @@ export function useCan(domain: AccessDomainName, action: AccessActionFlag): bool
   return hasAccessAction(data?.domains[domain], action);
 }
 
+/** One of the caller's own caving groups a new row may be bound to. */
+export type CreatableCavingGroup = components['schemas']['CreatableCavingGroupDto'];
+
+/** Where the caller may create in one domain — what a create door and its form need to know. */
+export interface CreateDoor {
+  /**
+   * Whether a create door is worth drawing at all: the right is held over the domain as such,
+   * or it reaches through at least one of the caller's caving groups.
+   */
+  canCreate: boolean;
+  /**
+   * The right is held with no row in view, so a row that belongs to no caving group is accepted.
+   * False for somebody whose right comes only through their groups: what they create has to be
+   * bound to one of `cavingGroups`, or the server refuses it.
+   */
+  unbound: boolean;
+  /** The caller's own caving groups a new row may be bound to, ordered by name. */
+  cavingGroups: readonly CreatableCavingGroup[];
+}
+
+// One array for every "none", so a component that depends on the list does not see a new one
+// on each render while the answer is still on its way.
+const NO_CAVING_GROUPS: readonly CreatableCavingGroup[] = [];
+
+/**
+ * Whether the caller may create in a domain somewhere, and where.
+ *
+ * `useCan(domain, 'create')` answers a narrower question — is the right held over the domain as
+ * such, with no row in view — and a right held only at a caving group's scope is never that: a
+ * member whose club lets them record the club's trips is told `create` on none. Gating a create
+ * door on it hides a door the server would open. The capabilities answer therefore says, beside
+ * the map, in which of the caller's own groups a create is accepted, decided by the rule the
+ * write itself is decided by; this reads both and keeps them apart, because the form behind the
+ * door needs to know which it is — an unbound create needs no group, a create by club only must
+ * name one.
+ *
+ * Creating only. Whether somebody may write or delete under a right held at a group's scope is a
+ * question about a row and stays with the per-object answers. All false and empty while the
+ * answer is loading, so a door appears and never flashes away.
+ */
+export function useCreateDoor(domain: AccessDomainName): CreateDoor {
+  const { data } = useCapabilities();
+  const unbound = hasAccessAction(data?.domains[domain], 'create');
+  const cavingGroups = data?.createInCavingGroups[domain] ?? NO_CAVING_GROUPS;
+  return { canCreate: unbound || cavingGroups.length > 0, unbound, cavingGroups };
+}
+
 export type MyPermissionGroup = components['schemas']['MyPermissionGroupDto'];
 
 /** The permission groups the caller reaches — where a right of theirs comes from. */

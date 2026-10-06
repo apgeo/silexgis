@@ -18,6 +18,7 @@ vi.mock('../../api/hooks.ts', () => ({
   useTripLogGrouping: (params: unknown, enabled: boolean) => groupSpy(params, enabled),
   useTripTypes: () => ({ data: [{ id: 3, code: 'survey', name: 'Survey' }] }),
   useCan: () => false,
+  useCreateDoor: () => ({ canCreate: false, unbound: false, cavingGroups: [] }),
 }));
 
 // Only the fetch is stood in for. The URL builder is the real one, because what this asserts is

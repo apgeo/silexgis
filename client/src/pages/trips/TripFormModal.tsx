@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { DeleteOutlined, EllipsisOutlined, PlusOutlined } from '@ant-design/icons';
 import {
+  Alert,
   App,
   Button,
   DatePicker,
@@ -18,6 +19,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
   useCavingGroups,
+  useCreateDoor,
   useCreateTripLog,
   useCreateTripPlan,
   useTripParticipantRoles,
@@ -73,6 +75,9 @@ interface FormValues {
   participants: RosterRow[];
   proposers: RosterRow[];
   visibility: TripLogInfo['visibility'];
+  // The caving group a new trip belongs to. Held only when the author has to choose one — see
+  // `mustBind` in the form; an existing trip's group is carried through, never edited here.
+  cavingGroupId?: string;
   maxParticipants?: number | null;
 }
 
@@ -266,9 +271,26 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
   const createPlan = useCreateTripPlan();
   const updateTrip = useUpdateTripLog();
   const planning = trip === null && intent === 'plan';
+
+  // Where this caller may record a trip at all. Most people who reach this form hold the right
+  // over trips as such, and for them nothing here changes: a new trip belongs to no caving group
+  // unless the plan door's own rule gives it one. But a right can also reach somebody only
+  // through their caving group — a club's own rules let its members record the club's trips and
+  // nothing wider — and the server accepts a trip from them only when it is bound to such a
+  // group. Left unbound, as this form used to send every report, it is refused. So for that
+  // caller a new trip always names its group: the one they have, or the one they choose from
+  // exactly the groups the server said it would accept, and never a group it would refuse.
+  // Read only when creating; an existing trip keeps the group it has.
+  const door = useCreateDoor('tripLogs');
+  const mustBind = trip === null && !door.unbound && door.cavingGroups.length > 0;
+  const onlyGroup = mustBind && door.cavingGroups.length === 1 ? door.cavingGroups[0] : null;
+  const choosesGroup = mustBind && onlyGroup === null;
+
   // Who would read this plan if the author says nothing about it — asked so the form can name
   // that audience rather than recite the rule, and asked only while a plan is being written.
-  const { data: planDefault } = useTripPlanDefault(open && planning);
+  // Not asked for somebody who must bind the trip: the answer describes a request that names no
+  // audience, and theirs always names one.
+  const { data: planDefault } = useTripPlanDefault(open && planning && !mustBind);
 
   // The map inside the form can only be built once the dialog's open transition has put the
   // content in the document — a map built against a container with no size renders nothing.
@@ -314,7 +336,16 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
           proposers: [],
           // What the door assumes: private for a report. A plan's default is the server's
           // answer, and it is written in below as soon as it arrives.
-          visibility: planning ? (planDefault?.visibility ?? 'private') : 'private',
+          //
+          // A trip that must belong to a caving group starts the same way on the report door —
+          // private is the narrowest audience there is, and the server accepts it for a bound
+          // trip — and on the plan door starts shared with that group, which is what a plan is
+          // for and is exactly what the server's own rule gives a planner who is in one group.
+          visibility: planning
+            ? mustBind
+              ? 'cavingGroup'
+              : (planDefault?.visibility ?? 'private')
+            : 'private',
         });
       }
     }
@@ -324,13 +355,22 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
   // The default audience usually lands after the form has opened. It is written into the control
   // only while nobody has touched it, so an answer arriving mid-edit cannot take back a choice.
   useEffect(() => {
-    if (open && planning && planDefault && !form.isFieldTouched('visibility')) {
+    if (open && planning && !mustBind && planDefault && !form.isFieldTouched('visibility')) {
       form.setFieldsValue({ visibility: planDefault.visibility });
     }
-  }, [open, planning, planDefault, form]);
+  }, [open, planning, mustBind, planDefault, form]);
 
   const onOk = async () => {
-    const values = await form.validateFields();
+    let values: FormValues;
+    try {
+      values = await form.validateFields();
+    } catch {
+      // The refusal is taken rather than left to travel. Every failure is already drawn against
+      // the field it belongs to — a missing title, a caving group not yet chosen — so there is
+      // nothing further to say; but a rejection nobody answered is reported as a fault by the
+      // observers watching for them, and pressing OK a moment too early is not a defect.
+      return;
+    }
     // Validation answers with the fields it validated, and a roster row carries more than the
     // one field the form draws for it — the job, the times, the note. Read those from the form's
     // own store, or every save would send back a row stripped of everything that was not on
@@ -344,10 +384,17 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
     // stated "caving group" is honoured as sent, and this form has no group picker to say which
     // group, so stating it here would be an audience with no group behind it. Only a different
     // choice is a stated one. A report's audience is always stated, as it always was.
+    //
+    // And so is the audience of a trip that must belong to a caving group, on either door: the
+    // group is stated, so the audience is stated with it and the two travel as the one answer
+    // they are. Leaving both out there would hand the decision to a rule that binds a plan only
+    // for somebody in exactly one group, and binds a report for nobody.
     const leavesTheDefault =
       planning &&
+      !mustBind &&
       (!form.isFieldTouched('visibility') ||
         (planDefault !== undefined && values.visibility === planDefault.visibility));
+    const owningGroupId = mustBind ? (onlyGroup?.id ?? values.cavingGroupId ?? null) : null;
     const body: TripLogWrite = {
       title: values.title.trim(),
       tripTypeId: values.tripTypeId ?? null,
@@ -367,7 +414,9 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
       caveIds: null,
       participants: toParticipants(stored.participants),
       proposers: toParticipants(stored.proposers),
-      cavingGroupId: trip?.cavingGroupId ?? null,
+      // An existing trip keeps the group it has; this form does not move a trip between groups.
+      // A new one belongs to none, unless its author may only record trips for a group.
+      cavingGroupId: trip ? (trip.cavingGroupId ?? null) : owningGroupId,
       visibility: leavesTheDefault ? null : values.visibility,
       // Carried through untouched. This form does not offer the measured facts, and a write
       // sets every one of them, so sending blanks here would unmeasure a trip whose title
@@ -409,12 +458,21 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
   // Where the pre-selected audience came from, said beside the control in words. The group is
   // named rather than called "your group": a plan shared with a club the author had forgotten
   // they were in is not what they thought they were doing.
-  const audienceNote =
-    planning && planDefault
-      ? planDefault.visibility === 'cavingGroup'
-        ? t('trips.plan.audienceFromGroup', { group: planDefault.cavingGroupName ?? '' })
-        : t('trips.plan.audiencePrivate')
-      : null;
+  //
+  // For a plan that must belong to a caving group the sentence is the same one, about the group
+  // the plan is bound to: named when there is one, and described as the group being chosen just
+  // below when there are several.
+  const audienceNote = !planning
+    ? null
+    : mustBind
+      ? onlyGroup
+        ? t('trips.plan.audienceFromGroup', { group: onlyGroup.name })
+        : t('trips.plan.audienceFromChosenGroup')
+      : planDefault
+        ? planDefault.visibility === 'cavingGroup'
+          ? t('trips.plan.audienceFromGroup', { group: planDefault.cavingGroupName ?? '' })
+          : t('trips.plan.audiencePrivate')
+        : null;
 
   return (
     <Modal
@@ -461,6 +519,39 @@ export default function TripFormModal({ open, trip, intent = 'report', onClose }
             />
           </Form.Item>
         </Flex>
+        {/* Which caving group a new trip belongs to, said or asked only for somebody whose right
+            to record trips reaches through their groups and no further. With one group there is
+            nothing to choose, so the form says what will happen and names the group. With
+            several it asks, and offers exactly the groups the server said it would accept —
+            nothing is guessed between them, for the reason a plan's audience is not: they carry
+            no order, and a guess would file the trip under a club with nothing to do with it.
+            Either way it also says what belonging means, because the visibility control beside
+            it cannot: a group's own rules decide what its members may do with the group's trips,
+            so "private" here does not keep the group out. */}
+        {onlyGroup && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            data-testid="trip-owning-group"
+            title={t('trips.owningGroup.only', { group: onlyGroup.name })}
+            description={t('trips.owningGroup.meaning')}
+          />
+        )}
+        {choosesGroup && (
+          <Form.Item
+            name="cavingGroupId"
+            label={t('trips.owningGroup.label')}
+            rules={[{ required: true, message: t('trips.owningGroup.required') }]}
+            extra={`${t('trips.owningGroup.several')} ${t('trips.owningGroup.meaning')}`}
+          >
+            <Select
+              data-testid="trip-owning-group-choice"
+              placeholder={t('trips.owningGroup.placeholder')}
+              options={door.cavingGroups.map((group) => ({ value: group.id, label: group.name }))}
+            />
+          </Form.Item>
+        )}
         <Flex gap={12}>
           <Form.Item name="entryTime" label={t('trips.entryTime')} style={{ flex: 1 }}>
             <TimePicker style={{ width: '100%' }} format="HH:mm" minuteStep={5} />

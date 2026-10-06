@@ -42,6 +42,12 @@ const upcoming = {
 const myTripsSpy = vi.fn();
 const upcomingQuery = vi.fn(() => ({ data: upcoming, isLoading: false, isError: false }));
 const canCreate = vi.fn(() => true);
+/**
+ * The trip action's own answer, which is wider than a right held over trips as such: it also
+ * admits somebody who may record trips only for their caving group. Follows the one switch
+ * above unless a test says otherwise.
+ */
+const tripDoor = vi.fn(() => ({ canCreate: canCreate(), unbound: canCreate(), cavingGroups: [] as { id: string; name: string }[] }));
 const refetch = vi.fn();
 const summaryQuery = vi.fn(() => ({ data: summary, isLoading: false, isError: false, refetch }));
 
@@ -59,6 +65,7 @@ vi.mock('../../api/hooks.ts', () => ({
   // One switch for all three quick-action domains: these tests exercise the card as a
   // whole, not the per-domain split.
   useCan: () => canCreate(),
+  useCreateDoor: () => tripDoor(),
   // Imported by the feature-navigation helper the activity feed uses; only entrance or
   // centerline rows would actually call it.
   fetchFeature: vi.fn(),
@@ -93,6 +100,7 @@ const countOn = (title: string) =>
 afterEach(() => {
   cleanup();
   canCreate.mockReturnValue(true);
+  tripDoor.mockImplementation(() => ({ canCreate: canCreate(), unbound: canCreate(), cavingGroups: [] }));
   refetch.mockClear();
   myTripsSpy.mockClear();
   summaryQuery.mockReturnValue({ data: summary, isLoading: false, isError: false, refetch });
@@ -213,5 +221,24 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Quick actions')).not.toBeInTheDocument();
     // The rest of the dashboard still renders for read-only users.
     expect(screen.getByText('Recent activity')).toBeInTheDocument();
+  });
+
+  it('offers the trip action, and only that one, to somebody who may record trips only for their caving group', () => {
+    // No right over any domain as such — so no new cave and no import — and a club that lets
+    // its members record the club's trips. The trip list would offer them its create control,
+    // so the board offers the action that leads there, opening the form on arrival.
+    canCreate.mockReturnValue(false);
+    tripDoor.mockImplementation(() => ({
+      canCreate: true,
+      unbound: false,
+      cavingGroups: [{ id: 'g-1', name: 'Silex' }],
+    }));
+    renderPage();
+
+    expect(screen.getByText('Quick actions')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /New cave/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Import file/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /New trip log/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/trip-logs');
   });
 });

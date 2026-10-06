@@ -12,7 +12,18 @@ import '../../i18n';
  * offers and which door it tells the form to write for.
  */
 
-const { canSpy, formSpy } = vi.hoisted(() => ({ canSpy: vi.fn(), formSpy: vi.fn() }));
+const { doorSpy, formSpy } = vi.hoisted(() => ({ doorSpy: vi.fn(), formSpy: vi.fn() }));
+
+/** Somebody who holds the right to record trips over the domain as such. */
+const holdsTheRight = { canCreate: true, unbound: true, cavingGroups: [] };
+/** Somebody whose right to record trips reaches only through the one caving group they are in. */
+const byClubOnly = {
+  canCreate: true,
+  unbound: false,
+  cavingGroups: [{ id: 'g-1', name: 'Silex' }],
+};
+/** Somebody who may record no trip anywhere. */
+const mayNot = { canCreate: false, unbound: false, cavingGroups: [] };
 
 vi.mock('../../api/hooks.ts', () => ({
   useTripLogs: () => ({
@@ -23,7 +34,9 @@ vi.mock('../../api/hooks.ts', () => ({
   useTripLogFacets: () => ({ data: undefined }),
   useTripLogGrouping: () => ({ data: undefined }),
   useTripTypes: () => ({ data: [] }),
-  useCan: () => canSpy(),
+  // The vocabulary links beside the control are a different right, and not what is tested here.
+  useCan: () => false,
+  useCreateDoor: () => doorSpy(),
 }));
 
 // The form is a probe of its props: which door it was opened on is the whole claim here, and the
@@ -49,7 +62,7 @@ const form = () => screen.getByTestId('trip-form');
 
 afterEach(cleanup);
 beforeEach(() => {
-  canSpy.mockReset().mockReturnValue(true);
+  doorSpy.mockReset().mockReturnValue(holdsTheRight);
   formSpy.mockReset();
 });
 
@@ -74,8 +87,24 @@ describe('creating a trip from the list', () => {
     expect(form().dataset.intent).toBe('plan');
   });
 
+  it('offers both doors to somebody who may record trips only for their caving group', async () => {
+    // The right held over trips as such is not what the control asks. A member whose club lets
+    // them record the club's trips holds no such right and is still served by both doors: the
+    // server accepts a trip of theirs that belongs to the club, and the form binds it.
+    doorSpy.mockReturnValue(byClubOnly);
+    show();
+
+    fireEvent.click(screen.getByRole('button', { name: /New trip log/ }));
+    expect(form().dataset.open).toBe('true');
+    expect(form().dataset.intent).toBe('report');
+
+    fireEvent.click(screen.getByTestId('trip-create-menu'));
+    fireEvent.click(await screen.findByText('Plan a trip'));
+    expect(form().dataset.intent).toBe('plan');
+  });
+
   it('offers neither door to somebody who may not create a trip', () => {
-    canSpy.mockReturnValue(false);
+    doorSpy.mockReturnValue(mayNot);
     show();
 
     expect(screen.queryByRole('button', { name: /New trip log/ })).toBeNull();

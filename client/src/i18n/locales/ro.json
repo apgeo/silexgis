@@ -1370,7 +1370,16 @@
       "new": "Planifică o tură",
       "createMenu": "Alte moduri de a crea o tură",
       "audienceFromGroup": "Dacă nu alegi altfel, acest plan este vizibil grupului tău de speologie, {{group}} — un plan pe care îl poate citi doar autorul este un plan pentru nimeni.",
-      "audiencePrivate": "Acest plan începe privat: nu ești într-un singur grup de speologie, așa că aplicația nu ghicește care club ar trebui să îl citească. Lărgește audiența aici dacă trebuie citit."
+      "audiencePrivate": "Acest plan începe privat: nu ești într-un singur grup de speologie, așa că aplicația nu ghicește care club ar trebui să îl citească. Lărgește audiența aici dacă trebuie citit.",
+      "audienceFromChosenGroup": "Dacă nu alegi altfel, acest plan este vizibil grupului de speologie căruia îi aparține — un plan pe care îl poate citi doar autorul este un plan pentru nimeni."
+    },
+    "owningGroup": {
+      "label": "Grupul căruia îi aparține",
+      "placeholder": "Alege un grup de speologie",
+      "required": "Alege grupul de speologie căruia îi aparține această tură.",
+      "only": "Înregistrezi ture pentru {{group}}; aceasta îi va aparține.",
+      "several": "Înregistrezi ture pentru grupurile tale de speologie, așa că aceasta trebuie să aparțină unuia dintre ele.",
+      "meaning": "Cine din grup o poate citi și corecta este hotărât de regulile grupului, nu de vizibilitatea aleasă aici."
     },
     "expectedReturnAt": "Ieșire estimată",
     "calloutAlarmAt": "Dă alarma la",

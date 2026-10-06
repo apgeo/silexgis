@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   useCan,
+  useCreateDoor,
   useDashboardSummary,
   useMapViews,
   useMyTripLogs,
@@ -80,7 +81,10 @@ export default function DashboardPage() {
   // Each quick action follows its own domain: a person who may log trips but not
   // create features still gets their button.
   const canCreateFeatures = useCan('features', 'create');
-  const canCreateTrips = useCan('tripLogs', 'create');
+  // The trip action is offered wherever the trip list would offer its create control, which is
+  // wider than holding the right over trips as such: a member who may record trips only for
+  // their caving group is served by the same form, which binds the trip to the group.
+  const { canCreate: canCreateTrips } = useCreateDoor('tripLogs');
   const canImportGeofiles = useCan('geofiles', 'create');
   const canCreate = canCreateFeatures || canCreateTrips || canImportGeofiles;
   const landingPage = useUiPrefsStore((s) => s.landingPage);

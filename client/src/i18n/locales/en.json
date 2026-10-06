@@ -1370,7 +1370,16 @@
       "new": "Plan a trip",
       "createMenu": "Other ways to create a trip",
       "audienceFromGroup": "Unless you choose otherwise, this plan is shared with your caving group, {{group}} — a plan only its author can read is a plan to nobody.",
-      "audiencePrivate": "This plan starts private: you are in no single caving group, so the application does not guess which club should read it. Widen the audience here if it should be read."
+      "audiencePrivate": "This plan starts private: you are in no single caving group, so the application does not guess which club should read it. Widen the audience here if it should be read.",
+      "audienceFromChosenGroup": "Unless you choose otherwise, this plan is shared with the caving group it belongs to — a plan only its author can read is a plan to nobody."
+    },
+    "owningGroup": {
+      "label": "Belongs to",
+      "placeholder": "Choose a caving group",
+      "required": "Choose the caving group this trip belongs to.",
+      "only": "You record trips for {{group}}; this one will belong to it.",
+      "several": "You record trips for your caving groups, so this one has to belong to one of them.",
+      "meaning": "Who in the group may read and correct it is decided by the group's own rules, not by the visibility chosen here."
     },
     "expectedReturnAt": "Expected back",
     "calloutAlarmAt": "Raise the alarm at",

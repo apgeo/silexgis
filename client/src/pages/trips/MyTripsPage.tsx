@@ -7,7 +7,7 @@ import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
-  useCan,
+  useCreateDoor,
   useMyTripLogs,
   useTripTypes,
   type ActivityState,
@@ -55,10 +55,11 @@ export default function MyTripsPage() {
   const { data, isFetching, isError } = useMyTripLogs(params);
   const { data: tripTypes } = useTripTypes();
   // Planning a trip from the page that lists the ones you are going on: the same form the trip
-  // list opens, on its plan door. Gated on the same right the list gates its create action on,
+  // list opens, on its plan door. Gated on the same answer the list gates its create action on,
   // because this is the one home for creating a trip reached from a second place, not a second
-  // way of creating one.
-  const canCreate = useCan('tripLogs', 'create');
+  // way of creating one — and that answer includes somebody who may record trips only for their
+  // caving group, whose plan the form binds to it.
+  const { canCreate } = useCreateDoor('tripLogs');
   const [planning, setPlanning] = useState(false);
 
   const onTableChange = (pagination: TablePaginationConfig) => {
