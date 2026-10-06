@@ -4126,6 +4126,60 @@ export function useKeepTripReport() {
 }
 
 /**
+ * What the picture of a map in a trip's write-up is drawn from, handed over as it is already
+ * held.
+ *
+ * Two things, and both are answers the write-up's page asks for anyway. The caves a trip names
+ * are read one by one, by id, to print their names; each answer also says where that cave is as
+ * far as this reader may know — exactly, approximately, or not at all — so the picture takes its
+ * positions from those answers and from nowhere else. The catalogue of map backgrounds is what
+ * every map in the application is built from.
+ *
+ * Nothing here is a new question. Each read goes by the key and the route the page's own reads
+ * go by, so an answer already held is handed back as it is, and one still on its way is waited
+ * for rather than asked for twice. That matters for more than thrift: a route of its own for
+ * "where are this trip's caves" would be a second place the server decides what a reader may be
+ * shown of them.
+ *
+ * A cave whose read fails — it stopped being readable between the trip's answer and this one —
+ * is simply not among the answers, and a catalogue that cannot be read is no catalogue.
+ */
+export function useTripReportMapSources() {
+  const queryClient = useQueryClient();
+  return {
+    caves: async (ids: readonly string[]): Promise<Map<string, CaveDetail>> => {
+      const answers = await Promise.allSettled(
+        ids.map((id) =>
+          queryClient.ensureQueryData({
+            queryKey: queryKeys.cave(id),
+            queryFn: () => unwrap(api.GET('/api/v1/caves/{id}', { params: { path: { id } } })),
+            retry: false,
+          }),
+        ),
+      );
+      const held = new Map<string, CaveDetail>();
+      answers.forEach((answer, index) => {
+        if (answer.status === 'fulfilled') {
+          held.set(ids[index], answer.value);
+        }
+      });
+      return held;
+    },
+    catalog: async (): Promise<MapLayerInfo[] | undefined> => {
+      try {
+        return await queryClient.ensureQueryData({
+          queryKey: queryKeys.mapLayers,
+          queryFn: () => unwrap(api.GET('/api/v1/map-layers')),
+          staleTime: 5 * 60_000,
+        });
+      } catch {
+        return undefined;
+      }
+    },
+  };
+}
+
+/**
  * Moving a trip to another lifecycle state, through the one route that names the state it moves
  * to rather than a verb per move.
  *
