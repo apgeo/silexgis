@@ -98,6 +98,7 @@ You can:
 
 - sort it,
 - group its rows under headings — by month, week, kind, state or caving group,
+- have the list open on **today**, with what just happened and what is coming next on one screen,
 - turn each family — **Trips**, **Camps**, **Events** — on and off by itself,
 - narrow the events to the kinds you choose,
 - narrow to a club's own,
@@ -130,7 +131,18 @@ back on.
 **Record** and **Agenda** are the same list drawn two ways: a row of cells to compare across, or
 one entry to a line to read down. Everything below is true of both.
 
-**It is one list, not pages.** Every record in the days you asked for is in it.
+**It is one list, not pages.** Every record in the days you asked for is in it; scroll the list
+itself to move through them.
+
+**It opens on today.** A line marked **Today** is drawn where the list crosses today: above it
+what began before today, below it what begins today or later. The list opens with that line a few
+rows down, so the last things that happened and the next things coming are in sight together.
+After that it stays where you put it — it does not jump back while you are reading, even when
+the calendar quietly refreshes. **Today** takes you back to the line. If the days you picked do
+not include today, **Today** switches back to the days the calendar opens on, which do.
+
+A record that began before today and is still running sits *above* the line: the line goes by
+the day a record begins.
 
 **Group by** puts the rows under headings — **Month**, **Week**, **Kind**, **State** or **Caving
 group** — each showing how many rows it holds. Click a heading to fold its rows away; the count
@@ -141,6 +153,9 @@ stays.
 - Rows that name no caving group are gathered under **Not recorded** rather than left out. A
   group whose rows you may read, but which is not yours to list, is shown as *A group you
   cannot list*.
+- Grouped by month or week, the list still runs through the days and keeps its **Today** line.
+  Grouped by kind, state or caving group — or sorted by title — there is no one place in it
+  that is today, so there is no line and the **Today** button says why.
 
 Click **When** or **What** to sort. Grouping and sorting only rearrange the rows; they are part
 of the link like everything else.

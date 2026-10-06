@@ -9,15 +9,31 @@ import { NoGrouping, type RecordGrouping } from './recordGrouping.ts';
 
 /**
  * How the rows of a window are laid out when they are read as a list: which rows sit under which
- * heading, and in what order the headings come.
+ * heading, where the line marking today falls among them, and which row the list should open on.
  *
- * It is worked out here, from the rows already in hand and with nothing drawn, for two reasons.
- * The window is bounded and read whole, so there is no second question to ask the server and
- * nothing a server could add: every row a heading counts is on the page. And every decision
- * below is one a reader meets as a fact about their calendar — "four in October" — so each is a
- * function that can be asked directly what it would say for a given set of rows, rather than
- * something only a rendered table can show.
+ * All of it is worked out here, from the rows already in hand and with nothing drawn, for two
+ * reasons. The window is bounded and read whole, so there is no second question to ask the server
+ * and nothing a server could add: every row a heading counts is on the page. And every decision
+ * below is one a reader meets as a fact about their calendar — "four in October", "today is
+ * here" — so each is a function that can be asked directly what it would say for a given set of
+ * rows on a given day, rather than something only a rendered table can show.
  */
+
+/** The groupings whose headings follow one another through time, so the whole list still does. */
+const CHRONOLOGICAL: Record<RecordGrouping, boolean> = {
+  none: true,
+  month: true,
+  week: true,
+  kind: false,
+  state: false,
+  cavingGroup: false,
+};
+
+/**
+ * How many rows are kept in sight above the line marking today when the list opens on it. The
+ * same number is aimed for below it, which is the list's own height rather than anything set here.
+ */
+export const ROWS_BEFORE_TODAY = 5;
 
 /** One heading and the rows under it. */
 export interface RecordGroup {
@@ -31,16 +47,28 @@ export interface RecordGroup {
   entries: CalendarEntry[];
 }
 
-/** A line of the list: a record, or a heading over some records. */
+/** A line of the list: a record, a heading over some records, or the line marking today. */
 export type RecordRow =
   | { type: 'entry'; key: string; entry: CalendarEntry }
-  | { type: 'group'; key: string; group: RecordGroup; collapsed: boolean };
+  | { type: 'group'; key: string; group: RecordGroup; collapsed: boolean }
+  | { type: 'today'; key: string };
 
 export interface RecordLayout {
   /** Every line to draw, top to bottom. */
   rows: RecordRow[];
   /** The headings, in the order drawn. Empty when the list is not grouped. */
   groups: RecordGroup[];
+  /**
+   * Whether this arrangement runs through time at all, and so whether "today" names a place in
+   * it. A list ordered by title does not, and neither does one cut by kind.
+   */
+  chronological: boolean;
+  /**
+   * The line to bring to the top of the list so that today sits a few rows down it, or null when
+   * there is no today to stand on — the arrangement is not chronological, or the window asked for
+   * does not hold today.
+   */
+  anchorKey: string | null;
 }
 
 export interface RecordLayoutOptions {
@@ -49,6 +77,11 @@ export interface RecordLayoutOptions {
   order: 'ascending' | 'descending' | null;
   /** The headings that have been folded away, by their value. */
   collapsed: ReadonlySet<string>;
+  /** The reader's own day, "YYYY-MM-DD". */
+  today: string;
+  /** The window the rows were read for. */
+  from: string;
+  to: string;
   /** The names of the caving groups the reader can list, by identifier. */
   groupNames?: ReadonlyMap<string, string>;
   /**
@@ -60,6 +93,7 @@ export interface RecordLayoutOptions {
 }
 
 export const groupKey = (value: string): string => `group:${value}`;
+export const TodayKey = 'today';
 
 /**
  * A record's line, the same one each time the same record is laid out.
@@ -200,28 +234,82 @@ export function groupRecord(
 }
 
 /**
- * Lays the rows out as the lines of a list: each heading, then the rows under it unless it has
- * been folded away. Ungrouped, the lines are the rows as the answer gave them.
+ * Lays the rows out as the lines of a list.
+ *
+ * **The line marking today.** Where the list is one run through the days — ungrouped, or under
+ * headings that are themselves stretches of time, and ordered by day — a line is drawn where the
+ * run crosses today: above it the records that began before today, below it the ones that begin
+ * today or later (the other way up when the order is latest-first). It goes by the day a record
+ * *begins*, because that is the day the list is ordered by; a camp that began last week and is
+ * still running sits above the line, where its row already was. A heading stays with its rows:
+ * the line is drawn above the heading of a group that lies wholly on the far side of it, and
+ * inside a group that straddles it. A folded group shows no rows to draw a line between, so one
+ * that holds anything from today on is treated as lying on that side, and the line goes above it.
+ *
+ * It is drawn only where the window asked for holds today. Over last year's window every row is
+ * before today, and a line under all of them would say "today" about a list today is not in.
+ *
+ * **The row the list opens on.** A few rows above the line, counted in lines as drawn — a heading
+ * takes a line of the list's height like any other — so that the last things that happened and
+ * the next things coming are in sight together. With fewer lines than that above the line it is
+ * the first line, and with no line there is nowhere in particular to open, which is the top.
  */
 export function layoutRecord(
   entries: readonly CalendarEntry[],
   options: RecordLayoutOptions,
 ): RecordLayout {
-  const { grouping, collapsed } = options;
-  if (grouping === NoGrouping) {
-    return { rows: entries.map(lineOf), groups: [] };
-  }
+  const { grouping, order, collapsed, today } = options;
+  const groups = grouping === NoGrouping ? [] : groupRecord(entries, grouping, options);
 
-  const groups = groupRecord(entries, grouping, options);
   const rows: RecordRow[] = [];
-  for (const group of groups) {
-    const folded = collapsed.has(group.value);
-    rows.push({ type: 'group', key: groupKey(group.value), group, collapsed: folded });
-    if (!folded) {
-      for (const entry of group.entries) {
-        rows.push(lineOf(entry));
+  if (grouping === NoGrouping) {
+    for (const entry of entries) {
+      rows.push(lineOf(entry));
+    }
+  } else {
+    for (const group of groups) {
+      const folded = collapsed.has(group.value);
+      rows.push({ type: 'group', key: groupKey(group.value), group, collapsed: folded });
+      if (!folded) {
+        for (const entry of group.entries) {
+          rows.push(lineOf(entry));
+        }
       }
     }
   }
-  return { rows, groups };
+
+  const chronological = CHRONOLOGICAL[grouping] && order !== null;
+  const holdsToday = options.from <= today && today <= options.to;
+  if (!chronological || !holdsToday || rows.length === 0) {
+    return { rows, groups, chronological, anchorKey: null };
+  }
+
+  const fromTodayOn = (entry: CalendarEntry): boolean => asDay(entry.start) >= today;
+  // Whether a line lies past the crossing, in the direction the list runs.
+  const pastTheCrossing = (row: RecordRow, index: number): boolean => {
+    if (row.type === 'entry') {
+      return order === 'ascending' ? fromTodayOn(row.entry) : !fromTodayOn(row.entry);
+    }
+    if (row.type === 'group') {
+      if (!row.collapsed) {
+        // A heading goes where its first row goes, which is the line after it.
+        const next = rows[index + 1];
+        return next !== undefined && pastTheCrossing(next, index + 1);
+      }
+      const reachesToday = row.group.entries.some(fromTodayOn);
+      return order === 'ascending' ? reachesToday : !reachesToday;
+    }
+    return false;
+  };
+
+  const crossing = rows.findIndex(pastTheCrossing);
+  const at = crossing === -1 ? rows.length : crossing;
+  rows.splice(at, 0, { type: 'today', key: TodayKey });
+
+  return {
+    rows,
+    groups,
+    chronological,
+    anchorKey: rows[Math.max(0, at - ROWS_BEFORE_TODAY)].key,
+  };
 }

@@ -256,7 +256,8 @@ feature and walkthroughs of whole jobs.
 - **One window over everything dated** — a calendar page answers *what is happening between these two
   days*, reading trips, expeditions and the club's events together in one list you can sort, group under
   headings (month, week, kind, state, caving group), narrow by family and by kind of event, narrow to
-  a club's own, or narrow to your own. Everything chosen is
+  a club's own, or narrow to your own. The list opens on **today**, with a line where it crosses today
+  and the last things that happened and the next things coming on one screen, and everything chosen is
   carried in the page's address so a narrowed calendar is a link. In the month and week readings a
   record lasting several days reads as one record rather than as several sharing a title. It shows what is still to come and what already happened, marks a
   trip that has been called off and lets you switch those off, and lists a postponed one with a

@@ -100,6 +100,7 @@ Puteți:
 
 - să-l sortați,
 - să-i grupați rândurile sub titluri — după lună, săptămână, tip, stare sau grup de speologie,
+- să aveți lista deschisă pe **azi**, cu ce tocmai s-a întâmplat și ce urmează pe același ecran,
 - să porniți și să stingeți fiecare familie — **Ture**, **Tabere**, **Evenimente** — separat,
 - să îngustați evenimentele la tipurile pe care le alegeți,
 - să-l îngustați la cele ale unui club,
@@ -133,7 +134,18 @@ evenimentele.
 **Listă** și **Agendă** sunt aceeași listă desenată în două feluri: un rând de celule de
 comparat, sau o intrare pe linie, de citit în jos. Tot ce urmează este valabil pentru amândouă.
 
-**Este o singură listă, nu pagini.** Toate înregistrările din zilele cerute sunt în ea.
+**Este o singură listă, nu pagini.** Toate înregistrările din zilele cerute sunt în ea; derulați
+lista însăși ca să treceți prin ele.
+
+**Se deschide pe azi.** O linie marcată **Azi** este trasă acolo unde lista trece de ziua de azi:
+deasupra ei ce a început înainte de azi, dedesubt ce începe azi sau mai târziu. Lista se deschide
+cu acea linie la câteva rânduri de sus, așa că ultimele lucruri întâmplate și următoarele care
+vin se văd împreună. După aceea rămâne unde ați lăsat-o — nu sare înapoi cât citiți, nici când
+calendarul se reîmprospătează singur. **Azi** vă duce înapoi la linie. Dacă zilele alese nu
+cuprind ziua de azi, **Azi** revine la zilele cu care se deschide calendarul, care o cuprind.
+
+O înregistrare care a început înainte de azi și încă durează stă *deasupra* liniei: linia merge
+după ziua în care începe o înregistrare.
 
 **Grupează după** așază rândurile sub titluri — **Lună**, **Săptămână**, **Tip**, **Stare** sau
 **Grup de speologie** — fiecare arătând câte rânduri cuprinde. Faceți clic pe un titlu ca să-i
@@ -144,6 +156,9 @@ strângeți rândurile; numărul rămâne.
 - Rândurile care nu numesc niciun grup de speologie sunt adunate sub **Neînregistrat**, nu lăsate
   deoparte. Un grup ale cărui rânduri le puteți citi, dar pe care nu-l puteți lista, apare ca
   *Un grup pe care nu-l poți lista*.
+- Grupată după lună sau săptămână, lista tot parcurge zilele și își păstrează linia **Azi**.
+  Grupată după tip, stare sau grup de speologie — sau sortată după titlu — niciun loc din ea nu
+  este „azi”, așa că nu există linie, iar butonul **Azi** spune de ce.
 
 Faceți clic pe **Când** sau **Ce** ca să sortați. Gruparea și sortarea doar rearanjează
 rândurile; fac parte din legătură ca tot restul.

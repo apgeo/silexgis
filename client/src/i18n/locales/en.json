@@ -4267,6 +4267,9 @@
         "cavingGroup": "Caving group"
       }
     },
+    "today": "Today",
+    "todayLine": "Today · {{date}}",
+    "todayNoPlace": "Arranged this way, the list has no one place that is today. Order it by When, and group it by nothing, month or week.",
     "mapToggle": "Map",
     "mapEmpty": "No trip or camp in view has a position recorded. Pan or zoom the map to look elsewhere.",
     "mapFailed": "The map of these days could not be read, so nothing is drawn on it — which is not the same as there being nothing there. Try again in a moment.",

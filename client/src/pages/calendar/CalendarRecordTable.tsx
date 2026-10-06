@@ -1,16 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
+import {
+  memo,
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { DownOutlined, RightOutlined } from '@ant-design/icons';
-import { Button, Empty, Flex, Table, Tag, Typography, theme } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Button, Divider, Empty, Flex, Table, Tag, Typography, theme } from 'antd';
+import type { ColumnsType, TableRef } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import type { CalendarEntry, CalendarSource } from '../../api/hooks.ts';
 import GroupBySelect from '../../components/GroupBySelect.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
-import { formatTripDates } from '../../components/trips/tripDates.ts';
+import { formatTripDates, parseTripDay } from '../../components/trips/tripDates.ts';
+import { calendarListBodyHeight } from '../../theme.ts';
 import { CALENDAR_SOURCES } from './calendarAddress.ts';
+import { formatDay } from './calendarDays.ts';
 import { RECORD_GROUPINGS, type RecordGrouping } from './recordGrouping.ts';
 import { chronologyOf, layoutRecord, type RecordGroup, type RecordRow } from './recordRows.ts';
 
@@ -39,8 +50,9 @@ const OrdinaryCell: Readonly<Record<string, never>> = Object.freeze({});
 interface Props {
   /**
    * Which way a row is drawn: as a set of cells to compare across, or as one entry to read down.
-   * They are one list read two ways, so everything else here — the headings, the empty sentence,
-   * the click through to the record — is shared and cannot drift between them.
+   * They are one list read two ways, so everything else here — the headings, the line marking
+   * today, where the list opens, the empty sentence, the click through to the record — is shared
+   * and cannot drift between them.
    */
   view: 'record' | 'agenda';
   /** The answer's rows, in the order the answer gave them. */
@@ -48,6 +60,9 @@ interface Props {
   loading: boolean;
   /** Why there is nothing here, when there is nothing here. */
   emptyText: string;
+  /** The window those rows were read for. */
+  from: string;
+  to: string;
   /** The order asked of the server, as the address carries it. */
   sort: string | undefined;
   onSortChange: (sort: string | undefined) => void;
@@ -55,36 +70,60 @@ interface Props {
   onGroupingChange: (grouping: RecordGrouping) => void;
   /** The names of the caving groups the reader can list, by identifier. */
   groupNames: ReadonlyMap<string, string>;
+  /**
+   * What the rows in hand are the answer to, or null while they are still the answer to the
+   * question before. The list opens on today once for each question and never again for the same
+   * one, and this is how it tells a new question from the same one answered a second time.
+   */
+  question: string | null;
   onOpen: (entry: CalendarEntry) => void;
+  /** Asked for when the reader wants today and the window in hand does not hold it. */
+  onShowToday: () => void;
 }
 
 /**
- * The window's rows read as a list, optionally under headings.
+ * The window's rows read as a list: one run through the days, optionally under headings, with a
+ * line where the run crosses today.
  *
- * **One list, not pages.** The window bounds the answer, so every row is already here, and the
- * list draws all of them rather than dealing them out a page at a time. A heading is a row of
- * the list, and a page boundary would part a heading from the rows it counts.
+ * **One run, not pages.** The window bounds the answer, so every row is already here; the list
+ * holds all of them in a body of its own that scrolls, rather than dealing them out a page at a
+ * time. Paging could not put the last things that happened and the next things coming on one
+ * screen whenever today fell near a page's edge, which is the one view this list is asked for.
+ *
+ * **It opens on today, and then leaves the reader alone.** When the answer to a new question
+ * arrives — the first, or a different window, narrowing, order or grouping — the body is moved so
+ * that the line marking today sits a few rows down it. It is moved at no other time: the same
+ * question answered again, because a record changed somewhere or the window regained focus, is
+ * the same list, and moving it would take the reader's place away from them mid-read. The Today
+ * button is how they ask to be taken back. Only the list's own body is moved, never the page.
  *
  * **Headings are rows.** The table this application uses can group column headers and cannot
  * group rows, so a heading is an ordinary row spanning every column, holding a button that folds
- * its rows away. Which rows sit under which heading is worked out beside this file, with nothing
- * drawn; this file only draws the answer.
+ * its rows away. Which rows sit under which heading, where the line goes and which row the list
+ * opens on are worked out beside this file, with nothing drawn; this file only draws the answer.
  */
 function CalendarRecordTable({
   view,
   entries,
   loading,
   emptyText,
+  from,
+  to,
   sort,
   onSortChange,
   grouping,
   onGroupingChange,
   groupNames,
+  question,
   onOpen,
+  onShowToday,
 }: Props) {
   const { t, i18n } = useTranslation();
   const { token } = theme.useToken();
   const language = i18n.resolvedLanguage;
+
+  // The reader's own day, the one a wall calendar would show them.
+  const today = formatDay(new Date());
 
   // What has been folded away belongs to the grouping it was folded under: "October" means
   // nothing once the list is cut by kind. So a change of grouping starts with everything open,
@@ -112,10 +151,49 @@ function CalendarRecordTable({
         grouping,
         order: chronologyOf(sort),
         collapsed,
+        today,
+        from,
+        to,
         groupNames,
       }),
-    [entries, grouping, sort, collapsed, groupNames],
+    [entries, grouping, sort, collapsed, today, from, to, groupNames],
   );
+
+  const table = useRef<TableRef>(null);
+
+  /**
+   * Moves the list's own body so the row it should open on is at its top. The row is found by the
+   * key the table writes on it and measured from the top of the body's own table, which is what
+   * the body scrolls by — so nothing here asks the browser to bring a row "into view", which
+   * would move the page under the reader as well.
+   */
+  const toAnchor = useCallback(() => {
+    const drawn = table.current;
+    if (!drawn) {
+      return;
+    }
+    const row =
+      layout.anchorKey === null
+        ? null
+        : drawn.nativeElement.querySelector<HTMLElement>(`[data-row-key="${layout.anchorKey}"]`);
+    drawn.scrollTo({ top: row?.offsetTop ?? 0 });
+  }, [layout.anchorKey]);
+
+  // Once for each question, when its own answer is what is drawn. How the rows are arranged is
+  // part of the question: a list regrouped or read the other way round is a different list, and
+  // the place somebody had in the old one is nowhere in the new.
+  const arrangement = question === null ? null : `${question}|${view}|${grouping}`;
+  const openedFor = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (arrangement === null || openedFor.current === arrangement) {
+      return;
+    }
+    openedFor.current = arrangement;
+    toAnchor();
+  }, [arrangement, toAnchor]);
+
+  const holdsToday = from <= today && today <= to;
+  const todayHint = useId();
 
   const sorted = sort ?? DefaultSort;
 
@@ -172,8 +250,20 @@ function CalendarRecordTable({
       </Button>
     );
 
+    const todayLine = (
+      <Divider plain titlePlacement="start" style={{ margin: 0, borderColor: token.colorPrimary }}>
+        <Typography.Text
+          strong
+          style={{ color: token.colorPrimary }}
+          data-testid="calendar-today-line"
+        >
+          {t('calendar.todayLine', { date: parseTripDay(today).toLocaleDateString(language) })}
+        </Typography.Text>
+      </Divider>
+    );
+
     /** What a line that is not a record draws, in the one cell it is given. */
-    const across = (row: Extract<RecordRow, { type: 'group' }>): ReactNode => heading(row);
+    const across = (row: RecordRow): ReactNode => (row.type === 'group' ? heading(row) : todayLine);
 
     const kindOf = (entry: CalendarEntry): string =>
       // The family for the two sources that are exactly one thing, and the row's own kind for
@@ -191,15 +281,18 @@ function CalendarRecordTable({
 
     const columnCount = view === 'agenda' ? 1 : 4;
     /**
-     * A heading takes the whole width of the list: the first cell spans every column and the
-     * others give theirs up.
+     * A heading and the line marking today each take the whole width of the list: the first cell
+     * spans every column and the others give theirs up.
      */
     const spanning = (first: boolean) => (row: RecordRow) =>
       row.type === 'entry'
         ? OrdinaryCell
         : {
             colSpan: first ? columnCount : 0,
-            style: { paddingBlock: token.paddingXXS, background: token.colorFillQuaternary },
+            style: {
+              paddingBlock: token.paddingXXS,
+              ...(row.type === 'group' ? { background: token.colorFillQuaternary } : {}),
+            },
           };
 
     const orderOf = (key: string) =>
@@ -301,9 +394,11 @@ function CalendarRecordTable({
     grouping,
     groupNames,
     sorted,
+    today,
     language,
     t,
     toggle,
+    token.colorPrimary,
     token.colorFillQuaternary,
     token.paddingXXS,
   ]);
@@ -327,9 +422,16 @@ function CalendarRecordTable({
     [onOpen],
   );
   // Marked by what a line is, so that a record can be told from a heading by anything that has
-  // to.
-  const rowClass = useCallback((row: RecordRow) => `calendar-row-${row.type}`, []);
-  const scroll = useMemo(() => ({ x: 'max-content' }), []);
+  // to — and the row the list opens on is marked too, which is the only way to see which one it
+  // is without measuring the page.
+  const rowClass = useCallback(
+    (row: RecordRow) =>
+      `calendar-row-${row.type}${row.key === layout.anchorKey ? ' calendar-row-anchor' : ''}`,
+    [layout.anchorKey],
+  );
+  // Across by its contents, down by a height of its own: the body scrolls and the page does not,
+  // so opening the list on today moves nothing but the list.
+  const scroll = useMemo(() => ({ x: 'max-content', y: calendarListBodyHeight[view] }), [view]);
   const locale = useMemo(
     () => ({
       emptyText: (
@@ -356,8 +458,34 @@ function CalendarRecordTable({
           }))}
           onChange={onGroupingChange}
         />
+        {/* Offered wherever the list runs through time, and says why not where it does not: a
+            list in the order of its titles, or cut by kind, has no one place that is today. The
+            reason is written beside the button rather than hung on a hover: a button that
+            cannot be used cannot be pointed at from a keyboard either. */}
+        <Button
+          data-testid="calendar-today"
+          disabled={!layout.chronological}
+          aria-describedby={layout.chronological ? undefined : todayHint}
+          onClick={() => {
+            // A window that does not hold today has no line to go to. The page is asked for one
+            // that does, and the list opens on today when its answer arrives.
+            if (holdsToday) {
+              toAnchor();
+            } else {
+              onShowToday();
+            }
+          }}
+        >
+          {t('calendar.today')}
+        </Button>
+        {layout.chronological ? null : (
+          <Typography.Text type="secondary" id={todayHint} data-testid="calendar-today-hint">
+            {t('calendar.todayNoPlace')}
+          </Typography.Text>
+        )}
       </Flex>
       <Table<RecordRow>
+        ref={table}
         scroll={scroll}
         rowKey="key"
         size="middle"

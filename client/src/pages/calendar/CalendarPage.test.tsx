@@ -86,6 +86,20 @@ function answer(entries: CalendarEntry[], omitted = 0) {
     data: { entries, omitted },
     isFetching: false,
     isError: false,
+    isPlaceholderData: false,
+  });
+}
+
+/**
+ * The rows of the question before, kept on screen while the answer to a new one is fetched —
+ * which is what the page is handed between a change and its answer arriving.
+ */
+function stillAnsweringTheLast(entries: CalendarEntry[]) {
+  calendarSpy.mockReturnValue({
+    data: { entries, omitted: 0 },
+    isFetching: true,
+    isError: false,
+    isPlaceholderData: true,
   });
 }
 
@@ -376,7 +390,12 @@ describe('the calendar record', () => {
    * above a grid.
    */
   it('claims nothing about the days while the first answer is still coming', () => {
-    calendarSpy.mockReturnValue({ data: undefined, isFetching: true, isError: false });
+    calendarSpy.mockReturnValue({
+      data: undefined,
+      isFetching: true,
+      isError: false,
+      isPlaceholderData: false,
+    });
     show();
     expect(screen.queryByTestId('calendar-empty')).toBeNull();
 
@@ -735,6 +754,73 @@ describe('the calendar read as a list', () => {
   });
 });
 
+describe('where the calendar list opens', () => {
+  let scrolled: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    scrolled = vi.fn();
+    // The list's body is moved through this one call; nothing here lays a page out, so whether
+    // it was moved is all there is to read.
+    Element.prototype.scrollTo = scrolled as unknown as typeof Element.prototype.scrollTo;
+  });
+
+  /**
+   * The list opens on today once the rows in hand are the answer to what was asked. While the
+   * rows of the question before are still on screen, moving would be moving to a place in rows
+   * that are about to be replaced.
+   */
+  it('waits for the answer to the question it asked', () => {
+    stillAnsweringTheLast([row()]);
+    show();
+    expect(scrolled).not.toHaveBeenCalled();
+
+    answer([row()]);
+    // Putting the map away redraws the page and asks nothing: the answer is simply read again.
+    fireEvent.click(screen.getByTestId('calendar-toggle-map'));
+    expect(scrolled).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * It is moved for a new question and for nothing else. Putting the map away is not a question,
+   * and neither is the same answer arriving a second time; a narrowing is, and so is a grouping.
+   */
+  it('opens on today for each new question, and stays put otherwise', () => {
+    show();
+    expect(scrolled).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-map'));
+    answer([row(), row({ id: 'another', title: 'Another' })]);
+    fireEvent.click(screen.getByTestId('calendar-toggle-map'));
+    expect(scrolled).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-mine'));
+    expect(scrolled).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByText('Agenda'));
+    expect(scrolled).toHaveBeenCalledTimes(3);
+  });
+
+  /**
+   * Over days that do not include today there is no today in the list to go to, so asking for it
+   * lets go of the reader's own window: the page goes back to the days it opens on, which are
+   * built round today. That is a different question, so it is a step the back button returns from.
+   */
+  it('goes back to the days round today when asked from days that do not include it', () => {
+    show('/calendar?from=2025-03-01&to=2025-03-31&groupBy=month');
+    expect(lastParams().from).toBe('2025-03-01');
+
+    fireEvent.click(screen.getByTestId('calendar-today'));
+
+    expect(addressKeys().has('from')).toBe(false);
+    expect(addressKeys().has('to')).toBe(false);
+    expect(arrivedBy()).toBe('PUSH');
+    // The window changed and nothing else about the view did.
+    expect(addressKeys().get('groupBy')).toBe('month');
+    const today = dayjs().format('YYYY-MM-DD');
+    expect(lastParams().from <= today).toBe(true);
+    expect(lastParams().to >= today).toBe(true);
+  });
+});
 
 /**
  * The grids are drawn over the month or the year they are showing, so a fixture has to fall in

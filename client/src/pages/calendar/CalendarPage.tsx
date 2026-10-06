@@ -127,14 +127,12 @@ function windowFor(view: CalendarView, panel: Dayjs, chosen: [Dayjs, Dayjs]): [D
  * reading is on, which day a grid stands on, the order, the grouping and the map are where the
  * reader is standing rather than what they asked to see, and replace the entry they were made on.
  *
- * **Read as a list, the window can be put under headings.** The record and the agenda are the
+ * **Read as a list, the window is one run through the days.** The record and the agenda are the
  * same list drawn two ways, and the list is its own file: it puts the rows under headings when
- * asked to — by the month or the week a record begins in, by its kind, its state or its caving
- * group — and how it is grouped is part of the address like everything else.
- *
- * **One thing this page is asked for and does not yet do, deferred rather than dropped.**
- * *Opening scrolled to the pivot between what has happened and what has not*, with a few rows of
- * each either side. The window control and the past toggle are what stand in for it.
+ * asked to, draws a line where the run crosses today, and opens with that line a few rows down.
+ * This page tells it what the rows in hand are the answer to, which is how it knows a new
+ * question from the same one answered again — it moves itself to today for the first and leaves
+ * the reader alone for the second.
  */
 export default function CalendarPage() {
   const { t } = useTranslation();
@@ -214,19 +212,30 @@ export default function CalendarPage() {
     includeCancelled: address.showCancelled ? undefined : false,
     sort: address.sort,
   };
-  const { data, isFetching, isError } = useCalendar(asking, { enabled: !nothingChosen });
+  const { data, isFetching, isError, isPlaceholderData } = useCalendar(asking, {
+    enabled: !nothingChosen,
+  });
+
+  // What the rows in hand are the answer to, once they are. While a new question is in flight
+  // the rows of the one before stay on screen, so that the record does not empty under whoever
+  // is reading it — and for as long as they do, the rows are not this question's answer. The
+  // list opens on today once per question, and must not do it over rows about to be replaced.
+  const answered =
+    data !== undefined && !isPlaceholderData && !nothingChosen ? JSON.stringify(asking) : null;
 
   // Opening a record, as one function for as long as the router gives the same way of going
   // anywhere: the list hands it to every row, and a new one on each redraw of this page would
-  // have every row redrawn with it. The two beside it are the list's ways of changing the
+  // have every row redrawn with it. The three beside it are the list's ways of changing the
   // address, kept the same for the same reason. The order and the grouping rearrange the same
-  // rows, so neither is a step the back button should walk through.
+  // rows, so neither is a step the back button should walk through; asking for today lets go of
+  // the reader's own window, because the window the page opens on is the one built round today.
   const open = useCallback(
     (entry: CalendarEntry) => void navigate(detailPath[entry.source](entry.id)),
     [navigate],
   );
   const orderBy = useCallback((next: string | undefined) => apply({ sort: next }, true), [apply]);
   const groupBy = useCallback((next: RecordGrouping) => apply({ groupBy: next }, true), [apply]);
+  const showToday = useCallback(() => apply({ from: undefined, to: undefined }), [apply]);
 
   // The caving groups by name, for the headings of a list grouped by them. The same directory
   // the group filter beside it offers, so a group named in one is named in the other.
@@ -429,12 +438,16 @@ export default function CalendarPage() {
           entries={nothingChosen ? NoEntries : (data?.entries ?? NoEntries)}
           loading={isFetching && !data}
           emptyText={emptyText}
+          from={asDay(asked[0])}
+          to={asDay(asked[1])}
           sort={address.sort}
           onSortChange={orderBy}
           grouping={address.groupBy}
           onGroupingChange={groupBy}
           groupNames={groupNames}
+          question={answered}
           onOpen={open}
+          onShowToday={showToday}
         />
       )}
       {/* One pane, under whichever way the same rows are being read, because it answers the same

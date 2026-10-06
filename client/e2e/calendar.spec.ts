@@ -112,7 +112,7 @@ test('a row clicks through to the record it came from', async ({ page }) => {
   await gotoRoute(page, '/calendar');
 
   // The rows that are records. The list also draws lines that are not — a heading over a group
-  // of rows — and those lead nowhere.
+  // of rows, the line marking today — and those lead nowhere.
   const rows = page.locator('.ant-table-tbody tr.calendar-row-entry');
   const empty = page.getByTestId('calendar-empty');
   // Wait for the answer to land before counting anything. Until it does the table is in its
@@ -941,5 +941,119 @@ test('the record groups its rows under headings that count them, fold away, and 
     if (tripId) {
       await tryAsPerson(page, 'DELETE', `/api/v1/trip-logs/${tripId}`);
     }
+  }
+});
+
+/**
+ * The record opens on today: the list is one run through the days with a line where it crosses
+ * today, and it arrives with that line a few rows down — the last things that happened above it,
+ * the next things coming below.
+ *
+ * Measured in the browser, because nothing else lays a page out. Eight records are written either
+ * side of today so there is more above the line than the list keeps in sight, and what is checked
+ * is geometry: the row the list opens on is at the top of the list's own body, the line is inside
+ * that body, and the page itself has not been moved. Then the part that matters to somebody
+ * reading: the list is moved again when the question changes and when they ask, and is left where
+ * they put it when the same question is merely answered again.
+ */
+test('the record opens on today, returns there when asked, and stays put when the same days are read again', async ({
+  page,
+}) => {
+  test.slow();
+  const stamp = Date.now();
+  const written: Written[] = [];
+  await login(page);
+
+  try {
+    for (let offset = -8; offset <= 7; offset++) {
+      await writeEvent(page, written, `E2E Pivot ${offset < 0 ? 'past' : 'ahead'} ${stamp} ${offset}`, localDay(offset));
+    }
+
+    await gotoRoute(page, `/calendar?from=${localDay(-10)}&to=${localDay(10)}&map=false`);
+    const record = page.getByTestId('calendar-record');
+    const body = record.locator('.ant-table-body');
+    const line = page.getByTestId('calendar-today-line');
+    const anchor = record.locator('tbody tr.calendar-row-anchor');
+    await expect(line).toBeVisible({ timeout: 30_000 });
+
+    /** Where a row sits in the list's own body: its top and bottom, measured from the body's. */
+    const within = async (locator: Locator) => {
+      const [outer, inner] = await Promise.all([body.boundingBox(), locator.boundingBox()]);
+      expect(outer).not.toBeNull();
+      expect(inner).not.toBeNull();
+      return {
+        top: inner!.y - outer!.y,
+        bottom: inner!.y + inner!.height - outer!.y,
+        height: outer!.height,
+      };
+    };
+    const scrollTop = () => body.evaluate((el) => el.scrollTop);
+
+    // It arrived moved: there is more above the line than fits above it, so the body is scrolled,
+    // the row it opens on is at the body's top, and the line is in sight below it.
+    await expect.poll(scrollTop, { timeout: 30_000 }).toBeGreaterThan(0);
+    expect(Math.abs((await within(anchor)).top)).toBeLessThanOrEqual(2);
+    const lineAt = await within(line);
+    expect(lineAt.top).toBeGreaterThan(0);
+    expect(lineAt.bottom).toBeLessThan(lineAt.height);
+    // Five rows are above the line, and what began before today is among them.
+    const lines = record.locator('tbody tr.ant-table-row');
+    const kinds = await lines.evaluateAll((all) =>
+      all.map(
+        (row) => Array.from(row.classList).find((name) => name.startsWith('calendar-row-')) ?? '',
+      ),
+    );
+    const anchorAt = await lines.evaluateAll((all) =>
+      all.findIndex((row) => row.classList.contains('calendar-row-anchor')),
+    );
+    expect(kinds.indexOf('calendar-row-today') - anchorAt).toBe(5);
+    // Rows either side of the line are in sight together.
+    const past = record.locator('tbody tr.calendar-row-entry').filter({ hasText: `${stamp} -1` });
+    const ahead = record.locator('tbody tr.calendar-row-entry').filter({ hasText: `${stamp} 0` });
+    expect((await within(past)).top).toBeGreaterThanOrEqual(0);
+    expect((await within(ahead)).bottom).toBeLessThanOrEqual(lineAt.height);
+    // Only the list was moved. Nothing the list sits inside has been — not the window, and not
+    // whichever part of the application's frame it is that scrolls.
+    const movedAround = await record.evaluate((el) => {
+      let moved = window.scrollY;
+      for (let node = el.parentElement; node; node = node.parentElement) {
+        moved += node.scrollTop;
+      }
+      return moved;
+    });
+    expect(movedAround).toBe(0);
+
+    // Moved by the reader, it stays where they put it when the same days are read again — even
+    // when what comes back is different. A record is written behind the page's back and the page
+    // is made to read its days again, which is what coming back to the window does; the new row
+    // arriving is what says the answer has been redrawn, and the list has not been moved by it.
+    await body.evaluate((el) => el.scrollTo({ top: 0 }));
+    expect(await scrollTop()).toBe(0);
+    const late = await writeEvent(page, written, `E2E Pivot late ${stamp}`, localDay(9));
+    await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+    await expect(
+      record.locator('tbody tr.calendar-row-entry').filter({ hasText: late.title }),
+    ).toBeAttached({ timeout: 30_000 });
+    expect(await scrollTop()).toBe(0);
+
+    // Asked for, it goes back.
+    await page.getByTestId('calendar-today').click();
+    await expect.poll(scrollTop).toBeGreaterThan(0);
+    expect(Math.abs((await within(anchor)).top)).toBeLessThanOrEqual(2);
+
+    // A different question is a different list, and opens on today of its own accord.
+    await body.evaluate((el) => el.scrollTo({ top: 0 }));
+    const narrowed = askedFor(page, without('tripLog'));
+    await page.getByTestId('calendar-toggle-trips').click();
+    await narrowed;
+    await expect.poll(scrollTop, { timeout: 30_000 }).toBeGreaterThan(0);
+
+    // Ordered by title the list runs through no time: no line, and no way to today offered.
+    await page.locator('.ant-table-thead th').filter({ hasText: 'What' }).click();
+    await expect(page).toHaveURL(/[?&]sort=title(&|$)/);
+    await expect(line).toHaveCount(0);
+    await expect(page.getByTestId('calendar-today')).toBeDisabled();
+  } finally {
+    await removeEvents(page, written);
   }
 });

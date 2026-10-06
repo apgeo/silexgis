@@ -57,6 +57,22 @@ export const calendarDayContentStyle: CSSProperties = {
   overflowY: 'visible',
 };
 
+/**
+ * How tall the calendar's list of records may grow before it scrolls inside itself, for each of
+ * the two ways its rows are drawn.
+ *
+ * The list opens with the line marking today a few rows down it, so that the last things that
+ * happened and the next things coming are on screen together. That takes a body of its own: it
+ * is the body that is moved to today, never the page, and a body with no height of its own is
+ * just part of the page. The height is what holds about five rows either side of the line, which
+ * is the view the list is asked for — a dozen rows of cells, or eleven of the taller rows that
+ * each hold a whole entry. A list shorter than this is simply as tall as its rows.
+ */
+export const calendarListBodyHeight: Record<'record' | 'agenda', number> = {
+  record: 564,
+  agenda: 780,
+};
+
 /** Whether the operating system is currently asking for a dark interface. */
 export function prefersDark(): boolean {
   return typeof window !== 'undefined'

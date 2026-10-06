@@ -6,10 +6,17 @@ import type { CalendarEntry } from '../../api/hooks.ts';
 import CalendarRecordTable from './CalendarRecordTable.tsx';
 
 /**
- * The list as a reader meets it: the rows, and the headings they sit under. Which rows sit under
- * which heading is asked of the layout directly in its own tests; what is asked here is that the
- * list draws that answer, folds it and names it.
+ * The list as a reader meets it: the rows under their headings, the line marking today, and the
+ * one thing no drawing shows — when the list is moved to today and when it is left alone.
+ *
+ * Nothing here lays a page out, so where the list is moved *to* is read off the row it marks as
+ * the one to open on, and *whether* it was moved is read off the one call that moves it. Which
+ * row that should be, for which rows on which day, is asked of the layout directly in its own
+ * tests; what is asked here is that the list acts on the answer at the right moments only.
  */
+
+/** The clock every case is read against: the middle of a Wednesday, the fourteenth of October. */
+const NOW = new Date(2026, 9, 14, 12, 0, 0);
 
 let serial = 0;
 function entry(start: string, overrides: Partial<CalendarEntry> = {}): CalendarEntry {
@@ -31,15 +38,17 @@ function entry(start: string, overrides: Partial<CalendarEntry> = {}): CalendarE
   return { ...base, ...overrides };
 }
 
-/** A fortnight of records, a day apart. */
+/** Seven records before today and seven from today on, a day apart. */
 const fortnight = (): CalendarEntry[] =>
   [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map((day) =>
     entry(`2026-10-${String(day).padStart(2, '0')}`),
   );
 
+const scrolled = vi.fn();
 const opened = vi.fn();
 const sortAsked = vi.fn();
 const groupingAsked = vi.fn();
+const todayAsked = vi.fn();
 
 type Props = Parameters<typeof CalendarRecordTable>[0];
 
@@ -49,37 +58,52 @@ function props(overrides: Partial<Props> = {}): Props {
     entries: fortnight(),
     loading: false,
     emptyText: 'Nothing is recorded in these days.',
+    from: '2026-09-01',
+    to: '2026-12-31',
     sort: undefined,
     onSortChange: sortAsked,
     grouping: 'none',
     onGroupingChange: groupingAsked,
     groupNames: new Map(),
+    question: 'q1',
     onOpen: opened,
+    onShowToday: todayAsked,
     ...overrides,
   };
 }
 
 /** The lines of the list as drawn, by what each one is. */
-function lines(): { kind: string; text: string }[] {
+function lines(): { kind: string; text: string; anchor: boolean }[] {
   return Array.from(document.querySelectorAll<HTMLElement>('tbody tr.ant-table-row')).map((row) => ({
     kind: Array.from(row.classList)
-      .find((name) => /^calendar-row-(entry|group)$/.test(name))!
+      .find((name) => /^calendar-row-(entry|group|today)$/.test(name))!
       .replace('calendar-row-', ''),
     text: row.textContent ?? '',
+    anchor: row.classList.contains('calendar-row-anchor'),
   }));
 }
 
 const kinds = (): string[] => lines().map((line) => line.kind);
+/** Where the row the list opens on is, counted from the top. */
+const anchorAt = (): number => lines().findIndex((line) => line.anchor);
 
 beforeEach(() => {
-  for (const spy of [opened, sortAsked, groupingAsked]) {
+  // Only the date is pinned: the component library keeps real timers of its own.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
+  for (const spy of [scrolled, opened, sortAsked, groupingAsked, todayAsked]) {
     spy.mockReset();
   }
+  // The body of the list is moved through this one call, on the element that scrolls.
+  Element.prototype.scrollTo = scrolled as unknown as typeof Element.prototype.scrollTo;
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
-describe('the list of a window', () => {
+describe('the list as one run through the days', () => {
   it('draws every row in hand, with no pages between them', () => {
     const many = Array.from({ length: 60 }, (_, index) =>
       entry(`2026-11-${String((index % 28) + 1).padStart(2, '0')}`),
@@ -90,19 +114,54 @@ describe('the list of a window', () => {
     expect(document.querySelector('.ant-pagination')).toBeNull();
   });
 
-  it('opens a record from its row', () => {
+  /** Above the line what began before today, below it what begins today or later. */
+  it('draws a line where the run crosses today', () => {
+    const rows = fortnight();
+    render(<CalendarRecordTable {...props({ entries: rows })} />);
+
+    const drawn = lines();
+    const at = drawn.findIndex((line) => line.kind === 'today');
+    expect(at).toBe(7);
+    expect(drawn[6].text).toContain(rows[6].title);
+    expect(drawn[8].text).toContain(rows[7].title);
+    expect(screen.getByTestId('calendar-today-line').textContent).toContain('Today');
+    // Spanning the list's whole width rather than sitting in its first column.
+    const cell = screen.getByTestId('calendar-today-line').closest('td')!;
+    expect(cell.getAttribute('colspan')).toBe('4');
+  });
+
+  it('draws no line over days that do not include today', () => {
+    render(
+      <CalendarRecordTable
+        {...props({
+          entries: [entry('2025-03-02'), entry('2025-03-09')],
+          from: '2025-03-01',
+          to: '2025-03-31',
+        })}
+      />,
+    );
+
+    expect(kinds()).toEqual(['entry', 'entry']);
+    expect(screen.queryByTestId('calendar-today-line')).toBeNull();
+  });
+
+  it('opens a record from its row, and nothing from the line', () => {
     const rows = fortnight();
     render(<CalendarRecordTable {...props({ entries: rows })} />);
 
     fireEvent.click(screen.getByText(rows[3].title));
     expect(opened).toHaveBeenCalledTimes(1);
     expect(opened).toHaveBeenLastCalledWith(rows[3]);
+
+    fireEvent.click(screen.getByTestId('calendar-today-line'));
+    expect(opened).toHaveBeenCalledTimes(1);
   });
 
   it('says why there is nothing, when there is nothing', () => {
     render(<CalendarRecordTable {...props({ entries: [], emptyText: 'Nothing in these days matches.' })} />);
 
     expect(screen.getByTestId('calendar-empty').textContent).toContain('Nothing in these days matches.');
+    expect(screen.queryByTestId('calendar-today-line')).toBeNull();
   });
 
   /**
@@ -113,7 +172,7 @@ describe('the list of a window', () => {
   it('claims nothing about the days while the first answer is still coming', () => {
     const view = render(
       <CalendarRecordTable
-        {...props({ entries: [], loading: true, emptyText: 'Nothing is recorded.' })}
+        {...props({ entries: [], loading: true, question: null, emptyText: 'Nothing is recorded.' })}
       />,
     );
     expect(screen.queryByTestId('calendar-empty')).toBeNull();
@@ -122,6 +181,139 @@ describe('the list of a window', () => {
       <CalendarRecordTable {...props({ entries: [], loading: false, emptyText: 'Nothing is recorded.' })} />,
     );
     expect(screen.getByTestId('calendar-empty').textContent).toContain('Nothing is recorded.');
+  });
+});
+
+describe('where the list opens, and when it is moved', () => {
+  /**
+   * Five rows above the line, so the last things that happened and the next things coming are in
+   * sight together — and moved once, when the answer arrives.
+   */
+  it('opens on today when the answer to the question is in hand', () => {
+    render(<CalendarRecordTable {...props()} />);
+
+    expect(scrolled).toHaveBeenCalledTimes(1);
+    expect(scrolled).toHaveBeenLastCalledWith({ top: expect.any(Number) });
+    const drawn = lines();
+    expect(anchorAt()).toBe(drawn.findIndex((line) => line.kind === 'today') - 5);
+  });
+
+  /**
+   * While the rows on screen are still the answer to the question before, there is nothing to
+   * open on yet: moving now would move to a place in the old rows, and then again in the new.
+   */
+  it('waits for the answer before it moves', () => {
+    const view = render(<CalendarRecordTable {...props({ question: null })} />);
+    expect(scrolled).not.toHaveBeenCalled();
+
+    view.rerender(<CalendarRecordTable {...props({ question: 'q1' })} />);
+    expect(scrolled).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The same question answered again — a record changed somewhere, the window regained focus —
+   * is the same list, and moving it would take the reader's place away from them mid-read. The
+   * rows change under them; where they are standing does not.
+   */
+  it('leaves the reader where they are when the same question is answered again', () => {
+    const view = render(<CalendarRecordTable {...props()} />);
+    expect(scrolled).toHaveBeenCalledTimes(1);
+
+    view.rerender(
+      <CalendarRecordTable {...props({ entries: [...fortnight(), entry('2026-10-21')] })} />,
+    );
+    view.rerender(<CalendarRecordTable {...props({ entries: fortnight().slice(2) })} />);
+    // Even through a moment when the rows are being fetched again.
+    view.rerender(<CalendarRecordTable {...props({ question: null })} />);
+    view.rerender(<CalendarRecordTable {...props({ question: 'q1' })} />);
+
+    expect(scrolled).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens on today again for a different question', () => {
+    const view = render(<CalendarRecordTable {...props()} />);
+
+    view.rerender(<CalendarRecordTable {...props({ question: 'q2' })} />);
+
+    expect(scrolled).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * A list regrouped, or read as an agenda, is a different list: the place somebody had in the
+   * old one is nowhere in the new.
+   */
+  it('opens on today again when the same rows are arranged differently', () => {
+    const view = render(<CalendarRecordTable {...props()} />);
+
+    view.rerender(<CalendarRecordTable {...props({ grouping: 'month' })} />);
+    expect(scrolled).toHaveBeenCalledTimes(2);
+
+    view.rerender(<CalendarRecordTable {...props({ grouping: 'month', view: 'agenda' })} />);
+    expect(scrolled).toHaveBeenCalledTimes(3);
+  });
+
+  /** Folding a heading away is the reader arranging what is in front of them, not a new list. */
+  it('does not move when a heading is folded', () => {
+    render(<CalendarRecordTable {...props({ grouping: 'month' })} />);
+    expect(scrolled).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getAllByTestId('calendar-group')[0]);
+
+    expect(scrolled).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes back to today when asked', () => {
+    render(<CalendarRecordTable {...props()} />);
+    expect(scrolled).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId('calendar-today'));
+
+    expect(scrolled).toHaveBeenCalledTimes(2);
+    expect(todayAsked).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Over a window that does not hold today there is no line to go to. The page is asked for a
+   * window that does, and the list opens on today when that window's answer arrives.
+   */
+  it('asks for a window that holds today when the one in hand does not', () => {
+    render(
+      <CalendarRecordTable
+        {...props({ entries: [entry('2025-03-02')], from: '2025-03-01', to: '2025-03-31' })}
+      />,
+    );
+    scrolled.mockClear();
+
+    fireEvent.click(screen.getByTestId('calendar-today'));
+
+    expect(todayAsked).toHaveBeenCalledTimes(1);
+    expect(scrolled).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A list in the order of its titles, or cut by kind, runs through no time: there is no one
+   * place in it that is today, so the button cannot be used, and says why.
+   */
+  it('offers no way to today in an arrangement that has no today in it', () => {
+    const view = render(<CalendarRecordTable {...props({ sort: 'title' })} />);
+
+    const button = screen.getByTestId('calendar-today');
+    expect(button).toHaveProperty('disabled', true);
+    expect(screen.queryByTestId('calendar-today-line')).toBeNull();
+    expect(anchorAt()).toBe(-1);
+    // Said beside the button, and tied to it for a reader who is told rather than shown.
+    const hint = screen.getByTestId('calendar-today-hint');
+    expect(hint.textContent).toContain('no one place that is today');
+    expect(button.getAttribute('aria-describedby')).toBe(hint.id);
+
+    view.rerender(<CalendarRecordTable {...props({ grouping: 'kind' })} />);
+    expect(screen.getByTestId('calendar-today')).toHaveProperty('disabled', true);
+    expect(screen.getByTestId('calendar-today-hint')).toBeTruthy();
+
+    view.rerender(<CalendarRecordTable {...props({ sort: '-start', entries: fortnight().reverse() })} />);
+    expect(screen.getByTestId('calendar-today')).toHaveProperty('disabled', false);
+    expect(screen.queryByTestId('calendar-today-hint')).toBeNull();
+    expect(screen.getByTestId('calendar-today-line')).toBeTruthy();
   });
 });
 
@@ -161,7 +353,7 @@ describe('the list under headings', () => {
     expect(headings()).toEqual(['September 2026 (2)', 'October 2026 (3)', 'November 2026 (1)']);
     expect(kinds()).toEqual([
       'group', 'entry', 'entry',
-      'group', 'entry', 'entry', 'entry',
+      'group', 'entry', 'entry', 'today', 'entry',
       'group', 'entry',
     ]);
     // A heading spans the list's whole width.
@@ -231,6 +423,8 @@ describe('the list under headings', () => {
     );
 
     expect(headings()).toEqual(['Trip (2)', 'Camp (1)', 'Training (1)', 'Deadline (1)']);
+    // Cut by kind the list is several runs through the days, and none of them is drawn a today.
+    expect(screen.queryByTestId('calendar-today-line')).toBeNull();
   });
 
   /** In the order a record moves through them, whatever order the rows arrived in. */
@@ -283,10 +477,10 @@ describe('the list under headings', () => {
 
 describe('the list read as an agenda', () => {
   /**
-   * The agenda is the record read forwards: the same rows under the same headings, with each row
-   * drawn as one entry and no header over a single column of them.
+   * The agenda is the record read forwards: the same rows, headings, line and place to open, with
+   * each row drawn as one entry and no header over a single column of them.
    */
-  it('keeps the headings, one entry to a row', () => {
+  it('keeps the headings and the line, one entry to a row', () => {
     const rows: CalendarEntry[] = [
       entry('2026-10-03', { title: 'oct-a', startTime: '08:30:00' }),
       entry('2026-10-17', { title: 'oct-c' }),
@@ -295,7 +489,7 @@ describe('the list read as an agenda', () => {
       <CalendarRecordTable {...props({ entries: rows, grouping: 'month', view: 'agenda' })} />,
     );
 
-    expect(kinds()).toEqual(['group', 'entry', 'entry']);
+    expect(kinds()).toEqual(['group', 'entry', 'today', 'entry']);
     expect(screen.getAllByTestId('calendar-agenda-row')).toHaveLength(2);
     expect(screen.getAllByTestId('calendar-agenda-row')[0].textContent).toContain('08:30');
     expect(document.querySelector('thead')).toBeNull();

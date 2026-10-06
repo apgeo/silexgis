@@ -62,6 +62,15 @@ if (!window.ResizeObserver) {
   window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
 
+// jsdom lays nothing out, so nothing in it scrolls: an element can be asked where it is scrolled
+// to and has no way to be told to move. The table component moves its own body through this
+// call, and without it a list that opens on a particular row throws the moment it is mounted.
+// It does nothing here — there is no layout for it to do anything to — and a test that cares
+// whether a list was moved replaces it with a spy of its own.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
+  Element.prototype.scrollTo = () => {};
+}
+
 // jsdom ships no 2D canvas, so getContext('2d') returns null. OpenLayers' Heatmap
 // builds its colour gradient through a canvas context the moment it is constructed,
 // which would throw under jsdom. A minimal stub covering the handful of calls that

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { CalendarEntry } from '../../api/hooks.ts';
 import { entryKey } from './calendarDays.ts';
 import {
+  ROWS_BEFORE_TODAY,
+  TodayKey,
   chronologyOf,
   groupKey,
   groupRecord,
@@ -41,20 +43,28 @@ const mondayWeekOf = (day: string): string => {
   return at.toISOString().slice(0, 10);
 };
 
+/** The clock every case below is read against: a Wednesday in the middle of a month. */
+const TODAY = '2026-10-14';
+
 const options = (overrides: Partial<RecordLayoutOptions> = {}): RecordLayoutOptions => ({
   grouping: 'none',
   order: 'ascending',
   collapsed: new Set(),
+  today: TODAY,
+  from: '2026-09-01',
+  to: '2026-12-31',
   weekOf: mondayWeekOf,
   ...overrides,
 });
 
-/** A layout as the words a reader would see down the list: a title, or a heading. */
+/** A layout as the words a reader would see down the list: a title, a heading, or the line. */
 const drawn = (rows: readonly RecordRow[]): string[] =>
   rows.map((row) =>
     row.type === 'entry'
       ? row.entry.title
-      : `[${row.group.value}:${row.group.entries.length}${row.collapsed ? ' folded' : ''}]`,
+      : row.type === 'group'
+        ? `[${row.group.value}:${row.group.entries.length}${row.collapsed ? ' folded' : ''}]`
+        : '— today —',
   );
 
 describe('what a row is grouped under', () => {
@@ -224,7 +234,135 @@ describe('which way an order runs through time', () => {
   });
 });
 
-describe('the lines of a list under headings', () => {
+describe('the line marking today, and the row a list opens on', () => {
+  /** Seven records before today and seven from today on, a day apart. */
+  const fortnight = () => [
+    ...[7, 8, 9, 10, 11, 12, 13].map((day) => entry(`2026-10-${String(day).padStart(2, '0')}`)),
+    ...[14, 15, 16, 17, 18, 19, 20].map((day) => entry(`2026-10-${day}`)),
+  ];
+
+  it('draws the line where the run crosses today, and opens five rows above it', () => {
+    const rows = fortnight();
+
+    const layout = layoutRecord(rows, options());
+
+    expect(layout.chronological).toBe(true);
+    const lines = drawn(layout.rows);
+    expect(lines.indexOf('— today —')).toBe(7);
+    // What began before today is above the line, and what begins today is below it.
+    expect(lines[6]).toBe(rows[6].title);
+    expect(lines[8]).toBe(rows[7].title);
+    // Five rows above the line, so the last things that happened are in sight with the next.
+    expect(layout.anchorKey).toBe(entryKey(rows[7 - ROWS_BEFORE_TODAY]));
+  });
+
+  /** The clock is an argument: the same rows read a week later cross somewhere else. */
+  it('moves with the clock', () => {
+    const rows = fortnight();
+
+    const later = layoutRecord(rows, options({ today: '2026-10-18' }));
+
+    expect(drawn(later.rows).indexOf('— today —')).toBe(11);
+    expect(later.anchorKey).toBe(entryKey(rows[11 - ROWS_BEFORE_TODAY]));
+  });
+
+  /** With fewer rows above the line than are kept in sight, the list opens at its first row. */
+  it('opens at the top when little has happened yet', () => {
+    const rows = [entry('2026-10-12'), entry('2026-10-13'), entry('2026-10-20')];
+
+    const layout = layoutRecord(rows, options());
+
+    expect(drawn(layout.rows)).toEqual([rows[0].title, rows[1].title, '— today —', rows[2].title]);
+    expect(layout.anchorKey).toBe(entryKey(rows[0]));
+  });
+
+  /** Nothing before today: the line is the first thing drawn, and the list opens on it. */
+  it('draws the line first when nothing in the window began before today', () => {
+    const rows = [entry('2026-10-14'), entry('2026-10-20'), entry('2026-11-02')];
+
+    const layout = layoutRecord(rows, options());
+
+    expect(drawn(layout.rows)[0]).toBe('— today —');
+    expect(layout.anchorKey).toBe(TodayKey);
+  });
+
+  /**
+   * Nothing from today on: the line is the last thing drawn, under everything that has happened,
+   * and the list opens on the last few of those rather than at the top of a past the reader
+   * would have to scroll through to find out there is nothing ahead.
+   */
+  it('draws the line last when nothing is still to come, and opens on the latest rows', () => {
+    const rows = [1, 2, 3, 4, 5, 6, 7, 8].map((day) => entry(`2026-10-0${day}`));
+
+    const layout = layoutRecord(rows, options());
+
+    const lines = drawn(layout.rows);
+    expect(lines.at(-1)).toBe('— today —');
+    expect(layout.anchorKey).toBe(entryKey(rows[8 - ROWS_BEFORE_TODAY]));
+  });
+
+  /**
+   * The line goes by the day a record begins, because that is what the list is ordered by. A
+   * camp that began last week and is still running stays above the line, where its row was.
+   */
+  it('keeps a record that is still running above the line it began before', () => {
+    const camp = entry('2026-10-10', { source: 'expedition', end: '2026-10-20' });
+    const tonight = entry('2026-10-14');
+
+    const layout = layoutRecord([camp, tonight], options());
+
+    expect(drawn(layout.rows)).toEqual([camp.title, '— today —', tonight.title]);
+  });
+
+  /** Latest-first, the same line the other way up: what is coming above it, what happened below. */
+  it('draws the line the other way up for an order that runs latest-first', () => {
+    const rows = fortnight().reverse();
+
+    const layout = layoutRecord(rows, options({ order: 'descending' }));
+
+    const lines = drawn(layout.rows);
+    expect(lines.indexOf('— today —')).toBe(7);
+    expect(lines[6]).toBe(rows[6].title);
+    expect(rows[6].start).toBe('2026-10-14');
+    expect(lines[8]).toBe(rows[7].title);
+    expect(layout.anchorKey).toBe(entryKey(rows[7 - ROWS_BEFORE_TODAY]));
+  });
+
+  /**
+   * Over a window that does not hold today every row is on one side of it, and a line under all
+   * of them would say "today" about a list today is not in. No line, and nowhere to open but the
+   * top.
+   */
+  it('draws no line over a window that does not hold today', () => {
+    const rows = [entry('2025-03-01'), entry('2025-03-09')];
+
+    const layout = layoutRecord(rows, options({ from: '2025-03-01', to: '2025-03-31' }));
+
+    expect(drawn(layout.rows)).toEqual([rows[0].title, rows[1].title]);
+    expect(layout.anchorKey).toBeNull();
+    // The arrangement is still one a line could be drawn in; it is the window that has no today.
+    expect(layout.chronological).toBe(true);
+  });
+
+  /** Ordered by title the list runs through no time, so "today" names no place in it. */
+  it('draws no line in a list ordered by title', () => {
+    const layout = layoutRecord(fortnight(), options({ order: null }));
+
+    expect(drawn(layout.rows)).not.toContain('— today —');
+    expect(layout.anchorKey).toBeNull();
+    expect(layout.chronological).toBe(false);
+  });
+
+  it('draws nothing at all for no rows', () => {
+    const layout = layoutRecord([], options());
+
+    expect(layout.rows).toEqual([]);
+    expect(layout.anchorKey).toBeNull();
+  });
+});
+
+describe('the line marking today under headings', () => {
+  /** September, October either side of today, and November. */
   const autumn = () => [
     entry('2026-09-05', { title: 'sep-a' }),
     entry('2026-09-19', { title: 'sep-b' }),
@@ -235,18 +373,15 @@ describe('the lines of a list under headings', () => {
     entry('2026-11-07', { title: 'nov-a' }),
   ];
 
-  it('is the rows as the answer gave them when nothing is grouped', () => {
+  /**
+   * Under headings that are stretches of time the list is still one run through the days, so
+   * the line is drawn inside the month it falls in — and a heading takes a line of the list's
+   * height like any other, so it is counted among the rows kept in sight above.
+   */
+  it('draws the line inside the month today falls in, counting headings as lines', () => {
     const rows = autumn();
 
-    const layout = layoutRecord(rows, options());
-
-    expect(drawn(layout.rows)).toEqual(rows.map((row) => row.title));
-    expect(layout.groups).toEqual([]);
-    expect(layout.rows[0].key).toBe(entryKey(rows[0]));
-  });
-
-  it('puts each heading above the rows it counts', () => {
-    const layout = layoutRecord(autumn(), options({ grouping: 'month' }));
+    const layout = layoutRecord(rows, options({ grouping: 'month' }));
 
     expect(drawn(layout.rows)).toEqual([
       '[2026-09:2]',
@@ -255,16 +390,43 @@ describe('the lines of a list under headings', () => {
       '[2026-10:4]',
       'oct-a',
       'oct-b',
+      '— today —',
       'oct-c',
       'oct-d',
       '[2026-11:1]',
       'nov-a',
     ]);
+    // Five lines above the line: two of October's rows, its heading, and the end of September.
+    expect(layout.anchorKey).toBe(entryKey(rows[0]));
     expect(layout.groups.map((group) => group.value)).toEqual(['2026-09', '2026-10', '2026-11']);
   });
 
-  /** Folded, a group gives up its rows and keeps its heading — and the count on it. */
-  it('folds a group away to its heading and keeps the others', () => {
+  /** A heading stays with its rows: the line goes above a group that lies wholly past it. */
+  it('draws the line above the heading of a month that is wholly still to come', () => {
+    const rows = [
+      entry('2026-10-03', { title: 'oct-a' }),
+      entry('2026-10-10', { title: 'oct-b' }),
+      entry('2026-11-07', { title: 'nov-a' }),
+    ];
+
+    const layout = layoutRecord(rows, options({ grouping: 'month' }));
+
+    expect(drawn(layout.rows)).toEqual([
+      '[2026-10:2]',
+      'oct-a',
+      'oct-b',
+      '— today —',
+      '[2026-11:1]',
+      'nov-a',
+    ]);
+  });
+
+  /**
+   * A folded group shows no rows to draw a line between. One that holds anything from today on
+   * is treated as lying on that side, so the line goes above its heading rather than below a
+   * heading whose hidden rows are still to come.
+   */
+  it('draws the line above a folded group that reaches today', () => {
     const layout = layoutRecord(
       autumn(),
       options({ grouping: 'month', collapsed: new Set(['2026-10']) }),
@@ -274,24 +436,94 @@ describe('the lines of a list under headings', () => {
       '[2026-09:2]',
       'sep-a',
       'sep-b',
+      '— today —',
       '[2026-10:4 folded]',
       '[2026-11:1]',
       'nov-a',
     ]);
+    // Folded, a group still says how many rows it holds.
     expect(layout.rows.find((row) => row.key === groupKey('2026-10'))).toMatchObject({
       type: 'group',
       collapsed: true,
     });
   });
 
-  it('runs the headings latest-first when the answer does', () => {
+  it('leaves a folded group that is wholly behind above the line', () => {
     const layout = layoutRecord(
-      autumn().reverse(),
-      options({ grouping: 'month', order: 'descending' }),
+      autumn(),
+      options({ grouping: 'month', collapsed: new Set(['2026-09']) }),
     );
 
-    expect(layout.groups.map((group) => group.value)).toEqual(['2026-11', '2026-10', '2026-09']);
-    expect(drawn(layout.rows).slice(0, 2)).toEqual(['[2026-11:1]', 'nov-a']);
+    expect(drawn(layout.rows).slice(0, 5)).toEqual([
+      '[2026-09:2 folded]',
+      '[2026-10:4]',
+      'oct-a',
+      'oct-b',
+      '— today —',
+    ]);
+  });
+
+  it('draws the line under weeks as it does under months', () => {
+    const rows = [
+      entry('2026-10-06', { title: 'last-week' }),
+      entry('2026-10-12', { title: 'monday' }),
+      entry('2026-10-15', { title: 'thursday' }),
+    ];
+
+    const layout = layoutRecord(rows, options({ grouping: 'week' }));
+
+    expect(drawn(layout.rows)).toEqual([
+      '[2026-10-05:1]',
+      'last-week',
+      '[2026-10-12:2]',
+      'monday',
+      '— today —',
+      'thursday',
+    ]);
+  });
+
+  it('draws the line the other way up under months that run latest-first', () => {
+    const rows = autumn().reverse();
+
+    const layout = layoutRecord(rows, options({ grouping: 'month', order: 'descending' }));
+
+    expect(drawn(layout.rows)).toEqual([
+      '[2026-11:1]',
+      'nov-a',
+      '[2026-10:4]',
+      'oct-d',
+      'oct-c',
+      '— today —',
+      'oct-b',
+      'oct-a',
+      '[2026-09:2]',
+      'sep-b',
+      'sep-a',
+    ]);
+  });
+
+  /**
+   * Cut by kind, by state or by caving group the list is several runs through the days, one
+   * under each heading, and "today" names no single place in it: no line, and nowhere to open
+   * but the top.
+   */
+  it('draws no line under headings that are not stretches of time', () => {
+    for (const grouping of ['kind', 'state', 'cavingGroup'] as const) {
+      const layout = layoutRecord(autumn(), options({ grouping }));
+
+      expect(drawn(layout.rows)).not.toContain('— today —');
+      expect(layout.anchorKey).toBeNull();
+      expect(layout.chronological).toBe(false);
+    }
+  });
+
+  it('folds a group away to its heading and keeps the others', () => {
+    const layout = layoutRecord(
+      autumn(),
+      options({ grouping: 'kind', collapsed: new Set(['tripLog']) }),
+    );
+
+    expect(drawn(layout.rows)).toEqual(['[tripLog:7 folded]']);
   });
 
   /**

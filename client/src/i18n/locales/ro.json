@@ -4267,6 +4267,9 @@
         "cavingGroup": "Grup de speologie"
       }
     },
+    "today": "Azi",
+    "todayLine": "Azi · {{date}}",
+    "todayNoPlace": "Aranjată așa, lista nu are un singur loc care să fie „azi”. Ordoneaz-o după Când și grupeaz-o după nimic, lună sau săptămână.",
     "mapToggle": "Hartă",
     "mapEmpty": "Nicio tură și nicio tabără din câmpul vizual nu are o poziție înregistrată. Deplasează sau apropie harta ca să cauți în altă parte.",
     "mapFailed": "Harta acestor zile nu a putut fi citită, așa că nu este desenat nimic pe ea — ceea ce nu înseamnă că nu este nimic acolo. Încercați din nou peste un moment.",
