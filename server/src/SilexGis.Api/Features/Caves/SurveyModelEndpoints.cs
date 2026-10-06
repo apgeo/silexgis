@@ -30,8 +30,8 @@ public sealed record SurveyModelDto(
     /// <summary>
     /// Whether this is the model the cave is represented by, among the cave's models of the same
     /// kind — the line plot the map and the statistics read, or the wall mesh the scene draws.
-    /// At most one per cave and kind. The newest upload takes it; an older model can be given it
-    /// back through the route that sets it.
+    /// At most one per cave and kind. The first model of a kind takes it and keeps it until
+    /// another is chosen through the route that sets it.
     /// </summary>
     bool IsCurrent,
     /// <summary>Signed survey-file URL — fetch and hand to the 3D viewer as-is.</summary>
@@ -476,15 +476,20 @@ public static class SurveyModelEndpoints
             RequestedBy = ctx.UserId,
         });
 
-        // The newest upload of a kind is the one the cave is represented by: whoever re-uploads a
-        // corrected export means it to replace the old one. Demoting the previous holder is its
-        // own statement, so the two go inside one transaction — the file is already stored
-        // either way, and a row that was never written leaves nothing to clean up but bytes.
-        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        // The first model of a kind is the one the cave is represented by; a later one takes over
+        // only when somebody says so. Arriving is not choosing: a second line plot may be a
+        // corrected re-export or a survey of one side passage, and only its uploader knows which.
+        await SurveyModelCurrency.TakeIfUnclaimedAsync(db, model, ct);
+        try
         {
-            await SurveyModelCurrency.MakeCurrentAsync(db, model, ct);
             await db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
+        }
+        catch (DbUpdateException) when (model.IsCurrent)
+        {
+            // Two first uploads of one kind for one cave, at once: the index let one of them have
+            // the mark, and this one is stored without it rather than refused.
+            model.IsCurrent = false;
+            await db.SaveChangesAsync(ct);
         }
 
         return TypedResults.Created($"/api/v1/survey-models/{model.Id}", model.ToDto(tokens, null));
@@ -635,14 +640,23 @@ public static class SurveyModelEndpoints
     /// that kind held it. Idempotent: marking the holder again changes nothing and still answers.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The same gates as every other write to a model: the cave must be visible with its exact
     /// location open, and writable. No version precondition is asked for, because this is not an
     /// edit of the row's content that another edit could be lost under — it is a choice between
     /// rows, and the last choice made is the one that was meant.
+    /// </para>
+    /// <para>
+    /// Only a model whose reading or conversion has finished can be chosen. For a line plot the
+    /// choice also makes the centerline read out of it the cave's shape, so that the map and the
+    /// figures move together; a model still being read has no centerline to hand the map, and
+    /// choosing it would leave the map drawing one survey and the figures waiting on another.
+    /// </para>
     /// </remarks>
     private static async Task<Results<Ok<SurveyModelDto>, UnauthorizedHttpResult, ProblemHttpResult>> MakeCurrentAsync(
         Guid id,
         SilexGisDbContext db,
+        FeatureWriteService writes,
         IFileAccessTokenService tokens,
         IAccessService access,
         FeatureProtection protection,
@@ -668,10 +682,33 @@ public static class SurveyModelEndpoints
             return ApiProblems.Forbidden();
         }
 
-        if (!model.IsCurrent)
+        if (model.Status != SurveyModelStatus.Ready)
         {
-            await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            await SurveyModelCurrency.MakeCurrentAsync(db, model, ct);
+            return ApiProblems.Conflict(
+                "survey_model.not_ready",
+                "This model is still being read, or could not be. Only a model that has finished can be made the current one.");
+        }
+
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            if (!model.IsCurrent)
+            {
+                await SurveyModelCurrency.MakeCurrentAsync(db, model, ct);
+            }
+
+            // The cave's shape follows the choice: the centerline read out of this model becomes
+            // the default, whatever was the default before. Looked at on every call, not only when
+            // the mark moved, so that choosing the holder again repairs a shape that had drifted.
+            var own = await db.Centerlines
+                .Where(c => c.SurveyModelId == model.Id)
+                .OrderBy(c => c.Source == CenterlineSource.Extracted ? 0 : 1).ThenBy(c => c.Id)
+                .Select(c => new { c.Id, c.IsDefault })
+                .ToListAsync(ct);
+            if (own.Count > 0 && !own.Any(c => c.IsDefault))
+            {
+                await writes.SetDefaultCenterlineAsync(own[0].Id, ct);
+            }
+
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         }
@@ -796,7 +833,7 @@ public static class SurveyModelEndpoints
         {
             db.SurveyModels.Remove(model);
             await db.SaveChangesAsync(ct);
-            await SurveyModelCurrency.PromoteSuccessorAsync(db, model.CaveFeatureId, model.Format, model.IsCurrent, ct);
+            await SurveyModelCurrency.PromoteSuccessorAsync(db, model.CaveFeatureId, model.Format, ct);
             await transaction.CommitAsync(ct);
         }
 

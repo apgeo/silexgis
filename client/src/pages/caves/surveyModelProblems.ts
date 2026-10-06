@@ -27,6 +27,7 @@ export const SURVEY_MODEL_PROBLEM_MESSAGE_KEYS: Record<string, string> = {
   // answer to it — "could not be saved" invites a retry of the very act that was refused on
   // purpose, and says nothing about the two ways forward.
   'survey_model.tracking_armed': 'surveyModels.problems.trackingArmed',
+  'survey_model.not_ready': 'surveyModels.problems.notReady',
   'cave.not_found': 'surveyModels.problems.caveNotFound',
   'acl.forbidden': 'surveyModels.problems.forbidden',
 };

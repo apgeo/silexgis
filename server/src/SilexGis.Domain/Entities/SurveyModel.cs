@@ -73,8 +73,9 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     /// enforces.
     ///
     /// <para>
-    /// The newest upload of a kind takes the mark, because a person re-uploading a corrected export
-    /// means for it to replace the old one; an older model can be given the mark back by hand. The
+    /// The first model of a kind takes the mark and keeps it until somebody chooses another, the
+    /// way a cave's default centerline behaves: a file arriving is not a decision that it replaces
+    /// the one before. For a line plot the mark and the default centerline are kept in step. The
     /// readers that need one model per cave fall back to the newest finished one when no row of the
     /// kind carries the mark, so a cave is never left unrepresented by the flag's absence.
     /// </para>

@@ -5,6 +5,7 @@ using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Features;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Infrastructure.Features;
 
@@ -122,6 +123,10 @@ public sealed class FeatureWriteService(
         if (centerline.IsDefault)
         {
             await ClearDefaultCenterlineAsync(centerline.CaveFeatureId, exceptId: feature.Id, ct);
+            // The cave's shape and the survey its figures are measured over are one choice: a
+            // centerline read out of a survey model that becomes the shape makes that model the
+            // cave's current line plot.
+            await SurveyModelCurrency.FollowDefaultCenterlineAsync(db, centerline, ct);
         }
 
         await InheritCaveBindingAsync(feature, centerline.CaveFeatureId, ct);
@@ -266,6 +271,10 @@ public sealed class FeatureWriteService(
         var centerline = await db.Centerlines.FirstAsync(c => c.Id == centerlineFeatureId, ct);
         await ClearDefaultCenterlineAsync(centerline.CaveFeatureId, exceptId: centerlineFeatureId, ct);
         centerline.IsDefault = true;
+        // And the survey it was read out of, when it was read out of one, becomes the one the
+        // cave's figures are measured over — so the map and the numbers never describe two
+        // different surveys of one cave.
+        await SurveyModelCurrency.FollowDefaultCenterlineAsync(db, centerline, ct);
     }
 
     /// <summary>

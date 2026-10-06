@@ -31,9 +31,13 @@ A cave keeps every model ever uploaded — uploads are never overwritten, so a c
 is a second model beside the first. One of them carries the **Current** mark, per kind: the
 current **line plot** (`.lox` / `.3d`) is what the map's extracted centerline and the
 [measurements](measurements-and-statistics.md) read; the current **walls** (`.stl`) are what the
-3D scene draws. The newest upload of a kind becomes current on arrival, which is what re-uploading
-a corrected survey means; **Make current** on an older model gives it the mark back. Deleting the
-current model passes the mark to the newest one left.
+3D scene draws. The **first** model of a kind is current and stays so until you choose another —
+a second upload may be a corrected re-export or a survey of one side passage, and only you know
+which — so use **Make current** on the model that should take over, once it has finished
+processing. For a line plot the choice also makes its centerline the cave's shape on the map, and
+making a survey's centerline the default does the same from the other side: the map and the
+figures always describe the same survey. Deleting the current model passes the mark to the newest
+one left.
 
 ### Reading a survey into rows
 

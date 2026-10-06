@@ -2862,7 +2862,7 @@
     "current": "Current",
     "makeCurrent": "Make current",
     "makeCurrentFailed": "The model could not be made current",
-    "currentHint": "The current line plot is what the map and the measurements read; the current wall mesh is what the 3D scene draws. The newest upload of each kind becomes current, and an older one can be made current here.",
+    "currentHint": "The current line plot is what the map and the measurements read; the current wall mesh is what the 3D scene draws. The first model of each kind stays current until you choose another here; choosing a line plot also makes its centerline the cave's shape on the map.",
     "precisionLost": "The file lost precision before it arrived",
     "precisionLostHint": "The coordinates in this file were too large for the numbers it stores them in, so the survey is coarser than it was surveyed. Re-exporting it about a local origin recovers the detail.",
     "meshDeclaration": "Where these walls sit in the world",
@@ -2887,6 +2887,7 @@
       "originInvalid": "A file in local coordinates needs the position its zero point sits at.",
       "notFound": "This survey model no longer exists.",
       "trackingArmed": "A trip's live tracking is armed on this survey model, and deleting it would leave that trip unable to place anybody. This account cannot read that trip, so ask its team — or an administrator, who can read every trip — to close that tracking or point it at another survey. Then delete this one.",
+      "notReady": "This model is still being read, or could not be. Only a model that has finished can be made the current one.",
       "caveNotFound": "This cave no longer exists.",
       "forbidden": "You are not allowed to change this cave's survey models."
     },

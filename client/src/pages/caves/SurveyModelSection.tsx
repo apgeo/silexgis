@@ -207,7 +207,9 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
                     </Tooltip>
                   </>
                 )}
-                {canEdit && !model.isCurrent && (
+                {/* Only a model that has finished can be chosen: for a line plot the choice hands
+                    the map its centerline, and a model still being read has none to hand over. */}
+                {canEdit && !model.isCurrent && model.status === 'ready' && (
                   <Button
                     size="small"
                     type="text"

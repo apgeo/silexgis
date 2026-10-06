@@ -2862,7 +2862,7 @@
     "current": "Curent",
     "makeCurrent": "Setează ca model curent",
     "makeCurrentFailed": "Modelul nu a putut fi setat ca model curent",
-    "currentHint": "Planul de linii curent este cel pe care îl citesc harta și măsurătorile; pereții curenți sunt cei pe care îi desenează scena 3D. Cea mai nouă încărcare de fiecare fel devine curentă, iar una mai veche poate fi setată ca model curent aici.",
+    "currentHint": "Planul de linii curent este cel pe care îl citesc harta și măsurătorile; pereții curenți sunt cei pe care îi desenează scena 3D. Primul model de fiecare fel rămâne curent până când alegi altul aici; alegerea unui plan de linii face și din poligonația lui forma peșterii pe hartă.",
     "precisionLost": "Fișierul a pierdut precizie înainte să ajungă aici",
     "precisionLostHint": "Coordonatele din acest fișier au fost prea mari pentru numerele în care sunt stocate, așa că topografia este mai grosieră decât a fost cartată. Reexportă fișierul față de o origine locală ca să recuperezi detaliul.",
     "meshDeclaration": "Unde se află acești pereți în lume",
@@ -2887,6 +2887,7 @@
       "originInvalid": "Un fișier în coordonate locale are nevoie de poziția punctului său zero.",
       "notFound": "Acest model topo nu mai există.",
       "trackingArmed": "Urmărirea în direct a unei ture este armată pe acest model topo, iar ștergerea lui ar lăsa acea tură fără posibilitatea de a plasa pe cineva. Acest cont nu poate citi acea tură, așa că roagă echipa ei — sau un administrator, care poate citi orice tură — să închidă urmărirea sau să o îndrepte către altă ridicare. Apoi șterge-l pe acesta.",
+      "notReady": "Modelul este încă în curs de citire sau nu a putut fi citit. Numai un model terminat poate fi setat ca model curent.",
       "caveNotFound": "Această peșteră nu mai există.",
       "forbidden": "Nu ai voie să modifici modelele topo ale acestei peșteri."
     },

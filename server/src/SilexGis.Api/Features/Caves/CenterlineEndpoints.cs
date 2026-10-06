@@ -12,6 +12,7 @@ using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Geodata;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.Caves;
 
@@ -288,6 +289,12 @@ public static class CenterlineEndpoints
         if (request.IsDefault && !found.Centerline.IsDefault)
         {
             await writes.SetDefaultCenterlineAsync(id, ct);
+        }
+        else
+        {
+            // Already the cave's shape, and possibly just tied to a different survey model: the
+            // model the shape is read out of is the one the figures are measured over.
+            await SurveyModelCurrency.FollowDefaultCenterlineAsync(db, found.Centerline, ct);
         }
 
         await db.SaveChangesAsync(ct);

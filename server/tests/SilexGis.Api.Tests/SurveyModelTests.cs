@@ -232,43 +232,79 @@ public sealed class SurveyModelTests : IAsyncLifetime, IDisposable, IClassFixtur
 
     /// <summary>Uploads one survey model as the owner and returns its id.</summary>
     /// <summary>
-    /// The newest upload of a kind is the model the cave is represented by; an older one can be
-    /// given the mark back; a wall mesh and a line plot hold their marks independently; and when
-    /// the current model goes, the mark moves to the newest one left.
+    /// The first model of a kind is the one the cave is represented by and stays so until another
+    /// is chosen; only a finished model can be chosen; a wall mesh and a line plot hold their marks
+    /// independently; and when the current model goes, the mark moves to the newest one left.
     /// </summary>
     [Fact]
-    public async Task The_newest_upload_of_a_kind_is_current_and_the_mark_can_be_moved_back_and_survives_a_delete()
+    public async Task The_first_model_of_a_kind_is_current_until_another_is_chosen_and_the_mark_survives_a_delete()
     {
         var caveId = await CreateCaveAsync(visibility: "authenticated", locationProtected: false);
 
         var first = await UploadAsync(caveId, "first.lox");
         (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = true });
 
+        // Arriving is not choosing: a second upload may be a corrected re-export or a survey of one
+        // side passage, and nothing about the file says which.
         var second = await UploadAsync(caveId, "second.lox");
-        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = false, [second] = true });
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = true, [second] = false });
 
-        // The mark goes back to the older survey on request, and the newer one loses it.
-        var moved = await owner.PutAsync($"/api/v1/survey-models/{first}/current", null);
+        // Nor can it be chosen while it is still being read: choosing a line plot hands the map its
+        // centerline, and there is none yet.
+        var early = await owner.PutAsync($"/api/v1/survey-models/{second}/current", null);
+        early.StatusCode.ShouldBe(HttpStatusCode.Conflict, await early.Content.ReadAsStringAsync());
+        (await early.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString()
+            .ShouldBe("survey_model.not_ready");
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = true, [second] = false });
+
+        await MarkReadAsync(first, second);
+
+        var moved = await owner.PutAsync($"/api/v1/survey-models/{second}/current", null);
         moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
         (await moved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("isCurrent").GetBoolean().ShouldBeTrue();
-        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = true, [second] = false });
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = false, [second] = true });
 
-        // Marking the holder again is not an error and changes nothing.
-        (await owner.PutAsync($"/api/v1/survey-models/{first}/current", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
-        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = true, [second] = false });
+        // Choosing the holder again is not an error and changes nothing.
+        (await owner.PutAsync($"/api/v1/survey-models/{second}/current", null)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = false, [second] = true });
 
-        // A wall mesh is a different kind: it takes a mark of its own and leaves the line plot's alone.
-        using var form = BuildForm("Walls.stl", ProjectedStl());
+        // A wall mesh is a different kind: the first one takes a mark of its own and leaves the
+        // line plot's alone, and a second mesh does not take over by arriving either.
+        var mesh = await UploadMeshAsync(caveId, "Walls.stl");
+        var laterMesh = await UploadMeshAsync(caveId, "Walls-again.stl");
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool>
+        {
+            [first] = false, [second] = true, [mesh] = true, [laterMesh] = false,
+        });
+
+        // Deleting the current line plot hands its mark to the newest line plot left, not to a mesh.
+        (await owner.DeleteAsync($"/api/v1/survey-models/{second}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool>
+        {
+            [first] = true, [mesh] = true, [laterMesh] = false,
+        });
+    }
+
+    private async Task<Guid> UploadMeshAsync(Guid caveId, string fileName)
+    {
+        using var form = BuildForm(fileName, ProjectedStl());
         form.Add(new StringContent("32635"), "sourceEpsg");
         form.Add(new StringContent("1100"), "originHeightM");
         var created = await owner.PostAsync($"/api/v1/caves/{caveId}/survey-models", form);
         created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
-        var mesh = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
-        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [first] = true, [second] = false, [mesh] = true });
+        return (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+    }
 
-        // Deleting the current line plot hands its mark to the newest line plot left, not to the mesh.
-        (await owner.DeleteAsync($"/api/v1/survey-models/{first}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        (await ListAsync(caveId)).ShouldBe(new Dictionary<Guid, bool> { [second] = true, [mesh] = true });
+    /// <summary>
+    /// Says these models finished being read, without reading them: the files this class uploads
+    /// are placeholders no reader could open, and what is under test here is who holds the mark.
+    /// </summary>
+    private async Task MarkReadAsync(params Guid[] ids)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        await db.SurveyModels.Where(m => ids.Contains(m.Id))
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, SurveyModelStatus.Ready));
     }
 
     /// <summary>

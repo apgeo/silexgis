@@ -733,29 +733,58 @@ public sealed class CaveSurveyStatisticsTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
-    /// The model marked as the cave's current one is the one the figures are measured over, ahead
-    /// of the newest upload — and a marked model whose reading has not finished is passed over
-    /// rather than answering with nothing.
+    /// The figures are measured over the model chosen as the cave's current one, not over the
+    /// newest upload — and the cave's shape on the map moves with that choice, from either side,
+    /// so the map and the figures never describe two different surveys of one cave.
     /// </summary>
     [Fact]
-    public async Task The_figures_are_measured_over_the_model_marked_current_and_a_mark_still_being_read_is_passed_over()
+    public async Task The_figures_and_the_caves_shape_follow_the_model_chosen_as_current_and_not_the_newest_upload()
     {
         var caveId = await CreateCaveAsync();
         var older = await UploadLocalLoxAsync(caveId, SplayedSurveyFile());
         await RunQueuedGraphJobAsync(older);
-
-        // The newest upload takes the mark, and until it is read the figures still come from the
-        // survey that has been.
         var newer = await UploadLocalLoxAsync(caveId, SplayedSurveyFile());
-        (await StatisticsAsync(owner, caveId)).GetProperty("surveyModelId").GetGuid().ShouldBe(older);
-
         await RunQueuedGraphJobAsync(newer);
-        (await StatisticsAsync(owner, caveId)).GetProperty("surveyModelId").GetGuid().ShouldBe(newer);
 
-        // Giving the mark back to the older survey moves the figures with it.
-        var moved = await owner.PutAsync($"/api/v1/survey-models/{older}/current", null);
-        moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+        // Arriving is not choosing: the first survey still measures the cave and still draws it.
         (await StatisticsAsync(owner, caveId)).GetProperty("surveyModelId").GetGuid().ShouldBe(older);
+        (await ShapeAsync(caveId)).Model.ShouldBe(older);
+
+        // Choosing the newer survey moves the figures and the shape together.
+        var chosen = await owner.PutAsync($"/api/v1/survey-models/{newer}/current", null);
+        chosen.StatusCode.ShouldBe(HttpStatusCode.OK, await chosen.Content.ReadAsStringAsync());
+        (await StatisticsAsync(owner, caveId)).GetProperty("surveyModelId").GetGuid().ShouldBe(newer);
+        (await ShapeAsync(caveId)).Model.ShouldBe(newer);
+
+        // And from the other side: making the older survey's centerline the cave's shape again
+        // takes the mark, and the figures, back with it.
+        var lines = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines");
+        var olderLine = lines.EnumerateArray()
+            .Single(l => l.GetProperty("surveyModelId").ValueKind == JsonValueKind.String
+                && l.GetProperty("surveyModelId").GetGuid() == older);
+        var back = await owner.PutAsJsonAsync($"/api/v1/centerlines/{olderLine.GetProperty("id").GetGuid()}", new
+        {
+            name = olderLine.GetProperty("name").GetString(),
+            description = (string?)null,
+            surveyModelId = older,
+            isDefault = true,
+        });
+        back.StatusCode.ShouldBe(HttpStatusCode.OK, await back.Content.ReadAsStringAsync());
+
+        (await StatisticsAsync(owner, caveId)).GetProperty("surveyModelId").GetGuid().ShouldBe(older);
+        var models = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/survey-models");
+        models.EnumerateArray()
+            .ToDictionary(m => m.GetProperty("id").GetGuid(), m => m.GetProperty("isCurrent").GetBoolean())
+            .ShouldBe(new Dictionary<Guid, bool> { [older] = true, [newer] = false });
+    }
+
+    /// <summary>The cave's default centerline and the survey model it was read out of.</summary>
+    private async Task<(Guid Centerline, Guid? Model)> ShapeAsync(Guid caveId)
+    {
+        var lines = await owner.GetFromJsonAsync<JsonElement>($"/api/v1/caves/{caveId}/centerlines");
+        var shape = lines.EnumerateArray().Single(l => l.GetProperty("isDefault").GetBoolean());
+        var model = shape.GetProperty("surveyModelId");
+        return (shape.GetProperty("id").GetGuid(), model.ValueKind == JsonValueKind.String ? model.GetGuid() : null);
     }
 
     private async Task UploadCenterlineAsync(Guid caveId, string fileName, byte[] bytes)

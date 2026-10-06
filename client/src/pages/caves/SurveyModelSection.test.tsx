@@ -187,16 +187,18 @@ describe('the survey model list', () => {
       model({ id: 'mesh', isCurrent: true }),
       model({ id: 'plot', format: 'lox', name: 'Grind plot', isCurrent: true }),
       model({ id: 'old', format: 'lox', name: 'Older plot', isCurrent: false }),
+      // Still being read: it has no centerline to hand the map yet, so it cannot be chosen.
+      model({ id: 'new', format: 'lox', name: 'Newest plot', isCurrent: false, status: 'processing' }),
     ];
     show();
     await screen.findByText('Older plot');
 
-    // One mark per kind: the mesh and the newer plot carry it, the older plot does not — and only
-    // the row without it is offered the action, since taking the mark from itself means nothing.
+    // One mark per kind: the mesh and one plot carry it, the others do not — and only a finished
+    // row without it is offered the action, since taking the mark from itself means nothing.
     expect(screen.getAllByText('Current')).toHaveLength(2);
     const offered = screen.getAllByText('Make current');
     expect(offered).toHaveLength(1);
-    expect(screen.getByText(/The newest upload of each kind becomes current/)).toBeInTheDocument();
+    expect(screen.getByText(/stays current until you choose another/)).toBeInTheDocument();
 
     fireEvent.click(offered[0].closest('button')!);
     await waitFor(() =>

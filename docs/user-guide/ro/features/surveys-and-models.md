@@ -31,9 +31,13 @@ O peșteră păstrează fiecare model încărcat vreodată — încărcările nu
 export corectat este un al doilea model lângă primul. Unul dintre ele poartă marcajul **Curent**,
 pe fel: **poligonația** curentă (`.lox` / `.3d`) este cea citită de poligonația extrasă pe hartă și
 de [măsurători](measurements-and-statistics.md); **pereții** curenți (`.stl`) sunt cei desenați de
-scena 3D. Cea mai nouă încărcare a unui fel devine curentă la sosire, căci asta înseamnă reîncărcarea
-unei topografii corectate; **Fă curent** pe un model mai vechi îi dă marcajul înapoi. Ștergerea
-modelului curent trece marcajul la cel mai nou rămas.
+scena 3D. **Primul** model de un fel este curent și rămâne așa până alegeți altul — o a doua
+încărcare poate fi un export corectat sau topografia unei singure galerii laterale, și numai
+dumneavoastră știți care — așa că folosiți **Setează ca model curent** pe modelul care trebuie să
+preia, după ce s-a terminat procesarea. Pentru o poligonație, alegerea face și din poligonația ei
+forma peșterii pe hartă, iar setarea poligonației unei topografii ca implicită face același lucru
+din cealaltă parte: harta și cifrele descriu întotdeauna aceeași topografie. Ștergerea modelului
+curent trece marcajul la cel mai nou rămas.
 
 ### Citirea unei topografii în rânduri
 
