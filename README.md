@@ -147,9 +147,10 @@ cd client && npm ci && npm run dev                          # Vite dev server
 The fast checks — server build, Domain and Architecture tests, the client gate, the script
 tests — finish in about a minute on Linux and on Windows; `.github/workflows/ci.yml` lists the
 exact commands, and also regenerates the API client from a running server to catch a drifted
-contract, audits the dependencies, and starts and smoke-tests the built images. The API
-integration suite (Testcontainers + PostGIS) is measured in hours: in CI it runs in twelve shards
-on pushes to `master` and nightly (`.github/workflows/integration.yml`, dealt by
+contract, audits the dependencies, and starts and smoke-tests the built images, down to having
+the packaged API write a trip and a camp up as documents — code no other check runs inside the
+image. The API integration suite (Testcontainers + PostGIS) is measured in hours: in CI it runs
+in twelve shards on pushes to `master` and nightly (`.github/workflows/integration.yml`, dealt by
 `scripts/gate-shard.mjs`), and the browser suite runs the same way through `scripts/e2e.mjs`
 (`.github/workflows/browser.yml`). On one machine, `scripts/gate-affected.mjs` names the test
 classes that answer for a change so those can run first, and `scripts/gate-lock.mjs` makes

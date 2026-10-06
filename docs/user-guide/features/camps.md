@@ -54,6 +54,13 @@ which of them are offered depends on the state the camp is in. Two are confirmed
 **Delete** asks *"Delete this camp? The trips it gathered stay; only the camp and its own rules
 go."* — a camp gathers trips rather than owning them.
 
+One document goes with the camp: a write-up filed by **Save to the camp** (see *The write-up*,
+below). It was made from the camp and says nothing once the camp is gone, so it is deleted with
+it rather than left in the library. Everything else on the camp's *Files* tab stays in the
+library and loses only its place on the camp — pictures, a report somebody wrote and uploaded,
+and a saved write-up that has since been filed in a cabinet or attached to something else.
+Write-ups saved to the camp's trips belong to those trips and stay with them.
+
 ## Tabs
 
 **Trips · Map · Leads · Who was there · Photographs · Files · History**
