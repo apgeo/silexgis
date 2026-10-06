@@ -305,10 +305,28 @@ describe('where the stack is, read from what compose resolved', () => {
 
 const ADMIN = { email: 'admin@caves.example.org', password: 'the-right-password' };
 const PUBLIC_URL = 'https://caves.example.org';
-const TRIP_ID = '11111111-1111-4111-8111-111111111111';
-const CAMP_ID = '22222222-2222-4222-8222-222222222222';
-const DOCUMENT_ID = '33333333-3333-4333-8333-333333333333';
 const FILE_ID = '44444444-4444-4444-8444-444444444444';
+
+// The two things the check has written up, as the stand-in holds them: one of each, with fixed
+// identities, so a test can name the request it expects letter for letter.
+const TRIP = {
+  collection: '/api/v1/trip-logs',
+  id: '11111111-1111-4111-8111-111111111111',
+  document: '33333333-3333-4333-8333-333333333333',
+  fileName: 'trip-report-11111111-20261006.docx',
+  missing: 'trip_log.not_found',
+};
+const CAMP = {
+  collection: '/api/v1/expeditions',
+  id: '22222222-2222-4222-8222-222222222222',
+  document: '55555555-5555-4555-8555-555555555555',
+  fileName: 'expedition-report-22222222-20261006.docx',
+  missing: 'expedition.not_found',
+};
+
+/** Where the stand-in keeps one of them, and where it keeps the write-up filed on it. */
+const record = (kind) => `${kind.collection}/${kind.id}`;
+const filed = (kind) => `/api/v1/documents/${kind.document}`;
 
 function problem(res, status, code, detail) {
   res.writeHead(status, { 'Content-Type': 'application/problem+json' });
@@ -328,11 +346,14 @@ function document(res) {
 /**
  * What the stand-in holds and has been asked. `intercept` lets one test answer one route
  * differently; it returns true when it has answered.
+ *
+ * A trip and a camp are answered by the same few lines, because that is the claim under test:
+ * the check asks the same things of both. Deleting either takes the write-up filed on it, which
+ * is the rule the real delete follows and the one the check exists to hold it to.
  */
 function standIn() {
   const state = {
-    trips: new Map(),
-    camps: new Map(),
+    records: new Map(),
     documents: new Set(),
     asked: [],
     challenge: null,
@@ -409,49 +430,47 @@ function standIn() {
       return;
     }
 
-    if (route === 'POST /api/v1/trip-logs') {
-      state.trips.set(TRIP_ID, JSON.parse(body));
-      json(res, 201, { id: TRIP_ID, ...state.trips.get(TRIP_ID) });
-    } else if (route === `GET /api/v1/trip-logs/${TRIP_ID}`) {
-      if (state.trips.has(TRIP_ID)) {
-        json(res, 200, { id: TRIP_ID });
-      } else {
-        problem(res, 404, 'trip_log.not_found');
+    for (const kind of [TRIP, CAMP]) {
+      const held = state.records.has(record(kind));
+      if (route === `POST ${kind.collection}`) {
+        state.records.set(record(kind), JSON.parse(body));
+        json(res, 201, { id: kind.id, ...state.records.get(record(kind)) });
+        return;
       }
-    } else if (route === `GET /api/v1/trip-logs/${TRIP_ID}/report` && state.trips.has(TRIP_ID)) {
-      document(res);
-    } else if (route === `POST /api/v1/trip-logs/${TRIP_ID}/report` && state.trips.has(TRIP_ID)) {
-      state.documents.add(DOCUMENT_ID);
-      json(res, 200, { documentId: DOCUMENT_ID, fileId: FILE_ID, fileName: 'trip-report-20261006.docx' });
-    } else if (route === `DELETE /api/v1/trip-logs/${TRIP_ID}` && state.trips.has(TRIP_ID)) {
-      state.trips.delete(TRIP_ID);
-      state.documents.delete(DOCUMENT_ID);
-      res.writeHead(204);
-      res.end();
-    } else if (route === `GET /api/v1/documents/${DOCUMENT_ID}`) {
-      if (state.documents.has(DOCUMENT_ID)) {
-        json(res, 200, { id: DOCUMENT_ID });
-      } else {
-        problem(res, 404, 'document.not_found');
+      if (route === `GET ${record(kind)}`) {
+        if (held) {
+          json(res, 200, { id: kind.id });
+        } else {
+          problem(res, 404, kind.missing);
+        }
+        return;
       }
-    } else if (route === 'POST /api/v1/expeditions') {
-      state.camps.set(CAMP_ID, JSON.parse(body));
-      json(res, 201, { id: CAMP_ID, ...state.camps.get(CAMP_ID) });
-    } else if (route === `GET /api/v1/expeditions/${CAMP_ID}`) {
-      if (state.camps.has(CAMP_ID)) {
-        json(res, 200, { id: CAMP_ID });
-      } else {
-        problem(res, 404, 'expedition.not_found');
+      if (route === `GET ${filed(kind)}`) {
+        if (state.documents.has(kind.document)) {
+          json(res, 200, { id: kind.document });
+        } else {
+          problem(res, 404, 'document.not_found');
+        }
+        return;
       }
-    } else if (route === `GET /api/v1/expeditions/${CAMP_ID}/report` && state.camps.has(CAMP_ID)) {
-      document(res);
-    } else if (route === `DELETE /api/v1/expeditions/${CAMP_ID}` && state.camps.has(CAMP_ID)) {
-      state.camps.delete(CAMP_ID);
-      res.writeHead(204);
-      res.end();
-    } else {
-      problem(res, 404, 'not_found');
+      if (held && route === `GET ${record(kind)}/report`) {
+        document(res);
+        return;
+      }
+      if (held && route === `POST ${record(kind)}/report`) {
+        state.documents.add(kind.document);
+        json(res, 200, { documentId: kind.document, fileId: FILE_ID, fileName: kind.fileName });
+        return;
+      }
+      if (held && route === `DELETE ${record(kind)}`) {
+        state.records.delete(record(kind));
+        state.documents.delete(kind.document);
+        res.writeHead(204);
+        res.end();
+        return;
+      }
     }
+    problem(res, 404, 'not_found');
   });
 
   return { server, state };
@@ -479,8 +498,7 @@ describe('the report check, against a server that answers the way the API does',
   });
 
   beforeEach(() => {
-    state.trips.clear();
-    state.camps.clear();
+    state.records.clear();
     state.documents.clear();
     state.asked.length = 0;
     state.intercept = () => false;
@@ -498,46 +516,48 @@ describe('the report check, against a server that answers the way the API does',
     };
   };
 
-  it('has both documents written, files the trip\'s, and leaves nothing behind', async () => {
+  /** What the check asks about one of the two, start to finish, when nothing goes wrong. */
+  const askedAbout = (kind) => [
+    `POST ${kind.collection}`,
+    `GET ${record(kind)}/report`,
+    `POST ${record(kind)}/report`,
+    `GET ${filed(kind)}`,
+    `DELETE ${record(kind)}`,
+    `GET ${record(kind)}`,
+    `GET ${filed(kind)}`,
+  ];
+
+  it('has both documents written and filed, and leaves nothing behind', async () => {
     await checkReports(stack, out);
 
-    assert.equal(state.trips.size, 0, 'the trip is still there');
-    assert.equal(state.camps.size, 0, 'the camp is still there');
-    assert.equal(state.documents.size, 0, 'the filed write-up is still there');
+    assert.equal(state.records.size, 0, 'a trip or a camp is still there');
+    assert.equal(state.documents.size, 0, 'a filed write-up is still there');
 
     assert.deepEqual(state.asked, [
       'POST /api/v1/auth/login',
       'GET /connect/authorize',
       'POST /connect/token',
-      'POST /api/v1/trip-logs',
-      `GET /api/v1/trip-logs/${TRIP_ID}/report`,
-      `POST /api/v1/trip-logs/${TRIP_ID}/report`,
-      `GET /api/v1/documents/${DOCUMENT_ID}`,
-      `DELETE /api/v1/trip-logs/${TRIP_ID}`,
-      `GET /api/v1/trip-logs/${TRIP_ID}`,
-      `GET /api/v1/documents/${DOCUMENT_ID}`,
-      'POST /api/v1/expeditions',
-      `GET /api/v1/expeditions/${CAMP_ID}/report`,
-      `DELETE /api/v1/expeditions/${CAMP_ID}`,
-      `GET /api/v1/expeditions/${CAMP_ID}`,
+      ...askedAbout(TRIP),
+      ...askedAbout(CAMP),
     ]);
 
     const lines = said.trimEnd().split('\n');
-    assert.equal(lines.length, 6);
+    assert.equal(lines.length, 7);
     assert.equal(lines[0], `Signing in as ${ADMIN.email} ok`);
     assert.match(lines[1], /^Writing up a throwaway trip ok \(\d+ bytes in 3 parts\)$/);
-    assert.equal(lines[2], 'Filing that write-up against the trip ok (trip-report-20261006.docx)');
+    assert.equal(lines[2], `Filing that write-up against the trip ok (${TRIP.fileName})`);
     assert.equal(lines[3], 'Deleting the trip ok (its filed write-up went with it)');
     assert.match(lines[4], /^Writing up a throwaway camp ok \(\d+ bytes in 3 parts\)$/);
-    assert.equal(lines[5], 'Deleting the camp ok');
+    assert.equal(lines[5], `Filing that write-up against the camp ok (${CAMP.fileName})`);
+    assert.equal(lines[6], 'Deleting the camp ok (its filed write-up went with it)');
   });
 
   it('makes records only their maker can see, named for what they are', async () => {
     let trip;
     let camp;
     state.intercept = (asked, _res, held) => {
-      trip ??= held.trips.get(TRIP_ID);
-      camp ??= held.camps.get(CAMP_ID);
+      trip ??= held.records.get(record(TRIP));
+      camp ??= held.records.get(record(CAMP));
       return false;
     };
     await checkReports(stack, out);
@@ -552,13 +572,6 @@ describe('the report check, against a server that answers the way the API does',
     assert.match(trip.tripDate, /^\d{4}-\d{2}-\d{2}$/);
     assert.equal(camp.startDate, trip.tripDate);
     assert.deepEqual(trip.participants, []);
-  });
-
-  it('never files the camp\'s write-up', async () => {
-    // Deleting a camp leaves a document that was filed on it standing, and no route removes a
-    // document — so filing one here would leave it on every installation the check ran against.
-    await checkReports(stack, out);
-    assert.ok(!state.asked.includes(`POST /api/v1/expeditions/${CAMP_ID}/report`));
   });
 
   it('signs in as the web application, proving its key, and asks for no lasting credential', async () => {
@@ -588,68 +601,77 @@ describe('the report check, against a server that answers the way the API does',
       checkReports({ ...stack, publicUrl: 'http://localhost:8080' }, out),
       /named http:\/\/localhost:8080\/auth\/callback .* SILEXGIS_PUBLIC_URL/,
     );
-    assert.equal(state.trips.size, 0);
+    assert.equal(state.records.size, 0);
   });
 
   it('fails when the image cannot write the trip up, and takes the trip away again', async () => {
-    failing(`GET /api/v1/trip-logs/${TRIP_ID}/report`,
+    failing(`GET ${record(TRIP)}/report`,
       (res) => problem(res, 500, 'server.error', 'The writer failed.'));
 
     await assert.rejects(checkReports(stack, out),
       /\/report: it answered 500 server\.error The writer failed\./);
-    assert.equal(state.trips.size, 0, 'the failed check left its trip behind');
-    assert.ok(!state.asked.includes('POST /api/v1/expeditions'), 'the check went on after failing');
+    assert.equal(state.records.size, 0, 'the failed check left its trip behind');
+    assert.ok(!state.asked.includes(`POST ${CAMP.collection}`), 'the check went on after failing');
     assert.match(said, /Writing up a throwaway trip failed\n$/);
   });
 
   it('fails when a write-up comes back as something other than a document', async () => {
-    failing(`GET /api/v1/expeditions/${CAMP_ID}/report`, (res) => {
+    failing(`GET ${record(CAMP)}/report`, (res) => {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end('<!doctype html><title>SilexGIS</title>');
     });
 
     await assert.rejects(checkReports(stack, out), /served as "text\/html"/);
-    assert.equal(state.camps.size, 0, 'the failed check left its camp behind');
+    assert.equal(state.records.size, 0, 'the failed check left its camp behind');
+    // The trip's half had already passed, and had cleared up after itself by then.
+    assert.match(said, /Deleting the trip ok \(its filed write-up went with it\)\n/);
+    assert.match(said, /Writing up a throwaway camp failed\n$/);
   });
 
-  it('fails when filing answers without having filed anything', async () => {
-    failing(`POST /api/v1/trip-logs/${TRIP_ID}/report`, (res) => json(res, 200, {
-      documentId: '00000000-0000-0000-0000-000000000000', fileId: FILE_ID, fileName: 'trip-report.docx',
-    }));
+  // The three ways filing and deleting can go wrong are asked of the camp as well as of the
+  // trip. They are two deletes and two filing routes in the application, written separately, and
+  // one of them keeping a rule says nothing about the other.
+  for (const [what, kind] of [['trip', TRIP], ['camp', CAMP]]) {
+    it(`fails when filing the ${what}'s write-up answers without having filed anything`, async () => {
+      failing(`POST ${record(kind)}/report`, (res) => json(res, 200, {
+        documentId: '00000000-0000-0000-0000-000000000000', fileId: FILE_ID, fileName: kind.fileName,
+      }));
 
-    await assert.rejects(checkReports(stack, out), /answered 200 and named no document/);
-    assert.equal(state.trips.size, 0);
-  });
-
-  it('fails when the document it was told about cannot be read back', async () => {
-    failing(`GET /api/v1/documents/${DOCUMENT_ID}`, (res) => problem(res, 404, 'document.not_found'));
-
-    await assert.rejects(checkReports(stack, out), /the document the route said it filed is not there/);
-    assert.equal(state.trips.size, 0);
-  });
-
-  it('fails when deleting the trip leaves its write-up on the installation', async () => {
-    // The whole claim that the check can be run against an installation rests on this, so it
-    // is checked on every run rather than assumed from how the delete is written today.
-    failing(`DELETE /api/v1/trip-logs/${TRIP_ID}`, (res) => {
-      state.trips.delete(TRIP_ID);
-      res.writeHead(204);
-      res.end();
+      await assert.rejects(checkReports(stack, out), /answered 200 and named no document/);
+      assert.equal(state.records.size, 0);
+      assert.match(said, new RegExp(`Filing that write-up against the ${what} failed\\n$`));
     });
 
-    const stillThere = `GET /api/v1/documents/${DOCUMENT_ID} answered 200 after the delete`;
-    await assert.rejects(checkReports(stack, out),
-      new RegExp(`${stillThere}, so the check has left it behind`));
-    assert.match(said, /Deleting the trip failed\n$/);
-  });
+    it(`fails when the document filed on the ${what} cannot be read back`, async () => {
+      failing(`GET ${filed(kind)}`, (res) => problem(res, 404, 'document.not_found'));
+
+      await assert.rejects(checkReports(stack, out), /the document the route said it filed is not there/);
+      assert.equal(state.records.size, 0);
+    });
+
+    it(`fails when deleting the ${what} leaves its write-up on the installation`, async () => {
+      // The whole claim that the check can be run against an installation rests on this, so it
+      // is checked on every run rather than assumed from how the delete is written today.
+      failing(`DELETE ${record(kind)}`, (res) => {
+        state.records.delete(record(kind));
+        res.writeHead(204);
+        res.end();
+      });
+
+      const stillThere = `GET ${filed(kind)} answered 200 after the delete`;
+      await assert.rejects(checkReports(stack, out),
+        new RegExp(`${stillThere}, so the check has left it behind`));
+      assert.match(said, new RegExp(`Deleting the ${what} failed\\n$`));
+    });
+  }
 
   it('says what it could not remove, and still reports the failure that came first', async () => {
     state.intercept = (asked, res) => {
-      if (asked === `GET /api/v1/trip-logs/${TRIP_ID}/report`) {
+      if (asked === `GET ${record(TRIP)}/report`) {
         problem(res, 500, 'server.error');
         return true;
       }
-      if (asked === `DELETE /api/v1/trip-logs/${TRIP_ID}`) {
+      if (asked === `DELETE ${record(TRIP)}`) {
         problem(res, 503, 'server.unavailable');
         return true;
       }
@@ -658,7 +680,7 @@ describe('the report check, against a server that answers the way the API does',
 
     await assert.rejects(checkReports(stack, out), /it answered 500 server\.error/);
     assert.match(said, new RegExp(
-      `could not remove what the check made: DELETE /api/v1/trip-logs/${TRIP_ID} answered 503`));
+      `could not remove what the check made: DELETE ${record(TRIP)} answered 503`));
   });
 });
 

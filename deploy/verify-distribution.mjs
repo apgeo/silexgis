@@ -571,14 +571,64 @@ async function discard(session, out, path) {
 const namesSomething = (id) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id) && /[1-9a-f]/i.test(id);
 
 /**
+ * Has the running image write one record up, files the write-up against it, and deletes the
+ * record — confirming that the record and the write-up filed on it are then both gone.
+ *
+ * The same three steps for a trip and for a camp, because one rule holds for both: a write-up
+ * the application generated is a derivative of what it was written for, and goes with it. That
+ * rule is the only reason this check may file a document at all, so it is asked on every run
+ * rather than assumed from how the delete is written today. The day it stopped holding, this
+ * check would be leaving a document behind on every installation it ran against — and nothing
+ * else would say so.
+ */
+async function writeUpAndRemove(session, out, { what, collection, body }) {
+  let record = null;
+  let filed = null;
+  try {
+    await step(out, `Writing up a throwaway ${what}`, async () => {
+      const id = await create(session, collection, body);
+      record = `${collection}/${id}`;
+      return askForWriteUp(session, `${record}/report`);
+    });
+
+    await step(out, `Filing that write-up against the ${what}`, async () => {
+      const kept = await call(session, 'POST', `${record}/report`);
+      const text = await kept.text();
+      if (kept.status !== 200) {
+        throw new Error(`POST ${record}/report answered ${wording(kept.status, text)}`);
+      }
+      const { documentId, fileName } = JSON.parse(text);
+      if (!namesSomething(documentId)) {
+        throw new Error(`POST ${record}/report answered 200 and named no document`);
+      }
+      filed = `/api/v1/documents/${documentId}`;
+      const read = await call(session, 'GET', filed);
+      if (read.status !== 200) {
+        throw new Error(
+          `GET ${filed} answered ${read.status}: the document the route said it filed is not there`,
+        );
+      }
+      return fileName;
+    });
+  } catch (err) {
+    await discard(session, out, record);
+    throw err;
+  }
+  await step(out, `Deleting the ${what}`, async () => {
+    await remove(session, record, [filed]);
+    return 'its filed write-up went with it';
+  });
+}
+
+/**
  * Has the running image write up a trip and a camp, and leaves neither behind.
  *
  * Both are made for the purpose, private to the administrator who made them, and named so that
- * one a killed run left behind says what it is. The trip's write-up is asked for, then filed
- * against the trip, and the trip is deleted — which takes the filed write-up with it, and the
- * check confirms that it did rather than assuming so. What a sign-in and a write always leave —
- * the session's entries in the token store and the lines in the audit trail — stays, as it
- * does for anybody.
+ * one a killed run left behind says what it is. Each write-up is asked for, then filed against
+ * what it was written for, and that record is deleted — which takes the filed write-up with it,
+ * and the check confirms that it did rather than assuming so. What a sign-in and a write always
+ * leave — the session's entries in the token store and the lines in the audit trail — stays, as
+ * it does for anybody.
  *
  * Neither holds a photograph, so the half of the writer that places pictures is not run here. A
  * picture hung on a trip is a document in its own right and deliberately outlives the trip, and
@@ -598,71 +648,18 @@ export async function checkReports(stack, out = process.stdout) {
     session.token = await signIn(stack);
   });
 
-  let trip = null;
-  let filed = null;
-  try {
-    await step(out, 'Writing up a throwaway trip', async () => {
-      const id = await create(session, '/api/v1/trip-logs', {
-        title,
-        tripDate: day,
-        participants: [],
-        // Said rather than left to the default, so that nobody else on the installation is shown
-        // the trip during the seconds it exists.
-        visibility: 'private',
-      });
-      trip = `/api/v1/trip-logs/${id}`;
-      return askForWriteUp(session, `${trip}/report`);
-    });
-
-    await step(out, 'Filing that write-up against the trip', async () => {
-      const kept = await call(session, 'POST', `${trip}/report`);
-      const text = await kept.text();
-      if (kept.status !== 200) {
-        throw new Error(`POST ${trip}/report answered ${wording(kept.status, text)}`);
-      }
-      const { documentId, fileName } = JSON.parse(text);
-      if (!namesSomething(documentId)) {
-        throw new Error(`POST ${trip}/report answered 200 and named no document`);
-      }
-      filed = `/api/v1/documents/${documentId}`;
-      const read = await call(session, 'GET', filed);
-      if (read.status !== 200) {
-        throw new Error(
-          `GET ${filed} answered ${read.status}: the document the route said it filed is not there`,
-        );
-      }
-      return fileName;
-    });
-  } catch (err) {
-    await discard(session, out, trip);
-    throw err;
-  }
-  await step(out, 'Deleting the trip', async () => {
-    await remove(session, trip, [filed]);
-    return 'its filed write-up went with it';
+  // Private in both cases, and said rather than left to the default, so that nobody else on the
+  // installation is shown either record during the seconds it exists.
+  await writeUpAndRemove(session, out, {
+    what: 'trip',
+    collection: '/api/v1/trip-logs',
+    body: { title, tripDate: day, participants: [], visibility: 'private' },
   });
-
-  let camp = null;
-  try {
-    await step(out, 'Writing up a throwaway camp', async () => {
-      const id = await create(session, '/api/v1/expeditions', {
-        name: title,
-        startDate: day,
-        visibility: 'private',
-      });
-      camp = `/api/v1/expeditions/${id}`;
-      // Downloaded and not filed, unlike the trip's. Deleting a camp takes the rows that pinned
-      // files to it and leaves the files themselves, so a write-up filed here would stay on the
-      // installation as a document nothing leads to — and the API has no route that deletes a
-      // document. The download is the part an image can get wrong: it runs the same writer over
-      // the camp's own layout. Filing would add nothing the trip's step has not already shown.
-      return askForWriteUp(session, `${camp}/report`);
-    });
-  } catch (err) {
-    await discard(session, out, camp);
-    throw err;
-  }
-  await step(out, 'Deleting the camp', () => remove(session, camp));
+  await writeUpAndRemove(session, out, {
+    what: 'camp',
+    collection: '/api/v1/expeditions',
+    body: { name: title, startDate: day, visibility: 'private' },
+  });
 }
 
 async function main() {
