@@ -20,11 +20,13 @@ import { NoGrouping, recordGroupingOf, type RecordGrouping } from './recordGroup
  * cannot both exist.
  *
  * **A word this application does not know is treated one of two ways, by what ignoring it would
- * do.** Where it would change *which rows* are shown — a family, a kind, an order — it is not
- * corrected here: it is handed to the server, which refuses it, because silently dropping it would
- * draw a calendar that is not the one the link asked for. Where it only decides *how* the same
- * rows are laid out — which reading, which day a grid is standing on — an unknown word falls back
- * to the ordinary one, because nothing is hidden by drawing the same rows the ordinary way.
+ * do.** Where it would change *which rows* are shown — a family, a kind — it is not corrected
+ * here: it is handed to the server, which refuses it, because silently dropping it would draw a
+ * calendar that is not the one the link asked for. Where it only decides *how* the same rows are
+ * laid out — which reading, which day a grid is standing on, what a list is grouped under — an
+ * unknown word falls back to the ordinary one, because nothing is hidden by drawing the same rows
+ * the ordinary way. An order is the server's to make and is sent as written; one the server does
+ * not know it answers in its own order, which hides nothing either.
  */
 
 /**
