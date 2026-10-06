@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
+import { signedInElsewhere } from './arrange.ts';
 import { gotoRoute, login } from './helpers.ts';
 
 /**
@@ -44,8 +45,9 @@ test('a grant is announced in the inbox, counted in the header, and degrades whe
 
   // The administrator works in a browser of their own. The watched page is the one the person
   // reading their inbox uses, because that is the surface this flow is about.
-  const adminContext = await browser.newContext();
-  const adminPage = await adminContext.newPage();
+  // Through the helper that seeds English for a context of its own: a bare context starts in the
+  // application's default language, and every sign-in label the flow looks for is English.
+  const { context: adminContext, page: adminPage } = await signedInElsewhere(browser);
   const modal = adminPage.getByRole('dialog');
 
   /** Opens the demo cave's permissions editor, whichever side of the grant we are on. */
@@ -57,7 +59,6 @@ test('a grant is announced in the inbox, counted in the header, and degrades whe
   };
 
   try {
-    await login(adminPage);
     await openPermissions();
 
     // User is the subject kind the editor opens on, so only the picker beside it is touched.

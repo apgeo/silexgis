@@ -92,7 +92,7 @@ async function removeFixture(page: Page, fileName: string) {
   const rows = page.locator('.silex-list-item').filter({ hasText: fileName });
   for (let remaining = await rows.count(); remaining > 0; remaining--) {
     await rows.first().getByRole('button', { name: 'delete' }).click();
-    await page.getByRole('button', { name: 'OK' }).click();
+    await page.getByRole('button', { name: 'OK', exact: true }).click();
     await expect(rows).toHaveCount(remaining - 1, { timeout: 15_000 });
   }
 }
@@ -321,7 +321,7 @@ test('filing a document in a cabinet says so on both sides', async ({ page, cons
   await gotoRoute(page, '/cabinets');
   await page.getByRole('button', { name: 'New' }).click();
   await page.getByLabel('Name').fill(cabinetName);
-  await page.getByRole('button', { name: 'OK' }).click();
+  await page.getByRole('button', { name: 'OK', exact: true }).click();
   // The name lands in the tree, the breadcrumb and the heading at once, so the tree row is
   // named rather than the text.
   const cabinetRow = page.getByRole('treeitem').filter({ hasText: cabinetName });
@@ -372,11 +372,11 @@ test('filing a document in a cabinet says so on both sides', async ({ page, cons
   const filed = page.getByRole('row').filter({ hasText: 'e2e-report.pdf' });
   await expect(filed).toHaveCount(1, { timeout: 15_000 });
   await filed.getByRole('button', { name: 'delete' }).click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await page.getByRole('button', { name: 'OK', exact: true }).click();
   await expect(filed).toHaveCount(0, { timeout: 15_000 });
 
   await page.getByRole('button', { name: 'delete' }).first().click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  await page.getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.getByRole('treeitem').filter({ hasText: cabinetName }))
     .toHaveCount(0, { timeout: 15_000 });
 });

@@ -11,6 +11,8 @@ import { login } from './helpers.ts';
 // whatever the table happens to hold.
 test('the delivery health page renders for an administrator', async ({ page }) => {
   await login(page);
+  // The page is filed in the rail's Administration group, which stays shut until somebody opens it.
+  await page.getByRole('menuitem', { name: /Administration$/ }).click();
   await page.getByRole('menuitem', { name: 'Message delivery' }).click();
   await expect(page).toHaveURL(/\/admin\/notification-health$/);
   await expect(page.getByRole('heading', { name: 'Message delivery' })).toBeVisible();

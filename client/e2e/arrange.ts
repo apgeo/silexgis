@@ -52,6 +52,33 @@ export async function registerAccount(request: Page['request'], label: string): 
 }
 
 /**
+ * A browser context of the spec's own that reads English, like the watched one does.
+ *
+ * The console guard's fixture records the language choice on the context it hands a test; a
+ * context a test makes for itself gets no such record, starts in the application's default
+ * language, and every sign-in label the helpers look for then names a field that is labelled in
+ * Romanian — a two-minute wait that names the locator and never the language. Every context a
+ * spec makes for a signed-in person goes through here; one made for an anonymous visitor may too.
+ */
+export async function newEnglishContext(
+  browser: Browser,
+  options?: Parameters<Browser['newContext']>[0],
+): Promise<BrowserContext> {
+  const context = await browser.newContext(options);
+  await context.addInitScript(
+    ({ key, language }) => {
+      try {
+        window.localStorage.setItem(key, language);
+      } catch {
+        // Blocked site data: the sign-in below then fails on a label, which says as much.
+      }
+    },
+    { key: CHOICE_KEY, language: 'en' },
+  );
+  return context;
+}
+
+/**
  * A browser of its own, signed in, reading English.
  *
  * English is seeded the way the fixture seeds it for the watched context, from the application's
@@ -65,17 +92,7 @@ export async function signedInElsewhere(
   browser: Browser,
   account?: Account,
 ): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await browser.newContext();
-  await context.addInitScript(
-    ({ key, language }) => {
-      try {
-        window.localStorage.setItem(key, language);
-      } catch {
-        // Blocked site data: the sign-in below then fails on a label, which says as much.
-      }
-    },
-    { key: CHOICE_KEY, language: 'en' },
-  );
+  const context = await newEnglishContext(browser);
   const page = await context.newPage();
   if (account) {
     await login(page, account.email, account.password);
