@@ -5,6 +5,7 @@ import {
   type Browser,
   type BrowserContext,
   type Page,
+  type Request,
   type TestInfo,
 } from '@playwright/test';
 import {
@@ -68,6 +69,19 @@ const ALLOWED_EVERYWHERE: { pattern: RegExp; reason: string }[] = [
       'request it lost still fails on what the test asked of it',
   },
 ];
+
+/**
+ * The mark left on a test during which the browser cut a request off because the machine's network
+ * changed under it.
+ *
+ * The entry above keeps the browser's line about it from failing the test. That is not the same as
+ * the test passing: a page that was loading at that moment has lost part of its own code and never
+ * starts, and the test fails on whatever it then asked of an empty screen. Nothing in that failure
+ * names its cause, so it is named here. The suite's runner reads this word off the run's report,
+ * runs a failure that carries it again on its own, and takes the second result as the verdict —
+ * which it does for no other failure. A script test holds the two spellings of the word together.
+ */
+const NETWORK_CHANGED = 'network-changed';
 
 /**
  * One error as the suite saw it — the shared record shape, with the suite's own fields filled in.
@@ -251,9 +265,27 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
       // too — the multi-window flows are exactly where a second window's errors would otherwise
       // go unseen. Both routes are taken because which of them yields the first page depends on
       // whether this fixture is set up before Playwright creates it.
+      // Requests the browser cut off because the network changed, across every page of every
+      // watched context. The test is marked at the first of them and not when it ends: a test that
+      // dies badly enough to skip its own ending is one of the tests the mark is for.
+      let cutOff = 0;
+      const noteCutOff = (request: Request) => {
+        if (request.failure()?.errorText !== 'net::ERR_NETWORK_CHANGED') {
+          return;
+        }
+        cutOff += 1;
+        if (cutOff === 1) {
+          testInfo.annotations.push({
+            type: NETWORK_CHANGED,
+            description: "the machine's network changed under the browser and cut requests off",
+          });
+        }
+      };
+
       const watchContext = (watchedContext: BrowserContext) => {
         watchedContext.on('page', watch);
         watchedContext.pages().forEach(watch);
+        watchedContext.on('requestfailed', noteCutOff);
       };
       watchContext(context);
       // And any context the test goes on to make for itself, through `ownContext`.
@@ -271,6 +303,13 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
         captured: unexplained,
       });
       watchForRunningTest = null;
+
+      if (cutOff > 0) {
+        process.stdout.write(
+          `\n  the network changed under the browser in "${testInfo.title}" ` +
+            `[${testInfo.project.name}]: ${cutOff} request(s) cut off\n`,
+        );
+      }
 
       // What the global list passed over is still said, in one line: it is excused, not unseen.
       // The entry there stands for the machine's network changing under the browser, and what
