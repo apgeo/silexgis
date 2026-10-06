@@ -15,12 +15,19 @@ import { expect, type Locator, type Page } from '@playwright/test';
  *
  * CSS animations are finished rather than caught halfway, so a drawer still sliding in does not
  * keep the picture from ever settling. Nothing drawn on a canvas is touched by that.
+ *
+ * `stillFor` asks for more than two captures alike: the picture must have gone that many
+ * milliseconds without changing. It is for a scene drawn in software, where the next frame can be
+ * longer in coming than two captures are apart — a model that has not appeared yet, or a panel
+ * that has not redrawn from under a dialog, is two identical pictures of the wrong thing. A picture
+ * that something is going to be compared with needs it; one kept only to be looked at does not.
  */
 export async function settledPicture(
   target: Page | Locator,
-  options: { fullPage?: boolean } = {},
+  options: { fullPage?: boolean; stillFor?: number } = {},
 ): Promise<Buffer> {
   let previous: Buffer | null = null;
+  let unchangedSince = 0;
   let settled: Buffer | null = null;
   await expect
     .poll(
@@ -29,7 +36,10 @@ export async function settledPicture(
           'goto' in target
             ? await target.screenshot({ fullPage: options.fullPage, animations: 'disabled' })
             : await target.screenshot({ animations: 'disabled' });
-        if (previous !== null && previous.equals(current)) {
+        const now = Date.now();
+        if (previous === null || !previous.equals(current)) {
+          unchangedSince = now;
+        } else if (now - unchangedSince >= (options.stillFor ?? 0)) {
           settled = current;
         }
         previous = current;

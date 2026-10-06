@@ -127,9 +127,9 @@ async function exportMovie(page: Page, dialog: Locator) {
  * The tracking panel's own picture, as the page shows it: taken before and after a movie is made,
  * to prove the movie was drawn by a viewer of its own and left this one — camera, markers — alone.
  */
-async function panelPicture(page: Page): Promise<string> {
+async function panelPicture(page: Page, options: { stillFor?: number } = {}): Promise<string> {
   const canvas = page.getByTestId('trip-tracking-model-panel').locator('canvas').first();
-  return (await settledPicture(canvas)).toString('base64');
+  return (await settledPicture(canvas, options)).toString('base64');
 }
 
 /** The share of pixels two same-sized PNGs differ at by more than a whisper, counted in the page. */
@@ -253,8 +253,10 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   await page.getByTestId('trip-tracking-model-toggle').click();
   const panelCanvas = page.getByTestId('trip-tracking-model-panel').locator('canvas').first();
   await expect(panelCanvas).toBeVisible({ timeout: 60_000 });
-  // Taken once the panel's markers have settled where the replay puts them.
-  const panelBefore = await panelPicture(page);
+  // Taken once the panel's markers have settled where the replay puts them. The model is drawn
+  // in software and arrives in its own time, so two pictures alike are not yet the scene at rest:
+  // it has to have stood still for a while. Everything after is compared with this one.
+  const panelBefore = await panelPicture(page, { stillFor: 2_000 });
 
   // ---- The movie dialog, opened from the panel with this trip ticked ----
   await page.getByTestId('trip-tracking-movie').click();
@@ -349,9 +351,15 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   // ---- Closing the dialog leaves the panel's own viewer as it was ----
   await dialog.locator('.movie-dialog-footer').getByRole('button', { name: 'Close', exact: true }).click();
   await expect(dialog).toBeHidden();
-  // Taken once the panel has finished redrawing from under the dialog.
-  const panelAfter = await panelPicture(page);
-  expect(await differingShare(page, panelBefore, panelAfter)).toBeLessThan(0.002);
+  // The panel redraws from under the dialog some frames after it has gone, so its picture is taken
+  // until it is the one from before — which it never becomes if making the movie moved this
+  // viewer's camera or its markers.
+  await expect
+    .poll(async () => differingShare(page, panelBefore, await panelPicture(page)), {
+      message: "the panel's own viewer did not come back as it was",
+      timeout: 30_000,
+    })
+    .toBeLessThan(0.002);
 
   // ---- The cave's survey list offers the same movie, with both trips to choose from ----
   await gotoRoute(page, `/caves/${caveId}`);
