@@ -543,6 +543,160 @@ public sealed class CalendarTests : IAsyncLifetime, IDisposable, IClassFixture<P
         (await IdsAsync(ana, $"{window}&includePast=false")).ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A kind is something only a club date has, so naming kinds narrows the club dates and says
+    /// nothing about the other two families: a trip and a camp are each exactly one thing, and a
+    /// narrowing they cannot answer leaves them where the family narrowing put them. Nothing is
+    /// dropped that the reader did not ask to drop, and every combination stays askable — the
+    /// club dates of two kinds and nothing else is those two kinds with the other families turned
+    /// off, which is the question the last assertions here ask.
+    /// </summary>
+    /// <remarks>
+    /// The window holds one row of each family and three club dates of three kinds, so every
+    /// answer below is an exact set: a narrowing that dropped the trip, or kept the wrong kind,
+    /// or answered everything, each fails a different line.
+    /// </remarks>
+    [Fact]
+    public async Task A_kind_narrows_the_club_dates_and_leaves_trips_and_camps_where_they_were()
+    {
+        var window = "from=2062-02-01&to=2062-02-28";
+
+        var trip = await TripAsync("Cal kind trip", "2062-02-03");
+        var camp = await CampAsync("Cal kind camp", "2062-02-04", "2062-02-06");
+        var meeting = await EventAsync("Cal kind meeting", "2062-02-10");
+        var training = await EventAsync("Cal kind training", "2062-02-11", kind: "training");
+        var deadline = await EventAsync("Cal kind deadline", "2062-02-12", kind: "deadline");
+        await MoveAsync(trip, "planned");
+        await MoveCampAsync(camp, "planned");
+        await MoveEventAsync(meeting, "planned");
+        await MoveEventAsync(training, "planned");
+        await MoveEventAsync(deadline, "planned");
+
+        // Unnarrowed, all five: the absences below are the narrowing and not an empty month.
+        (await IdsAsync(ana, window)).ShouldBe([trip, camp, meeting, training, deadline]);
+
+        // One kind: the other two club dates go, and the trip and the camp do not.
+        (await IdsAsync(ana, $"{window}&kind=training")).ShouldBe([trip, camp, training]);
+
+        // Several kinds are alternatives, as several families are.
+        (await IdsAsync(ana, $"{window}&kind=training,deadline")).ShouldBe([trip, camp, training, deadline]);
+
+        // Read by name the way every other closed vocabulary on a query string is: the spelling
+        // the answer prints, the declared spelling, and either one in any case.
+        (await IdsAsync(ana, $"{window}&kind=ClubMeeting")).ShouldBe([trip, camp, meeting]);
+        (await IdsAsync(ana, $"{window}&kind=CLUBMEETING, deadline")).ShouldBe([trip, camp, meeting, deadline]);
+
+        // Only the club dates of two kinds: the two kinds, and the other families turned off.
+        (await IdsAsync(ana, $"{window}&source=event&kind=training,deadline")).ShouldBe([training, deadline]);
+        (await IdsAsync(ana, $"{window}&source=expedition,event&kind=clubMeeting")).ShouldBe([camp, meeting]);
+
+        // With the club dates not asked for, a kind has nothing to narrow. That is an answer and
+        // not a mistake: the reader turned a family off and left a choice standing beside it.
+        (await IdsAsync(ana, $"{window}&source=tripLog,expedition&kind=training")).ShouldBe([trip, camp]);
+
+        // A parameter that arrived empty is the absence of one.
+        (await IdsAsync(ana, $"{window}&kind=")).ShouldBe([trip, camp, meeting, training, deadline]);
+    }
+
+    /// <summary>
+    /// A word that names no kind is refused with a code of its own, never ignored: an answer that
+    /// quietly dropped half a narrowing would show club dates the reader asked not to see and say
+    /// nothing about it. A number is not a name, and neither is a list of nothing.
+    /// </summary>
+    [Fact]
+    public async Task A_kind_this_application_does_not_have_is_refused_and_never_ignored()
+    {
+        var window = "from=2062-03-01&to=2062-03-31";
+
+        (await CodeAsync(ana, $"{window}&kind=banana")).ShouldBe("calendar.kind_invalid");
+        (await CodeAsync(ana, $"{window}&kind=training,banana")).ShouldBe("calendar.kind_invalid");
+
+        // The underlying number of a real kind, which the framework's own parse would accept.
+        (await CodeAsync(ana, $"{window}&kind=1")).ShouldBe("calendar.kind_invalid");
+
+        // Present, and naming nothing at all.
+        (await CodeAsync(ana, $"{window}&kind=,")).ShouldBe("calendar.kind_invalid");
+
+        // Refused whether or not the family it narrows was asked for: what is wrong is the word.
+        (await CodeAsync(ana, $"{window}&source=tripLog&kind=banana")).ShouldBe("calendar.kind_invalid");
+
+        // The positive beside them, so a route refusing every kind could not pass.
+        (await ana.GetAsync($"/api/v1/calendar?{window}&kind=gearCheck")).StatusCode
+            .ShouldBe(HttpStatusCode.OK);
+    }
+
+    /// <summary>
+    /// Naming a kind is laid on top of the reader's own visibility exactly as every other
+    /// narrowing here is, so it can only ever take rows away from what she could already read. A
+    /// club date of the kind she asked for that she may not open stays out, and asking for its
+    /// kind by name does not change that.
+    /// </summary>
+    /// <remarks>
+    /// The reader is the plain one who holds nothing: two of the three club dates are open to
+    /// every account and one is its author's alone, and the one that is shut is of the kind she
+    /// asks for — the only arrangement in which a narrowing that widened would show.
+    /// </remarks>
+    [Fact]
+    public async Task A_kind_narrows_what_a_reader_may_already_read_and_never_widens_it()
+    {
+        var window = "from=2062-04-01&to=2062-04-30";
+
+        var shutTraining = await EventAsync("Cal kind shut", "2062-04-06", kind: "training");
+        var openTraining = await EventAsync(
+            "Cal kind open", "2062-04-07", kind: "training", visibility: "authenticated");
+        var openMeeting = await EventAsync(
+            "Cal kind open meeting", "2062-04-08", visibility: "authenticated");
+        await MoveEventAsync(shutTraining, "planned");
+        await MoveEventAsync(openTraining, "planned");
+        await MoveEventAsync(openMeeting, "planned");
+
+        // Its author reads all three, so the row the reader is refused really is there.
+        (await IdsAsync(ana, $"{window}&kind=training")).ShouldBe([shutTraining, openTraining]);
+        (await reader.GetAsync($"/api/v1/events/{shutTraining}")).StatusCode
+            .ShouldBe(HttpStatusCode.NotFound);
+
+        (await IdsAsync(reader, window)).ShouldBe([openTraining, openMeeting]);
+
+        var hers = await BodyAsync(reader, $"{window}&kind=training");
+        hers.GetProperty("entries").EnumerateArray()
+            .Select(x => x.GetProperty("id").GetGuid()).ShouldBe([openTraining]);
+        hers.GetProperty("omitted").GetInt32().ShouldBe(0);
+    }
+
+    /// <summary>
+    /// The shortfall the answer reports is counted over the club dates the kind left, not over
+    /// the ones it took away. Counted any earlier, a reader who narrowed to one kind would be
+    /// warned about rows that are missing only because she asked for them to be.
+    /// </summary>
+    [Fact]
+    public async Task The_shortfall_counts_what_a_kind_left_and_not_what_it_took_away()
+    {
+        using var capped = new SilexGisApiFactory(
+            connectionString, new Dictionary<string, string?> { ["Calendar:MaxRows"] = "1" });
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        await AuthHelper.CreateUserAsync(capped, GlobalRoles.Editor, $"cal-kcap-{suffix}@t.local");
+        using var cappedReader = await AuthHelper.BearerClientAsync(capped, $"cal-kcap-{suffix}@t.local");
+
+        var window = "from=2062-05-01&to=2062-05-31";
+        var training = await EventAsync("Cap training", "2062-05-05", kind: "training", visibility: "authenticated");
+        var meeting = await EventAsync("Cap meeting", "2062-05-06", visibility: "authenticated");
+        var conference = await EventAsync("Cap conference", "2062-05-07", kind: "conference", visibility: "authenticated");
+        await MoveEventAsync(training, "planned");
+        await MoveEventAsync(meeting, "planned");
+        await MoveEventAsync(conference, "planned");
+
+        // The cap really does bite in this window, so the zero below is the count being right
+        // and not a cap that was never reached.
+        var whole = await BodyAsync(cappedReader, $"{window}&source=event");
+        whole.GetProperty("entries").GetArrayLength().ShouldBe(1);
+        whole.GetProperty("omitted").GetInt32().ShouldBe(2);
+
+        var narrowed = await BodyAsync(cappedReader, $"{window}&source=event&kind=conference");
+        narrowed.GetProperty("entries").EnumerateArray()
+            .Select(x => x.GetProperty("id").GetGuid()).ShouldBe([conference]);
+        narrowed.GetProperty("omitted").GetInt32().ShouldBe(0);
+    }
+
     public Task DisposeAsync() => Task.CompletedTask;
 
     public void Dispose()
@@ -761,15 +915,20 @@ public sealed class CalendarTests : IAsyncLifetime, IDisposable, IClassFixture<P
         response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
     }
 
-    private async Task<Guid> EventAsync(string title, string date)
+    /// <summary>
+    /// A club date written by the editing account: a club meeting nobody else may read, unless a
+    /// test about kinds or about readers says otherwise.
+    /// </summary>
+    private async Task<Guid> EventAsync(
+        string title, string date, string kind = "clubMeeting", string visibility = "private")
     {
         var response = await ana.PostAsJsonAsync("/api/v1/events", new
         {
             title = $"{title} {Guid.NewGuid():N}",
-            kind = "clubMeeting",
+            kind,
             startDate = date,
             startTime = "19:00",
-            visibility = "private",
+            visibility,
         });
         return await CreatedIdAsync(response);
     }

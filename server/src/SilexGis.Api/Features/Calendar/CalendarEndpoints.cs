@@ -53,6 +53,7 @@ public static class CalendarEndpoints
     private const string WindowInvertedCode = "calendar.window_inverted";
     private const string WindowTooWideCode = "calendar.window_too_wide";
     private const string SourceInvalidCode = "calendar.source_invalid";
+    private const string KindInvalidCode = "calendar.kind_invalid";
     private const string StateInvalidCode = "calendar.state_invalid";
 
     /// <summary>
@@ -67,7 +68,10 @@ public static class CalendarEndpoints
         api.MapGet("/calendar", GetAsync)
             .WithTags("Calendar")
             .WithSummary(
-                "The trips, camps and events a caller may read whose days fall in a window.");
+                "The trips, camps and events a caller may read whose days fall in a window. "
+                + "'source' names the families wanted and 'kind' the kinds of event, each a "
+                + "comma-separated list; a kind narrows the events and leaves trips and camps "
+                + "as 'source' left them.");
         return api;
     }
 
@@ -77,6 +81,16 @@ public static class CalendarEndpoints
     /// Narrows to the named families of record, comma-separated. Absent means all of them, which
     /// is the point of the surface; naming several is how "everything except one family" is
     /// asked for.
+    /// </param>
+    /// <param name="kind">
+    /// Narrows the events to the named kinds, comma-separated, and narrows nothing else. A kind is
+    /// something only an event has: a trip and a camp are each exactly one thing, so a narrowing
+    /// they cannot answer leaves them exactly where <paramref name="source"/> put them rather
+    /// than dropping them. Dropping them would take rows away that the caller never asked to
+    /// lose, and the family narrowing already exists for a caller who does want them gone —
+    /// events of two kinds and nothing else is those two kinds with the other families not
+    /// asked for. Where events themselves are not asked for there is nothing for a kind to narrow,
+    /// which is an answer and not a refusal. A word that names no kind is refused, never ignored.
     /// </param>
     /// <param name="state">
     /// Narrows to one lifecycle state. A state that reaches no calendar is refused rather than
@@ -114,6 +128,7 @@ public static class CalendarEndpoints
         DateOnly? from,
         DateOnly? to,
         string? source,
+        string? kind,
         string? state,
         Guid? cavingGroupId,
         bool? mine,
@@ -162,32 +177,30 @@ public static class CalendarEndpoints
         // Several families may be named at once, comma-separated, because "everything except
         // trips" is a question a reader can ask of a record with three families in it and a
         // single-valued narrowing cannot express it. Absent still means all of them. A list that
-        // names every family is the same answer as naming none, and is left as the null set so
-        // nothing downstream has to treat the two as different.
-        HashSet<CalendarSource>? sourceFilter = null;
-        if (!string.IsNullOrWhiteSpace(source))
+        // names every family is the same answer as naming none, and nothing downstream treats
+        // the two differently.
+        if (!CalendarNarrowing.TryParseSet<CalendarSource>(source, out var sourceFilter, out var unknownSource))
         {
-            var wanted = new HashSet<CalendarSource>();
-            foreach (var word in source.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (!RouteEnums.TryParse<CalendarSource>(word, out var sourceValue))
-                {
-                    return ApiProblems.BadRequest(SourceInvalidCode, $"Unknown source '{word}'.");
-                }
-
-                wanted.Add(sourceValue);
-            }
-
             // A parameter that was present but named nothing at all is a caller asking for a
             // narrowing they did not write; answering the whole record would be answering a
             // different question.
-            if (wanted.Count == 0)
-            {
-                return ApiProblems.BadRequest(SourceInvalidCode, "'source' names no family.");
-            }
-
-            sourceFilter = wanted;
+            return ApiProblems.BadRequest(
+                SourceInvalidCode,
+                unknownSource is null ? "'source' names no family." : $"Unknown source '{unknownSource}'.");
         }
+
+        // Read whether or not events are among the families asked for. What is wrong with a
+        // word that names no kind is the word, and a caller who is told so only on the requests
+        // that happen to include events would have a filter that is silently broken on the rest.
+        if (!CalendarNarrowing.TryParseSet<EventKind>(kind, out var kindSet, out var unknownKind))
+        {
+            return ApiProblems.BadRequest(
+                KindInvalidCode,
+                unknownKind is null ? "'kind' names no kind." : $"Unknown kind '{unknownKind}'.");
+        }
+
+        // An array, because the narrowing runs in the database.
+        EventKind[]? kindFilter = kindSet is null ? null : [.. kindSet];
 
         ActivityState? stateFilter = null;
         if (!string.IsNullOrWhiteSpace(state))
@@ -397,6 +410,17 @@ public static class CalendarEndpoints
             if (cavingGroupId is { } eventGroup)
             {
                 events = events.Where(x => x.CavingGroupId == eventGroup);
+            }
+
+            // The one narrowing only this family can answer, so it is applied here and nowhere
+            // above: the trips and the camps have already been read exactly as they would have
+            // been without it. Like every narrowing in this handler it sits after the reader's
+            // own visibility, so naming a kind can take rows away and can never add one, and it
+            // sits before the count below, so the shortfall the answer reports is of the events
+            // the kind left rather than of the ones it took away.
+            if (kindFilter is { } wantedKinds)
+            {
+                events = events.Where(x => wantedKinds.Contains(x.Kind));
             }
 
             // Being on an event is having been asked and not having declined — its invitation

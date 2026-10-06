@@ -9027,6 +9027,13 @@ export interface CalendarParams {
    * which a single word cannot express once there are more than two families.
    */
   source?: string;
+  /**
+   * The kinds of event wanted, comma-separated. It narrows the events and nothing else: a trip
+   * and a camp have no kind, so they stay exactly where `source` put them rather than being
+   * dropped by a question they cannot answer. Omitted means every kind. A word the server does
+   * not have is refused rather than ignored.
+   */
+  kind?: string;
   /** A lifecycle state spelled the way the contract spells it. */
   state?: ActivityState;
   /** One group's calendar: the trips it is running and the camps it owns. */

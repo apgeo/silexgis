@@ -1807,13 +1807,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The trips, camps and events a caller may read whose days fall in a window. */
+        /** The trips, camps and events a caller may read whose days fall in a window. 'source' names the families wanted and 'kind' the kinds of event, each a comma-separated list; a kind narrows the events and leaves trips and camps as 'source' left them. */
         get: {
             parameters: {
                 query?: {
                     from?: string;
                     to?: string;
                     source?: string;
+                    kind?: string;
                     state?: string;
                     cavingGroupId?: string;
                     mine?: boolean;
