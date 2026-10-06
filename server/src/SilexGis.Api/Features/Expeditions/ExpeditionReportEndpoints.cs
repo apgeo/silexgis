@@ -5,6 +5,7 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Expeditions;
 using SilexGis.Domain.Permissions;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Documents;
@@ -188,7 +189,7 @@ internal static class ExpeditionReportEndpoints
         // Only what this endpoint produced before, recognised by the name it gives its own output.
         // A club's own written report sits in the same slot and is left exactly where it is:
         // producing a document is not a licence to remove one nobody was asked about.
-        var prefix = GeneratedNamePrefix(id);
+        var prefix = ExpeditionReportNaming.GeneratedPrefix(id);
         var superseded = await db.Attachments
             .Where(a => a.EntityType == AttachedEntityType.Expedition
                 && a.EntityId == id
@@ -271,7 +272,7 @@ internal static class ExpeditionReportEndpoints
             await RosterPeopleAsync(id, db, reading, ct),
             await PlatesAsync(id, db, reading, thumbnails, ct));
 
-        var fileName = $"{GeneratedNamePrefix(id)}{DateTime.UtcNow:yyyyMMdd}.{writer.Extension}";
+        var fileName = $"{ExpeditionReportNaming.GeneratedPrefix(id)}{DateTime.UtcNow:yyyyMMdd}.{writer.Extension}";
         return new BuiltReport(writer.Write(ExpeditionReportDocument.Blocks(content, parts)), fileName, null);
     }
 
@@ -438,17 +439,6 @@ internal static class ExpeditionReportEndpoints
                 .Distinct()
                 .CountAsync(ct)
             : 0;
-
-    /// <summary>
-    /// What every generated write-up of this camp is called, up to the day it was produced.
-    /// </summary>
-    /// <remarks>
-    /// One definition, because it is also how a previously generated write-up is recognised when a
-    /// new one takes its place. Its own prefix, not the trip's: the two supersession queries must
-    /// never be able to reach each other's files.
-    /// </remarks>
-    private static string GeneratedNamePrefix(Guid campId) =>
-        $"expedition-report-{campId.ToString("N")[..8]}-";
 
     /// <summary>
     /// The pictures, obtained the way the galleries of the camp's trips obtain them.
