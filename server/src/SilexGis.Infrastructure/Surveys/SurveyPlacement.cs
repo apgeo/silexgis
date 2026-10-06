@@ -277,21 +277,39 @@ public sealed class SurveyPlacement
     }
 
     /// <summary>
-    /// Where a point of the file is in the world: longitude, latitude, and altitude in metres.
+    /// Where a point of the file is about the anchor, in ground metres: how far east of it, how far
+    /// north of it, and how far above the file's own zero plane.
+    ///
+    /// <para>
+    /// This is the frame a drawable mesh is written in, and it is the first half of
+    /// <see cref="ToWorld"/> on purpose: a wall built here and a station stored through there are
+    /// the same arithmetic up to the last step, so the two cannot drift apart by the grid's turn or
+    /// by its scale. Height is left alone — a grid distorts the ground plan, not the plumb line.
+    /// </para>
     /// </summary>
-    public (double Longitude, double Latitude, double AltitudeM) ToWorld(double x, double y, double z)
+    public (double East, double North, double Up) ToLocal(double x, double y, double z)
     {
         var (turnedX, turnedY) = Turn(x, y);
 
         // Grid metres out of the file, ground metres into the ellipsoid's radii. The two are not
         // the same unit on a projected grid, and the ratio between them is the same everywhere in
         // one cave, so it is measured once at the anchor and applied here.
-        var east = (turnedX - Origin.X) * gridMetreInGroundMetres;
-        var north = (turnedY - Origin.Y) * gridMetreInGroundMetres;
+        return (
+            (turnedX - Origin.X) * gridMetreInGroundMetres,
+            (turnedY - Origin.Y) * gridMetreInGroundMetres,
+            z);
+    }
+
+    /// <summary>
+    /// Where a point of the file is in the world: longitude, latitude, and altitude in metres.
+    /// </summary>
+    public (double Longitude, double Latitude, double AltitudeM) ToWorld(double x, double y, double z)
+    {
+        var (east, north, up) = ToLocal(x, y, z);
 
         return (
             Anchor.Longitude + (east * degreesPerMetreEast),
             Anchor.Latitude + (north * degreesPerMetreNorth),
-            OriginHeightM + z);
+            OriginHeightM + up);
     }
 }

@@ -175,7 +175,7 @@ export const groups = {
     'SurveyCompilationLogTests', 'SurveyCompilationTests', 'SurveyFormatReaderTests',
     'SurveyGraphExtractorTests', 'SurveyGraphTests', 'SurveyMeshTests', 'SurveyModelTests',
     'SurveyPlacementTests', 'SurveySegmentSubstrateTests', 'SurveySourceTests',
-    'SurveyTopologyTests',
+    'SurveyTopologyTests', 'SurveyWallBuilderTests', 'SurveyWallsTests',
   ],
   // What a device asks of this installation, and what it may carry away. The protocol suites
   // and the registration and seed paths a device signs in through are one selection: they fail
@@ -401,7 +401,7 @@ export const crossCutting = {
     'SpeleoLocDevSeedTests', 'SpeleolocTripImportTests', 'SpeologieCatalogueTests',
     'StagedImportTests', 'StructureComparisonTests', 'SurveyCompilationTests',
     'SurveyGraphTests', 'SurveyModelTests', 'SurveyModelTrackedTripsTests',
-    'SurveySegmentSubstrateTests', 'SurveySourceTests', 'SyncPageSizeTests',
+    'SurveySegmentSubstrateTests', 'SurveySourceTests', 'SurveyWallsTests', 'SyncPageSizeTests',
     'SyncProtocolTests', 'SyncUploadTests', 'TerrainProbeTests', 'TrackingCsvImportTests',
     'TripAndTagTests', 'TripCalloutSweepTests', 'TripCaveReachTests', 'TripDeleteCleanupTests',
     'TripImportCommitTests', 'TripImportPreviewResolutionTests', 'TripImportResolutionTests',

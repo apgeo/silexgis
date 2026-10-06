@@ -45,8 +45,11 @@ public sealed record SurveyModelDto(
     /// </summary>
     string? ProcessingError,
     /// <summary>
-    /// Signed URL of the drawable mesh, once a conversion has produced one. Null for the line-plot
-    /// formats, which the embedded viewer reads from <see cref="ModelUrl"/> directly.
+    /// Signed URL of the drawable mesh, once there is one: an uploaded wall mesh converted, or the
+    /// walls a line plot's own reading built from the wall surfaces and passage dimensions in the
+    /// file. Null for a line plot that carries neither — nothing is drawn around a leg nobody
+    /// measured the walls of — and the embedded viewer reads a line plot from
+    /// <see cref="ModelUrl"/> either way.
     /// </summary>
     string? MeshUrl,
     /// <summary>

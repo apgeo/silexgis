@@ -88,7 +88,9 @@ public class SurveyModel : ITimestamped, IAuditable, IAuditChild
     public string? ProcessingError { get; set; }
 
     /// <summary>
-    /// The drawable model produced from <see cref="FileId"/>, once there is one.
+    /// The drawable model produced from <see cref="FileId"/>, once there is one: a wall mesh
+    /// converted, or the walls built out of a line plot's own wall surfaces and measured passage
+    /// dimensions. A line plot that carries neither has none, and that is not a failure.
     ///
     /// <para>
     /// A second file rather than a replacement: uploads are immutable, and the original is what a

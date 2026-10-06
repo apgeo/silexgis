@@ -225,6 +225,11 @@ public class DependencyRuleTests
         "Therion.Blender.CaveSurfaceGrid",
         "Therion.Blender.CaveTraverseError",
 
+        // One face of a wall surface the compiler modelled: three positions in the point list of
+        // the record above, and nothing else. Reached since those surfaces are drawn as walls, and
+        // a value with three numbers in it is as far from starting a process as a type can be.
+        "Therion.Blender.CaveTriangle",
+
         // The centreline graph derived from a model.
         "Therion.Blender.Geometry.CenterlineBranch",
         "Therion.Blender.Geometry.CenterlineComponent",

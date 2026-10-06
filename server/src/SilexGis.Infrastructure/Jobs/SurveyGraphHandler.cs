@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
 using SilexGis.Domain;
 using SilexGis.Domain.Entities;
 using SilexGis.Domain.Geo;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Features;
 using SilexGis.Infrastructure.Persistence;
 using SilexGis.Infrastructure.Surveys;
@@ -32,12 +36,25 @@ public sealed record SurveyGraphPayload(Guid SurveyModelId);
 /// can be run again after a crash, and rows appended a second time would double every count
 /// computed over them without failing anything.
 /// </para>
+///
+/// <para>
+/// The same reading also builds the survey's walls, where the file gives something real to build
+/// them from, and stores them as the mesh the 3D scene draws. Here and not in a job of its own
+/// because everything the walls need is in hand at this moment — the parsed file, which is tens of
+/// megabytes to read a second time, and the placement its stations were just stored by — and
+/// because a second job would publish the survey as finished and its walls some seconds later, to a
+/// page that stops asking once it is told the work is done. The walls are the lesser half of this
+/// job all the same: nothing that goes wrong building or storing them fails the reading, undoes it
+/// or marks the model as failed. The stations and legs are what the file is uploaded for.
+/// </para>
 /// </summary>
 public sealed class SurveyGraphHandler(
     SilexGisDbContext db,
     IFileStore fileStore,
     SurveyGraphExtractor extractor,
-    FeatureWriteService writes) : IProcessingJobHandler
+    FeatureWriteService writes,
+    DocumentWriteService documents,
+    ILogger<SurveyGraphHandler> logger) : IProcessingJobHandler
 {
     /// <summary>What the feature name column holds; a survey file's own name can be longer.</summary>
     private const int MaxNameLength = 255;
@@ -56,6 +73,11 @@ public sealed class SurveyGraphHandler(
 
         model.Status = SurveyModelStatus.Processing;
         await db.SaveChangesAsync(ct);
+
+        // The walls this reading built, once their bytes are in the file store. Declared out here
+        // because the bytes are written before the transaction that records them, and a reading
+        // that then fails has to be able to take them back out.
+        BuiltWalls? walls = null;
 
         try
         {
@@ -100,6 +122,13 @@ public sealed class SurveyGraphHandler(
             // kills outright. A file with no network at all is measured as nothing.
             var topology = SurveyTopologyAnalyzer.Measure(
                 CenterlineGraph.Build(file), model.Id, DateTime.UtcNow);
+
+            // Built before the transaction opens for the reason the topology is measured there:
+            // it is arithmetic over the whole file followed by a write to the file store, and
+            // neither belongs inside a transaction holding delete locks.
+            walls = await BuildWallsAsync(file, extraction.Placement, upload, model.Id, ct);
+
+            WallsOutcome outcome;
 
             // Clearing what a previous read left behind and writing what this one found are one
             // change to the survey, so they are one transaction. Without it a read that fails on
@@ -152,11 +181,28 @@ public sealed class SurveyGraphHandler(
                 model.Status = SurveyModelStatus.Ready;
                 model.ProcessingError = null;
                 await db.SaveChangesAsync(ct);
+
+                // After the reading is saved and before it is committed, so that the survey is
+                // published as read and as walled in one step — and guarded, so that the commit
+                // below happens whether or not the walls could be recorded.
+                outcome = await ReplaceWallsAsync(tx, model, upload, walls, ct);
                 await tx.CommitAsync(ct);
+            }
+
+            // Bytes are dropped only once the rows that named them are gone for good. The mesh a
+            // previous reading built is no longer referenced by anything; the one this reading
+            // built is in the same position if it could not be recorded.
+            await DiscardAsync(outcome.ReplacedStoragePath, model.Id);
+            if (!outcome.Recorded)
+            {
+                await DiscardAsync(walls?.StoragePath, model.Id);
             }
         }
         catch (Exception e)
         {
+            // The reading left no row behind, so the mesh built for it belongs to nothing.
+            await DiscardAsync(walls?.StoragePath, model.Id);
+
             // A survey that cannot be read or cannot be placed is nearly always something the
             // uploader can do something about — a truncated export, a format that is not what the
             // name says, a coordinate system nobody here knows, a file in plain metres with no
@@ -166,6 +212,223 @@ public sealed class SurveyGraphHandler(
                 payload.SurveyModelId,
                 e is SurveySourceException ? e.Message : "The survey could not be read.");
             throw;
+        }
+    }
+
+    /// <summary>The mesh one reading built, as the file store holds it.</summary>
+    private sealed record BuiltWalls(string StoragePath, long SizeBytes, string Sha256, int TriangleCount);
+
+    /// <summary>What became of the walls inside the reading's transaction.</summary>
+    /// <param name="Recorded">The model now names the mesh this reading built.</param>
+    /// <param name="ReplacedStoragePath">
+    /// Where the mesh of a previous reading was kept, when this one took its place; its row is gone
+    /// and its bytes are the caller's to drop once the transaction has committed.
+    /// </param>
+    private readonly record struct WallsOutcome(bool Recorded, string? ReplacedStoragePath);
+
+    /// <summary>
+    /// Builds the survey's walls and puts them in the file store, or answers null when the file
+    /// gives nothing to build them from — or when building them failed.
+    ///
+    /// <para>
+    /// Both are the same answer to the reading: carry on without walls. A file with no wall
+    /// surfaces and no measured passage is the ordinary case and not an error, and a fault in here
+    /// is logged and goes no further, because the stations and legs this job exists to store are
+    /// already worked out and must not be lost to their own decoration.
+    /// </para>
+    ///
+    /// <para>
+    /// Nothing logged here names a station or a position. The survey may be of a cave whose
+    /// location is protected, and a log is read by people the cave's record is closed to.
+    /// </para>
+    /// </summary>
+    private async Task<BuiltWalls?> BuildWallsAsync(
+        CaveModel file, SurveyPlacement placement, StoredFile upload, Guid surveyModelId, CancellationToken ct)
+    {
+        try
+        {
+            var built = SurveyWallBuilder.Build(file, placement);
+            if (built.Mesh is not { } mesh)
+            {
+                logger.LogInformation(
+                    "Survey model {SurveyModelId} has no walls: {Reason}", surveyModelId, built.Reason);
+                return null;
+            }
+
+            // The vertices are already metres about the anchor, turned onto true north, so the mesh
+            // is written about its own zero. Held in memory rather than in a scratch file: the cap
+            // on a built mesh keeps this to tens of megabytes, beside a parsed upload that is
+            // already larger.
+            using var glb = new MemoryStream();
+            GlbWriter.Write(mesh, (0, 0, 0), glb);
+            var sha256 = Convert.ToHexStringLower(SHA256.HashData(glb.GetBuffer().AsSpan(0, (int)glb.Length)));
+
+            glb.Position = 0;
+            var storagePath = await fileStore.SaveAsync(glb, ".glb", ct);
+
+            logger.LogInformation(
+                "Survey model {SurveyModelId} has walls built from {Source}: {Triangles} triangles, {WalledLegs} of {PassageLegs} legs walled, {RingSides} sides a ring",
+                surveyModelId, built.Source, mesh.TriangleCount, built.WalledLegs, built.PassageLegs, built.RingSides);
+
+            return new BuiltWalls(storagePath, glb.Length, sha256, mesh.TriangleCount);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not build walls for survey model {SurveyModelId} from {UploadFileId}; it is read without them",
+                surveyModelId, upload.Id);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Makes the model's mesh the one this reading built — or none, when it built none — inside the
+    /// reading's own transaction, without ever being able to fail it.
+    ///
+    /// <para>
+    /// <b>Replaced, not added to.</b> The mesh is a derived file of the upload's revision, and a
+    /// revision holds at most one file derived from any upload, which the database enforces. So a
+    /// second reading cannot simply record a second mesh: the first one's row is removed and the
+    /// new one written, in that order and in two saves, because the three rows involved constrain
+    /// one another in a circle — the model must stop naming the old file before the old file can
+    /// go, the old file must go before the new one can claim the same upload, and the new one must
+    /// exist before the model can name it. A reading that built nothing takes the old mesh away
+    /// just the same: what is drawn for a survey is what its latest reading made of it.
+    /// </para>
+    ///
+    /// <para>
+    /// <b>Guarded by a savepoint, not by a transaction of its own.</b> A failed statement poisons a
+    /// PostgreSQL transaction, and this transaction is carrying the reading. Rolling back to the
+    /// savepoint undoes exactly the statements made here and leaves the reading's rows ready to
+    /// commit — with whatever mesh the model had before, which was built from these same bytes and
+    /// is still true of them. The commonest way into that branch is an old mesh somebody has since
+    /// attached to something else: the attachment forbids its removal, quite rightly.
+    /// </para>
+    /// </summary>
+    private async Task<WallsOutcome> ReplaceWallsAsync(
+        IDbContextTransaction transaction,
+        SurveyModel model,
+        StoredFile upload,
+        BuiltWalls? walls,
+        CancellationToken ct)
+    {
+        const string savepoint = "survey_walls";
+        var meshBefore = model.ConvertedFileId;
+        var trianglesBefore = model.TriangleCount;
+
+        await transaction.CreateSavepointAsync(savepoint, ct);
+        try
+        {
+            string? replaced = null;
+            var previous = await db.StoredFiles.FirstOrDefaultAsync(f => f.ConvertedFromFileId == upload.Id, ct);
+            if (previous is not null || model.ConvertedFileId is not null)
+            {
+                model.ConvertedFileId = null;
+                model.TriangleCount = null;
+                if (previous is not null)
+                {
+                    replaced = previous.StoragePath;
+                    db.StoredFiles.Remove(previous);
+                }
+
+                await db.SaveChangesAsync(ct);
+            }
+
+            if (walls is null)
+            {
+                return new WallsOutcome(Recorded: false, replaced);
+            }
+
+            // Another encoding of the uploaded file rather than a new revision of it, so it joins
+            // the upload's own revision and says which file it was derived from — recorded through
+            // the service that knows what a stored file has to carry, which also decides from the
+            // format that a binary mesh has no text to read and no page to draw.
+            var mesh = documents.AddFile(
+                upload.DocumentVersionId,
+                new StoredContent(
+                    walls.StoragePath,
+                    Path.GetFileNameWithoutExtension(upload.OriginalName) + ".glb",
+                    "model/gltf-binary",
+                    walls.SizeBytes,
+                    walls.Sha256,
+                    FileKind.Survey),
+                convertedFromFileId: upload.Id);
+
+            model.ConvertedFileId = mesh.Id;
+            model.TriangleCount = walls.TriangleCount;
+            await db.SaveChangesAsync(ct);
+
+            return new WallsOutcome(Recorded: true, replaced);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogWarning(
+                e,
+                "Could not record the walls built for survey model {SurveyModelId}; it keeps the mesh it had",
+                model.Id);
+
+            await transaction.RollbackToSavepointAsync(savepoint, CancellationToken.None);
+
+            // The database is back where the reading left it, and the change tracker has to agree
+            // before the commit that follows: whatever this staged is forgotten, and the model's
+            // two mesh columns are put back to what the database now holds again — one of the
+            // saves above may have succeeded, in which case the tracker believes a change that the
+            // rollback has just undone.
+            ForgetPendingChanges();
+            var mesh = db.Entry(model).Property(m => m.ConvertedFileId);
+            mesh.CurrentValue = meshBefore;
+            mesh.OriginalValue = meshBefore;
+            mesh.IsModified = false;
+            var triangles = db.Entry(model).Property(m => m.TriangleCount);
+            triangles.CurrentValue = trianglesBefore;
+            triangles.OriginalValue = trianglesBefore;
+            triangles.IsModified = false;
+
+            return new WallsOutcome(Recorded: false, ReplacedStoragePath: null);
+        }
+    }
+
+    /// <summary>
+    /// Drops stored bytes nothing names any more. Never throws: bytes left behind cost disk, while
+    /// a failure here would be reported as a failure of the reading that has already succeeded.
+    /// </summary>
+    private async Task DiscardAsync(string? storagePath, Guid surveyModelId)
+    {
+        if (storagePath is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await fileStore.DeleteAsync(storagePath, CancellationToken.None);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e, "Could not delete a wall mesh survey model {SurveyModelId} no longer uses", surveyModelId);
+        }
+    }
+
+    /// <summary>
+    /// Throws away everything the change tracker is still waiting to write. A failed save leaves
+    /// its entities pending, so the next save through the same tracker would send the identical
+    /// failing statements again.
+    /// </summary>
+    private void ForgetPendingChanges()
+    {
+        foreach (var entry in db.ChangeTracker.Entries().ToList())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.State = EntityState.Detached;
+            }
+            else if (entry.State is EntityState.Modified or EntityState.Deleted)
+            {
+                entry.CurrentValues.SetValues(entry.OriginalValues);
+                entry.State = EntityState.Unchanged;
+            }
         }
     }
 
@@ -193,18 +456,7 @@ public sealed class SurveyGraphHandler(
     /// </summary>
     private async Task RecordFailureAsync(Guid surveyModelId, string reason)
     {
-        foreach (var entry in db.ChangeTracker.Entries().ToList())
-        {
-            if (entry.State == EntityState.Added)
-            {
-                entry.State = EntityState.Detached;
-            }
-            else if (entry.State is EntityState.Modified or EntityState.Deleted)
-            {
-                entry.CurrentValues.SetValues(entry.OriginalValues);
-                entry.State = EntityState.Unchanged;
-            }
-        }
+        ForgetPendingChanges();
 
         var model = await db.SurveyModels
             .FirstOrDefaultAsync(m => m.Id == surveyModelId, CancellationToken.None);

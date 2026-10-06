@@ -42,6 +42,12 @@ namespace SilexGis.Infrastructure.Surveys;
 /// no longer the single component that would tell a stored station name from the way the survey
 /// viewer addresses the same station, so answering with one of them would be a guess.
 /// </param>
+/// <param name="Placement">
+/// Where the file sits in the world, exactly as every position above was worked out. Handed on
+/// rather than left for the next stage to resolve again, because anything else built from this file
+/// has to land on these stations — and two resolutions of one file are two chances to disagree
+/// about its anchor, the turn of its grid or the scale of it.
+/// </param>
 public sealed record SurveyGraphExtraction(
     IReadOnlyList<SurveyStation> Stations,
     IReadOnlyList<SurveyShot> Shots,
@@ -53,7 +59,8 @@ public sealed record SurveyGraphExtraction(
     double AnchorLongitude,
     double AnchorLatitude,
     double AnchorHeightM,
-    double AppliedRotationDeg);
+    double AppliedRotationDeg,
+    SurveyPlacement Placement);
 
 /// <summary>
 /// Reads a parsed compiled survey into this application's own station and shot rows.
@@ -287,7 +294,8 @@ public sealed class SurveyGraphExtractor(ICoordinateProjector projector)
             placement.Anchor.Longitude,
             placement.Anchor.Latitude,
             placement.OriginHeightM,
-            placement.AppliedRotationDeg);
+            placement.AppliedRotationDeg,
+            placement);
     }
 
     /// <summary>
