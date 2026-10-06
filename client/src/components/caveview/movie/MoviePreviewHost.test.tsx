@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../../i18n';
-import type { Cv2Namespace } from '../../../caveview/loadCaveView.ts';
+import i18n from '../../../i18n';
+import { CAVEVIEW_HOME, type Cv2Namespace } from '../../../caveview/loadCaveView.ts';
 import { DEFAULT_MOVIE_SETTINGS } from '../../../caveview/movie/movieSettings.ts';
 import MoviePreviewHost, { type MoviePreviewHandle } from './MoviePreviewHost.tsx';
 import { previewBox, previewSurface } from './previewBox.ts';
@@ -185,6 +185,61 @@ describe('MoviePreviewHost', () => {
     expect(FakeViewer.all).toHaveLength(1);
     // A changed setting reaches the viewer at once.
     await waitFor(() => expect(viewer.grid).toBe(true));
+  });
+
+  it('builds its viewer as the one on the page behind it was built: same home, same language, a lookup of its own', async () => {
+    // The viewer's catalogue is one object shared by every viewer on the page, and a viewer given
+    // no language sets the browser's for all of them. The preview opens over a panel that is
+    // showing a model, so a preview built without the interface's language rewrote that panel's
+    // settings and scale caption in the browser's — and asked for a catalogue nobody ships when
+    // the browser was in a third language. These tests read English, so Romanian is the language
+    // that shows the option is passed rather than happening to match a default.
+    await i18n.changeLanguage('ro');
+    try {
+      render(host());
+      await waitFor(() => expect(FakeViewer.all).toHaveLength(1));
+      expect(FakeViewer.all[0].config.language).toBe('ro');
+      // The versioned home is what brings an upgraded viewer to the browser, and the lookup is
+      // what keeps the bundle from asking a third party which coordinate system a survey is in.
+      expect(FakeViewer.all[0].config.home).toBe(CAVEVIEW_HOME);
+      expect(typeof FakeViewer.all[0].config.crsLookup).toBe('function');
+
+      // Switched with the dialog open: not a reason to read the model again. A turn of the event
+      // loop is waited out, since a rebuild would only then have asked for the file.
+      await act(async () => {
+        await i18n.changeLanguage('en');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(FakeViewer.all).toHaveLength(1);
+
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('reads the language when the viewer is built, not when the dialog opened', async () => {
+    // The viewer is built once the model's address has arrived, which can be a while after the
+    // preview was mounted. A language switched in between is the one the interface is in.
+    model.current = { ...model.current, data: undefined };
+    await i18n.changeLanguage('ro');
+    try {
+      const { rerender } = render(host());
+      await act(async () => {
+        await i18n.changeLanguage('en');
+      });
+      expect(FakeViewer.all).toHaveLength(0);
+
+      model.current = {
+        ...model.current,
+        data: { modelUrl: 'http://files.local/model?sig=1', name: 'Pestera 1', format: 'survex3d' },
+      };
+      rerender(host());
+      await waitFor(() => expect(FakeViewer.all).toHaveLength(1));
+      expect(FakeViewer.all[0].config.language).toBe('en');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 
   it('draws labels at the preview’s share of the frame', async () => {

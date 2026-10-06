@@ -582,8 +582,25 @@ export interface CaveViewViewConstants {
   VIEW_ELEVATION_W: number;
 }
 
+/**
+ * What a viewer is built with. The first three are not optional here, though the bundle would
+ * take a viewer without any of them: each has a default that is wrong for this application, and
+ * the wrong one shows up somewhere else than where it was left out. {@link caveViewerOptions}
+ * supplies all three.
+ */
+export interface CaveViewerOptions {
+  /** Where the bundle fetches its workers, images and catalogues from. */
+  home: string;
+  /** The two-letter code of the language the viewer's own controls are written in. */
+  language: string;
+  /** Resolves the coordinate system a survey names; see {@link makeCrsLookup}. */
+  crsLookup: (code: string) => Promise<string | null>;
+  /** Colours and sizes to draw with in place of the viewer's own, by the names its theme uses. */
+  theme?: Record<string, unknown>;
+}
+
 export interface Cv2Namespace extends CaveViewShadingConstants, CaveViewCameraConstants, CaveViewViewConstants {
-  CaveViewer: new (containerId: string, config: Record<string, unknown>) => CaveViewer;
+  CaveViewer: new (containerId: string, config: CaveViewerOptions) => CaveViewer;
   CaveViewUI: new (viewer: CaveViewer) => CaveViewUi;
   CaveViewToolbar: new (
     viewer: CaveViewer,
@@ -661,4 +678,35 @@ export function makeCrsLookup(): (code: string) => Promise<string | null> {
       return null;
     }
   };
+}
+
+// ---- construction ----
+
+/**
+ * The options every viewer in this application is built with, whichever component builds it.
+ *
+ * <b>One function, because the viewers on a page are not independent.</b> The bundle keeps a single
+ * translation catalogue for the whole page. A viewer built without `language` chooses the
+ * browser's and sets it for every viewer there is: the one already on screen has its settings
+ * panel and its scale caption rewritten in that language, while its toolbar keeps the one it was
+ * built in. So a second place that builds a viewer and leaves the option out does not merely get
+ * its own language wrong — it changes the first one's, and with a browser in a language nobody
+ * ships a catalogue for it asks for a file that is not there. Building the options here means a new
+ * construction site cannot leave one out.
+ *
+ * `language` is the language the interface is being read in — i18next's, not the browser's, which
+ * this application never consults: it opens in Romanian in a browser configured in English. Only
+ * the two-letter code means anything to the viewer. English is built in; any other code is fetched
+ * as `lib/lang-<code>.json` from the vendored directory. Pass the language as it is at the moment
+ * the viewer is built: a language switched while a model is open is not a reason to build another
+ * viewer and load the model again.
+ *
+ * `crsLookup` is for a caller that cannot use this installation's registry — a page read without
+ * an account — and brings its own; everybody else gets {@link makeCrsLookup}.
+ */
+export function caveViewerOptions(
+  language: string,
+  crsLookup: (code: string) => Promise<string | null> = makeCrsLookup(),
+): CaveViewerOptions {
+  return { home: CAVEVIEW_HOME, language: language.slice(0, 2), crsLookup };
 }

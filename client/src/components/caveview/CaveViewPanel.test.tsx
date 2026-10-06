@@ -313,6 +313,38 @@ describe('CaveViewPanel', () => {
     expect(typeof lastViewerConfig!.crsLookup).toBe('function');
   });
 
+  it('builds the viewer in the language the interface is in, and builds no other when that changes', async () => {
+    // A viewer given no language takes the browser's, which says nothing about the language this
+    // application is being read in: it opens in Romanian in a browser configured in English, and
+    // is switched to English in one configured in Romanian. These tests read English, so Romanian
+    // is the language that shows the option is passed rather than happening to match a default.
+    await i18n.changeLanguage('ro');
+    try {
+      const { rerender } = render(<CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" />);
+      await waitFor(() => expect(lastViewerConfig).toBeDefined());
+      expect(lastViewerConfig!.language).toBe('ro');
+
+      // Switched with a model open. The language is read when a viewer is built and is not a
+      // reason to build one: that would download and parse the survey again for a change of words.
+      // A turn of the event loop is waited out, since a rebuild would only then have asked for the
+      // file.
+      await act(async () => {
+        await i18n.changeLanguage('en');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(viewers).toHaveLength(1);
+
+      // The next viewer this same panel builds, for another model, is in the language the
+      // interface is in by then — not the one the panel was mounted in.
+      rerender(<CaveViewPanel fileUrl="http://files.local/another" fileName="demo.lox" />);
+      await waitFor(() => expect(viewers).toHaveLength(2));
+      expect(lastViewerConfig!.language).toBe('en');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
   it('reports entrance label clicks through onEntrancePick', async () => {
     const onPick = vi.fn();
     render(<CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" onEntrancePick={onPick} />);

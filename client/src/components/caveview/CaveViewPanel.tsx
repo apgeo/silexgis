@@ -4,10 +4,9 @@ import { createPortal } from 'react-dom';
 import { Alert, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
-  CAVEVIEW_HOME,
+  caveViewerOptions,
   focusNamedNothing,
   loadCaveView,
-  makeCrsLookup,
   type CaveViewMediaEntry,
   type CaveViewStationMediaSource,
   type CaveViewToolbar,
@@ -499,20 +498,13 @@ export default function CaveViewPanel({
       const blob = await response.blob();
       if (disposed) return;
 
-      // `crsLookup` points the viewer's coordinate-system resolution at this installation's
-      // own registry instead of epsg.io — see loadCaveView.ts for why that matters. A caller with
-      // no account cannot reach that registry and supplies its own; see the prop.
-      // `language` is the interface language this application is being read in, not the
-      // browser's: the viewer would otherwise pick its catalogue from `navigator.language`, so a
-      // member reading the application in English on a Romanian machine (or the other way round)
-      // got a viewer in the other language. Only the two-letter code is meaningful to it; English
-      // is built in, and any other code is fetched as `lib/lang-<code>.json` from the vendored
-      // directory, which carries the Romanian catalogue.
-      const viewer = new cv2.CaveViewer(containerIdRef.current!, {
-        home: CAVEVIEW_HOME,
-        language: languageRef.current.slice(0, 2),
-        crsLookup: crsLookupRef.current ?? makeCrsLookup(),
-      });
+      // Built with what every viewer here is built with — see `caveViewerOptions` for why none of
+      // it is this component's to choose. A caller with no account cannot reach this installation's
+      // coordinate-system registry and supplies a lookup of its own; see the prop.
+      const viewer = new cv2.CaveViewer(
+        containerIdRef.current!,
+        caveViewerOptions(languageRef.current, crsLookupRef.current),
+      );
       viewer.addEventListener('newCave', () => {
         if (disposed) return;
         setStatus('ready');

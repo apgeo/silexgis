@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { CAVEVIEW_HOME, focusNamedNothing, makeCrsLookup } from './loadCaveView.ts';
+import { CAVEVIEW_HOME, caveViewerOptions, focusNamedNothing, makeCrsLookup } from './loadCaveView.ts';
 import { userManager } from '../auth/auth.tsx';
 
 vi.mock('../auth/auth.tsx', () => ({
@@ -79,6 +79,33 @@ describe('the words the triage is written against', () => {
     expect(bundle).toContain('No survey section [');
     expect(bundle).toContain('in the loaded survey');
     expect(bundle).toContain('No survey loaded');
+  });
+});
+
+describe('what a viewer is built with', () => {
+  it('is the versioned home, the language it was given and a lookup against this installation', async () => {
+    const options = caveViewerOptions('ro');
+
+    expect(options.home).toBe(CAVEVIEW_HOME);
+    expect(options.language).toBe('ro');
+    await options.crsLookup('31700');
+    expect(underlying.mock.calls[0][0]).toBe('/api/v1/crs/31700.proj4');
+  });
+
+  it('names the language by its two letters, which is all the viewer keys a catalogue on', () => {
+    // The viewer asks for `lib/lang-<code>.json` with whatever it is given, so a regional form
+    // would be a request for a file that does not exist rather than for the language's catalogue.
+    expect(caveViewerOptions('en-GB').language).toBe('en');
+    expect(caveViewerOptions('ro-RO').language).toBe('ro');
+  });
+
+  it('takes the lookup of a caller that cannot use this installation’s own', () => {
+    // A page read without an account cannot reach the registry and brings a lookup that can.
+    const own = async () => null;
+
+    expect(caveViewerOptions('en', own).crsLookup).toBe(own);
+    // Absent is absent however it is spelled: an optional prop passed straight through.
+    expect(typeof caveViewerOptions('en', undefined).crsLookup).toBe('function');
   });
 });
 

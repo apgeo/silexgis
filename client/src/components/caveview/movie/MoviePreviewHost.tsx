@@ -4,9 +4,8 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSP
 import { useTranslation } from 'react-i18next';
 import { useSurveyModel } from '../../../api/hooks.ts';
 import {
-  CAVEVIEW_HOME,
+  caveViewerOptions,
   loadCaveView,
-  makeCrsLookup,
   type CaveViewer,
   type CaveViewUi,
   type Cv2Namespace,
@@ -118,7 +117,11 @@ export default function MoviePreviewHost({
   recording = false,
   viewRequest = 0,
 }: MoviePreviewHostProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // Read off a ref at the moment the viewer is built: a language switched while the dialog is open
+  // is not a reason to build the viewer and read the model again.
+  const languageRef = useRef(i18n.language);
+  languageRef.current = i18n.language;
   const containerId = `movie-preview-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const roomRef = useRef<HTMLDivElement | null>(null);
   const [room, setRoom] = useState({ width: 0, height: 0 });
@@ -190,9 +193,11 @@ export default function MoviePreviewHost({
       if (!response.ok) throw new Error(`survey file request failed (${response.status})`);
       const blob = await response.blob();
       if (disposed) return;
+      // Built with what the viewer on the page behind the dialog was built with, and the movie's
+      // labels on top. The language is not this viewer's alone: all the viewers on a page share
+      // one, and a preview built without it would put the other into the browser's.
       const viewer = new cv2.CaveViewer(containerId, {
-        home: CAVEVIEW_HOME,
-        crsLookup: makeCrsLookup(),
+        ...caveViewerOptions(languageRef.current),
         theme: MOVIE_LABEL_THEME,
       });
       created = viewer;
