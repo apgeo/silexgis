@@ -24,7 +24,13 @@ import { dirname, join } from 'node:path';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { checkReports, stackSettings, writeUpProblem, zipEntryNames } from './verify-distribution.mjs';
+import {
+  checkReports,
+  stackSettings,
+  unknownOptions,
+  writeUpProblem,
+  zipEntryNames,
+} from './verify-distribution.mjs';
 
 const deployDir = dirname(fileURLToPath(import.meta.url));
 const read = (...parts) => readFileSync(join(deployDir, ...parts), 'utf8');
@@ -653,6 +659,30 @@ describe('the report check, against a server that answers the way the API does',
     await assert.rejects(checkReports(stack, out), /it answered 500 server\.error/);
     assert.match(said, new RegExp(
       `could not remove what the check made: DELETE /api/v1/trip-logs/${TRIP_ID} answered 503`));
+  });
+});
+
+describe('an option the script does not take', () => {
+  it('is named, so that a misspelt one cannot pass for the check having run', () => {
+    assert.deepEqual(unknownOptions(['--no-build', '--down', '--no-cache', '--reports']), []);
+    assert.deepEqual(unknownOptions([]), []);
+    // The one that matters: a letter short of the option that turns the report check on.
+    assert.deepEqual(unknownOptions(['--no-build', '--down', '--report']), ['--report']);
+    assert.deepEqual(unknownOptions(['up', '--Reports']), ['up', '--Reports']);
+  });
+
+  it('is refused before the script looks at anything else', () => {
+    const refusal = script.indexOf('unknownOptions([...args])');
+    assert.ok(refusal > 0, 'the refusal is gone');
+    assert.ok(refusal < script.indexOf("existsSync(join(deployDir, '.env'))"));
+    assert.ok(refusal < script.indexOf('stackSettings(resolvedConfig())'));
+  });
+
+  it('knows every option the script reads', () => {
+    // An option read by the script and missing from the list would be refused as unknown.
+    const read = [...script.matchAll(/args\.has\('(--[a-z-]+)'\)/g)].map((match) => match[1]);
+    assert.ok(read.length > 0);
+    assert.deepEqual(unknownOptions([...new Set(read)]), []);
   });
 });
 

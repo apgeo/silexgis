@@ -40,6 +40,20 @@ const deployDir = dirname(fileURLToPath(import.meta.url));
 const args = new Set(process.argv.slice(2));
 const compose = 'docker compose -f docker-compose.yml';
 
+/** Every option this script takes. */
+const OPTIONS = ['--no-build', '--down', '--no-cache', '--reports'];
+
+/**
+ * The arguments this script does not take.
+ *
+ * Refused, where they used to be ignored, because one option now decides whether a whole check
+ * runs. Ignored, `--report` for `--reports` would skip that check and still end in the line
+ * that says everything is healthy.
+ *
+ * Exported for its own test; `main` is what an operator runs.
+ */
+export const unknownOptions = (argv) => argv.filter((arg) => !OPTIONS.includes(arg));
+
 /** The web application's own registered client. Public: it holds no secret and must prove a key. */
 const WEB_CLIENT_ID = 'silexgis-spa';
 
@@ -111,8 +125,8 @@ export function stackSettings(config) {
 
   // The port line may carry an address in front of the port — `127.0.0.1:8080` publishes on
   // this machine only — and then that address is the one place the front answers. `localhost`
-  // would be a guess at it: the name resolves to the IPv6 loopback first on most machines, and
-  // nothing is listening there when the port was bound to an IPv4 address.
+  // would be a guess at it: where the name resolves to the IPv6 loopback first, nothing is
+  // listening there when the port was bound to an IPv4 address.
   const address = published.host_ip ?? '';
   const everywhere = address === '' || address === '0.0.0.0' || address === '::';
   const host = everywhere ? 'localhost' : address.includes(':') ? `[${address}]` : address;
@@ -652,6 +666,12 @@ export async function checkReports(stack, out = process.stdout) {
 }
 
 async function main() {
+  const unknown = unknownOptions([...args]);
+  if (unknown.length > 0) {
+    console.error(`Unknown option ${unknown.join(' ')} — this script takes ${OPTIONS.join(', ')}.`);
+    process.exit(2);
+  }
+
   if (!existsSync(join(deployDir, '.env'))) {
     console.error('deploy/.env is missing — copy .env.example to .env and set the passwords first.');
     process.exit(2);
