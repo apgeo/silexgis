@@ -171,8 +171,11 @@ function preferredMesh(candidate: SurveyModelInfo, best: SurveyModelInfo): boole
  * The state to publish for a cave that has models but none of them drawable.
  *
  * Only the wall meshes are consulted. A line plot also has work done on it after it arrives — it
- * is read into its stations and shots — but no amount of that work ever produces walls, so
- * reporting "walls on the way" because a .lox is being read promises something that never comes.
+ * is read into its stations and shots, and that reading builds walls when the file carries scraps
+ * or measured passage dimensions. Most files carry neither, and nothing known before the reading
+ * ends says which kind this one is, so a line plot being read is not reported as "walls on the
+ * way": that would promise, for most caves, something that never comes. Walls the reading did
+ * build are found the next time the cave is asked about.
  */
 function stateWithoutMesh(models: readonly SurveyModelInfo[]): Partial<SurveyMesh3DState> {
   const meshes = models.filter((model) => model.format === 'stl');

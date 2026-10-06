@@ -418,9 +418,10 @@ describe('attachSurveyMesh3d', () => {
 
   it('does not promise walls because a line plot is being read', async () => {
     const scene = new FakeScene();
-    // A .lox is read into stations and shots after it arrives, and that work never ends in a
-    // mesh. Reporting it the way a conversion is reported would leave the scene waiting for
-    // walls that are not coming, on a cave that simply has none.
+    // A .lox is read into stations and shots after it arrives, and only a file carrying scraps
+    // or measured passage dimensions ends that reading with walls. Reporting every reading the
+    // way a conversion is reported would leave the scene waiting, for most caves, on walls that
+    // are not coming.
     listed.push([
       model({
         id: 'plot',
