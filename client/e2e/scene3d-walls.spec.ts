@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login, waitForScene3dReady } from './helpers.ts';
+import { gotoRoute, login, waitForScene3dReady } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 
 // The walls of a cave are the heaviest thing the product draws, and until now nothing in the
@@ -96,7 +96,9 @@ test('the walls of a cave are uploaded, converted, drawn in the scene from its p
     }
   });
 
-  await page.goto(`/caves/${caveId}`);
+  // By address, so through a whole sign-in round trip: waited out before the page is looked at,
+  // or a busy machine has this looking for the heading on the redirect pages.
+  await gotoRoute(page, `/caves/${caveId}`);
   await expect(page.getByRole('heading', { name: caveName })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Open in 3D' }).click();
   await page.waitForURL(/\/map3d/);
@@ -200,7 +202,7 @@ test('the walls of every cave in view are drawn together, counted in words, and 
     }
   });
 
-  await page.goto(`/caves/${firstId}`);
+  await gotoRoute(page, `/caves/${firstId}`);
   await expect(page.getByRole('heading', { name: firstName })).toBeVisible({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Open in 3D' }).click();
   await page.waitForURL(/\/map3d/);
