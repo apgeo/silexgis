@@ -65,8 +65,13 @@ async function openFeature(page: Page, name: string): Promise<string> {
  */
 async function createPointFeature(page: Page, name: string) {
   await page.goto('/');
+  // A whole page load: the application starts, restores the session and draws the map before
+  // the editing toolbar exists. Waited for the way signing in waits for it, and with the same
+  // allowance — the default five seconds is a bound on an element appearing on a page that is
+  // already there, and on a busy machine it fails this before the map has been drawn.
+  await expect(page.locator('.ol-viewport')).toBeVisible({ timeout: 45_000 });
   const toolbar = page.locator('.map-edit-overlay');
-  await expect(toolbar).toBeVisible();
+  await expect(toolbar).toBeVisible({ timeout: 15_000 });
   await toolbar.getByRole('button', { name: /Feature type/ }).click();
   await page.getByRole('button', { name: 'Sinkhole / Doline' }).click();
 
@@ -462,12 +467,9 @@ test('the map dock links the entrance that was clicked, not the cave it belongs 
   await dialog.getByRole('button', { name: 'OK' }).click();
   await accepted(page, 'Saved.');
 
-  // In a dock there is no room for a section, so the links are counted on a button and the
-  // rows sit behind it. The button carries an icon, and an icon's own label joins the
-  // accessible name ("link Linked items (1)"), so this matches the counted wording rather
-  // than anchoring on it.
-  const counted = dock.getByRole('button', { name: /Linked items \(\d+\)/ });
-  await expect(counted).toBeVisible({ timeout: 15_000 });
+  // The dock's links section has two shapes — its rows in the open, or a counted button with
+  // the rows behind it — and which one it is in follows how the dock is arranged, so the row is
+  // reached through the helper that opens it either way rather than by asserting one of them.
   await expandDockLinks(dock);
   const row = linkRow(dock, pointName);
   await expect(row).toBeVisible({ timeout: 15_000 });

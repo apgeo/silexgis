@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, registryRow } from './helpers.ts';
 
 /**
  * The selection panel as somebody arranges it.
@@ -75,8 +75,7 @@ test.describe('lateral panel', () => {
     await page.getByRole('button', { name: 'Restore the default arrangement' }).click();
 
     // Cleanup.
-    await page.goto('/features');
-    const row = page.getByRole('row', { name: new RegExp(featureName) });
+    const row = await registryRow(page, featureName);
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.getByRole('button', { name: 'delete' }).click();
     await page.getByRole('button', { name: 'OK' }).click();

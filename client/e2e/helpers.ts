@@ -551,3 +551,33 @@ export async function narrowingFacetOption(
   }
   throw new Error(`No option of this facet leaves some but not all of the ${overall} trips: ${labels.join(', ')}`);
 }
+
+/**
+ * The surface-feature registry narrowed to one name, and the row that name leaves.
+ *
+ * The registry shows a page at a time, newest first, so whether a row is on screen without
+ * narrowing is a fact about how many features were made after it — and in a whole run of the
+ * suite dozens are, which is how a row of the demonstration data that every spec finds when run
+ * alone is not there for the spec that runs fiftieth. A flow that looks a feature up narrows to
+ * it first; whether the row is then there is for the flow to say.
+ */
+export async function registryRow(page: Page, name: string) {
+  await page.goto('/features');
+  await page.getByPlaceholder('Search by name').fill(name);
+  return page.getByRole('row', { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) });
+}
+
+/**
+ * Opens a cave from the registry, narrowing the registry to its name first.
+ *
+ * The registry lists twenty caves at a time by name, and nearly every cave this suite makes is
+ * called "E2E …", which sorts ahead of the demonstration caves. Run alone, a spec finds
+ * "Peștera Demo Mare" on the first page; run after the specs that leave caves behind, it waits two
+ * minutes for a name that is on the second. Narrowing first makes which page a cave is on nobody's
+ * business.
+ */
+export async function openCaveFromRegistry(page: Page, name: string) {
+  await gotoRoute(page, '/caves');
+  await page.getByPlaceholder('Search name or toponym…').fill(name);
+  await page.getByText(name).click();
+}

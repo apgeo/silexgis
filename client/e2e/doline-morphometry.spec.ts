@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, registryRow } from './helpers.ts';
 
 /**
  * A doline drawn as an outline, and the outline measured.
@@ -52,8 +52,7 @@ test('a doline is drawn as an outline and its measured shape is shown', async ({
 
   // Reached from the table rather than from the map, so the assertion below is about the feature
   // page and not about whatever the map's selection panel happens to show.
-  await page.goto('/features');
-  const row = page.getByRole('row', { name: new RegExp(featureName) });
+  const row = await registryRow(page, featureName);
   await expect(row).toBeVisible({ timeout: 15_000 });
   // The name cell is text, not an anchor: this table carries its navigation on the row itself,
   // so the row is what a person clicks to open the feature.
@@ -78,8 +77,7 @@ test('a doline is drawn as an outline and its measured shape is shown', async ({
   await expect(card.getByText(/alignment, not a direction/)).toBeVisible();
 
   // Cleanup, so a re-run of this file starts from the same map.
-  await page.goto('/features');
-  const cleanup = page.getByRole('row', { name: new RegExp(featureName) });
+  const cleanup = await registryRow(page, featureName);
   await cleanup.getByRole('button', { name: 'delete' }).click();
   await page.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByText('Deleted.')).toBeVisible({ timeout: 15_000 });

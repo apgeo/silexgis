@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, openCaveFromRegistry } from './helpers.ts';
 
 /**
  * The document surfaces, driven end to end in a real browser: an upload becoming a document,
@@ -86,8 +86,7 @@ async function acceptDuplicate(page: Page) {
 
 /** Removes an uploaded fixture from the cave, so a re-run starts where this one did. */
 async function removeFixture(page: Page, fileName: string) {
-  await gotoRoute(page, '/caves');
-  await page.getByText('Peștera Demo Mare').click();
+  await openCaveFromRegistry(page, 'Peștera Demo Mare');
   await expect(page.getByText('Photos & documents')).toBeVisible({ timeout: 15_000 });
   const rows = page.locator('.silex-list-item').filter({ hasText: fileName });
   for (let remaining = await rows.count(); remaining > 0; remaining--) {

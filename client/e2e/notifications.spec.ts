@@ -2,7 +2,7 @@
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
 import { signedInElsewhere } from './arrange.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { gotoRoute, login, openCaveFromRegistry } from './helpers.ts';
 
 /**
  * The inbox, driven the way a person reaches it: something happens to somebody, the header
@@ -52,8 +52,7 @@ test('a grant is announced in the inbox, counted in the header, and degrades whe
 
   /** Opens the demo cave's permissions editor, whichever side of the grant we are on. */
   const openPermissions = async () => {
-    await gotoRoute(adminPage, '/caves');
-    await adminPage.getByText(caveName).click();
+    await openCaveFromRegistry(adminPage, caveName);
     await adminPage.getByRole('button', { name: /Permissions/ }).click();
     await expect(modal).toBeVisible({ timeout: 15_000 });
   };

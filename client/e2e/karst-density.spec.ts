@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, registryRow } from './helpers.ts';
 
 /**
  * What a karst area adds up to, and how thickly its features sit.
@@ -20,8 +20,7 @@ import { login } from './helpers.ts';
 test('an area says what it holds, and on what basis it counted', async ({ page }) => {
   await login(page);
 
-  await page.goto('/features');
-  const row = page.getByRole('row', { name: /Platoul Demo/ });
+  const row = await registryRow(page, 'Platoul Demo');
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.click();
   await expect(page).toHaveURL(/\/features\/[0-9a-f-]+$/, { timeout: 15_000 });
@@ -41,8 +40,7 @@ test('an area says what it holds, and on what basis it counted', async ({ page }
 test('a density says how fine it is allowed to be, and why', async ({ page }) => {
   await login(page);
 
-  await page.goto('/features');
-  const row = page.getByRole('row', { name: /Platoul Demo/ });
+  const row = await registryRow(page, 'Platoul Demo');
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.click();
   await expect(page).toHaveURL(/\/features\/[0-9a-f-]+$/, { timeout: 15_000 });

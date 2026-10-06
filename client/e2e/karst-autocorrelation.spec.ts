@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { login, registryRow } from './helpers.ts';
 
 /**
  * Signs in and hands back the session's `authorization` header.
@@ -55,8 +55,7 @@ test('the hot and cold spots are shown at the grid they came from and no finer',
 }) => {
   await login(page);
 
-  await page.goto('/features');
-  const row = page.getByRole('row', { name: /Platoul Demo/ });
+  const row = await registryRow(page, 'Platoul Demo');
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.click();
   await expect(page).toHaveURL(/\/features\/[0-9a-f-]+$/, { timeout: 15_000 });
@@ -82,8 +81,7 @@ test('the reader is told the hot-cell count is uncorrected before they read the 
 }) => {
   await login(page);
 
-  await page.goto('/features');
-  const row = page.getByRole('row', { name: /Platoul Demo/ });
+  const row = await registryRow(page, 'Platoul Demo');
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.click();
   await expect(page).toHaveURL(/\/features\/[0-9a-f-]+$/, { timeout: 15_000 });
