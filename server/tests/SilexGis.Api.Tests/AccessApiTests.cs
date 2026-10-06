@@ -328,6 +328,101 @@ public sealed class AccessApiTests : IAsyncLifetime, IDisposable, IClassFixture<
             .ShouldContain(SeededPermissionGroups.AllUsersSlug);
     }
 
+    /// <summary>
+    /// A KNOWN GAP, pinned as it stands — so that closing it is a deliberate change this test
+    /// greets, and so that nobody reads the capability map as saying more than it does.
+    /// <para>
+    /// The map is decided with no row in view: does the caller hold this action over the domain
+    /// as such. A right held at a caving group's own scope matches rows bound to that group and
+    /// nothing else, so with no row in view it matches nothing. A member whose only right to
+    /// create trips is their club's starter ruleset is therefore told they may create none —
+    /// while the server, asked about a trip bound to that club, accepts it through either door.
+    /// A client that draws its create doors from the map hides a door the server would open.
+    /// </para>
+    /// <para>
+    /// Both halves are asserted, beside the refusal of the same write left unbound, so the
+    /// acceptance is the club's scoped right and nothing wider. The first assertion on the map
+    /// is the one that changes on the day the map — or a second one beside it — learns to say
+    /// that a right is held somewhere rather than everywhere.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Known_gap_a_create_right_held_only_at_a_caving_groups_scope_is_absent_from_the_capability_map_though_the_write_is_accepted()
+    {
+        // Through the route, not written straight into the table: creating a club is what seeds
+        // the starter ruleset its members' rights come from.
+        var club = await admin.PostAsJsonAsync("/api/v1/caving-groups", new
+        {
+            name = $"Capability Club {suffix}",
+            description = (string?)null,
+            website = (string?)null,
+        });
+        club.StatusCode.ShouldBe(HttpStatusCode.Created, await club.Content.ReadAsStringAsync());
+        var clubId = (await club.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        (await admin.PostAsJsonAsync($"/api/v1/caving-groups/{clubId}/members", new
+        {
+            caverId = await RosterHelper.CaverIdForAsync(factory, viewerId),
+            role = "member",
+        })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        // The fixture, stated rather than assumed: the right exists, it reaches this account,
+        // and every form of it is scoped to the club — the account holds no create on trips at
+        // any wider scope, which would make the rest of this test prove nothing.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            var ctx = await RosterHelper.AccessContextOfAsync(db, viewerId);
+            var creates = ctx.Entries
+                .Where(e => e.Domain == AccessDomain.TripLogs
+                    && e.Effect == AccessEffect.Allow
+                    && (e.Actions & AccessAction.Create) != 0)
+                .ToList();
+            creates.ShouldNotBeEmpty();
+            creates.ShouldAllBe(e => e.ScopeKind == AccessScopeKind.CavingGroup && e.ScopeId == clubId);
+        }
+
+        // The gap. Asked with no row in view, the map says this account may create no trip…
+        var capabilities = await viewer.GetFromJsonAsync<JsonElement>("/api/v1/me/capabilities");
+        capabilities.GetProperty("domains").GetProperty("tripLogs").GetString()!
+            .ShouldNotContain("create");
+
+        // …and the server accepts exactly that write, bound to the club: written up after the
+        // fact through the one door,
+        var report = await viewer.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Club report {suffix}",
+            tripDate = "2026-07-01",
+            participants = Array.Empty<object>(),
+            visibility = "cavingGroup",
+            cavingGroupId = clubId,
+        });
+        report.StatusCode.ShouldBe(HttpStatusCode.Created, await report.Content.ReadAsStringAsync());
+
+        // and planned through the other, which binds a plan to its author's one club when the
+        // request names no audience at all.
+        var plan = await viewer.PostAsJsonAsync("/api/v1/trip-logs/plans", new
+        {
+            title = $"Club plan {suffix}",
+            tripDate = "2026-07-08",
+            participants = Array.Empty<object>(),
+        });
+        var planned = await plan.Content.ReadAsStringAsync();
+        plan.StatusCode.ShouldBe(HttpStatusCode.Created, planned);
+        JsonDocument.Parse(planned).RootElement.GetProperty("cavingGroupId").GetGuid().ShouldBe(clubId);
+
+        // Left unbound, the same write is refused — so what admitted the two above is the right
+        // held at the club's scope, which is the one the map could not see.
+        var unbound = await viewer.PostAsJsonAsync("/api/v1/trip-logs/", new
+        {
+            title = $"Nobody's report {suffix}",
+            tripDate = "2026-07-01",
+            participants = Array.Empty<object>(),
+            visibility = "private",
+        });
+        unbound.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await unbound.Content.ReadAsStringAsync()).ShouldContain(CreateRules.ForbiddenCode);
+    }
+
     // ---- feature sets ----
 
     [Fact]
