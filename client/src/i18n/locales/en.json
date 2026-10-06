@@ -2600,7 +2600,9 @@
     "meshesInViewOverBytes": "Walls of {{shown}} of {{total}} caves in view — the rest would exceed {{limit}}.",
     "meshesInViewOverCount": "Walls of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once.",
     "meshesInViewLoading": "Still loading: {{count}}.",
-    "meshesInViewUnreadable": "Could not be read: {{count}}."
+    "meshesInViewUnreadable": "Could not be read: {{count}}.",
+    "surfaceFeaturesCapped": "Showing the first {{limit}} surface features in this view, which is this installation's limit; zoom in to see the rest.",
+    "entrancesCapped": "Showing the first {{limit}} cave entrances in this view, which is this installation's limit; zoom in to see the rest."
   },
   "caveview": {
     "loadError": "Failed to load the 3D model",

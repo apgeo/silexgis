@@ -10,6 +10,7 @@ import { ANCHORED_TO_SURFACE, samePlacement } from './altitude3d.ts';
 import type { Altitude3DPlacement } from './altitude3d.ts';
 import { entranceMarkers, surfaceFeatureLines, surfaceFeatureMarkers } from './caveMarkers3d.ts';
 import { cameraFloorFor, caveFootprint } from './caveFootprint3d.ts';
+import { featuresOf, propertiesOf } from './geoJson3d.ts';
 import {
   caveCenterlines,
   centerlineBounds,
@@ -66,6 +67,15 @@ export interface CaveData3DLimits {
   detailZoom: number;
   /** How many line components one request may serve across all caves in the view. */
   maxPaths: number;
+  /**
+   * The most features any one layer request is answered with, once the installation has said.
+   *
+   * Unlike the two above it has no stand-in value. They shape a request and a wrong guess only
+   * costs a redraw; this one is compared against an answer to decide whether to tell a viewer
+   * that the answer was cut off, and a guessed limit would either say so falsely or stay silent
+   * about a real one.
+   */
+  maxPoints?: number;
 }
 
 const fallbackLimits: CaveData3DLimits = { detailZoom: 18, maxPaths: 25000 };
@@ -110,11 +120,29 @@ type LayerControl = Pick<Scene3DVectorSource<unknown>, 'setVisible' | 'setOpacit
 export interface CaveData3DState extends CenterlineLoad3DState {
   /** True from the moment a load starts until every one of its requests has settled. */
   loading: boolean;
+  /**
+   * The installation's limit, when the surface features drawn stopped at it; zero when they did
+   * not, or when the limit is not known yet.
+   *
+   * A layer that ended and a layer that was cut off look the same on screen. The server caps
+   * every layer request at a published number and answers with the first that many, so an answer
+   * holding exactly that many is one there was more of — and saying so is the only way a viewer
+   * can tell "this view has fewer features than the map" from "this request stopped".
+   */
+  surfaceFeaturesCappedAt: number;
+  /**
+   * The same for the entrances, and only when they were served one by one. Below the clustering
+   * zoom the server sums them into bubbles, and a count of bubbles reaching the limit would say
+   * nothing about entrances.
+   */
+  entrancesCappedAt: number;
 }
 
 export const EMPTY_CAVE_DATA_3D_STATE: CaveData3DState = {
   ...EMPTY_CENTERLINE_LOAD_STATE,
   loading: false,
+  surfaceFeaturesCappedAt: 0,
+  entrancesCappedAt: 0,
 };
 
 export interface CaveData3DHandle {
@@ -178,9 +206,13 @@ export interface CaveData3DHandle {
 
 /** Reads the limits out of the server's published map configuration. */
 export function limitsFromMapConfig(
-  config: Pick<MapConfig, 'centerlineDetailZoom' | 'centerlineMaxPaths'>,
+  config: Pick<MapConfig, 'centerlineDetailZoom' | 'centerlineMaxPaths' | 'maxPoints'>,
 ): CaveData3DLimits {
-  return { detailZoom: config.centerlineDetailZoom, maxPaths: config.centerlineMaxPaths };
+  return {
+    detailZoom: config.centerlineDetailZoom,
+    maxPaths: config.centerlineMaxPaths,
+    maxPoints: config.maxPoints,
+  };
 }
 
 /**
@@ -233,11 +265,34 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
   let drawnEntrances: readonly Scene3DMarker[] = [];
   let drawnFeatures: readonly Scene3DMarker[] = [];
   let drawnFeatureLines: readonly Scene3DPolyline[] = [];
+  // How many features each of the two capped layers was last answered with, kept so the answer
+  // can be measured against a limit that is published after it arrived. Undefined for a layer
+  // that has no answer to measure: it is off, or — for the entrances — it came back as clusters.
+  let answeredFeatures: number | undefined;
+  let answeredEntrances: number | undefined;
 
   const publish = (next: Partial<CaveData3DState>) => {
     state = { ...state, ...next };
     for (const listener of [...listeners]) {
       listener(state);
+    }
+  };
+
+  /** The limit, when an answer of this many features is one the server stopped at it. */
+  const cappedAt = (answered: number | undefined) =>
+    limits.maxPoints !== undefined && answered !== undefined && answered >= limits.maxPoints
+      ? limits.maxPoints
+      : 0;
+
+  /** Says which layers stopped at the limit, and says nothing when that has not changed. */
+  const publishCaps = () => {
+    const surfaceFeaturesCappedAt = cappedAt(answeredFeatures);
+    const entrancesCappedAt = cappedAt(answeredEntrances);
+    if (
+      surfaceFeaturesCappedAt !== state.surfaceFeaturesCappedAt ||
+      entrancesCappedAt !== state.entrancesCappedAt
+    ) {
+      publish({ surfaceFeaturesCappedAt, entrancesCappedAt });
     }
   };
 
@@ -303,6 +358,17 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       }
       drawnEntrances = entranceMarkers(collection, zoom);
       entrances.replace(drawnEntrances);
+      // Measured only for a layer still on: one turned off while its request was in the air has
+      // had its notice taken down on purpose, and this would put it back over an empty view.
+      if (layerVisible[ENTRANCE_SOURCE_ID]) {
+        const answered = featuresOf(collection);
+        // Counted in what the server counts — features — and only when they are entrances. One
+        // cluster anywhere in the answer means the whole answer was summed.
+        answeredEntrances = answered.some((feature) => propertiesOf(feature).cluster === true)
+          ? undefined
+          : answered.length;
+        publishCaps();
+      }
     } catch {
       // As above.
     }
@@ -321,6 +387,12 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
       drawnFeatureLines = surfaceFeatureLines(collection);
       features.replace(drawnFeatures);
       featureLines.replace(drawnFeatureLines);
+      if (layerVisible[SURFACE_FEATURE_SOURCE_ID]) {
+        // The features answered with, not the items drawn: one feature can be several markers or
+        // none at all, and the server's limit is on features.
+        answeredFeatures = featuresOf(collection).length;
+        publishCaps();
+      }
     } catch {
       // As above.
     }
@@ -391,11 +463,23 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
     },
     setLimits(next) {
       const merged = { ...limits, ...next };
-      if (merged.detailZoom === limits.detailZoom && merged.maxPaths === limits.maxPaths) {
+      const asksDifferently =
+        merged.detailZoom !== limits.detailZoom || merged.maxPaths !== limits.maxPaths;
+      // A cap that changed from one number to another means the answers held were cut at the old
+      // one, so they are fetched again. A cap learned for the first time changes nothing about
+      // what to ask: the same server produced the answers already held, at this very limit, and
+      // they only need measuring against it.
+      const capReplaced = limits.maxPoints !== undefined && merged.maxPoints !== limits.maxPoints;
+      const capLearned = limits.maxPoints === undefined && merged.maxPoints !== undefined;
+      if (!asksDifferently && !capReplaced && !capLearned) {
         return;
       }
       limits = merged;
-      void load();
+      if (asksDifferently || capReplaced) {
+        void load();
+      } else {
+        publishCaps();
+      }
     },
     setAltitudePlacement(next) {
       if (samePlacement(next, placement)) {
@@ -445,6 +529,15 @@ export function attachCaveData3d(engine: CaveData3DEngine): CaveData3DHandle {
           // cave, while resetting it would haul a camera that is already down there back up to the
           // default the moment a layer was switched off.
           engine.setCutawayFootprint(undefined);
+        } else {
+          // The same for a layer that stopped at the installation's limit: with it off there is
+          // nothing on screen for "showing the first so many" to be about.
+          if (layer === ENTRANCE_SOURCE_ID) {
+            answeredEntrances = undefined;
+          } else {
+            answeredFeatures = undefined;
+          }
+          publishCaps();
         }
         return;
       }

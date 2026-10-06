@@ -336,6 +336,9 @@ describe('attachCaveData3d', () => {
       detail: false,
       flatCount: 2,
       loading: false,
+      // Neither capped layer reached a limit, and here none has been published to reach.
+      surfaceFeaturesCappedAt: 0,
+      entrancesCappedAt: 0,
     });
     // Loading is announced as well as finished, so chrome can say the view is still filling in.
     expect(seen.length).toBeGreaterThan(1);
@@ -655,6 +658,169 @@ function featureCollection(name: string, at: [number, number] = [25.5, 45.5]) {
     ],
   };
 }
+
+describe('a layer the server stopped at its limit', () => {
+  /** This many surface features, each a point of its own. */
+  function surfaceFeatures(count: number) {
+    return {
+      type: 'FeatureCollection',
+      features: Array.from({ length: count }, (_, index) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [25.4 + index * 0.001, 45.5] },
+        properties: { id: `feature-${index}`, name: `Sinkhole ${index}` },
+      })),
+    };
+  }
+
+  /** This many entrances, served one by one. */
+  function entrances(count: number) {
+    return {
+      type: 'FeatureCollection',
+      features: Array.from({ length: count }, (_, index) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [25.4 + index * 0.001, 45.5] },
+        properties: { id: `entrance-${index}`, caveId: `cave-${index}`, approximate: false },
+      })),
+    };
+  }
+
+  /** This many bubbles, the way the server answers below its clustering zoom. */
+  function clusters(count: number) {
+    return {
+      type: 'FeatureCollection',
+      features: Array.from({ length: count }, (_, index) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [25.4 + index * 0.1, 45.5] },
+        properties: { cluster: true, count: 40 },
+      })),
+    };
+  }
+
+  it('says a layer stopped at the limit once the limit is known, without asking again', async () => {
+    responses.features = () => Promise.resolve(surfaceFeatures(3));
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    await vi.waitFor(() => expect(calls.features).toHaveLength(1));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+
+    // Nothing is claimed about a limit nobody has published: a guessed one would either cry
+    // wolf or stay silent about a real cut.
+    expect(handle.getState().surfaceFeaturesCappedAt).toBe(0);
+
+    handle.setLimits({ maxPoints: 3 });
+
+    // The answer already held was produced at this very limit, so it is measured, not refetched.
+    expect(handle.getState().surfaceFeaturesCappedAt).toBe(3);
+    expect(calls.features).toHaveLength(1);
+    expect(calls.centerlines).toHaveLength(1);
+    handle.detach();
+  });
+
+  it('says nothing about an answer that ended before the limit', async () => {
+    responses.features = () => Promise.resolve(surfaceFeatures(2));
+    responses.entrances = () => Promise.resolve(entrances(2));
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    handle.setLimits({ maxPoints: 3 });
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    await vi.waitFor(() => expect(calls.features.length).toBeGreaterThan(0));
+
+    expect(handle.getState()).toMatchObject({ surfaceFeaturesCappedAt: 0, entrancesCappedAt: 0 });
+    handle.detach();
+  });
+
+  it('says the entrances stopped at the limit when they were served one by one', async () => {
+    responses.entrances = () => Promise.resolve(entrances(4));
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    handle.setLimits({ maxPoints: 4 });
+    await vi.waitFor(() => expect(handle.getState().entrancesCappedAt).toBe(4));
+
+    // The surface features ended short of it, and each layer answers for itself.
+    expect(handle.getState().surfaceFeaturesCappedAt).toBe(0);
+    handle.detach();
+  });
+
+  it('does not mistake a screen of clusters for entrances cut off', async () => {
+    // Four bubbles standing for a hundred and sixty entrances reach a limit of four by count
+    // alone. They are sums, and nothing was left out of them.
+    // A cluster carries a count and no identity, which is not the shape an entrance row has.
+    responses.entrances = () => Promise.resolve(clusters(4) as never);
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    handle.setLimits({ maxPoints: 4 });
+    await vi.waitFor(() => expect(calls.entrances.length).toBeGreaterThan(0));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+
+    expect(handle.getState().entrancesCappedAt).toBe(0);
+    handle.detach();
+  });
+
+  it('stops saying so once the viewer has zoomed in to a view that fits', async () => {
+    vi.useFakeTimers();
+    responses.features = () => Promise.resolve(surfaceFeatures(3));
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    handle.setLimits({ maxPoints: 3 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(handle.getState().surfaceFeaturesCappedAt).toBe(3);
+
+    responses.features = () => Promise.resolve(surfaceFeatures(1));
+    engine.settle();
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(handle.getState().surfaceFeaturesCappedAt).toBe(0);
+    handle.detach();
+  });
+
+  it('takes the notice down with the layer, and does not let a late answer put it back', async () => {
+    let deliver: (value: unknown) => void = () => {};
+    responses.features = () => Promise.resolve(surfaceFeatures(3));
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    handle.setLimits({ maxPoints: 3 });
+    await vi.waitFor(() => expect(handle.getState().surfaceFeaturesCappedAt).toBe(3));
+
+    // A request in the air when the layer goes off.
+    responses.features = () =>
+      new Promise((resolve) => {
+        deliver = resolve;
+      });
+    handle.reload();
+    await vi.waitFor(() => expect(calls.features.length).toBeGreaterThanOrEqual(2));
+    handle.setLayerVisible(SURFACE_FEATURE_SOURCE_ID, false);
+    expect(handle.getState().surfaceFeaturesCappedAt).toBe(0);
+
+    deliver(surfaceFeatures(3));
+    await vi.waitFor(() => expect(handle.getState().loading).toBe(false));
+    // With the layer off there is nothing on screen for "showing the first three" to be about.
+    expect(handle.getState().surfaceFeaturesCappedAt).toBe(0);
+
+    // Back on, the view it missed is loaded and measured again.
+    responses.features = () => Promise.resolve(surfaceFeatures(3));
+    handle.setLayerVisible(SURFACE_FEATURE_SOURCE_ID, true);
+    await vi.waitFor(() => expect(handle.getState().surfaceFeaturesCappedAt).toBe(3));
+    handle.detach();
+  });
+
+  it('fetches again when the installation replaces one limit with another', async () => {
+    responses.features = () => Promise.resolve(surfaceFeatures(3));
+    const engine = new FakeEngine();
+    const handle = attachCaveData3d(engine);
+    handle.setLimits({ maxPoints: 3 });
+    await vi.waitFor(() => expect(handle.getState().surfaceFeaturesCappedAt).toBe(3));
+    const asked = calls.features.length;
+
+    // The answer held was cut at three. Measured against five it would look complete, which is
+    // exactly the silence this exists to prevent — so it is asked for again.
+    responses.features = () => Promise.resolve(surfaceFeatures(5));
+    handle.setLimits({ maxPoints: 5 });
+
+    await vi.waitFor(() => expect(calls.features).toHaveLength(asked + 1));
+    await vi.waitFor(() => expect(handle.getState().surfaceFeaturesCappedAt).toBe(5));
+    handle.detach();
+  });
+});
 
 describe('finding a pick again after the scene has reloaded', () => {
   it('hands back the payload now drawn for the same feature, with the name it now has', async () => {

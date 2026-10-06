@@ -2600,7 +2600,9 @@
     "meshesInViewOverBytes": "Peșteri din vedere cu pereții desenați: {{shown}} din {{total}} — restul ar depăși {{limit}}.",
     "meshesInViewOverCount": "Peșteri din vedere cu pereții desenați: {{shown}} din {{total}} — restul sunt peste cele {{limit}} desenate deodată.",
     "meshesInViewLoading": "Încă se încarcă: {{count}}.",
-    "meshesInViewUnreadable": "Nu au putut fi citite: {{count}}."
+    "meshesInViewUnreadable": "Nu au putut fi citite: {{count}}.",
+    "surfaceFeaturesCapped": "Se arată primele {{limit}} fenomene de suprafață din această vedere, atât cât permite această instalare; apropie vederea pentru a le vedea pe celelalte.",
+    "entrancesCapped": "Se arată primele {{limit}} intrări în peșteri din această vedere, atât cât permite această instalare; apropie vederea pentru a le vedea pe celelalte."
   },
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat",

@@ -1123,6 +1123,18 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     meshesInViewNotice,
     dataState.withheldCount > 0 ? t('map.centerlinesWithheld', { count: dataState.withheldCount }) : undefined,
     dataState.flatCount > 0 ? t('scene3d.centerlinesFlat', { count: dataState.flatCount }) : undefined,
+    // A layer the server cut off at its per-request limit. Without this the scene showing fewer
+    // features than the flat map cannot be told from a request that simply stopped.
+    dataState.surfaceFeaturesCappedAt > 0
+      ? t('scene3d.surfaceFeaturesCapped', {
+          limit: dataState.surfaceFeaturesCappedAt.toLocaleString(i18n.language),
+        })
+      : undefined,
+    dataState.entrancesCappedAt > 0
+      ? t('scene3d.entrancesCapped', {
+          limit: dataState.entrancesCappedAt.toLocaleString(i18n.language),
+        })
+      : undefined,
     surfaceState?.pausedBy ? t(cutawayPauseMessage(surfaceState.pausedBy)) : undefined,
     // The fourth is not about the data at all: this installation was configured with an elevation
     // model that cannot be drawn, and the globe a viewer is looking at is the smooth one. Said

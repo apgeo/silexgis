@@ -35,7 +35,7 @@ vi.mock('../../api/hooks.ts', () => ({
     centerlineRequests.push(args);
     return Promise.resolve(centerlineResponse);
   },
-  fetchEntranceFeatures: () => Promise.resolve(emptyCollection),
+  fetchEntranceFeatures: () => Promise.resolve(entranceResponse),
   fetchMapFeatures: () => Promise.resolve(featureResponse),
   // Named here because leaving it out is not an empty answer: the mock factory replaces the whole
   // module, so the loader's call would raise on the property access, be swallowed by its own
@@ -76,6 +76,8 @@ let centerlineResponse: unknown = {
 };
 /** What the cross-kind overlay answers with; a test that edits a feature changes it in place. */
 let featureResponse: unknown = emptyCollection;
+/** What the entrance layer answers with; empty unless a test is about entrances. */
+let entranceResponse: unknown = emptyCollection;
 /** Which caves the wall-mesh loader asked about, and what it was told they hold. */
 let surveyModelRequests: string[] = [];
 let surveyModels: unknown[] = [];
@@ -213,6 +215,7 @@ beforeEach(() => {
   mapConfig = undefined;
   centerlineRequests = [];
   featureResponse = emptyCollection;
+  entranceResponse = emptyCollection;
   surveyModelRequests = [];
   surveyModels = [];
   caveMeshRequests = [];
@@ -1564,6 +1567,77 @@ describe('the walls of the selected cave', () => {
       useWorkspaceStore.setState({ overlayVisible: { 'survey-mesh': true } });
     });
     await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(2));
+  });
+});
+
+describe('a layer the installation cut off at its limit', () => {
+  /** This many point features, as either capped layer answers with them. */
+  function points(count: number, properties: (index: number) => Record<string, unknown>) {
+    return {
+      type: 'FeatureCollection',
+      features: Array.from({ length: count }, (_, index) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [25.4 + index * 0.001, 45.5] },
+        properties: properties(index),
+      })),
+    };
+  }
+
+  function publishLimit(maxPoints: number) {
+    mapConfig = {
+      centerlineDetailZoom: 18,
+      centerlineMaxPaths: 25000,
+      terrainBuilds: [],
+      maxPoints,
+      meshesInViewMinZoom: 14,
+      meshesInViewMaxCaves: 12,
+      meshesInViewMaxBytes: 64 * 1024 * 1024,
+    };
+  }
+
+  it('says the surface features shown are the first so many, and that this is the limit', async () => {
+    withWebGl2(true);
+    publishLimit(1200);
+    featureResponse = points(1200, (index) => ({ id: `f${index}`, name: `Dolină ${index}` }));
+    renderView();
+
+    // The number is written the way the reader's language writes numbers.
+    expect(
+      await screen.findByText(
+        "Showing the first 1,200 surface features in this view, which is this installation's limit; zoom in to see the rest.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/cave entrances in this view/)).toBeNull();
+  });
+
+  it('says the same of the entrances when they were served one by one', async () => {
+    withWebGl2(true);
+    publishLimit(3);
+    entranceResponse = points(3, (index) => ({
+      id: `e${index}`,
+      caveId: `cave-${index}`,
+      approximate: false,
+    }));
+    renderView();
+
+    expect(
+      await screen.findByText(
+        "Showing the first 3 cave entrances in this view, which is this installation's limit; zoom in to see the rest.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('says nothing of the kind about a view the limit did not touch', async () => {
+    withWebGl2(true);
+    publishLimit(1200);
+    featureResponse = points(4, (index) => ({ id: `f${index}`, name: `Dolină ${index}` }));
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    await waitFor(() =>
+      expect(screen.getByTestId('scene3d-data')).toHaveAttribute('data-loading', 'false'),
+    );
+
+    expect(screen.queryByText(/installation's limit/)).toBeNull();
   });
 });
 
