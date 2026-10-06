@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// <reference types="vitest/config" />
 import { createHash } from 'node:crypto';
-import { appendFileSync, createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
+import {
+  appendFileSync,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,14 +40,22 @@ const devPort = Number(process.env.SILEXGIS_DEV_PORT ?? 5173);
 // starts, and a browser test waits two minutes for a sign-in page that is not coming, naming
 // only the address it waited for. Keyed on this checkout's own path, which separates checkouts
 // whatever they share, and on the port, which separates two servers of one checkout.
+const checkoutDir = path.dirname(fileURLToPath(import.meta.url));
 const dependencyCacheDir = path.join(
   'node_modules',
   '.vite',
-  `${createHash('sha1')
-    .update(path.dirname(fileURLToPath(import.meta.url)))
-    .digest('hex')
-    .slice(0, 8)}-${devPort}`,
+  `${createHash('sha1').update(checkoutDir).digest('hex').slice(0, 8)}-${devPort}`,
 );
+// Whose cache it is, written inside it. The name is a digest and says nothing, and a checkout
+// that is removed leaves its caches behind in the `node_modules` it shared — eighty megabytes
+// for every port it ever served on. scripts/dependency-caches.mjs reads this to remove the
+// caches of checkouts that are no longer there, and leaves alone any cache that does not say.
+try {
+  mkdirSync(path.join(checkoutDir, dependencyCacheDir), { recursive: true });
+  writeFileSync(path.join(checkoutDir, dependencyCacheDir, 'checkout'), `${checkoutDir}\n`);
+} catch {
+  // A read-only tree builds without a cache to name; nothing here is worth failing a build for.
+}
 const proxiedPaths = ['/api', '/connect', '/health', '/openapi', '/.well-known'];
 
 // The 3D engine loads shader workers, decompression modules and icons at runtime rather than

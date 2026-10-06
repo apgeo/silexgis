@@ -31,6 +31,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
+import { pruneDependencyCaches } from './dependency-caches.mjs';
 import {
   ATTEMPTS,
   canBeJudged,
@@ -266,6 +267,11 @@ try {
   if (!existsSync(join(clientDir, 'node_modules'))) {
     console.error('client/node_modules is missing — run `npm ci` in client/ first.');
     process.exit(1);
+  }
+  // Every dev server keeps a dependency cache of its own, and a checkout that is removed leaves
+  // its caches in the node_modules it shared. This is the one place every checkout passes through.
+  for (const checkout of pruneDependencyCaches(join(clientDir, 'node_modules', '.vite'))) {
+    console.log(`Removed the dependency cache of a checkout that is gone: ${checkout}`);
   }
 
   if (!reuse) {
