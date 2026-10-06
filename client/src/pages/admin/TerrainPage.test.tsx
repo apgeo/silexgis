@@ -36,6 +36,8 @@ function mapConfig(
     meshesInViewMinZoom: 14,
     meshesInViewMaxCaves: 12,
     meshesInViewMaxBytes: 64 * 1024 * 1024,
+    meshesInViewMaxCavesLimit: 60,
+    meshesInViewMaxBytesLimit: 512 * 1024 * 1024,
   };
 }
 

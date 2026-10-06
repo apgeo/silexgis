@@ -71,7 +71,20 @@ public sealed class MapOptions
     /// The most caves one request for the wall meshes in a view answers with, nearest the middle
     /// of the view first. The caves beyond it are counted in the answer and not described.
     /// </summary>
+    /// <remarks>
+    /// Where a person starts, not where they must stay: a request may name a count of its own, up
+    /// to <see cref="MeshesInViewMaxCavesLimit"/>.
+    /// </remarks>
     public int MeshesInViewMaxCaves { get; set; } = 12;
+
+    /// <summary>Hard ceiling on a client-requested <see cref="MeshesInViewMaxCaves"/> override.</summary>
+    /// <remarks>
+    /// A person may raise the count for their own browser — a workstation can hold more walls
+    /// than a phone — but every mesh is fetched from this installation, so the operator keeps
+    /// the last word on how much one view may pull. A default configured above the ceiling is
+    /// held to it.
+    /// </remarks>
+    public int MeshesInViewMaxCavesLimit { get; set; } = 60;
 
     /// <summary>
     /// How many bytes of wall mesh the 3D scene may hold at once for the caves in its view.
@@ -81,9 +94,19 @@ public sealed class MapOptions
     /// but the largest measured one is 54.7 MB to fetch and roughly twice that once it is on the
     /// graphics card, so a count alone would let a dozen large caves ask for gigabytes. It is
     /// spent by the client, nearest cave first, against the sizes the answer states; the server
-    /// publishes it so that every client of an installation spends the same budget.
+    /// publishes it so that every client of an installation starts from the same budget; a
+    /// person may then set their own, up to <see cref="MeshesInViewMaxBytesLimit"/>.
     /// </remarks>
     public long MeshesInViewMaxBytes { get; set; } = 64L * 1024 * 1024;
+
+    /// <summary>Hard ceiling on a person's own <see cref="MeshesInViewMaxBytes"/>.</summary>
+    /// <remarks>
+    /// Published rather than enforced here, because the budget is spent in the browser. It is
+    /// still the operator's number for the same reason the cave ceiling is: the bytes a raised
+    /// budget buys are served by this installation, to every member who raises it. A default
+    /// configured above the ceiling is held to it.
+    /// </remarks>
+    public long MeshesInViewMaxBytesLimit { get; set; } = 512L * 1024 * 1024;
 
     /// <summary>
     /// Simplification tolerance in screen pixels. Nearly a no-op on splay-heavy surveys, whose
@@ -98,4 +121,15 @@ public sealed class MapOptions
     /// </summary>
     public double SimplifyToleranceDegrees(int zoom) =>
         CenterlineSimplifyPixels * 360d / (256d * Math.Pow(2, Math.Clamp(zoom, 0, 24)));
+
+    /// <summary>
+    /// How many caves one request for the walls in a view is answered with: the count the caller
+    /// named, or the installation's default when they named none — never fewer than one cave and
+    /// never more than the ceiling, which is what holds a default configured above it.
+    /// </summary>
+    public int MeshesInViewCaves(int? requested = null) =>
+        Math.Clamp(requested ?? MeshesInViewMaxCaves, 1, Math.Max(1, MeshesInViewMaxCavesLimit));
+
+    /// <summary>The byte budget a scene starts from: the configured default, held to its ceiling.</summary>
+    public long MeshesInViewBytes() => Math.Min(MeshesInViewMaxBytes, MeshesInViewMaxBytesLimit);
 }

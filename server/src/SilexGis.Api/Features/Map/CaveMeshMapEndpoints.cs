@@ -35,7 +35,10 @@ public sealed record CaveMeshInViewDto(
     long SizeBytes);
 
 /// <summary>The wall meshes of the caves in a view, nearest the middle of it first.</summary>
-/// <param name="Items">At most the installation's limit of caves, one mesh each.</param>
+/// <param name="Items">
+/// At most the number of caves asked for, or the installation's default when none was, one mesh
+/// each.
+/// </param>
 /// <param name="Total">
 /// How many caves qualified in all, the ones described included, so a scene showing a few of
 /// them can say a few of how many. It counts only what the caller may be told about: a cave that
@@ -54,7 +57,7 @@ public static class CaveMeshMapEndpoints
     {
         api.MapGet("/map/cave-meshes", CaveMeshesAsync)
             .WithTags("Map")
-            .WithSummary("The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped; caves the caller may not read or may not place exactly are omitted and not counted.");
+            .WithSummary("The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped at maxCaves (the installation's default when absent, never above its ceiling); caves the caller may not read or may not place exactly are omitted and not counted.");
         return api;
     }
 
@@ -71,9 +74,17 @@ public static class CaveMeshMapEndpoints
     /// the scene, because only the scene knows what it already holds and which cave the viewer
     /// has selected; the sizes it needs to do that are stated on every item.
     /// </para>
+    /// <para>
+    /// <c>maxCaves</c> is the caller's own count, for a person who has set one for their browser.
+    /// It moves the cap and nothing else — which caves qualify, their order and the total are the
+    /// same whatever is asked — and it is held between one cave and the installation's ceiling,
+    /// so no request can pull more of this installation's meshes into one view than its operator
+    /// allows.
+    /// </para>
     /// </summary>
     private static async Task<Results<Ok<CaveMeshesInViewDto>, UnauthorizedHttpResult, ProblemHttpResult>> CaveMeshesAsync(
         string bbox,
+        int? maxCaves,
         SilexGisDbContext db,
         IAccessContextAccessor accessAccessor,
         FeatureProtection protection,
@@ -101,7 +112,7 @@ public static class CaveMeshMapEndpoints
         var rows = await CaveMeshMapSql.QueryAsync(db, ctx, box, eligibleIds, ct);
 
         var items = rows
-            .Take(Math.Max(0, mapOptions.Value.MeshesInViewMaxCaves))
+            .Take(mapOptions.Value.MeshesInViewCaves(maxCaves))
             .Select(row => new CaveMeshInViewDto(
                 row.CaveId,
                 row.CaveName,

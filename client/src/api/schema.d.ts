@@ -1768,11 +1768,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped; caves the caller may not read or may not place exactly are omitted and not counted. */
+        /** The wall mesh each cave is drawn by, for the caves whose mesh is anchored in the given bbox, nearest its middle first and capped at maxCaves (the installation's default when absent, never above its ceiling); caves the caller may not read or may not place exactly are omitted and not counted. */
         get: {
             parameters: {
                 query: {
                     bbox: string;
+                    maxCaves?: number;
                 };
                 header?: never;
                 path?: never;
@@ -22107,6 +22108,10 @@ export interface components {
             meshesInViewMaxCaves: number;
             /** Format: int64 */
             meshesInViewMaxBytes: number;
+            /** Format: int32 */
+            meshesInViewMaxCavesLimit: number;
+            /** Format: int64 */
+            meshesInViewMaxBytesLimit: number;
         };
         /** @enum {unknown} */
         MapKind: "geological" | "topographic" | "tourist" | "caveMap" | "other";

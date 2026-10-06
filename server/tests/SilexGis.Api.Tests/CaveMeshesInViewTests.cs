@@ -37,13 +37,17 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
     private const double HalfBox = 0.02;
 
     private const int CappedCaves = 2;
+    private const int CappedCavesCeiling = 3;
     private const int CappedMinZoom = 16;
     private const long CappedBytes = 4096;
 
     private readonly SilexGisApiFactory factory;
     private readonly SilexGisApiFactory capped;
+    private readonly string connectionString;
+    private readonly Dictionary<string, string?> storage;
     private readonly string filesRoot;
 
+    private string ownerEmail = null!;
     private HttpClient owner = null!;
     private HttpClient reader = null!;
     private HttpClient cappedOwner = null!;
@@ -53,8 +57,9 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
 
     public CaveMeshesInViewTests(PostgresFixture postgres)
     {
+        connectionString = postgres.ConnectionString;
         filesRoot = Path.Combine(TestScratch.Root, $"silexgis-test-files-{Guid.NewGuid():N}");
-        var storage = new Dictionary<string, string?>
+        storage = new Dictionary<string, string?>
         {
             ["Files:Root"] = filesRoot,
             ["Keys:Path"] = Path.Combine(filesRoot, "keys"),
@@ -69,6 +74,7 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
             new Dictionary<string, string?>(storage)
             {
                 ["Map:MeshesInViewMaxCaves"] = CappedCaves.ToString(CultureInfo.InvariantCulture),
+                ["Map:MeshesInViewMaxCavesLimit"] = CappedCavesCeiling.ToString(CultureInfo.InvariantCulture),
                 ["Map:MeshesInViewMinZoom"] = CappedMinZoom.ToString(CultureInfo.InvariantCulture),
                 ["Map:MeshesInViewMaxBytes"] = CappedBytes.ToString(CultureInfo.InvariantCulture),
             },
@@ -78,7 +84,8 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
     public async Task InitializeAsync()
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, $"cmv-own-{suffix}@t.local");
+        ownerEmail = $"cmv-own-{suffix}@t.local";
+        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Editor, ownerEmail);
         readerId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"cmv-read-{suffix}@t.local");
 
         using (var scope = factory.Services.CreateScope())
@@ -89,9 +96,9 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
                 .Where(t => t.Code == "karst_area").Select(t => t.Id).SingleAsync();
         }
 
-        owner = await AuthHelper.BearerClientAsync(factory, $"cmv-own-{suffix}@t.local");
+        owner = await AuthHelper.BearerClientAsync(factory, ownerEmail);
         reader = await AuthHelper.BearerClientAsync(factory, $"cmv-read-{suffix}@t.local");
-        cappedOwner = await AuthHelper.BearerClientAsync(capped, $"cmv-own-{suffix}@t.local");
+        cappedOwner = await AuthHelper.BearerClientAsync(capped, ownerEmail);
     }
 
     [Fact]
@@ -315,6 +322,48 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
         answer.Total.ShouldBe(3);
     }
 
+    /// <summary>
+    /// A caller's own count moves the cap between one cave and the installation's ceiling, and
+    /// moves nothing else: the same caves qualify in the same order, and the total is the same.
+    /// </summary>
+    [Fact]
+    public async Task A_count_the_caller_names_moves_the_cap_up_to_the_ceiling_and_never_the_total()
+    {
+        var spot = Spot.Somewhere();
+        var fourth = await CreateCaveWithMeshAsync(spot.North(0.013));
+        var second = await CreateCaveWithMeshAsync(spot.North(-0.004));
+        var first = await CreateCaveWithMeshAsync(spot.North(0.001));
+        var third = await CreateCaveWithMeshAsync(spot.North(0.009));
+
+        // Asked for nothing, the installation's default answers.
+        var byDefault = await MeshesAsync(cappedOwner, spot);
+        byDefault.CaveIds.ShouldBe([first.CaveId, second.CaveId]);
+        byDefault.Total.ShouldBe(4);
+
+        // More than the default, within the ceiling: more caves, nearest first as before.
+        var raised = await MeshesAsync(cappedOwner, spot, maxCaves: CappedCavesCeiling);
+        raised.CaveIds.ShouldBe([first.CaveId, second.CaveId, third.CaveId]);
+        raised.Total.ShouldBe(4);
+
+        // Beyond the ceiling is answered as the ceiling, with the fourth cave still only counted.
+        var beyond = await MeshesAsync(cappedOwner, spot, maxCaves: 50);
+        beyond.CaveIds.ShouldBe([first.CaveId, second.CaveId, third.CaveId]);
+        beyond.Total.ShouldBe(4);
+
+        // Fewer than the default is a person's to ask for too, down to one cave and no lower.
+        var lowered = await MeshesAsync(cappedOwner, spot, maxCaves: 1);
+        lowered.CaveIds.ShouldBe([first.CaveId]);
+        lowered.Total.ShouldBe(4);
+        foreach (var none in new[] { 0, -3 })
+        {
+            (await MeshesAsync(cappedOwner, spot, maxCaves: none)).CaveIds.ShouldBe([first.CaveId]);
+        }
+
+        // The ceiling is the installation's own: one with room for all four gives all four.
+        (await MeshesAsync(owner, spot, maxCaves: 50)).CaveIds
+            .ShouldBe([first.CaveId, second.CaveId, third.CaveId, fourth.CaveId]);
+    }
+
     [Fact]
     public async Task The_limits_a_scene_works_within_are_published_and_follow_the_configuration()
     {
@@ -322,11 +371,54 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
         shipped.GetProperty("meshesInViewMinZoom").GetInt32().ShouldBe(14);
         shipped.GetProperty("meshesInViewMaxCaves").GetInt32().ShouldBe(12);
         shipped.GetProperty("meshesInViewMaxBytes").GetInt64().ShouldBe(64L * 1024 * 1024);
+        shipped.GetProperty("meshesInViewMaxCavesLimit").GetInt32().ShouldBe(60);
+        shipped.GetProperty("meshesInViewMaxBytesLimit").GetInt64().ShouldBe(512L * 1024 * 1024);
 
         var configured = await cappedOwner.GetFromJsonAsync<JsonElement>("/api/v1/map/config");
         configured.GetProperty("meshesInViewMinZoom").GetInt32().ShouldBe(CappedMinZoom);
         configured.GetProperty("meshesInViewMaxCaves").GetInt32().ShouldBe(CappedCaves);
         configured.GetProperty("meshesInViewMaxBytes").GetInt64().ShouldBe(CappedBytes);
+        configured.GetProperty("meshesInViewMaxCavesLimit").GetInt32().ShouldBe(CappedCavesCeiling);
+        // Not configured on that host, so the shipped ceiling stands beside its lowered default.
+        configured.GetProperty("meshesInViewMaxBytesLimit").GetInt64().ShouldBe(512L * 1024 * 1024);
+    }
+
+    /// <summary>
+    /// A default set above its ceiling is published as the ceiling, so the number a client shows
+    /// as "this installation's default" is the number a request that names none is answered with.
+    /// </summary>
+    [Fact]
+    public async Task A_default_configured_above_its_ceiling_is_held_to_the_ceiling()
+    {
+        using var overreaching = new SilexGisApiFactory(
+            connectionString,
+            new Dictionary<string, string?>(storage)
+            {
+                ["Map:MeshesInViewMaxCaves"] = "9",
+                ["Map:MeshesInViewMaxCavesLimit"] = "1",
+                ["Map:MeshesInViewMaxBytes"] = "4096",
+                ["Map:MeshesInViewMaxBytesLimit"] = "1024",
+            },
+            JobWorkers.RemoveFrom);
+        using var client = await AuthHelper.BearerClientAsync(overreaching, ownerEmail);
+
+        var config = await client.GetFromJsonAsync<JsonElement>("/api/v1/map/config");
+        config.GetProperty("meshesInViewMaxCaves").GetInt32().ShouldBe(1);
+        config.GetProperty("meshesInViewMaxCavesLimit").GetInt32().ShouldBe(1);
+        config.GetProperty("meshesInViewMaxBytes").GetInt64().ShouldBe(1024);
+        config.GetProperty("meshesInViewMaxBytesLimit").GetInt64().ShouldBe(1024);
+
+        // And the route keeps to it: two caves in the box, one described, whatever is asked.
+        var spot = Spot.Somewhere();
+        var near = await CreateCaveWithMeshAsync(spot.North(0.001));
+        _ = await CreateCaveWithMeshAsync(spot.North(0.006));
+
+        foreach (var asked in new int?[] { null, 9 })
+        {
+            var answer = await MeshesAsync(client, spot, asked);
+            answer.CaveIds.ShouldBe([near.CaveId]);
+            answer.Total.ShouldBe(2);
+        }
     }
 
     [Fact]
@@ -344,6 +436,11 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
             refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
             (await refused.Content.ReadAsStringAsync()).ShouldContain("map.invalid_bbox");
         }
+
+        // A count that is not a number is refused as the caller's mistake, not answered by default.
+        var notANumber = await owner.GetAsync($"/api/v1/map/cave-meshes?bbox={spot.Box}&maxCaves=many");
+        notANumber.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await notANumber.Content.ReadAsStringAsync()).ShouldContain("request.binding_failed");
     }
 
     // ---- helpers ----
@@ -374,9 +471,10 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
         public IReadOnlyList<Guid> ModelIds => [.. Items.Select(i => i.GetProperty("surveyModelId").GetGuid())];
     }
 
-    private static async Task<Answer> MeshesAsync(HttpClient client, Spot spot)
+    private static async Task<Answer> MeshesAsync(HttpClient client, Spot spot, int? maxCaves = null)
     {
-        var response = await client.GetAsync($"/api/v1/map/cave-meshes?bbox={spot.Box}");
+        var count = maxCaves is null ? string.Empty : $"&maxCaves={maxCaves}";
+        var response = await client.GetAsync($"/api/v1/map/cave-meshes?bbox={spot.Box}{count}");
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         return new Answer([.. body.GetProperty("items").EnumerateArray()], body.GetProperty("total").GetInt32());
