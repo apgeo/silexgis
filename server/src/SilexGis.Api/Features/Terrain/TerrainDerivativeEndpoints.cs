@@ -79,7 +79,8 @@ public sealed record TerrainDerivativeCreateRequest(
     TerrainSlopeUnit? SlopeUnit,
     TerrainRuggednessFit? RuggednessFit,
     bool? ComputeEdges,
-    IReadOnlyList<TerrainColourStop>? ColourRamp)
+    IReadOnlyList<TerrainColourStop>? ColourRamp,
+    double? ContourIntervalMetres)
 {
     /// <summary>The request as the settings record everything downstream reads.</summary>
     public TerrainDerivativeSettings ToSettings() => new()
@@ -94,6 +95,7 @@ public sealed record TerrainDerivativeCreateRequest(
         RuggednessFit = RuggednessFit ?? TerrainRuggednessFit.Riley,
         ComputeEdges = ComputeEdges ?? true,
         ColourRamp = ColourRamp ?? [],
+        ContourIntervalMetres = ContourIntervalMetres,
     };
 }
 

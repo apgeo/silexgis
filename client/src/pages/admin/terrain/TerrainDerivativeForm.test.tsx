@@ -101,6 +101,7 @@ describe('TerrainDerivativeForm', () => {
       slopeUnit: null,
       ruggednessFit: null,
       computeEdges: true,
+      contourIntervalMetres: null,
       colourRamp: null,
     });
     expect(await screen.findByText(/has been queued/)).toBeInTheDocument();
@@ -203,6 +204,52 @@ describe('TerrainDerivativeForm', () => {
 
     fireEvent.click(screen.getByTestId('terrain-derivative-submit'));
     expect(await screen.findByText(/at least two heights/)).toBeInTheDocument();
+    expect(requestMutate).not.toHaveBeenCalled();
+  });
+
+  // Contour lines read one setting and none of the others. In particular there is no outermost
+  // ring of cells to compute or leave blank, so that choice is neither shown nor sent: sent, it
+  // would be recorded against a picture it never applied to.
+  it('asks for contour lines at a spacing, and sends nothing a line does not read', async () => {
+    show();
+
+    await chooseKind('Contour lines');
+    expect(screen.getByLabelText('Name')).toHaveValue('Contour lines');
+    expect(screen.getByLabelText('A line every (m)')).toHaveValue('20');
+    expect(screen.queryByTestId('terrain-derivative-edges')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Slope arithmetic')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('A line every (m)'), { target: { value: '25' } });
+    fireEvent.click(screen.getByTestId('terrain-derivative-submit'));
+
+    await waitFor(() => expect(requestMutate).toHaveBeenCalledTimes(1));
+    expect(sent()).toEqual({
+      terrainBuildId: 'drawn',
+      derivative: 'contours',
+      name: 'Contour lines',
+      lighting: null,
+      azimuthDegrees: null,
+      altitudeDegrees: null,
+      zFactor: null,
+      surfaceFit: null,
+      slopeUnit: null,
+      ruggednessFit: null,
+      computeEdges: null,
+      contourIntervalMetres: 25,
+      colourRamp: null,
+    });
+  });
+
+  // The server's own bounds. Lines no height apart are no lines, and lines further apart than any
+  // ground is high are a finished picture with nothing on it.
+  it('refuses a spacing no lines could be drawn at before sending anything', async () => {
+    show();
+    await chooseKind('Contour lines');
+
+    fireEvent.change(screen.getByLabelText('A line every (m)'), { target: { value: '0' } });
+    fireEvent.click(screen.getByTestId('terrain-derivative-submit'));
+
+    expect(await screen.findByText(/spaced from 1 to 1000 metres/)).toBeInTheDocument();
     expect(requestMutate).not.toHaveBeenCalled();
   });
 

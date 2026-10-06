@@ -360,6 +360,102 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
     }
 
     /// <summary>
+    /// Contour lines are asked for like any other picture, at a spacing of their own, and the
+    /// spacing is part of which picture it is.
+    /// </summary>
+    /// <remarks>
+    /// Three requests and two pictures: one at twenty-five metres, and one at the usual spacing
+    /// asked for twice — once by naming nothing and once by naming it. The record kept beside each
+    /// says which spacing it was drawn at, because that is the only place the register can read
+    /// it from.
+    /// </remarks>
+    [Fact]
+    public async Task Contours_are_asked_for_at_a_spacing_and_the_spacing_is_part_of_the_picture()
+    {
+        var buildId = await SeedBuildAsync(active: true);
+
+        (await outsider.PostAsJsonAsync("/api/v1/terrain/derivatives", new
+        {
+            terrainBuildId = buildId,
+            derivative = "contours",
+            name = "not theirs to ask for",
+        })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        var close = await AskForContoursAsync(buildId, 25d);
+        close.GetProperty("derivative").GetString().ShouldBe("contours");
+        close.GetProperty("status").GetString().ShouldBe("queued");
+        close.GetProperty("stale").GetBoolean().ShouldBeFalse();
+        SpacingOf(close).ShouldBe(25d);
+
+        var unnamed = await AskForContoursAsync(buildId, null);
+        SpacingOf(unnamed).ShouldBe(TerrainContourLines.DefaultIntervalMetres);
+
+        var named = await AskForContoursAsync(buildId, TerrainContourLines.DefaultIntervalMetres);
+
+        named.GetProperty("id").GetGuid().ShouldBe(unnamed.GetProperty("id").GetGuid());
+        unnamed.GetProperty("id").GetGuid().ShouldNotBe(close.GetProperty("id").GetGuid());
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TerrainDerivativeLayers.CountAsync(
+            l => l.TerrainBuildId == buildId && l.Derivative == TerrainDerivative.Contours)).ShouldBe(2);
+
+        // One run queued for each picture, and none for the request that named a picture already
+        // asked for.
+        var queued = await db.ProcessingJobs
+            .Where(j => j.Kind == ProcessingJobKinds.TerrainDerivative)
+            .Select(j => j.Payload)
+            .ToListAsync();
+        foreach (var picture in new[] { close, unnamed })
+        {
+            var id = picture.GetProperty("id").GetGuid().ToString();
+            queued.Count(p => p.Contains(id, StringComparison.Ordinal)).ShouldBe(1);
+        }
+    }
+
+    /// <summary>
+    /// A spacing that cannot be drawn is refused when it is asked for, with the code every refused
+    /// request body carries and a sentence naming the bounds.
+    /// </summary>
+    /// <remarks>
+    /// Queued instead, each of these would be a job that fails minutes later over elevation that
+    /// is perfectly fine — or, for a spacing wider than the relief, a job that succeeds and writes
+    /// a picture with nothing on it.
+    /// </remarks>
+    [Theory]
+    [InlineData(0d)]
+    [InlineData(-10d)]
+    [InlineData(0.5d)]
+    [InlineData(1000.01d)]
+    [InlineData(50_000d)]
+    public async Task Contours_at_a_spacing_that_cannot_be_drawn_are_refused_and_nothing_is_queued(
+        double interval)
+    {
+        var buildId = await SeedBuildAsync(active: true);
+
+        var refused = await holder.PostAsJsonAsync("/api/v1/terrain/derivatives", new
+        {
+            terrainBuildId = buildId,
+            derivative = "contours",
+            name = "lines nobody could draw",
+            contourIntervalMetres = interval,
+        });
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await refused.Content.ReadFromJsonAsync<JsonElement>();
+        problem.GetProperty("code").GetString().ShouldBe("validation.failed");
+        problem.GetProperty("errors").ToString().ShouldContain("Contour lines are spaced from 1 to 1000");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TerrainDerivativeLayers.CountAsync(l => l.TerrainBuildId == buildId)).ShouldBe(0);
+
+        // The same request at a spacing that can be drawn is accepted, so the refusal above was
+        // about the spacing.
+        (await AskForContoursAsync(buildId, 1000d)).GetProperty("status").GetString().ShouldBe("queued");
+    }
+
+    /// <summary>
     /// Removing a picture takes the right to remove it, and takes the picture's files with it.
     /// </summary>
     /// <remarks>
@@ -409,6 +505,27 @@ public sealed class TerrainDerivativeApiTests : IAsyncLifetime, IDisposable, ICl
         // A picture that is already gone is not there to be removed, said with a stable code.
         var again = await holder.DeleteAsync($"/api/v1/terrain/derivatives/{layerId}");
         again.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    private async Task<JsonElement> AskForContoursAsync(Guid buildId, double? interval)
+    {
+        var asked = await holder.PostAsJsonAsync("/api/v1/terrain/derivatives", new
+        {
+            terrainBuildId = buildId,
+            derivative = "contours",
+            name = "contour lines",
+            contourIntervalMetres = interval,
+        });
+
+        asked.StatusCode.ShouldBe(HttpStatusCode.OK, await asked.Content.ReadAsStringAsync());
+        return await asked.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    /// <summary>The spacing the record kept beside a picture of contours says it was drawn at.</summary>
+    private static double SpacingOf(JsonElement picture)
+    {
+        using var record = JsonDocument.Parse(picture.GetProperty("settings").GetString()!);
+        return record.RootElement.GetProperty("contourIntervalMetres").GetDouble();
     }
 
     private async Task<JsonElement> FindAsync(Guid layerId)

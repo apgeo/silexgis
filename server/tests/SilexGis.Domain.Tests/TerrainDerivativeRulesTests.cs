@@ -111,6 +111,36 @@ public sealed class TerrainDerivativeRulesTests
         }).ShouldNotBeNull();
 
     [Fact]
+    public void Contours_are_accepted_at_the_usual_spacing_when_none_is_named()
+        => TerrainDerivativeRules.Problem(new TerrainDerivativeSettings
+        {
+            Derivative = TerrainDerivative.Contours,
+        }).ShouldBeNull();
+
+    [Theory]
+    [InlineData(0d)]
+    [InlineData(-5d)]
+    [InlineData(100_000d)]
+    [InlineData(double.NaN)]
+    public void Contours_at_a_spacing_that_cannot_be_drawn_are_refused(double interval)
+        => TerrainDerivativeRules.Problem(new TerrainDerivativeSettings
+        {
+            Derivative = TerrainDerivative.Contours,
+            ContourIntervalMetres = interval,
+        }).ShouldNotBeNull();
+
+    [Fact]
+    public void A_spacing_is_not_grounds_to_refuse_a_picture_that_draws_no_lines()
+        // The settings record is one record for every picture. A spacing that would be refused on
+        // contours is simply not part of what a shaded relief is, and it is dropped before the
+        // picture is recorded rather than held against it.
+        => TerrainDerivativeRules.Problem(new TerrainDerivativeSettings
+        {
+            Derivative = TerrainDerivative.Hillshade,
+            ContourIntervalMetres = -1d,
+        }).ShouldBeNull();
+
+    [Fact]
     public void A_picture_this_installation_cannot_compute_is_refused_by_name()
         // The stored value is a number, so a row written by a newer version — or by hand — can name
         // something this one has no mode for. Geomorphons, curvature and flow accumulation are the

@@ -5,6 +5,7 @@ import {
   altitudeValid,
   azimuthValid,
   colourRampProblem,
+  contourIntervalValid,
   defaultDerivativeName,
   describeDerivativeSettings,
   hexToRgb,
@@ -80,6 +81,17 @@ describe('the bounds a request is held to', () => {
     ).toBeNull();
   });
 
+  it('spaces contour lines from one metre of height to a thousand', () => {
+    expect(contourIntervalValid(0)).toBe(false);
+    expect(contourIntervalValid(0.9)).toBe(false);
+    expect(contourIntervalValid(1)).toBe(true);
+    expect(contourIntervalValid(20)).toBe(true);
+    expect(contourIntervalValid(1000)).toBe(true);
+    expect(contourIntervalValid(1000.5)).toBe(false);
+    expect(contourIntervalValid(-20)).toBe(false);
+    expect(contourIntervalValid(Number.NaN)).toBe(false);
+  });
+
   it('turns a picker colour into the three bytes a stop is stored as', () => {
     expect(hexToRgb('#2f855a')).toEqual({ red: 47, green: 133, blue: 90 });
     expect(hexToRgb('fff')).toEqual({ red: 255, green: 255, blue: 255 });
@@ -87,12 +99,11 @@ describe('the bounds a request is held to', () => {
 });
 
 describe('the name a picture opens with', () => {
-  // The layer list prints the kind under the name, so a name carrying the kind's caveat would
-  // show it twice on one row.
-  it('is the kind without the caveat two of the kinds carry', () => {
+  it('is what its kind is called', () => {
     expect(defaultDerivativeName('slope', t)).toBe('Steepness');
     expect(defaultDerivativeName('aspect', t)).toBe('Facing');
     expect(defaultDerivativeName('hillshade', t)).toBe('Shaded relief');
+    expect(defaultDerivativeName('contours', t)).toBe('Contour lines');
   });
 });
 
@@ -122,6 +133,7 @@ describe('reading the settings stored beside a picture', () => {
       ruggednessFit: undefined,
       computeEdges: undefined,
       colourRamp: undefined,
+      contourIntervalMetres: undefined,
     });
   });
 
@@ -144,5 +156,14 @@ describe('reading the settings stored beside a picture', () => {
     expect(
       describeDerivativeSettings('colourRelief', '{"colourRamp":[{"elevation":1},{"elevation":2}],"computeEdges":true}', t),
     ).toBe('2 colour stops');
+    // Contour lines say their spacing and nothing else: they have no outermost ring of cells, so
+    // a record that says the ring was left blank is not a fact about them.
+    expect(
+      describeDerivativeSettings('contours', '{"derivative":7,"computeEdges":false,"contourIntervalMetres":25}', t),
+    ).toBe('a line every 25 m');
+    // And a spacing in the record of a picture that draws no lines is not reported for it.
+    expect(
+      describeDerivativeSettings('roughness', '{"computeEdges":true,"contourIntervalMetres":25}', t),
+    ).toBe('');
   });
 });

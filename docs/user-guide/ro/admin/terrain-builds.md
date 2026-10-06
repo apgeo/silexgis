@@ -179,10 +179,10 @@ repornită.
 ## Imagini derivate ale terenului
 
 Altitudinile unei generări încheiate pot fi transformate și în **imagini ale terenului** — relief
-umbrit, pantă, orientare, asperitate, poziție topografică, rugozitate sau un relief colorat. Sunt
-calculate o singură dată de instalare, pe același lucrător care face generările, iar apoi oricine
-are dreptul de a citi terenul le vede în lista de straturi a hărții, la **Imagini ale terenului**:
-activați una și se desenează sub peșteri.
+umbrit, pantă, orientare, asperitate, poziție topografică, rugozitate, un relief colorat sau curbe
+de nivel. Sunt calculate o singură dată de instalare, pe același lucrător care face generările, iar
+apoi oricine are dreptul de a citi terenul le vede în lista de straturi a hărții, la **Imagini ale
+terenului**: activați una și se desenează sub peșteri.
 
 ### Cum se cere una
 
@@ -211,8 +211,14 @@ Setările, pe feluri:
   sau a lui Wilson, care dă alte numere — cele două nu sunt niciodată comparabile.
 - **Relief colorat**: o culoare la fiecare înălțime, în metri. Cel puțin două trepte, niciodată
   două la aceeași înălțime; terenul dintre două înălțimi se pictează cu amestecul lor.
-- Orice fel: dacă celulele de la margine se calculează din vecinii pe care îi au. Oprit, fiecare
-  rastru al generării se întâlnește cu vecinul lui printr-o linie goală prin imagine.
+- **Curbe de nivel**: câți metri de înălțime sunt între o curbă și următoarea — de la 1 la 1000,
+  și 20 dacă nu spuneți altfel — numărați de la nivelul mării, fiecare a cincea curbă fiind
+  desenată mai gros. Curbele sunt o imagine ca toate celelalte, transparentă între linii, și nu
+  date: de-a lungul lor nu se poate măsura, nu pot fi selectate sau exportate și nicio curbă nu
+  își poartă înălțimea.
+- Orice fel în afară de curbele de nivel: dacă celulele de la margine se calculează din vecinii pe
+  care îi au. Oprit, fiecare rastru al generării se întâlnește cu vecinul lui printr-o linie goală
+  prin imagine.
 
 **Cere imaginea** o pune la coadă. Cererea din nou a unei imagini pe care instalarea o are deja —
 aceeași generare, același fel, aceleași setări — răspunde cu cea existentă în loc să o calculeze de

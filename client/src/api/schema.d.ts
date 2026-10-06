@@ -24753,7 +24753,7 @@ export interface components {
             alpha?: number;
         };
         /** @enum {unknown} */
-        TerrainDerivative: "hillshade" | "slope" | "aspect" | "ruggednessIndex" | "positionIndex" | "roughness" | "colourRelief";
+        TerrainDerivative: "hillshade" | "slope" | "aspect" | "ruggednessIndex" | "positionIndex" | "roughness" | "colourRelief" | "contours";
         TerrainDerivativeCreateRequest: {
             /** Format: uuid */
             terrainBuildId: string;
@@ -24771,6 +24771,8 @@ export interface components {
             ruggednessFit: null | components["schemas"]["TerrainRuggednessFit"];
             computeEdges: null | boolean;
             colourRamp: null | components["schemas"]["TerrainColourStop"][];
+            /** Format: double */
+            contourIntervalMetres: null | number;
         };
         TerrainDerivativeLayerDto: {
             /** Format: uuid */

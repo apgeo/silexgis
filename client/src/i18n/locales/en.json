@@ -212,12 +212,13 @@
         "ruggednessIndex": "Ruggedness",
         "positionIndex": "Topographic position",
         "roughness": "Roughness",
-        "colourRelief": "Coloured relief"
+        "colourRelief": "Coloured relief",
+        "contours": "Contour lines"
       }
     },
     "derivativeForm": {
       "title": "Derived pictures",
-      "intro": "A picture of the ground computed from a finished build: shaded relief, steepness, facing, ruggedness, topographic position, roughness or a coloured relief. Everybody who may read terrain then finds it in the map's layer list.",
+      "intro": "A picture of the ground computed from a finished build: shaded relief, steepness, facing, ruggedness, topographic position, roughness, a coloured relief or contour lines. Everybody who may read terrain then finds it in the map's layer list.",
       "needsExecute": "Asking for a picture needs the right to execute on terrain, which this account does not hold. The register below is still yours to read.",
       "noBuilds": "No finished build to draw from. A picture is computed from a build that has run to the end.",
       "build": "Build",
@@ -260,6 +261,9 @@
         "riley": "Riley (root mean square of the differences)",
         "wilson": "Wilson (mean of the absolute differences)"
       },
+      "contourInterval": "A line every (m)",
+      "contourIntervalHint": "Metres of height between one line and the next, counted from sea level. Every fifth line is drawn heavier. The lines are a picture: nothing can be measured along one or selected.",
+      "contourIntervalInvalid": "Contour lines are spaced from {{min}} to {{max}} metres of height apart.",
       "computeEdges": "Compute the outermost cells from the neighbours they have",
       "computeEdgesHint": "Off, every raster of the build meets its neighbour with a hairline gap. On, the edge is slightly wrong — by less than a missing line is.",
       "colourRamp": "Colour ramp",
@@ -296,6 +300,7 @@
         "altitude": "{{degrees}}° up",
         "zFactor": "heights ×{{factor}}",
         "stops": "{{count}} colour stops",
+        "interval": "a line every {{metres}} m",
         "edgesOff": "edges left blank"
       }
     },

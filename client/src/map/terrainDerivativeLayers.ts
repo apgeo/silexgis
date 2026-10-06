@@ -91,17 +91,26 @@ const ASPECT_RAMP = [
 /**
  * How one raster of one picture is turned into a map layer.
  *
- * The two families are drawn differently and must be. Shaded relief comes back as whole bytes and
+ * The three families are drawn differently and must be. Shaded relief comes back as whole bytes and
  * coloured relief as red, green and blue, so both are read as a picture and shown as one. Steepness,
  * facing, ruggedness, topographic position and roughness come back as one band of floating-point
  * measurements — degrees, metres — and reading those as a picture asks the reader's browser to
  * interpret a slope of 30 degrees as a brightness on a scale that runs to the largest number the
  * type can hold. The result is not an error: it is a layer that draws, and is black everywhere.
+ *
+ * Contour lines come back as red, green, blue and a fourth band saying where there is a line at
+ * all, and are read exactly as stored. The conversion the other pictures go through reads three
+ * colours and stops, which would leave the fourth band unread — and the fourth band is the only
+ * thing that says where the lines are and where the map beneath them shows through.
  */
 function sourceFor(derivative: TerrainDerivativeLayerInfo, url: string): {
   source: GeoTIFF;
   style?: WebGLTileStyle;
 } {
+  if (derivative.derivative === 'contours') {
+    return { source: new GeoTIFF({ sources: [{ url }] }) };
+  }
+
   const range = DISPLAY_RANGE[derivative.derivative];
   if (!range) {
     return { source: new GeoTIFF({ sources: [{ url }], convertToRGB: true }) };

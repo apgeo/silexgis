@@ -138,8 +138,11 @@ feature and walkthroughs of whole jobs.
   does not cost the region again: a build can **extend a finished one**, adding only the new
   rasters to a copy of its tiles.
 - **Pictures drawn from that elevation** — shaded relief, steepness, facing, ruggedness,
-  topographic position, roughness or a colour relief, requested from the terrain page, computed
-  once from a finished build and shown to everyone who may read terrain as ordinary map layers. Each one belongs to the build it was
+  topographic position, roughness, a colour relief or contour lines, requested from the terrain
+  page, computed once from a finished build and shown to everyone who may read terrain as ordinary
+  map layers. Steepness and facing are measured on the ground rather than on the grid of degrees
+  the elevation is held in, so a hillside facing east reads as steep as the same hillside facing
+  north. Each one belongs to the build it was
   drawn from, so **activating a different build marks every picture of the old one as out of date**,
   where the reader sees it rather than in a log — a shaded relief that disagrees with the heights
   beneath it otherwise looks like a fault in the cave data. They live under their build and are

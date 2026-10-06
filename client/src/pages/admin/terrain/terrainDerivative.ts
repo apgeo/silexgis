@@ -25,6 +25,7 @@ export const TERRAIN_DERIVATIVE_KINDS: readonly TerrainDerivativeKind[] = [
   'positionIndex',
   'roughness',
   'colourRelief',
+  'contours',
 ];
 
 export const HILLSHADE_LIGHTINGS: readonly TerrainHillshadeLighting[] = [
@@ -53,6 +54,18 @@ export const DEFAULT_Z_FACTOR = 1;
  * and says nothing. Twenty times is already far beyond what anybody reads.
  */
 export const MAX_Z_FACTOR = 100;
+
+/**
+ * How far apart contour lines may be asked to be, in metres of height, as the server bounds it —
+ * and the spacing a request that names none is given.
+ *
+ * Twenty metres is what a map of mountain country at walking scale uses. Past a thousand the
+ * spacing is wider than the relief of any ground, and the result is a finished, valid picture with
+ * no line on it anywhere.
+ */
+export const DEFAULT_CONTOUR_INTERVAL = 20;
+export const MIN_CONTOUR_INTERVAL = 1;
+export const MAX_CONTOUR_INTERVAL = 1000;
 
 /** The server's cap on a picture's name. */
 export const MAX_NAME_LENGTH = 200;
@@ -94,6 +107,20 @@ export function readsColourRamp(kind: TerrainDerivativeKind): boolean {
   return kind === 'colourRelief';
 }
 
+export function readsContourInterval(kind: TerrainDerivativeKind): boolean {
+  return kind === 'contours';
+}
+
+/**
+ * Whether the kind has an outermost ring of cells to compute or leave blank.
+ *
+ * Contour lines are traced through the heights rather than computed from a cell's neighbours, so
+ * there is no such ring, and the choice is neither offered nor sent for them.
+ */
+export function readsEdges(kind: TerrainDerivativeKind): boolean {
+  return kind !== 'contours';
+}
+
 /*
  * The bounds the server checks a request against, mirrored so the form refuses before sending
  * rather than after. Each bound is the server's exactly, including which end is open: a light
@@ -109,6 +136,12 @@ export function altitudeValid(degrees: number): boolean {
 
 export function zFactorValid(factor: number): boolean {
   return Number.isFinite(factor) && factor > 0 && factor <= MAX_Z_FACTOR;
+}
+
+export function contourIntervalValid(metres: number): boolean {
+  return (
+    Number.isFinite(metres) && metres >= MIN_CONTOUR_INTERVAL && metres <= MAX_CONTOUR_INTERVAL
+  );
 }
 
 /** One stop of a colour ramp as the form holds it: a height and a `#rrggbb` colour. */
@@ -189,6 +222,7 @@ export interface StoredDerivativeSettings {
   ruggednessFit?: TerrainRuggednessFit;
   computeEdges?: boolean;
   colourRamp?: unknown[];
+  contourIntervalMetres?: number;
 }
 
 /**
@@ -240,6 +274,7 @@ export function parseDerivativeSettings(settings: string): StoredDerivativeSetti
     ruggednessFit: choice(record.ruggednessFit, RUGGEDNESS_FITS),
     computeEdges: typeof record.computeEdges === 'boolean' ? record.computeEdges : undefined,
     colourRamp: Array.isArray(record.colourRamp) ? record.colourRamp : undefined,
+    contourIntervalMetres: finite(record.contourIntervalMetres),
   };
 }
 
@@ -285,7 +320,10 @@ export function describeDerivativeSettings(
   if (readsColourRamp(kind) && stored.colourRamp !== undefined) {
     parts.push(t('terrain.derivativeList.params.stops', { count: stored.colourRamp.length }));
   }
-  if (stored.computeEdges === false) {
+  if (readsContourInterval(kind) && stored.contourIntervalMetres !== undefined) {
+    parts.push(t('terrain.derivativeList.params.interval', { metres: stored.contourIntervalMetres }));
+  }
+  if (readsEdges(kind) && stored.computeEdges === false) {
     parts.push(t('terrain.derivativeList.params.edgesOff'));
   }
   return parts.join(' · ');

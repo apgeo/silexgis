@@ -115,6 +115,79 @@ public sealed class TerrainDerivativeRegistryRulesTests
     }
 
     /// <summary>
+    /// The record of a picture that draws no contours is written exactly as it was before
+    /// contours existed.
+    /// </summary>
+    /// <remarks>
+    /// The fingerprint is taken over this text, so a field that appeared in it the day a new kind
+    /// of picture was added would give every picture already stored a different fingerprint from
+    /// the one on its row. Asking again for one of them would then find nothing, and compute and
+    /// keep a second copy. The text is spelled out here rather than derived, because the property
+    /// being protected is that it does not change.
+    /// </remarks>
+    [Fact]
+    public void A_picture_without_contours_is_recorded_as_it_always_was()
+        => TerrainDerivativeRegistry.Describe(
+                new TerrainDerivativeSettings { Derivative = TerrainDerivative.Hillshade })
+            .ShouldBe(
+                "{\"derivative\":0,\"lighting\":0,\"azimuthDegrees\":315,\"altitudeDegrees\":45,"
+                + "\"zFactor\":1,\"surfaceFit\":0,\"slopeUnit\":0,\"ruggednessFit\":0,"
+                + "\"computeEdges\":true,\"colourRamp\":[]}");
+
+    [Fact]
+    public void Contours_asked_for_at_no_spacing_and_at_the_usual_one_are_one_picture()
+    {
+        var unnamed = new TerrainDerivativeSettings { Derivative = TerrainDerivative.Contours };
+        var named = unnamed with
+        {
+            ContourIntervalMetres = TerrainContourLines.DefaultIntervalMetres,
+        };
+
+        TerrainDerivativeRegistry.Fingerprint(unnamed)
+            .ShouldBe(TerrainDerivativeRegistry.Fingerprint(named));
+
+        // And the record says which spacing was drawn, so the register can.
+        TerrainDerivativeRegistry.Describe(unnamed).ShouldContain("\"contourIntervalMetres\":20");
+    }
+
+    [Fact]
+    public void A_different_spacing_is_a_different_picture_of_contours()
+    {
+        var close = new TerrainDerivativeSettings
+        {
+            Derivative = TerrainDerivative.Contours,
+            ContourIntervalMetres = 10d,
+        };
+
+        TerrainDerivativeRegistry.Fingerprint(close with { ContourIntervalMetres = 50d })
+            .ShouldNotBe(TerrainDerivativeRegistry.Fingerprint(close));
+    }
+
+    /// <summary>
+    /// Settings that contours never read do not divide them, and a spacing divides nothing else.
+    /// </summary>
+    [Fact]
+    public void A_spacing_divides_only_contours_and_contours_are_divided_only_by_it()
+    {
+        var contours = new TerrainDerivativeSettings { Derivative = TerrainDerivative.Contours };
+
+        TerrainDerivativeRegistry.Fingerprint(contours with
+            {
+                ComputeEdges = false,
+                SurfaceFit = TerrainSurfaceFit.ZevenbergenThorne,
+                ZFactor = 4d,
+            })
+            .ShouldBe(TerrainDerivativeRegistry.Fingerprint(contours));
+
+        var shaded = new TerrainDerivativeSettings { Derivative = TerrainDerivative.Hillshade };
+
+        TerrainDerivativeRegistry.Fingerprint(shaded with { ContourIntervalMetres = 50d })
+            .ShouldBe(TerrainDerivativeRegistry.Fingerprint(shaded));
+        TerrainDerivativeRegistry.Normalise(shaded with { ContourIntervalMetres = 50d })
+            .ContourIntervalMetres.ShouldBeNull();
+    }
+
+    /// <summary>
     /// A picture is current exactly while the elevation it was drawn from is the elevation being
     /// served, and stale in both of the other cases.
     /// </summary>

@@ -212,12 +212,13 @@
         "ruggednessIndex": "Asperitate",
         "positionIndex": "Poziție topografică",
         "roughness": "Rugozitate",
-        "colourRelief": "Relief colorat"
+        "colourRelief": "Relief colorat",
+        "contours": "Curbe de nivel"
       }
     },
     "derivativeForm": {
       "title": "Imagini derivate",
-      "intro": "O imagine a terenului calculată dintr-o generare încheiată: relief umbrit, pantă, orientare, asperitate, poziție topografică, rugozitate sau un relief colorat. Oricine are dreptul de a citi relieful o găsește apoi în lista de straturi a hărții.",
+      "intro": "O imagine a terenului calculată dintr-o generare încheiată: relief umbrit, pantă, orientare, asperitate, poziție topografică, rugozitate, un relief colorat sau curbe de nivel. Oricine are dreptul de a citi relieful o găsește apoi în lista de straturi a hărții.",
       "needsExecute": "Cererea unei imagini are nevoie de dreptul de execuție asupra reliefului, pe care acest cont nu îl are. Registrul de mai jos rămâne de citit.",
       "noBuilds": "Nicio generare încheiată din care să se deseneze. O imagine se calculează dintr-o generare care a mers până la capăt.",
       "build": "Generare",
@@ -260,6 +261,9 @@
         "riley": "Riley (rădăcina mediei pătratelor diferențelor)",
         "wilson": "Wilson (media diferențelor absolute)"
       },
+      "contourInterval": "O curbă la fiecare (m)",
+      "contourIntervalHint": "Metri de înălțime între o curbă și următoarea, numărați de la nivelul mării. Fiecare a cincea curbă este desenată mai gros. Curbele sunt o imagine: de-a lungul lor nu se poate măsura și nu pot fi selectate.",
+      "contourIntervalInvalid": "Curbele de nivel se află la o distanță de la {{min}} la {{max}} metri de înălțime una de alta.",
       "computeEdges": "Calculează celulele de la margine din vecinii pe care îi au",
       "computeEdgesHint": "Oprit, fiecare rastru al generării se întâlnește cu vecinul lui printr-o linie goală. Pornit, marginea este ușor greșită — cu mai puțin decât o linie lipsă.",
       "colourRamp": "Rampa de culori",
@@ -296,6 +300,7 @@
         "altitude": "{{degrees}}° deasupra orizontului",
         "zFactor": "înălțimi ×{{factor}}",
         "stops": "{{count}} trepte de culoare",
+        "interval": "o curbă la fiecare {{metres}} m",
         "edgesOff": "margini lăsate goale"
       }
     },

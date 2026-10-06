@@ -72,10 +72,18 @@ public static class TerrainDerivativeRegistry
             RuggednessFit = settings.Derivative == TerrainDerivative.RuggednessIndex
                 ? settings.RuggednessFit
                 : TerrainRuggednessFit.Riley,
-            ComputeEdges = settings.ComputeEdges,
+            // Contour lines are traced through the heights rather than computed from a cell's
+            // neighbours, so they have no outermost ring to compute or leave out.
+            ComputeEdges = settings.Derivative == TerrainDerivative.Contours || settings.ComputeEdges,
             ColourRamp = settings.Derivative == TerrainDerivative.ColourRelief
                 ? settings.ColourRamp
                 : [],
+
+            // The spacing asked for, or the usual one written out: two requests for contours, one
+            // naming twenty metres and one naming nothing, are one picture.
+            ContourIntervalMetres = settings.Derivative == TerrainDerivative.Contours
+                ? settings.ContourIntervalMetres ?? TerrainContourLines.DefaultIntervalMetres
+                : null,
         };
     }
 

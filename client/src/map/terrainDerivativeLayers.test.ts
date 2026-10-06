@@ -143,6 +143,20 @@ describe('computed terrain layers', () => {
     expect(options.sources).toEqual([{ url: steepness.rasters[0].url, min: 0, max: 90 }]);
   });
 
+  // Contour lines are four bands: three of colour and one saying where there is a line at all.
+  // Read the way a photograph is, only the three colours are fetched, and the band that makes
+  // everything between the lines see-through never arrives.
+  it('reads contour lines exactly as they are stored, transparency included', () => {
+    const lines = layerInfo({ id: '44444444-4444-4444-4444-444444444444', derivative: 'contours' });
+    syncTerrainDerivativeLayers([lines], new Set([lines.id]), new Map());
+
+    const options = sourceOptions(onlyLayer());
+    expect(options.convertToRGB).toBeUndefined();
+    expect(options.sources).toEqual([{ url: lines.rasters[0].url }]);
+    // Drawn in the colours it was burnt in, not through a ramp of this application's choosing.
+    expect(terrainDerivativeStyle('contours')).toBeUndefined();
+  });
+
   it('removes a picture that is no longer wanted', () => {
     const info = layerInfo();
     syncTerrainDerivativeLayers([info], new Set([info.id]), new Map());

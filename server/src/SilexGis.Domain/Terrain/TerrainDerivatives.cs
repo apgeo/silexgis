@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json.Serialization;
+
 namespace SilexGis.Domain.Terrain;
 
 /// <summary>
@@ -44,6 +46,11 @@ public enum TerrainDerivative : short
 
     /// <summary>Elevation painted with a colour ramp the caller supplies.</summary>
     ColourRelief = 6,
+
+    /// <summary>
+    /// Lines of equal height at a chosen spacing, every fifth drawn heavier, on a clear ground.
+    /// </summary>
+    Contours = 7,
 }
 
 /// <summary>Which arithmetic is used to work out the slope of the ground at a cell.</summary>
@@ -161,6 +168,20 @@ public sealed record TerrainDerivativeSettings
 
     /// <summary>The elevation ramp, for a colour relief and for nothing else.</summary>
     public IReadOnlyList<TerrainColourStop> ColourRamp { get; init; } = [];
+
+    /// <summary>
+    /// How many metres of height apart contour lines are drawn, for a picture of contours and
+    /// for nothing else. Nothing means the usual spacing.
+    /// </summary>
+    /// <remarks>
+    /// Left out of the stored record altogether when it holds nothing, rather than written as
+    /// an empty entry. The record of a picture is also what its fingerprint is taken over, so a
+    /// field that appeared in every record the day it was added would change the fingerprint of
+    /// every picture already stored — and asking again for one of those would then compute and
+    /// keep a second copy instead of answering with the first.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? ContourIntervalMetres { get; init; }
 }
 
 /// <summary>What the settings have to satisfy before anything is computed from them.</summary>
@@ -233,6 +254,12 @@ public static class TerrainDerivativeRules
         else if (settings.ColourRamp.Count > 0)
         {
             return "A colour ramp only means something for a colour relief.";
+        }
+
+        if (settings.Derivative == TerrainDerivative.Contours)
+        {
+            return TerrainContourLines.Problem(
+                settings.ContourIntervalMetres ?? TerrainContourLines.DefaultIntervalMetres);
         }
 
         return null;

@@ -180,10 +180,10 @@ restarted.
 ## Derived pictures of the ground
 
 A finished build's elevation can also be turned into **pictures of the ground** — shaded relief,
-steepness, facing, ruggedness, topographic position, roughness, or a colour relief. They are
-computed once by the installation, on the same worker that makes builds, and then everybody with
-permission to read terrain sees them in the map's layer list under **Ground pictures**: switch one
-on, and it draws beneath the caves.
+steepness, facing, ruggedness, topographic position, roughness, a colour relief, or contour lines.
+They are computed once by the installation, on the same worker that makes builds, and then
+everybody with permission to read terrain sees them in the map's layer list under **Ground
+pictures**: switch one on, and it draws beneath the caves.
 
 ### Asking for one
 
@@ -210,8 +210,12 @@ The settings, by kind:
   Wilson's, which gives different numbers — the two are never comparable.
 - **Coloured relief**: a colour at each height, in metres. At least two stops, no two at the same
   height; the ground between two heights is painted with the blend.
-- Every kind: whether the outermost cells are computed from the neighbours they have. Off, every
-  raster of a build meets its neighbour with a hairline gap through the picture.
+- **Contour lines**: how many metres of height lie between one line and the next — from 1 to 1000,
+  and 20 unless you say otherwise — counted from sea level, with every fifth line drawn heavier.
+  The lines are a picture like the others, clear between the lines, and not data: nothing can be
+  measured along one, selected or exported, and no line carries its height.
+- Every kind but contour lines: whether the outermost cells are computed from the neighbours they
+  have. Off, every raster of a build meets its neighbour with a hairline gap through the picture.
 
 **Request picture** queues it. Asking again for a picture the installation already holds — same
 build, same kind, same settings — answers with the one that exists rather than computing it twice.

@@ -47,7 +47,7 @@ namespace SilexGis.Infrastructure.Terrain;
 /// either be single-threaded — which the queue that runs terrain work is — or hold a gate of its own.
 /// </para>
 /// </remarks>
-public sealed class GdalDemDerivatives : ITerrainDerivativeComputer
+public sealed partial class GdalDemDerivatives : ITerrainDerivativeComputer
 {
     static GdalDemDerivatives() => GdalRuntime.Configure();
 
@@ -111,7 +111,11 @@ public sealed class GdalDemDerivatives : ITerrainDerivativeComputer
             // the handle that wrote it is gone.
             using (var source = OpenSource(request.SourcePath))
             {
-                if (MeasuredAcrossTheGround(request.Settings.Derivative)
+                if (request.Settings.Derivative == TerrainDerivative.Contours)
+                {
+                    DrawContours(source, partial, request.Settings, sentence, ct);
+                }
+                else if (MeasuredAcrossTheGround(request.Settings.Derivative)
                     && Grid.Of(source) is { } grid)
                 {
                     ComputeInRowBands(source, grid, rows, partial, request.Settings, sentence, ct);
@@ -768,9 +772,10 @@ public sealed class GdalDemDerivatives : ITerrainDerivativeComputer
     /// raise instead. Left uncaught that arrives at the caller as a defect of this server rather than
     /// as a fact about the file.
     /// </remarks>
-    private static Dataset Produce(Func<Dataset?> call, string sentence)
+    private static T Produce<T>(Func<T?> call, string sentence)
+        where T : class
     {
-        Dataset? produced;
+        T? produced;
         Gdal.ErrorReset();
         try
         {

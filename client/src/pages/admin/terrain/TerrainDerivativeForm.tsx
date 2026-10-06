@@ -30,11 +30,14 @@ import {
   DEFAULT_ALTITUDE,
   DEFAULT_AZIMUTH,
   DEFAULT_COLOUR_RAMP,
+  DEFAULT_CONTOUR_INTERVAL,
   DEFAULT_Z_FACTOR,
   DERIVATIVE_BUILD_CHOICES,
   HILLSHADE_LIGHTINGS,
+  MAX_CONTOUR_INTERVAL,
   MAX_NAME_LENGTH,
   MAX_Z_FACTOR,
+  MIN_CONTOUR_INTERVAL,
   RUGGEDNESS_FITS,
   SLOPE_UNITS,
   SURFACE_FITS,
@@ -42,9 +45,12 @@ import {
   altitudeValid,
   azimuthValid,
   colourRampProblem,
+  contourIntervalValid,
   defaultDerivativeName,
   hexToRgb,
   readsColourRamp,
+  readsContourInterval,
+  readsEdges,
   readsLight,
   readsRuggednessFit,
   readsSlopeUnit,
@@ -72,6 +78,7 @@ interface FormValues {
   ruggednessFit: TerrainRuggednessFit;
   computeEdges: boolean;
   colourRamp: ColourStopDraft[];
+  contourIntervalMetres: number;
 }
 
 interface Props {
@@ -120,6 +127,7 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
     ruggednessFit: 'riley',
     computeEdges: true,
     colourRamp: DEFAULT_COLOUR_RAMP.map((stop) => ({ ...stop })),
+    contourIntervalMetres: DEFAULT_CONTOUR_INTERVAL,
   };
 
   const buildLabel = (build: TerrainBuild): string => {
@@ -164,7 +172,8 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
       surfaceFit: readsSurfaceFit(chosen) ? values.surfaceFit : null,
       slopeUnit: readsSlopeUnit(chosen) ? values.slopeUnit : null,
       ruggednessFit: readsRuggednessFit(chosen) ? values.ruggednessFit : null,
-      computeEdges: values.computeEdges,
+      computeEdges: readsEdges(chosen) ? values.computeEdges : null,
+      contourIntervalMetres: readsContourInterval(chosen) ? values.contourIntervalMetres : null,
       colourRamp: readsColourRamp(chosen)
         ? values.colourRamp.map((stop) => ({
             elevation: stop.elevation ?? 0,
@@ -473,15 +482,49 @@ export default function TerrainDerivativeForm({ canExecute }: Props) {
           </Form.List>
         )}
 
-        <Form.Item
-          name="computeEdges"
-          valuePropName="checked"
-          extra={t('terrain.derivativeForm.computeEdgesHint')}
-        >
-          <Checkbox data-testid="terrain-derivative-edges">
-            {t('terrain.derivativeForm.computeEdges')}
-          </Checkbox>
-        </Form.Item>
+        {readsContourInterval(kind) && (
+          <Form.Item
+            name="contourIntervalMetres"
+            label={t('terrain.derivativeForm.contourInterval')}
+            extra={t('terrain.derivativeForm.contourIntervalHint')}
+            rules={[
+              {
+                validator: (_, value: number) =>
+                  contourIntervalValid(value)
+                    ? Promise.resolve()
+                    : Promise.reject(
+                        new Error(
+                          t('terrain.derivativeForm.contourIntervalInvalid', {
+                            min: MIN_CONTOUR_INTERVAL,
+                            max: MAX_CONTOUR_INTERVAL,
+                          }),
+                        ),
+                      ),
+              },
+            ]}
+            style={{ maxWidth: 320 }}
+          >
+            <InputNumber
+              data-testid="terrain-derivative-contour-interval"
+              min={0}
+              max={MAX_CONTOUR_INTERVAL}
+              step={5}
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+        )}
+
+        {readsEdges(kind) && (
+          <Form.Item
+            name="computeEdges"
+            valuePropName="checked"
+            extra={t('terrain.derivativeForm.computeEdgesHint')}
+          >
+            <Checkbox data-testid="terrain-derivative-edges">
+              {t('terrain.derivativeForm.computeEdges')}
+            </Checkbox>
+          </Form.Item>
+        )}
 
         <Button
           type="primary"
