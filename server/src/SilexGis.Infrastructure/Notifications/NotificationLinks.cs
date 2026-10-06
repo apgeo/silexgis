@@ -36,4 +36,30 @@ public static class NotificationLinks
     /// </summary>
     public static string Absolute(IConfiguration configuration, string url) =>
         url.StartsWith('/') ? SiteUrl(configuration) + url : url;
+
+    /// <summary>
+    /// What a notification that somebody asked on a trip cannot open a cave records the
+    /// account of that person under, beside the values its wording uses.
+    /// </summary>
+    /// <remarks>
+    /// An identifier, not a word. It is kept so that where the notification points can be
+    /// rebuilt later from what it is about, and it is deliberately on no template's list of
+    /// names a wording may use. A wording that uses a name off its list is refused when it is
+    /// saved, so no message — shipped, or rewritten by an operator — prints it.
+    /// </remarks>
+    public const string InviteeAccount = "inviteeUserId";
+
+    /// <summary>
+    /// A cave's permissions dialog, opened about one account: where somebody told that a person
+    /// cannot open the cave is sent to change that.
+    /// </summary>
+    /// <remarks>
+    /// One home because two things build it and have to agree: the producer, for the copy that
+    /// leaves by mail, and the inbox, which rebuilds where a notification points from what it
+    /// is about rather than trusting a path frozen when the notification was queued. The page
+    /// treats the account as a suggestion and nothing more — it looks the account up under its
+    /// reader's own rights, and what is granted is whatever that reader then saves.
+    /// </remarks>
+    public static string CavePermissionsAbout(Guid caveId, Guid accountId) =>
+        $"/caves/{caveId}?permissions=1&grantTo={accountId}";
 }

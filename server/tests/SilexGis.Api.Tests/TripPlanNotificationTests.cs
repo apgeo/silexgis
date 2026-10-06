@@ -565,6 +565,61 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, ICl
             .ShouldBe($"/caves/{laterId}?permissions=1&grantTo={mateId}");
     }
 
+    /// <summary>
+    /// The message is a line in its reader's inbox before it is a letter in anybody's mailbox —
+    /// an installation need not send mail at all — so the line has to be the quick way too.
+    /// <para>
+    /// Where an inbox line points is never the path its producer stored: it is worked out
+    /// again when the line is read, from what the message is about, after the reader's access
+    /// to that has been decided afresh. So two things are asserted, and they are one rule. The
+    /// line leads to the cave's permissions dialog about the person who was asked, built from
+    /// the cave the check was made against. And once its reader can no longer open that cave,
+    /// the same line carries neither the cave's name nor any way to it — while still being
+    /// there, because that something happened is not the secret.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Read_in_the_inbox_the_message_leads_to_the_dialog_about_that_person_until_its_reader_loses_the_cave()
+    {
+        var caveName = $"Peștera Citită {Guid.NewGuid():N}"[..34];
+        var caveId = await CreateCaveAsync(caveName, keeper);
+        await GrantCaveReadAsync(caveId, organiserId);
+
+        var trip = await CreatePlanAsync("A trip its keeper reads about", caveId);
+        await ProposeAsync(trip);
+        (await InviteAsync(organiser, trip, mateCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // What was stored names the cave as its subject, which is what makes the rest possible:
+        // a message that named nothing could never be checked against anything.
+        var stored = (await CaveNoticesForAsync(keeperId, caveId)).ShouldHaveSingleItem();
+        stored.TargetKind.ShouldBe(NotificationTargetKind.Feature);
+        stored.TargetId.ShouldBe(caveId);
+
+        var line = await InboxLineAsync(keeper, stored.Id);
+        line.GetProperty("targetWithheld").GetBoolean().ShouldBeFalse();
+        line.GetProperty("title").GetString()!.ShouldContain(caveName);
+        line.GetProperty("url").GetString()
+            .ShouldBe($"/caves/{caveId}?permissions=1&grantTo={mateId}");
+
+        // A refusal written straight onto the cave: it beats owning it, which is the one way an
+        // owner can genuinely stop being able to read their own row.
+        await DenyCaveReadAsync(caveId, keeperId);
+        (await keeper.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var response = await keeper.GetAsync($"/api/v1/notifications/{stored.Id}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        var after = JsonDocument.Parse(payload).RootElement;
+        after.GetProperty("targetWithheld").GetBoolean().ShouldBeTrue();
+        after.GetProperty("title").ValueKind.ShouldBe(JsonValueKind.Null);
+        after.GetProperty("url").ValueKind.ShouldBe(JsonValueKind.Null);
+        // Asserted on what was actually sent rather than on two fields of it: neither the name,
+        // nor the cave, nor the person the message was about travels in any other member.
+        payload.ShouldNotContain(caveName);
+        payload.ShouldNotContain(caveId.ToString());
+        payload.ShouldNotContain(mateId.ToString());
+    }
+
     // ---- fixture ----
 
     private async Task<Guid> CreatePlanAsync(string title, params Guid[] caveIds)
@@ -709,6 +764,15 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, ICl
     /// </summary>
     private static string LinkOf(Notification notice) =>
         JsonDocument.Parse(notice.Placeholders).RootElement.GetProperty("url").GetString()!;
+
+    /// <summary>One line of somebody's own inbox, as the application shows it to them.</summary>
+    private static async Task<JsonElement> InboxLineAsync(HttpClient reader, long id)
+    {
+        var response = await reader.GetAsync($"/api/v1/notifications/{id}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement;
+    }
 
     private async Task<List<Notification>> NoticesForTemplateAsync(string templateKey, Guid tripId)
     {

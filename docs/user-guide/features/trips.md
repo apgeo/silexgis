@@ -102,13 +102,14 @@ When somebody asked onto a trip cannot read a cave the trip is about, the **cave
 the full administrators** get a message, whether the cave was already on the trip or added
 afterwards.
 
-**The link in that message is the quick way to let them in.** It opens the cave's
+**That message is the quick way to let them in.** Opening it — the line in your
+[notifications](notifications.md#the-inbox), or the link in the mail — takes you to the cave's
 **Permissions** about that person: a rule for them is already drafted — **Read** on that cave
 and nothing more, in a row marked *proposed* — with a line above the table saying why the row
 is there.
 
-- **Nothing is granted by following the link.** Press **OK** and the rule is saved; close the
-  dialog, or remove the row, and nothing changes.
+- **Nothing is granted by opening it.** Press **OK** and the rule is saved; close the dialog,
+  or remove the row, and nothing changes.
 - **Only Read is ticked.** Anything more — *Exact location* above all — is yours to tick, and
   is never ticked for you.
 - **If somebody got there first**, the dialog says the person already has a rule with Read,

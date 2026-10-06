@@ -102,12 +102,13 @@ Când cineva invitat pe o tură nu poate citi o peșteră despre care este tura,
 peșterii și administratorii compleți** primesc un mesaj, indiferent dacă peștera era deja pe tură
 sau a fost adăugată ulterior.
 
-**Linkul din acel mesaj este calea rapidă de a-i da acces.** Deschide **Permisiunile** peșterii
-despre acea persoană: o regulă pentru ea este deja pregătită — **Citire** pe acea peșteră și nimic
-mai mult, într-un rând marcat *propusă* — cu un rând deasupra tabelului care spune de ce este
-acolo.
+**Acel mesaj este calea rapidă de a-i da acces.** Deschiderea lui — rândul din
+[notificările](notifications.md#cutia-poștală) dumneavoastră, sau linkul din e-mail — vă duce
+la **Permisiunile** peșterii despre acea persoană: o regulă pentru ea este deja pregătită —
+**Citire** pe acea peșteră și nimic mai mult, într-un rând marcat *propusă* — cu un rând deasupra
+tabelului care spune de ce este acolo.
 
-- **Nimic nu se acordă prin simpla urmare a linkului.** Apăsați **OK** și regula este salvată;
+- **Nimic nu se acordă prin simpla lui deschidere.** Apăsați **OK** și regula este salvată;
   închideți dialogul, sau ștergeți rândul, și nu se schimbă nimic.
 - **Doar Citire este bifată.** Orice în plus — mai ales *Locație exactă* — rămâne de bifat de
   dumneavoastră și nu este niciodată bifat în locul dumneavoastră.

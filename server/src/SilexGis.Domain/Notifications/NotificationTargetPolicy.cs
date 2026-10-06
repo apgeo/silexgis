@@ -65,9 +65,6 @@ public static class NotificationTargetPolicy
                 "Temporary. Its producer belongs to work in progress elsewhere; the target is a trip.",
             [MessageTemplateCatalog.NotifyTripPlanCancelled] =
                 "Temporary. Its producer belongs to work in progress elsewhere; the target is a trip.",
-            [MessageTemplateCatalog.NotifyTripInviteeCannotOpenCave] =
-                "Temporary. Its producer belongs to work in progress elsewhere; the target is the "
-                + "cave, not the trip.",
         };
 
     /// <summary>Whether a message must name what it is about.</summary>
