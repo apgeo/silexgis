@@ -79,7 +79,9 @@ test('a cave measured from its compiled survey shows its passage rose and its fi
   // about one cave are the same measurement only if they came from the same upload.
   await expect(figures.getByText(/Measured from the survey/)).toBeVisible();
 
-  const rose = page.getByTestId('chart-rose');
+  // The cave's own orientation rose: the structure comparison beside it draws two more roses under
+  // the same test id, so the page as a whole holds three.
+  const rose = page.getByTestId('cave-orientation').getByTestId('chart-rose');
   await expect(rose).toBeVisible();
 
   // Axial, and drawn as such: every sector the survey filled is drawn again on the opposite side,
@@ -121,7 +123,7 @@ test('a cave with only a centerline says its figures are an approximation', asyn
   await expect(figures.getByText(/Approximated from the stored centerline/)).toBeVisible();
   await expect(figures.getByText(/Measured from the compiled survey/)).toHaveCount(0);
 
-  await expect(page.getByTestId('chart-rose')).toBeVisible();
+  await expect(page.getByTestId('cave-orientation').getByTestId('chart-rose')).toBeVisible();
   await expect(
     page.getByTestId('cave-orientation').getByText(/Approximated from the stored centerline/),
   ).toBeVisible();
@@ -142,7 +144,7 @@ test('a cave whose line work carries no altitudes is refused a steepness, in wor
   await reopenCave(page);
 
   // Which way the passages run is still answerable from a plan drawing, so the rose is drawn.
-  await expect(page.getByTestId('chart-rose')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('cave-orientation').getByTestId('chart-rose')).toBeVisible({ timeout: 30_000 });
 
   // How steeply they run is not, and the refusal is a stated reason rather than an empty chart or
   // a mean of zero. Zero would say the cave is level, which is a claim about the cave; this

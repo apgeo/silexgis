@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
+import { signedInElsewhere } from './arrange.ts';
 import { gotoRoute, login } from './helpers.ts';
 
 /**
@@ -56,14 +57,18 @@ test('a club officer writes to the roster, sees who it reaches, confirms, and a 
 
   // The officer works in a browser of their own. The watched page is the member's, because the
   // question this flow answers last is whether the notice reached somebody.
-  const officerContext = await browser.newContext();
-  const officer = await officerContext.newPage();
+  // Through the helper that seeds English for a context of its own: a bare context starts in the
+  // application's default language, and every sign-in label the flow looks for is English.
+  const { context: officerContext, page: officer } = await signedInElsewhere(browser, {
+    email: officerEmail,
+    password: officerPassword,
+    displayName: officerName,
+  });
 
   try {
     // An ordinary account, holding nothing but what every account here holds. What lets it
     // announce at all is that it starts the club below: a club's starter rights give whoever
     // created it the right to write to its roster, and that is the only grant in this flow.
-    await login(officer, officerEmail, officerPassword);
     await gotoRoute(officer, '/caving-groups');
 
     // A club of its own rather than one the sample data ships with: this test writes to

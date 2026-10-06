@@ -84,7 +84,8 @@ test('a cave at two heights proposes two levels and a confirmed reading survives
 
   // And it can be withdrawn, so a reading recorded by mistake is not permanent.
   await reloaded.getByTestId('hypsometry-clear').click();
-  await page.getByRole('button', { name: 'OK' }).click();
+  // Exactly "OK": the page also offers "Look this cave up in Grottocenter", whose name contains it.
+  await page.getByRole('button', { name: 'OK', exact: true }).click();
   await expect(reloaded.getByTestId('hypsometry-saved')).toHaveText(
     /No reading has been recorded yet/,
     { timeout: 15_000 },

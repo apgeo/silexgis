@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Locator, type Page } from '@playwright/test';
+import { newEnglishContext } from './arrange.ts';
 import { test } from './consoleGuard.ts';
 import { deleteFeature, login } from './helpers.ts';
 
@@ -700,7 +701,9 @@ test('an administrator may edit a link somebody else recorded', async ({ page, b
     // link's author and the person editing it below are different people.
     await createPointFeature(page, anchorName);
 
-    const authorContext = await browser.newContext();
+    // A context of the test's own, reading English like the watched one, or the sign-in below
+    // waits on a field labelled in Romanian.
+    const authorContext = await newEnglishContext(browser);
     const authorPage = await authorContext.newPage();
     await login(authorPage, otherEmail, otherPassword);
     await openFeature(authorPage, anchorName);

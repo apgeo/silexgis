@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
+import { newEnglishContext } from './arrange.ts';
 import { test } from './consoleGuard.ts';
 import {
   countScene3dDrawCalls,
@@ -214,7 +215,9 @@ test('picking an entrance in the scene names it over the scene, and lets go of i
 test('a browser without WebGL 2 is told why, rather than shown a dead canvas', async ({
   browser,
 }) => {
-  const context = await browser.newContext();
+  // A context of the test's own, reading English like the watched one, or the sign-in below waits
+  // on a field labelled in Romanian.
+  const context = await newEnglishContext(browser);
   // Removes the capability the scene needs, before any application code runs.
   await context.addInitScript(() => {
     Reflect.deleteProperty(window, 'WebGL2RenderingContext');

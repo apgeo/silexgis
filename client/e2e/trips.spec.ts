@@ -139,7 +139,12 @@ test('a trip records what it worked in, and the record survives a reload and can
 
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
+  // The dialog's own title field, by role: the listing behind it carries a column header that also
+  // announces itself as "Title", so a bare label lookup matches two elements.
+  await page
+    .getByRole('dialog')
+    .getByRole('textbox', { name: /^\*?\s*Title$/ })
+    .fill(title);
   await page.getByRole('button', { name: 'OK' }).click();
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
@@ -225,7 +230,12 @@ test('a trip spans several days, carries a shape of its own, and says the shape 
 
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
+  // The dialog's own title field, by role: the listing behind it carries a column header that also
+  // announces itself as "Title", so a bare label lookup matches two elements.
+  await page
+    .getByRole('dialog')
+    .getByRole('textbox', { name: /^\*?\s*Title$/ })
+    .fill(title);
   await fillRange(page, start, end);
   await drawPoint(page);
   await page.getByRole('button', { name: 'OK' }).click();
@@ -268,7 +278,12 @@ test('a trip is written as a draft and stays one until it is published', async (
   // write-up is ready and not before, so a new trip arrives as a draft with nothing sent.
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
+  // The dialog's own title field, by role: the listing behind it carries a column header that also
+  // announces itself as "Title", so a bare label lookup matches two elements.
+  await page
+    .getByRole('dialog')
+    .getByRole('textbox', { name: /^\*?\s*Title$/ })
+    .fill(title);
   await page.getByRole('button', { name: 'OK' }).click();
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
@@ -318,7 +333,12 @@ test('a trip logged without touching the date control is a day trip today', asyn
   // itself, which is what makes the detail page label it "Date".
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
+  // The dialog's own title field, by role: the listing behind it carries a column header that also
+  // announces itself as "Title", so a bare label lookup matches two elements.
+  await page
+    .getByRole('dialog')
+    .getByRole('textbox', { name: /^\*?\s*Title$/ })
+    .fill(title);
   await page.getByRole('button', { name: 'OK' }).click();
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
@@ -344,7 +364,12 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
 
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
+  // The dialog's own title field, by role: the listing behind it carries a column header that also
+  // announces itself as "Title", so a bare label lookup matches two elements.
+  await page
+    .getByRole('dialog')
+    .getByRole('textbox', { name: /^\*?\s*Title$/ })
+    .fill(title);
   // One person, named for this run only, so the totals below are about a caver whose whole
   // history is the trip this flow just wrote — an assertion of exactly one, rather than of
   // "more than before", which would pass on a page that had stopped filtering entirely.
@@ -440,7 +465,12 @@ test('what a trip measured and what it found are stored on it, not held by the p
   // trip's purpose holds, so a trip with no purpose has nothing to be asked.
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
+  // The dialog's own title field, by role: the listing behind it carries a column header that also
+  // announces itself as "Title", so a bare label lookup matches two elements.
+  await page
+    .getByRole('dialog')
+    .getByRole('textbox', { name: /^\*?\s*Title$/ })
+    .fill(title);
   await page.getByLabel('Trip type').click();
   // Waited for before it is clicked: a click landing while the list is still opening selects
   // nothing at all, and the trip is then created with no purpose.
@@ -490,7 +520,12 @@ test('a trip records who was there, what one of them did, and when they came out
 
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
+  // The dialog's own title field, by role: the listing behind it carries a column header that also
+  // announces itself as "Title", so a bare label lookup matches two elements.
+  await page
+    .getByRole('dialog')
+    .getByRole('textbox', { name: /^\*?\s*Title$/ })
+    .fill(title);
 
   // Two people, and the ordinary one is a name and nothing else — the row asks for nothing
   // more, which is the bar this control has to keep: most rows are exactly this.
@@ -561,7 +596,12 @@ test('a trip is written up as a document, and the document is filed against the 
 
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
+  // The dialog's own title field, by role: the listing behind it carries a column header that also
+  // announces itself as "Title", so a bare label lookup matches two elements.
+  await page
+    .getByRole('dialog')
+    .getByRole('textbox', { name: /^\*?\s*Title$/ })
+    .fill(title);
   await page.getByRole('button', { name: 'OK' }).click();
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });

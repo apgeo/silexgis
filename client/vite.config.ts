@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// <reference types="vitest/config" />
+import { createHash } from 'node:crypto';
 import { appendFileSync, createReadStream, existsSync, mkdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -20,6 +21,26 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 // there is refused. Unset, both are the ordinary local stack, so `npm run dev` is unchanged.
 const apiTarget = process.env.SILEXGIS_API_TARGET ?? 'http://localhost:5080';
 const devPort = Number(process.env.SILEXGIS_DEV_PORT ?? 5173);
+
+// Each dev server keeps a dependency cache of its own.
+//
+// Vite pre-bundles the application's dependencies into its cache directory and rewrites that
+// directory whenever a server meets an import it had not bundled yet. The default,
+// `node_modules/.vite`, is one directory for every server that resolves the same `node_modules` —
+// and a second checkout of this project usually symlinks `node_modules` to the first one's, so
+// two servers on two branches rewrote each other's bundles. The loser's browser is then answered
+// `504 Outdated Optimize Dep` for a file that was there a moment ago, the application never
+// starts, and a browser test waits two minutes for a sign-in page that is not coming, naming
+// only the address it waited for. Keyed on this checkout's own path, which separates checkouts
+// whatever they share, and on the port, which separates two servers of one checkout.
+const dependencyCacheDir = path.join(
+  'node_modules',
+  '.vite',
+  `${createHash('sha1')
+    .update(path.dirname(fileURLToPath(import.meta.url)))
+    .digest('hex')
+    .slice(0, 8)}-${devPort}`,
+);
 const proxiedPaths = ['/api', '/connect', '/health', '/openapi', '/.well-known'];
 
 // The 3D engine loads shader workers, decompression modules and icons at runtime rather than
@@ -321,6 +342,7 @@ function framingPolicy(): Plugin {
 }
 
 export default defineConfig({
+  cacheDir: dependencyCacheDir,
   plugins: [
     react(),
     framingPolicy(),
