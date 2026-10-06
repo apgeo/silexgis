@@ -182,7 +182,7 @@ mărimile relative tocmai ale lucrului pe care răspunsul a refuzat să îl spun
 
 ## Statistici din ture
 
-O persoană, o peșteră și un grup de speologie își primesc fiecare totalurile:
+O persoană, o peșteră, un grup de speologie și o tabără își primesc fiecare totalurile:
 
 **Ture · Persoane · Locuri · Primele vizite · Ore în subteran · Cartat · Coardă · Stații
 topografice · Ture cu incident · Fotografii**
@@ -199,14 +199,43 @@ tura. O **primă vizită** este pur și simplu cea mai veche tură care a dus pe
 că tastarea unei ture mai vechi din arhivă *corectează* cifrele, în loc să lase în urmă un
 indicator învechit.
 
-Oricare dintre cele trei poate fi **salvată ca foaie de calcul**, care poartă exact ce a purtat
-ecranul și spune ale cui sunt totalurile — pentru că un fișier se redirecționează și se citește
-luni mai târziu.
+**Nu orice subiect le arată pe toate zece:**
+
+| Ale cui sunt totalurile | Ce lipsește | De ce |
+|---|---|---|
+| Ale unei persoane | *Persoane* | Câți oameni au fost în turele cuiva este un fapt despre cei cu care a mers, nu despre persoana însăși |
+| Ale unei peșteri | *Locuri* · *Primele vizite* | Orice tură numărată pentru o peșteră a fost în acea peșteră — așa că *Locuri* ar putea arăta doar unu, iar *Primele vizite* ar repeta doar *Persoane*. O cifră care nu poate diferi de vecina ei se citește totuși ca un al doilea fapt |
+| Ale unui grup de speologie, ale unei tabere | nimic | |
+
+Oricare dintre ele poate fi **salvată ca foaie de calcul**, care poartă exact ce a purtat
+ecranul — fără aceleași cifre — și spune ale cui sunt totalurile, pentru că un fișier se
+redirecționează și se citește luni mai târziu.
 
 > **Nu puteți cere turele unei persoane numind-o.** Aceasta este o întrebare despre o persoană,
 > asamblată din înregistrări pe care cel care întreabă s-ar putea să nu aibă niciodată voie să le
 > citească. Turele proprii sunt la *Jurnale de tură → Turele mele*, calculate din cine este
 > autentificat.
+
+### Sinteza ieșirilor
+
+**Sinteză**, deasupra listei de ture, adună turele pe care le arată lista — ia cu ea filtrul
+listei. Patru grafice: *Ieșiri pe an*, *Cu ce scop*, *Unde s-a mers* și *Cine a fost*. Titlul
+fiecărui grafic spune peste câte ture a fost desenat, iar **Filtrul curent · Toate ieșirile**
+comută între filtrul cu care ați venit și tot ce puteți citi, astfel încât o vedere restrânsă
+să aibă cu ce fi comparată.
+
+Primul grafic desenează o linie peste bare: câte zone distincte atinseseră turele numărate
+până la sfârșitul fiecărui an. *„Dacă urcă în continuare, se descoperă teren nou; dacă se
+aplatizează sub bare care nu se aplatizează, se revine în aceleași locuri."*
+
+> **„Nou" înseamnă nou față de turele numărate, nu față de întreaga arhivă.** O zonă în care
+> ajunsese deja o tură din afara lor se numără ca nouă prima dată când ajunge acolo una dintre
+> ele. Așa că restrângerea listei la un singur an pornește linia din nou de la zero, iar
+> restrângerea la un singur scop le atribuie turelor de cartare teren în care o tură de
+> explorare ajunsese mai întâi. Pagina spune acest lucru sub linie și numește turele la care
+> se referă — aceleași pe care le numește titlul graficului.
+
+Ca orice total de aici, și acestea sunt numărate peste turele pe care le puteți citi.
 
 ---
 
