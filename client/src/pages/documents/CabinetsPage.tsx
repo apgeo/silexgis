@@ -557,7 +557,7 @@ export default function CabinetsPage() {
               type="warning"
               showIcon
               style={{ marginBottom: 12 }}
-              message={t('cabinets.expectsMetadata', {
+              title={t('cabinets.expectsMetadata', {
                 keys: current.defaults.effectiveRequiredMetadataKeys.join(', '),
               })}
             />

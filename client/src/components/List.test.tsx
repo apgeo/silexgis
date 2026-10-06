@@ -114,4 +114,21 @@ describe('List', () => {
     rerender(<List dataSource={[]} renderItem={() => null} locale={{ emptyText: ' ' }} />);
     expect(screen.queryAllByText('No data')).toHaveLength(0);
   });
+
+  it('can be found by the mark its caller put on it, with rows and without', () => {
+    // The library's own list handed a `data-testid` on to its root, and a call site moved here
+    // by changing its import kept passing one. Dropped silently, the list was simply not there
+    // for the test that looked for it.
+    const { rerender } = render(
+      <List
+        data-testid="the-list"
+        dataSource={['a', 'b']}
+        renderItem={(item) => <List.Item>{item}</List.Item>}
+      />,
+    );
+    expect(screen.getByTestId('the-list')).toContainElement(screen.getByText('a'));
+
+    rerender(<List data-testid="the-list" dataSource={[]} renderItem={() => null} />);
+    expect(screen.getByTestId('the-list')).toBeInTheDocument();
+  });
 });

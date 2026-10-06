@@ -207,7 +207,7 @@ export default function TripCalloutPanel({
           type="error"
           showIcon
           icon={<WarningOutlined />}
-          message={t('trips.calloutOverdueTitle')}
+          title={t('trips.calloutOverdueTitle')}
           description={t('trips.calloutOverdueBody')}
           data-testid="trip-callout-overdue"
         />
@@ -220,7 +220,7 @@ export default function TripCalloutPanel({
         <Alert
           type="warning"
           showIcon
-          message={t('trips.calloutUncheckedTitle')}
+          title={t('trips.calloutUncheckedTitle')}
           description={t('trips.calloutUncheckedBody')}
           data-testid="trip-callout-unchecked"
         />

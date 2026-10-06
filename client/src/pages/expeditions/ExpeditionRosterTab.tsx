@@ -39,7 +39,7 @@ export default function ExpeditionRosterTab({ expeditionId }: { expeditionId: st
         type="info"
         showIcon
         data-testid="expedition-roster-withheld"
-        message={t('expeditions.rosterWithheld')}
+        title={t('expeditions.rosterWithheld')}
         description={t('expeditions.rosterWithheldDetail')}
       />
     );
@@ -49,7 +49,7 @@ export default function ExpeditionRosterTab({ expeditionId }: { expeditionId: st
   // between the page loading and this tab being opened. It says the roster could not be read, and
   // deliberately does not guess which of the several reasons it was.
   if (error) {
-    return <Alert type="warning" showIcon message={t('expeditions.rosterUnavailable')} />;
+    return <Alert type="warning" showIcon title={t('expeditions.rosterUnavailable')} />;
   }
 
   if (isPending || !data) {

@@ -91,7 +91,7 @@ export default function AreaPointPatternCard({
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message={t('karstDensity.protectionNote', { metres: round(grid.protectionGridMetres) })}
+        title={t('karstDensity.protectionNote', { metres: round(grid.protectionGridMetres) })}
         description={t('karstDensity.protectionNoteDetail', {
           counted: grid.featureCount,
           placed: pattern.data?.featureCount ?? 0,

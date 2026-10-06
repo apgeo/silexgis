@@ -35,7 +35,7 @@ export default function ExpeditionLeadsTab({ expeditionId }: { expeditionId: str
   const { data, isPending, error } = useExpeditionLeads(expeditionId);
 
   if (error) {
-    return <Alert type="warning" showIcon message={t('expeditions.leadsUnavailable')} />;
+    return <Alert type="warning" showIcon title={t('expeditions.leadsUnavailable')} />;
   }
 
   if (isPending || !data) {
@@ -69,7 +69,7 @@ export default function ExpeditionLeadsTab({ expeditionId }: { expeditionId: str
           showIcon
           style={{ marginBottom: 12 }}
           data-testid="expedition-leads-truncated"
-          message={t('expeditions.leadsTruncated')}
+          title={t('expeditions.leadsTruncated')}
         />
       )}
       <Flex vertical gap={12}>

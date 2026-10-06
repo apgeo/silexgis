@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Breadcrumb, Button, Card, Empty, Flex, List, Spin, Typography } from 'antd';
+import { Alert, Breadcrumb, Button, Card, Empty, Flex, Spin, Typography } from 'antd';
+import List from '../../components/List.tsx';
 import { EnvironmentOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -172,7 +173,7 @@ export default function WorkAreasPage() {
     return <Flex justify="center" style={{ padding: 48 }}><Spin /></Flex>;
   }
   if (isError) {
-    return <Alert type="error" message={t('workAreas.loadFailed')} style={{ margin: 24 }} />;
+    return <Alert type="error" title={t('workAreas.loadFailed')} style={{ margin: 24 }} />;
   }
 
   return (
@@ -189,7 +190,7 @@ export default function WorkAreasPage() {
         />
       </Flex>
 
-      {data?.truncated ? <Alert type="warning" showIcon message={t('workAreas.truncated')} /> : null}
+      {data?.truncated ? <Alert type="warning" showIcon title={t('workAreas.truncated')} /> : null}
 
       {areas.length === 0 ? (
         <Empty description={t('workAreas.none')} />

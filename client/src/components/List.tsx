@@ -37,9 +37,23 @@ interface ListProps<T> {
    */
   locale?: { emptyText?: ReactNode };
   style?: CSSProperties;
+  /**
+   * A mark for a test to find the list by. Named because a JSX `data-` attribute type-checks on
+   * any component and is then dropped by one that does not hand it on — which is how a list
+   * swapped in for the library's own stopped being findable with nothing to say why.
+   */
+  'data-testid'?: string;
 }
 
-function ListRoot<T>({ dataSource, renderItem, size, loading, locale, style }: ListProps<T>) {
+function ListRoot<T>({
+  dataSource,
+  renderItem,
+  size,
+  loading,
+  locale,
+  style,
+  'data-testid': testId,
+}: ListProps<T>) {
   const { token } = theme.useToken();
   const records = dataSource ?? [];
 
@@ -63,7 +77,11 @@ function ListRoot<T>({ dataSource, renderItem, size, loading, locale, style }: L
       (locale?.emptyText ?? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />)
     );
 
-  return <div style={style}>{loading ? <Spin>{rows}</Spin> : rows}</div>;
+  return (
+    <div style={style} data-testid={testId}>
+      {loading ? <Spin>{rows}</Spin> : rows}
+    </div>
+  );
 }
 
 interface ListItemProps extends Omit<HTMLAttributes<HTMLLIElement>, 'title'> {

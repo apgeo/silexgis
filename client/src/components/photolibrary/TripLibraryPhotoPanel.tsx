@@ -99,7 +99,7 @@ export default function TripLibraryPhotoPanel({ tripId }: TripLibraryPhotoPanelP
   if (usable.length === 0 || !chosen) {
     return (
       <Card size="small" title={t('libraryPhotos.trip.title')} style={{ marginBottom: 16 }}>
-        <Alert type="info" showIcon message={t('libraryPhotos.health.suspended')} />
+        <Alert type="info" showIcon title={t('libraryPhotos.health.suspended')} />
       </Card>
     );
   }
@@ -162,7 +162,7 @@ export default function TripLibraryPhotoPanel({ tripId }: TripLibraryPhotoPanelP
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('libraryPhotos.health.picturesStopped')}
+          title={t('libraryPhotos.health.picturesStopped')}
         />
       )}
 
@@ -171,7 +171,7 @@ export default function TripLibraryPhotoPanel({ tripId }: TripLibraryPhotoPanelP
           type={problem.kind}
           showIcon
           style={{ marginBottom: 12 }}
-          message={t(problem.key, problem.values)}
+          title={t(problem.key, problem.values)}
           data-testid="trip-library-photo-problem"
         />
       )}
@@ -220,7 +220,7 @@ export default function TripLibraryPhotoPanel({ tripId }: TripLibraryPhotoPanelP
                 </Typography.Text>
                 <Button
                   icon={<RightOutlined />}
-                  iconPosition="end"
+                  iconPlacement="end"
                   disabled={!paging.hasNext}
                   onClick={() => setPage((current) => stepPage(current, 1, paging))}
                 >

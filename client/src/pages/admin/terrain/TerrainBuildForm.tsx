@@ -262,7 +262,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
             showIcon
             style={{ marginBottom: 16 }}
             data-testid="terrain-area-too-large"
-            message={t('terrain.form.areaTooLarge')}
+            title={t('terrain.form.areaTooLarge')}
           />
         )}
 
@@ -294,7 +294,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
             showIcon
             style={{ marginBottom: 16 }}
             data-testid="terrain-extend-locked"
-            message={t('terrain.form.extendLocked', { depth: base.requestedMaxDepth })}
+            title={t('terrain.form.extendLocked', { depth: base.requestedMaxDepth })}
           />
         )}
 
@@ -377,7 +377,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
-            message={t('terrain.problems.noRoots')}
+            title={t('terrain.problems.noRoots')}
           />
         )}
 
@@ -437,7 +437,7 @@ export default function TerrainBuildForm({ canExecute, isFullAdmin }: Props) {
             showIcon
             style={{ marginBottom: 16 }}
             data-testid="terrain-depth-capped"
-            message={t('terrain.form.depthCapped')}
+            title={t('terrain.form.depthCapped')}
             description={t('terrain.form.depthCappedDetail')}
           />
         )}

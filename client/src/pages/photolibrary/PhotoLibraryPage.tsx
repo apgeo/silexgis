@@ -132,7 +132,7 @@ export default function PhotoLibraryPage() {
       <Alert
         type="error"
         showIcon
-        message={t('libraryPhotos.refusals.notAllowed')}
+        title={t('libraryPhotos.refusals.notAllowed')}
         style={{ margin: 16 }}
       />
     );
@@ -151,7 +151,7 @@ export default function PhotoLibraryPage() {
       <Alert
         type="info"
         showIcon
-        message={t(anySuspended ? 'libraryPhotos.health.suspended' : 'libraryPhotos.notConfigured')}
+        title={t(anySuspended ? 'libraryPhotos.health.suspended' : 'libraryPhotos.notConfigured')}
         style={{ margin: 16 }}
       />
     );
@@ -264,7 +264,7 @@ export default function PhotoLibraryPage() {
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('libraryPhotos.health.picturesStopped')}
+          title={t('libraryPhotos.health.picturesStopped')}
         />
       )}
 
@@ -273,7 +273,7 @@ export default function PhotoLibraryPage() {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('libraryPhotos.browse.pageCapped', { count: data.pageSize })}
+          title={t('libraryPhotos.browse.pageCapped', { count: data.pageSize })}
         />
       )}
 
@@ -287,7 +287,7 @@ export default function PhotoLibraryPage() {
           type={problem.kind}
           showIcon
           style={{ marginBottom: 12 }}
-          message={t(problem.key, problem.values)}
+          title={t(problem.key, problem.values)}
           data-testid="library-photo-problem"
         />
       )}
@@ -302,7 +302,7 @@ export default function PhotoLibraryPage() {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('libraryPhotos.search.reduced', { words: reduced })}
+          title={t('libraryPhotos.search.reduced', { words: reduced })}
         />
       )}
 
@@ -361,7 +361,7 @@ export default function PhotoLibraryPage() {
               </Typography.Text>
               <Button
                 icon={<RightOutlined />}
-                iconPosition="end"
+                iconPlacement="end"
                 disabled={!paging.hasNext}
                 onClick={() => setPage((current) => stepPage(current, 1, paging))}
               >

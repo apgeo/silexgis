@@ -96,7 +96,7 @@ export default function TerrainBuildProgress({ buildId }: Props) {
             type="error"
             showIcon
             data-testid="terrain-build-failure"
-            message={t('terrain.detail.failed')}
+            title={t('terrain.detail.failed')}
             // The server writes this one in words for whoever has to act on it, and it says more
             // than any code can — what it was reading, which step it stopped at, what to do next.
             description={build.message ?? undefined}

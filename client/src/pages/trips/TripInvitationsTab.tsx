@@ -146,7 +146,7 @@ export default function TripInvitationsTab({
         type="warning"
         showIcon
         data-testid="trip-invitations-unavailable"
-        message={t('trips.invitations.unavailable')}
+        title={t('trips.invitations.unavailable')}
       />
     );
   }

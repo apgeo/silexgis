@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { App, Button, Card, Descriptions, Empty, Input, List, Typography } from 'antd';
+import { App, Button, Card, Descriptions, Empty, Input, Typography } from 'antd';
+import List from '../../components/List.tsx';
 import { useTranslation } from 'react-i18next';
 import {
   useCaveExternalIds,

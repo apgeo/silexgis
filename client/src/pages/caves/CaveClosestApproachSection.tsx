@@ -123,7 +123,7 @@ function Body({ data, isError, isLoading }: BodyProps) {
         type="info"
         showIcon
         style={{ marginTop: 16 }}
-        message={t('closestApproach.unavailable')}
+        title={t('closestApproach.unavailable')}
         description={t('closestApproach.unavailableWhy')}
       />
     );
@@ -141,7 +141,7 @@ function Body({ data, isError, isLoading }: BodyProps) {
         type="warning"
         showIcon
         style={{ marginTop: 16 }}
-        message={t(`closestApproach.absence.${data.absence}`)}
+        title={t(`closestApproach.absence.${data.absence}`)}
       />
     );
   }

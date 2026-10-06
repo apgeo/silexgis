@@ -127,7 +127,7 @@ export default function TripGroupingPanel({
           showIcon
           style={{ marginBottom: 12 }}
           data-testid="trip-grouping-overlap"
-          message={t('trips.grouping.overlapping', { count: grouping.matching })}
+          title={t('trips.grouping.overlapping', { count: grouping.matching })}
         />
       )}
       {groupBy !== 'none' && grouping?.truncated && (
@@ -135,7 +135,7 @@ export default function TripGroupingPanel({
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          message={t('trips.grouping.truncated', { count: grouping.matching })}
+          title={t('trips.grouping.truncated', { count: grouping.matching })}
         />
       )}
       {groupBy !== 'none' && (

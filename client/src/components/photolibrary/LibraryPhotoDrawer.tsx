@@ -50,7 +50,7 @@ export default function LibraryPhotoDrawer({
     <Drawer
       open={photographId !== null}
       onClose={onClose}
-      width={520}
+      size={520}
       title={t('libraryPhotos.detail.title')}
       data-testid="library-photo-drawer"
     >
@@ -58,7 +58,7 @@ export default function LibraryPhotoDrawer({
         <Alert
           type={gone(error) ? 'info' : 'warning'}
           showIcon
-          message={
+          title={
             gone(error) ? t('libraryPhotos.detail.gone') : t('libraryPhotos.detail.silent')
           }
         />
@@ -149,7 +149,7 @@ function PhotographDetail({ detail }: { detail: LibraryPhotographDetail }) {
           data-testid="library-photo-detail-picture"
         />
       ) : (
-        <Alert type="info" showIcon message={t('libraryPhotos.thumbnailFailed')} />
+        <Alert type="info" showIcon title={t('libraryPhotos.thumbnailFailed')} />
       )}
 
       <Typography.Title level={5} style={{ margin: 0 }}>
@@ -161,7 +161,7 @@ function PhotographDetail({ detail }: { detail: LibraryPhotographDetail }) {
           picture alone. Absent for a photograph whose kind the library never stated, which is
           not the same as one it called an image. */}
       {detail.kind === 'video' && (
-        <Alert type="info" showIcon message={t('libraryPhotos.detail.isVideo')} />
+        <Alert type="info" showIcon title={t('libraryPhotos.detail.isVideo')} />
       )}
 
       {detail.description && (

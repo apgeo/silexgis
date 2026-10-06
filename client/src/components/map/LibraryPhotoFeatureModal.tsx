@@ -224,7 +224,7 @@ export default function LibraryPhotoFeatureModal({
           <Alert
             type="success"
             showIcon
-            message={t('libraryPhotos.created', { name: created.name })}
+            title={t('libraryPhotos.created', { name: created.name })}
             action={
               <Typography.Link onClick={open}>{t('libraryPhotos.openCreated')}</Typography.Link>
             }
@@ -234,7 +234,7 @@ export default function LibraryPhotoFeatureModal({
               style={{ marginTop: 12 }}
               type="warning"
               showIcon
-              message={t('libraryPhotos.nearbyTitle')}
+              title={t('libraryPhotos.nearbyTitle')}
               description={
                 <>
                   <div>{t('libraryPhotos.nearbyHint')}</div>

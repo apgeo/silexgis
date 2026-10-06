@@ -73,7 +73,7 @@ export default function ImageRegionAnchorEditor({
       <Alert
         type="info"
         showIcon
-        message={
+        title={
           file !== undefined && file.kind !== 'image'
             ? t('resLinks.anchorEditors.regionNotAPicture')
             : t('resLinks.anchorEditors.regionNoRendering')

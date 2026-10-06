@@ -162,7 +162,7 @@ export default function TripStatsPage() {
       )}
 
       {isError ? (
-        <Alert type="error" showIcon message={t('tripStats.failed')} data-testid="trip-stats-error" />
+        <Alert type="error" showIcon title={t('tripStats.failed')} data-testid="trip-stats-error" />
       ) : data === undefined ? (
         <Skeleton active paragraph={{ rows: 8 }} />
       ) : counted === 0 ? (

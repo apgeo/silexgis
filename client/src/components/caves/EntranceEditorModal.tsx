@@ -216,7 +216,7 @@ export default function EntranceEditorModal({
         <Alert
           type="info"
           showIcon
-          message={t('entrances.positionBlurred')}
+          title={t('entrances.positionBlurred')}
           style={{ marginBottom: 12 }}
         />
       )}

@@ -43,7 +43,7 @@ export default function FeatureMorphometryCard({ featureId, geometryType }: Feat
     // rather than as a drawing that needs fixing.
     return (
       <Card title={t('morphometry.title')} style={{ marginBottom: 16 }}>
-        <Alert type="warning" showIcon message={t('morphometry.invalidGeometry')} />
+        <Alert type="warning" showIcon title={t('morphometry.invalidGeometry')} />
       </Card>
     );
   }

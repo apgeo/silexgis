@@ -124,7 +124,7 @@ function Compilation({
           type="warning"
           showIcon
           style={{ marginTop: 8 }}
-          message={t('surveyQuality.unreadable')}
+          title={t('surveyQuality.unreadable')}
           description={compilation.readError ?? undefined}
         />
       )}
@@ -133,7 +133,7 @@ function Compilation({
           type="error"
           showIcon
           style={{ marginTop: 8 }}
-          message={t('surveyQuality.compilationFailed')}
+          title={t('surveyQuality.compilationFailed')}
           description={
             compilation.incompleteStage
               ? t('surveyQuality.stoppedAt', { stage: compilation.incompleteStage })

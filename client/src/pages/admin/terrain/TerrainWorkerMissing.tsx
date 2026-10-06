@@ -32,7 +32,7 @@ export default function TerrainWorkerMissing({ compact = false }: { compact?: bo
       type="info"
       showIcon
       data-testid={compact ? 'terrain-build-bake-missing' : 'terrain-worker-missing'}
-      message={t('terrain.worker.title')}
+      title={t('terrain.worker.title')}
       description={
         <Flex vertical gap={8}>
           <Typography.Text>{t('terrain.worker.body')}</Typography.Text>

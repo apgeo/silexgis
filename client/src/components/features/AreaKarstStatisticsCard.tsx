@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, Card, Descriptions, Empty, List, Statistic, Table, Tag, Typography } from 'antd';
+import { Alert, Card, Descriptions, Empty, Statistic, Table, Tag, Typography } from 'antd';
+import List from '../List.tsx';
 import { useTranslation } from 'react-i18next';
 
 import type { AreaCaveExtreme, AreaKarstStatistics, KarstificationComponent } from '../../api/hooks.ts';
@@ -54,7 +55,7 @@ export default function AreaKarstStatisticsCard({
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message={t('karstArea.basisDeclared')}
+        title={t('karstArea.basisDeclared')}
         description={t('karstArea.basisDeclaredDetail', {
           drift: data.unparentedInsideCount,
           placeable: data.placeableCaveCount,
@@ -162,17 +163,19 @@ function ExtremeList({
   if (caves.length === 0) return null;
 
   return (
-    <List
-      style={{ marginTop: 16 }}
-      size="small"
-      header={<Typography.Text strong>{title}</Typography.Text>}
-      dataSource={caves as AreaCaveExtreme[]}
-      renderItem={(cave) => (
-        <List.Item>
-          {cave.name} — {Math.round(cave.value)} {unit}
-        </List.Item>
-      )}
-    />
+    <div style={{ marginTop: 16 }}>
+      {/* The list draws rows and nothing else, so what names them stands above it. */}
+      <Typography.Text strong>{title}</Typography.Text>
+      <List
+        size="small"
+        dataSource={caves as AreaCaveExtreme[]}
+        renderItem={(cave) => (
+          <List.Item>
+            {cave.name} — {Math.round(cave.value)} {unit}
+          </List.Item>
+        )}
+      />
+    </div>
   );
 }
 
