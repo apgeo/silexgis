@@ -117,7 +117,10 @@ export function stackSettings(config) {
   const everywhere = address === '' || address === '0.0.0.0' || address === '::';
   const host = everywhere ? 'localhost' : address.includes(':') ? `[${address}]` : address;
 
-  const maxUploadBytes = Number(environment.SILEXGIS__Files__MaxUploadBytes);
+  // A cap the stack was given is the cap that is probed, whatever it is. Only a stack given
+  // none falls back, and then to what the API applies in that case rather than to a guess.
+  const cap = environment.SILEXGIS__Files__MaxUploadBytes;
+  const maxUploadBytes = cap === undefined || cap === null || cap === '' ? Number.NaN : Number(cap);
   const email = (environment.SILEXGIS__Admin__Email ?? '').trim();
   const password = environment.SILEXGIS__Admin__Password ?? '';
 
@@ -127,7 +130,7 @@ export function stackSettings(config) {
     // name resolves to and tries no other.
     socketHost: everywhere ? '127.0.0.1' : address,
     port,
-    maxUploadBytes: maxUploadBytes > 0 ? maxUploadBytes : DEFAULT_MAX_UPLOAD_BYTES,
+    maxUploadBytes: maxUploadBytes >= 0 ? maxUploadBytes : DEFAULT_MAX_UPLOAD_BYTES,
     // Trimmed the way the API trims it before registering the web client's return address.
     publicUrl: (environment.SILEXGIS__PublicUrl || 'http://localhost:8080').replace(/\/+$/, ''),
     admin: email && password ? { email, password } : null,

@@ -253,7 +253,12 @@ describe('where the stack is, read from what compose resolved', () => {
 
   it('reads the upload cap the stack was given, and the API\'s own when it was given none', () => {
     assert.equal(given({ SILEXGIS__Files__MaxUploadBytes: '1048576' }).maxUploadBytes, 1048576);
-    assert.equal(given({ SILEXGIS__Files__MaxUploadBytes: undefined }).maxUploadBytes, 512 * 1024 * 1024);
+    // Nought is a cap like any other — an installation that takes no uploads — and is what is
+    // probed; only a stack that was told nothing gets the default.
+    assert.equal(given({ SILEXGIS__Files__MaxUploadBytes: '0' }).maxUploadBytes, 0);
+    for (const nothing of [undefined, null, '', 'unlimited']) {
+      assert.equal(given({ SILEXGIS__Files__MaxUploadBytes: nothing }).maxUploadBytes, 512 * 1024 * 1024);
+    }
   });
 
   it('names the administrator only when the stack was given a whole one', () => {
