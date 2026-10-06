@@ -1837,7 +1837,7 @@
     "publishSuccess": "Announced.",
     "callOff": "Call it off",
     "callOffConfirm": "Call this camp off? It is kept, and it can be reinstated as a draft.",
-    "deleteConfirm": "Delete this camp? The trips it gathered stay; only the camp and its own rules go.",
+    "deleteConfirm": "Delete this camp? The trips it gathered stay; the camp goes, with its own rules and any write-up saved to it.",
     "draftNotice": "This is a draft. It has not been announced yet — announce it when the plan is settled, or record it as done once it has happened.",
     "sharing": {
       "title": "Share the camp",

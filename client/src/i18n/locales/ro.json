@@ -1837,7 +1837,7 @@
     "publishSuccess": "Anunțată.",
     "callOff": "Anulează tabăra",
     "callOffConfirm": "Anulați această tabără? Se păstrează și poate fi readusă la ciornă.",
-    "deleteConfirm": "Ștergeți această tabără? Turele adunate în ea rămân; dispar doar tabăra și regulile ei proprii.",
+    "deleteConfirm": "Ștergeți această tabără? Turele adunate în ea rămân; dispare tabăra, cu regulile ei proprii și cu orice raport salvat la ea.",
     "draftNotice": "Aceasta este o ciornă. Nu a fost anunțată încă — anunțați-o când planul este stabilit sau marcați-o efectuată după ce a avut loc.",
     "sharing": {
       "title": "Partajează tabăra",
