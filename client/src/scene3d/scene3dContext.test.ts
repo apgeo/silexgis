@@ -2708,3 +2708,111 @@ describe('models the scene loads', () => {
     await expect(loading).resolves.toBeUndefined();
   });
 });
+
+describe('a picture of the scene', () => {
+  const scene = () => engine.engineState.widgets[0].scene;
+
+  it('draws a frame and reads it back in the same task, as a PNG', async () => {
+    const session = acquire();
+    const drawn = scene().framesDrawn;
+    const asked = scene().renderRequests;
+
+    const pending = session.engine.captureImage();
+
+    // All of it has already happened, before anything was awaited. The drawing surface is not
+    // kept between frames, so a read in any later task finds it blank and reports nothing wrong.
+    expect(scene().framesDrawn).toBe(drawn + 1);
+    expect(engine.engineState.captures).toHaveLength(1);
+    expect(engine.engineState.captures[0]).toMatchObject({
+      type: 'image/png',
+      framesDrawn: drawn + 1,
+      blank: false,
+    });
+    // The frame was asked for before it was drawn: this scene draws on demand, and told to render
+    // with nothing changed it would have decided there was nothing to do.
+    expect(scene().renderRequests).toBeGreaterThan(asked);
+
+    const image = await pending;
+    expect(image).toBe(engine.engineState.captures[0].blob);
+    expect(image.type).toBe('image/png');
+  });
+
+  it('refuses when the surface cannot be read, rather than answering with an empty picture', async () => {
+    const session = acquire();
+    engine.engineState.captureFails = true;
+
+    await expect(session.engine.captureImage()).rejects.toThrow(/could not be read/);
+  });
+
+  it('refuses once the scene has been closed, without reaching for what is gone', async () => {
+    const session = acquire();
+    const closed = session.engine;
+    session.release();
+
+    await expect(closed.captureImage()).rejects.toThrow(/closed/);
+    expect(engine.engineState.captures).toEqual([]);
+  });
+
+  it('names the credits of the layers being drawn, bottom first, and of no others', async () => {
+    const session = acquire();
+    session.engine.addImageryLayer('base:1', {
+      urlTemplate: 'https://a/{z}/{x}/{y}',
+      attribution: '© Base maps',
+    });
+    session.engine.addImageryLayer('overlay:2', {
+      urlTemplate: 'https://b/{z}/{x}/{y}',
+      attribution: '© Trails',
+      visible: false,
+    });
+    // A layer nobody configured a credit for has none to show.
+    session.engine.addImageryLayer('overlay:3', { urlTemplate: 'https://c/{z}/{x}/{y}' });
+    session.engine.addImageOverlayLayer('raster:4', {
+      imageUrl: 'blob:sheet',
+      bounds: [25, 45, 26, 46],
+      attribution: '© Survey sheet',
+    });
+
+    // The hidden layer is in no frame, so its credit is on no picture.
+    expect(session.engine.getVisibleCredits()).toEqual(['© Base maps', '© Survey sheet']);
+
+    // Shown again, and faded: its pixels are in the picture however faintly, so it is credited.
+    session.engine.setImageryLayerVisible('overlay:2', true);
+    session.engine.setImageryLayerOpacity('overlay:2', 0.2);
+    expect(session.engine.getVisibleCredits()).toEqual([
+      '© Base maps',
+      '© Trails',
+      '© Survey sheet',
+    ]);
+
+    session.engine.removeImageryLayer('base:1');
+    expect(session.engine.getVisibleCredits()).toEqual(['© Trails', '© Survey sheet']);
+  });
+
+  it('credits the elevation model while it is the ground, and not once it is gone', async () => {
+    const session = acquire();
+    expect(session.engine.getVisibleCredits()).toEqual([]);
+
+    await session.engine.setTerrainSource({ url: '/terrain/', attribution: '© Copernicus' });
+    session.engine.addImageryLayer('base:1', {
+      urlTemplate: 'https://a/{z}/{x}/{y}',
+      attribution: '© Base maps',
+    });
+    // The ground's credit after the imagery's, whichever was attached first.
+    expect(session.engine.getVisibleCredits()).toEqual(['© Base maps', '© Copernicus']);
+
+    await session.engine.setTerrainSource(undefined);
+    expect(session.engine.getVisibleCredits()).toEqual(['© Base maps']);
+  });
+
+  it('does not credit an elevation model that could not be read', async () => {
+    const session = acquire();
+    engine.engineState.terrainFailures.add('/missing/');
+
+    await expect(
+      session.engine.setTerrainSource({ url: '/missing/', attribution: '© Nobody' }),
+    ).rejects.toThrow();
+
+    // The globe is still the smooth one, and a picture of it owes that source nothing.
+    expect(session.engine.getVisibleCredits()).toEqual([]);
+  });
+});

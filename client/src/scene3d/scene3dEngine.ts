@@ -28,7 +28,7 @@ import type { Scene3DContextLossState } from './contextLoss.ts';
 // Members are grouped so that an implementation can honestly declare which groups it satisfies.
 // `Scene3DCore` names the groups something really provides, and today that is all of them:
 // lifecycle, imagery, camera, coordinates, picking, vector sources, the ground surface, its
-// elevation, and loaded models.
+// elevation, loaded models, and a picture of what is drawn.
 
 /** A position on the globe: degrees, plus metres above the WGS84 ellipsoid. */
 export interface Scene3DPosition {
@@ -636,6 +636,36 @@ export interface Scene3DModels {
   modelStatus(id: string): Scene3DModelStatus | undefined;
 }
 
+// ---- a picture of the scene ---------------------------------------------------
+
+/**
+ * Taking what the scene is showing out of it, as a picture a viewer can keep.
+ *
+ * Two members rather than one, because a picture of the drawing surface is not the whole of what
+ * is on screen. The credits the tile sources' licences ask for are drawn beside the surface, as
+ * page elements, and are in no frame the surface can be asked for — so whoever saves a picture
+ * has to be able to ask for them as well and put them into it.
+ */
+export interface Scene3DCapture {
+  /**
+   * The frame the scene is showing now, as a PNG of the drawing surface at its own pixel size.
+   *
+   * An implementation has to draw a frame and read it back within the one task. A drawing surface
+   * of this kind is not kept between frames: once the browser has shown a frame the surface may be
+   * cleared, and reading it at any later moment answers with a blank picture and no error.
+   *
+   * Rejects when the surface cannot be read — the scene has been closed, or the graphics context
+   * is gone — which the caller is expected to tell the viewer rather than save an empty file.
+   */
+  captureImage(): Promise<Blob>;
+  /**
+   * The credits of everything the scene is drawing now, bottom layer first: each visible imagery
+   * layer that has one, then the elevation model's. As configured, so an entry may carry markup;
+   * a layer that is hidden, or was given no attribution, contributes nothing.
+   */
+  getVisibleCredits(): string[];
+}
+
 // ---- the whole surface, and the part that exists today -----------------------
 
 /** Everything a fully featured 3D scene owes the application. */
@@ -648,7 +678,8 @@ export interface Scene3DEngine
     Scene3DVectorSources,
     Scene3DSurface,
     Scene3DTerrain,
-    Scene3DModels {}
+    Scene3DModels,
+    Scene3DCapture {}
 
 /**
  * The part of the contract that is implemented. It is a separate name rather than a set of
@@ -668,4 +699,5 @@ export type Scene3DCore = Scene3DLifecycle &
   Scene3DVectorSources &
   Scene3DSurface &
   Scene3DTerrain &
-  Scene3DModels;
+  Scene3DModels &
+  Scene3DCapture;

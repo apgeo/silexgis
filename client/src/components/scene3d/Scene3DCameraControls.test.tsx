@@ -27,6 +27,7 @@ function renderControls(overrides: Partial<Scene3DCameraControlsProps> = {}) {
     fitDisabled: false,
     coupled: true,
     onCoupledChange: vi.fn(),
+    onSaveImage: vi.fn(),
     ...overrides,
   };
   render(<Scene3DCameraControls {...props} />);
@@ -206,5 +207,33 @@ describe('Scene3DCameraControls at phone width', () => {
     expect(screen.getByTestId('scene3d-fit-cave')).toBeDisabled();
     fireEvent.click(screen.getByTestId('scene3d-fit-cave'));
     expect(props.onFitCave).not.toHaveBeenCalled();
+  });
+});
+
+describe('saving the view as an image', () => {
+  it('offers it in the strip, named for a reader who cannot see the icon', () => {
+    const props = renderControls();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save image' }));
+
+    expect(props.onSaveImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers it behind the fold too, captioned in words', () => {
+    vi.mocked(useCoarsePointer).mockReturnValue(true);
+    const props = renderControls();
+    fireEvent.click(screen.getByTestId('scene3d-camera-trigger'));
+
+    fireEvent.click(screen.getByText('Save image'));
+
+    expect(props.onSaveImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes no second press while a picture is being made', () => {
+    const props = renderControls({ savingImage: true });
+
+    fireEvent.click(screen.getByTestId('scene3d-save-image'));
+
+    expect(props.onSaveImage).not.toHaveBeenCalled();
   });
 });

@@ -50,6 +50,7 @@ import {
 } from '../../scene3d/geofileTracks3d.ts';
 import type { OverlayRect } from '../../scene3d/overlayPlacement.ts';
 import { takePendingReveal3d } from '../../scene3d/pendingReveal3d.ts';
+import { imageWithCredits, sceneImageFileName } from '../../scene3d/sceneImage3d.ts';
 import { activePreset, presetCamera, type Camera3DPreset } from '../../scene3d/presets3d.ts';
 import { claimSceneSurface, sceneSurfaceElement } from '../../scene3d/sceneSurface.ts';
 import {
@@ -94,6 +95,7 @@ import {
 import { attachScene3dHash } from '../../scene3d/urlHash3d.ts';
 import { attachViewSync3d, type ViewSync3dHandle } from '../../scene3d/viewSync3d.ts';
 import { supportsWebGl2 } from '../../scene3d/webglSupport.ts';
+import { saveBlob } from '../../api/download.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
@@ -736,6 +738,41 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     setCamera(readCamera3D(engine));
   }, []);
 
+  // ---- a picture of the view ----
+
+  const [savingImage, setSavingImage] = useState(false);
+  /** True when the last picture could not be made, until the next one is asked for. */
+  const [imageProblem, setImageProblem] = useState(false);
+
+  const saveImage = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine) {
+      return;
+    }
+    setSavingImage(true);
+    setImageProblem(false);
+    // Read in the same breath as the frame, so the credits written onto the picture are the ones
+    // for the layers that are in it: a basemap switched while the picture is being encoded must
+    // not put its name on a frame of the one before.
+    const credits = engine.getVisibleCredits();
+    void engine
+      .captureImage()
+      // The frame is the drawing surface alone. The tile sources' credits are page elements
+      // beside it, and their licences ask for the credit to travel with the picture.
+      .then((frame) => imageWithCredits(frame, credits))
+      .then((image) => saveBlob(image, sceneImageFileName(new Date())))
+      .then(
+        () => setSavingImage(false),
+        () => {
+          // Said rather than swallowed: a press that produces no file and no word reads as a
+          // button that does nothing. Set together with the button being handed back, so the
+          // sentence never appears beside a button that still refuses a second press.
+          setImageProblem(true);
+          setSavingImage(false);
+        },
+      );
+  }, []);
+
   const fitCave = useCallback(() => {
     const engine = engineRef.current;
     const bounds = dataRef.current?.caveBounds();
@@ -1142,6 +1179,7 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
     terrainProblem
       ? t(terrainProblemMessage(terrainProblem.problem, terrainProblem.fellBack))
       : undefined,
+    imageProblem ? t('scene3d.saveImageFailed') : undefined,
   ].filter((notice): notice is string => notice !== undefined);
 
   return (
@@ -1208,6 +1246,8 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
           fitDisabled={!caveFramable}
           coupled={scene3dCoupledToMap}
           onCoupledChange={changeCoupling}
+          onSaveImage={saveImage}
+          savingImage={savingImage}
         />
       )}
       {/* Gated on the scene alone. Only the basemap section of the panel is about the layer

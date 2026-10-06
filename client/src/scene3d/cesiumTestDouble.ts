@@ -99,6 +99,14 @@ export const engineState = {
    * something else underneath it, and those are the cases worth having a test for.
    */
   modelRequests: [] as FakeModelRequest[],
+  /**
+   * Every read of a drawing surface as a file, in order, with what the surface held at the time.
+   *
+   * `captureFails` stands in for a surface the browser will not hand over — a lost context — which
+   * the real read reports by answering with nothing rather than by throwing.
+   */
+  captures: [] as FakeCapture[],
+  captureFails: false,
   reset() {
     engineState.widgets = [];
     engineState.widgetOptions = [];
@@ -111,6 +119,8 @@ export const engineState = {
     engineState.terrainFailures = new Set();
     engineState.modelRequests = [];
     Model.forget();
+    engineState.captures = [];
+    engineState.captureFails = false;
   },
 };
 
@@ -605,18 +615,26 @@ export class UrlTemplateImageryProvider {
   }
 }
 
+/** One picture pinned to a rectangle of ground, as the scene asks for a georeferenced map. */
+export class SingleTileImageryProvider {
+  options: Record<string, unknown>;
+  constructor(options: Record<string, unknown>) {
+    this.options = options;
+  }
+}
+
 class FakeImageryLayer {
   show = true;
   alpha = 1;
-  provider: UrlTemplateImageryProvider;
-  constructor(provider: UrlTemplateImageryProvider) {
+  provider: UrlTemplateImageryProvider | SingleTileImageryProvider;
+  constructor(provider: UrlTemplateImageryProvider | SingleTileImageryProvider) {
     this.provider = provider;
   }
 }
 
 class FakeImageryLayerCollection {
   readonly layers: FakeImageryLayer[] = [];
-  addImageryProvider(provider: UrlTemplateImageryProvider) {
+  addImageryProvider(provider: UrlTemplateImageryProvider | SingleTileImageryProvider) {
     const layer = new FakeImageryLayer(provider);
     this.layers.push(layer);
     return layer;
@@ -873,6 +891,18 @@ export const Transforms = {
     return { origin };
   },
 };
+
+/** One read of a drawing surface as a file. */
+export interface FakeCapture {
+  /** The file type asked for. */
+  type: string | undefined;
+  /** How many frames the scene had drawn when the surface was read. */
+  framesDrawn: number;
+  /** True when the surface no longer held a frame, which the real read answers with a blank picture. */
+  blank: boolean;
+  /** What the read answered with; null when the surface could not be read at all. */
+  blob: Blob | null;
+}
 
 /** One `Model.fromGltfAsync` the scene made, with the options it passed. */
 export interface FakeModelRequest {
@@ -1133,6 +1163,18 @@ class FakeScene {
    */
   terrainProvider: EllipsoidTerrainProvider | CesiumTerrainProvider = new EllipsoidTerrainProvider();
   renderRequests = 0;
+  /** Frames actually drawn, as opposed to frames asked for. */
+  framesDrawn = 0;
+  /**
+   * Whether the drawing surface still holds the frame last drawn into it.
+   *
+   * The real surface is not kept between frames: read in the task that drew it, it holds the
+   * frame; read any later, it may hold nothing, and says so by answering with a blank picture
+   * rather than an error. Modelled more strictly than the browser behaves — the frame is gone as
+   * soon as anything at all has been awaited — so that code which draws, waits, and then reads
+   * fails here every time instead of on some machines some of the time.
+   */
+  surfaceHoldsFrame = false;
   pickedPosition: FakeCartesian3 | undefined = undefined;
   /** What the next hit test answers with; the real one returns undefined when it finds nothing. */
   pickResult: { id?: unknown } | undefined = undefined;
@@ -1150,6 +1192,11 @@ class FakeScene {
    * collection repack itself — which only happens while the cut is switched on.
    */
   render() {
+    this.framesDrawn += 1;
+    this.surfaceHoldsFrame = true;
+    queueMicrotask(() => {
+      this.surfaceHoldsFrame = false;
+    });
     this.preRender.raise();
     if (this.globe.clippingPolygons?.enabled) {
       this.globe.clippingPolygons.update();
@@ -1206,6 +1253,20 @@ export class CesiumWidget {
     width: 1200,
     clientHeight: 800,
     height: 800,
+    /**
+     * Reads the surface out as a file. What it copies is decided at the moment it is called —
+     * which is the property the real read has and the reason a caller must not wait between
+     * drawing and reading — while the answer arrives later, as the real one does.
+     */
+    toBlob: (callback: (blob: Blob | null) => void, type?: string) => {
+      const scene = this.scene;
+      const blank = !scene.surfaceHoldsFrame;
+      const blob = engineState.captureFails
+        ? null
+        : new Blob([blank ? 'blank' : `frame ${scene.framesDrawn}`], { type: type ?? 'image/png' });
+      engineState.captures.push({ type, framesDrawn: scene.framesDrawn, blank, blob });
+      queueMicrotask(() => callback(blob));
+    },
   }) as unknown as HTMLCanvasElement;
   readonly container: Element;
   destroyCount = 0;

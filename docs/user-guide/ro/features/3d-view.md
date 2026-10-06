@@ -149,6 +149,15 @@ limite sunt setări ale instalării; vedeți `SILEXGIS__Map__MeshesInView…` î
 | **Privește drept în jos (plan)** | Vederea în plan |
 | **Vedere din nord / sud / est / vest** | Elevații fixe |
 | **Elimină perspectiva** | Proiecție ortografică, ca distanțele să se citească la fel aproape și departe |
+| **Salvează imaginea** | Descarcă ceea ce arată scena, ca imagine |
+
+**Salvează imaginea** descarcă vederea ca PNG, cu numele format din data și ora la care a fost
+făcută (`silexgis-3d-20261006-140509.png`), la rezoluția întreagă a ecranului. Mențiunile de
+sursă ale hărții de bază, ale oricărui strat suprapus aprins și ale modelului de elevație sunt
+scrise de-a lungul marginii de jos a imaginii: licențele acelor surse cer ca mențiunea să
+însoțească plăcile lor, iar în pagină ea este desenată lângă scenă, nu în ea. Butoanele,
+etichetele cu nume și notele de deasupra scenei nu fac parte din imagine. Dacă imaginea nu poate
+fi făcută, scena o spune în loc să salveze un fișier gol.
 
 ## Poligonații fără adâncimi
 

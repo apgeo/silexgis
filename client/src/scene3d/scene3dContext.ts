@@ -267,6 +267,16 @@ interface LoadedModel {
 class CesiumScene3D implements Scene3DCore {
   private readonly widget: CesiumWidget;
   private readonly imageryById = new Map<string, ImageryLayer>();
+  /**
+   * The attribution each imagery layer was added with, for the layers that were given one.
+   *
+   * Kept here as well as handed to the engine, because the engine only ever draws a credit and
+   * cannot be asked what it is drawing — and a picture saved out of the scene has to carry the
+   * same words the page shows beside it.
+   */
+  private readonly imageryCredit = new Map<string, string>();
+  /** The attribution of the elevation model in force, when it was given one. */
+  private terrainCredit: string | undefined;
   private readonly renderErrorListeners = new Set<(message: string) => void>();
   private readonly removeRenderErrorHandler: () => void;
   private readonly contextLossListeners = new Set<(state: Scene3DContextLossState) => void>();
@@ -640,6 +650,52 @@ class CesiumScene3D implements Scene3DCore {
     contextLossPolicyFor(this.widget.container).recordRecovered();
   }
 
+  // ---- a picture of the scene ----
+
+  captureImage(): Promise<Blob> {
+    if (this.widget.isDestroyed()) {
+      return Promise.reject(new Error('The scene has been closed.'));
+    }
+    const { scene, canvas } = this.widget;
+    // Drawn and read with nothing awaited in between, and that is the whole of the technique. The
+    // drawing surface is not preserved between frames — keeping it would cost a copy of the frame
+    // on every frame for the sake of a button pressed once a session — so by the time any later
+    // task runs the browser may already have cleared it, and reading it then answers with a blank
+    // picture and no error at all. The copy the file is made from is taken as the read is asked
+    // for; only the encoding happens afterwards.
+    //
+    // The frame is asked for before it is drawn because this scene draws on demand: told to
+    // render with nothing having changed, it would decide there was nothing to do.
+    scene.requestRender();
+    scene.render();
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(new Error('The drawing surface could not be read as an image.'));
+        }
+      }, 'image/png');
+    });
+  }
+
+  getVisibleCredits(): string[] {
+    const credits: string[] = [];
+    // In the order the layers are composited, which is the order they were added in.
+    for (const [id, layer] of this.imageryById) {
+      const credit = this.imageryCredit.get(id);
+      // A hidden layer is in no frame, and the engine takes its credit off the page as well. A
+      // faded one still is: its pixels are in the picture, however faintly.
+      if (credit && layer.show) {
+        credits.push(credit);
+      }
+    }
+    if (this.terrainCredit) {
+      credits.push(this.terrainCredit);
+    }
+    return credits;
+  }
+
   // ---- imagery ----
 
   addImageryLayer(id: string, options: Scene3DImageryOptions): void {
@@ -667,6 +723,9 @@ class CesiumScene3D implements Scene3DCore {
     layer.show = options.visible ?? true;
     layer.alpha = options.opacity ?? 1;
     this.imageryById.set(id, layer);
+    if (options.attribution) {
+      this.imageryCredit.set(id, options.attribution);
+    }
   }
 
   addImageOverlayLayer(id: string, options: Scene3DImageOverlayOptions): void {
@@ -688,6 +747,9 @@ class CesiumScene3D implements Scene3DCore {
     layer.show = options.visible ?? true;
     layer.alpha = options.opacity ?? 1;
     this.imageryById.set(id, layer);
+    if (options.attribution) {
+      this.imageryCredit.set(id, options.attribution);
+    }
   }
 
   removeImageryLayer(id: string): void {
@@ -696,6 +758,7 @@ class CesiumScene3D implements Scene3DCore {
       return;
     }
     this.imageryById.delete(id);
+    this.imageryCredit.delete(id);
     this.widget.scene.imageryLayers.remove(layer, true);
   }
 
@@ -999,6 +1062,7 @@ class CesiumScene3D implements Scene3DCore {
 
     if (!url) {
       this.terrainUrl = undefined;
+      this.terrainCredit = undefined;
       this.widget.scene.terrainProvider = new EllipsoidTerrainProvider();
       this.afterTerrainChanged();
       return;
@@ -1035,6 +1099,9 @@ class CesiumScene3D implements Scene3DCore {
       return;
     }
     this.terrainUrl = url;
+    // Recorded only now that this model is the one drawing: a credit for ground that failed to
+    // arrive would be written onto pictures of a smooth globe.
+    this.terrainCredit = source?.attribution || undefined;
     this.widget.scene.terrainProvider = provider;
     this.afterTerrainChanged();
   }

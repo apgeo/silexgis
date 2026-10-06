@@ -2,6 +2,7 @@
 import type { RefObject } from 'react';
 import {
   BorderOuterOutlined,
+  CameraOutlined,
   DisconnectOutlined,
   ExpandOutlined,
   LinkOutlined,
@@ -31,6 +32,13 @@ export interface Scene3DCameraControlsProps {
    */
   coupled: boolean;
   onCoupledChange(coupled: boolean): void;
+  /** Saves what the scene is showing as a picture. */
+  onSaveImage(): void;
+  /**
+   * True while a picture is being made, which on a large drawing surface takes long enough to be
+   * pressed twice. The button says so and takes no second press until the first is done.
+   */
+  savingImage?: boolean;
   /** Handed out so whoever mounts this can measure how much of the view it stands on. */
   containerRef?: RefObject<HTMLDivElement | null>;
 }
@@ -62,6 +70,8 @@ export default function Scene3DCameraControls({
   fitDisabled,
   coupled,
   onCoupledChange,
+  onSaveImage,
+  savingImage = false,
   containerRef,
 }: Scene3DCameraControlsProps) {
   const { t } = useTranslation();
@@ -134,6 +144,15 @@ export default function Scene3DCameraControls({
               >
                 {couplingLabel}
               </Button>
+              <Button
+                block
+                icon={<CameraOutlined />}
+                loading={savingImage}
+                onClick={onSaveImage}
+                data-testid="scene3d-save-image"
+              >
+                {t('scene3d.saveImage')}
+              </Button>
             </div>
           }
         >
@@ -196,6 +215,16 @@ export default function Scene3DCameraControls({
           aria-pressed={coupled}
           onClick={() => onCoupledChange(!coupled)}
           data-testid="scene3d-coupling-toggle"
+        />
+      </Tooltip>
+      <Tooltip title={t('scene3d.saveImageHint')} placement="left">
+        <Button
+          size="small"
+          icon={<CameraOutlined />}
+          loading={savingImage}
+          aria-label={t('scene3d.saveImage')}
+          onClick={onSaveImage}
+          data-testid="scene3d-save-image"
         />
       </Tooltip>
     </div>

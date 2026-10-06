@@ -2602,7 +2602,10 @@
     "meshesInViewLoading": "Still loading: {{count}}.",
     "meshesInViewUnreadable": "Could not be read: {{count}}.",
     "surfaceFeaturesCapped": "Showing the first {{limit}} surface features in this view, which is this installation's limit; zoom in to see the rest.",
-    "entrancesCapped": "Showing the first {{limit}} cave entrances in this view, which is this installation's limit; zoom in to see the rest."
+    "entrancesCapped": "Showing the first {{limit}} cave entrances in this view, which is this installation's limit; zoom in to see the rest.",
+    "saveImage": "Save image",
+    "saveImageHint": "Save this view as a picture",
+    "saveImageFailed": "This view could not be saved as an image."
   },
   "caveview": {
     "loadError": "Failed to load the 3D model",

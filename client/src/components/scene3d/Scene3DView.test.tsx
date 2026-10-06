@@ -17,6 +17,20 @@ import { setActiveViewCamera, viewFlyTo } from '../../workspace/viewCamera.ts';
 // The engine library is replaced by the same double the scene module's own suite uses; the test
 // runner has no graphics context to give it.
 vi.mock('cesium', () => import('../../scene3d/cesiumTestDouble.ts'));
+// The browser's own save, and the 2D canvas the credits are written with: the runner has neither,
+// and what is under test here is what each of them is handed.
+vi.mock('../../api/download.ts', () => ({
+  saveBlob: (blob: Blob, fileName: string) => {
+    savedFiles.push({ blob, fileName });
+  },
+}));
+vi.mock('../../scene3d/sceneImage3d.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../scene3d/sceneImage3d.ts')>()),
+  imageWithCredits: (frame: Blob, credits: readonly string[]) => {
+    composited.push({ frame, credits: [...credits] });
+    return Promise.resolve(pictureWithCredits);
+  },
+}));
 vi.mock('../../api/hooks.ts', () => ({
   useMapLayers: () => ({ data: mapLayers }),
   useMapConfig: () => ({ data: mapConfig }),
@@ -61,6 +75,10 @@ const { useWorkspaceStore } = await import('../../stores/workspaceStore.ts');
 const { default: Scene3DView } = await import('./Scene3DView.tsx');
 
 let mapLayers: unknown[] | undefined;
+/** What was handed to the browser to save, and what the credits were written onto and with. */
+let savedFiles: { blob: Blob; fileName: string }[] = [];
+let composited: { frame: Blob; credits: string[] }[] = [];
+const pictureWithCredits = new Blob(['a frame with its credits'], { type: 'image/png' });
 /** What the server publishes about this installation, including its elevation model if it has one. */
 let mapConfig: Record<string, unknown> | undefined;
 /** What each kind of surface feature is called; this view fills the catalog the labels read. */
@@ -212,6 +230,8 @@ function renderView() {
 beforeEach(() => {
   engine.engineState.reset();
   mapLayers = undefined;
+  savedFiles = [];
+  composited = [];
   mapConfig = undefined;
   centerlineRequests = [];
   featureResponse = emptyCollection;
@@ -247,6 +267,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -1567,6 +1588,70 @@ describe('the walls of the selected cave', () => {
       useWorkspaceStore.setState({ overlayVisible: { 'survey-mesh': true } });
     });
     await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(2));
+  });
+});
+
+describe('saving the view as an image', () => {
+  const creditedBase = [
+    {
+      id: 1,
+      name: 'OpenStreetMap',
+      layerKind: 'xyz',
+      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '© OpenStreetMap contributors',
+      isBase: true,
+      isDefault: true,
+      sortOrder: 0,
+      options: null,
+    },
+  ];
+
+  it('captures the frame, has the visible credits written onto it, and saves a PNG named by the clock', async () => {
+    withWebGl2(true);
+    mapLayers = creditedBase;
+    renderView();
+    const save = await screen.findByRole('button', { name: 'Save image' });
+    await waitFor(() => expect(engine.engineState.providers).toHaveLength(1));
+    // Only the clock is held still; the scene's own timers keep running.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 6, 14, 5, 9));
+
+    fireEvent.click(save);
+
+    await waitFor(() => expect(savedFiles).toHaveLength(1));
+    // One capture, of a surface that still held the frame drawn for it.
+    expect(engine.engineState.captures).toHaveLength(1);
+    expect(engine.engineState.captures[0]).toMatchObject({ type: 'image/png', blank: false });
+    // The frame is the drawing surface alone, so the basemap's credit — a page element beside it
+    // — is handed to whatever writes it into the picture.
+    expect(composited).toEqual([
+      { frame: engine.engineState.captures[0].blob, credits: ['© OpenStreetMap contributors'] },
+    ]);
+    // What is saved is the picture with the credits on it, not the bare frame.
+    expect(savedFiles[0].blob).toBe(pictureWithCredits);
+    expect(savedFiles[0].fileName).toBe('silexgis-3d-20261006-140509.png');
+    expect(screen.queryByText('This view could not be saved as an image.')).toBeNull();
+  });
+
+  it('says so when the picture could not be made, and saves nothing', async () => {
+    withWebGl2(true);
+    mapLayers = creditedBase;
+    renderView();
+    const save = await screen.findByRole('button', { name: 'Save image' });
+    engine.engineState.captureFails = true;
+
+    fireEvent.click(save);
+
+    expect(
+      await screen.findByText('This view could not be saved as an image.'),
+    ).toBeInTheDocument();
+    expect(savedFiles).toEqual([]);
+
+    // The next press that works takes the sentence down again.
+    engine.engineState.captureFails = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Save image' }));
+    await waitFor(() => expect(savedFiles).toHaveLength(1));
+    expect(screen.queryByText('This view could not be saved as an image.')).toBeNull();
   });
 });
 

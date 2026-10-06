@@ -2602,7 +2602,10 @@
     "meshesInViewLoading": "Încă se încarcă: {{count}}.",
     "meshesInViewUnreadable": "Nu au putut fi citite: {{count}}.",
     "surfaceFeaturesCapped": "Se arată primele {{limit}} fenomene de suprafață din această vedere, atât cât permite această instalare; apropie vederea pentru a le vedea pe celelalte.",
-    "entrancesCapped": "Se arată primele {{limit}} intrări în peșteri din această vedere, atât cât permite această instalare; apropie vederea pentru a le vedea pe celelalte."
+    "entrancesCapped": "Se arată primele {{limit}} intrări în peșteri din această vedere, atât cât permite această instalare; apropie vederea pentru a le vedea pe celelalte.",
+    "saveImage": "Salvează imaginea",
+    "saveImageHint": "Salvează această vedere ca imagine",
+    "saveImageFailed": "Această vedere nu a putut fi salvată ca imagine."
   },
   "caveview": {
     "loadError": "Modelul 3D nu a putut fi încărcat",

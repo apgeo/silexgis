@@ -143,6 +143,15 @@ limits are settings of the installation; see `SILEXGIS__Map__MeshesInView…` in
 | **Look straight down (plan)** | The plan view |
 | **View from the north / south / east / west** | Fixed elevations |
 | **Remove perspective** | Orthographic projection, so distances read the same near and far |
+| **Save image** | Downloads what the scene is showing as a picture |
+
+**Save image** downloads the view as a PNG named with the date and time it was taken
+(`silexgis-3d-20261006-140509.png`), at the full resolution of your screen. The credits of the
+basemap, of any overlay that is switched on and of the elevation model are written along the
+bottom edge of the picture: the licences of those sources ask for the credit to travel with their
+tiles, and on the page it is drawn beside the scene rather than in it. The buttons, the name
+labels and the notices over the scene are not part of the picture. If the picture cannot be made
+the scene says so instead of saving an empty file.
 
 ## Centerlines with no depths
 
