@@ -3152,8 +3152,6 @@
         "dashboard": "Panou"
       },
       "mapChrome": "Ascunde controalele de pe hartă",
-      "centerlineDetailZoom": "Detaliu poligonale de la zoom",
-      "centerlineMaxPaths": "Buget de trasee",
       "reset": "Resetează",
       "resetDone": "Resetat."
     },
@@ -3163,9 +3161,14 @@
       "wallsMinZoom": "Arată de la zoom-ul",
       "wallsMaxCaves": "Peșteri cel mult",
       "wallsMaxMegabytes": "Megaocteți cel mult",
-      "wallsHint": "Un câmp gol urmează valoarea implicită a acestei instalări, afișată cu gri.",
       "wallsCeilings": "Această instalare permite cel mult {{caves}} peșteri și {{megabytes}} MB.",
-      "wallsReset": "Folosește valorile implicite ale instalării"
+      "centerlinesHeading": "Poligonațiile de pe hartă",
+      "centerlinesIntro": "Două numere limitează poligonațiile pe care le desenează harta plană: nivelul de zoom de la care apare detaliul complet al ridicării, inclusiv razele laterale, și câte linii poate conține o vedere. Lista de straturi a hărții le arată pe aceleași două cât timp stratul „Poligonații peșteri” este afișat. Ca tot ce se află pe această pagină, se păstrează doar pentru acest browser.",
+      "centerlinesDetailZoom": "Detaliu de la nivelul",
+      "centerlinesMaxPaths": "Limită de linii",
+      "centerlinesCeiling": "Această instalare permite o limită de linii de cel mult {{paths, number}}.",
+      "emptyHint": "Un câmp gol urmează valoarea implicită a acestei instalări, afișată cu gri.",
+      "useDefaults": "Folosește valorile implicite ale instalării"
     },
     "pointPicker": {
       "title": "Alegeți un punct",

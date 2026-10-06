@@ -3152,8 +3152,6 @@
         "dashboard": "The dashboard"
       },
       "mapChrome": "Hide the on-map controls",
-      "centerlineDetailZoom": "Centerline detail from zoom",
-      "centerlineMaxPaths": "Centerline path budget",
       "reset": "Reset these",
       "resetDone": "Reset."
     },
@@ -3163,9 +3161,14 @@
       "wallsMinZoom": "Show from zoom",
       "wallsMaxCaves": "Caves at most",
       "wallsMaxMegabytes": "Megabytes at most",
-      "wallsHint": "An empty field follows this installation's default, shown in grey.",
       "wallsCeilings": "This installation allows at most {{caves}} caves and {{megabytes}} MB.",
-      "wallsReset": "Use this installation's defaults"
+      "centerlinesHeading": "Survey lines on the map",
+      "centerlinesIntro": "Two numbers bound the survey lines the flat map draws: the zoom from which full survey detail appears, splays included, and how many lines one view may hold. The map's layer list shows the same two while Cave centerlines is switched on. Like everything on this page, they are kept for this browser alone.",
+      "centerlinesDetailZoom": "Detail from zoom",
+      "centerlinesMaxPaths": "Line budget",
+      "centerlinesCeiling": "This installation allows a line budget of at most {{paths, number}}.",
+      "emptyHint": "An empty field follows this installation's default, shown in grey.",
+      "useDefaults": "Use this installation's defaults"
     },
     "pointPicker": {
       "title": "Pick a point",

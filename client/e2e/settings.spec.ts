@@ -137,7 +137,11 @@ test.describe('settings', () => {
       ),
     ).toBe(128 * 1024 * 1024);
 
-    await page.getByRole('button', { name: "Use this installation's defaults" }).click();
+    // Each card has a button of this name, and hands back only its own numbers.
+    await page
+      .getByRole('group', { name: 'Cave walls in the 3D view' })
+      .getByRole('button', { name: "Use this installation's defaults" })
+      .click();
     await expect(page.getByLabel('Caves at most')).toHaveValue('');
     await expect(page.getByLabel('Megabytes at most')).toHaveValue('');
     expect(
@@ -148,6 +152,46 @@ test.describe('settings', () => {
         );
       }),
       'nothing of the three is left in this browser',
+    ).toEqual([]);
+  });
+
+  test('a line budget for the map is kept for this browser across a reload, and handed back', async ({
+    page,
+  }) => {
+    await gotoRoute(page, '/settings/advanced');
+
+    const card = page.getByRole('group', { name: 'Survey lines on the map' });
+    const budget = page.getByLabel('Line budget');
+    // Nothing set: the field is empty, the installation's own number stands in it, and the
+    // ceiling is the one the installation publishes.
+    await expect(budget).toHaveAttribute('placeholder', '25000', { timeout: 15_000 });
+    await expect(page.getByLabel('Detail from zoom')).toHaveAttribute('placeholder', '18');
+    await expect(budget).toHaveValue('');
+    await expect(card.getByText(/line budget of at most 100,000/)).toBeVisible();
+
+    await budget.fill('40000');
+    await budget.blur();
+
+    // The reload is a sign-in round trip, waited out before the field is looked at.
+    await page.reload();
+    await page.waitForURL(/\/settings\/advanced/, { timeout: 20_000 });
+    await expect(page.getByLabel('Line budget')).toHaveValue('40000', { timeout: 20_000 });
+    expect(
+      await page.evaluate(
+        () => JSON.parse(localStorage.getItem('silexgis.uiPrefs') ?? '{}').state?.centerlineMaxPaths,
+      ),
+    ).toBe(40000);
+
+    await card.getByRole('button', { name: "Use this installation's defaults" }).click();
+    await expect(page.getByLabel('Line budget')).toHaveValue('');
+    expect(
+      await page.evaluate(() => {
+        const state = JSON.parse(localStorage.getItem('silexgis.uiPrefs') ?? '{}').state ?? {};
+        return ['centerlineDetailZoom', 'centerlineMaxPaths'].filter(
+          (key) => state[key] !== undefined && state[key] !== null,
+        );
+      }),
+      'neither of the two is left in this browser',
     ).toEqual([]);
   });
 

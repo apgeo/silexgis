@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { MapConfig } from '../../api/hooks.ts';
@@ -7,7 +7,7 @@ import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 
 const MB = 1024 * 1024;
 
-/** What the installation publishes about the walls in view; undefined while it is still loading. */
+/** What the installation publishes about both budgets; undefined while it is still loading. */
 let mapConfig: Partial<MapConfig> | undefined;
 
 vi.mock('../../api/hooks.ts', async () => {
@@ -20,12 +20,25 @@ const { default: AdvancedSettingsPage } = await import('./AdvancedSettingsPage.t
 const zoom = () => screen.getByRole('spinbutton', { name: 'Show from zoom' });
 const caves = () => screen.getByRole('spinbutton', { name: 'Caves at most' });
 const megabytes = () => screen.getByRole('spinbutton', { name: 'Megabytes at most' });
-const reset = () => screen.getByRole('button', { name: "Use this installation's defaults" });
+// Each card has a button of the same name, so a button is found through the card it belongs to.
+const walls = () => screen.getByRole('group', { name: 'Cave walls in the 3D view' });
+const reset = () => within(walls()).getByRole('button', { name: "Use this installation's defaults" });
+
+const lines = () => screen.getByRole('group', { name: 'Survey lines on the map' });
+const detailZoom = () => screen.getByRole('spinbutton', { name: 'Detail from zoom' });
+const lineBudget = () => screen.getByRole('spinbutton', { name: 'Line budget' });
+const resetLines = () => within(lines()).getByRole('button', { name: "Use this installation's defaults" });
 
 /** The three personal values as the store holds them. */
 function stored() {
   const { meshesInViewMinZoom, meshesInViewMaxCaves, meshesInViewMaxBytes } = useUiPrefsStore.getState();
   return { minZoom: meshesInViewMinZoom, maxCaves: meshesInViewMaxCaves, maxBytes: meshesInViewMaxBytes };
+}
+
+/** The two personal survey-line values as the store holds them. */
+function storedLines() {
+  const { centerlineDetailZoom, centerlineMaxPaths } = useUiPrefsStore.getState();
+  return { detailZoom: centerlineDetailZoom, maxPaths: centerlineMaxPaths };
 }
 
 /** Types into a number field the way a person does: the text changes, then the field is left. */
@@ -41,13 +54,18 @@ beforeEach(() => {
     meshesInViewMaxBytes: 64 * MB,
     meshesInViewMaxCavesLimit: 60,
     meshesInViewMaxBytesLimit: 512 * MB,
+    centerlineDetailZoom: 18,
+    centerlineMaxPaths: 25000,
+    centerlineMaxPathsLimit: 100000,
   };
   useUiPrefsStore.getState().setMeshesInViewLimits({});
+  useUiPrefsStore.getState().setCenterlineLimits({});
 });
 
 afterEach(() => {
   cleanup();
   useUiPrefsStore.getState().setMeshesInViewLimits({});
+  useUiPrefsStore.getState().setCenterlineLimits({});
   localStorage.removeItem('silexgis.uiPrefs');
 });
 
@@ -172,5 +190,130 @@ describe('the limits of the cave walls in the 3D view', () => {
 
     type(caves(), '30');
     expect(stored().maxCaves).toBe(30);
+  });
+});
+
+describe('the budgets of the survey lines on the map', () => {
+  it('shows the installation’s defaults in place of values nobody has set', () => {
+    render(<AdvancedSettingsPage />);
+
+    expect(screen.getByText('Survey lines on the map')).toBeInTheDocument();
+    expect(detailZoom()).toHaveValue('');
+    expect(lineBudget()).toHaveValue('');
+    expect(detailZoom()).toHaveAttribute('placeholder', '18');
+    expect(lineBudget()).toHaveAttribute('placeholder', '25000');
+  });
+
+  it('says that an empty field follows the installation, and how far the installation lets the budget go', () => {
+    render(<AdvancedSettingsPage />);
+
+    expect(screen.getByTestId('advanced-centerlines-hint')).toHaveTextContent(
+      "An empty field follows this installation's default, shown in grey. " +
+        'This installation allows a line budget of at most 100,000.',
+    );
+    expect(screen.getByText(/kept for this browser alone/)).toBeInTheDocument();
+  });
+
+  it('stores a typed value for this browser and leaves the other following the installation', () => {
+    render(<AdvancedSettingsPage />);
+
+    type(lineBudget(), '40000');
+
+    expect(storedLines()).toEqual({ detailZoom: undefined, maxPaths: 40000 });
+    expect(JSON.parse(localStorage.getItem('silexgis.uiPrefs')!).state.centerlineMaxPaths).toBe(40000);
+
+    type(detailZoom(), '16');
+
+    expect(storedLines()).toEqual({ detailZoom: 16, maxPaths: 40000 });
+  });
+
+  it('shows a budget that was set from the map, which keeps it in the same place', () => {
+    useUiPrefsStore.getState().setCenterlineLimits({ detailZoom: 15, maxPaths: 60000 });
+    render(<AdvancedSettingsPage />);
+
+    expect(detailZoom()).toHaveValue('15');
+    expect(lineBudget()).toHaveValue('60000');
+  });
+
+  it('stops the line budget at the ceiling the installation publishes, and the zoom at the zooms a map has', () => {
+    render(<AdvancedSettingsPage />);
+
+    expect(detailZoom()).toHaveAttribute('aria-valuemin', '1');
+    expect(detailZoom()).toHaveAttribute('aria-valuemax', '22');
+    expect(lineBudget()).toHaveAttribute('aria-valuemin', '100');
+    expect(lineBudget()).toHaveAttribute('aria-valuemax', '100000');
+
+    // Brought back to the ceiling when the field is left, so what is stored is what the server
+    // will serve rather than a wish it then quietly cuts down.
+    type(lineBudget(), '500000');
+    expect(storedLines().maxPaths).toBe(100000);
+
+    type(lineBudget(), '5');
+    expect(storedLines().maxPaths).toBe(100);
+
+    type(detailZoom(), '30');
+    expect(storedLines().detailZoom).toBe(22);
+  });
+
+  it('follows a ceiling the installation has set lower', () => {
+    // The ceiling is whatever this installation says and never a number of the page's own: a
+    // page that knew better would offer a budget the server refuses to serve.
+    mapConfig = { ...mapConfig, centerlineMaxPathsLimit: 40000 };
+    render(<AdvancedSettingsPage />);
+
+    expect(lineBudget()).toHaveAttribute('aria-valuemax', '40000');
+    expect(screen.getByTestId('advanced-centerlines-hint')).toHaveTextContent('at most 40,000.');
+  });
+
+  it('hands both back to the installation with its own button, and leaves the walls’ limits alone', () => {
+    useUiPrefsStore.getState().setCenterlineLimits({ detailZoom: 16, maxPaths: 40000 });
+    useUiPrefsStore.getState().setMeshesInViewLimits({ minZoom: 12, maxCaves: 30, maxBytes: 256 * MB });
+    render(<AdvancedSettingsPage />);
+
+    fireEvent.click(resetLines());
+
+    expect(storedLines()).toEqual({ detailZoom: undefined, maxPaths: undefined });
+    expect(detailZoom()).toHaveValue('');
+    expect(lineBudget()).toHaveValue('');
+    expect(resetLines()).toBeDisabled();
+    // A number somebody tuned for the 3D view is not given up by a button in another card.
+    expect(stored()).toEqual({ minZoom: 12, maxCaves: 30, maxBytes: 256 * MB });
+    expect(caves()).toHaveValue('30');
+    expect(reset()).toBeEnabled();
+  });
+
+  it('keeps its numbers when the walls’ limits are handed back', () => {
+    useUiPrefsStore.getState().setCenterlineLimits({ detailZoom: 16, maxPaths: 40000 });
+    useUiPrefsStore.getState().setMeshesInViewLimits({ maxCaves: 30 });
+    render(<AdvancedSettingsPage />);
+
+    fireEvent.click(reset());
+
+    expect(stored()).toEqual({ minZoom: undefined, maxCaves: undefined, maxBytes: undefined });
+    expect(storedLines()).toEqual({ detailZoom: 16, maxPaths: 40000 });
+    expect(lineBudget()).toHaveValue('40000');
+    expect(resetLines()).toBeEnabled();
+  });
+
+  it('clears one value when its field is emptied, without touching the other', () => {
+    useUiPrefsStore.getState().setCenterlineLimits({ detailZoom: 16, maxPaths: 40000 });
+    render(<AdvancedSettingsPage />);
+
+    type(lineBudget(), '');
+
+    expect(storedLines()).toEqual({ detailZoom: 16, maxPaths: undefined });
+  });
+
+  it('still lets a value be typed before the installation’s limits have arrived', () => {
+    mapConfig = undefined;
+    render(<AdvancedSettingsPage />);
+
+    expect(lineBudget()).toHaveAttribute('placeholder', '');
+    expect(screen.getByTestId('advanced-centerlines-hint')).toHaveTextContent(
+      "An empty field follows this installation's default, shown in grey.",
+    );
+
+    type(lineBudget(), '40000');
+    expect(storedLines().maxPaths).toBe(40000);
   });
 });

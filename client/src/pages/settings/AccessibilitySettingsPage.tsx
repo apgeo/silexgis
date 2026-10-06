@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useEffect, useRef } from 'react';
-import { App, Button, Card, Flex, InputNumber, Select, Switch, Typography } from 'antd';
+import { App, Button, Card, Flex, Select, Switch, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useUiPreferences, useUpdateUiPreferences } from '../../api/hooks.ts';
 import { useLanguageChoice } from '../../i18n/languageChoice.ts';
@@ -23,8 +23,8 @@ interface StoredPreferences {
  *
  * Two cards, because the split is real and worth showing: what follows the person to every
  * machine they sign in on, and what belongs to this browser. Reduced motion is a need, not a
- * per-device taste, so it travels; a centerline budget tuned for a workstation would be wrong
- * on a phone, so it does not.
+ * per-device taste, so it travels; map controls hidden to make room on a phone would be wrong
+ * on a workstation, so that does not.
  *
  * Each control writes the local copy immediately and saves in the background — a theme switch
  * that waited for a round trip before repainting would feel broken.
@@ -39,9 +39,6 @@ export default function AccessibilitySettingsPage() {
   const setLandingPage = useUiPrefsStore((s) => s.setLandingPage);
   const mapChromeHidden = useUiPrefsStore((s) => s.mapChromeHidden);
   const setMapChromeHidden = useUiPrefsStore((s) => s.setMapChromeHidden);
-  const centerlineDetailZoom = useUiPrefsStore((s) => s.centerlineDetailZoom);
-  const centerlineMaxPaths = useUiPrefsStore((s) => s.centerlineMaxPaths);
-  const setCenterlineLimits = useUiPrefsStore((s) => s.setCenterlineLimits);
 
   const { data: stored } = useUiPreferences();
   const save = useUpdateUiPreferences();
@@ -155,38 +152,12 @@ export default function AccessibilitySettingsPage() {
             />
           </Flex>
 
-          <Flex gap={12} align="center" wrap>
-            <Typography.Text style={{ minWidth: 160 }}>
-              {t('settings.accessibility.centerlineDetailZoom')}
-            </Typography.Text>
-            <InputNumber
-              min={1}
-              max={22}
-              aria-label={t('settings.accessibility.centerlineDetailZoom')}
-              value={centerlineDetailZoom}
-              onChange={(value) =>
-                setCenterlineLimits({ detailZoom: value ?? undefined, maxPaths: centerlineMaxPaths })
-              }
-            />
-            <Typography.Text style={{ minWidth: 160 }}>
-              {t('settings.accessibility.centerlineMaxPaths')}
-            </Typography.Text>
-            <InputNumber
-              min={100}
-              max={200000}
-              step={1000}
-              aria-label={t('settings.accessibility.centerlineMaxPaths')}
-              value={centerlineMaxPaths}
-              onChange={(value) =>
-                setCenterlineLimits({ detailZoom: centerlineDetailZoom, maxPaths: value ?? undefined })
-              }
-            />
-          </Flex>
-
           <Flex>
+            {/* Puts back what this page shows and nothing else. The rendering budgets kept for
+                this browser are set on the advanced page and have their own way back there; a
+                button here that emptied them would do it where nobody is looking. */}
             <Button
               onClick={() => {
-                setCenterlineLimits({ detailZoom: undefined, maxPaths: undefined });
                 setMapChromeHidden(false);
                 setLandingPage('map');
                 update(DEFAULT_APPEARANCE);
