@@ -36,7 +36,7 @@ import EventFormModal from './EventFormModal.tsx';
 import EventResponsesTab from './EventResponsesTab.tsx';
 import EventStateControl from './EventStateControl.tsx';
 import { eventRefusalKey } from './eventRefusals.ts';
-import { eventKindTakesResponses } from './eventKinds.ts';
+import { eventKindTakesResponses } from '../../components/events/eventKinds.ts';
 
 /**
  * One event: what it is, when it is, where it is in words, who it is for, and where it has got to.

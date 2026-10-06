@@ -20,7 +20,7 @@ import { formatTripDates } from '../../components/trips/tripDates.ts';
 import { ACTIVITY_STATES } from '../../components/trips/tripStates.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import EventFormModal from './EventFormModal.tsx';
-import { EVENT_KINDS } from './eventKinds.ts';
+import { EVENT_KINDS } from '../../components/events/eventKinds.ts';
 
 const asDate = (value: Dayjs | null | undefined): string | undefined =>
   value ? value.format('YYYY-MM-DD') : undefined;

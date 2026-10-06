@@ -29,7 +29,7 @@ import {
   type Visibility,
 } from '../../api/hooks.ts';
 import { tripDateEndForWrite } from '../../components/trips/tripDates.ts';
-import { EVENT_KINDS } from './eventKinds.ts';
+import { EVENT_KINDS } from '../../components/events/eventKinds.ts';
 import { eventRefusalKey } from './eventRefusals.ts';
 
 interface Props {
