@@ -6,6 +6,7 @@ import { hasAccessAction, useCapabilities } from '../../api/hooks.ts';
 import TerrainBuildForm from './terrain/TerrainBuildForm.tsx';
 import TerrainBuildList from './terrain/TerrainBuildList.tsx';
 import TerrainConfiguredNotice from './terrain/TerrainConfiguredNotice.tsx';
+import TerrainCreditNotice from './terrain/TerrainCreditNotice.tsx';
 import TerrainDerivativeForm from './terrain/TerrainDerivativeForm.tsx';
 import TerrainDerivativeList from './terrain/TerrainDerivativeList.tsx';
 import { TerrainWorkerNotice } from './terrain/TerrainWorkerMissing.tsx';
@@ -60,6 +61,11 @@ export default function TerrainPage() {
         otherwise say one thing and the scene do another.
       */}
       <TerrainConfiguredNotice />
+      {/*
+        Beside it, because both are about the ground the scene is drawing right now rather than
+        about any row below: this one says that ground is being shown with nobody credited for it.
+      */}
+      <TerrainCreditNotice />
       <TerrainBuildList canExecute={canExecute} canDelete={canDelete} />
       {/*
         Below the builds rather than among them: a picture is made from a build that has finished,

@@ -308,6 +308,12 @@
       "title": "A terrain address in this installation's configuration overrides the chosen build",
       "body": "The configuration names a terrain address of its own, and it wins: the scene draws that pyramid, not the build chosen here ({{build}}…). The chosen build is drawn only once the setting below is removed from the installation's configuration and the application restarted.",
       "setting": "The setting to remove:"
+    },
+    "credit": {
+      "title": "The terrain being drawn carries no credit",
+      "configuredBody": "The scene draws a terrain address named in this installation's configuration, and the configuration states no credit for it. Elevation data almost always has to be credited — Copernicus and most other free models require it — and what is stated in the setting below is what the scene shows beside the ground.",
+      "setting": "The setting that states it:",
+      "buildBody": "The scene draws a build ({{build}}…) that records no credit: none of the sources it was made from declared one. Elevation data almost always has to be credited. The credit is given for each source when a build is started, and it cannot be added to a finished build — start a build over the same ground with its sources credited, and choose that one."
     }
   },
   "dashboard": {

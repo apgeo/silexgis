@@ -174,6 +174,18 @@ configurată. Pagina Relief arată atunci un avertisment deasupra listei, care n
 suprascrisă și setarea; generarea aleasă se desenează după ce setarea este scoasă și aplicația
 repornită.
 
+**Pagina avertizează și atunci când relieful desenat nu poartă nicio mențiune a sursei.** Datele
+de altitudine trebuie aproape întotdeauna creditate — Copernicus și majoritatea celorlalte modele
+gratuite o cer — iar scena arată mențiunea pe care o poartă relieful desenat, deci un relief fără
+niciuna se desenează fără nimic alături și nimic nu refuză acest lucru. Pentru o adresă de relief
+numită în configurație, avertismentul numește setarea care precizează mențiunea
+(`SILEXGIS__Terrain__Attribution`); adăugați-o și reporniți. Pentru o generare, mențiunea vine de
+la sursele din care a fost făcută, fiecare declarând una atunci când se pornește generarea:
+aplicația refuză o sursă fără mențiune, deci o generare făcută aici are întotdeauna una, iar
+avertismentul apare doar pentru o generare înregistrată pe altă cale. Mențiunea nu poate fi
+adăugată unei generări încheiate — porniți una peste același teren, cu sursele creditate, și
+alegeți-o pe aceea.
+
 ---
 
 ## Imagini derivate ale terenului

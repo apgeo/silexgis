@@ -487,6 +487,42 @@ public sealed class TerrainSourceTests : IAsyncLifetime, IDisposable, IClassFixt
     }
 
     /// <summary>
+    /// A source declared with no credit is refused, so a build started here always carries one.
+    /// </summary>
+    /// <remarks>
+    /// The scene shows whatever credit the drawn terrain carries and shows nothing when there is
+    /// none, which looks exactly like terrain that needs none. The only place a build's credit can
+    /// come from is the sources it is started with, so this refusal is what stands between an
+    /// administrator in a hurry and a pyramid shown to everybody uncredited. A credit of nothing
+    /// but spaces credits nobody and is refused with the empty one.
+    /// </remarks>
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task A_source_declared_with_no_credit_is_refused(string credit)
+    {
+        var sent = await UploadAsync(starter, "uncredited.tif");
+        var reference = JsonDocument.Parse(await BodyAsync(sent)).RootElement
+            .GetProperty("reference").GetString()!;
+
+        TerrainBuildSubmitRequest With(string attribution) => new(
+            23.60, 46.10, 23.65, 46.15, 13, null, null,
+            FetchCoverage: false,
+            Sources: [new TerrainBuildSourceRequest(
+                TerrainBuildSourceKind.Uploaded, reference, attribution, null)]);
+
+        var refused = await SubmitAsync(With(credit));
+        var body = await BodyAsync(refused);
+        refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        CodeOf(body).ShouldBe("validation.failed");
+
+        // The same raster over the same ground with a credit is taken, so the refusal above was
+        // about the credit — and nothing of the refused request was left in the way of this one.
+        var buildId = await AcceptedAsync(With("An invented survey"));
+        (await SourcesAsync(buildId)).Single().Attribution.ShouldBe("An invented survey");
+    }
+
+    /// <summary>
     /// The directories an installation reads from are published, so a page can offer them rather
     /// than asking somebody to type a path and guess — and only to somebody who may start a build.
     /// </summary>

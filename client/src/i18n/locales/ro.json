@@ -308,6 +308,12 @@
       "title": "O adresă de relief din configurația acestei instalări are prioritate față de generarea aleasă",
       "body": "Configurația numește o adresă de relief proprie, iar ea câștigă: scena desenează acea piramidă, nu generarea aleasă aici ({{build}}…). Generarea aleasă se desenează doar după ce setarea de mai jos este scoasă din configurația instalării și aplicația repornită.",
       "setting": "Setarea de scos:"
+    },
+    "credit": {
+      "title": "Relieful desenat nu poartă nicio mențiune a sursei",
+      "configuredBody": "Scena desenează o adresă de relief numită în configurația acestei instalări, iar configurația nu precizează nicio mențiune a sursei pentru ea. Datele de altitudine trebuie aproape întotdeauna creditate — Copernicus și majoritatea celorlalte modele gratuite o cer — iar ceea ce se scrie în setarea de mai jos este ceea ce scena arată lângă teren.",
+      "setting": "Setarea care o precizează:",
+      "buildBody": "Scena desenează o generare ({{build}}…) care nu are înregistrată nicio mențiune a sursei: niciuna dintre sursele din care a fost făcută nu a declarat una. Datele de altitudine trebuie aproape întotdeauna creditate. Mențiunea se dă pentru fiecare sursă atunci când se pornește o generare și nu poate fi adăugată unei generări încheiate — porniți o generare peste același teren, cu sursele creditate, și alegeți-o pe aceea."
     }
   },
   "dashboard": {

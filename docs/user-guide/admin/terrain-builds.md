@@ -175,6 +175,16 @@ pyramid instead. The Terrain page then shows a warning above the list naming the
 and the setting; the chosen build is drawn once that setting is removed and the application
 restarted.
 
+**The page also warns when the terrain being drawn carries no credit.** Elevation data almost
+always has to be credited — Copernicus and most other free models require it — and the scene shows
+whatever credit the drawn terrain carries, so terrain with none is drawn with nothing beside it and
+nothing refuses that. For a terrain address named in the configuration, the warning names the
+setting that states the credit (`SILEXGIS__Terrain__Attribution`); add it and restart. For a build,
+the credit comes from the sources it was made from, each of which states one when the build is
+started: the application refuses a source with no credit, so a build made here always has one, and
+the warning appears only for a build recorded some other way. A credit cannot be added to a
+finished build — start one over the same ground with its sources credited, and choose that one.
+
 ---
 
 ## Derived pictures of the ground

@@ -347,6 +347,88 @@ describe('TerrainPage', () => {
     expect(screen.queryByTestId('terrain-configured-override')).not.toBeInTheDocument();
   });
 
+  // Terrain drawn with no credit looks exactly like terrain that needs none, and nothing refuses
+  // it. The two origins are credited in two different places, so the notice has to name the one
+  // that applies: a line of configuration for a configured address, the sources of a build for a
+  // build.
+  it('warns that the drawn terrain carries no credit, and says where its kind states one', () => {
+    const configured = {
+      url: 'https://terrain.example/tiles',
+      attribution: null,
+      surveyHeightOffsetM: 0,
+      origin: 'configured' as const,
+      buildId: null,
+    };
+    const built = {
+      url: '/terrain/builds/0a1b2c3d4e5f/tiles',
+      attribution: null,
+      surveyHeightOffsetM: 0,
+      origin: 'build' as const,
+      buildId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+    };
+
+    config = mapConfig(configured, null);
+    const fromConfiguration = show();
+    const named = screen.getByTestId('terrain-no-credit');
+    expect(named).toHaveTextContent('SILEXGIS__Terrain__Attribution');
+    expect(named).toHaveTextContent(/configuration states no credit/);
+    fromConfiguration.unmount();
+
+    config = mapConfig(built, null);
+    const fromBuild = show();
+    const sourced = screen.getByTestId('terrain-no-credit');
+    expect(sourced).toHaveTextContent('0a1b2c3d');
+    expect(sourced).toHaveTextContent(/given for each source when a build is started/);
+    // Not the configuration's line: setting it would change nothing about a build's credit.
+    expect(sourced).not.toHaveTextContent('SILEXGIS__Terrain__Attribution');
+    fromBuild.unmount();
+
+    // A credit of nothing but spaces credits nobody.
+    config = mapConfig({ ...configured, attribution: '   ' }, null);
+    show();
+    expect(screen.getByTestId('terrain-no-credit')).toBeInTheDocument();
+  });
+
+  it('says nothing about credit when the drawn terrain has one, or when none is drawn', () => {
+    const credited = {
+      url: 'https://terrain.example/tiles',
+      attribution: 'Elevation © An Invented Survey',
+      surveyHeightOffsetM: 0,
+      origin: 'configured' as const,
+      buildId: null,
+    };
+    const uncreditedBuild = {
+      url: '/terrain/builds/0a1b2c3d4e5f/tiles',
+      attribution: null,
+      surveyHeightOffsetM: 0,
+      origin: 'build' as const,
+      buildId: '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+    };
+
+    // Credited terrain is drawn. The build that would be drawn instead has no credit, and that is
+    // not this notice's business: it is not what anybody is looking at.
+    config = mapConfig(credited, uncreditedBuild);
+    const drawn = show();
+    expect(screen.queryByTestId('terrain-no-credit')).not.toBeInTheDocument();
+    drawn.unmount();
+
+    config = mapConfig({ ...uncreditedBuild, attribution: 'Elevation © An Invented Survey' }, null);
+    const built = show();
+    expect(screen.queryByTestId('terrain-no-credit')).not.toBeInTheDocument();
+    built.unmount();
+
+    // The smooth ellipsoid owes nobody a credit.
+    config = mapConfig(null, null);
+    const bare = show();
+    expect(screen.queryByTestId('terrain-no-credit')).not.toBeInTheDocument();
+    bare.unmount();
+
+    // And nothing is claimed before the answer is in.
+    config = undefined;
+    show();
+    expect(screen.queryByTestId('terrain-no-credit')).not.toBeInTheDocument();
+  });
+
   it('turns a refusal into the sentence it deserves', async () => {
     submitMutate.mockRejectedValue(new ApiError(409, 'terrain_build.already_building'));
     show();

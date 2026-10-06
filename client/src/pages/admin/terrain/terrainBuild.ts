@@ -28,6 +28,16 @@ export const TERRAIN_WORKER_COMMAND =
 export const TERRAIN_URL_SETTING = 'SILEXGIS__Terrain__Url';
 
 /**
+ * The setting that states the credit of a terrain address named in the configuration.
+ *
+ * A pyramid baked outside the application says nothing reliable about whose data it holds — the
+ * tool that bakes one writes a placeholder — so the credit of a configured address is whatever
+ * this line says, and nothing at all while it is absent. Written out for the same reason as the
+ * others: the way to put it right is to add this exact line to the environment file.
+ */
+export const TERRAIN_ATTRIBUTION_SETTING = 'SILEXGIS__Terrain__Attribution';
+
+/**
  * Whether a build stopped because this installation has nothing that can turn rasters into tiles.
  *
  * This is the only signal there is. Nothing the server publishes says in advance whether the bake
