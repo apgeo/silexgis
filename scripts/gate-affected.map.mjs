@@ -74,7 +74,7 @@ export const groups = {
     'NotificationInboxTests', 'NotificationQuietHoursTests', 'SmsNotificationChannelTests',
     'TripPlanNotificationTests',
   ],
-  calendar: ['CalendarFeedTests', 'CalendarTests', 'CalendarWindowTests'],
+  calendar: ['CalendarFeedTests', 'CalendarNarrowingTests', 'CalendarTests', 'CalendarWindowTests'],
   access: [
     'AccessApiTests', 'AccessHistoryTests', 'AccessModelTests', 'AclAndCavingGroupTests',
     'DocumentAccessApiTests', 'DocumentAccessParityTests', 'ProfileVisibilityTests',
