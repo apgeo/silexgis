@@ -436,7 +436,10 @@ test('pop-out registry drives the main map across windows', async ({ page, conte
   const popup = await popupPromise;
   await expect(popup.getByText('Cave registry')).toBeVisible({ timeout: 15_000 });
 
-  // Picking a cave in the pop-out selects it in the MAIN window's dock.
+  // Picking a cave in the pop-out selects it in the MAIN window's dock. Narrowed to first: the
+  // registry shows a page at a time, and which page a demonstration cave is on depends on how
+  // many caves the tests before this one happened to make.
+  await popup.getByPlaceholder('Search name or toponym…').fill('Peștera Demo Mare');
   await popup.getByText('Peștera Demo Mare').click();
   await expect(page.getByRole('heading', { name: 'Peștera Demo Mare' })).toBeVisible({ timeout: 15_000 });
   await popup.close();
