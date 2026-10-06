@@ -19,6 +19,10 @@
 // with a dev stack somebody is using, and cannot be the run that quietly migrates the shared
 // dev database. Set SILEXGIS_E2E_REUSE=1 to point it at an already-running stack instead.
 //
+// A failure during which the browser reported the machine's network changing under it is run
+// again on its own, and that second result is its verdict; every other failure stands as it
+// fell. Why, and exactly which failures, is in e2e-verdict.mjs.
+//
 // Cross-platform: no shell-isms, paths joined rather than concatenated, and every child
 // process spawned with an argument array rather than a command line.
 import { spawn, spawnSync } from 'node:child_process';
@@ -26,6 +30,18 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
+
+import {
+  ATTEMPTS,
+  canBeJudged,
+  describe,
+  readReport,
+  selectorsByProject,
+  sortFailures,
+  sortSecondRun,
+  verdict,
+  withReport,
+} from './e2e-verdict.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const clientDir = join(repoRoot, 'client');
@@ -175,6 +191,75 @@ function teardown() {
   spawnSync('docker', ['rm', '-f', DB_NAME], { stdio: 'ignore' });
 }
 
+/**
+ * One Playwright run, with its report written beside its artifacts in `outputDir`.
+ *
+ * The report's place is named through the environment rather than in the configuration, so that
+ * the first run and a run made to judge it cannot write over each other.
+ */
+function browserRun(argv, outputDir) {
+  const reportFile = join(clientDir, outputDir, 'report.json');
+  rmSync(reportFile, { force: true });
+  const status = run('npx', ['playwright', 'test', ...withReport(argv)], {
+    cwd: clientDir,
+    env: {
+      ...process.env,
+      SILEXGIS_DEV_PORT: DEV_PORT,
+      // Tells the Playwright config not to adopt a dev server it did not start. Without this a
+      // Vite left over from an earlier run serves the previous code, and the run reports on
+      // assets that are no longer on disk.
+      SILEXGIS_E2E_MANAGED: '1',
+      SILEXGIS_API_TARGET: `http://localhost:${API_PORT}`,
+      PLAYWRIGHT_JSON_OUTPUT_FILE: reportFile,
+    },
+  });
+  return { status, report: readReport(reportFile) };
+}
+
+/**
+ * The exit code of a run that failed, after its failures have been told apart.
+ *
+ * The failures the browser put down to a network change are run again, one worker, each in the
+ * project it failed in, against the stack that is still standing. Their artifacts go to a
+ * directory of their own per attempt and project: Playwright empties the directory it is given
+ * before it starts, and the first run's traces are the evidence for every failure that stands.
+ */
+function judged(first) {
+  const { standing, cutOff, outside } = sortFailures(first.report);
+  if (cutOff.length === 0) {
+    // Nothing the browser blamed on the network, so Playwright's own word stands — whatever it
+    // was, including a run that failed without any test failing and one that wrote no report.
+    return first.status;
+  }
+
+  const againRoot = 'test-results-again';
+  rmSync(join(clientDir, againRoot), { recursive: true, force: true });
+  const excused = [];
+  let pending = cutOff;
+  for (let attempt = 1; attempt <= ATTEMPTS && pending.length > 0; attempt += 1) {
+    step(`${pending.length} failure(s) were cut off by a network change; `
+      + `running them again on their own (${attempt} of ${ATTEMPTS})`);
+    for (const test of pending) console.log(`  ${describe(test)}`);
+
+    const stillCutOff = [];
+    for (const [project, places] of selectorsByProject(pending)) {
+      const outputDir = join(againRoot, String(attempt), project);
+      const { report } = browserRun(
+        [...places, `--project=${project}`, '--workers=1', `--output=${outputDir}`], outputDir);
+      const second = sortSecondRun(pending.filter((test) => test.project === project), report);
+      excused.push(...second.passed);
+      standing.push(...second.standing);
+      stillCutOff.push(...second.cutOff);
+    }
+    pending = stillCutOff;
+  }
+
+  const last = verdict({ excused, standing, unjudged: pending, outside });
+  step('What the failures were');
+  for (const line of last.lines) console.log(line);
+  return last.exitCode;
+}
+
 let api;
 let exitCode = 1;
 try {
@@ -247,20 +332,11 @@ try {
   }
 
   step('Running the browser leg');
-  const playwrightArgs = ['playwright', 'test', ...passthrough];
-
-  exitCode = run('npx', playwrightArgs, {
-    cwd: clientDir,
-    env: {
-      ...process.env,
-      SILEXGIS_DEV_PORT: DEV_PORT,
-      // Tells the Playwright config not to adopt a dev server it did not start. Without this a
-      // Vite left over from an earlier run serves the previous code, and the run reports on
-      // assets that are no longer on disk.
-      SILEXGIS_E2E_MANAGED: '1',
-      SILEXGIS_API_TARGET: `http://localhost:${API_PORT}`,
-    },
-  });
+  const first = browserRun(passthrough, 'test-results');
+  exitCode = first.status;
+  if (first.status !== 0 && canBeJudged(passthrough)) {
+    exitCode = judged(first);
+  }
 } catch (error) {
   console.error(`\n${error.message}`);
 } finally {

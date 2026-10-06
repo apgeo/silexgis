@@ -52,6 +52,7 @@ jobs:
           name: browser-desktop-${{ matrix.shard }}
           path: |
             client/test-results
+            client/test-results-again
             client/playwright-report
           if-no-files-found: ignore
 
@@ -83,5 +84,6 @@ jobs:
           name: browser-phones
           path: |
             client/test-results
+            client/test-results-again
             client/playwright-report
           if-no-files-found: ignore

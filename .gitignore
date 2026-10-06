@@ -139,6 +139,7 @@ client/dist-trips
 
 # Playwright test output
 test-results
+test-results-again
 
 # Browser errors the application reports about itself while it is being used locally.
 .diagnostics
