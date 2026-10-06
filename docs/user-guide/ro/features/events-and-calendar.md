@@ -99,13 +99,41 @@ trasată pe planul ei — și nimic pentru o dată a clubului, care nu are nicio
 Puteți:
 
 - să-l sortați,
-- să-l îngustați la un singur fel,
+- să porniți și să stingeți fiecare familie — **Ture**, **Tabere**, **Evenimente** — separat,
+- să îngustați evenimentele la tipurile pe care le alegeți,
 - să-l îngustați la cele ale unui club,
 - să-l îngustați la ale dumneavoastră,
 - să vedeți ce urmează și ce s-a întâmplat deja,
 - să stingeți intrările anulate (sunt marcate, nu ascunse implicit),
 - să vedeți o intrare **amânată** cu un marcaj de amânare, în loc să se prefacă că data pe care o
   poartă încă este una pe care merge cineva.
+
+## Familii și tipuri
+
+**Ture**, **Tabere** și **Evenimente** au fiecare comutatorul ei, așa că se poate afișa orice
+combinație — doar taberele, sau totul în afară de ture. Cu toate trei stinse, calendarul nu cere
+nimic și spune asta, în loc să vă arate o lună goală.
+
+**Orice tip de eveniment** îngustează *evenimentele* la tipurile pe care le alegeți — ședințe de
+club, instruiri, zile de lucru, verificări de echipament, conferințe, termene limită — și puteți
+alege mai multe.
+
+> **Un tip îngustează evenimentele și nimic altceva.** O tură și o tabără nu au tip, așa că
+> rămân afișate, conduse de comutatoarele lor; calendarul vă spune asta cât timp este ales un
+> tip. Ca să vedeți **doar serile de instruire**, alegeți *Instruire* și stingeți **Ture** și
+> **Tabere**.
+
+Cât timp **Evenimente** este stins, un tip nu are ce să îngusteze, așa că controlul nu poate fi
+folosit și spune de ce. Ce ați ales se păstrează și se aplică din nou când reporniți
+evenimentele.
+
+## O vizualizare este o legătură
+
+Tot ce alegeți — zilele, familiile și tipurile, clubul, comutatoarele, ordinea și felul în care
+citiți — este scris în adresa paginii. Copiați adresa, iar cine o deschide vede aceleași zile
+citite la fel (prin propriul acces: o legătură nu arată nimănui un rând pe care nu-l putea citi
+deja). Butonul **Înapoi** parcurge îngustările făcute; trecerea între Lună, Săptămână și
+celelalte nu îi adaugă pași.
 
 ## Ce nu vă spune calendarul
 

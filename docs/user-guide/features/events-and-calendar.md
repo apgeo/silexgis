@@ -97,13 +97,40 @@ area drawn on its plan — and nothing for a club date, which has no shape.
 You can:
 
 - sort it,
-- narrow to one kind,
+- turn each family — **Trips**, **Camps**, **Events** — on and off by itself,
+- narrow the events to the kinds you choose,
 - narrow to a club's own,
 - narrow to your own,
 - show what is still to come and what already happened,
 - switch off called-off entries (they are marked, not hidden by default),
 - see a **postponed** entry with a postponed mark rather than pretending the date it still
   carries is one anybody is going on.
+
+## Families and kinds
+
+**Trips**, **Camps** and **Events** each have a switch of their own, so any combination can be
+shown — the camps alone, or everything except the trips. With all three off the calendar asks
+for nothing and says so, rather than showing you an empty month.
+
+**Any kind of event** narrows the *events* to the kinds you pick — club meetings, training,
+working days, gear checks, conferences, deadlines — and you may pick several.
+
+> **A kind narrows the events and nothing else.** A trip and a camp have no kind, so they stay
+> listed, governed by their own switches; the calendar tells you so while a kind is chosen.
+> To see **only the training evenings**, choose *Training* and switch **Trips** and **Camps**
+> off.
+
+While **Events** is switched off there is nothing for a kind to narrow, so the control cannot
+be used and says why. What you had chosen is kept, and applies again when you switch events
+back on.
+
+## A view is a link
+
+Everything you choose — the days, the families and kinds, the club, the switches, the order and
+which reading you are in — is written into the page's address. Copy the address and whoever
+opens it sees the same days read the same way (through their own access: a link never shows
+anybody a row they could not already read). The **Back** button walks through your narrowings;
+switching between Month, Week and the rest does not add steps to it.
 
 ## What the calendar will not tell you
 

@@ -3,8 +3,8 @@ import { expect, type Locator, type Page } from '@playwright/test';
 // Straight from Playwright this spec would run unwatched: the guard is what records uncaught
 // errors, unhandled rejections and console errors across the whole browser context.
 import { test } from './consoleGuard.ts';
-import { asPerson, localDay, tryAsPerson, versionOf } from './arrange.ts';
-import { gotoRoute, login } from './helpers.ts';
+import { asPerson, localDay, tripBody, tryAsPerson, versionOf } from './arrange.ts';
+import { chooseOption, gotoRoute, login } from './helpers.ts';
 
 /**
  * The record of everything dated, driven the way somebody reads it.
@@ -19,14 +19,34 @@ import { gotoRoute, login } from './helpers.ts';
  * and that a pair of them asking for no kind of record at all says so instead of asking.
  */
 
-/** What the page asked for on its last request, read off the wire. */
-async function askedFor(page: import('@playwright/test').Page): Promise<URLSearchParams> {
+/**
+ * What the page asks the calendar for next, read off the wire.
+ *
+ * `about` names the request a step is waiting for when the one before it may not have gone out
+ * yet. The page redraws after the address has changed, and the router may defer that redraw, so
+ * a request caused by the previous click can leave the browser after the next step has begun to
+ * listen — and "the next request" would then be the previous step's. Naming what the awaited
+ * request is about lets that late one go by; what is asserted afterwards is everything else the
+ * request says.
+ */
+async function askedFor(
+  page: import('@playwright/test').Page,
+  about: (query: URLSearchParams) => boolean = () => true,
+): Promise<URLSearchParams> {
   const request = await page.waitForRequest(
-    (r) => r.url().includes('/api/v1/calendar?'),
+    (r) => r.url().includes('/api/v1/calendar?') && about(new URL(r.url()).searchParams),
     { timeout: 30_000 },
   );
   return new URL(request.url()).searchParams;
 }
+
+/**
+ * A request that names its families and does not name this one — which is how a step tells the
+ * request its own click caused from a late one caused by the click before, whose families still
+ * held the one this step turned off.
+ */
+const without = (family: string) => (query: URLSearchParams): boolean =>
+  query.has('source') && !(query.get('source') ?? '').split(',').includes(family);
 
 test('the calendar opens on a window of its own and asks for both ends of it', async ({ page }) => {
   await login(page);
@@ -58,24 +78,33 @@ test('turning a family off narrows the question rather than the reader', async (
   await gotoRoute(page, '/calendar');
   await expect(page.getByTestId('calendar-toggle-trips')).toBeVisible();
 
-  const asked = askedFor(page);
-  await page.getByTestId('calendar-toggle-other').click();
-  expect((await asked).get('source')).toBe('tripLog');
+  // Each family has a toggle of its own, and what is left is named family by family.
+  const asked = askedFor(page, without('expedition'));
+  await page.getByTestId('calendar-toggle-camps').click();
+  expect((await asked).get('source')).toBe('tripLog,event');
+  const askedForTrips = askedFor(page, without('event'));
+  await page.getByTestId('calendar-toggle-events').click();
+  expect((await askedForTrips).get('source')).toBe('tripLog');
 
   // The other way round names every family that is not a trip, one by one. "Not the trips" is
   // more than one family, and a narrowing that could only name one would drop the family it left
   // out of a record that says nothing is missing.
-  await page.getByTestId('calendar-toggle-other').click();
-  const askedForTheRest = askedFor(page);
+  await page.getByTestId('calendar-toggle-camps').click();
+  await page.getByTestId('calendar-toggle-events').click();
+  const askedForTheRest = askedFor(page, without('tripLog'));
   await page.getByTestId('calendar-toggle-trips').click();
   expect((await askedForTheRest).get('source')?.split(',').sort()).toEqual([
     'event',
     'expedition',
   ]);
 
-  // Neither family wanted is not a question the answer can be asked, so nothing is asked.
-  await page.getByTestId('calendar-toggle-other').click();
-  await expect(page.getByTestId('calendar-empty')).toBeVisible();
+  // No family wanted is not a question the answer can be asked, so nothing is asked — and the
+  // page says which of the two kinds of emptiness this is. It is held in the address like every
+  // other choice, so it is still what the page shows after a reload.
+  await page.getByTestId('calendar-toggle-camps').click();
+  await page.getByTestId('calendar-toggle-events').click();
+  await expect(page.getByTestId('calendar-empty')).toContainText('No kind of record is selected');
+  await expect(page).toHaveURL(/[?&]source=none(&|$)/);
 });
 
 test('a row clicks through to the record it came from', async ({ page }) => {
@@ -657,5 +686,128 @@ test('the agenda reads a window forwards, one entry to a line, and opens a recor
     await opensEvent(page, lines.nth(0), training);
   } finally {
     await removeEvents(page, written);
+  }
+});
+
+/**
+ * A kind is something only a club date has, so choosing kinds narrows the club dates and leaves
+ * the trips and the camps where their own toggles put them.
+ *
+ * Driven against three records written for this run on days of their own — a training evening, a
+ * club meeting and a trip — so each step is read off exact rows: which of the three are listed,
+ * and what the page asked the server for to get them. The choice is carried in the address, which
+ * is what makes a narrowed calendar a link; the flow opens that address afresh and expects the
+ * same rows.
+ */
+test('choosing kinds narrows the events, leaves the trips listed, and travels in the address', async ({
+  page,
+  consoleErrors,
+}) => {
+  const stamp = Date.now();
+  const written: Written[] = [];
+  let tripId: string | undefined;
+  await login(page);
+
+  // Days of their own, further ahead than any other flow in this file writes on.
+  const first = localDay(70);
+  const middle = localDay(71);
+  const last = localDay(72);
+
+  try {
+    const training = await writeEvent(page, written, `E2E Kind Training ${stamp}`, first, {
+      kind: 'training',
+    });
+    const meeting = await writeEvent(page, written, `E2E Kind Meeting ${stamp}`, middle);
+    const tripTitle = `E2E Kind Trip ${stamp}`;
+    const trip = await asPerson<{ id: string }>(
+      page,
+      'POST',
+      '/api/v1/trip-logs/',
+      tripBody(tripTitle, last),
+    );
+    tripId = trip.id;
+    // A trip is written as a draft, which no calendar shows; planning it is what puts it on.
+    await asPerson(
+      page,
+      'POST',
+      `/api/v1/trip-logs/${trip.id}/state`,
+      { state: 'planned' },
+      { 'If-Match': await versionOf(page, `/api/v1/trip-logs/${trip.id}`) },
+    );
+
+    // The window is asked for in the address rather than picked: a calendar's view is a link.
+    await gotoRoute(page, `/calendar?from=${first}&to=${last}`);
+    const mine = page.locator('.ant-table-tbody tr.ant-table-row').filter({ hasText: `${stamp}` });
+    await expect(mine).toHaveCount(3, { timeout: 30_000 });
+    await expect(page.getByTestId('calendar-kind-note')).toHaveCount(0);
+
+    // One kind: the meeting goes, and the trip — which has no kind to be asked about — stays.
+    const kinds = page.getByTestId('calendar-kind-filter');
+    const asked = askedFor(page, (asking) => asking.has('kind'));
+    await chooseOption(page, kinds, 'Training');
+    const query = await asked;
+    expect(query.get('kind')).toBe('training');
+    // Choosing a kind names no family: the trips and the camps are asked for exactly as before.
+    expect(query.get('source')).toBeNull();
+    await page.keyboard.press('Escape');
+    await expect(mine).toHaveCount(2, { timeout: 30_000 });
+    await expect(mine.filter({ hasText: training.title })).toHaveCount(1);
+    await expect(mine.filter({ hasText: tripTitle })).toHaveCount(1);
+    await expect(mine.filter({ hasText: meeting.title })).toHaveCount(0);
+    // And the page says so, because a filter one family in three can answer owes the other two a
+    // sentence.
+    await expect(page.getByTestId('calendar-kind-note')).toContainText('Trips and camps');
+    await expect(page).toHaveURL(/[?&]kind=training(&|$)/);
+
+    // Events of one kind and nothing else: the kind, with the other two families turned off.
+    await page.getByTestId('calendar-toggle-trips').click();
+    const askedForEvents = askedFor(page, without('expedition'));
+    await page.getByTestId('calendar-toggle-camps').click();
+    const narrowed = await askedForEvents;
+    expect(narrowed.get('source')).toBe('event');
+    expect(narrowed.get('kind')).toBe('training');
+    await expect(mine).toHaveCount(1, { timeout: 30_000 });
+    await expect(mine).toContainText(training.title);
+    await expect(page.getByTestId('calendar-kind-note')).toHaveCount(0);
+
+    // The same address opened afresh is the same calendar.
+    const here = new URL(page.url());
+    await gotoRoute(page, `${here.pathname}${here.search}`);
+    await expect(mine).toHaveCount(1, { timeout: 30_000 });
+    await expect(mine).toContainText(training.title);
+    await expect(page.getByTestId('calendar-toggle-trips')).not.toBeChecked();
+    await expect(page.getByTestId('calendar-toggle-events')).toBeChecked();
+    await expect(page.getByTestId('calendar-kind-filter')).toContainText('Training');
+
+    // With the events turned off there is nothing for a kind to narrow. The control is still
+    // there, cannot be used, and says why — and the trips come back without a kind being asked.
+    await page.getByTestId('calendar-toggle-trips').click();
+    const askedWithoutEvents = askedFor(page, without('event'));
+    await page.getByTestId('calendar-toggle-events').click();
+    const withoutEvents = await askedWithoutEvents;
+    expect(withoutEvents.get('source')).toBe('tripLog');
+    expect(withoutEvents.get('kind')).toBeNull();
+    await expect(page.getByTestId('calendar-kind-filter')).toHaveClass(/ant-select-disabled/);
+    await page.getByTestId('calendar-kind-filter').hover();
+    await expect(page.getByRole('tooltip')).toContainText('Events are turned off');
+    await expect(mine).toHaveCount(1, { timeout: 30_000 });
+    await expect(mine).toContainText(tripTitle);
+
+    // A word that names no kind is refused by the server rather than ignored, so a link carrying
+    // one draws the sentence for a calendar that could not be read — not a calendar quietly
+    // showing every kind. The browser writes a console error for any request answered 400.
+    consoleErrors.allow(
+      /status of 400/,
+      'this flow opens a link naming a kind the server does not have, which it refuses',
+    );
+    await gotoRoute(page, `/calendar?from=${first}&to=${last}&kind=banana`);
+    await expect(page.getByTestId('calendar-empty')).toContainText('could not be read', {
+      timeout: 30_000,
+    });
+  } finally {
+    await removeEvents(page, written);
+    if (tripId) {
+      await tryAsPerson(page, 'DELETE', `/api/v1/trip-logs/${tripId}`);
+    }
   }
 });

@@ -1,19 +1,46 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useState } from 'react';
-import { Alert, Checkbox, DatePicker, Empty, Flex, Segmented, Select, Table, Tag, Typography } from 'antd';
+import { useEffect, useMemo, useRef } from 'react';
+import {
+  Alert,
+  Checkbox,
+  DatePicker,
+  Empty,
+  Flex,
+  Segmented,
+  Select,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   useCalendar,
   useCavingGroups,
   type CalendarEntry,
   type CalendarSource,
 } from '../../api/hooks.ts';
+import { EVENT_KINDS } from '../../components/events/eventKinds.ts';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import { formatTripDates } from '../../components/trips/tripDates.ts';
+import {
+  CALENDAR_SOURCES,
+  CALENDAR_VIEWS,
+  isCalendarNarrowed,
+  kindQuery,
+  readCalendarAddress,
+  sourceQuery,
+  wantsNoSource,
+  wantsSource,
+  withSource,
+  writeCalendarAddress,
+  type CalendarAddress,
+  type CalendarView,
+} from './calendarAddress.ts';
 import CalendarGrid from './CalendarGrid.tsx';
 import CalendarMapPane from './CalendarMapPane.tsx';
 import CalendarWeekStrip from './CalendarWeekStrip.tsx';
@@ -39,6 +66,9 @@ const openingWindow = (): [Dayjs, Dayjs] => [
  */
 const sortableFields: Record<string, string> = { start: 'start', title: 'title' };
 
+/** The order the server puts the record in when nothing is asked for. */
+const DefaultSort = 'start';
+
 /**
  * Where each family of row is read. Written as a map over the source union rather than as a
  * chain of tests, so a family added to the answer is a compile error here instead of falling
@@ -50,21 +80,6 @@ const detailPath: Record<CalendarSource, (id: string) => string> = {
   expedition: (id) => `/expeditions/${id}`,
   event: (id) => `/events/${id}`,
 };
-
-/** Every family the answer can hold, so "all of them" can be told from "some of them". */
-const CALENDAR_SOURCES = Object.keys(detailPath) as CalendarSource[];
-
-/**
- * The ways the same window of days may be read, offered in the order they narrow: the whole
- * record, then a year, a month and a week of it, then the agenda.
- *
- * The record is the list — sortable, paged, and the only one that carries a column of each thing.
- * The two grids and the week strip are the same rows laid out as the days they fall on. The
- * agenda is the same list again with each row drawn as one entry rather than as a set of cells,
- * which is what a reader wants who is reading forwards rather than looking something up.
- */
-const VIEWS = ['record', 'month', 'week', 'year', 'agenda'] as const;
-type CalendarView = (typeof VIEWS)[number];
 
 /** The views that are a list of rows rather than a layout of days. */
 const isList = (view: CalendarView): boolean => view === 'record' || view === 'agenda';
@@ -93,8 +108,8 @@ function windowFor(view: CalendarView, panel: Dayjs, chosen: [Dayjs, Dayjs]): [D
 }
 
 /**
- * The club's dated records over a window of days — every trip and every camp the reader may open,
- * read as one list.
+ * The club's dated records over a window of days — every trip, camp and event the reader may
+ * open, read as one list.
  *
  * **What a row carries, and what it does not.** A row is what a thing is called, when it is, and
  * enough to click through to it. It names no cave and carries no count of caves: naming a cave is
@@ -110,6 +125,19 @@ function windowFor(view: CalendarView, panel: Dayjs, chosen: [Dayjs, Dayjs]): [D
  * person who was going on one is exactly the reader who most needs to find it; narrowing them
  * away is offered rather than assumed.
  *
+ * **A family has a toggle of its own, and a kind narrows only the family that has kinds.** Each of
+ * the three families is turned on and off by itself, so any combination can be asked for. The
+ * kinds are something only an event has: choosing some narrows the events to them and leaves the
+ * trips and the camps exactly as their own toggles put them, so nothing leaves the calendar that
+ * the reader did not turn off — and the page says so beside the control while that is in force,
+ * because a filter that one family in three can answer owes the other two a sentence.
+ *
+ * **Everything chosen here lives in the address**, so a calendar narrowed and read a particular
+ * way is a link: reloading it, opening it in a second tab or sending it to somebody shows the same
+ * days the same way. A narrowing is a view somebody chose and is given a history entry; which
+ * reading is on, which day a grid stands on, the order and the map are where the reader is
+ * standing rather than what they asked to see, and replace the entry they were made on.
+ *
  * **Two things this page is asked for and does not yet do, deferred rather than dropped.**
  * *Grouping rows by a column* — the table this application uses has column-header grouping and no
  * row grouping at all, and nothing here hand-rolls one, so it is a component to build rather than
@@ -121,35 +149,55 @@ function windowFor(view: CalendarView, panel: Dayjs, chosen: [Dayjs, Dayjs]): [D
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const [view, setView] = useState<CalendarView>('record');
-  const [panel, setPanel] = useState<Dayjs>(() => dayjs());
-  const [range, setRange] = useState<[Dayjs, Dayjs]>(openingWindow);
-  const [showTrips, setShowTrips] = useState(true);
-  const [showOther, setShowOther] = useState(true);
-  const [showPast, setShowPast] = useState(true);
-  const [showCancelled, setShowCancelled] = useState(true);
-  const [mine, setMine] = useState(false);
-  const [cavingGroupId, setCavingGroupId] = useState<string | undefined>(undefined);
-  const [sort, setSort] = useState<string | undefined>(undefined);
-  // On, because a calendar that has to be asked for its map is a calendar whose map nobody
-  // finds. It is a toggle rather than a fixture so a reader working down a long record can put
-  // the tiles away.
-  const [showMap, setShowMap] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: cavingGroups } = useCavingGroups();
 
-  // Two toggles over three families of record, so "the rest" names more than one family and the
-  // narrowing is written as the list of families wanted rather than as a single word. Wanting all
-  // of them is the absence of the parameter; wanting none is not a question anybody can ask, and
-  // rather than sending a request that could only come back empty the page says so and asks
-  // nothing.
-  const wanted: CalendarSource[] = [
-    ...(showTrips ? (['tripLog'] as const) : []),
-    ...(showOther ? (['expedition', 'event'] as const) : []),
-  ];
-  const source = wanted.length > 0 && wanted.length < CALENDAR_SOURCES.length
-    ? wanted.join(',')
-    : undefined;
-  const nothingChosen = !showTrips && !showOther;
+  // The address is the view, not a copy of it.
+  const address = useMemo(() => readCalendarAddress(searchParams), [searchParams]);
+
+  // What the next change is made to: the address as last drawn, or as last changed if that is
+  // newer. The two differ because the router is free to defer the redraw that follows a
+  // navigation, and on a busy machine a reader turns a second switch before the first has come
+  // back. A change worked out from what the page last drew would then be worked out from before
+  // the first one and would quietly undo it — so each change is made to the one before it, and
+  // the router's own answer is taken up again whenever it arrives.
+  const latest = useRef(address);
+  useEffect(() => {
+    latest.current = address;
+  }, [address]);
+
+  /**
+   * Every change goes through here, so there is one place that decides what the back button walks
+   * through: a narrowing is worth a history entry and a rearrangement of the same rows is not.
+   * A change that depends on what is already chosen is given as a function of it, so that it too
+   * is worked out from the newest address rather than from the one this render was drawn with.
+   */
+  const apply = (
+    change: Partial<CalendarAddress> | ((current: CalendarAddress) => Partial<CalendarAddress>),
+    replace = false,
+  ) => {
+    const current = latest.current;
+    const next = { ...current, ...(typeof change === 'function' ? change(current) : change) };
+    latest.current = next;
+    setSearchParams(writeCalendarAddress(next), { replace });
+  };
+
+  const view = address.view;
+  // A grid with no day named stands on today, read when the page is drawn rather than kept, so a
+  // bare link to the week is this week whenever it is opened.
+  const panel = address.day ? dayjs(address.day) : dayjs();
+  const range: [Dayjs, Dayjs] =
+    address.from && address.to ? [dayjs(address.from), dayjs(address.to)] : openingWindow();
+
+  /** Where a grid moved to; today is written as the absence of a day, which is what it means. */
+  const standOn = (next: Dayjs): string | undefined =>
+    asDay(next) === asDay(dayjs()) ? undefined : asDay(next);
+
+  // Wanting every family is the absence of the narrowing; wanting none is not a question anybody
+  // can ask, and rather than sending a request that could only come back empty the page says so
+  // and asks nothing.
+  const nothingChosen = wantsNoSource(address);
+  const eventsWanted = wantsSource(address, 'event');
 
   const asked = windowFor(view, panel, range);
 
@@ -157,15 +205,20 @@ export default function CalendarPage() {
     {
       from: asDay(asked[0]),
       to: asDay(asked[1]),
-      source,
-      cavingGroupId,
-      mine: mine || undefined,
-      includePast: showPast ? undefined : false,
-      includeCancelled: showCancelled ? undefined : false,
-      sort,
+      source: sourceQuery(address),
+      kind: kindQuery(address),
+      cavingGroupId: address.cavingGroupId,
+      mine: address.mine || undefined,
+      includePast: address.showPast ? undefined : false,
+      includeCancelled: address.showCancelled ? undefined : false,
+      sort: address.sort,
     },
     { enabled: !nothingChosen },
   );
+
+  const sort = address.sort ?? DefaultSort;
+  const orderOf = (key: string) =>
+    sort === key ? ('ascend' as const) : sort === `-${key}` ? ('descend' as const) : null;
 
   const onTableChange = (
     _pagination: unknown,
@@ -174,8 +227,32 @@ export default function CalendarPage() {
   ) => {
     const single = Array.isArray(sorter) ? sorter[0] : sorter;
     const field = single?.field ? sortableFields[String(single.field)] : undefined;
-    setSort(field && single.order ? `${single.order === 'descend' ? '-' : ''}${field}` : undefined);
+    const word = field && single.order ? `${single.order === 'descend' ? '-' : ''}${field}` : undefined;
+    apply({ sort: word === DefaultSort ? undefined : word }, true);
   };
+
+  // One toggle to a family, written as a map over the family union so a family added to the
+  // answer has to be given a toggle before this compiles.
+  const familyToggles: Record<CalendarSource, { testId: string; label: string }> = {
+    tripLog: { testId: 'calendar-toggle-trips', label: t('calendar.toggleTrips') },
+    expedition: { testId: 'calendar-toggle-camps', label: t('calendar.toggleCamps') },
+    event: { testId: 'calendar-toggle-events', label: t('calendar.toggleEvents') },
+  };
+
+  const kindOptions = [
+    ...EVENT_KINDS.map((kind) => ({ value: kind as string, label: t(`events.kindValues.${kind}`) })),
+    // A word a hand-written address carried that names no kind is still offered, as itself. The
+    // server refuses it, and a control that did not show it would leave the reader with a
+    // calendar that cannot be read and nothing on the page to let go of.
+    ...address.kinds
+      .filter((word) => !(EVENT_KINDS as readonly string[]).includes(word))
+      .map((word) => ({ value: word, label: word })),
+  ];
+  // Said while it is true and not otherwise: a kind is in force, and a family it cannot narrow is
+  // still on the calendar beside the events it did narrow.
+  const kindLeavesOthers =
+    kindQuery(address) !== undefined &&
+    (wantsSource(address, 'tripLog') || wantsSource(address, 'expedition'));
 
   /**
    * A row read forwards rather than looked up: one entry to a line, its own words first and the
@@ -224,18 +301,15 @@ export default function CalendarPage() {
     },
   ];
 
-  const isNarrowed =
-    !showTrips || !showOther || !showPast || !showCancelled || mine || cavingGroupId !== undefined;
-
   // Four situations and four sentences, because only one of them is a fact about the calendar.
   // "Nothing is happening in these days" is a claim: a request that never answered has not earned
-  // it, a toggle that excluded everything has not either, and neither has a pair of toggles that
+  // it, a toggle that excluded everything has not either, and neither has a set of toggles that
   // between them asked for no kind of record at all.
   const emptyText = nothingChosen
     ? t('calendar.emptyNoKind')
     : isError
       ? t('calendar.failed')
-      : isNarrowed
+      : isCalendarNarrowed(address)
         ? t('calendar.emptyFiltered')
         : t('calendar.empty');
 
@@ -248,8 +322,8 @@ export default function CalendarPage() {
         <Segmented<CalendarView>
           data-testid="calendar-view"
           value={view}
-          onChange={setView}
-          options={VIEWS.map((name) => ({ value: name, label: t(`calendar.views.${name}`) }))}
+          onChange={(next) => apply({ view: next }, true)}
+          options={CALENDAR_VIEWS.map((name) => ({ value: name, label: t(`calendar.views.${name}`) }))}
         />
       </Flex>
       <Flex gap={12} wrap align="center" style={{ marginBottom: 12 }}>
@@ -263,50 +337,70 @@ export default function CalendarPage() {
             value={range}
             onChange={(next) => {
               if (next?.[0] && next[1]) {
-                setRange([next[0], next[1]]);
+                apply({ from: asDay(next[0]), to: asDay(next[1]) });
               }
             }}
           />
         ) : null}
         <Checkbox
           data-testid="calendar-toggle-past"
-          checked={showPast}
-          onChange={(e) => setShowPast(e.target.checked)}
+          checked={address.showPast}
+          onChange={(e) => apply({ showPast: e.target.checked })}
         >
           {t('calendar.togglePast')}
         </Checkbox>
-        <Checkbox
-          data-testid="calendar-toggle-trips"
-          checked={showTrips}
-          onChange={(e) => setShowTrips(e.target.checked)}
-        >
-          {t('calendar.toggleTrips')}
-        </Checkbox>
-        <Checkbox
-          data-testid="calendar-toggle-other"
-          checked={showOther}
-          onChange={(e) => setShowOther(e.target.checked)}
-        >
-          {t('calendar.toggleOther')}
-        </Checkbox>
+        {CALENDAR_SOURCES.map((family) => (
+          <Checkbox
+            key={family}
+            data-testid={familyToggles[family].testId}
+            checked={wantsSource(address, family)}
+            onChange={(e) =>
+              apply((current) => ({ sources: withSource(current, family, e.target.checked) }))
+            }
+          >
+            {familyToggles[family].label}
+          </Checkbox>
+        ))}
+        {/* Beside the family it narrows. Disabled rather than hidden while that family is off: a
+            control that came and went with a checkbox would move everything after it along the
+            bar, and the reason it cannot be used is one worth being told. */}
+        <Tooltip title={eventsWanted ? undefined : t('calendar.kindFilterOff')}>
+          <Select<string[]>
+            mode="multiple"
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            maxTagCount="responsive"
+            placeholder={t('calendar.kindFilter')}
+            style={{ minWidth: 200, maxWidth: 320 }}
+            data-testid="calendar-kind-filter"
+            disabled={!eventsWanted}
+            value={address.kinds}
+            options={kindOptions}
+            onChange={(values) => apply({ kinds: values })}
+          />
+        </Tooltip>
         <Checkbox
           data-testid="calendar-toggle-cancelled"
-          checked={showCancelled}
-          onChange={(e) => setShowCancelled(e.target.checked)}
+          checked={address.showCancelled}
+          onChange={(e) => apply({ showCancelled: e.target.checked })}
         >
           {t('calendar.toggleCancelled')}
         </Checkbox>
         <Checkbox
           data-testid="calendar-toggle-mine"
-          checked={mine}
-          onChange={(e) => setMine(e.target.checked)}
+          checked={address.mine}
+          onChange={(e) => apply({ mine: e.target.checked })}
         >
           {t('calendar.toggleMine')}
         </Checkbox>
+        {/* On, because a calendar that has to be asked for its map is a calendar whose map nobody
+            finds. It is a toggle rather than a fixture so a reader working down a long record can
+            put the tiles away. */}
         <Checkbox
           data-testid="calendar-toggle-map"
-          checked={showMap}
-          onChange={(e) => setShowMap(e.target.checked)}
+          checked={address.showMap}
+          onChange={(e) => apply({ showMap: e.target.checked }, true)}
         >
           {t('calendar.mapToggle')}
         </Checkbox>
@@ -315,11 +409,16 @@ export default function CalendarPage() {
           placeholder={t('calendar.groupFilter')}
           style={{ minWidth: 200 }}
           data-testid="calendar-group-filter"
-          value={cavingGroupId}
-          onChange={(value) => setCavingGroupId(value)}
+          value={address.cavingGroupId}
+          onChange={(value) => apply({ cavingGroupId: value })}
           options={(cavingGroups ?? []).map((group) => ({ value: group.id, label: group.name }))}
         />
       </Flex>
+      {kindLeavesOthers ? (
+        <Typography.Paragraph type="secondary" data-testid="calendar-kind-note">
+          {t('calendar.kindFilterNote')}
+        </Typography.Paragraph>
+      ) : null}
       {data && data.omitted > 0 ? (
         // Said out loud, because an answer quietly short of its last rows reads exactly like a
         // complete one, and a record of a month missing days without saying so is worse than one
@@ -329,7 +428,7 @@ export default function CalendarPage() {
           showIcon
           style={{ marginBottom: 12 }}
           data-testid="calendar-omitted"
-          message={t('calendar.omitted', { count: data.omitted })}
+          title={t('calendar.omitted', { count: data.omitted })}
         />
       ) : null}
       {!isList(view) ? (
@@ -349,10 +448,7 @@ export default function CalendarPage() {
         <CalendarGrid
           mode={view}
           value={panel}
-          onPanelChange={(next, nextMode) => {
-            setPanel(next);
-            setView(nextMode);
-          }}
+          onPanelChange={(next, nextMode) => apply({ day: standOn(next), view: nextMode }, true)}
           entries={nothingChosen ? [] : (data?.entries ?? [])}
           from={asDay(asked[0])}
           to={asDay(asked[1])}
@@ -361,7 +457,7 @@ export default function CalendarPage() {
       ) : view === 'week' ? (
         <CalendarWeekStrip
           value={panel}
-          onChange={setPanel}
+          onChange={(next) => apply({ day: standOn(next) }, true)}
           entries={nothingChosen ? [] : (data?.entries ?? [])}
           from={asDay(asked[0])}
           to={asDay(asked[1])}
@@ -403,7 +499,9 @@ export default function CalendarPage() {
             key: 'start',
             width: 240,
             sorter: true,
-            defaultSortOrder: 'ascend',
+            // Drawn from the address rather than kept by the table, so a link that asks for an
+            // order shows its arrow on the column it is ordered by.
+            sortOrder: orderOf('start'),
             render: (_, row) => (
               <Flex gap={8} align="center">
                 <span>{formatTripDates(row.start, row.end, i18n.resolvedLanguage)}</span>
@@ -418,7 +516,13 @@ export default function CalendarPage() {
               </Flex>
             ),
           },
-          { title: t('calendar.what'), dataIndex: 'title', sorter: true },
+          {
+            title: t('calendar.what'),
+            dataIndex: 'title',
+            key: 'title',
+            sorter: true,
+            sortOrder: orderOf('title'),
+          },
           {
             title: t('calendar.kind'),
             dataIndex: 'source',
@@ -447,12 +551,12 @@ export default function CalendarPage() {
       {/* One pane, under whichever way the same rows are being read, because it answers the same
           question about the same rows: it is handed what is on screen and matches the shapes to
           it, so it narrows with every toggle above without knowing what any of them mean. */}
-      {showMap ? (
+      {address.showMap ? (
         <CalendarMapPane
           entries={nothingChosen ? [] : (data?.entries ?? [])}
           from={asDay(asked[0])}
           to={asDay(asked[1])}
-          active={showMap}
+          active={address.showMap}
         />
       ) : null}
     </div>

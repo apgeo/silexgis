@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import dayjs from 'dayjs';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { CalendarEntry, CalendarParams } from '../../api/hooks.ts';
@@ -93,12 +93,47 @@ function fails() {
   calendarSpy.mockReturnValue({ data: undefined, isFetching: false, isError: true });
 }
 
-function show() {
+/**
+ * The address, rendered, so a test can read where a change went and how it got there. The router
+ * keeps it and the page does not, and a view that lives in the address is only testable by
+ * reading it back; whether the change was a new history entry or a rewrite of the one it was made
+ * on is the router's to say too.
+ */
+function Address() {
+  const location = useLocation();
+  const how = useNavigationType();
+  return (
+    <span data-testid="calendar-address" data-how={how}>
+      {`${location.pathname}${location.search}`}
+    </span>
+  );
+}
+
+function show(address = '/calendar') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[address]}>
       <CalendarPage />
+      <Address />
     </MemoryRouter>,
   );
+}
+
+/** The query string the page is standing on, read back as the keys it holds. */
+function addressKeys(): URLSearchParams {
+  const address = screen.getByTestId('calendar-address').textContent ?? '';
+  return new URLSearchParams(address.split('?')[1] ?? '');
+}
+
+/** Whether the last change made a history entry of its own or rewrote the one it was made on. */
+const arrivedBy = (): string | undefined => screen.getByTestId('calendar-address').dataset.how;
+
+/** Opens the kinds control and takes one of the words it offers. */
+async function chooseKind(label: string) {
+  const control = screen.getByTestId('calendar-kind-filter');
+  fireEvent.mouseDown(control.querySelector('.ant-select-selector') ?? control);
+  await act(async () => {
+    fireEvent.click(document.querySelector(`.ant-select-item-option[title="${label}"]`)!);
+  });
 }
 
 afterEach(cleanup);
@@ -166,12 +201,37 @@ describe('the calendar record', () => {
   it('names the families it wants, and asks nothing when it wants none', () => {
     show();
 
-    fireEvent.click(screen.getByTestId('calendar-toggle-other'));
+    fireEvent.click(screen.getByTestId('calendar-toggle-camps'));
+    expect(lastParams().source).toBe('tripLog,event');
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-events'));
     expect(lastParams().source).toBe('tripLog');
 
     fireEvent.click(screen.getByTestId('calendar-toggle-trips'));
     expect(lastEnabled()).toBe(false);
     expect(screen.getByTestId('calendar-empty').textContent).toContain('No kind of record');
+  });
+
+  /**
+   * Three families and a toggle for each, so every combination of them can be asked for — the
+   * camps alone, or the events without the camps, which one toggle standing for "everything that
+   * is not a trip" could not say.
+   */
+  it('turns each family on and off by itself', () => {
+    show();
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-trips'));
+    fireEvent.click(screen.getByTestId('calendar-toggle-events'));
+    expect(lastParams().source).toBe('expedition');
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-events'));
+    fireEvent.click(screen.getByTestId('calendar-toggle-camps'));
+    expect(lastParams().source).toBe('event');
+
+    // All three back on is the absence of the narrowing, not a list of all three.
+    fireEvent.click(screen.getByTestId('calendar-toggle-trips'));
+    fireEvent.click(screen.getByTestId('calendar-toggle-camps'));
+    expect(lastParams().source).toBeUndefined();
   });
 
   /**
@@ -322,6 +382,257 @@ describe('the calendar record', () => {
 
     fireEvent.click(screen.getByTestId('calendar-toggle-mine'));
     expect(screen.getByTestId('calendar-empty').textContent).toContain('matches what you asked');
+  });
+});
+
+describe('the calendar in the address', () => {
+  /**
+   * A calendar narrowed and read a particular way is a link: opened anywhere, it asks the server
+   * the same question and draws the answer the same way. Every control is read out of the address
+   * here and none of them out of a default.
+   */
+  it('takes its whole view from the address', () => {
+    show(
+      '/calendar?view=agenda&from=2026-09-01&to=2026-09-30&source=expedition,event&kind=training'
+        + '&cavingGroupId=22222222-2222-2222-2222-222222222222&mine=true&includePast=false'
+        + '&includeCancelled=false&sort=-title&map=false',
+    );
+
+    expect(lastParams()).toEqual({
+      from: '2026-09-01',
+      to: '2026-09-30',
+      source: 'expedition,event',
+      kind: 'training',
+      cavingGroupId: '22222222-2222-2222-2222-222222222222',
+      mine: true,
+      includePast: false,
+      includeCancelled: false,
+      sort: '-title',
+    });
+    // The reading is the agenda's, whose rows have no header to sort by.
+    expect(screen.getByTestId('calendar-agenda-row')).toBeTruthy();
+    expect(screen.queryByText('When')).toBeNull();
+    // And every toggle shows what the address says rather than what it would have opened on.
+    const checked = (id: string) => screen.getByTestId(id).closest('label')!.className;
+    expect(checked('calendar-toggle-trips')).not.toContain('checked');
+    expect(checked('calendar-toggle-camps')).toContain('checked');
+    expect(checked('calendar-toggle-events')).toContain('checked');
+    expect(checked('calendar-toggle-past')).not.toContain('checked');
+    expect(checked('calendar-toggle-cancelled')).not.toContain('checked');
+    expect(checked('calendar-toggle-mine')).toContain('checked');
+    expect(checked('calendar-toggle-map')).not.toContain('checked');
+  });
+
+  /** The untouched calendar has a bare address, and each choice is one readable key in it. */
+  it('writes each choice into the address, and nothing for a default', () => {
+    show();
+    expect(screen.getByTestId('calendar-address').textContent).toBe('/calendar');
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-trips'));
+    fireEvent.click(screen.getByTestId('calendar-toggle-past'));
+    fireEvent.click(screen.getByTestId('calendar-toggle-mine'));
+
+    const keys = addressKeys();
+    expect(keys.get('source')).toBe('expedition,event');
+    expect(keys.get('includePast')).toBe('false');
+    expect(keys.get('mine')).toBe('true');
+    expect([...keys.keys()].sort()).toEqual(['includePast', 'mine', 'source']);
+
+    // Turned back, the key goes rather than being written out as its default.
+    fireEvent.click(screen.getByTestId('calendar-toggle-mine'));
+    expect(addressKeys().has('mine')).toBe(false);
+  });
+
+  /**
+   * No family wanted is a state the reader can put the page in, so it has to survive a reload:
+   * it is held in the address under a word of its own, and that word is never sent anywhere.
+   */
+  it('holds no family in the address and still asks the server nothing', () => {
+    show('/calendar?source=none');
+
+    expect(lastEnabled()).toBe(false);
+    expect(lastParams().source).toBeUndefined();
+    expect(screen.getByTestId('calendar-empty').textContent).toContain('No kind of record');
+  });
+
+  /**
+   * A narrowing is a view somebody chose and is worth walking back to; which reading is on and
+   * which order it is in say where the reader is standing, and walking back through each of those
+   * would be walking back through every click.
+   */
+  it('gives a narrowing a history entry of its own, and a rearrangement none', () => {
+    show();
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-cancelled'));
+    expect(arrivedBy()).toBe('PUSH');
+
+    fireEvent.click(screen.getByText('Agenda'));
+    expect(arrivedBy()).toBe('REPLACE');
+    expect(addressKeys().get('view')).toBe('agenda');
+
+    fireEvent.click(screen.getByText('Record'));
+    fireEvent.click(screen.getAllByText('What')[0]);
+    expect(arrivedBy()).toBe('REPLACE');
+    expect(addressKeys().get('sort')).toBe('title');
+    // The record is the reading an address says nothing to ask for.
+    expect(addressKeys().has('view')).toBe(false);
+  });
+
+  /**
+   * Two changes made before the page has redrawn build on each other. The address is redrawn
+   * from a navigation the router is free to defer, so a reader on a busy machine can turn two
+   * switches before the first has come back; a change worked out from what the page last drew
+   * would then be worked out from before the first one, and would quietly undo it.
+   */
+  it('keeps the first of two changes made before the page has redrawn', () => {
+    show();
+
+    act(() => {
+      fireEvent.click(screen.getByTestId('calendar-toggle-camps'));
+      fireEvent.click(screen.getByTestId('calendar-toggle-events'));
+    });
+
+    expect(lastParams().source).toBe('tripLog');
+    expect(addressKeys().get('source')).toBe('tripLog');
+
+    act(() => {
+      fireEvent.click(screen.getByTestId('calendar-toggle-past'));
+      fireEvent.click(screen.getByTestId('calendar-toggle-mine'));
+      fireEvent.click(screen.getByTestId('calendar-toggle-cancelled'));
+    });
+
+    expect(lastParams()).toMatchObject({
+      source: 'tripLog',
+      includePast: false,
+      mine: true,
+      includeCancelled: false,
+    });
+  });
+
+  /** An order asked for by a link shows its arrow on the column it is ordered by. */
+  it('draws the order the address asks for on the column that has it', () => {
+    show('/calendar?sort=-title');
+
+    const sorted = document.querySelector('th.ant-table-column-sort');
+    expect(sorted?.textContent).toContain('What');
+    expect(sorted?.getAttribute('aria-sort')).toBe('descending');
+  });
+
+  /** A grid stands on the day the address names, and on today when it names none. */
+  it('stands a grid on the day in the address', () => {
+    show('/calendar?view=week&day=2026-03-18');
+
+    expect(screen.getByTestId('calendar-week-day-2026-03-18')).toBeTruthy();
+    expect(lastParams().from <= '2026-03-18').toBe(true);
+    expect(lastParams().to >= '2026-03-18').toBe(true);
+
+    // Moving a week is written down; coming back to this week is the absence of a day.
+    fireEvent.click(screen.getByTestId('calendar-week-next'));
+    expect(addressKeys().get('day')).toBe('2026-03-25');
+    fireEvent.click(screen.getByTestId('calendar-week-today'));
+    expect(addressKeys().has('day')).toBe(false);
+  });
+});
+
+describe('the kinds of event', () => {
+  /**
+   * Several kinds may be chosen and are alternatives. They reach the server as one list under the
+   * name the server reads them by, and the address carries the same list.
+   */
+  it('asks for the kinds chosen, as one list', async () => {
+    show();
+    expect(lastParams().kind).toBeUndefined();
+
+    await chooseKind('Training');
+    expect(lastParams().kind).toBe('training');
+
+    await chooseKind('Deadline');
+    expect(lastParams().kind).toBe('training,deadline');
+    expect(addressKeys().get('kind')).toBe('training,deadline');
+    // Choosing a kind names no family: the trips and the camps are asked for exactly as before.
+    expect(lastParams().source).toBeUndefined();
+  });
+
+  /**
+   * A kind is something only an event has, so the trips and the camps are still on the calendar
+   * beside the events it narrowed — and the page says so while that is true, because a filter one
+   * family in three can answer owes the other two a sentence. With the events alone on the
+   * calendar there is nothing left to explain.
+   */
+  it('says the trips and camps are still listed while a kind is in force beside them', () => {
+    show('/calendar?kind=training');
+    expect(screen.getByTestId('calendar-kind-note').textContent).toContain('Trips and camps');
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-trips'));
+    expect(screen.getByTestId('calendar-kind-note')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-camps'));
+    expect(screen.queryByTestId('calendar-kind-note')).toBeNull();
+    // Events of one kind and nothing else: the kind, with the other two families turned off.
+    expect(lastParams().source).toBe('event');
+    expect(lastParams().kind).toBe('training');
+  });
+
+  it('says nothing about kinds while none is chosen', () => {
+    show();
+
+    expect(screen.queryByTestId('calendar-kind-note')).toBeNull();
+  });
+
+  /**
+   * With the events turned off there is nothing for a kind to narrow. The control is disabled
+   * rather than removed and says why; the choice stays in the address, is not sent, and is back
+   * in force the moment the events are.
+   */
+  it('cannot be chosen while events are turned off, says why, and keeps what was chosen', async () => {
+    show('/calendar?kind=training');
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-events'));
+
+    const control = screen.getByTestId('calendar-kind-filter');
+    expect(control.className).toContain('ant-select-disabled');
+    expect(lastParams().kind).toBeUndefined();
+    expect(lastParams().source).toBe('tripLog,expedition');
+    expect(addressKeys().get('kind')).toBe('training');
+    expect(screen.queryByTestId('calendar-kind-note')).toBeNull();
+
+    fireEvent.mouseEnter(control);
+    expect(await screen.findByText(/Events are turned off/)).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('calendar-toggle-events'));
+    expect(screen.getByTestId('calendar-kind-filter').className).not.toContain('ant-select-disabled');
+    expect(lastParams().kind).toBe('training');
+  });
+
+  /**
+   * A calendar emptied by a kind has not earned "nothing is recorded in these days": that is a
+   * claim about the club, and what happened is that the reader asked for less.
+   */
+  it('reads an empty answer under a kind as a narrowing rather than as an empty stretch of days', () => {
+    answer([]);
+    show('/calendar?kind=conference');
+
+    expect(screen.getByTestId('calendar-empty').textContent).toContain('matches what you asked');
+  });
+
+  /**
+   * A word a hand-written address carried that names no kind is not corrected: it is sent, the
+   * server refuses it, and the control shows it as itself so there is something to let go of.
+   */
+  it('hands a kind it does not know to the server, and shows it so it can be removed', () => {
+    fails();
+    show('/calendar?kind=training,banana');
+
+    expect(lastParams().kind).toBe('training,banana');
+    expect(screen.getByTestId('calendar-empty').textContent).toContain('could not be read');
+
+    // Read off the open list rather than off the closed control, which folds its choices into a
+    // count when it has no width to draw them in.
+    const control = screen.getByTestId('calendar-kind-filter');
+    fireEvent.mouseDown(control.querySelector('.ant-select-selector') ?? control);
+    const offered = document.querySelector('.ant-select-item-option[title="banana"]');
+    expect(offered).not.toBeNull();
+    expect(offered?.className).toContain('ant-select-item-option-selected');
   });
 });
 
