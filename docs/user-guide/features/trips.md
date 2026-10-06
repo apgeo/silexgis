@@ -215,9 +215,10 @@ it should be read. A visibility you choose yourself is kept as chosen.
 
 Not everybody holds the right to record trips in general. A caving group's own rules usually let
 its members record **the group's** trips and nothing wider. Somebody whose right comes only that
-way is offered the same two doors — on the trip list, on *My trips* and on the dashboard — with
-one difference: the trip has to **belong to the group**, because that is the only trip the
-application accepts from them.
+way is offered the same ways in as everybody else — *New trip log* and *Plan a trip* on the trip
+list, *Plan a trip* on *My trips*, the trip action on the dashboard — with one difference: the
+trip has to **belong to the group**, because that is the only trip the application accepts from
+them.
 
 | You may record trips for | What the form does |
 |---|---|

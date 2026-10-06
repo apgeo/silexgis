@@ -216,9 +216,10 @@ dvs. este păstrată așa cum ați ales-o.
 
 Nu toată lumea are dreptul de a înregistra ture în general. De obicei, regulile unui grup de
 speologie le permit membrilor să înregistreze turele **grupului** și nimic mai larg. Cine are
-dreptul doar pe această cale primește aceleași două uși — pe lista de ture, pe *Turele mele* și pe
-panoul de bord — cu o singură diferență: tura trebuie să **aparțină grupului**, pentru că aceasta
-este singura tură pe care aplicația o acceptă de la acea persoană.
+dreptul doar pe această cale primește aceleași căi de intrare ca toți ceilalți — *Jurnal de tură
+nou* și *Planifică o tură* pe lista de ture, *Planifică o tură* pe *Turele mele*, acțiunea de tură
+de pe panoul de bord — cu o singură diferență: tura trebuie să **aparțină grupului**, pentru că
+aceasta este singura tură pe care aplicația o acceptă de la acea persoană.
 
 | Puteți înregistra ture pentru | Ce face formularul |
 |---|---|

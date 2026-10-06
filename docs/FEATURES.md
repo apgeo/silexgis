@@ -424,6 +424,9 @@ feature and walkthroughs of whole jobs.
   group's content, a feature subtree, a named feature set, a cabinet and everything filed
   below it, one object), per-object grants
   with the same reach, and an explainer that answers "why can this person see that?".
+  A right held only over a caving group's content opens the door it should: a member whose club
+  lets them record the club's trips — and who holds nothing wider — is offered the trip form, which
+  binds the trip to the club and says so, or asks which club when there are several.
   Two-factor sign-in (authenticator app, emailed code or texted code), optional external
   login (Google/GitHub/OIDC), and location protection for sensitive caves — which keeps a
   protected cave's documents readable while withholding the fact that they point at *that*
