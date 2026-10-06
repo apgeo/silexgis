@@ -484,3 +484,47 @@ describe('AppLayout language switch', () => {
     expect(timeZone === null || typeof timeZone === 'string').toBe(true);
   });
 });
+
+describe('AppLayout account menu', () => {
+  // The language-switch case above leaves the interface in Romanian, and the menu's entries are
+  // read here by their English names.
+  beforeEach(async () => {
+    await i18n.changeLanguage('en');
+  });
+
+  it('is a button, so the keyboard can reach signing out', () => {
+    renderShell();
+
+    // By role: a name that is only text takes no focus, and a menu behind it is then the
+    // mouse's alone.
+    expect(screen.getByRole('button', { name: /caver@example\.org/ })).toBe(
+      screen.getByTestId('account-menu'),
+    );
+  });
+
+  it('opens when pressed, and not when the pointer merely passes over it', async () => {
+    vi.useFakeTimers();
+    try {
+      renderShell();
+      const account = screen.getByTestId('account-menu');
+
+      // Passing over it opens nothing, however long the pointer stays: a menu that opened this
+      // way dropped across the page's own top-right action whenever the pointer came to rest
+      // on the name, and the action under it could not be pressed.
+      fireEvent.mouseEnter(account);
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.queryByText('Sign out')).toBeNull();
+
+      await act(async () => {
+        fireEvent.click(account);
+        vi.advanceTimersByTime(1000);
+      });
+      expect(screen.getByText('Sign out')).toBeInTheDocument();
+      expect(screen.getByText('Settings')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

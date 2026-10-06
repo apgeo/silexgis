@@ -5,7 +5,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
-import { Avatar, Dropdown, Flex, Layout, Menu, Select, Typography, theme } from 'antd';
+import { Avatar, Button, Dropdown, Flex, Layout, Menu, Select, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useLanguageChoice } from '../i18n/languageChoice.ts';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -174,7 +174,14 @@ export default function AppLayout() {
             ]}
             aria-label={t('common.language')}
           />
+          {/* Opened by a press, on a real button. A menu that opens when the pointer merely passes
+              over it drops across the page's own top-right action whenever the pointer comes to
+              rest on the name — after closing a drawer by its corner, say — and the button under
+              it cannot be pressed until the pointer is taken somewhere else and brought back. And
+              a name that is not a button cannot be reached from the keyboard at all, which left
+              signing out to the mouse. */}
           <Dropdown
+            trigger={['click']}
             menu={{
               items: [
                 {
@@ -193,7 +200,14 @@ export default function AppLayout() {
               ],
             }}
           >
-            <Typography.Text style={{ color: token.colorTextLightSolid, cursor: 'pointer' }}>
+            <Button
+              type="text"
+              data-testid="account-menu"
+              // No padding and no border of its own: on a phone the header has no width to spare,
+              // and the two pixels of a button's transparent border are enough to wrap the
+              // application's name onto a second line.
+              style={{ color: token.colorTextLightSolid, paddingInline: 0, border: 'none' }}
+            >
               <Avatar
                 size="small"
                 src={me?.avatarUrl ?? undefined}
@@ -201,7 +215,7 @@ export default function AppLayout() {
                 style={{ marginInlineEnd: 8 }}
               />
               {me?.displayName ?? me?.email ?? user?.profile.email}
-            </Typography.Text>
+            </Button>
           </Dropdown>
         </Flex>
       </Layout.Header>
