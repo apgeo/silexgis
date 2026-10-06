@@ -5611,6 +5611,7 @@
     "trips": "Trips",
     "areasSoFar": "Distinct areas reached",
     "newGroundNote": "The line is how many distinct areas the counted trips had reached by the end of each year. Still climbing means new ground is being found; flattening under bars that are not means the same places are being revisited.",
+    "newWithin": "“New” means new among {{population}}, not new to the whole archive. An area that a trip outside them had already reached counts as new the first time one of them gets there, so a narrower filter starts the line again from nothing.",
     "overlapping": "A trip counts into every value it holds, so these bars add up to more than the {{count}} trips counted.",
     "showingValues": "Showing the {{shown}} largest of {{distinct}}.",
     "empty": "No trips to count.",

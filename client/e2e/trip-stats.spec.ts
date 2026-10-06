@@ -52,12 +52,24 @@ test('totals the narrowed listing, says whose totals they are, and moves its tit
   const filtered = await titleNumbers(page);
   expect(filtered).toContain(`the ${count} of ${overall} trips you can read that this filter leaves`);
 
+  // Under the curve, what "new" is measured against: the trips being counted, named by the same
+  // two numbers. Without it a rising line reads as ground nobody had covered, when it is ground
+  // the trips this filter left had not.
+  const newWithin = page.getByTestId('trip-stats-new-within');
+  await expect(newWithin).toContainText(
+    `new among the ${count} of ${overall} trips you can read that this filter leaves`,
+  );
+
   // The scope control, and the thing the original of this page got wrong: the population in the
   // title has to move with it. Compared against itself rather than against a seeded number.
   await page.getByTestId('trip-stats-scope').getByText('All trips').click();
   await expect(page).toHaveURL(/[?&]scope=all/);
   await expect.poll(async () => titleNumbers(page), { timeout: 15_000 }).not.toBe(filtered);
   expect(await titleNumbers(page)).toContain(`all ${overall} trips you can read`);
+  // The sentence under the curve moves with the scope exactly as the titles do, so it never
+  // describes a filter the line is no longer drawn over.
+  await expect(newWithin).toContainText(`new among all ${overall} trips you can read`);
+  await expect(newWithin).not.toContainText('this filter leaves');
 
   // The filter is still in the address, so switching back is not a lost narrowing.
   await expect(page).toHaveURL(/[?&]states=/);
