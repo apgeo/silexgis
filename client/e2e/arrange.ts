@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
+import { ownContext } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 // The session's own token, read where the raster-map flows already read it: one copy of how.
 import { bearerToken } from './rastermapApi.ts';
@@ -12,9 +12,9 @@ import { bearerToken } from './rastermapApi.ts';
  *
  * The flows that need these are the ones about what one person sees of something another person
  * did — a trip somebody else put them on, a list somebody else kept to themselves — and the
- * administrator cannot be both. The watched page is always the subject's: the console guard
- * watches the fixture's own context and nothing else, so the person whose screen the flow is
- * about is the one on it, and the other browser only arranges what that screen is about.
+ * administrator cannot be both. The fixture's page is the subject's — the person whose screen the
+ * flow is about — and the other browser only arranges what that screen is about; both are
+ * watched, because the other browser is made through the console guard's own `ownContext`.
  */
 
 export interface Account {
@@ -55,33 +55,6 @@ export async function registerAccount(request: Page['request'], label: string): 
 }
 
 /**
- * A browser context of the spec's own that reads English, like the watched one does.
- *
- * The console guard's fixture records the language choice on the context it hands a test; a
- * context a test makes for itself gets no such record, starts in the application's default
- * language, and every sign-in label the helpers look for then names a field that is labelled in
- * Romanian — a two-minute wait that names the locator and never the language. Every context a
- * spec makes for a signed-in person goes through here; one made for an anonymous visitor may too.
- */
-export async function newEnglishContext(
-  browser: Browser,
-  options?: Parameters<Browser['newContext']>[0],
-): Promise<BrowserContext> {
-  const context = await browser.newContext(options);
-  await context.addInitScript(
-    ({ key, language }) => {
-      try {
-        window.localStorage.setItem(key, language);
-      } catch {
-        // Blocked site data: the sign-in below then fails on a label, which says as much.
-      }
-    },
-    { key: CHOICE_KEY, language: 'en' },
-  );
-  return context;
-}
-
-/**
  * A browser of its own, signed in, reading English.
  *
  * English is seeded the way the fixture seeds it for the watched context, from the application's
@@ -99,7 +72,7 @@ export async function signedInElsewhere(
   // a field this function never looks at.
   account?: Omit<Account, 'id'> & Partial<Pick<Account, 'id'>>,
 ): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await newEnglishContext(browser);
+  const context = await ownContext(browser);
   const page = await context.newPage();
   if (account) {
     await login(page, account.email, account.password);

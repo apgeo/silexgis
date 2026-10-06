@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { writeFileSync } from 'node:fs';
-import { test as base, type Page, type TestInfo } from '@playwright/test';
+import {
+  test as base,
+  type Browser,
+  type BrowserContext,
+  type Page,
+  type TestInfo,
+} from '@playwright/test';
 import {
   fingerprintOf,
   normalizeMessage,
@@ -45,10 +51,20 @@ const gateMode = process.env.SILEXGIS_CONSOLE_GATE === 'enforce' ? 'enforce' : '
 /**
  * Errors no test should have to excuse, each with the reason it is here.
  *
- * Deliberately empty to begin with. An entry earns its place by being understood — a browser or
- * library reporting something the application cannot act on — and never by being frequent.
+ * An entry earns its place by being understood — a browser or library reporting something the
+ * application cannot act on — and never by being frequent. It was empty until the first such
+ * report was understood, and each entry says what it is.
  */
-const ALLOWED_EVERYWHERE: { pattern: RegExp; reason: string }[] = [];
+const ALLOWED_EVERYWHERE: { pattern: RegExp; reason: string }[] = [
+  {
+    pattern: /net::ERR_NETWORK_CHANGED/,
+    reason:
+      "the browser reporting that the machine's network interfaces changed while a request was in " +
+      'flight — a container starting or stopping somewhere on the host is enough — which says ' +
+      'nothing about the application and which it can do nothing about; a page that needed the ' +
+      'request it lost still fails on what the test asked of it',
+  },
+];
 
 /**
  * One error as the suite saw it — the shared record shape, with the suite's own fields filled in.
@@ -134,6 +150,55 @@ function watchPage(page: Page, into: CapturedError[], testInfo: TestInfo) {
  * that is not importing this, so the omission surfaces when the errors are read rather than
  * staying invisible forever.
  */
+/** Records the language choice on a context, before any page of it exists. */
+async function readEnglish(context: BrowserContext) {
+  await context.addInitScript(
+    ({ key, language }) => {
+      try {
+        window.localStorage.setItem(key, language);
+      } catch {
+        // Private windows and blocked site data throw. The suite then runs in the default
+        // language and fails on a label, which is the same visible outcome as before this
+        // existed — there is nothing better to do here.
+      }
+    },
+    { key: CHOICE_KEY, language: 'en' },
+  );
+}
+
+/**
+ * How the test now running in this worker watches a context, or null between tests.
+ *
+ * A worker runs one test at a time, so "the test now running" is one value. It is set when the
+ * guard's fixture starts and cleared when it ends, and it exists for `ownContext` below: a context
+ * a test makes for itself is not the fixture's, and nothing else would ever look at its pages.
+ */
+let watchForRunningTest: ((context: BrowserContext) => void) | null = null;
+
+/**
+ * A browser context of the test's own — a second person signed in beside the first, or a visitor
+ * holding nothing but a link — made the way the fixture's context is.
+ *
+ * Two things are true of the fixture's context that a bare `browser.newContext()` gets neither
+ * of. It reads English: the application opens in Romanian, and a context without the recorded
+ * choice dies at the sign-in form waiting for a password field labelled in another language,
+ * naming only the locator. And it is watched: the guard records what the fixture's pages report,
+ * so whatever a second person's screen reported was seen by nobody, in the very flows that are
+ * about what one person sees of what another did. Every context a spec makes comes from here, and
+ * a script test fails the gate on one that does not.
+ *
+ * The caller closes it, as it would one of its own.
+ */
+export async function ownContext(
+  browser: Browser,
+  options?: Parameters<Browser['newContext']>[0],
+): Promise<BrowserContext> {
+  const context = await browser.newContext(options);
+  await readEnglish(context);
+  watchForRunningTest?.(context);
+  return context;
+}
+
 export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
   /**
    * The browser reads English, because the specs are written in it.
@@ -162,18 +227,7 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
   // parameter says the same thing to Playwright and nothing at all to that rule; suppressing the
   // rule here would have switched it off for a real mistake later in the same file.
   context: async ({ context }, provide) => {
-    await context.addInitScript(
-      ({ key, language }) => {
-        try {
-          window.localStorage.setItem(key, language);
-        } catch {
-          // Private windows and blocked site data throw. The suite then runs in the default
-          // language and fails on a label, which is the same visible outcome as before this
-          // existed — there is nothing better to do here.
-        }
-      },
-      { key: CHOICE_KEY, language: 'en' },
-    );
+    await readEnglish(context);
     await provide(context);
   },
 
@@ -194,8 +248,13 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
       // too — the multi-window flows are exactly where a second window's errors would otherwise
       // go unseen. Both routes are taken because which of them yields the first page depends on
       // whether this fixture is set up before Playwright creates it.
-      context.on('page', watch);
-      context.pages().forEach(watch);
+      const watchContext = (watchedContext: BrowserContext) => {
+        watchedContext.on('page', watch);
+        watchedContext.pages().forEach(watch);
+      };
+      watchContext(context);
+      // And any context the test goes on to make for itself, through `ownContext`.
+      watchForRunningTest = watchContext;
 
       const unexplained = () =>
         withoutEchoes(captured).filter(
@@ -208,6 +267,24 @@ export const test = base.extend<{ consoleErrors: ConsoleErrorGuard }>({
         allow: (pattern, reason) => allowed.push({ pattern, reason }),
         captured: unexplained,
       });
+      watchForRunningTest = null;
+
+      // What the global list passed over is still said, in one line: it is excused, not unseen.
+      // The entry there stands for the machine's network changing under the browser, and what
+      // follows such a change — a route that failed to load, a request that never came back — is
+      // a failure with no cause in sight unless the change is named beside it.
+      const passedOver = withoutEchoes(captured).filter((error) =>
+        ALLOWED_EVERYWHERE.some((entry) => entry.pattern.test(error.message)),
+      );
+      if (passedOver.length > 0) {
+        const note = `${passedOver.length} console error(s) passed over by the global list`;
+        testInfo.annotations.push({ type: 'console-errors-allowed', description: note });
+        process.stdout.write(
+          `\n  ${note} in "${testInfo.title}" [${testInfo.project.name}]: ${[
+            ...new Set(passedOver.map((error) => error.message.split('\n')[0])),
+          ].join('; ')}\n`,
+        );
+      }
 
       const found = unexplained();
       if (found.length === 0) {

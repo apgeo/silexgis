@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
-import { test } from './consoleGuard.ts';
+import { ownContext, test } from './consoleGuard.ts';
 import { uniquePng } from './png.ts';
 import { centreOnDemoCave, deleteFeature, gotoRoute, login, overlayTreeNode } from './helpers.ts';
 
@@ -558,7 +558,7 @@ test('saved views: save, share anonymously, delete', async ({ page, browser, con
   const sharedUrl = await page.evaluate(() => navigator.clipboard.readText());
   expect(sharedUrl).toContain('/shared/view/');
 
-  const anonymous = await browser.newContext();
+  const anonymous = await ownContext(browser);
   const anonymousPage = await anonymous.newPage();
   await anonymousPage.goto(sharedUrl);
   await anonymousPage.waitForURL(/\/shared\/view\//); // no login redirect

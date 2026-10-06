@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
-import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
-import { test } from './consoleGuard.ts';
+import { ownContext, test } from './consoleGuard.ts';
 import { gotoRoute, login } from './helpers.ts';
 import { apiJson, bearerToken, relationId, uploadMapPng } from './rastermapApi.ts';
 import { settledScreenshot } from './settled.ts';
@@ -53,7 +52,14 @@ function sheetPoint(
 test('a follower sees the party on the sheet, and a revoked link closes it', async ({
   page,
   browser,
+  consoleErrors: guard,
 }) => {
+  // The follower's browser is watched like the signed-in one, and this flow ends by revoking the
+  // link under it: the read that finds the link gone is answered 404, which the browser logs.
+  guard.allow(
+    /the server responded with a status of 404/,
+    'this flow revokes the link its follower holds, and the read that finds it gone is answered 404',
+  );
   const caveName = `E2E Public Sheet Cave ${Date.now()}`;
   const mapName = `E2E public sheet ${Date.now()}`;
   await login(page);
@@ -163,20 +169,10 @@ test('a follower sees the party on the sheet, and a revoked link closes it', asy
   )) as { id: string; token: string };
 
   // ---- The follower: a fresh context holding nothing but the link ----
-  const anonymous = await browser.newContext();
+  // Made the way the fixture's context is — reading English, and watched — though it holds no
+  // session at all.
+  const anonymous = await ownContext(browser);
   try {
-    // The suite's context fixture seeds English the same way; a manual context repeats it or
-    // fails on the login form's language, which this page does not even have.
-    await anonymous.addInitScript(
-      ({ key, language }: { key: string; language: string }) => {
-        try {
-          window.localStorage.setItem(key, language);
-        } catch {
-          // Blocked storage falls back to Romanian, and the assertions below would say so.
-        }
-      },
-      { key: CHOICE_KEY, language: 'en' },
-    );
     const pub = await anonymous.newPage();
     const consoleErrors: string[] = [];
     pub.on('pageerror', (error) => consoleErrors.push(String(error)));

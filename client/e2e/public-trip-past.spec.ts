@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
-import { CHOICE_KEY } from '../src/i18n/languageStorage.ts';
-import { test } from './consoleGuard.ts';
+import { ownContext, test } from './consoleGuard.ts';
 import { login } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 import { settledScreenshot } from './settled.ts';
@@ -108,7 +107,14 @@ async function setWatch(
 test('a visitor picks a past trip of this cave, plays it, and finds the way back', async ({
   page,
   browser,
+  consoleErrors: guard,
 }) => {
+  // The visitor's browser is watched like the signed-in one, and this flow refuses a track on
+  // purpose and then revokes the link: each is answered 404, which the browser logs.
+  guard.allow(
+    /the server responded with a status of 404/,
+    'this flow refuses one past track and then revokes the link, and each read that finds them gone is answered 404',
+  );
   const stamp = Date.now();
   const caveName = `E2E Past Cave ${stamp}`;
   await login(page);
@@ -223,19 +229,10 @@ test('a visitor picks a past trip of this cave, plays it, and finds the way back
   )) as { id: string; token: string };
 
   // ---- The visitor: a fresh context holding nothing but the link ----
-  const anonymous = await browser.newContext();
+  // Made the way the fixture's context is — reading English, and watched — though it holds no
+  // session at all.
+  const anonymous = await ownContext(browser);
   try {
-    // English is a recorded choice; without it every assertion below reads Romanian.
-    await anonymous.addInitScript(
-      ({ key, language }: { key: string; language: string }) => {
-        try {
-          window.localStorage.setItem(key, language);
-        } catch {
-          // Blocked storage falls back to Romanian, and the assertions below would say so.
-        }
-      },
-      { key: CHOICE_KEY, language: 'en' },
-    );
     const pub = await anonymous.newPage();
     const consoleErrors: string[] = [];
     pub.on('pageerror', (error) => consoleErrors.push(String(error)));

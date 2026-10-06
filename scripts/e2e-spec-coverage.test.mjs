@@ -127,3 +127,51 @@ describe('the browser suite cannot shrink unnoticed', () => {
     );
   });
 });
+
+// Two more ways a spec passes by not being looked at, both of which have happened here.
+//
+// The browser-error sweep works by every spec taking its `test` from the console guard instead
+// of from Playwright: one that forgets is driven as usual and watched by nobody. And the guard's
+// fixture knows only the context it hands out, so a context a spec made for itself — the second
+// person in a flow about what one person sees of another's work — was neither watched nor told
+// to read English, and four specs sat at a sign-in form labelled in Romanian until they timed
+// out. Both rules are one line to follow and invisible to break, so they are checked here.
+describe('every spec is watched, in every browser it opens', () => {
+  const sources = () =>
+    readdirSync(e2eDir)
+      .filter((f) => f.endsWith('.ts'))
+      .map((f) => [f, readFileSync(join(e2eDir, f), 'utf8')]);
+
+  it('every spec takes its test function from the console guard', () => {
+    const unwatched = sources()
+      .filter(([f]) => f.endsWith('.spec.ts'))
+      .filter(
+        ([, text]) =>
+          !/import \{[^}]*\btest\b[^}]*\} from '\.\/consoleGuard(\.ts)?'/.test(text) ||
+          /import \{[^}]*\btest\b[^}]*\} from '@playwright\/test'/.test(text),
+      )
+      .map(([f]) => f);
+    assert.deepEqual(
+      unwatched,
+      [],
+      `these specs take \`test\` from Playwright, so nothing records what their pages report: ${unwatched.join(', ')}`,
+    );
+  });
+
+  it('no spec or helper makes a browser context the guard does not know about', () => {
+    const bare = sources()
+      // The guard is the one place allowed to call it: that is where `ownContext` lives.
+      .filter(([f]) => f !== 'consoleGuard.ts')
+      .filter(([, text]) =>
+        text
+          .split('\n')
+          .some((line) => /\bnewContext\s*\(/.test(line.replace(/\/\/.*$/, ''))),
+      )
+      .map(([f]) => f);
+    assert.deepEqual(
+      bare,
+      [],
+      `use ownContext(browser) from consoleGuard.ts instead of browser.newContext(): ${bare.join(', ')}`,
+    );
+  });
+});
