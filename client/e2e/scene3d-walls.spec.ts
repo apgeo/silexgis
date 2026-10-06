@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect, type Page } from '@playwright/test';
+import { tryAsPerson } from './arrange.ts';
 import { test } from './consoleGuard.ts';
 import { gotoRoute, login, waitForScene3dReady } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
@@ -47,8 +48,24 @@ async function createCave(page: Page, name: string): Promise<string> {
   await expect(page.getByRole('heading', { name })).toBeVisible({ timeout: 15_000 });
   const caveId = /\/caves\/([0-9a-f-]+)/.exec(page.url())?.[1];
   expect(caveId, 'the cave page names the cave in its address').toBeTruthy();
+  madeCaves.push(caveId!);
   return caveId!;
 }
+
+/**
+ * The caves this file made, removed again when the test that made them ends — passed or failed.
+ *
+ * The suite shares one database, and a cave left behind with an entrance is not inert there: it
+ * joins the clusters the map draws at low zoom, so a test elsewhere that taps "the cluster in the
+ * middle of the view" meets a different cluster than it was written against.
+ */
+const madeCaves: string[] = [];
+
+test.afterEach(async ({ page }) => {
+  for (const caveId of madeCaves.splice(0)) {
+    await tryAsPerson(page, 'DELETE', `/api/v1/caves/${caveId}`);
+  }
+});
 
 test('the walls of a cave are uploaded, converted, drawn in the scene from its page, and unloaded on request', async ({
   page,
@@ -167,11 +184,12 @@ test('the walls of every cave in view are drawn together, counted in words, and 
   const secondId = await createCave(page, `E2E Walls South ${stamp}`);
   const token = await bearerToken(page);
 
-  // Two caves under three hundred metres apart, well away from the cave the test above anchors:
-  // the mode counts every cave in the view, and a neighbour left by another test would make the
-  // count this asserts depend on which tests ran before it.
-  const longitude = 25.352;
-  const latitude = 45.612;
+  // Two caves under three hundred metres apart, hundreds of kilometres from every seeded cave and
+  // from the cave the test above anchors: the mode counts every cave in the view, and a neighbour
+  // — seeded, or left by another test — would make the count this asserts depend on what else is
+  // in the database.
+  const longitude = 27.9;
+  const latitude = 47.6;
   const firstModel = await uploadWalls(page, token, firstId, longitude, latitude);
   const secondModel = await uploadWalls(page, token, secondId, longitude, latitude - 0.0025);
 
