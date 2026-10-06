@@ -375,8 +375,15 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
   );
   // The drop goes on the trip's files, which is where a picture is attached and where the star
   // that makes one of them the trip's cover lives; the gallery reads them back.
+  //
+  // Found inside the files tab's own panel, not as "the last file input on the page". The page's
+  // header carries a file picker of its own (the one that reads a recorded track onto the trip),
+  // and it is there from the first render, while this panel is drawn only once its tab is opened.
+  // A page-wide locator therefore resolves at once to the header's picker, the picture is handed
+  // to the track reader and refused, and nothing is ever attached.
   await openTab(page, 'Files');
   await page
+    .getByRole('tabpanel', { name: 'Files' })
     .locator('.ant-upload input[type=file]')
     .last()
     .setInputFiles({ name: `trip-${stamp}.png`, mimeType: 'image/png', buffer: uniquePng() });
