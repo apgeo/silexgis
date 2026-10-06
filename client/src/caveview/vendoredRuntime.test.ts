@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CAVEVIEW_HOME } from './loadCaveView.ts';
+import i18n from '../i18n';
+import { CAVEVIEW_HOME, caveViewerOptions } from './loadCaveView.ts';
 
 /**
  * That the viewer this application says it loads is the one actually sitting on disk.
@@ -45,6 +46,38 @@ describe('the vendored viewer runtime', () => {
     const workers = join(home, 'js', 'workers');
     expect(existsSync(workers), `${CAVEVIEW_HOME}js/workers/ exists`).toBe(true);
     expect(readdirSync(workers).filter((f) => f.endsWith('.js')).length).toBeGreaterThan(0);
+  });
+
+  it('carries a catalogue for every language the interface can be read in', () => {
+    // English is built into the bundle. A viewer told any other language fetches
+    // `lib/lang-<code>.json` from its home, and one that gets a 404 for it stays in English and
+    // logs an error on every load. The catalogues are tracked files of the viewer's repository
+    // which its build never writes, so a vendoring that copies what the build produced leaves
+    // them behind — and nothing else notices: the loader never names them, and every other test
+    // builds a viewer that is not the bundle.
+    const offered = i18n.options.supportedLngs;
+    expect(Array.isArray(offered), 'the interface names the languages it is offered in').toBe(true);
+    // `cimode` is i18next's own entry for showing keys in place of text, not a language.
+    const languages = (offered as readonly string[]).filter((code) => code !== 'cimode');
+    expect(languages).toContain('en');
+
+    const home = join(publicDir, CAVEVIEW_HOME);
+    for (const language of languages) {
+      // Named the way the viewer will be told it, so a change to how the language is passed
+      // cannot leave this looking for a file the viewer no longer asks for.
+      const code = caveViewerOptions(language).language;
+      if (code === 'en') {
+        continue;
+      }
+      const rel = `lib/lang-${code}.json`;
+      const file = join(home, rel);
+      expect(existsSync(file), `${CAVEVIEW_HOME}${rel} exists`).toBe(true);
+      // The viewer reads it as JSON; a truncated copy would fail there, in the reader's browser.
+      const catalogue = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+      const isObject = catalogue !== null && typeof catalogue === 'object' && !Array.isArray(catalogue);
+      expect(isObject, `${rel} is a catalogue`).toBe(true);
+      expect(Object.keys(catalogue as object).length, `${rel} is not empty`).toBeGreaterThan(0);
+    }
   });
 
   it('keeps at most one superseded version beside it', () => {
