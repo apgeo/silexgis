@@ -2876,6 +2876,7 @@
     "converting": "The walls are being prepared for the 3D scene. This list updates itself when they are ready.",
     "conversionFailed": "The walls could not be converted.",
     "triangles": "{{count}} triangles",
+    "wallsBuilt": "Walls built from this survey's own scraps and passage dimensions",
     "current": "Current",
     "makeCurrent": "Make current",
     "makeCurrentFailed": "The model could not be made current",

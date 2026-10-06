@@ -104,6 +104,15 @@ export default function SurveyModelSection({ caveId, canEdit }: { caveId: string
             )}
           </Flex>
         )}
+        {/* Triangles on a line plot are walls nobody uploaded: the reading built them. Said in
+            words, because a mesh beside a plot otherwise looks like an export somebody made, and
+            what it was made from decides how far it can be trusted — only what the survey
+            itself measured or drew is in it. */}
+        {!walls && model.triangleCount !== null && (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('surveyModels.wallsBuilt')}
+          </Typography.Text>
+        )}
         {model.sourcePrecisionLost && (
           <Tooltip title={t('surveyModels.precisionLostHint')}>
             <Typography.Text type="warning" style={{ fontSize: 12 }}>

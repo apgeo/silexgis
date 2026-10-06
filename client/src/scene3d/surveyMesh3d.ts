@@ -114,13 +114,19 @@ export function isDrawableSurveyMesh(model: SurveyModelInfo): boolean {
 /**
  * The one model of a cave whose walls are drawn.
  *
- * A cave may hold any number of models — several line plots, an older mesh and a newer one — and
- * the record says which is preferred: one wall mesh per cave carries the current mark, given to
- * the newest upload when it arrives and handed to an older one on purpose from the cave's page.
- * A drawable mesh with the mark wins. Without one — rows written before the mark existed, or a
- * current mesh whose conversion has not finished or failed — the most recently uploaded drawable
- * mesh is drawn instead, which is the one an uploader who has just replaced a survey expects to
- * see.
+ * A cave may hold any number of models, and walls can come from two kinds of them: a wall mesh
+ * somebody exported and uploaded, and a line plot whose own reading built walls out of the wall
+ * surfaces and passage dimensions in the file. The record says which model of each kind is
+ * preferred — one wall mesh and one line plot per cave carry the current mark, given to the newest
+ * upload of the kind when it arrives and handed to an older one on purpose from the cave's page.
+ *
+ * An uploaded mesh with the mark wins: it is walls somebody made deliberately, usually with more
+ * in them than the survey's own dimensions hold, and marking it current is saying so. Failing
+ * that, the walls of the line plot with the mark are drawn — they belong to the survey the map and
+ * the measurements already read. Without either — rows written before the mark existed, or a
+ * current model whose walls are not finished, failed, or were never there to build — the most
+ * recently uploaded drawable model is drawn instead, whichever kind it is, which is the one an
+ * uploader who has just replaced a survey expects to see.
  *
  * A row that has an anchor but no mesh yet is not drawable, mark or no mark: a file declared in
  * local coordinates is given its anchor at upload, before anything has been converted, so the
@@ -141,10 +147,22 @@ export function drawableSurveyMesh(
   return best;
 }
 
-/** Whether `candidate` should be drawn rather than `best`: the current mark first, then age. */
+/**
+ * How strongly the record itself asks for a model's walls: a current uploaded mesh most, a
+ * current line plot next, and a model without the mark not at all.
+ */
+function markedPreference(model: SurveyModelInfo): number {
+  if (!model.isCurrent) {
+    return 0;
+  }
+  return model.format === 'stl' ? 2 : 1;
+}
+
+/** Whether `candidate` should be drawn rather than `best`: what the record asks for, then age. */
 function preferredMesh(candidate: SurveyModelInfo, best: SurveyModelInfo): boolean {
-  if (candidate.isCurrent !== best.isCurrent) {
-    return candidate.isCurrent;
+  const asked = markedPreference(candidate) - markedPreference(best);
+  if (asked !== 0) {
+    return asked > 0;
   }
   return candidate.createdAt > best.createdAt;
 }

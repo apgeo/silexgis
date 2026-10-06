@@ -156,12 +156,66 @@ describe('drawableSurveyMesh', () => {
     expect(drawableSurveyMesh([currentUnconverted])).toBeUndefined();
   });
 
-  it('ignores the line-plot models a cave also holds', () => {
-    // A .lox or .3d upload has no mesh at all and never grows one; the embedded survey viewer
-    // reads those, and the scene must not try to.
-    const linePlot = model({ id: 'plot', format: 'lox', meshUrl: null, anchorLongitude: null });
+  it('ignores a line plot that has no walls of its own', () => {
+    // Most line plots carry neither wall surfaces nor passage dimensions, so reading them builds
+    // no mesh; the embedded survey viewer draws those, and the scene has nothing to.
+    const linePlot = model({ id: 'plot', format: 'lox', meshUrl: null, triangleCount: null });
 
     expect(drawableSurveyMesh([linePlot])).toBeUndefined();
+  });
+
+  it('draws an uploaded mesh marked current rather than the walls of the current line plot', () => {
+    // Each kind has its own mark, so both of these carry one. The uploaded mesh is walls somebody
+    // made on purpose, and it wins whichever of the two arrived later.
+    const mesh = model({ id: 'mesh', isCurrent: true, createdAt: '2026-01-01T00:00:00Z' });
+    const plot = model({
+      id: 'plot',
+      format: 'lox',
+      isCurrent: true,
+      createdAt: '2026-07-01T00:00:00Z',
+    });
+
+    expect(drawableSurveyMesh([plot, mesh])?.id).toBe('mesh');
+    expect(drawableSurveyMesh([mesh, plot])?.id).toBe('mesh');
+  });
+
+  it('draws the walls of the current line plot when no current uploaded mesh can be drawn', () => {
+    const plot = model({
+      id: 'plot',
+      format: 'survex3d',
+      isCurrent: true,
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    // Marked current the moment it arrived, and still being converted.
+    const unconverted = model({
+      id: 'mesh',
+      isCurrent: true,
+      meshUrl: null,
+      status: 'processing',
+      createdAt: '2026-08-01T00:00:00Z',
+    });
+    // Drawable and newer than the plot, but nobody's choice: the mark outranks age.
+    const superseded = model({ id: 'old-mesh', createdAt: '2026-07-01T00:00:00Z' });
+
+    expect(drawableSurveyMesh([unconverted, superseded, plot])?.id).toBe('plot');
+    expect(drawableSurveyMesh([plot, superseded, unconverted])?.id).toBe('plot');
+  });
+
+  it('falls back to the newest drawable model of either kind when no marked one can be drawn', () => {
+    const olderMesh = model({ id: 'mesh', createdAt: '2026-01-01T00:00:00Z' });
+    const newerPlot = model({ id: 'plot', format: 'lox', createdAt: '2026-07-01T00:00:00Z' });
+    // The current line plot has no walls: nothing in it was measured.
+    const bare = model({
+      id: 'bare',
+      format: 'lox',
+      isCurrent: true,
+      meshUrl: null,
+      triangleCount: null,
+      createdAt: '2026-08-01T00:00:00Z',
+    });
+
+    expect(drawableSurveyMesh([olderMesh, newerPlot, bare])?.id).toBe('plot');
+    expect(drawableSurveyMesh([bare, newerPlot, olderMesh])?.id).toBe('plot');
   });
 });
 

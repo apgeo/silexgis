@@ -182,6 +182,29 @@ describe('the survey model list', () => {
     expect(screen.getByText('2.5 MB')).toBeInTheDocument();
   });
 
+  it('says where the walls of a line plot came from, and says it of no uploaded mesh', async () => {
+    models = [
+      model({ id: 'plot', name: 'Grind plot', format: 'lox', triangleCount: 320 }),
+      model({ id: 'mesh', name: 'Grind walls' }),
+    ];
+    show();
+
+    // Both rows carry triangles. Only the plot's were built here, out of what the survey itself
+    // holds, and only that row says so.
+    expect(await screen.findByText('320 triangles')).toBeInTheDocument();
+    expect(screen.getByText('40120 triangles')).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Walls built from this survey's own scraps and passage dimensions"),
+    ).toHaveLength(1);
+
+    // A plot with nothing measured has no walls, and nothing is said about walls it does not have.
+    cleanup();
+    models = [model({ id: 'bare', format: 'survex3d', meshUrl: null, triangleCount: null })];
+    show();
+    expect(await screen.findByText('Ready')).toBeInTheDocument();
+    expect(screen.queryByText(/Walls built from/)).not.toBeInTheDocument();
+  });
+
   it('marks the model each kind is represented by, and lets a writer pick another', async () => {
     models = [
       model({ id: 'mesh', isCurrent: true }),

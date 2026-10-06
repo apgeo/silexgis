@@ -2876,6 +2876,7 @@
     "converting": "Pereții sunt pregătiți pentru scena 3D. Lista se actualizează singură când sunt gata.",
     "conversionFailed": "Pereții nu au putut fi convertiți.",
     "triangles": "{{count}} triunghiuri",
+    "wallsBuilt": "Pereți construiți din schițele și dimensiunile de galerie ale acestei ridicări",
     "current": "Curent",
     "makeCurrent": "Setează ca model curent",
     "makeCurrentFailed": "Modelul nu a putut fi setat ca model curent",
