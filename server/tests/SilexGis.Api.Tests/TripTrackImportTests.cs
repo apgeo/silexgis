@@ -94,9 +94,17 @@ public sealed class TripTrackImportTests : IAsyncLifetime, IDisposable, IClassFi
         coordinates[0][0].GetDouble().ShouldBe(25.400, 1e-9);
         coordinates[0][1].GetDouble().ShouldBe(45.500, 1e-9);
 
+        // The write answers the version it produced and says whose it is. The trip's page reads a
+        // track onto the trip and may save the trip straight after; that save is checked against
+        // this version, and without it would be refused until the trip had been read again.
+        response.Content.Headers.ContentLocation!.OriginalString.ShouldBe($"/api/v1/trip-logs/{tripId}");
+        var answered = response.Headers.ETag!.Tag;
+
         // Read back from the trip, by somebody who may read it: the sketch is the trip's.
-        var read = await reader.GetFromJsonAsync<JsonElement>($"/api/v1/trip-logs/{tripId}");
+        var reread = await reader.GetAsync($"/api/v1/trip-logs/{tripId}");
+        var read = await reread.Content.ReadFromJsonAsync<JsonElement>();
         read.GetProperty("geom").GetProperty("coordinates").GetArrayLength().ShouldBe(4);
+        reread.Headers.ETag!.Tag.ShouldBe(answered);
 
         // No registry row for what was one edit of one trip.
         (await CountGeofilesAsync()).ShouldBe(geofilesBefore);

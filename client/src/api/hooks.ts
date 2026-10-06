@@ -3888,11 +3888,12 @@ export function useUpdateTripLog() {
 
 /**
  * Replaces the trip's sketch with the track in a GPX file, in one request. A trip write like
- * the update above, and finished the same way: the trip is read back before the mutation
- * settles, because the write moved the row version the next save is checked against.
+ * the update above, and finished the same way: the answer is the trip as it now stands and
+ * carries the version the write produced, so the page redraws from it and the next save needs no
+ * read in between.
  */
 export function useImportTripTrack() {
-  const readBack = useReadTripLogsBack();
+  const written = useTripLogWritten();
   const invalidateHistory = useInvalidateHistory();
   return useMutation({
     mutationFn: ({ id, file }: { id: string; file: File }): Promise<TripLogInfo> => {
@@ -3905,9 +3906,9 @@ export function useImportTripTrack() {
         bodySerializer: (b: unknown) => b as FormData,
       }));
     },
-    onSuccess: () => {
+    onSuccess: (trip) => {
       invalidateHistory();
-      return readBack();
+      written(trip);
     },
   });
 }
