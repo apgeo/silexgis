@@ -2614,6 +2614,7 @@
     "meshesInViewOverCount": "Walls of {{shown}} of {{total}} caves in view — the rest are beyond the {{limit}} drawn at once.",
     "meshesInViewLoading": "Still loading: {{count}}.",
     "meshesInViewUnreadable": "Could not be read: {{count}}.",
+    "meshesInViewLimitsLink": "Change these limits in Settings › Advanced",
     "surfaceFeaturesCapped": "Showing the first {{limit}} surface features in this view, which is this installation's limit; zoom in to see the rest.",
     "entrancesCapped": "Showing the first {{limit}} cave entrances in this view, which is this installation's limit; zoom in to see the rest.",
     "saveImage": "Save image",
@@ -2955,7 +2956,8 @@
       "notifications": "Notifications",
       "security": "Security",
       "accessibility": "Accessibility",
-      "sync": "Sync"
+      "sync": "Sync",
+      "advanced": "Advanced"
     },
     "visibility": {
       "label": "Who can see this",
@@ -3154,6 +3156,16 @@
       "centerlineMaxPaths": "Centerline path budget",
       "reset": "Reset these",
       "resetDone": "Reset."
+    },
+    "advanced": {
+      "wallsHeading": "Cave walls in the 3D view",
+      "wallsIntro": "When the 3D view draws the walls of every cave in view, three numbers bound it: the zoom it starts from, how many caves it draws at once, and how much it downloads and holds for them. What you set here stays in this browser only — a phone and a workstation want different answers.",
+      "wallsMinZoom": "Show from zoom",
+      "wallsMaxCaves": "Caves at most",
+      "wallsMaxMegabytes": "Megabytes at most",
+      "wallsHint": "An empty field follows this installation's default, shown in grey.",
+      "wallsCeilings": "This installation allows at most {{caves}} caves and {{megabytes}} MB.",
+      "wallsReset": "Use this installation's defaults"
     },
     "pointPicker": {
       "title": "Pick a point",

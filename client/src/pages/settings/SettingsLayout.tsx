@@ -6,6 +6,7 @@ import {
   MailOutlined,
   MobileOutlined,
   SafetyOutlined,
+  SlidersOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import type { ReactNode } from 'react';
@@ -23,6 +24,7 @@ const SECTION_ICONS: Record<SettingsSection, ReactNode> = {
   security: <SafetyOutlined />,
   accessibility: <EyeOutlined />,
   sync: <MobileOutlined />,
+  advanced: <SlidersOutlined />,
 };
 
 /**
@@ -53,7 +55,7 @@ export default function SettingsLayout() {
 
       {isMobile ? (
         // A picker rather than a second off-canvas drawer: the shell already puts one on this
-        // screen edge, and six items overflow a segmented control.
+        // screen edge, and this many items overflow a segmented control.
         <Flex vertical gap={16}>
           <Select
             value={section}

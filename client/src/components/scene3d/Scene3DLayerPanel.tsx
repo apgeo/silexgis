@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { Checkbox, Collapse, Divider, Radio, Slider, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import type { MapLayerInfo, RasterMapInfo } from '../../api/hooks.ts';
 import {
   CAVE_DATA_3D_LAYERS,
@@ -500,6 +501,18 @@ export default function Scene3DLayerPanel({
           >
             {meshHint()}
           </Typography.Text>
+          {/* The sentence above names a limit; this is where that limit is changed. Offered in
+              this mode only — the selected cave's walls are drawn whatever their size, so the
+              other mode has no number to set. */}
+          {wallsMode === 'inView' && (
+            <Link
+              to="/settings/advanced"
+              className="scene3d-mesh-hint"
+              data-testid="scene3d-walls-limits-link"
+            >
+              {t('scene3d.meshesInViewLimitsLink')}
+            </Link>
+          )}
           {/* Said whenever the mesh is on screen, not only while it loads: the survey itself is
               degraded, and the person who can fix it is the one who exported the file. */}
           {wallsMode === 'selected' && meshState.precisionLost && (

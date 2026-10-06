@@ -6,11 +6,14 @@ import type { Scene3DBounds, Scene3DModelOptions } from './scene3dEngine.ts';
 // The listing is the only thing this loader fetches, and every decision it makes is about what
 // came back — so it is stubbed, and every other module involved is the real one.
 let asked: string[] = [];
+/** How many caves each of those requests asked to be answered with. */
+let askedCaves: (number | undefined)[] = [];
 let respond: (bbox: string) => Promise<CaveMeshesInView> = () => Promise.resolve(answer([]));
 
 vi.mock('../api/hooks.ts', () => ({
-  fetchCaveMeshesInView: (bbox: string) => {
+  fetchCaveMeshesInView: (bbox: string, maxCaves?: number) => {
     asked.push(bbox);
+    askedCaves.push(maxCaves);
     return respond(bbox);
   },
 }));
@@ -18,7 +21,7 @@ vi.mock('../api/hooks.ts', () => ({
 const {
   attachSurveyMeshesInView3d,
   chooseMeshesInView,
-  meshesInViewLimitsFromMapConfig,
+  meshesInViewLimitsInForce,
   surveyMeshInViewModelId,
 } = await import('./surveyMeshesInView3d.ts');
 type SurveyMeshesInView3DEngine = import('./surveyMeshesInView3d.ts').SurveyMeshesInView3DEngine;
@@ -147,6 +150,7 @@ async function started(
 
 beforeEach(() => {
   asked = [];
+  askedCaves = [];
   respond = () => Promise.resolve(answer([]));
 });
 
@@ -648,15 +652,257 @@ describe('attachSurveyMeshesInView3d', () => {
   });
 });
 
-describe('meshesInViewLimitsFromMapConfig', () => {
-  it('reads the three limits the server publishes', () => {
+describe('limits that change while the walls are on', () => {
+  /** A listing that never answers, so what a test sees next happened without one. */
+  const neverAnswers = () => new Promise<CaveMeshesInView>(() => {});
+
+  it('asks for as many caves as the limit in force allows, because the answer stops at that count', async () => {
+    const scene = new FakeScene();
+    await started(scene, answer([mesh('a')]), { limits: { ...limits, maxCaves: 30 } });
+
+    expect(askedCaves).toEqual([30]);
+  });
+
+  it('releases what a lowered byte budget no longer covers at once, before the view is asked about again', async () => {
+    const scene = new FakeScene();
+    const { loader } = await started(
+      scene,
+      answer([mesh('a', { sizeBytes: 30 * MB }), mesh('b', { sizeBytes: 30 * MB })]),
+    );
+    scene.reads.forEach((read) => read.land());
+    await settle();
+    expect(loader.getState()).toMatchObject({ shown: 2, heldBytes: 60 * MB });
+
+    respond = neverAnswers;
+    const lowered = { ...limits, maxBytes: 40 * MB };
+    loader.setLimits(lowered);
+
+    // Somebody lowers a budget to get memory back. It is back before this line, not after a
+    // round trip — and the mesh that still fits was neither removed nor read again.
+    expect(scene.removals).toEqual([surveyMeshInViewModelId('b')]);
+    expect(scene.heldCaves()).toEqual(['a']);
+    expect(scene.reads).toHaveLength(2);
+    expect(loader.getState()).toMatchObject({
+      shown: 1,
+      inView: 2,
+      leftOut: 1,
+      limitedBy: 'bytes',
+      heldBytes: 30 * MB,
+      limits: lowered,
+    });
+    // The view is asked about again all the same, without the camera having moved.
+    expect(asked).toHaveLength(2);
+  });
+
+  it('releases the farthest caves at once when the count is lowered, and asks for the smaller count', async () => {
+    const scene = new FakeScene();
+    const { loader } = await started(scene, answer([mesh('a'), mesh('b'), mesh('c')]));
+    expect(scene.heldCaves()).toEqual(['a', 'b', 'c']);
+
+    respond = neverAnswers;
+    loader.setLimits({ ...limits, maxCaves: 1 });
+
+    expect(scene.removals).toEqual([surveyMeshInViewModelId('b'), surveyMeshInViewModelId('c')]);
+    expect(scene.heldCaves()).toEqual(['a']);
+    expect(loader.getState()).toMatchObject({ shown: 1, inView: 3, leftOut: 2, limitedBy: 'count' });
+    expect(askedCaves).toEqual([12, 1]);
+  });
+
+  it('takes up a raised budget without waiting for the camera: from the answer it holds, then from a fresh one', async () => {
+    const scene = new FakeScene();
+    const described = [
+      mesh('a', { sizeBytes: 30 * MB }),
+      mesh('b', { sizeBytes: 30 * MB }),
+      mesh('c', { sizeBytes: 30 * MB }),
+    ];
+    // Five caves in view, three described: the server stopped at the count it was asked for.
+    const { loader } = await started(scene, answer(described, 5), {
+      limits: { ...limits, maxCaves: 3 },
+    });
+    expect(scene.readCaves()).toEqual(['a', 'b']);
+    expect(loader.getState()).toMatchObject({ shown: 2, limitedBy: 'bytes' });
+
+    let deliver: (value: CaveMeshesInView) => void = () => {};
+    respond = () =>
+      new Promise<CaveMeshesInView>((resolve) => {
+        deliver = resolve;
+      });
+    loader.setLimits({ minZoom: 14, maxCaves: 5, maxBytes: 256 * MB });
+
+    // The third cave had been described and only the old budget kept it out, so it starts now.
+    expect(scene.readCaves()).toEqual(['a', 'b', 'c']);
+    // The other two were only ever counted; describing them takes asking for five.
+    expect(askedCaves).toEqual([3, 5]);
+    expect(loader.getState()).toMatchObject({ shown: 3, inView: 5, leftOut: 2, limitedBy: 'count' });
+
+    deliver(answer([...described, mesh('d'), mesh('e')], 5));
+    await settle();
+
+    expect(scene.readCaves()).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(scene.removals).toEqual([]);
+    expect(loader.getState()).toMatchObject({ shown: 5, inView: 5, leftOut: 0 });
+    expect(loader.getState().limitedBy).toBeUndefined();
+  });
+
+  it('lets everything go when the floor is raised above the view, and asks again when it is lowered back', async () => {
+    const scene = new FakeScene();
+    const first = answer([
+      mesh('a', { sizeBytes: 30 * MB }),
+      mesh('b', { sizeBytes: 30 * MB }),
+      mesh('c', { sizeBytes: 30 * MB }),
+    ]);
+    const { loader } = await started(scene, first);
+    expect(scene.heldCaves()).toEqual(['a', 'b']);
+
+    // The camera is at 15. The byte budget is raised in the same breath, and the cave it would
+    // now cover is not started: a read begun here would be abandoned by the very next line.
+    loader.setLimits({ minZoom: 17, maxCaves: 12, maxBytes: 256 * MB });
+
+    expect(scene.readCaves()).toEqual(['a', 'b']);
+    expect(scene.heldCaves()).toEqual([]);
+    expect(asked).toHaveLength(1);
+    expect(loader.getState()).toMatchObject({ status: 'zoomIn', shown: 0, inView: 0, heldBytes: 0 });
+
+    loader.setLimits({ minZoom: 12, maxCaves: 12, maxBytes: 256 * MB });
+    await settle();
+
+    expect(asked).toHaveLength(2);
+    expect(scene.heldCaves()).toEqual(['a', 'b', 'c']);
+    expect(loader.getState().status).toBe('ready');
+  });
+
+  it('asks nothing when it is told the limits it already has', async () => {
+    const scene = new FakeScene();
+    const { loader } = await started(scene, answer([mesh('a')]));
+
+    loader.setLimits({ ...limits });
+
+    expect(asked).toHaveLength(1);
+    expect(scene.removals).toEqual([]);
+  });
+
+  it('holds new limits without asking while the walls are off, and works within them once on', async () => {
+    const scene = new FakeScene();
+    const loader = attachSurveyMeshesInView3d(scene, () => undefined);
+    loader.setLimits(limits);
+    loader.setLimits({ ...limits, maxCaves: 1 });
+    await settle();
+    expect(asked).toEqual([]);
+
+    respond = () => Promise.resolve(answer([mesh('a')], 2));
+    loader.setActive(true);
+    await settle();
+
+    expect(askedCaves).toEqual([1]);
+    expect(scene.heldCaves()).toEqual(['a']);
+  });
+});
+
+describe('meshesInViewLimitsInForce', () => {
+  const published = {
+    meshesInViewMinZoom: 14,
+    meshesInViewMaxCaves: 12,
+    meshesInViewMaxBytes: 64 * MB,
+    meshesInViewMaxCavesLimit: 60,
+    meshesInViewMaxBytesLimit: 512 * MB,
+  };
+
+  it('is the installation’s three defaults for a person who has set nothing', () => {
+    const defaults = { minZoom: 14, maxCaves: 12, maxBytes: 64 * MB };
+
+    expect(meshesInViewLimitsInForce(published)).toEqual(defaults);
+    expect(meshesInViewLimitsInForce(published, {})).toEqual(defaults);
     expect(
-      meshesInViewLimitsFromMapConfig({
-        meshesInViewMinZoom: 15,
-        meshesInViewMaxCaves: 6,
+      meshesInViewLimitsInForce(published, { minZoom: undefined, maxCaves: undefined, maxBytes: undefined }),
+    ).toEqual(defaults);
+  });
+
+  it('takes a personal value over the default, each of the three on its own', () => {
+    expect(meshesInViewLimitsInForce(published, { maxCaves: 30 })).toEqual({
+      minZoom: 14,
+      maxCaves: 30,
+      maxBytes: 64 * MB,
+    });
+    expect(meshesInViewLimitsInForce(published, { minZoom: 12, maxBytes: 256 * MB })).toEqual({
+      minZoom: 12,
+      maxCaves: 12,
+      maxBytes: 256 * MB,
+    });
+    // Less than the installation offers is a person's to choose as well: a phone wants it.
+    expect(
+      meshesInViewLimitsInForce(published, { minZoom: 17, maxCaves: 3, maxBytes: 8 * MB }),
+    ).toEqual({ minZoom: 17, maxCaves: 3, maxBytes: 8 * MB });
+  });
+
+  it('holds a personal value to the installation’s ceilings', () => {
+    expect(
+      meshesInViewLimitsInForce(published, { maxCaves: 500, maxBytes: 4096 * MB }),
+    ).toMatchObject({ maxCaves: 60, maxBytes: 512 * MB });
+
+    // A ceiling lowered after the value was stored is the one in force.
+    expect(
+      meshesInViewLimitsInForce(
+        { ...published, meshesInViewMaxCavesLimit: 20, meshesInViewMaxBytesLimit: 100 * MB },
+        { maxCaves: 30, maxBytes: 256 * MB },
+      ),
+    ).toMatchObject({ maxCaves: 20, maxBytes: 100 * MB });
+  });
+
+  it('holds a personal value above the floors: one cave, one megabyte, a zoom a map can be at', () => {
+    expect(meshesInViewLimitsInForce(published, { minZoom: 0, maxCaves: 0, maxBytes: 1 })).toEqual({
+      minZoom: 1,
+      maxCaves: 1,
+      maxBytes: MB,
+    });
+    expect(meshesInViewLimitsInForce(published, { minZoom: -3, maxCaves: -1 })).toMatchObject({
+      minZoom: 1,
+      maxCaves: 1,
+    });
+    expect(meshesInViewLimitsInForce(published, { minZoom: 40 }).minZoom).toBe(22);
+  });
+
+  it('lets a ceiling set below a floor win, because the operator keeps the last word', () => {
+    expect(
+      meshesInViewLimitsInForce(
+        { ...published, meshesInViewMaxBytesLimit: 4096 },
+        { maxBytes: 8 * MB },
+      ).maxBytes,
+    ).toBe(4096);
+  });
+
+  it('takes the installation’s own numbers as published, even outside what a person may type', () => {
+    // The floors and the zoom range bound what somebody types into a settings page. An
+    // operator's default is not that: a floor of zero or a budget under a megabyte is theirs to set.
+    expect(
+      meshesInViewLimitsInForce({
+        ...published,
+        meshesInViewMinZoom: 0,
         meshesInViewMaxBytes: 1000,
       }),
-    ).toEqual({ minZoom: 15, maxCaves: 6, maxBytes: 1000 });
+    ).toEqual({ minZoom: 0, maxCaves: 12, maxBytes: 1000 });
+    expect(meshesInViewLimitsInForce({ ...published, meshesInViewMinZoom: 25 }).minZoom).toBe(25);
+  });
+
+  it('reads a stored value that is not a number as not set, and a fraction as the nearest whole number', () => {
+    expect(
+      meshesInViewLimitsInForce(published, { minZoom: Number.NaN, maxCaves: Number.POSITIVE_INFINITY }),
+    ).toMatchObject({ minZoom: 14, maxCaves: 12 });
+    // The count travels to the server as a whole number, which is the only kind it reads.
+    expect(meshesInViewLimitsInForce(published, { maxCaves: 12.6 }).maxCaves).toBe(13);
+  });
+
+  it('keeps to the defaults when the installation published no ceilings to hold a personal value to', () => {
+    // What a server that predates the ceilings answers with. A limit computed from a missing
+    // ceiling would be NaN, and every comparison against NaN is false: the budget would be off.
+    const withoutCeilings = {
+      meshesInViewMinZoom: 14,
+      meshesInViewMaxCaves: 12,
+      meshesInViewMaxBytes: 64 * MB,
+    } as typeof published;
+
+    expect(
+      meshesInViewLimitsInForce(withoutCeilings, { minZoom: 12, maxCaves: 500, maxBytes: 4096 * MB }),
+    ).toEqual({ minZoom: 12, maxCaves: 12, maxBytes: 64 * MB });
   });
 });
 

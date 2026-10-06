@@ -20,6 +20,7 @@ function renderShell(at = '/settings/emails') {
         <Route path="/settings" element={<SettingsLayout />}>
           <Route path="profile" element={<div>profile section</div>} />
           <Route path="emails" element={<div>emails section</div>} />
+          <Route path="advanced" element={<div>advanced section</div>} />
         </Route>
       </Routes>
       <LocationProbe />
@@ -49,6 +50,28 @@ describe('SettingsLayout', () => {
     // Each section is its own route, which is what makes a section linkable — and what lets
     // the address-confirmation link land straight on the emails section.
     expect(screen.getByTestId('location')).toHaveTextContent('/settings/profile');
+  });
+
+  it('lists the sections in their order, with the advanced one last and reachable', () => {
+    renderShell();
+
+    // Last on purpose: it holds numbers most people never need, behind everything they do.
+    expect(Array.from(document.querySelectorAll('.ant-menu-item'), (item) => item.textContent)).toEqual([
+      'Profile',
+      'Account',
+      'Emails',
+      'Notifications',
+      'Security',
+      'Accessibility',
+      'Sync',
+      'Advanced',
+    ]);
+
+    fireEvent.click(screen.getByText('Advanced'));
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/settings/advanced');
+    expect(screen.getByText('advanced section')).toBeInTheDocument();
+    expect(document.querySelector('.ant-menu-item-selected')).toHaveTextContent('Advanced');
   });
 
   it('swaps the vertical nav for a picker on a phone', () => {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { expect } from '@playwright/test';
 import { test } from './consoleGuard.ts';
-import { login } from './helpers.ts';
+import { gotoRoute, login } from './helpers.ts';
 
 test.describe('settings', () => {
   test.beforeEach(async ({ page }) => {
@@ -99,6 +99,56 @@ test.describe('settings', () => {
       .locator('.ant-select-dropdown:visible')
       .getByTitle('Match my system', { exact: true })
       .click();
+  });
+
+  test('a limit for the cave walls is kept for this browser across a reload, and handed back', async ({
+    page,
+  }) => {
+    await gotoRoute(page, '/settings/advanced');
+
+    await expect(page.locator('.ant-menu-item-selected')).toHaveText('Advanced');
+    const caves = page.getByLabel('Caves at most');
+    const megabytes = page.getByLabel('Megabytes at most');
+    // Nothing set: the fields are empty, and the installation's own numbers stand in them.
+    await expect(caves).toHaveAttribute('placeholder', '12', { timeout: 15_000 });
+    await expect(megabytes).toHaveAttribute('placeholder', '64');
+    await expect(page.getByLabel('Show from zoom')).toHaveAttribute('placeholder', '14');
+    await expect(caves).toHaveValue('');
+    await expect(page.getByText(/at most 60 caves and 512 MB/)).toBeVisible();
+
+    // More than the installation lets anybody ask for is brought back to its ceiling on leaving
+    // the field, so what is kept is what will be in force.
+    await caves.fill('500');
+    await caves.blur();
+    await expect(caves).toHaveValue('60');
+    await megabytes.fill('128');
+    await megabytes.blur();
+
+    // Kept in this browser and nowhere else, so a reload is what proves it was kept at all. The
+    // reload is a sign-in round trip, waited out before the fields are looked at.
+    await page.reload();
+    await page.waitForURL(/\/settings\/advanced/, { timeout: 20_000 });
+    await expect(page.getByLabel('Caves at most')).toHaveValue('60', { timeout: 20_000 });
+    await expect(page.getByLabel('Megabytes at most')).toHaveValue('128');
+    // Megabytes on the page, bytes in the store: the unit the installation's own budget is in.
+    expect(
+      await page.evaluate(
+        () => JSON.parse(localStorage.getItem('silexgis.uiPrefs') ?? '{}').state?.meshesInViewMaxBytes,
+      ),
+    ).toBe(128 * 1024 * 1024);
+
+    await page.getByRole('button', { name: "Use this installation's defaults" }).click();
+    await expect(page.getByLabel('Caves at most')).toHaveValue('');
+    await expect(page.getByLabel('Megabytes at most')).toHaveValue('');
+    expect(
+      await page.evaluate(() => {
+        const state = JSON.parse(localStorage.getItem('silexgis.uiPrefs') ?? '{}').state ?? {};
+        return ['meshesInViewMinZoom', 'meshesInViewMaxCaves', 'meshesInViewMaxBytes'].filter(
+          (key) => state[key] !== undefined && state[key] !== null,
+        );
+      }),
+      'nothing of the three is left in this browser',
+    ).toEqual([]);
   });
 
   test('a selection of caves for a phone can be made, reviewed and revoked', async ({ page }) => {

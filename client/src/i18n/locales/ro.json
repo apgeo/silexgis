@@ -2614,6 +2614,7 @@
     "meshesInViewOverCount": "Peșteri din vedere cu pereții desenați: {{shown}} din {{total}} — restul sunt peste cele {{limit}} desenate deodată.",
     "meshesInViewLoading": "Încă se încarcă: {{count}}.",
     "meshesInViewUnreadable": "Nu au putut fi citite: {{count}}.",
+    "meshesInViewLimitsLink": "Schimbă aceste limite în Setări › Avansat",
     "surfaceFeaturesCapped": "Se arată primele {{limit}} fenomene de suprafață din această vedere, atât cât permite această instalare; apropie vederea pentru a le vedea pe celelalte.",
     "entrancesCapped": "Se arată primele {{limit}} intrări în peșteri din această vedere, atât cât permite această instalare; apropie vederea pentru a le vedea pe celelalte.",
     "saveImage": "Salvează imaginea",
@@ -2955,7 +2956,8 @@
       "notifications": "Notificări",
       "security": "Securitate",
       "accessibility": "Accesibilitate",
-      "sync": "Sincronizare"
+      "sync": "Sincronizare",
+      "advanced": "Avansat"
     },
     "visibility": {
       "label": "Cine poate vedea",
@@ -3154,6 +3156,16 @@
       "centerlineMaxPaths": "Buget de trasee",
       "reset": "Resetează",
       "resetDone": "Resetat."
+    },
+    "advanced": {
+      "wallsHeading": "Pereții peșterilor în vizualizarea 3D",
+      "wallsIntro": "Când vizualizarea 3D desenează pereții tuturor peșterilor din vedere, trei numere o limitează: zoom-ul de la care începe, câte peșteri desenează deodată și cât descarcă și păstrează pentru ele. Ce stabiliți aici rămâne doar în acest browser — un telefon și o stație de lucru cer răspunsuri diferite.",
+      "wallsMinZoom": "Arată de la zoom-ul",
+      "wallsMaxCaves": "Peșteri cel mult",
+      "wallsMaxMegabytes": "Megaocteți cel mult",
+      "wallsHint": "Un câmp gol urmează valoarea implicită a acestei instalări, afișată cu gri.",
+      "wallsCeilings": "Această instalare permite cel mult {{caves}} peșteri și {{megabytes}} MB.",
+      "wallsReset": "Folosește valorile implicite ale instalării"
     },
     "pointPicker": {
       "title": "Alegeți un punct",

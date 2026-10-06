@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { MapLayerInfo } from '../../api/hooks.ts';
@@ -110,7 +111,12 @@ function renderPanel(overrides: Partial<Scene3DLayerPanelProps> = {}) {
     },
     ...overrides,
   };
-  render(<Scene3DLayerPanel {...props} />);
+  // Inside a router, as it always is in the application: the walls row links to a settings page.
+  render(
+    <MemoryRouter>
+      <Scene3DLayerPanel {...props} />
+    </MemoryRouter>,
+  );
   return props;
 }
 
@@ -504,6 +510,37 @@ describe('whose walls the scene draws', () => {
     renderPanel({ wallsMode: 'inView', meshesInViewState: inView() });
 
     expect(status()).not.toMatch(/Pick a cave/);
+  });
+
+  it('links to where the limits are changed, under the sentence that names them', () => {
+    renderPanel({
+      wallsMode: 'inView',
+      meshesInViewState: inView({ shown: 12, inView: 31, leftOut: 19, limitedBy: 'count' }),
+    });
+
+    const link = screen.getByRole('link', { name: 'Change these limits in Settings › Advanced' });
+    expect(link).toHaveAttribute('href', '/settings/advanced');
+    // After the status, not before it: the link is about the numbers that sentence states.
+    expect(
+      screen.getByTestId('scene3d-mesh-status').compareDocumentPosition(link) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('offers the link while the walls are off too, so a budget can be set before anything is read', () => {
+    renderPanel({
+      meshVisible: false,
+      wallsMode: 'inView',
+      meshesInViewState: EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE,
+    });
+
+    expect(screen.getByTestId('scene3d-walls-limits-link')).toBeInTheDocument();
+  });
+
+  it('offers no such link for the selected cave, whose walls are drawn whatever their size', () => {
+    renderPanel({ wallsMode: 'selected' });
+
+    expect(screen.queryByTestId('scene3d-walls-limits-link')).toBeNull();
   });
 });
 

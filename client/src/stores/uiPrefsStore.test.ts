@@ -11,6 +11,11 @@ afterEach(() => {
     appearance: DEFAULT_APPEARANCE,
     karstLinkTreatment: undefined,
     movieSettings: undefined,
+    centerlineDetailZoom: undefined,
+    centerlineMaxPaths: undefined,
+    meshesInViewMinZoom: undefined,
+    meshesInViewMaxCaves: undefined,
+    meshesInViewMaxBytes: undefined,
   });
   localStorage.removeItem('silexgis.uiPrefs');
 });
@@ -43,7 +48,7 @@ describe('uiPrefsStore pinned types', () => {
     const raw = localStorage.getItem('silexgis.uiPrefs');
     expect(raw).not.toBeNull();
     const stored = JSON.parse(raw!) as { state: { pinnedTypeIds: number[]; mapChromeHidden: boolean }; version: number };
-    expect(stored.version).toBe(6);
+    expect(stored.version).toBe(7);
     expect(stored.state.pinnedTypeIds).toEqual([7]);
     expect(stored.state.mapChromeHidden).toBe(true);
   });
@@ -180,6 +185,92 @@ describe('uiPrefsStore appearance', () => {
     expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([2]);
     expect(useUiPrefsStore.getState().karstLinkTreatment).toBe('omit');
     expect(useUiPrefsStore.getState().movieSettings).toBeUndefined();
+  });
+
+  it('keeps the centerline budgets when the limits for the walls in view arrive beside them', () => {
+    // One version on again, and the nearest neighbour of the new fields: a budget somebody tuned
+    // for the flat map must survive, and the walls must come back following the installation
+    // rather than holding a number nobody typed.
+    localStorage.setItem(
+      'silexgis.uiPrefs',
+      JSON.stringify({
+        version: 6,
+        state: {
+          pinnedTypeIds: [8],
+          centerlineDetailZoom: 16,
+          centerlineMaxPaths: 40000,
+          // A stray value under the new name in an older blob is not a choice anybody made.
+          meshesInViewMaxCaves: 500,
+        },
+      }),
+    );
+
+    useUiPrefsStore.persist.rehydrate();
+
+    expect(useUiPrefsStore.getState().pinnedTypeIds).toEqual([8]);
+    expect(useUiPrefsStore.getState().centerlineDetailZoom).toBe(16);
+    expect(useUiPrefsStore.getState().centerlineMaxPaths).toBe(40000);
+    expect(useUiPrefsStore.getState().meshesInViewMinZoom).toBeUndefined();
+    expect(useUiPrefsStore.getState().meshesInViewMaxCaves).toBeUndefined();
+    expect(useUiPrefsStore.getState().meshesInViewMaxBytes).toBeUndefined();
+  });
+});
+
+describe('uiPrefsStore limits for the walls of the caves in view', () => {
+  it('follows the installation until somebody sets a number of their own', () => {
+    const state = useUiPrefsStore.getState();
+
+    expect(state.meshesInViewMinZoom).toBeUndefined();
+    expect(state.meshesInViewMaxCaves).toBeUndefined();
+    expect(state.meshesInViewMaxBytes).toBeUndefined();
+  });
+
+  it('stores the three together, and clears whichever is left out', () => {
+    const { setMeshesInViewLimits } = useUiPrefsStore.getState();
+    setMeshesInViewLimits({ minZoom: 12, maxCaves: 30, maxBytes: 256 * 1024 * 1024 });
+
+    expect(useUiPrefsStore.getState()).toMatchObject({
+      meshesInViewMinZoom: 12,
+      meshesInViewMaxCaves: 30,
+      meshesInViewMaxBytes: 256 * 1024 * 1024,
+    });
+
+    // One setter for all three, as the centerline limits have: a value not named is a value
+    // handed back to the installation, which is what "use the defaults" has to be able to say.
+    setMeshesInViewLimits({ maxCaves: 30 });
+
+    expect(useUiPrefsStore.getState().meshesInViewMinZoom).toBeUndefined();
+    expect(useUiPrefsStore.getState().meshesInViewMaxCaves).toBe(30);
+    expect(useUiPrefsStore.getState().meshesInViewMaxBytes).toBeUndefined();
+  });
+
+  it('persists them in this browser, and keeps them across a reload at the current version', () => {
+    useUiPrefsStore.getState().setMeshesInViewLimits({ minZoom: 13, maxCaves: 24, maxBytes: 128_000_000 });
+
+    const stored = JSON.parse(localStorage.getItem('silexgis.uiPrefs')!) as {
+      state: Record<string, unknown>;
+      version: number;
+    };
+    expect(stored.state).toMatchObject({
+      meshesInViewMinZoom: 13,
+      meshesInViewMaxCaves: 24,
+      meshesInViewMaxBytes: 128_000_000,
+    });
+
+    // What a reload does: the store starts empty and reads the blob back.
+    useUiPrefsStore.setState({
+      meshesInViewMinZoom: undefined,
+      meshesInViewMaxCaves: undefined,
+      meshesInViewMaxBytes: undefined,
+    });
+    localStorage.setItem('silexgis.uiPrefs', JSON.stringify(stored));
+    useUiPrefsStore.persist.rehydrate();
+
+    expect(useUiPrefsStore.getState()).toMatchObject({
+      meshesInViewMinZoom: 13,
+      meshesInViewMaxCaves: 24,
+      meshesInViewMaxBytes: 128_000_000,
+    });
   });
 });
 

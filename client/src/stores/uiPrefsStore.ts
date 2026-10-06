@@ -60,6 +60,18 @@ interface UiPrefsState {
   centerlineMaxPaths?: number;
   setCenterlineLimits: (limits: { detailZoom?: number; maxPaths?: number }) => void;
   /**
+   * Personal limits for the 3D view's "walls of every cave in view", overriding the
+   * installation's: the zoom it starts from, how many caves it draws and how many bytes of mesh
+   * it holds. Per browser for the reason the centerline limits are — the right budget is a fact
+   * about the graphics card in front of the person, not about the person. Undefined means
+   * "follow this installation's default". Stored as typed and bounded where they are used: the
+   * ceilings are the installation's and can change after a value was stored.
+   */
+  meshesInViewMinZoom?: number;
+  meshesInViewMaxCaves?: number;
+  meshesInViewMaxBytes?: number;
+  setMeshesInViewLimits: (limits: { minZoom?: number; maxCaves?: number; maxBytes?: number }) => void;
+  /**
    * Local mirror of the appearance settings the server also holds. The mirror is what paints —
    * it rehydrates synchronously, so the first render already has the right theme — while the
    * server copy is what carries the choice to another machine.
@@ -138,6 +150,15 @@ export const useUiPrefsStore = create<UiPrefsState>()(
       centerlineMaxPaths: undefined,
       setCenterlineLimits: ({ detailZoom, maxPaths }) =>
         set({ centerlineDetailZoom: detailZoom, centerlineMaxPaths: maxPaths }),
+      meshesInViewMinZoom: undefined,
+      meshesInViewMaxCaves: undefined,
+      meshesInViewMaxBytes: undefined,
+      setMeshesInViewLimits: ({ minZoom, maxCaves, maxBytes }) =>
+        set({
+          meshesInViewMinZoom: minZoom,
+          meshesInViewMaxCaves: maxCaves,
+          meshesInViewMaxBytes: maxBytes,
+        }),
       appearance: DEFAULT_APPEARANCE,
       setAppearance: (patch) => set((state) => ({ appearance: { ...state.appearance, ...patch } })),
       karstLinkTreatment: undefined,
@@ -189,7 +210,7 @@ export const useUiPrefsStore = create<UiPrefsState>()(
     }),
     {
       name: 'silexgis.uiPrefs',
-      version: 6,
+      version: 7,
       // Without a migrate, raising the version makes zustand discard the whole stored blob —
       // wiping everyone's pinned types, landing page and centerline budgets to add one field.
       migrate: (persisted, from) => {
@@ -202,6 +223,9 @@ export const useUiPrefsStore = create<UiPrefsState>()(
           selectors: from < 4 ? {} : (state.selectors ?? {}),
           karstLinkTreatment: from < 5 ? undefined : state.karstLinkTreatment,
           movieSettings: from < 6 ? undefined : state.movieSettings,
+          meshesInViewMinZoom: from < 7 ? undefined : state.meshesInViewMinZoom,
+          meshesInViewMaxCaves: from < 7 ? undefined : state.meshesInViewMaxCaves,
+          meshesInViewMaxBytes: from < 7 ? undefined : state.meshesInViewMaxBytes,
         };
       },
     },

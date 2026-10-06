@@ -59,8 +59,9 @@ vi.mock('../../api/hooks.ts', () => ({
     return Promise.resolve(surveyModels);
   },
   // Named for the same reason: the loader for the walls of the caves in view asks through it.
-  fetchCaveMeshesInView: (bbox: string) => {
+  fetchCaveMeshesInView: (bbox: string, maxCaves?: number) => {
     caveMeshRequests.push(bbox);
+    caveMeshCounts.push(maxCaves);
     return Promise.resolve(caveMeshesInView);
   },
   // What a reveal reads to find out where the thing it names is, through the query cache.
@@ -72,6 +73,7 @@ vi.mock('../../api/hooks.ts', () => ({
 
 const engine = await import('../../scene3d/cesiumTestDouble.ts');
 const { useWorkspaceStore } = await import('../../stores/workspaceStore.ts');
+const { useUiPrefsStore } = await import('../../stores/uiPrefsStore.ts');
 const { default: Scene3DView } = await import('./Scene3DView.tsx');
 
 let mapLayers: unknown[] | undefined;
@@ -101,6 +103,8 @@ let surveyModelRequests: string[] = [];
 let surveyModels: unknown[] = [];
 /** Which views the walls-in-view loader asked about, and what it was told they hold. */
 let caveMeshRequests: string[] = [];
+/** How many caves each of those requests asked to be answered with. */
+let caveMeshCounts: (number | undefined)[] = [];
 let caveMeshesInView: { items: unknown[]; total: number } = { items: [], total: 0 };
 /** This installation's imported files, which of them were asked for, and what each answers. */
 let geofilePage: { items: unknown[] } | undefined;
@@ -239,7 +243,10 @@ beforeEach(() => {
   surveyModelRequests = [];
   surveyModels = [];
   caveMeshRequests = [];
+  caveMeshCounts = [];
   caveMeshesInView = { items: [], total: 0 };
+  // Kept per browser, so a number one test set would otherwise bound the walls of the next.
+  useUiPrefsStore.getState().setMeshesInViewLimits({});
   geofilePage = undefined;
   geofileRequests = [];
   geofileResponses = {};
@@ -1790,6 +1797,8 @@ describe('the walls of every cave in view', () => {
       meshesInViewMinZoom: 0,
       meshesInViewMaxCaves: 12,
       meshesInViewMaxBytes: 64 * MB,
+      meshesInViewMaxCavesLimit: 60,
+      meshesInViewMaxBytesLimit: 512 * MB,
       ...overrides,
     };
   }
@@ -1962,6 +1971,78 @@ describe('the walls of every cave in view', () => {
     expect(await screen.findByTestId('scene3d-mesh-status')).toHaveTextContent(
       'No cave in view has walls to draw.',
     );
+    // And under that sentence, the way to the numbers it is counted against.
+    expect(screen.getByRole('link', { name: 'Change these limits in Settings › Advanced' })).toHaveAttribute(
+      'href',
+      '/settings/advanced',
+    );
+  });
+
+  it('asks with the installation’s own count for a person who has set none', async () => {
+    withWebGl2(true);
+    publishLimits();
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    chooseEveryCaveInView();
+
+    await waitFor(() => expect(caveMeshCounts).toEqual([12]));
+  });
+
+  it('works within the numbers this person set for this browser, held to the installation’s ceilings', async () => {
+    withWebGl2(true);
+    publishLimits({ meshesInViewMaxCavesLimit: 20 });
+    act(() => {
+      // More caves than the installation lets anybody ask for, and a budget of one megabyte.
+      useUiPrefsStore.getState().setMeshesInViewLimits({ maxCaves: 500, maxBytes: MB });
+    });
+    caveMeshesInView = {
+      items: [
+        aMeshInView('cave-1', { sizeBytes: 700 * 1024 }),
+        aMeshInView('cave-2', { sizeBytes: 700 * 1024 }),
+      ],
+      total: 2,
+    };
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+
+    chooseEveryCaveInView();
+
+    // The count sent is the ceiling, not the number typed; the budget in force is the person's.
+    await waitFor(() => expect(caveMeshCounts).toEqual([20]));
+    expect(
+      await screen.findByText(/Walls of 1 of 2 caves in view — the rest would exceed 1\.0 MB\./),
+    ).toBeInTheDocument();
+    expect(engine.engineState.modelRequests.map((request) => request.url)).toEqual([
+      '/files/cave-1.glb',
+    ]);
+  });
+
+  it('takes a number changed while the scene is open at once, releasing what it no longer covers', async () => {
+    withWebGl2(true);
+    publishLimits();
+    caveMeshesInView = { items: [aMeshInView('cave-1'), aMeshInView('cave-2')], total: 2 };
+    renderView();
+    await waitFor(() => expect(centerlineRequests).toHaveLength(1));
+    chooseEveryCaveInView();
+    await waitFor(() => expect(engine.engineState.modelRequests).toHaveLength(2));
+    act(() => {
+      engine.Model.deliver('/files/cave-1.glb');
+      engine.Model.deliver('/files/cave-2.glb');
+    });
+    await waitFor(() => expect(modelsInScene()).toHaveLength(2));
+
+    act(() => {
+      useUiPrefsStore.getState().setMeshesInViewLimits({ maxCaves: 1 });
+    });
+
+    // Without the camera moving and without a reload: the second cave's walls are out of the
+    // scene, and the view was asked about again for the one cave now allowed.
+    await waitFor(() => expect(modelsInScene()).toHaveLength(1));
+    await waitFor(() => expect(caveMeshCounts).toEqual([12, 1]));
+    expect(
+      await screen.findByText(/Walls of 1 of 2 caves in view — the rest are beyond the 1 drawn at once\./),
+    ).toBeInTheDocument();
   });
 });
 

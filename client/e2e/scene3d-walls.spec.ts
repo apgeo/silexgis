@@ -248,4 +248,38 @@ test('the walls of every cave in view are drawn together, counted in words, and 
   await page.getByTestId('scene3d-mesh-toggle').click();
   await expect(status).toHaveText(/not loaded/);
   expect(meshRequests.length - fetchedForTheSelectedCave).toBe(2);
+
+  // The numbers that view was counted against are a person's to change for their own browser,
+  // from where the panel points. Driven through the real page and the real route, because the
+  // count is one the server has to be asked for: a limit applied only in the browser would pass
+  // every check short of this one.
+  await page.getByRole('link', { name: 'Change these limits in Settings › Advanced' }).click();
+  await page.waitForURL(/\/settings\/advanced$/);
+  const cavesAtMost = page.getByLabel('Caves at most');
+  await expect(cavesAtMost).toHaveAttribute('placeholder', '12', { timeout: 15_000 });
+  await cavesAtMost.fill('1');
+  await cavesAtMost.blur();
+
+  // Back in the same view the walls are still off, as they were left. Switched on again: one
+  // cave of the two, and the sentence names the number just set as what kept the other out.
+  const countsAsked: (string | null)[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/v1/map/cave-meshes') {
+      countsAsked.push(url.searchParams.get('maxCaves'));
+    }
+  });
+  await page.goBack();
+  await page.waitForURL(/\/map3d/);
+  await waitForScene3dReady(page);
+  await page.getByTestId('scene3d-layers-trigger').click();
+  const statusAgain = page.getByTestId('scene3d-mesh-status');
+  await expect(statusAgain).toHaveText(/not loaded/);
+  await page.getByTestId('scene3d-mesh-toggle').click();
+  await expect(statusAgain).toHaveText(
+    /^Walls of 1 of 2 caves in view — the rest are beyond the 1 drawn at once\.$/,
+    { timeout: 60_000 },
+  );
+  expect(countsAsked.length, 'the view was asked about once the walls were on').toBeGreaterThan(0);
+  expect(new Set(countsAsked), 'every request named the one cave now allowed').toEqual(new Set(['1']));
 });

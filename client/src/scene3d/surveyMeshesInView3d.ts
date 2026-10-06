@@ -17,7 +17,9 @@ import { boundsToBbox } from './viewBounds3d.ts';
 // with a different risk: a wall mesh is a few hundred kilobytes in the ordinary case and tens of
 // megabytes in the worst one, it is fetched and held whole, and it costs roughly twice its size in
 // graphics memory for as long as it is held. A camera-driven layer that simply drew what was in
-// view could therefore try to pull gigabytes on one bad view. So nothing here is unbounded:
+// view could therefore try to pull gigabytes on one bad view. So nothing here is unbounded, and
+// the bounds are the installation's — or the person's own for this browser, which the
+// installation in turn bounds:
 //
 //   * below a zoom floor it holds nothing at all, because a wide view is a district's worth of
 //     caves and each would be a speck that cost its full size;
@@ -50,7 +52,10 @@ export interface SurveyMeshesInView3DEngine
  */
 export type SurveyWalls3DMode = 'selected' | 'inView';
 
-/** The installation's limits for this mode. Published by the server; there are no defaults here. */
+/**
+ * The limits in force for this mode: the installation's published ones, each replaced by the
+ * person's own where they set one. There are no defaults here.
+ */
 export interface SurveyMeshesInView3DLimits {
   /** Below this map zoom nothing is held. */
   minZoom: number;
@@ -117,7 +122,13 @@ export interface SurveyMeshesInView3DHandle {
    * any other regardless of how far from the middle of the view it is.
    */
   setSelectedCave(caveId: string | undefined): void;
-  /** Applies the installation's published limits. Nothing is held until they have been given. */
+  /**
+   * Applies the limits in force. Nothing is held until they have been given.
+   *
+   * Given again with different numbers — a person changed their own — they take effect at once
+   * rather than at the next camera move: what a lowered limit no longer covers is released
+   * before this returns, and a raised one is asked about straight away.
+   */
   setLimits(limits: SurveyMeshesInView3DLimits): void;
   /** Says how surveyed altitudes become scene heights. Moves what is loaded; never refetches. */
   setAltitudePlacement(placement: Altitude3DPlacement): void;
@@ -154,14 +165,76 @@ export function surveyMeshInViewModelId(caveId: string): string {
   return `survey-mesh-in-view:${caveId}`;
 }
 
-/** Reads the limits out of the server's published map configuration. */
-export function meshesInViewLimitsFromMapConfig(
-  config: Pick<MapConfig, 'meshesInViewMinZoom' | 'meshesInViewMaxCaves' | 'meshesInViewMaxBytes'>,
+/** A person's own limits for the browser they are using. A value left out follows the installation. */
+export interface PersonalMeshesInView3DLimits {
+  minZoom?: number;
+  maxCaves?: number;
+  maxBytes?: number;
+}
+
+/** What the installation publishes about this mode: its three defaults and its two ceilings. */
+export type MeshesInViewMapConfig = Pick<
+  MapConfig,
+  | 'meshesInViewMinZoom'
+  | 'meshesInViewMaxCaves'
+  | 'meshesInViewMaxBytes'
+  | 'meshesInViewMaxCavesLimit'
+  | 'meshesInViewMaxBytesLimit'
+>;
+
+/** The zooms a person may start this mode from: the range a map of this kind is ever drawn at. */
+export const MESHES_IN_VIEW_ZOOM_RANGE = { min: 1, max: 22 } as const;
+
+/**
+ * The smallest byte budget a person may set. Lower would be a budget that refuses an ordinary
+ * cave's walls, which reads on screen as the mode being broken rather than as a choice.
+ */
+export const MESHES_IN_VIEW_MIN_BYTES = 1024 * 1024;
+
+/**
+ * The limits in force for this viewer: for each of the three, the person's own value when they
+ * have set one and the installation's default when they have not.
+ *
+ * A personal value is held to what may be asked for before it is used — one cave up to the
+ * installation's ceiling, a megabyte up to the installation's ceiling, a zoom a map can be at —
+ * because it was typed once and is kept in this browser, while a ceiling is the operator's and
+ * can be lowered afterwards. Where a ceiling sits below a floor the ceiling wins: the operator
+ * keeps the last word. The installation's defaults are taken as published; they are the
+ * operator's own numbers, and the server has already held each to its ceiling.
+ *
+ * A ceiling that did not arrive — an answer from a server that does not publish one — is not
+ * leave to go without: the personal value is set aside and the default stands. Arithmetic on a
+ * missing ceiling would yield a limit that compares false with everything, which is no limit.
+ */
+export function meshesInViewLimitsInForce(
+  config: MeshesInViewMapConfig,
+  personal: PersonalMeshesInView3DLimits = {},
 ): SurveyMeshesInView3DLimits {
+  const inForce = (own: number | undefined, published: number, floor: number, ceiling: number) =>
+    // A value that is not a number is nobody's choice — a stored blob can hold anything.
+    own === undefined || !Number.isFinite(own) || !Number.isFinite(ceiling)
+      ? published
+      : Math.min(Math.max(Math.round(own), floor), ceiling);
+
   return {
-    minZoom: config.meshesInViewMinZoom,
-    maxCaves: config.meshesInViewMaxCaves,
-    maxBytes: config.meshesInViewMaxBytes,
+    minZoom: inForce(
+      personal.minZoom,
+      config.meshesInViewMinZoom,
+      MESHES_IN_VIEW_ZOOM_RANGE.min,
+      MESHES_IN_VIEW_ZOOM_RANGE.max,
+    ),
+    maxCaves: inForce(
+      personal.maxCaves,
+      config.meshesInViewMaxCaves,
+      1,
+      config.meshesInViewMaxCavesLimit,
+    ),
+    maxBytes: inForce(
+      personal.maxBytes,
+      config.meshesInViewMaxBytes,
+      MESHES_IN_VIEW_MIN_BYTES,
+      config.meshesInViewMaxBytesLimit,
+    ),
   };
 }
 
@@ -220,8 +293,8 @@ interface HeldMesh {
 }
 
 /**
- * Holds the walls of the caves in view, within the installation's budget. Nothing is held until
- * it has been switched on and told the limits.
+ * Holds the walls of the caves in view, within the budget in force. Nothing is held until it has
+ * been switched on and told the limits.
  *
  * `surveyTopOf` is how each cave's top is found, read at the moment a mesh is placed rather than
  * copied: every cave hangs from its own top, the same one its survey lines hang from, and those
@@ -378,7 +451,9 @@ export function attachSurveyMeshesInView3d(
 
     let answer: CaveMeshesInView;
     try {
-      answer = await fetchCaveMeshesInView(boundsToBbox(bounds));
+      // The count travels with the question, because the answer stops at it: asked without one,
+      // a person who raised theirs would be told about the installation's default and no more.
+      answer = await fetchCaveMeshesInView(boundsToBbox(bounds), activeLimits.maxCaves);
     } catch {
       if (seq === requestSeq && !detached) {
         // Keep what is already drawn: a dropped request is usually a network hiccup, and it says
@@ -445,6 +520,23 @@ export function attachSurveyMeshesInView3d(
         return;
       }
       limits = next;
+      // The answer already held says what this view contains, so it is measured against the new
+      // limits here, before anything is asked: a person who lowered a budget did it to get
+      // memory back, and waiting for a round trip to release it would hold the bytes they had
+      // just said they could not afford. Not when the view is now below the floor — there the
+      // request below releases everything, and starting a read first would be a download
+      // abandoned in the same breath.
+      if (
+        active &&
+        lastAnswer &&
+        !detached &&
+        mapZoomFor(engine.getPseudoZoom()) >= next.minZoom
+      ) {
+        apply(lastAnswer, next);
+        publish(counted(state.status, state.listing));
+      }
+      // And asked again in any case: the answer held stopped at the old count, so a raised one
+      // has caves in it that were only ever counted.
       void load();
     },
     setAltitudePlacement(next) {

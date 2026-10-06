@@ -88,7 +88,7 @@ import {
 import {
   attachSurveyMeshesInView3d,
   EMPTY_SURVEY_MESHES_IN_VIEW_3D_STATE,
-  meshesInViewLimitsFromMapConfig,
+  meshesInViewLimitsInForce,
   type SurveyMeshesInView3DHandle,
   type SurveyMeshesInView3DState,
 } from '../../scene3d/surveyMeshesInView3d.ts';
@@ -96,6 +96,7 @@ import { attachScene3dHash } from '../../scene3d/urlHash3d.ts';
 import { attachViewSync3d, type ViewSync3dHandle } from '../../scene3d/viewSync3d.ts';
 import { supportsWebGl2 } from '../../scene3d/webglSupport.ts';
 import { saveBlob } from '../../api/download.ts';
+import { useUiPrefsStore } from '../../stores/uiPrefsStore.ts';
 import { useWorkspaceStore } from '../../stores/workspaceStore.ts';
 import { onSurfaceFeaturesChanged } from '../../workspace/surfaceFeatureRefresh.ts';
 import { setActiveViewCamera } from '../../workspace/viewCamera.ts';
@@ -783,16 +784,28 @@ export default function Scene3DView({ height = '100%', syncUrlHash = false }: Sc
   }, []);
 
   const { data: mapConfig } = useMapConfig();
+  // This person's own limits for the walls in view, kept in this browser. Read one by one so
+  // that an unrelated preference changing does not hand the loader the same numbers again.
+  const ownMeshesMinZoom = useUiPrefsStore((s) => s.meshesInViewMinZoom);
+  const ownMeshesMaxCaves = useUiPrefsStore((s) => s.meshesInViewMaxCaves);
+  const ownMeshesMaxBytes = useUiPrefsStore((s) => s.meshesInViewMaxBytes);
 
   // Keyed on the surface as well as on the scene: a mount that takes the surface back attaches
   // fresh loaders, and the one for the walls in view holds nothing at all until it has been told
-  // its limits — it has no defaults of its own to fall back on.
+  // its limits — it has no defaults of its own to fall back on. Keyed on the person's own
+  // numbers too, so one changed while the scene is open is in force without a reload.
   useEffect(() => {
     if (mapConfig) {
       dataRef.current?.setLimits(limitsFromMapConfig(mapConfig));
-      meshesInViewRef.current?.setLimits(meshesInViewLimitsFromMapConfig(mapConfig));
+      meshesInViewRef.current?.setLimits(
+        meshesInViewLimitsInForce(mapConfig, {
+          minZoom: ownMeshesMinZoom,
+          maxCaves: ownMeshesMaxCaves,
+          maxBytes: ownMeshesMaxBytes,
+        }),
+      );
     }
-  }, [mapConfig, engineVersion, showingHere]);
+  }, [mapConfig, engineVersion, showingHere, ownMeshesMinZoom, ownMeshesMaxCaves, ownMeshesMaxBytes]);
 
   // ---- the ground's elevation ----
 

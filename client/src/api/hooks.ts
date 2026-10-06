@@ -1825,9 +1825,15 @@ export type CaveMeshInView = components['schemas']['CaveMeshInViewDto'];
  * One mesh per cave, already chosen by the server, nearest the middle of the box first, and only
  * for caves this caller may both read and place exactly — a cave left out for either reason is in
  * neither the items nor the total, so nothing here can be used to work out that one is there.
+ *
+ * `maxCaves` is how many caves the viewer's own limit allows; the server holds it to the
+ * installation's ceiling and answers with its default when none is sent.
  */
-export async function fetchCaveMeshesInView(bbox: string): Promise<CaveMeshesInView> {
-  return unwrap(api.GET('/api/v1/map/cave-meshes', { params: { query: { bbox } } }));
+export async function fetchCaveMeshesInView(
+  bbox: string,
+  maxCaves?: number,
+): Promise<CaveMeshesInView> {
+  return unwrap(api.GET('/api/v1/map/cave-meshes', { params: { query: { bbox, maxCaves } } }));
 }
 
 /** Imperative fetch used by the OpenLayers photo overlay loader (not a hook). */
