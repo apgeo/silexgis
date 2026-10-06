@@ -1647,9 +1647,12 @@ describe('saving the view as an image', () => {
     ).toBeInTheDocument();
     expect(savedFiles).toEqual([]);
 
-    // The next press that works takes the sentence down again.
+    // The next press that works takes the sentence down again. Pressed once the button has been
+    // handed back: the component library lets go of its busy state one render after it is told
+    // to, and a press landing in that render is — correctly — not taken.
     engine.engineState.captureFails = false;
-    fireEvent.click(screen.getByRole('button', { name: 'Save image' }));
+    await waitFor(() => expect(save).not.toHaveClass('ant-btn-loading'));
+    fireEvent.click(save);
     await waitFor(() => expect(savedFiles).toHaveLength(1));
     expect(screen.queryByText('This view could not be saved as an image.')).toBeNull();
   });
