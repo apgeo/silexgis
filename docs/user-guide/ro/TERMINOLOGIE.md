@@ -130,6 +130,8 @@ odată cu ea — și apoi paginile.
 | First visits | Primele vizite |
 | Leads | Continuări |
 | Who was there | Cine a fost |
+| Add a stay / Edit stay / Remove stay | Adaugă o ședere / Editare ședere / Șterge șederea |
+| Who / Role / Days / Note (a stay) | Cine / Rol / Zilele / Notă |
 | Tracking (the tab) | Urmărire |
 | Tracking setup | Configurarea urmăririi |
 | Start tracking / Close tracking | Pornește urmărirea / Încheie urmărirea |

@@ -126,12 +126,46 @@ under you, and it says it was capped.
 
 ### Who was there
 
-The camp roster, **counted once each** however many roles somebody is recorded in.
+The camp roster: who was at the camp, as what, and for which days. It is kept by hand rather
+than worked out from the trips, because the people it exists for — the cook, the driver,
+whoever kept the base camp — went on none of them.
+
+People are **counted once each**, however many roles or stays somebody is recorded in.
 
 Roles: Member · Organiser · Cook · Base camp · Driver · Medic · Equipment · Guest.
 
+**Keeping it.** If you may edit the camp, **Add a stay** records one, and each row has *Edit
+stay* and *Remove stay*. A stay is **one person in one role, for one stretch of days**:
+
+| | |
+|---|---|
+| **Who** | Start typing and pick somebody from the list of cavers — or type the name of somebody who is not on it |
+| **Role** | *Member* unless you say otherwise |
+| **Days** | The first and the last day they were there; for a single day, pick it twice. Starts out as the whole camp |
+| **Note** | *Arrived late, left early, came back…* |
+
+Somebody who cooked and also surveyed is **two stays**, and so is somebody who left and came
+back. Nothing stops stays overlapping.
+
+**Naming somebody new.** A name you type instead of picking is *"saved as a name: it means
+whoever the list of cavers already holds under exactly this name, and adds them if nobody
+is."* So the camp's cook can be written straight onto the roster, and is under **People →
+Cavers** afterwards — once, however many stays name them. It is the same rule a trip names
+its people by. Two things follow from *exactly*:
+
+- **Pick from the list when the person is on it.** A name typed slightly differently — a
+  missing accent, a nickname — is a different name, and makes a second entry for the same
+  person. (Two entries for one person are joined afterwards with **Merge**, on the cavers
+  page.)
+- **If two people are recorded under one name, the list shows both**, each with their clubs.
+  Typing that name instead of picking one means the older entry.
+
+*Remove stay* takes away only the record that they were at the camp for those days — *"the
+person stays in the list of cavers."*
+
 If you may read the camp but not the people in this installation, the roster is withheld
-whole — names, count and all — rather than shown partially.
+whole — names, count and all — rather than shown partially, and nothing is offered for
+keeping it.
 
 The roles are a vocabulary of the camp's own, separate from the trip roles; an administrator
 edits it under **Configuration → Camp roles** (see [Vocabularies](../admin/vocabularies.md)).
