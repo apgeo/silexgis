@@ -21,7 +21,7 @@ vi.mock('./client.ts', () => ({
   lastReadETag: () => '"7"',
 }));
 
-const { queryKeys, useMoveTripLog, useTripLog, useUpdateTripLog } = await import('./hooks.ts');
+const { queryKeys, useImportTripTrack, useMoveTripLog, useTripLog, useUpdateTripLog } = await import('./hooks.ts');
 
 /**
  * A save on a trip used to be finished only once the trip had been read back, because only a
@@ -102,6 +102,32 @@ describe('a write on a trip', () => {
       expect.objectContaining({ headers: { 'If-Match': '"7"' } }),
     );
     await waitFor(() => expect(result.current.trip.data).toEqual(proposed));
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it('reading a recorded track onto the trip is finished the same way, with no read behind it', async () => {
+    // The answer is the trip with its new sketch. A read that never answers stands behind it, as
+    // above: were the import still waiting for the trip to be read back, this would never settle.
+    const sketched = { ...after, geom: { type: 'LineString', coordinates: [[25.4, 45.5], [25.41, 45.51]] } };
+    post.mockImplementation(() => answers(sketched));
+    const { wrapper } = harness();
+    const { result } = renderHook(
+      () => ({ read: useImportTripTrack(), trip: useTripLog('trip-1') }),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.read.mutateAsync({
+        id: 'trip-1',
+        file: new File(['<gpx/>'], 'day.gpx', { type: 'application/gpx+xml' }),
+      });
+    });
+
+    expect(post).toHaveBeenCalledWith(
+      '/api/v1/trip-logs/{id}/geometry/gpx',
+      expect.objectContaining({ params: { path: { id: 'trip-1' } } }),
+    );
+    await waitFor(() => expect(result.current.trip.data).toEqual(sketched));
     expect(get).not.toHaveBeenCalled();
   });
 });

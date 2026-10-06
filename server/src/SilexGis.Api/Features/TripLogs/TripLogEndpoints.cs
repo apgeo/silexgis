@@ -1107,7 +1107,7 @@ public static class TripLogEndpoints
     /// what an action posted beside the trip names in <c>Content-Location</c> so the version it
     /// answers is filed where the trip's next write will look for it.
     /// </summary>
-    private static string TripPath(Guid id) => $"/api/v1/trip-logs/{id}";
+    internal static string TripPath(Guid id) => $"/api/v1/trip-logs/{id}";
 
     /// <summary>
     /// Moves a trip to another lifecycle state. Which moves exist is not decided here — the
