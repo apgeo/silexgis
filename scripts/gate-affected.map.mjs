@@ -196,7 +196,7 @@ export const groups = {
   terrain: [
     'CaveOverburdenTests', 'DemSamplerTests', 'GdalScratchDirectoryTests', 'JobQueueLaneTests',
     'TerrainActivationTests', 'TerrainBakePhaseTests', 'TerrainBuildApiTests',
-    'TerrainBuildHeightTests', 'TerrainBuildPipelineTests', 'TerrainCellFetchTests',
+    'TerrainBuildExtendTests', 'TerrainBuildHeightTests', 'TerrainBuildPipelineTests', 'TerrainCellFetchTests',
     'TerrainDerivativeApiTests', 'TerrainDerivativeRegistryTests', 'TerrainDerivativeTests',
     'TerrainMapConfigTests', 'TerrainOptionsTests', 'TerrainPipelineRegistrationTests',
     'TerrainPreparePhaseTests', 'TerrainProbeTests', 'TerrainPublishPhaseTests',
