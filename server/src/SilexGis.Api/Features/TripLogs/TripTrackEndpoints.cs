@@ -68,6 +68,7 @@ public static class TripTrackEndpoints
     private static async Task<Results<Ok<TripLogDto>, UnauthorizedHttpResult, ProblemHttpResult>> ImportAsync(
         Guid id,
         IFormFile file,
+        HttpContext http,
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
@@ -136,6 +137,11 @@ public static class TripTrackEndpoints
         await db.SaveChangesAsync(ct);
 
         var items = await TripLogEndpoints.MapWithChildrenAsync(db, access, protection, ctx, user, [trip], ct);
+        // The version this write produced, filed under the trip's own path. A page that reads a
+        // track onto the trip and then saves the trip is saving over this version, and without
+        // it that save would be refused until the trip had been read again.
+        await Concurrency.EmitETagAsync(
+            http, db, VersionedTable.TripLogs, trip.Id, ct, TripLogEndpoints.TripPath(trip.Id));
         return TypedResults.Ok(items[0]);
     }
 

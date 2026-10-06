@@ -15,7 +15,12 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
-import { classify, filterExpression } from './gate-affected.mjs';
+import {
+  classify,
+  deriveCrossCutting,
+  filterExpression,
+  withCrossCutting,
+} from './gate-affected.mjs';
 import * as map from './gate-affected.map.mjs';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -175,27 +180,39 @@ describe('the map cannot rot', () => {
   });
 
   it('the cross-cutting lists equal what re-deriving them produces today', () => {
-    const perm = new RegExp(map.crossCutting.derivation.permission.source, map.crossCutting.derivation.permission.flags);
-    const loc = new RegExp(map.crossCutting.derivation.location.source, map.crossCutting.derivation.location.flags);
-    const permFound = [];
-    const locFound = [];
-    for (const f of readdirSync(testDir).filter((x) => x.endsWith('Tests.cs'))) {
-      const text = readFileSync(join(testDir, f), 'utf8');
-      const cls = f.replace(/\.cs$/, '');
-      if (perm.test(text)) permFound.push(cls);
-      if (loc.test(text)) locFound.push(cls);
-    }
-    permFound.sort();
-    locFound.sort();
+    const derived = deriveCrossCutting(map, testDir);
+    const how = 'run `node scripts/gate-affected.mjs --rederive` and commit the map';
     assert.deepEqual(
       [...map.crossCutting.permissionClasses].sort(),
-      permFound,
-      'permissionClasses drifted from the sources — re-derive the list and update the map',
+      derived.permissionClasses,
+      `permissionClasses drifted from the sources — ${how}`,
     );
     assert.deepEqual(
       [...map.crossCutting.locationClasses].sort(),
-      locFound,
-      'locationClasses drifted from the sources — re-derive the list and update the map',
+      derived.locationClasses,
+      `locationClasses drifted from the sources — ${how}`,
     );
+  });
+
+  it('rewriting the lists replaces both and nothing else', () => {
+    const source = [
+      'export const before = 1;',
+      'export const crossCutting = {',
+      "  triggers: ['x/'],",
+      '  permissionClasses: [',
+      " 'OldA', 'OldB',",
+      '  ],',
+      '  locationClasses: [',
+      " 'OldC',",
+      '  ],',
+      '};',
+      'export const after = 2;',
+    ].join('\n');
+    const out = withCrossCutting(source, { permissionClasses: ['A', 'B'], locationClasses: [] });
+    assert.match(out, /permissionClasses: \[\n {4}'A', 'B',\n {2}\],/);
+    assert.match(out, /locationClasses: \[\n\n {2}\],|locationClasses: \[\n {2}\],/);
+    assert.ok(!out.includes('Old'), 'the old names are gone');
+    assert.ok(out.startsWith('export const before = 1;') && out.endsWith('export const after = 2;'));
+    assert.throws(() => withCrossCutting('nothing here', { permissionClasses: [], locationClasses: [] }));
   });
 });
