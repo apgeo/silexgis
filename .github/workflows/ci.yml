@@ -124,7 +124,7 @@ jobs:
           SILEXGIS__Db__ConnectionString: Host=localhost;Port=5432;Database=silexgis;Username=silexgis;Password=silexgis
         run: |
           nohup dotnet run --no-build --no-launch-profile > "$RUNNER_TEMP/api.log" 2>&1 &
-          for i in $(seq 1 90); do
+          for _ in $(seq 1 90); do
             if curl -fs -o /dev/null http://127.0.0.1:5080/openapi/v1.json; then exit 0; fi
             sleep 2
           done
