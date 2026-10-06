@@ -23,6 +23,12 @@ import {
 } from '../../caveview/modelParts.ts';
 import { noStationsMissing, stationsNotOnModel } from '../../caveview/placedOnModel.ts';
 import { mediaForStation } from '../../caveview/stationMedia.ts';
+import {
+  compareToolbarButtons,
+  comparisonUnderWay,
+  type SurveyCompareOffer,
+  type SurveyComparison,
+} from '../../caveview/surveyCompare.ts';
 import { caveViewToolbarButtons } from '../../caveview/toolbarButtons.ts';
 import {
   clusterLabelFor,
@@ -37,6 +43,7 @@ import { markerLine } from '../../caveview/markerLine.ts';
 import type { ResourceRef } from '../../viewlinks/resourceRef.ts';
 import { useViewControl } from '../../viewlinks/useViewControl.ts';
 import Lightbox from '../gallery/Lightbox.tsx';
+import CaveViewCompare from './CaveViewCompare.tsx';
 import CaveViewTrackingOverlay, { type TrackedPlace } from './CaveViewTrackingOverlay.tsx';
 import './CaveViewPanel.css';
 
@@ -183,11 +190,35 @@ export interface CaveViewPanelProps {
    * A place to fly the camera to, asked for from outside. See {@link CaveViewFocusRequest}.
    */
   focusRequest?: CaveViewFocusRequest;
+  /**
+   * The cave's other line plots, which this one can be looked at together with.
+   *
+   * <b>Offered by the mount, because only the mount knows there is a cave.</b> This panel is handed
+   * a file and nothing about where it came from; whether another survey of the same cave exists is
+   * a question about the cave's list. A mount that passes nothing offers no comparison, which is
+   * the right default for the ones that draw a party on the model or are read without an account:
+   * what they show is one survey at one moment, and a second survey beside it answers a question
+   * nobody there is asking.
+   *
+   * Absent — or naming no other survey — nothing of a comparison is drawn and the panel is exactly
+   * what it was. See {@link CaveViewCompare} for what a comparison is.
+   */
+  compare?: SurveyCompareOffer;
 }
 
 // CaveView addresses its container by element id; keep ids unique across remounts and
 // multiple simultaneous panels (main window + pop-outs).
 let panelSequence = 0;
+
+/**
+ * How wide a panel has to be before two surveys are drawn beside one another rather than one above
+ * the other.
+ *
+ * A question about the panel, not about the screen: the same panel is a dialog across a whole
+ * window and a pane a third of one wide beside the map, and half of that pane is narrower than the
+ * viewer's own row of controls.
+ */
+const SIDE_BY_SIDE_FROM_PX = 640;
 
 /**
  * The pictures a click on a thumbnail opens, and which of them was clicked.
@@ -295,6 +326,7 @@ export default function CaveViewPanel({
   stationMedia,
   crsLookup,
   focusRequest,
+  compare,
 }: CaveViewPanelProps) {
   const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
@@ -366,6 +398,19 @@ export default function CaveViewPanel({
    * inside a container that is no longer covering the screen is a sheet inside a card.
    */
   const [pictureHost, setPictureHost] = useState<HTMLElement | null>(null);
+  /**
+   * The other survey this one is being looked at with, and how — or null for this one alone.
+   *
+   * Held here rather than by what draws the comparison because this panel's own surface is laid
+   * out by it: out of sight while both surveys are drawn in one viewer, half the width while the
+   * second has a viewer of its own.
+   */
+  const [comparison, setComparison] = useState<SurveyComparison | null>(null);
+  /** How many models this panel's viewer has drawn — what says "a new viewer" to what follows it. */
+  const [modelLoads, setModelLoads] = useState(0);
+  /** Whether two surveys are drawn one above the other for want of room across. */
+  const [stacked, setStacked] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // The viewer that holds the loaded survey, kept so links, markers, pictures and the toolbar can
   // reach it after the load. The survey file itself is no longer kept: showing a named part of it
@@ -508,6 +553,7 @@ export default function CaveViewPanel({
       viewer.addEventListener('newCave', () => {
         if (disposed) return;
         setStatus('ready');
+        setModelLoads((count) => count + 1);
         // The parsed survey is the only thing that knows its stations; asked here, once,
         // the moment it exists. A build that cannot enumerate them (or a survey that
         // refuses) costs an empty index, never a broken viewer.
@@ -950,11 +996,46 @@ export default function CaveViewPanel({
     return () => observer.disconnect();
   }, [status]);
 
+  // ---- Looking at this survey together with another ----
+  //
+  // A comparison is of this survey with one other of the same cave. Pointed at another survey,
+  // the panel is showing something else and the comparison is over; the other survey taken off
+  // the cave's list ends it the same way, without anything having to be reset.
+  useEffect(() => {
+    setComparison(null);
+  }, [surveyModelId]);
+  // Not offered over a model that failed to load: there is nothing to compare, and the message
+  // saying so is in the place the controls would take.
+  const compareOffer = status === 'error' ? undefined : compare;
+  const underWay = comparisonUnderWay(compareOffer, comparison);
+  const sideBySide = underWay?.mode === 'sideBySide';
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!sideBySide || panel === null || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      // Measured zero is not measured: a panel behind another tab has no width to decide by.
+      if (width > 0) {
+        setStacked(width < SIDE_BY_SIDE_FROM_PX);
+      }
+    });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [sideBySide]);
+
   // ---- The viewer's own toolbar ----
   const toolbarOptions = toolbar === true ? {} : toolbar === false ? null : toolbar;
   const toolbarWanted = toolbarOptions !== null;
   const toolbarPlacement = toolbarOptions?.placement ?? 'top';
-  const toolbarButtons = toolbarOptions?.buttons ?? caveViewToolbarButtons({ narrow, coarse });
+  const ownToolbarButtons = toolbarOptions?.buttons ?? caveViewToolbarButtons({ narrow, coarse });
+  // Beside a second survey this viewer is half of a comparison, and is given the controls a
+  // comparison's viewers are given — see the rule for which ones go and why.
+  const toolbarButtons = sideBySide
+    ? compareToolbarButtons(ownToolbarButtons, 'sideBySide')
+    : ownToolbarButtons;
   // The list is a new array on every render, so what the toolbar is rebuilt for is its contents;
   // the list itself is read off a ref at the moment one is built.
   const toolbarButtonKey = toolbarButtons.join(',');
@@ -1035,8 +1116,18 @@ export default function CaveViewPanel({
     return () => document.removeEventListener('fullscreenchange', settle);
   }, [picturesOpen]);
 
+  const panelClass = [
+    'caveview-panel',
+    compareOffer !== undefined && 'caveview-panel-compare',
+    underWay?.mode === 'overlaid' && 'caveview-panel-overlaid',
+    sideBySide && 'caveview-panel-side-by-side',
+    sideBySide && stacked && 'caveview-panel-stacked',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className="caveview-panel" style={{ height }}>
+    <div ref={panelRef} className={panelClass} style={{ height }}>
       {status === 'loading' && (
         <Spin style={{ position: 'absolute', inset: 0, marginTop: 48 }} data-testid="caveview-loading" />
       )}
@@ -1054,12 +1145,38 @@ export default function CaveViewPanel({
           data-testid="caveview-missing-part"
         />
       )}
-      <div
-        id={containerIdRef.current}
-        className="caveview-panel-surface"
-        data-testid="caveview-container"
-        style={{ width: '100%', height: '100%', display: status === 'error' ? 'none' : undefined }}
-      />
+      {/* Every panel draws its surface through this, whether or not it has anything to compare:
+          the surface must keep one place in the tree for as long as the panel lives, because the
+          viewer owns the element and an offer that arrives a moment after the model — the cave's
+          list is a second request — must not take it out and put another in. */}
+      <CaveViewCompare
+        offer={compareOffer}
+        comparison={comparison}
+        onComparisonChange={setComparison}
+        getPrimaryViewer={() => (status === 'ready' ? (viewerRef.current?.viewer ?? null) : null)}
+        primaryLoads={modelLoads}
+        toolbar={
+          toolbarWanted ? { placement: toolbarPlacement, buttons: ownToolbarButtons } : null
+        }
+        crsLookup={crsLookup}
+      >
+        <div
+          id={containerIdRef.current}
+          className="caveview-panel-surface"
+          data-testid="caveview-container"
+          style={{
+            width: '100%',
+            height: '100%',
+            display: status === 'error' ? 'none' : undefined,
+            // Out of sight while both surveys are drawn in one viewer, and still laid out: it
+            // keeps its place and its size under the viewer that draws the two. The viewer sizes
+            // itself to its container whenever the window is resized, and one whose container
+            // has no size at that moment is left with a camera that shows nothing when it comes
+            // back — which this one does, with its model and everything attached to it.
+            visibility: underWay?.mode === 'overlaid' ? 'hidden' : undefined,
+          }}
+        />
+      </CaveViewCompare>
       {trackedCavers !== undefined && trackedCavers.length > 0 && status !== 'error' && (
         <CaveViewTrackingOverlay
           cavers={trackedCavers}

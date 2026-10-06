@@ -55,7 +55,13 @@ export type CaveViewerEvent =
   // A thumbnail in a station's strip was clicked, before the viewer shows the picture itself. The
   // event carries `entry` — the very object the strip was built from — and `handled`, which a host
   // that opens its own viewer on the picture sets to suppress the viewer's in-model popup.
-  | 'mediaOpen';
+  | 'mediaOpen'
+  // The view changed other than by this application setting it: the reader turned, tilted, zoomed
+  // or moved the model, the viewer flew to one of its own views, or the projection was switched.
+  // Carries nothing — the view is read with `getViewpoint()`. A view set through `setViewpoint()`,
+  // `setCameraAngles()` or `setView()` raises none, which is what lets two viewers be kept in step
+  // from each other's events without answering one another for ever.
+  | 'viewpoint';
 
 /**
  * How a station or a named part of a survey is addressed: the dotted path the viewer itself
@@ -67,6 +73,52 @@ export type CaveViewerEvent =
  * invent component boundaries that were never observed.
  */
 export type CaveViewRef = string | readonly string[];
+
+/**
+ * One file handed to the viewer together with others, with a name of its own in the survey tree.
+ *
+ * <b>Without a label the files of one load share a tree.</b> Two exports of one cave name their
+ * surveys alike, so their surveys merge and a station of either answers to the same path. With a
+ * label each file's surveys hang from a survey of that name, and every path begins with it. The
+ * label is one name of the tree: the viewer refuses an empty one and one with a full stop in it.
+ */
+export interface CaveViewFileDescription {
+  file: File;
+  label?: string;
+  /** The colour the file is drawn in under the by-survey shading, as a CSS colour. Needs a label. */
+  color?: string;
+}
+
+/**
+ * A node of the parsed survey: a survey, whose children are surveys and stations, or a station.
+ *
+ * The viewer's own object, of which this is only what the application walks. The order of
+ * `children` is not the file's and not stable — the viewer's own tree page sorts them in place.
+ */
+export interface CaveViewTreeNode {
+  name: string;
+  children: readonly CaveViewTreeNode[];
+  isStation(): boolean;
+}
+
+/** Where the camera looks from, how closely, at what, and with which projection. */
+export interface CaveViewViewpoint {
+  /** Radians about the vertical through the point looked at, as `getCameraAngles()` gives it. */
+  azimuth: number;
+  /** Radians from looking straight down: 0 is a plan view. */
+  polar: number;
+  /** 1 where the plan of the model just fits its container — so it means the same in any viewer. */
+  zoom: number;
+  /** The point looked at, from the model's centre, in heights of the container at a zoom of 1. */
+  target: { x: number; y: number; z: number };
+  cameraType: number;
+}
+
+/** The least box holding a survey's stations, in the coordinates the survey was made in. */
+export interface CaveViewSectionBounds {
+  min: { x: number; y: number; z: number };
+  max: { x: number; y: number; z: number };
+}
 
 /** One picture held for a station, as the viewer's media strip takes it. */
 export interface CaveViewMediaEntry {
@@ -507,6 +559,34 @@ export interface CaveViewer extends CaveViewLayers {
   removeTrail(id: string): boolean;
   clearTrails(): void;
   getTrails(): CaveViewTrail[];
+
+  /** The parsed survey's tree. Only meaningful once a survey is loaded. */
+  getSurveyTree(): CaveViewTreeNode;
+  /**
+   * Hides a named survey of the model, or shows it again: its legs, stations, labels, entrances
+   * and walls, with those of every survey inside it. A survey is drawn when neither it nor one it
+   * lies within is hidden. False, changing nothing, when the reference names no survey.
+   */
+  setSectionVisible(ref: CaveViewRef, visible: boolean): boolean;
+  /** Shows every hidden survey again — or, given one, every hidden survey that is it or inside it. */
+  showAllSections(ref?: CaveViewRef): boolean;
+  /** The surveys hidden, each as the names on its path — which is a reference to it. */
+  getHiddenSections(): string[][];
+  /**
+   * The colour a survey is drawn in under the by-survey shading, as `#rrggbb`: the one handed over
+   * with its file, or the one the viewer chose. Null for no survey, and for one outside the part
+   * of the model that is selected.
+   */
+  getSectionColor(ref: CaveViewRef): string | null;
+  /** Null for a reference naming no survey, and for a survey with no station in it. */
+  getSectionBounds(ref: CaveViewRef): CaveViewSectionBounds | null;
+  /** Null with no model loaded, and for a viewer whose container is not displayed. */
+  getViewpoint(): CaveViewViewpoint | null;
+  /**
+   * Sets the view at once, with no animation; a part left out stays. Raises no `viewpoint` event.
+   * False, changing nothing, where `getViewpoint()` would answer null and during a capture session.
+   */
+  setViewpoint(viewpoint: Partial<CaveViewViewpoint>): boolean;
 }
 
 /**
@@ -533,6 +613,8 @@ export function focusNamedNothing(error: unknown): boolean {
 export interface CaveViewUi {
   /** A File's name extension (.lox / .3d) selects the parser; string values are URLs. */
   loadCave(file: File | string, section?: string): void;
+  /** Several files drawn as one model, each under its label where it is given one. */
+  loadCaves(files: readonly CaveViewFileDescription[]): void;
   /** Tears down the UI, the viewer, its workers and WebGL resources. */
   dispose(): void;
 }
