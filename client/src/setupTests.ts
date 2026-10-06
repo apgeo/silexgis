@@ -14,6 +14,32 @@ import { afterEach } from 'vitest';
 afterEach(cleanup);
 import i18n from './i18n';
 
+// A component library's deprecation notice fails the test that provoked it.
+//
+// antd announces a renamed prop by writing to `console.error` and carrying on, so nothing fails
+// when one is used: the old name stays in the surrounding code to copy from, and a rename made
+// once across the whole client was undone by new work within weeks, twice. The browser suite
+// records these notices too, but only for the pages a flow visits; here every component a unit
+// test renders answers for itself. The library says each notice once per process, so it is the
+// first test in a file to render the old name that fails — which is enough to turn the file red.
+const antdDeprecations: string[] = [];
+const reportError = console.error.bind(console);
+console.error = (...args: unknown[]) => {
+  const line = args.map(String).join(' ');
+  if (/\[antd: [^\]]+\].*deprecated/.test(line)) {
+    antdDeprecations.push(line);
+  }
+  reportError(...args);
+};
+afterEach(() => {
+  const seen = antdDeprecations.splice(0);
+  if (seen.length > 0) {
+    throw new Error(
+      `this test rendered a component through a prop antd has deprecated:\n${seen.join('\n')}`,
+    );
+  }
+});
+
 // The application opens in Romanian; the tests read English.
 //
 // Almost every assertion about the interface names a string, and those strings are English in
