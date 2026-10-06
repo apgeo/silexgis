@@ -53,28 +53,22 @@ async function openTab(page: Page, name: string) {
 /**
  * Clicks one of the report card's save buttons and waits for that save to be *finished*.
  *
- * Finished means two answers, not one. The write itself comes back first; the trip is then read
- * again, because a write on a trip is checked against the version last read and the version has
- * just moved — so until the re-read lands, the page cannot write to this trip again and says so
- * by keeping the button busy. A flow that carried on after the write alone would type into a
- * card that is still saving and lose the click, which is what this waits out.
+ * Finished means the write has answered. The answer carries the trip as it now stands and the
+ * version the write produced, so the page redraws from it and can write again at once; nothing is
+ * read back, and a wait for a read would wait for ever. Waiting on the write rather than carrying
+ * on after the click is still needed: a flow that typed into the card while it was still saving
+ * would lose the click.
  *
- * Both waits are set up before the click: an answer that arrives before anything is watching for
- * it is an answer nothing sees.
+ * The wait is set up before the click: an answer that arrives before anything is watching for it
+ * is an answer nothing sees.
  */
 async function saveSection(page: Page, testId: string) {
   const written = page.waitForResponse(
     (response) =>
       response.request().method() === 'PUT' && /\/api\/v1\/trip-logs\//.test(response.url()),
   );
-  const readBack = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'GET' &&
-      /\/api\/v1\/trip-logs\/[0-9a-f-]+$/.test(new URL(response.url()).pathname),
-  );
   await page.getByTestId(testId).click();
   expect((await written).status()).toBe(200);
-  expect((await readBack).status()).toBe(200);
 }
 
 /** Opens one of the trip report's sections by its collapse header. */
@@ -145,7 +139,7 @@ test('a trip records what it worked in, and the record survives a reload and can
 
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
   await page.getByRole('button', { name: 'OK' }).click();
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
@@ -231,7 +225,7 @@ test('a trip spans several days, carries a shape of its own, and says the shape 
 
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
   await fillRange(page, start, end);
   await drawPoint(page);
   await page.getByRole('button', { name: 'OK' }).click();
@@ -274,7 +268,7 @@ test('a trip is written as a draft and stays one until it is published', async (
   // write-up is ready and not before, so a new trip arrives as a draft with nothing sent.
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
   await page.getByRole('button', { name: 'OK' }).click();
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
@@ -324,7 +318,7 @@ test('a trip logged without touching the date control is a day trip today', asyn
   // itself, which is what makes the detail page label it "Date".
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
   await page.getByRole('button', { name: 'OK' }).click();
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
@@ -350,7 +344,7 @@ test('a photograph attached to a trip appears in the trip’s own gallery, and t
 
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
   // One person, named for this run only, so the totals below are about a caver whose whole
   // history is the trip this flow just wrote — an assertion of exactly one, rather than of
   // "more than before", which would pass on a page that had stopped filtering entirely.
@@ -439,7 +433,7 @@ test('what a trip measured and what it found are stored on it, not held by the p
   // trip's purpose holds, so a trip with no purpose has nothing to be asked.
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
   await page.getByLabel('Trip type').click();
   // Waited for before it is clicked: a click landing while the list is still opening selects
   // nothing at all, and the trip is then created with no purpose.
@@ -489,7 +483,7 @@ test('a trip records who was there, what one of them did, and when they came out
 
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
 
   // Two people, and the ordinary one is a name and nothing else — the row asks for nothing
   // more, which is the bar this control has to keep: most rows are exactly this.
@@ -560,7 +554,7 @@ test('a trip is written up as a document, and the document is filed against the 
 
   await page.goto('/trip-logs');
   await page.getByRole('button', { name: /New trip log/ }).click();
-  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByRole('dialog').getByLabel('Title', { exact: true }).fill(title);
   await page.getByRole('button', { name: 'OK' }).click();
 
   await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
