@@ -105,17 +105,30 @@ export default function CaveDetailPage() {
   // somebody asked on a trip cannot open this cave can link to the place where access is granted
   // rather than to a page with a lock button somewhere on it. The address opens the dialog only
   // for a caller who may manage this cave's permissions; for anybody else it is inert, never a
-  // dialog they cannot use. Closing clears the parameter with a history replace, so Back does not
-  // reopen the dialog and a reload lands shut.
+  // dialog they cannot use. That is asked of this cave's own answer and never of the coarse
+  // capability the buttons are bridged with: holding a right over caves in general is not
+  // holding it over this one, and a dialog that opened on the first and shut again on the
+  // second would be exactly the dialog-they-cannot-use the address promises not to draw.
+  //
+  // `grantTo` rides with it and says which account the notice was about, so the dialog opens
+  // with a rule for that account already drafted. It means nothing alone — it is read only
+  // beside `permissions=1` — and it decides nothing: the dialog looks the account up under the
+  // reader's own rights and saves through the ordinary route, or drafts nothing at all.
+  //
+  // Closing clears both with a history replace, so Back does not reopen the dialog, a reload
+  // lands shut, and an address copied afterwards no longer carries somebody's account in it.
   const [searchParams, setSearchParams] = useSearchParams();
   const permissionsAddressed = searchParams.get('permissions') === '1';
+  const grantTo = permissionsAddressed ? searchParams.get('grantTo') : null;
   const [permissionsClicked, setPermissionsClicked] = useState(false);
-  const permissionsOpen = permissionsClicked || (permissionsAddressed && canManagePermissions);
+  const permissionsOpen =
+    permissionsClicked || (permissionsAddressed && summary?.permissions.canManagePermissions === true);
   const closePermissions = () => {
     setPermissionsClicked(false);
-    if (permissionsAddressed) {
+    if (searchParams.has('permissions') || searchParams.has('grantTo')) {
       const next = new URLSearchParams(searchParams);
       next.delete('permissions');
+      next.delete('grantTo');
       setSearchParams(next, { replace: true });
     }
   };
@@ -522,6 +535,7 @@ export default function CaveDetailPage() {
           entityId={id}
           open={permissionsOpen}
           onClose={closePermissions}
+          grantTo={grantTo}
         />
       )}
 

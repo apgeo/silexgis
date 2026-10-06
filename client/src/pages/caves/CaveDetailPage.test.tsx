@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
-import type { CaveDetail, Entrance } from '../../api/hooks.ts';
+import type { CaveDetail, CaveSummary, Entrance } from '../../api/hooks.ts';
 
 /**
  * The entrances table, and specifically what it says about a position it is not allowed to state
@@ -26,6 +26,8 @@ const permissionsModal = vi.fn();
 let entrances: Entrance[] = [];
 // What the domain capability answers, which is what the page falls back on with no summary.
 let can = false;
+// What this cave's own summary answers about the caller, or nothing while it is still on its way.
+let summary: CaveSummary | undefined;
 
 vi.mock('react-router-dom', async () => ({
   ...(await vi.importActual<typeof import('react-router-dom')>('react-router-dom')),
@@ -45,7 +47,7 @@ vi.mock('../../stores/workspaceStore.ts', () => ({
 
 vi.mock('../../api/hooks.ts', () => ({
   useCave: () => ({ data: cave(), isPending: false }),
-  useCaveSummary: () => ({ data: undefined }),
+  useCaveSummary: () => ({ data: summary }),
   // The declared-depths card is drawn on this page; nothing declared, so it says so.
   useCaveDepthPlaces: () => ({ data: [] }),
   useWriteCaveDepthPlace: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -67,7 +69,7 @@ vi.mock('../../api/hooks.ts', () => ({
 vi.mock('../../components/attachments/AttachmentSection.tsx', () => ({ default: () => null }));
 vi.mock('../../components/history/HistoryPanel.tsx', () => ({ default: () => null }));
 vi.mock('../../components/permissions/PermissionsModal.tsx', () => ({
-  default: (props: { open: boolean; onClose: () => void }) => {
+  default: (props: PermissionsDialogProps) => {
     permissionsModal(props);
     return null;
   },
@@ -95,6 +97,30 @@ vi.mock('./SurveyQualityPanel.tsx', () => ({ default: () => null }));
 vi.mock('./CaveExternalIdsSection.tsx', () => ({ default: () => null }));
 
 const { default: CaveDetailPage } = await import('./CaveDetailPage.tsx');
+
+/** What the page hands the permissions dialog. */
+interface PermissionsDialogProps {
+  open: boolean;
+  onClose: () => void;
+  grantTo?: string | null;
+}
+
+/** The cave's own answer about the caller: whether they may manage its permissions, and nothing else. */
+function summaryAnswering(canManagePermissions: boolean): CaveSummary {
+  return {
+    entranceCount: 0,
+    centerlineCount: 0,
+    surveyModelCount: 0,
+    attachmentCount: 0,
+    tripLogCount: 0,
+    permissions: {
+      canWrite: false,
+      canDelete: false,
+      canShare: false,
+      canManagePermissions,
+    },
+  } as unknown as CaveSummary;
+}
 
 function cave(): CaveDetail {
   return {
@@ -143,8 +169,13 @@ function showAt(path: string) {
 }
 
 /** The permissions dialog's props as of its latest render. */
-function permissionsDialog(): { open: boolean; onClose: () => void } {
-  return permissionsModal.mock.lastCall![0] as { open: boolean; onClose: () => void };
+function permissionsDialog(): PermissionsDialogProps {
+  return permissionsModal.mock.lastCall![0] as PermissionsDialogProps;
+}
+
+/** Whether the dialog was drawn open at any point so far, however briefly. */
+function dialogEverOpened(): boolean {
+  return permissionsModal.mock.calls.some(([props]) => (props as PermissionsDialogProps).open);
 }
 
 /** The row for one entrance, found by the name in its first cell. */
@@ -158,6 +189,7 @@ beforeEach(() => {
   setSelection.mockClear();
   permissionsModal.mockClear();
   can = false;
+  summary = undefined;
 });
 
 afterEach(cleanup);
@@ -218,23 +250,54 @@ describe('CaveDetailPage entrances table', () => {
  * opens the dialog only for somebody who may use it, and closing hands back a clean address.
  */
 describe('CaveDetailPage permissions address', () => {
+  // An account's id, shaped as an address carries one.
+  const ana = '0b6f2c1e-5a51-4c0e-9d1b-3f6a8a2d7c11';
+
   it('opens the permissions dialog from its address for a caller who may manage them', () => {
-    can = true;
+    summary = summaryAnswering(true);
     showAt('/caves/cave-1?permissions=1');
 
     expect(permissionsDialog().open).toBe(true);
   });
 
   it('leaves the address inert for a caller who may not', () => {
-    can = false;
+    summary = summaryAnswering(false);
     showAt('/caves/cave-1?permissions=1');
 
-    expect(permissionsModal.mock.calls.every(([props]) => props.open === false)).toBe(true);
+    expect(dialogEverOpened()).toBe(false);
     expect(screen.queryByRole('button', { name: /Permissions/ })).toBeNull();
   });
 
-  it('clears the address when the dialog closes, and stays shut', () => {
+  it('leaves the address inert for a caller who holds the right over caves in general but not over this one', () => {
+    // The coarse capability bridges the buttons until the cave's own answer arrives, and it is
+    // the wrong question for an address: an editor of caves at large is not thereby somebody
+    // who may hand out access to this one. Opening on it would draw the dialog, have its rules
+    // refused, and shut it again a moment later.
     can = true;
+    summary = summaryAnswering(false);
+    showAt(`/caves/cave-1?permissions=1&grantTo=${ana}`);
+
+    expect(dialogEverOpened()).toBe(false);
+  });
+
+  it('waits for the cave\'s own answer rather than opening on the coarse capability', () => {
+    can = true;
+    const view = showAt('/caves/cave-1?permissions=1');
+    expect(dialogEverOpened()).toBe(false);
+
+    summary = summaryAnswering(true);
+    view.rerender(
+      <MemoryRouter initialEntries={['/caves/cave-1?permissions=1']}>
+        <CaveDetailPage />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    expect(permissionsDialog().open).toBe(true);
+  });
+
+  it('clears the address when the dialog closes, and stays shut', () => {
+    summary = summaryAnswering(true);
     showAt('/caves/cave-1?permissions=1');
     expect(screen.getByTestId('location-search').textContent).toBe('?permissions=1');
 
@@ -251,6 +314,43 @@ describe('CaveDetailPage permissions address', () => {
     fireEvent.click(screen.getByRole('button', { name: /Permissions/ }));
 
     expect(permissionsDialog().open).toBe(true);
+    expect(screen.getByTestId('location-search').textContent).toBe('');
+  });
+
+  it('hands the dialog the account the address was written about', () => {
+    summary = summaryAnswering(true);
+    showAt(`/caves/cave-1?permissions=1&grantTo=${ana}`);
+
+    expect(permissionsDialog().open).toBe(true);
+    expect(permissionsDialog().grantTo).toBe(ana);
+  });
+
+  it('clears the account from the address with the dialog, and leaves what is not its own alone', () => {
+    // An address copied after the dialog has been dealt with should not still carry somebody's
+    // account in it, and whatever else the address said was not this dialog's to remove.
+    summary = summaryAnswering(true);
+    showAt(`/caves/cave-1?from=inbox&permissions=1&grantTo=${ana}`);
+
+    act(() => permissionsDialog().onClose());
+
+    expect(screen.getByTestId('location-search').textContent).toBe('?from=inbox');
+    expect(permissionsDialog().open).toBe(false);
+    expect(permissionsDialog().grantTo).toBeNull();
+  });
+
+  it('reads the account only beside the dialog\'s own parameter', () => {
+    // Alone it opens nothing and names nobody: the dialog reached from the lock button is the
+    // ordinary one, and closing it tidies the stray parameter away.
+    can = true;
+    summary = summaryAnswering(true);
+    showAt(`/caves/cave-1?grantTo=${ana}`);
+    expect(dialogEverOpened()).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: /Permissions/ }));
+    expect(permissionsDialog().open).toBe(true);
+    expect(permissionsDialog().grantTo).toBeNull();
+
+    act(() => permissionsDialog().onClose());
     expect(screen.getByTestId('location-search').textContent).toBe('');
   });
 });

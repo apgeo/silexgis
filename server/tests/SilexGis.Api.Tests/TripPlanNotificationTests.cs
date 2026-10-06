@@ -286,8 +286,9 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, ICl
         told.Count.ShouldBe(1);
         told[0].Placeholders.ShouldContain(caveName);
         // The message is about a grant, so its link lands on the cave's permissions dialog —
-        // the page's address for it — and not merely on the cave's page.
-        told[0].Placeholders.ShouldContain($"/caves/{caveId}?permissions=1");
+        // the page's address for it — and not merely on the cave's page. And it says who the
+        // message is about, by account, so the dialog can open about them.
+        LinkOf(told[0]).ShouldBe($"/caves/{caveId}?permissions=1&grantTo={mateId}");
         (await CaveNoticesForAsync(mateId, caveId)).ShouldBeEmpty(
             "the person who cannot open the cave is never told its name");
 
@@ -496,6 +497,129 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, ICl
         (await CaveNoticesForAsync(administratorId, caveId)).Count.ShouldBe(1);
     }
 
+    /// <summary>
+    /// The link in the message says who the message is about, by account. Whoever is told that
+    /// a person cannot open a cave is being asked to do one thing — open it to that person —
+    /// and a link that led only to the cave's permissions would leave them to find the person
+    /// by hand among everybody the installation knows. Two people shut out of the same cave are
+    /// two messages, and each carries its own person: a link naming the other one would draft
+    /// a rule for somebody the message never mentioned.
+    /// </summary>
+    [Fact]
+    public async Task The_link_names_the_account_each_message_is_about()
+    {
+        var caveName = $"Peștera Numită {Guid.NewGuid():N}"[..34];
+        var caveId = await CreateCaveAsync(caveName, keeper);
+        await GrantCaveReadAsync(caveId, organiserId);
+
+        var trip = await CreatePlanAsync("A trip two people cannot follow", caveId);
+        await ProposeAsync(trip);
+
+        (await mate.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await stranger.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        (await InviteAsync(organiser, trip, mateCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await InviteAsync(organiser, trip, strangerCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // In the order the two were asked, which is the order the messages were written in.
+        (await CaveNoticesForAsync(keeperId, caveId)).Select(LinkOf).ShouldBe(
+            [
+                $"/caves/{caveId}?permissions=1&grantTo={mateId}",
+                $"/caves/{caveId}?permissions=1&grantTo={strangerId}",
+            ]);
+    }
+
+    /// <summary>
+    /// Somebody asked who holds no account can be granted nothing: a rule names an account or a
+    /// club, and they are neither. So no message is written about them at all, on either edge —
+    /// rather than one whose link would open a dialog about nobody. The person asked beside them
+    /// who does hold an account is the subject of exactly one message each time, so the silence
+    /// is about the account and not about a path that has stopped sending.
+    /// </summary>
+    [Fact]
+    public async Task Somebody_asked_who_holds_no_account_is_the_subject_of_no_message_and_no_link()
+    {
+        var caveId = await CreateCaveAsync($"Peștera Fără Cont {Guid.NewGuid():N}"[..34], keeper);
+        await GrantCaveReadAsync(caveId, organiserId);
+
+        // The first edge: asked onto a trip that already names the cave.
+        var trip = await CreatePlanAsync("A trip with somebody who never signs in", caveId);
+        await ProposeAsync(trip);
+
+        (await InviteAsync(organiser, trip, accountlessCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        (await CaveNoticesForAsync(keeperId, caveId)).ShouldBeEmpty(
+            "there is no account to open the cave to, so there is nothing to ask of its owner");
+        (await CaveNoticesForAsync(administratorId, caveId)).ShouldBeEmpty();
+
+        (await InviteAsync(organiser, trip, mateCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        LinkOf((await CaveNoticesForAsync(keeperId, caveId)).ShouldHaveSingleItem())
+            .ShouldBe($"/caves/{caveId}?permissions=1&grantTo={mateId}");
+
+        // The second edge: a cave named onto the trip after both were asked. Everybody already
+        // on the list is weighed against it, and the one without an account is again nobody.
+        var laterId = await CreateCaveAsync($"Peștera Ulterioară {Guid.NewGuid():N}"[..34], keeper);
+        await GrantCaveReadAsync(laterId, organiserId);
+        await EditAsync(trip, "A trip that gained a second cave", caveId, laterId);
+
+        LinkOf((await CaveNoticesForAsync(keeperId, laterId)).ShouldHaveSingleItem())
+            .ShouldBe($"/caves/{laterId}?permissions=1&grantTo={mateId}");
+    }
+
+    /// <summary>
+    /// The message is a line in its reader's inbox before it is a letter in anybody's mailbox —
+    /// an installation need not send mail at all — so the line has to be the quick way too.
+    /// <para>
+    /// Where an inbox line points is never the path its producer stored: it is worked out
+    /// again when the line is read, from what the message is about, after the reader's access
+    /// to that has been decided afresh. So two things are asserted, and they are one rule. The
+    /// line leads to the cave's permissions dialog about the person who was asked, built from
+    /// the cave the check was made against. And once its reader can no longer open that cave,
+    /// the same line carries neither the cave's name nor any way to it — while still being
+    /// there, because that something happened is not the secret.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Read_in_the_inbox_the_message_leads_to_the_dialog_about_that_person_until_its_reader_loses_the_cave()
+    {
+        var caveName = $"Peștera Citită {Guid.NewGuid():N}"[..34];
+        var caveId = await CreateCaveAsync(caveName, keeper);
+        await GrantCaveReadAsync(caveId, organiserId);
+
+        var trip = await CreatePlanAsync("A trip its keeper reads about", caveId);
+        await ProposeAsync(trip);
+        (await InviteAsync(organiser, trip, mateCaver)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        // What was stored names the cave as its subject, which is what makes the rest possible:
+        // a message that named nothing could never be checked against anything.
+        var stored = (await CaveNoticesForAsync(keeperId, caveId)).ShouldHaveSingleItem();
+        stored.TargetKind.ShouldBe(NotificationTargetKind.Feature);
+        stored.TargetId.ShouldBe(caveId);
+
+        var line = await InboxLineAsync(keeper, stored.Id);
+        line.GetProperty("targetWithheld").GetBoolean().ShouldBeFalse();
+        line.GetProperty("title").GetString()!.ShouldContain(caveName);
+        line.GetProperty("url").GetString()
+            .ShouldBe($"/caves/{caveId}?permissions=1&grantTo={mateId}");
+
+        // A refusal written straight onto the cave: it beats owning it, which is the one way an
+        // owner can genuinely stop being able to read their own row.
+        await DenyCaveReadAsync(caveId, keeperId);
+        (await keeper.GetAsync($"/api/v1/caves/{caveId}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var response = await keeper.GetAsync($"/api/v1/notifications/{stored.Id}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        var after = JsonDocument.Parse(payload).RootElement;
+        after.GetProperty("targetWithheld").GetBoolean().ShouldBeTrue();
+        after.GetProperty("title").ValueKind.ShouldBe(JsonValueKind.Null);
+        after.GetProperty("url").ValueKind.ShouldBe(JsonValueKind.Null);
+        // Asserted on what was actually sent rather than on two fields of it: neither the name,
+        // nor the cave, nor the person the message was about travels in any other member.
+        payload.ShouldNotContain(caveName);
+        payload.ShouldNotContain(caveId.ToString());
+        payload.ShouldNotContain(mateId.ToString());
+    }
+
     // ---- fixture ----
 
     private async Task<Guid> CreatePlanAsync(string title, params Guid[] caveIds)
@@ -631,6 +755,23 @@ public sealed class TripPlanNotificationTests : IAsyncLifetime, IDisposable, ICl
     {
         var sent = await NoticesForAsync(userId, MessageTemplateCatalog.NotifyTripInviteeCannotOpenCave);
         return [.. sent.Where(x => x.Placeholders.Contains(caveId.ToString(), StringComparison.Ordinal))];
+    }
+
+    /// <summary>
+    /// Where a stored message points, read out of what its producer recorded rather than
+    /// matched in the raw text: the stored form is free to escape an ampersand, and a link is
+    /// right as a whole or not at all.
+    /// </summary>
+    private static string LinkOf(Notification notice) =>
+        JsonDocument.Parse(notice.Placeholders).RootElement.GetProperty("url").GetString()!;
+
+    /// <summary>One line of somebody's own inbox, as the application shows it to them.</summary>
+    private static async Task<JsonElement> InboxLineAsync(HttpClient reader, long id)
+    {
+        var response = await reader.GetAsync($"/api/v1/notifications/{id}");
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+        return JsonDocument.Parse(payload).RootElement;
     }
 
     private async Task<List<Notification>> NoticesForTemplateAsync(string templateKey, Guid tripId)

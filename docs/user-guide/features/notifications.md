@@ -72,6 +72,9 @@ what happened, newest first, filterable by kind, marked read as you open them or
 - A line about something you **can no longer open** says exactly that, in place of a name and
   a link. You are still told that it happened — hiding that would be its own kind of leak —
   but nothing about the thing itself survives your losing access to it.
+- A line saying that **somebody asked onto a trip cannot open a cave** leads to that cave's
+  **Permissions**, opened about that person — see
+  [An invitation grants nothing](trips.md#an-invitation-grants-nothing).
 
 ---
 

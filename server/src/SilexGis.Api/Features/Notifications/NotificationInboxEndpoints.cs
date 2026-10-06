@@ -372,7 +372,7 @@ public static class NotificationInboxEndpoints
                 row.TemplateKey,
                 rendering.Titles.GetValueOrDefault(row.Id),
                 !withheld.Contains(row.Id) && targets.TryGetValue(row.Id, out var target)
-                    ? NotificationTargets.RouteTo(target)
+                    ? NotificationTargets.RouteTo(row, target)
                     : null,
                 withheld.Contains(row.Id),
                 row.CreatedAt,

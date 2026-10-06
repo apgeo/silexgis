@@ -75,6 +75,9 @@ deschideți sau tot deodată.
 - Un rând despre ceva pe care **nu îl mai puteți deschide** spune exact asta, în locul unui nume
   și al unui link. Sunteți în continuare anunțat că s-a întâmplat — ascunderea ar fi propriul ei
   fel de scurgere — dar nimic despre lucrul în sine nu supraviețuiește pierderii accesului.
+- Un rând care spune că **cineva invitat pe o tură nu poate deschide o peșteră** duce la
+  **Permisiunile** acelei peșteri, deschise despre acea persoană — vedeți
+  [O invitație nu acordă nimic](trips.md#o-invitație-nu-acordă-nimic).
 
 ---
 

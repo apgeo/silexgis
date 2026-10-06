@@ -149,6 +149,20 @@ Every object has a **Permissions** tab (where you may manage permissions on it).
 Add a rule naming a **user** or a **caving group**, an effect, actions, and a scope of
 **this object only** or **this object and everything inside**.
 
+### Opened about somebody
+
+The message saying that somebody asked onto a trip cannot open a cave links to that cave's
+**Permissions**, opened about that person. The dialog then holds one row you did not add —
+**Read** on this object for them, marked *proposed* — and a line above the table saying why it
+is there.
+
+It is a draft. **Nothing is granted until you press OK**, and what is saved is an ordinary
+rule: bounded, like any other, by what you hold yourself, and in force until somebody removes
+it. Remove the row to grant nothing. A link naming somebody the application cannot find opens
+the ordinary dialog and says nothing about them.
+
+See [An invitation grants nothing](../features/trips.md#an-invitation-grants-nothing).
+
 ### Rules written by a camp
 
 On a trip belonging to a camp, some rules show as **From a camp**. They were written by the

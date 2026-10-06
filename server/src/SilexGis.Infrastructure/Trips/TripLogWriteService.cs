@@ -181,18 +181,10 @@ public sealed class TripLogWriteService(
         // only their attachment rows go, below, and the documents stay. A generated write-up that
         // something else has since taken hold of — attached to another entity, filed in a cabinet
         // — has become library material by that act and is kept the same way. Found before the
-        // attachment rows go, because they are what names it.
-        var generatedPrefix = TripReportNaming.GeneratedPrefix(trip.Id);
-        var generatedReportFileIds = await (
-            from attachment in db.Attachments.AsNoTracking()
-            join file in db.StoredFiles.AsNoTracking() on attachment.FileId equals file.Id
-            where attachment.EntityType == AttachedEntityType.TripLog
-                && attachment.EntityId == trip.Id
-                && attachment.Role == AttachmentRole.Report
-                && file.OriginalName.StartsWith(generatedPrefix)
-            select file.Id)
-            .Distinct()
-            .ToListAsync(ct);
+        // attachment rows go, because they are what names it. The rule is not the trip's alone —
+        // a camp's write-up goes the same way — so it is stated once, where both ask it.
+        var generatedReportFileIds = await GeneratedWriteUpCleanup.FiledOnAsync(
+            db, AttachedEntityType.TripLog, trip.Id, TripReportNaming.GeneratedPrefix(trip.Id), ct);
 
         // Participant rows cascade; polymorphic rows are cleaned here.
         //
@@ -223,20 +215,11 @@ public sealed class TripLogWriteService(
             .Where(x => x.EntityType == AttachedEntityType.TripLog && x.EntityId == trip.Id)
             .ExecuteDeleteAsync(ct);
 
-        var removedFiles = new List<StoredFile>();
-        foreach (var fileId in generatedReportFileIds)
-        {
-            if (await HeldElsewhereAsync(fileId, ct))
-            {
-                continue;
-            }
+        // Asked now that the trip's own attachment rows are gone, so that an attachment still
+        // pointing at a write-up is somebody else's, and keeps it.
+        var removedFiles = await GeneratedWriteUpCleanup.RemoveUnheldAsync(
+            db, documents, generatedReportFileIds, ct);
 
-            // A tag on the file carries no foreign key and would be left pointing at nothing.
-            await db.Taggings
-                .Where(t => t.EntityType == AttachedEntityType.StoredFile && t.EntityId == fileId)
-                .ExecuteDeleteAsync(ct);
-            removedFiles.AddRange(await documents.DeleteDocumentOfFileAsync(fileId, ct));
-        }
         // The trip's memberships go, and so do the links that cannot mean anything without it.
         //
         // A link typed with one of the trip roles goes whole, however many features it still
@@ -295,26 +278,6 @@ public sealed class TripLogWriteService(
             .ExecuteDeleteAsync(ct);
         db.TripLogs.Remove(trip);
         return removedFiles;
-    }
-
-    /// <summary>
-    /// Whether a generated write-up has been taken hold of by something other than the trip it
-    /// was written for: attached to another entity, or filed in a cabinet. Asked once the trip's
-    /// own attachment rows are gone, so any attachment left is somebody else's.
-    /// </summary>
-    private async Task<bool> HeldElsewhereAsync(Guid fileId, CancellationToken ct)
-    {
-        if (await db.Attachments.AsNoTracking().AnyAsync(a => a.FileId == fileId, ct))
-        {
-            return true;
-        }
-
-        var documentId = await db.StoredFiles.AsNoTracking()
-            .Where(f => f.Id == fileId)
-            .Join(db.DocumentVersions.AsNoTracking(), f => f.DocumentVersionId, v => v.Id, (f, v) => v.DocumentId)
-            .FirstOrDefaultAsync(ct);
-        return documentId != Guid.Empty
-            && await db.CabinetDocuments.AsNoTracking().AnyAsync(c => c.DocumentId == documentId, ct);
     }
 
     /// <summary>

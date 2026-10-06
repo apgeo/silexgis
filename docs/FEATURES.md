@@ -367,8 +367,12 @@ feature and walkthroughs of whole jobs.
   is closed. The [user guide](user-guide/features/live-tracking.md) has the whole of it.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,
-  the cave's owner and the full administrators get a message with a link to the cave, whether the cave
-  was already on the trip or was added afterwards. That message is honest about its own reach: it says
+  the cave's owner and the full administrators get a message, whether the cave was already on the trip
+  or was added afterwards. Its link is the quick way to let that person in: it opens the cave's
+  permissions with read access for them already drafted — and nothing more than read — so that one
+  confirmation grants it, and nothing is granted until that confirmation is given. What is granted is
+  an ordinary rule on the cave and lasts until it is removed; access that ends by itself on a date is
+  not built. That message is honest about its own reach: it says
   it went to the owner and the administrators and to nobody else, that somebody who could grant access
   another way — through a club, say — has **not** been told, and asks the reader to pass it on if it
   is not theirs to act on. Somebody on the list with no account on this installation gets nothing and

@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Messaging;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Notifications;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Notifications;
@@ -61,6 +64,62 @@ public static class NotificationTargets
         NotificationTargetKind.MapView => "/map",
         _ => null,
     };
+
+    /// <summary>
+    /// Where a reader is sent for one notification: ordinarily the page of the thing it is
+    /// about, and for the one message that asks its reader to do something there, the place on
+    /// that page where it is done.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The message saying that somebody asked on a trip cannot open a cave is a request to open
+    /// it to them, so it lands on that cave's permissions dialog, opened about that person.
+    /// Sending its reader to the cave's page instead would hand them a problem and leave them
+    /// to find both the dialog and the person by hand.
+    /// </para>
+    /// <para>
+    /// The address is still derived and never trusted. The cave in it is the target the
+    /// reader's access has just been decided against, not the path the producer stored; and
+    /// the one thing taken from what the producer recorded is the account the message is
+    /// about, read as an identifier or not at all, so nothing else can ride into the address
+    /// with it. That account is no secret from this reader — the message names the person in
+    /// its own first words — and the page it leads to treats it as a suggestion, looked up
+    /// again under the reader's own rights.
+    /// </para>
+    /// <para>
+    /// A notification of this kind that recorded no account points at the ordinary page.
+    /// </para>
+    /// </remarks>
+    public static string? RouteTo(Notification notification, NotificationTarget target) =>
+        notification.TemplateKey == MessageTemplateCatalog.NotifyTripInviteeCannotOpenCave
+        && target.Kind == NotificationTargetKind.Feature
+        && InviteeRecordedIn(notification) is { } invitee
+            ? NotificationLinks.CavePermissionsAbout(target.Id, invitee)
+            : RouteTo(target);
+
+    /// <summary>
+    /// The account a notification recorded as the person it is about, or nothing when it
+    /// recorded none or recorded something that is not an identifier.
+    /// </summary>
+    private static Guid? InviteeRecordedIn(Notification notification)
+    {
+        try
+        {
+            using var recorded = JsonDocument.Parse(notification.Placeholders);
+            return recorded.RootElement.ValueKind == JsonValueKind.Object
+                && recorded.RootElement.TryGetProperty(NotificationLinks.InviteeAccount, out var value)
+                && value.ValueKind == JsonValueKind.String
+                && Guid.TryParse(value.GetString(), out var invitee)
+                    ? invitee
+                    : null;
+        }
+        catch (JsonException)
+        {
+            // What a producer recorded is its own business to get right; a row this cannot
+            // read is still a row with a target, and the ordinary page is a true answer for it.
+            return null;
+        }
+    }
 
     /// <summary>
     /// Which of these targets the reader may open right now. A target that has since been deleted

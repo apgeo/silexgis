@@ -56,6 +56,13 @@ mai întâi confirmare:
 **Șterge** întreabă *„Ștergeți această tabără? Turele adunate în ea rămân; dispar doar tabăra
 și regulile ei proprii."* — o tabără adună ture, nu le deține.
 
+Un document pleacă odată cu tabăra: raportul depus prin **Salvează la tabără** (vedeți
+*Raportul*, mai jos). A fost făcut din tabără și nu mai spune nimic după ce tabăra dispare, așa
+că este șters împreună cu ea, nu lăsat în bibliotecă. Tot restul de pe fila *Fișiere* a taberei
+rămâne în bibliotecă și își pierde doar locul de la tabără — fotografiile, un raport scris și
+încărcat de cineva și un raport salvat care între timp a fost clasat într-un dulap sau atașat
+la altceva. Rapoartele salvate la turele taberei aparțin acelor ture și rămân la ele.
+
 ## File
 
 **Ture · Hartă · Continuări · Cine a fost · Fotografii · Fișiere · Istoric**

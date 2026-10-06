@@ -20,10 +20,14 @@ namespace SilexGis.Api.Features.TripLogs;
 /// Being asked on a trip grants nothing. Somebody organising one therefore has no way to open the
 /// cave to the person they just asked, and the person asked has no way to ask for it — so this
 /// closes the loop the only way that hands nobody anything they did not already have: it tells
-/// people who can already open the cave that somebody else cannot, and links them to the page
-/// where they may change that. There is no button here that grants: a grant made from a message
-/// would have no expiry to give it, and no mark on it saying where it came from, so the next
-/// person to save that cave's permissions would silently delete it.
+/// people who can already open the cave that somebody else cannot, and links them to the place
+/// where they may change that — the cave's permissions dialog, opened about the person in
+/// question. Nothing here grants, and neither does following the link. A rule comes to exist
+/// only when somebody who may manage that cave's permissions saves one, as themselves, through
+/// the route every such rule is written by: bounded by what they hold, recorded under their
+/// name, and listed among the cave's other rules where the next person to edit them will find
+/// it. A grant written by the message itself would be none of those things. What is saved lasts
+/// until somebody removes it — a rule cannot yet carry a date on which it ends.
 /// </para>
 /// <para>
 /// Either half of the pairing can arrive second, so both openings are watched: a person asked
@@ -45,7 +49,10 @@ namespace SilexGis.Api.Features.TripLogs;
 /// <para>
 /// This is the one message about a trip that names a cave, and it is only ever sent to somebody
 /// whose own access already opens that cave, decided freshly for each of them. A notice that
-/// disclosed a cave in the course of protecting it would be worse than sending nothing.
+/// disclosed a cave in the course of protecting it would be worse than sending nothing. The
+/// cave is also recorded as what the message is about, so the same question is asked a second
+/// time when the message is read inside the application: somebody who could open the cave when
+/// they were told and cannot any more is shown that something happened, and not what or where.
 /// </para>
 /// <para>
 /// Somebody asked who holds no account is told nothing and can be granted nothing: the list is a
@@ -231,8 +238,29 @@ internal static class TripCaveAccessNotifier
                             // the message is about a grant, so the link lands where the grant is made
                             // rather than on a page with a lock button somewhere on it. The address
                             // opens nothing for a reader who may not manage the cave's permissions.
-                            ["url"] = $"/caves/{cave.Id}?permissions=1",
-                        });
+                            //
+                            // It also says who the message is about, so the dialog can open with a
+                            // rule for that account already drafted instead of leaving its reader
+                            // to find the person by hand. That is all the address does: the draft is
+                            // saved, or not, by whoever is looking at it, through the same route and
+                            // under the same bound on what they may hand out as any rule written
+                            // there. Everybody weighed here holds an account — somebody without one
+                            // was dropped before this point — so there is always an id to carry.
+                            ["url"] = NotificationLinks.CavePermissionsAbout(cave.Id, invitee),
+                            // The same account once more, as an identifier rather than inside a
+                            // path. The copy read inside the application does not follow the path
+                            // above: where it points is worked out again when it is read, from the
+                            // cave named below, and this is what lets that land on the same dialog
+                            // about the same person.
+                            [NotificationLinks.InviteeAccount] = invitee.ToString(),
+                        },
+                        // What the message is about is the cave — it says nothing of the trip on
+                        // purpose — and naming it is what lets its reader's access to that cave be
+                        // decided again at the moment they read the message, rather than trusted
+                        // from now. An owner who has since lost the cave is then shown neither its
+                        // name nor a way to it.
+                        NotificationTargetKind.Feature,
+                        cave.Id);
                 }
             }
         }

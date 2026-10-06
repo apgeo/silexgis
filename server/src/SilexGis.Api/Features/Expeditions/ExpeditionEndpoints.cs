@@ -6,8 +6,10 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Expeditions;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Documents;
+using SilexGis.Infrastructure.Files;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
 
@@ -243,6 +245,8 @@ public static class ExpeditionEndpoints
         SilexGisDbContext db,
         IAccessService access,
         IAccessContextAccessor accessAccessor,
+        DocumentWriteService documents,
+        StoredContentRemover content,
         CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
@@ -290,19 +294,36 @@ public static class ExpeditionEndpoints
             .ToListAsync(ct);
         db.AccessEntries.RemoveRange(anchored);
 
+        // The write-up this application generated for the camp and filed on it goes with the
+        // camp, by the rule a trip's follows: it is a derivative of the camp — built from it,
+        // named after it, regenerable from nothing else — and means nothing once the camp is
+        // gone. A photograph, or a report a club wrote and uploaded into the same slot, is
+        // library material and loses only its pin here. Found now, before the rows that pin
+        // files to the camp go, because those rows are what name it.
+        var writeUps = await GeneratedWriteUpCleanup.FiledOnAsync(
+            db, AttachedEntityType.Expedition, expedition.Id,
+            ExpeditionReportNaming.GeneratedPrefix(expedition.Id), ct);
+
         // The polymorphic rows a camp can carry — files attached to it, tags on it, and its
         // place in a relation — have no foreign key to follow, so nothing removes them unless
         // this does. Which relations go with it is the shared rule, stated once for every kind
         // that carries such rows.
         await PolymorphicRowCleanup.RemoveRowsPointingAtAsync(db, AttachedEntityType.Expedition, [expedition.Id], ct);
 
-        // The membership rows go with the camp, and nothing else does: the trips it gathered
-        // stand alone perfectly well and are what the people who wrote them still have. That is
-        // carried by the membership row's own foreign keys, so a camp deleted by any route — a
-        // handler, a repair script, a cascade from somewhere else — releases its trips rather
-        // than taking them.
+        // Asked now that the camp's own attachment rows are gone, so that an attachment still
+        // pointing at a write-up is somebody else's, and keeps it — as a place on a shelf does.
+        var removed = await GeneratedWriteUpCleanup.RemoveUnheldAsync(db, documents, writeUps, ct);
+
+        // The membership rows go with the camp, and nothing else of the trips does: the trips it
+        // gathered stand alone perfectly well and are what the people who wrote them still have,
+        // each with whatever write-up was generated for it. That is carried by the membership
+        // row's own foreign keys, so a camp deleted by any route — a handler, a repair script, a
+        // cascade from somewhere else — releases its trips rather than taking them.
         db.Expeditions.Remove(expedition);
         await db.SaveChangesAsync(ct);
+
+        // The write-up's bytes, after the rows that pointed at them are gone.
+        await content.DropAsync(removed);
         return TypedResults.NoContent();
     }
 
