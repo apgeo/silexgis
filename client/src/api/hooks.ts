@@ -4577,9 +4577,21 @@ export function useCavingGroupMembers(cavingGroupId: string | undefined) {
   });
 }
 
+/**
+ * What creating a caving group changes, which is more than the directory.
+ *
+ * Whoever creates a group joins it as its owner, and the group's starter rules reach them from
+ * that moment: the right to add people to its roster, and the right to create content that
+ * belongs to the group. So the creator's own capabilities are read again with the directory —
+ * left to go stale by themselves, the create doors those rights open would stay shut for minutes
+ * on the very account that has just earned them.
+ */
 function useInvalidateCavingGroups() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.capabilities });
+  };
 }
 
 /**
@@ -4589,6 +4601,12 @@ function useInvalidateCavingGroups() {
  * roster the edit was made in, and so does how many people an announcement to that club would
  * reach. Refetching only the directory leaves the drawer showing the roster as it was before the
  * edit that was just made in it.
+ *
+ * And membership is what a group's rules reach people through, so an edit to a roster can be an
+ * edit to what the person making it may do: somebody who puts themselves on a roster, or takes
+ * themselves off one, has just gained or lost the right to create that group's content. Their
+ * own capabilities are read again rather than left to go stale, so a create door opens and shuts
+ * with the membership instead of leading, for a few minutes, to a refusal.
  */
 function useInvalidateCavingGroupRoster(cavingGroupId: string) {
   const queryClient = useQueryClient();
@@ -4596,6 +4614,7 @@ function useInvalidateCavingGroupRoster(cavingGroupId: string) {
     void queryClient.invalidateQueries({ queryKey: ['cavingGroups'] });
     void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroupMembers(cavingGroupId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.cavingGroupAudience(cavingGroupId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.capabilities });
   };
 }
 
