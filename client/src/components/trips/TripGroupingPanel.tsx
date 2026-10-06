@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, Card, Empty, Flex, Select, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Card, Empty, Flex, Space, Table, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { TripGroup, TripListGrouping, TripType } from '../../api/hooks.ts';
+import GroupBySelect from '../GroupBySelect.tsx';
 import { formatTripDates } from './tripDates.ts';
 import { tripTypeLabelOf } from './tripTypes.ts';
 
@@ -99,17 +100,17 @@ export default function TripGroupingPanel({
   return (
     <Card size="small" style={{ marginBottom: 12 }} data-testid="trip-grouping-panel">
       <Flex gap={8} wrap align="center" style={{ marginBottom: rows.length > 0 ? 12 : 0 }}>
-        <Typography.Text type="secondary">{t('trips.grouping.groupBy')}</Typography.Text>
-        <Select
-          style={{ minWidth: 160 }}
+        {/* The control every grouped list in the application is asked through, twice over: by
+            what, and then by what. */}
+        <GroupBySelect
+          label={t('trips.grouping.groupBy')}
           data-testid="trip-grouping-primary"
           value={groupBy}
           options={options(thenBy)}
           onChange={(value) => onChange({ groupBy: value, thenBy: value === 'none' ? 'none' : thenBy })}
         />
-        <Typography.Text type="secondary">{t('trips.grouping.thenBy')}</Typography.Text>
-        <Select
-          style={{ minWidth: 160 }}
+        <GroupBySelect
+          label={t('trips.grouping.thenBy')}
           data-testid="trip-grouping-secondary"
           value={thenBy}
           disabled={groupBy === 'none'}

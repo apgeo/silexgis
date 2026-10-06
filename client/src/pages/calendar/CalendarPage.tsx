@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Alert,
   Checkbox,
@@ -8,13 +8,9 @@ import {
   Flex,
   Segmented,
   Select,
-  Table,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import type { SorterResult } from 'antd/es/table/interface';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -22,11 +18,10 @@ import {
   useCalendar,
   useCavingGroups,
   type CalendarEntry,
+  type CalendarParams,
   type CalendarSource,
 } from '../../api/hooks.ts';
 import { EVENT_KINDS } from '../../components/events/eventKinds.ts';
-import TripStateTag from '../../components/trips/TripStateTag.tsx';
-import { formatTripDates } from '../../components/trips/tripDates.ts';
 import {
   CALENDAR_SOURCES,
   CALENDAR_VIEWS,
@@ -43,9 +38,14 @@ import {
 } from './calendarAddress.ts';
 import CalendarGrid from './CalendarGrid.tsx';
 import CalendarMapPane from './CalendarMapPane.tsx';
+import CalendarRecordTable from './CalendarRecordTable.tsx';
 import CalendarWeekStrip from './CalendarWeekStrip.tsx';
+import type { RecordGrouping } from './recordGrouping.ts';
 
 const asDay = (value: Dayjs): string => value.format('YYYY-MM-DD');
+
+/** No rows, as the one same list each time, so that "still none" is not a change to anything. */
+const NoEntries: readonly CalendarEntry[] = [];
 
 /**
  * The days a reader is offered when they arrive with no window in mind: the month behind them and
@@ -57,17 +57,6 @@ const openingWindow = (): [Dayjs, Dayjs] => [
   dayjs().subtract(1, 'month').startOf('month'),
   dayjs().add(2, 'month').endOf('month'),
 ];
-
-/**
- * Which orders this page may ask for, keyed by the column that offers them. The words are the
- * server's and the ordering is done there: a page that sorted the rows it happens to be holding
- * would reorder one page of a merged answer, which is a different and wrong answer as soon as
- * there is more than one page.
- */
-const sortableFields: Record<string, string> = { start: 'start', title: 'title' };
-
-/** The order the server puts the record in when nothing is asked for. */
-const DefaultSort = 'start';
 
 /**
  * Where each family of row is read. Written as a map over the source union rather than as a
@@ -135,19 +124,20 @@ function windowFor(view: CalendarView, panel: Dayjs, chosen: [Dayjs, Dayjs]): [D
  * **Everything chosen here lives in the address**, so a calendar narrowed and read a particular
  * way is a link: reloading it, opening it in a second tab or sending it to somebody shows the same
  * days the same way. A narrowing is a view somebody chose and is given a history entry; which
- * reading is on, which day a grid stands on, the order and the map are where the reader is
- * standing rather than what they asked to see, and replace the entry they were made on.
+ * reading is on, which day a grid stands on, the order, the grouping and the map are where the
+ * reader is standing rather than what they asked to see, and replace the entry they were made on.
  *
- * **Two things this page is asked for and does not yet do, deferred rather than dropped.**
- * *Grouping rows by a column* — the table this application uses has column-header grouping and no
- * row grouping at all, and nothing here hand-rolls one, so it is a component to build rather than
- * a prop to set. *Opening scrolled to the pivot between what has happened and what has not*, with
- * a few rows of each either side — nothing in this application does infinite or anchored
- * scrolling, and paging by offset cannot express "centre on today". Both want a mechanism that
- * does not exist here yet; the window control and the past toggle are what stand in for them.
+ * **Read as a list, the window can be put under headings.** The record and the agenda are the
+ * same list drawn two ways, and the list is its own file: it puts the rows under headings when
+ * asked to — by the month or the week a record begins in, by its kind, its state or its caving
+ * group — and how it is grouped is part of the address like everything else.
+ *
+ * **One thing this page is asked for and does not yet do, deferred rather than dropped.**
+ * *Opening scrolled to the pivot between what has happened and what has not*, with a few rows of
+ * each either side. The window control and the past toggle are what stand in for it.
  */
 export default function CalendarPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: cavingGroups } = useCavingGroups();
@@ -165,22 +155,34 @@ export default function CalendarPage() {
   useEffect(() => {
     latest.current = address;
   }, [address]);
+  // The router's way of writing the address, as last handed over. Reached through here so that
+  // the function below can stay the same function for as long as the page is mounted.
+  const write = useRef(setSearchParams);
+  useEffect(() => {
+    write.current = setSearchParams;
+  }, [setSearchParams]);
 
   /**
    * Every change goes through here, so there is one place that decides what the back button walks
    * through: a narrowing is worth a history entry and a rearrangement of the same rows is not.
    * A change that depends on what is already chosen is given as a function of it, so that it too
    * is worked out from the newest address rather than from the one this render was drawn with.
+   *
+   * It is one function for the life of the page. The list below is handed ways of changing the
+   * address, and redraws every row it holds when it is handed different ones.
    */
-  const apply = (
-    change: Partial<CalendarAddress> | ((current: CalendarAddress) => Partial<CalendarAddress>),
-    replace = false,
-  ) => {
-    const current = latest.current;
-    const next = { ...current, ...(typeof change === 'function' ? change(current) : change) };
-    latest.current = next;
-    setSearchParams(writeCalendarAddress(next), { replace });
-  };
+  const apply = useCallback(
+    (
+      change: Partial<CalendarAddress> | ((current: CalendarAddress) => Partial<CalendarAddress>),
+      replace = false,
+    ) => {
+      const current = latest.current;
+      const next = { ...current, ...(typeof change === 'function' ? change(current) : change) };
+      latest.current = next;
+      write.current(writeCalendarAddress(next), { replace });
+    },
+    [],
+  );
 
   const view = address.view;
   // A grid with no day named stands on today, read when the page is drawn rather than kept, so a
@@ -201,35 +203,37 @@ export default function CalendarPage() {
 
   const asked = windowFor(view, panel, range);
 
-  const { data, isFetching, isError } = useCalendar(
-    {
-      from: asDay(asked[0]),
-      to: asDay(asked[1]),
-      source: sourceQuery(address),
-      kind: kindQuery(address),
-      cavingGroupId: address.cavingGroupId,
-      mine: address.mine || undefined,
-      includePast: address.showPast ? undefined : false,
-      includeCancelled: address.showCancelled ? undefined : false,
-      sort: address.sort,
-    },
-    { enabled: !nothingChosen },
-  );
-
-  const sort = address.sort ?? DefaultSort;
-  const orderOf = (key: string) =>
-    sort === key ? ('ascend' as const) : sort === `-${key}` ? ('descend' as const) : null;
-
-  const onTableChange = (
-    _pagination: unknown,
-    _filters: unknown,
-    sorter: SorterResult<CalendarEntry> | SorterResult<CalendarEntry>[],
-  ) => {
-    const single = Array.isArray(sorter) ? sorter[0] : sorter;
-    const field = single?.field ? sortableFields[String(single.field)] : undefined;
-    const word = field && single.order ? `${single.order === 'descend' ? '-' : ''}${field}` : undefined;
-    apply({ sort: word === DefaultSort ? undefined : word }, true);
+  const asking: CalendarParams = {
+    from: asDay(asked[0]),
+    to: asDay(asked[1]),
+    source: sourceQuery(address),
+    kind: kindQuery(address),
+    cavingGroupId: address.cavingGroupId,
+    mine: address.mine || undefined,
+    includePast: address.showPast ? undefined : false,
+    includeCancelled: address.showCancelled ? undefined : false,
+    sort: address.sort,
   };
+  const { data, isFetching, isError } = useCalendar(asking, { enabled: !nothingChosen });
+
+  // Opening a record, as one function for as long as the router gives the same way of going
+  // anywhere: the list hands it to every row, and a new one on each redraw of this page would
+  // have every row redrawn with it. The two beside it are the list's ways of changing the
+  // address, kept the same for the same reason. The order and the grouping rearrange the same
+  // rows, so neither is a step the back button should walk through.
+  const open = useCallback(
+    (entry: CalendarEntry) => void navigate(detailPath[entry.source](entry.id)),
+    [navigate],
+  );
+  const orderBy = useCallback((next: string | undefined) => apply({ sort: next }, true), [apply]);
+  const groupBy = useCallback((next: RecordGrouping) => apply({ groupBy: next }, true), [apply]);
+
+  // The caving groups by name, for the headings of a list grouped by them. The same directory
+  // the group filter beside it offers, so a group named in one is named in the other.
+  const groupNames = useMemo(
+    () => new Map((cavingGroups ?? []).map((group) => [group.id, group.name])),
+    [cavingGroups],
+  );
 
   // One toggle to a family, written as a map over the family union so a family added to the
   // answer has to be given a toggle before this compiles.
@@ -253,53 +257,6 @@ export default function CalendarPage() {
   const kindLeavesOthers =
     kindQuery(address) !== undefined &&
     (wantsSource(address, 'tripLog') || wantsSource(address, 'expedition'));
-
-  /**
-   * A row read forwards rather than looked up: one entry to a line, its own words first and the
-   * day it falls on under them.
-   *
-   * **It is the same table, given a different renderer for its rows.** The list and the agenda are
-   * one answer read two ways, so they share the paging, the empty sentence that says why there is
-   * nothing, the click that opens the record and the shortfall warning above them all; what
-   * differs is whether a row is a set of cells to compare across or a line to read down. Written
-   * as a second set of columns rather than as a second component, because a second component
-   * would be a second place for all of that to drift out of step.
-   *
-   * The header is dropped with it: a single column of whole rows has nothing to head, and the
-   * sorting a header offers is the record's job, which is one click away.
-   */
-  const agendaColumns: ColumnsType<CalendarEntry> = [
-    {
-      title: t('calendar.what'),
-      key: 'agenda',
-      render: (_, entry) => (
-        <Flex vertical gap={2} data-testid="calendar-agenda-row">
-          <Flex gap={8} align="center" wrap>
-            <Typography.Text strong>{entry.title}</Typography.Text>
-            <Tag>
-              {entry.kind
-                ? t(`events.kindValues.${entry.kind}`)
-                : t(`calendar.sourceValues.${entry.source}`)}
-            </Tag>
-            <TripStateTag state={entry.state} />
-            {entry.placement === 'putBack' ? (
-              <Tag color="orange" data-testid="calendar-postponed">
-                {t('calendar.postponed')}
-              </Tag>
-            ) : null}
-          </Flex>
-          <Typography.Text type="secondary">
-            {formatTripDates(entry.start, entry.end, i18n.resolvedLanguage)}
-            {/* The time is stated where the row states one, and nothing is filled in where it
-                does not: most of these records carry no time of day at all, and a blank is the
-                truthful reading of that rather than a gap somebody forgot. */}
-            {entry.startTime ? ` · ${entry.startTime.slice(0, 5)}` : ''}
-            {entry.startTime && entry.endTime ? `–${entry.endTime.slice(0, 5)}` : ''}
-          </Typography.Text>
-        </Flex>
-      ),
-    },
-  ];
 
   // Four situations and four sentences, because only one of them is a fact about the calendar.
   // "Nothing is happening in these days" is a claim: a request that never answered has not earned
@@ -455,7 +412,7 @@ export default function CalendarPage() {
           entries={nothingChosen ? [] : (data?.entries ?? [])}
           from={asDay(asked[0])}
           to={asDay(asked[1])}
-          onOpen={(entry) => void navigate(detailPath[entry.source](entry.id))}
+          onOpen={open}
         />
       ) : view === 'week' ? (
         <CalendarWeekStrip
@@ -464,92 +421,21 @@ export default function CalendarPage() {
           entries={nothingChosen ? [] : (data?.entries ?? [])}
           from={asDay(asked[0])}
           to={asDay(asked[1])}
-          onOpen={(entry) => void navigate(detailPath[entry.source](entry.id))}
+          onOpen={open}
         />
       ) : (
-      <Table<CalendarEntry>
-        scroll={{ x: 'max-content' }}
-        rowKey={(row) => `${row.source}:${row.id}`}
-        size="middle"
-        loading={isFetching && !data}
-        dataSource={nothingChosen ? [] : data?.entries}
-        onChange={onTableChange}
-        onRow={(row) => ({
-          onClick: () => void navigate(detailPath[row.source](row.id)),
-          style: { cursor: 'pointer' },
-        })}
-        locale={{
-          emptyText: (
-            <Empty
-              data-testid="calendar-empty"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={emptyText}
-            />
-          ),
-        }}
-        // The window bounds the answer, so the rows are all here and the paging is of what is
-        // already in hand. Paging that spanned the sources would make "row forty of the combined
-        // record" mean nothing, which is the one thing this record is for.
-        pagination={{ pageSize: 25, showSizeChanger: true }}
-        showHeader={view !== 'agenda'}
-        columns={view === 'agenda' ? agendaColumns : [
-          {
-            title: t('calendar.when'),
-            // Named by the field the row carries, not only by a key: the table reports which
-            // column was sorted by that name, and a column identified only by a key reports
-            // nothing — the header would draw an arrow for an order that was never asked for.
-            dataIndex: 'start',
-            key: 'start',
-            width: 240,
-            sorter: true,
-            // Drawn from the address rather than kept by the table, so a link that asks for an
-            // order shows its arrow on the column it is ordered by.
-            sortOrder: orderOf('start'),
-            render: (_, row) => (
-              <Flex gap={8} align="center">
-                <span>{formatTripDates(row.start, row.end, i18n.resolvedLanguage)}</span>
-                {/* A date that has been put back is still worth listing and is not a date
-                    anybody is going on, so it is marked here rather than beside the state:
-                    what is wrong with the row is the day it still carries. */}
-                {row.placement === 'putBack' ? (
-                  <Tag color="orange" data-testid="calendar-postponed">
-                    {t('calendar.postponed')}
-                  </Tag>
-                ) : null}
-              </Flex>
-            ),
-          },
-          {
-            title: t('calendar.what'),
-            dataIndex: 'title',
-            key: 'title',
-            sorter: true,
-            sortOrder: orderOf('title'),
-          },
-          {
-            title: t('calendar.kind'),
-            dataIndex: 'source',
-            width: 160,
-            // The family for the two sources that are exactly one thing, and the row's own kind
-            // for the one that is not: "Event" for both a permit deadline and a social evening
-            // would make them the same row to somebody scanning a month, which is the reading
-            // this column exists for.
-            render: (value: CalendarSource, row) => (
-              <Tag>
-                {row.kind
-                  ? t(`events.kindValues.${row.kind}`)
-                  : t(`calendar.sourceValues.${value}`)}
-              </Tag>
-            ),
-          },
-          {
-            title: t('calendar.state'),
-            dataIndex: 'state',
-            width: 150,
-            render: (value: CalendarEntry['state']) => <TripStateTag state={value} />,
-          },
-        ]}
-      />
+        <CalendarRecordTable
+          view={view === 'agenda' ? 'agenda' : 'record'}
+          entries={nothingChosen ? NoEntries : (data?.entries ?? NoEntries)}
+          loading={isFetching && !data}
+          emptyText={emptyText}
+          sort={address.sort}
+          onSortChange={orderBy}
+          grouping={address.groupBy}
+          onGroupingChange={groupBy}
+          groupNames={groupNames}
+          onOpen={open}
+        />
       )}
       {/* One pane, under whichever way the same rows are being read, because it answers the same
           question about the same rows: it is handed what is on screen and matches the shapes to

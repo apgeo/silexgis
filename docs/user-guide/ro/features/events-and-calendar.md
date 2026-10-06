@@ -92,13 +92,14 @@ fiecare este evidența a ceva ce s-a întâmplat.
 
 **Activitate → Calendar.** O fereastră peste **ture, tabere și evenimente** citite împreună.
 
-Se citește ca **lună, an, săptămână sau agendă**, peste o hartă. Harta desenează turele și taberele
+Se citește ca **listă, lună, săptămână, an sau agendă**, peste o hartă. Harta desenează turele și taberele
 zilelor de pe ecran — o tură acolo unde a lucrat și unde s-a întâlnit echipa, o tabără ca zona de lucru
 trasată pe planul ei — și nimic pentru o dată a clubului, care nu are nicio formă.
 
 Puteți:
 
 - să-l sortați,
+- să-i grupați rândurile sub titluri — după lună, săptămână, tip, stare sau grup de speologie,
 - să porniți și să stingeți fiecare familie — **Ture**, **Tabere**, **Evenimente** — separat,
 - să îngustați evenimentele la tipurile pe care le alegeți,
 - să-l îngustați la cele ale unui club,
@@ -126,6 +127,26 @@ alege mai multe.
 Cât timp **Evenimente** este stins, un tip nu are ce să îngusteze, așa că controlul nu poate fi
 folosit și spune de ce. Ce ați ales se păstrează și se aplică din nou când reporniți
 evenimentele.
+
+## Citit ca listă
+
+**Listă** și **Agendă** sunt aceeași listă desenată în două feluri: un rând de celule de
+comparat, sau o intrare pe linie, de citit în jos. Tot ce urmează este valabil pentru amândouă.
+
+**Este o singură listă, nu pagini.** Toate înregistrările din zilele cerute sunt în ea.
+
+**Grupează după** așază rândurile sub titluri — **Lună**, **Săptămână**, **Tip**, **Stare** sau
+**Grup de speologie** — fiecare arătând câte rânduri cuprinde. Faceți clic pe un titlu ca să-i
+strângeți rândurile; numărul rămâne.
+
+- O înregistrare care durează mai multe zile este numărată **o singură dată**, sub ziua în care
+  începe, așa că numerele adunate dau rândurile.
+- Rândurile care nu numesc niciun grup de speologie sunt adunate sub **Neînregistrat**, nu lăsate
+  deoparte. Un grup ale cărui rânduri le puteți citi, dar pe care nu-l puteți lista, apare ca
+  *Un grup pe care nu-l poți lista*.
+
+Faceți clic pe **Când** sau **Ce** ca să sortați. Gruparea și sortarea doar rearanjează
+rândurile; fac parte din legătură ca tot restul.
 
 ## O înregistrare care durează mai multe zile
 

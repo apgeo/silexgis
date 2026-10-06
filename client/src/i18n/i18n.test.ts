@@ -64,6 +64,7 @@ import { SEEDED_TRIP_TYPE_CODES } from '../components/trips/tripTypes.ts';
 import { TERRAIN_PROBLEM_MESSAGE_KEYS } from '../pages/admin/terrain/terrainProblems.ts';
 import { SURVEY_MODEL_PROBLEM_MESSAGE_KEYS } from '../pages/caves/surveyModelProblems.ts';
 import { SETTINGS_SECTIONS } from '../pages/settings/sections.ts';
+import { RECORD_GROUPINGS } from '../pages/calendar/recordGrouping.ts';
 import type { TerrainDepthBand } from '../pages/admin/terrain/terrainDepth.ts';
 import en from './locales/en.json';
 import ro from './locales/ro.json';
@@ -666,6 +667,18 @@ describe('i18n locales', () => {
     expect(sources.filter((source) => !enSources[source])).toEqual([]);
     expect(sources.filter((source) => !roSources[source])).toEqual([]);
     expect(Object.keys(enSources).sort()).toEqual(sources.sort());
+  });
+
+  // The calendar's list builds the name of each thing it can be grouped by from the word itself,
+  // so the check over literal keys cannot see any of them: a grouping added to the vocabulary
+  // and not named here would be offered to a reader as its own lookup key, in both languages.
+  it('everything the calendar list can be grouped by is named in both locales, and none is left over', () => {
+    const words: string[] = [...RECORD_GROUPINGS];
+    const enNames: Record<string, string> = en.calendar.grouping.dimensions;
+    const roNames: Record<string, string> = ro.calendar.grouping.dimensions;
+    expect(words.filter((word) => !enNames[word])).toEqual([]);
+    expect(words.filter((word) => !roNames[word])).toEqual([]);
+    expect(Object.keys(enNames).sort()).toEqual([...words].sort());
   });
 
   // A link chip labels its target by type. An unnamed type would render as a raw lookup

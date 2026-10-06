@@ -254,8 +254,11 @@ feature and walkthroughs of whole jobs.
   unlike a trip, an event keeps no separate record of who turned up: the answers *are* the record, so
   there is nothing to turn into anything.
 - **One window over everything dated** — a calendar page answers *what is happening between these two
-  days*, reading trips, expeditions and the club's events together in one list you can sort, narrow to one kind, narrow to
-  a club's own, or narrow to your own. It shows what is still to come and what already happened, marks a
+  days*, reading trips, expeditions and the club's events together in one list you can sort, group under
+  headings (month, week, kind, state, caving group), narrow by family and by kind of event, narrow to
+  a club's own, or narrow to your own. Everything chosen is
+  carried in the page's address so a narrowed calendar is a link. In the month and week readings a
+  record lasting several days reads as one record rather than as several sharing a title. It shows what is still to come and what already happened, marks a
   trip that has been called off and lets you switch those off, and lists a postponed one with a
   postponed mark rather than pretending the date it still carries is one anybody is going on. A trip
   that nobody has been shown yet is not on it — but that is only about what gets drawn: it stays exactly

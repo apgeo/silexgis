@@ -4254,6 +4254,19 @@
     "weekDayEmpty": "Nimic",
     "monthCount": "{{count}} înregistrări",
     "spanDay": "ziua {{day}} din {{count}}",
+    "grouping": {
+      "groupBy": "Grupează după",
+      "unassigned": "Neînregistrat",
+      "unlistedGroup": "Un grup pe care nu-l poți lista",
+      "dimensions": {
+        "none": "Nimic",
+        "month": "Lună",
+        "week": "Săptămână",
+        "kind": "Tip",
+        "state": "Stare",
+        "cavingGroup": "Grup de speologie"
+      }
+    },
     "mapToggle": "Hartă",
     "mapEmpty": "Nicio tură și nicio tabără din câmpul vizual nu are o poziție înregistrată. Deplasează sau apropie harta ca să cauți în altă parte.",
     "mapFailed": "Harta acestor zile nu a putut fi citită, așa că nu este desenat nimic pe ea — ceea ce nu înseamnă că nu este nimic acolo. Încercați din nou peste un moment.",

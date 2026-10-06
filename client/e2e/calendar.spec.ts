@@ -111,7 +111,9 @@ test('a row clicks through to the record it came from', async ({ page }) => {
   await login(page);
   await gotoRoute(page, '/calendar');
 
-  const rows = page.locator('.ant-table-tbody tr.ant-table-row');
+  // The rows that are records. The list also draws lines that are not — a heading over a group
+  // of rows — and those lead nowhere.
+  const rows = page.locator('.ant-table-tbody tr.calendar-row-entry');
   const empty = page.getByTestId('calendar-empty');
   // Wait for the answer to land before counting anything. Until it does the table is in its
   // loading state and holds neither a row nor the empty placeholder, so a count taken then is
@@ -838,6 +840,102 @@ test('choosing kinds narrows the events, leaves the trips listed, and travels in
     await expect(page.getByTestId('calendar-empty')).toContainText('could not be read', {
       timeout: 30_000,
     });
+  } finally {
+    await removeEvents(page, written);
+    if (tripId) {
+      await tryAsPerson(page, 'DELETE', `/api/v1/trip-logs/${tripId}`);
+    }
+  }
+});
+
+/**
+ * The record's rows under headings: which rows sit under which, how many each holds, and that a
+ * heading folds its rows away without losing its count.
+ *
+ * Read off records written for this run on days of their own, far enough ahead that the window
+ * holds them and nothing else — so a heading's count is exact and "the only row under it" means
+ * what it says. The grouping is carried in the address like every other choice, and the flow
+ * opens that address afresh to show the same headings come back.
+ */
+test('the record groups its rows under headings that count them, fold away, and travel in the address', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const written: Written[] = [];
+  let tripId: string | undefined;
+  await login(page);
+
+  const first = localDay(90);
+  const second = localDay(91);
+  const third = localDay(92);
+
+  try {
+    const training = await writeEvent(page, written, `E2E Group Training ${stamp}`, first, {
+      kind: 'training',
+    });
+    const course = await writeEvent(page, written, `E2E Group Course ${stamp}`, second, {
+      kind: 'training',
+    });
+    const meeting = await writeEvent(page, written, `E2E Group Meeting ${stamp}`, third);
+    const tripTitle = `E2E Group Trip ${stamp}`;
+    const trip = await asPerson<{ id: string }>(
+      page,
+      'POST',
+      '/api/v1/trip-logs/',
+      tripBody(tripTitle, second),
+    );
+    tripId = trip.id;
+    await asPerson(
+      page,
+      'POST',
+      `/api/v1/trip-logs/${trip.id}/state`,
+      { state: 'planned' },
+      { 'If-Match': await versionOf(page, `/api/v1/trip-logs/${trip.id}`) },
+    );
+
+    await gotoRoute(page, `/calendar?from=${first}&to=${third}`);
+    const record = page.getByTestId('calendar-record');
+    const rows = record.locator('tbody tr.calendar-row-entry');
+    await expect(rows).toHaveCount(4, { timeout: 30_000 });
+    await expect(page.getByTestId('calendar-group')).toHaveCount(0);
+
+    // By what the Kind column says: a family for the row that has no kind, the kind for the rest.
+    await chooseOption(page, page.getByTestId('calendar-group-by'), 'Kind');
+    await expect(page).toHaveURL(/[?&]groupBy=kind(&|$)/);
+    const headings = page.getByTestId('calendar-group');
+    await expect(headings).toHaveText(['Trip (1)', 'Club meeting (1)', 'Training (2)']);
+
+    // Every line of the list in order: each heading, then the rows it counts.
+    const lines = record.locator('tbody tr.ant-table-row');
+    await expect(lines).toHaveCount(7);
+    await expect(lines.nth(1)).toContainText(tripTitle);
+    await expect(lines.nth(3)).toContainText(meeting.title);
+    await expect(lines.nth(5)).toContainText(training.title);
+    await expect(lines.nth(6)).toContainText(course.title);
+
+    // Folded, a heading keeps its count and gives up its rows; the others are untouched.
+    const trainings = headings.filter({ hasText: 'Training' });
+    await expect(trainings).toHaveAttribute('aria-expanded', 'true');
+    await trainings.click();
+    await expect(trainings).toHaveAttribute('aria-expanded', 'false');
+    await expect(trainings).toHaveText('Training (2)');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.filter({ hasText: training.title })).toHaveCount(0);
+    await trainings.click();
+    await expect(rows).toHaveCount(4);
+
+    // The same address opened afresh is the same list under the same headings.
+    const here = new URL(page.url());
+    await gotoRoute(page, `${here.pathname}${here.search}`);
+    await expect(page.getByTestId('calendar-group')).toHaveText(
+      ['Trip (1)', 'Club meeting (1)', 'Training (2)'],
+      { timeout: 30_000 },
+    );
+    await expect(page.getByTestId('calendar-group-by')).toContainText('Kind');
+
+    // A row under a heading still opens its own record.
+    await record.locator('tbody tr.calendar-row-entry').filter({ hasText: course.title }).click();
+    await page.waitForURL((url) => url.pathname === `/events/${course.id}`, { timeout: 60_000 });
   } finally {
     await removeEvents(page, written);
     if (tripId) {

@@ -2,6 +2,7 @@
 import type { CalendarSource } from '../../api/hooks.ts';
 import { parseTripDay } from '../../components/trips/tripDates.ts';
 import { formatDay } from './calendarDays.ts';
+import { NoGrouping, recordGroupingOf, type RecordGrouping } from './recordGrouping.ts';
 
 /**
  * What the calendar page is showing, and its translation to and from the address bar.
@@ -86,6 +87,12 @@ export interface CalendarAddress {
   showMap: boolean;
   /** One of the orders the server knows, a leading minus for descending. Absent is its own. */
   sort?: string;
+  /**
+   * What the list's rows are grouped under. How a list is arranged, not what is in it: it is
+   * carried in the address so a link hands over the shape somebody was looking at, and it is not
+   * a narrowing, so it never makes an empty calendar read as a filtered one.
+   */
+  groupBy: RecordGrouping;
 }
 
 /** The calendar nobody has touched yet. */
@@ -96,6 +103,7 @@ export const EmptyCalendarAddress: CalendarAddress = {
   showPast: true,
   showCancelled: true,
   showMap: true,
+  groupBy: NoGrouping,
 };
 
 const list = (raw: string | null): string[] =>
@@ -151,6 +159,7 @@ export function readCalendarAddress(params: URLSearchParams): CalendarAddress {
     showCancelled: params.get('includeCancelled') !== 'false',
     showMap: params.get('map') !== 'false',
     sort: one(params.get('sort')),
+    groupBy: recordGroupingOf(params.get('groupBy')),
   };
 }
 
@@ -187,6 +196,9 @@ export function writeCalendarAddress(address: CalendarAddress): URLSearchParams 
   }
   if (address.sort !== undefined) {
     params.set('sort', address.sort);
+  }
+  if (address.groupBy !== NoGrouping) {
+    params.set('groupBy', address.groupBy);
   }
   if (!address.showMap) {
     params.set('map', 'false');

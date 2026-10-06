@@ -42,6 +42,7 @@ describe('the calendar in the address bar', () => {
       showCancelled: false,
       showMap: false,
       sort: '-title',
+      groupBy: 'week',
     };
 
     expect(read(write(chosen))).toEqual(chosen);
@@ -100,6 +101,21 @@ describe('the calendar in the address bar', () => {
   it('falls back to the record for a reading it does not have', () => {
     expect(read('view=fortnight').view).toBe('record');
     expect(read('view=week').view).toBe('week');
+  });
+
+  /**
+   * The same for what the list is grouped under: a grouping this application does not have is no
+   * grouping, because nothing is hidden by drawing the same rows ungrouped. Not grouping is the
+   * ordinary state and is written as the absence of the key.
+   */
+  it('carries a grouping it has, and reads one it does not have as none', () => {
+    expect(read('groupBy=month').groupBy).toBe('month');
+    expect(read('groupBy=cavingGroup').groupBy).toBe('cavingGroup');
+    expect(read('groupBy=phase-of-the-moon').groupBy).toBe('none');
+    expect(read('').groupBy).toBe('none');
+
+    expect(write({ ...EmptyCalendarAddress, groupBy: 'kind' })).toBe('groupBy=kind');
+    expect(write({ ...EmptyCalendarAddress, groupBy: 'none' })).toBe('');
   });
 
   /**
@@ -204,7 +220,7 @@ describe('whether a calendar is narrowed', () => {
    */
   it('counts what takes rows away, and nothing that only rearranges them', () => {
     expect(isCalendarNarrowed(read(''))).toBe(false);
-    expect(isCalendarNarrowed(read('view=month&day=2026-09-14&sort=-title&map=false'))).toBe(false);
+    expect(isCalendarNarrowed(read('view=month&day=2026-09-14&sort=-title&map=false&groupBy=kind'))).toBe(false);
     expect(isCalendarNarrowed(read('from=2026-09-01&to=2026-09-30'))).toBe(false);
 
     expect(isCalendarNarrowed(read('source=tripLog'))).toBe(true);

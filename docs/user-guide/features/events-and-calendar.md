@@ -90,13 +90,14 @@ each is the record of something that happened.
 
 **Activity → Calendar.** One window over **trips, camps and events** read together.
 
-It reads as a **month, a year, a week or an agenda**, over a map. The map draws the trips and the
+It reads as a **list (Record), a month, a week, a year or an agenda**, over a map. The map draws the trips and the
 camps of the days on screen — a trip where it worked and where its party met, a camp as the working
 area drawn on its plan — and nothing for a club date, which has no shape.
 
 You can:
 
 - sort it,
+- group its rows under headings — by month, week, kind, state or caving group,
 - turn each family — **Trips**, **Camps**, **Events** — on and off by itself,
 - narrow the events to the kinds you choose,
 - narrow to a club's own,
@@ -123,6 +124,26 @@ working days, gear checks, conferences, deadlines — and you may pick several.
 While **Events** is switched off there is nothing for a kind to narrow, so the control cannot
 be used and says why. What you had chosen is kept, and applies again when you switch events
 back on.
+
+## Reading it as a list
+
+**Record** and **Agenda** are the same list drawn two ways: a row of cells to compare across, or
+one entry to a line to read down. Everything below is true of both.
+
+**It is one list, not pages.** Every record in the days you asked for is in it.
+
+**Group by** puts the rows under headings — **Month**, **Week**, **Kind**, **State** or **Caving
+group** — each showing how many rows it holds. Click a heading to fold its rows away; the count
+stays.
+
+- A record lasting several days is counted **once**, under the day it begins, so the counts add
+  up to the rows.
+- Rows that name no caving group are gathered under **Not recorded** rather than left out. A
+  group whose rows you may read, but which is not yours to list, is shown as *A group you
+  cannot list*.
+
+Click **When** or **What** to sort. Grouping and sorting only rearrange the rows; they are part
+of the link like everything else.
 
 ## A record that lasts several days
 

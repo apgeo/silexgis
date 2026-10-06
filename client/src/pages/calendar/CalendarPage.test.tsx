@@ -656,6 +656,86 @@ describe('the kinds of event', () => {
 });
 
 
+describe('the calendar read as a list', () => {
+  /** The headings a list is grouped under, as the words they show. */
+  const headings = (): string[] =>
+    screen.getAllByTestId('calendar-group').map((heading) => heading.textContent ?? '');
+
+  const mixed = (): CalendarEntry[] => [
+    row({ id: 'a', title: 'Coiba Mare recce', start: '2026-09-05' }),
+    row({ id: 'b', source: 'event', kind: 'training', title: 'Rope evening', start: '2026-09-08' }),
+    row({ id: 'c', source: 'expedition', title: 'Ponorul camp', start: '2026-10-02' }),
+    row({ id: 'd', source: 'event', kind: 'training', title: 'Rescue drill', start: '2026-10-09' }),
+  ];
+
+  /**
+   * How the list is grouped is carried in the address like everything else about the view, so a
+   * link hands over the shape somebody was looking at and not only the rows.
+   */
+  it('groups the list by what the address says', () => {
+    answer(mixed());
+    show('/calendar?from=2026-09-01&to=2026-10-31&groupBy=kind');
+
+    expect(headings()).toEqual(['Trip (1)', 'Camp (1)', 'Training (2)']);
+    // Every row is still there, under its heading.
+    for (const title of ['Coiba Mare recce', 'Rope evening', 'Ponorul camp', 'Rescue drill']) {
+      expect(screen.getByText(title)).toBeTruthy();
+    }
+  });
+
+  /**
+   * Grouping rearranges the rows in hand: it asks the server nothing new, and it is not a step
+   * the back button should walk through.
+   */
+  it('writes a grouping into the address as a rearrangement, and asks nothing new for it', () => {
+    answer(mixed());
+    show('/calendar?from=2026-09-01&to=2026-10-31');
+    const askedBefore = lastParams();
+    expect(screen.queryByTestId('calendar-group')).toBeNull();
+
+    const control = screen.getByTestId('calendar-group-by');
+    fireEvent.mouseDown(control.querySelector('.ant-select-selector') ?? control);
+    fireEvent.click(document.querySelector('.ant-select-item-option[title="Month"]')!);
+
+    expect(addressKeys().get('groupBy')).toBe('month');
+    expect(arrivedBy()).toBe('REPLACE');
+    expect(headings()).toEqual(['September 2026 (2)', 'October 2026 (2)']);
+    expect(lastParams()).toEqual(askedBefore);
+  });
+
+  /** The agenda is the same list, so it is grouped the same way by the same choice. */
+  it('keeps the grouping when the list is read as an agenda', () => {
+    answer(mixed());
+    show('/calendar?from=2026-09-01&to=2026-10-31&groupBy=month&view=agenda');
+
+    expect(headings()).toEqual(['September 2026 (2)', 'October 2026 (2)']);
+    expect(screen.getAllByTestId('calendar-agenda-row')).toHaveLength(4);
+  });
+
+  it('names a caving group by the name the group filter offers it under', () => {
+    answer([
+      row({ id: 'a', cavingGroupId: 'club-1' }),
+      row({ id: 'b', cavingGroupId: null }),
+    ]);
+    show('/calendar?groupBy=cavingGroup');
+
+    // The test double for the groups hook answers no groups at all, so the one a row names is a
+    // group this reader cannot list — and the row naming none is counted under its own heading.
+    expect(headings()).toEqual(['A group you cannot list (1)', 'Not recorded (1)']);
+  });
+
+  /** Every row of the window is in the list at once; there is nothing to page through. */
+  it('holds the whole window in one list', () => {
+    answer(Array.from({ length: 40 }, (_, index) => row({ id: `row-${index}`, title: `Row ${index}` })));
+    show('/calendar?from=2026-09-01&to=2026-09-30');
+
+    expect(screen.getByText('Row 0')).toBeTruthy();
+    expect(screen.getByText('Row 39')).toBeTruthy();
+    expect(document.querySelector('.ant-pagination')).toBeNull();
+  });
+});
+
+
 /**
  * The grids are drawn over the month or the year they are showing, so a fixture has to fall in
  * the panel the page opens on rather than on a date somebody wrote down once.
