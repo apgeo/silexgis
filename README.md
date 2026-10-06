@@ -149,13 +149,16 @@ tests — finish in about a minute on Linux and on Windows; `.github/workflows/c
 exact commands, and also regenerates the API client from a running server to catch a drifted
 contract, audits the dependencies, and starts and smoke-tests the built images, down to having
 the packaged API write a trip and a camp up as documents — code no other check runs inside the
-image. The API integration suite (Testcontainers + PostGIS) is measured in hours: in CI it runs
-in twelve shards on pushes to `master` and nightly (`.github/workflows/integration.yml`, dealt by
-`scripts/gate-shard.mjs`), and the browser suite runs the same way through `scripts/e2e.mjs`
-(`.github/workflows/browser.yml`). On one machine, `scripts/gate-affected.mjs` names the test
-classes that answer for a change so those can run first, and `scripts/gate-lock.mjs` makes
-integration runs take turns instead of colliding — a run of the whole suite needs its `--full`
-flag, on purpose.
+image. The API integration suite (Testcontainers + PostGIS) is measured in hours as one process:
+in CI it runs in twelve shards on pushes to `master` and nightly
+(`.github/workflows/integration.yml`, dealt by `scripts/gate-shard.mjs`), and the browser suite
+runs the same way through `scripts/e2e.mjs` (`.github/workflows/browser.yml`). On one machine,
+`scripts/gate-affected.mjs` names the test classes that answer for a change so those can run
+first; `scripts/gate-sharded.mjs` runs the whole suite as several processes side by side, each
+with a database server of its own, which brings it under an hour on a workstation; and
+`scripts/gate-lock.mjs` makes integration runs take turns instead of colliding — a run of the
+whole suite, in either form, needs its `--full` flag, on purpose. The specs that need a photo
+library beside the application bring their own: `scripts/e2e-photo-libraries.mjs`.
 
 ## License
 

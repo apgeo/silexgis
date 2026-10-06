@@ -26,6 +26,7 @@ import {
   liveTickets,
   legacyBlocker,
   isUnfilteredApiSuite,
+  outputDirsFor,
   cpuSecondsOfTree,
   holderProgress,
 } from './gate-lock.mjs';
@@ -283,6 +284,38 @@ describe('the whole API suite is a deliberate act', () => {
     assert.equal(isUnfilteredApiSuite(['dotnet', 'test', 'tests/SilexGis.Domain.Tests']), false);
     assert.equal(isUnfilteredApiSuite(['dotnet', 'build', 'tests/SilexGis.Api.Tests']), false);
     assert.equal(isUnfilteredApiSuite([process.execPath, '-e', '1']), false);
+  });
+
+  it('knows the suite by its other door, the runner that deals it into shards', () => {
+    assert.equal(isUnfilteredApiSuite(['node', 'scripts/gate-sharded.mjs', '--count', '8']), true);
+    assert.equal(
+      isUnfilteredApiSuite([process.execPath, 'C:\\repo\\scripts\\gate-sharded.mjs', '--project', 'x.csproj']),
+      true,
+    );
+    // Some shards of the deal are not the suite, as a filter is not.
+    assert.equal(isUnfilteredApiSuite(['node', 'scripts/gate-sharded.mjs', '--only', '3']), false);
+    assert.equal(isUnfilteredApiSuite(['node', 'scripts/gate-shard.mjs', '--index', '0', '--count', '8']), false);
+  });
+
+  it('guards the assemblies the sharded runner tests, whether or not it was told which', () => {
+    const repo = freshDir('sharded-guard');
+    const bin = join(repo, 'server', 'tests', 'SilexGis.Api.Tests', 'bin');
+    mkdirSync(bin, { recursive: true });
+    mkdirSync(join(repo, 'scripts'), { recursive: true });
+    const elsewhere = join(freshDir('sharded-elsewhere'), 'tests', 'SilexGis.Api.Tests');
+    mkdirSync(join(elsewhere, 'bin'), { recursive: true });
+    writeFileSync(join(elsewhere, 'SilexGis.Api.Tests.csproj'), '<Project />');
+
+    // Told nothing, it tests the project beside itself.
+    assert.deepEqual(outputDirsFor(['node', join(repo, 'scripts', 'gate-sharded.mjs')], scratch), [bin]);
+    // Told a project in another checkout, that is the one whose assemblies must not change.
+    assert.deepEqual(
+      outputDirsFor(
+        ['node', join(repo, 'scripts', 'gate-sharded.mjs'), '--project', join(elsewhere, 'SilexGis.Api.Tests.csproj')],
+        scratch,
+      ),
+      [join(elsewhere, 'bin')],
+    );
   });
 
   it('refuses the whole suite without --full, before taking the lock or running anything', () => {

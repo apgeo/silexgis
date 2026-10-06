@@ -476,12 +476,25 @@ async function acquireWaiting(dir, label, { cwd = process.cwd() } = {}) {
 }
 
 /**
+ * The sharded runner in a command, if that is what the command runs: the script and what follows it.
+ *
+ * scripts/gate-sharded.mjs is the same suite by another door — several `dotnet test` processes
+ * with a share of the classes each — so what holds for the suite has to hold for it.
+ */
+function shardedRunnerIn(command) {
+  const at = command.findIndex((a) => /(^|\/)gate-sharded\.mjs$/.test(a.replaceAll('\\', '/')));
+  return at === -1 ? null : { script: command[at], rest: command.slice(at + 1) };
+}
+
+/**
  * Whether a command is the whole API integration suite: `dotnet test` naming the Api.Tests
- * project or its directory, with nothing narrowing it. Purely lexical, on purpose — the point
- * is to refuse before anything runs.
+ * project or its directory, with nothing narrowing it — or the sharded runner asked for every
+ * shard. Purely lexical, on purpose — the point is to refuse before anything runs.
  */
 export function isUnfilteredApiSuite(command) {
   if (command.length < 2) return false;
+  const sharded = shardedRunnerIn(command);
+  if (sharded) return !sharded.rest.includes('--only');
   const tool = basename(command[0].replaceAll('\\', '/')).replace(/\.exe$/i, '');
   if (tool !== 'dotnet' || command[1] !== 'test') return false;
   const namesSuite = command.some((a) => /Api\.Tests(\.csproj)?$/.test(a.replaceAll('\\', '/').replace(/\/+$/, '')));
@@ -504,7 +517,7 @@ export function isUnfilteredApiSuite(command) {
  * fifteen and twenty-four hours respectively, while every health probe reported a healthy,
  * hard-working suite.
  */
-function outputDirsFor(command, cwd) {
+export function outputDirsFor(command, cwd) {
   // `dotnet test <project file>` and `dotnet test <project directory>` are the two shapes every
   // caller uses; the assemblies live under that project's bin/. The directory shape used to fall
   // through to the working directory, which has no bin/ of its own, so a run started that way had
@@ -526,6 +539,14 @@ function outputDirsFor(command, cwd) {
     } catch {
       /* not a path at all: a flag or a filter */
     }
+  }
+  // The sharded runner tests the project beside itself unless told another, and that default is
+  // named nowhere on its command line.
+  const sharded = shardedRunnerIn(command);
+  if (sharded) {
+    const beside = join(
+      dirname(resolve(cwd, sharded.script)), '..', 'server', 'tests', 'SilexGis.Api.Tests', 'bin');
+    if (existsSync(beside)) return [beside];
   }
   const bin = join(cwd, 'bin');
   return existsSync(bin) ? [bin] : [];
