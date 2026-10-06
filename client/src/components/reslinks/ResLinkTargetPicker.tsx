@@ -24,7 +24,7 @@ import type { ResLinkTargetType } from './registry.ts';
  */
 
 /** The target kinds the filter model can already answer for. */
-const WORLD_OF: Partial<Record<ResLinkTargetType, string>> = {
+export const WORLD_OF: Partial<Record<ResLinkTargetType, string>> = {
   feature: 'feature',
   document: 'document',
   tripLog: 'tripLog',

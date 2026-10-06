@@ -46,13 +46,23 @@ export interface UseObjectSelectorOptions {
   rememberAs?: string;
 }
 
-/** Which field a world matches free text against; a world calls it a name or a title, not both. */
+/**
+ * Which field a world matches free text against; a world calls it a name or a title, not both.
+ *
+ * Every world a selector is ever pointed at has to be here. One that is not is still asked, with
+ * nothing of what was typed in the question, so the control answers every search with the same
+ * rows or with none — which is how linking to an existing document or a saved view came to find
+ * nothing however exactly its title was typed. The test beside the link picker fails on a world
+ * handed to a selector without an entry.
+ */
 const TEXT_FIELD: Record<string, string> = {
   feature: 'name',
   tripLog: 'title',
+  document: 'title',
+  mapView: 'name',
 };
 
-function textFieldOf(world: string): string | null {
+export function textFieldOf(world: string): string | null {
   return TEXT_FIELD[world] ?? null;
 }
 
