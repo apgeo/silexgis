@@ -142,22 +142,22 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
     }
 
     [Fact]
-    public async Task The_current_mesh_answers_for_its_cave_even_when_a_newer_one_exists()
+    public async Task The_mesh_chosen_as_current_answers_for_its_cave_whichever_was_uploaded_last()
     {
         var spot = Spot.Somewhere();
         var cave = await CreateCaveWithMeshAsync(spot.North(0.001));
         var newer = await UploadMeshAsync(cave.CaveId, spot.North(0.002), heightM: 1000);
         await RunQueuedMeshJobAsync(newer);
 
-        // The newest upload took the mark, so it is the one drawn.
-        (await MeshesAsync(owner, spot)).ModelIds.ShouldBe([newer]);
+        // The first mesh keeps the mark: a second one does not take over by arriving.
+        (await MeshesAsync(owner, spot)).ModelIds.ShouldBe([cave.ModelId]);
 
-        // Given back to the older mesh by hand, the mark decides and the upload order does not.
-        (await owner.PutAsync($"/api/v1/survey-models/{cave.ModelId}/current", null))
+        // Chosen by hand, the newer mesh answers: the mark decides and the upload order does not.
+        (await owner.PutAsync($"/api/v1/survey-models/{newer}/current", null))
             .StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var answer = await MeshesAsync(owner, spot);
-        answer.ModelIds.ShouldBe([cave.ModelId]);
+        answer.ModelIds.ShouldBe([newer]);
         // One mesh per cave: the cave is counted once, however many meshes it holds.
         answer.Total.ShouldBe(1);
     }
@@ -192,11 +192,11 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
                 .SetProperty(m => m.AnchorHeightM, 1000d));
         }
 
-        // Both marks are held — the newest wall mesh and the line plot — and the wall mesh wins.
-        (await MeshesAsync(owner, spot)).ModelIds.ShouldBe([newMesh]);
+        // Both marks are held — by the first wall mesh and by the line plot — and the wall mesh wins.
+        (await MeshesAsync(owner, spot)).ModelIds.ShouldBe([oldMesh]);
 
         // No current wall mesh: the current line plot answers, though a newer mesh exists.
-        await SetAsync(newMesh, isCurrent: false);
+        await SetAsync(oldMesh, isCurrent: false);
         (await MeshesAsync(owner, spot)).ModelIds.ShouldBe([linePlot]);
 
         // Nothing marked at all: the newest model that has a mesh.
@@ -220,9 +220,11 @@ public sealed class CaveMeshesInViewTests : IAsyncLifetime, IDisposable, IClassF
     {
         var spot = Spot.Somewhere();
         var cave = await CreateCaveWithMeshAsync(spot.North(0.001));
-        // The corrected export moved the cave out of this view.
+        // The corrected export moved the cave out of this view, and was chosen as the cave's walls.
         var moved = await UploadMeshAsync(cave.CaveId, spot.North(0.2), heightM: 1000);
         await RunQueuedMeshJobAsync(moved);
+        (await owner.PutAsync($"/api/v1/survey-models/{moved}/current", null))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var answer = await MeshesAsync(owner, spot);
 

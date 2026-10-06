@@ -117,8 +117,8 @@ export function isDrawableSurveyMesh(model: SurveyModelInfo): boolean {
  * A cave may hold any number of models, and walls can come from two kinds of them: a wall mesh
  * somebody exported and uploaded, and a line plot whose own reading built walls out of the wall
  * surfaces and passage dimensions in the file. The record says which model of each kind is
- * preferred — one wall mesh and one line plot per cave carry the current mark, given to the newest
- * upload of the kind when it arrives and handed to an older one on purpose from the cave's page.
+ * preferred — one wall mesh and one line plot per cave carry the current mark, taken by the first
+ * model of the kind and kept until another is chosen on purpose from the cave's page.
  *
  * An uploaded mesh with the mark wins: it is walls somebody made deliberately, usually with more
  * in them than the survey's own dimensions hold, and marking it current is saying so. Failing

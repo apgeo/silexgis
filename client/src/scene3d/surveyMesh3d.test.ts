@@ -141,8 +141,9 @@ describe('drawableSurveyMesh', () => {
   });
 
   it('does not let a current mesh with nothing to draw win over one that has walls', () => {
-    // The newest upload takes the mark the moment it arrives, before its conversion has run; a
-    // scene that honoured the mark alone would show nothing while an older mesh sits ready.
+    // The first mesh of a cave takes the mark the moment it arrives, before its conversion has
+    // run, and a marked mesh can fail to convert; a scene that honoured the mark alone would show
+    // nothing while another mesh sits ready.
     const currentUnconverted = model({
       id: 'current',
       isCurrent: true,
