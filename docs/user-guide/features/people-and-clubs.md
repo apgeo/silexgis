@@ -52,7 +52,11 @@ Groups matter for three reasons:
 
 1. **Visibility.** The *caving group* visibility means "members of the group this record is
    bound to".
-2. **Permission scope.** A rule can be scoped to *a caving group's content*.
+2. **Permission scope.** A rule can be scoped to *a caving group's content*. A new group starts
+   with such a rule for its members — read, correct and create the group's own content — which is
+   why a member can
+   [record a trip that belongs to the group](trips.md#when-your-right-to-record-trips-is-your-clubs)
+   without holding any wider right.
 3. **Announcements.** See below.
 
 ### Membership and roles

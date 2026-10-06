@@ -52,6 +52,10 @@ Grupurile contează din trei motive:
 1. **Vizibilitate.** Vizibilitatea *grup de speologie* înseamnă „membrii grupului de care este
    legată înregistrarea".
 2. **Domeniu de permisiune.** O regulă poate fi limitată la *conținutul unui grup de speologie*.
+   Un grup nou pornește cu o astfel de regulă pentru membrii săi — citirea, corectarea și crearea
+   conținutului propriu al grupului — de aceea un membru poate
+   [înregistra o tură care aparține grupului](trips.md#când-dreptul-de-a-înregistra-ture-vine-de-la-club)
+   fără să dețină vreun drept mai larg.
 3. **Anunțuri.** Vedeți mai jos.
 
 ### Membri și roluri
