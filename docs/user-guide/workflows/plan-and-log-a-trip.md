@@ -195,8 +195,14 @@ same renderings the gallery shows you, with camera metadata stripped.
 A copy filed against the trip is narrower still: it is written for whoever may read the trip
 *at all*, not for the person who filed it.
 
-There is no map picture in it — the sketch is written out in words — and there is no public
-address for a report. It is downloaded by somebody signed in who may read the trip.
+The copy you download carries **a map of the trip** — its sketch, the meeting point and the
+caves it names that you may place — drawn by your own browser from what the page already holds,
+with a line under it saying whose view it is. The copy filed against the trip does not: it is
+opened by everybody who may read the trip. Details:
+[The map in the download](../features/trips.md#the-map-in-the-download).
+
+There is no public address for a report. It is downloaded by somebody signed in who may read
+the trip.
 
 Your club can write **its own layout**: download the standard one (a short, self-explaining
 text file), edit it, upload it under Configuration → Report layouts, and choose it. A layout

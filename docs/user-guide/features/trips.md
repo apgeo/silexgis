@@ -248,13 +248,47 @@ See [Checklists and the callout](checklists-and-callout.md#the-callout).
 - Photographs go in as the same renderings the gallery shows you, **camera metadata stripped**.
 - **A copy filed against the trip is narrower still** — written for whoever may read the trip
   at all, not for the person who filed it.
-- **No map picture** — the sketch is written out in words.
+- **The download carries a map of the trip** — see below. The sketch is still written out in
+  words beside it.
 - **No public address.** A report is downloaded by somebody signed in who may read the trip.
 
 Your club can write **its own layout** — download the standard one (a short, self-explaining
 text file), edit, upload under Configuration → Report layouts, choose it. A layout can only
 ask for things the reader was already given, and a line whose contents turn out empty simply
 disappears, so the same layout produces an honest document for a member and for an editor.
+
+### The map in the download
+
+**Download document** draws a map of the trip and puts it in the file, where the document says
+where the trip went.
+
+| On the map | Drawn as |
+|---|---|
+| The trip's sketch — where the party worked | a filled disc, a line or an area |
+| The meeting point | a hollow ring |
+| Each cave the trip names **that you may place** | a square, with the cave's name |
+
+- **It is your view, and it says so.** The map is drawn by your own browser from what this page
+  had already been given — the trip as you read it, and each named cave as you read it. Nothing
+  is asked of the server for the sake of the picture, so it cannot show a position the page
+  would not have shown you. The line under the picture names you and the day: *Map as shown to …
+  on …; positions as this reader may see them.* Somebody else downloading the same trip may get
+  a different map.
+- **The copy filed against the trip has no map.** *Save to the trip* never sends one, and the
+  server refuses one if it is sent: that copy is opened by everybody who may read the trip, and a
+  map shows what one reader may see.
+- **On and under the map**: a scale on it; under it, what the marks mean and the credit of the
+  map behind it.
+- **Where it goes in the document**: after the line that prints the sketch — or, in a layout of
+  your club's that prints no sketch, after the meeting point, or failing both at the end.
+- **The background** is one of this installation's map backgrounds — the standard one, when
+  whoever runs the installation has said it may be copied into a document. If its tiles do not
+  arrive in time, or the installation offers no such background, the map is drawn on a plain
+  ground and the reason is written under it.
+- **You are told when the file differs from the page**: when the map went out with no
+  background, and when no map could be drawn or the server would not take it. The document is
+  downloaded in every case.
+- **Print** is as before: paper gets the sketch in words, not a map.
 
 ---
 

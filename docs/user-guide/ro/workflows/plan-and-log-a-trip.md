@@ -202,8 +202,14 @@ iar fotografiile intră ca aceleași randări pe care le arată galeria, cu meta
 O copie clasată pe tură este și mai îngustă: este scrisă pentru oricine poate citi tura, nu
 pentru cine a clasat-o.
 
-Nu există imagine de hartă în ea — schița turei este scrisă în cuvinte — și nu există adresă
-publică pentru un raport: se descarcă de cineva autentificat care poate citi tura.
+Copia pe care o descărcați conține **o hartă a turei** — schița ei, punctul de întâlnire și
+peșterile numite pe care le puteți localiza — desenată de propriul browser din ceea ce pagina
+deține deja, cu un rând dedesubt care spune a cui vedere este. Copia clasată pe tură nu o
+conține: este deschisă de toți cei care pot citi tura. Detalii:
+[Harta din descărcare](../features/trips.md#harta-din-descărcare).
+
+Nu există adresă publică pentru un raport: se descarcă de cineva autentificat care poate citi
+tura.
 
 Un club poate scrie **propriul model**: descărcați-l pe cel standard (un fișier text scurt care
 se explică singur), editați-l, încărcați-l la Configurare → Modele de raport și alegeți-l. Un

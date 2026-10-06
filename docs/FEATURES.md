@@ -407,9 +407,14 @@ feature and walkthroughs of whole jobs.
   contain something the page would not have shown you — no cave you may not place, no account of an
   incident if you are only a reader of the trip, and photographs go in as the same renderings the
   gallery shows you, with their camera metadata stripped. A copy filed against the trip is narrower
-  still: it is written for whoever may read the trip at all, not for the person who filed it. There
-  is no map picture in it — the trip's sketch is written out in words instead — and there is no
-  public address for a report: it is downloaded by somebody signed in who may read the trip.
+  still: it is written for whoever may read the trip at all, not for the person who filed it. The
+  copy you download carries **a map of the trip** — its sketch, where its party met, and the caves
+  it names that you may place — drawn by your own browser out of what the page had already been
+  given, over one of the installation's map backgrounds that may be copied into a document, with
+  a line under it saying whose view it is and when. The sketch is still written out in words
+  beside it. The copy filed against the trip never carries that map: it shows what one reader may
+  see, and a filed copy is opened by everybody who may read the trip. There is no public address
+  for a report: it is downloaded by somebody signed in who may read the trip.
   A club can write **its own layout** for the document: download the standard one, which is a short
   text file that explains itself in its own comments, edit it, upload it, and choose it. A layout can
   only ask for things the reader was already given, and a line whose contents turn out to be empty
