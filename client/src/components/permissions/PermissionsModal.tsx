@@ -16,6 +16,7 @@ import {
 } from '../../api/hooks.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
 import AccessExplanationList from './AccessExplanationList.tsx';
+import ViaExpeditionTag from './ViaExpeditionTag.tsx';
 import { ACTION_ORDER, joinActions } from './accessDisplay.ts';
 
 // Create is rejected at object scope (nothing is created "into" one row) and valid at
@@ -301,9 +302,7 @@ export default function PermissionsModal({ entityType, entityId, open, onClose }
                     <Tag>{t(`permissions.${entry.subjectKind}`)}</Tag>
                     {entry.subjectName ?? entry.subjectId}
                     {entry.grantedViaExpeditionId !== null && (
-                      <Tag color="blue" style={{ marginInlineStart: 8 }}>
-                        {t('permissions.viaExpedition')}
-                      </Tag>
+                      <ViaExpeditionTag expeditionId={entry.grantedViaExpeditionId} />
                     )}
                   </>
                 ),

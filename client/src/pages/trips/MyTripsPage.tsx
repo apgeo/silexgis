@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
-import { DatePicker, Empty, Flex, Select, Table, Tag, Typography } from 'antd';
+import { ScheduleOutlined } from '@ant-design/icons';
+import { Button, DatePicker, Empty, Flex, Select, Table, Tag, Typography } from 'antd';
 import type { TablePaginationConfig } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
+  useCan,
   useMyTripLogs,
   useTripTypes,
   type ActivityState,
   type MyTripLogListParams,
   type TripLogInfo,
 } from '../../api/hooks.ts';
+import TripFormModal from './TripFormModal.tsx';
 import TripStateTag from '../../components/trips/TripStateTag.tsx';
 import TripReadinessTag from '../../components/trips/TripReadinessTag.tsx';
 import { countPeople } from '../../components/trips/roster.ts';
@@ -51,6 +54,12 @@ export default function MyTripsPage() {
   const [params, setParams] = useState<MyTripLogListParams>({ page: 1, pageSize: 20 });
   const { data, isFetching, isError } = useMyTripLogs(params);
   const { data: tripTypes } = useTripTypes();
+  // Planning a trip from the page that lists the ones you are going on: the same form the trip
+  // list opens, on its plan door. Gated on the same right the list gates its create action on,
+  // because this is the one home for creating a trip reached from a second place, not a second
+  // way of creating one.
+  const canCreate = useCan('tripLogs', 'create');
+  const [planning, setPlanning] = useState(false);
 
   const onTableChange = (pagination: TablePaginationConfig) => {
     setParams((p) => ({ ...p, page: pagination.current, pageSize: pagination.pageSize }));
@@ -91,6 +100,16 @@ export default function MyTripsPage() {
         <Typography.Title level={3} style={{ margin: 0 }}>
           {t('trips.mine.title')}
         </Typography.Title>
+        {canCreate && (
+          <Button
+            type="primary"
+            icon={<ScheduleOutlined />}
+            data-testid="my-trips-plan"
+            onClick={() => setPlanning(true)}
+          >
+            {t('trips.plan.new')}
+          </Button>
+        )}
       </Flex>
       <Flex gap={8} wrap style={{ marginBottom: 12 }}>
         <Select<ActivityState | undefined>
@@ -168,6 +187,19 @@ export default function MyTripsPage() {
           },
         ]}
       />
+      {canCreate && (
+        <TripFormModal
+          open={planning}
+          trip={null}
+          intent="plan"
+          onClose={(savedId) => {
+            setPlanning(false);
+            if (savedId) {
+              navigate(`/trip-logs/${savedId}`);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

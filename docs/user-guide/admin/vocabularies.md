@@ -61,6 +61,21 @@ Somebody who did two jobs is recorded doing both rather than made to choose.
 
 ---
 
+## Configuration → Camp roles
+
+**What it governs:** what somebody was at a [camp](../features/camps.md) as. Every row of a
+camp's *Who was there* list renders its role from this list.
+
+Ships with: *Member · Organiser · Cook · Base camp · Driver · Medic · Equipment · Guest*.
+**Member is there from the start and cannot be removed** — without it a camp could not record
+that somebody was simply there.
+
+A list of its own, kept apart from the trip roles on purpose: cooking for thirty or keeping the
+base camp is not a job underground, so a role added here is never offered on a trip, and a trip
+role is never offered at a camp. It is also reached from the camps list, under *Configure*.
+
+---
+
 ## Configuration → Report layouts
 
 **What it governs:** the layout a trip is written up in.

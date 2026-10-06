@@ -24,9 +24,41 @@ ce citește peste ele.
 
 O tabără trece prin aceleași stări ca o tură.
 
+## Crearea unei tabere
+
+**Activitate → Tabere → Tabără nouă**, dacă aveți dreptul să creați una. Formularul cere numele,
+zilele, cine o poate citi (clubul, dacă nu spuneți altfel), clubul organizator, o descriere și
+**zona de lucru** — o formă aproximativă desenată pe o hartă mică. Zona de lucru nu poartă nicio
+protecție a locației: *„Arătată exact tuturor celor care pot citi tabăra"*, așa că desenați-o
+aproximativ, niciodată strâns în jurul unei intrări care trebuie să rămână protejată.
+
+O tabără introdusă fără a atinge datele este o tabără de o zi, astăzi. Salvarea deschide tabăra.
+
+O tabără nouă este o **ciornă**, iar pagina o spune oricui ar putea-o anunța: *„Aceasta este o
+ciornă. Nu a fost anunțată încă — anunțați-o când planul este stabilit sau marcați-o efectuată
+după ce a avut loc."*
+
+## Editare, ciclul de viață și ștergere
+
+**Editare tabără** deschide același formular, completat. Dacă altcineva a salvat tabăra cât
+timp o aveați deschisă, salvarea dumneavoastră este refuzată și vi se cere să reîncărcați.
+
+Butoanele ciclului de viață sunt cele ale turei — *Publică · Propune ideea · Începe organizarea ·
+Se desfășoară · Amână · Stabilește o dată nouă · Marchează efectuată · Anulează tabăra · Înapoi
+la ciornă* — iar care dintre ele sunt oferite depinde de starea în care se află tabăra. Două cer
+mai întâi confirmare:
+
+- **Publică** — *„Anunțați această tabără? Nimeni nu este notificat prin aceasta; marchează
+  tabăra ca anunțată. Cine o poate citi nu se schimbă."* Spre deosebire de o tură, anunțarea
+  unei tabere nu înștiințează pe nimeni.
+- **Anulează tabăra** — tabăra se păstrează și poate fi readusă la ciornă.
+
+**Șterge** întreabă *„Ștergeți această tabără? Turele adunate în ea rămân; dispar doar tabăra
+și regulile ei proprii."* — o tabără adună ture, nu le deține.
+
 ## File
 
-**Ture · Hartă · Continuări · Cine a fost · Fișiere · Istoric**
+**Ture · Hartă · Continuări · Cine a fost · Fotografii · Fișiere · Istoric**
 
 ### Ture
 
@@ -98,9 +130,55 @@ Roluri: Membru · Organizator · Bucătar · Tabără de bază · Șofer · Medi
 Dacă puteți citi tabăra dar nu și persoanele din această instalare, lista este reținută în
 întregime — nume, număr și tot — nu arătată parțial.
 
+Rolurile sunt un vocabular propriu al taberei, separat de rolurile în tură; un administrator îl
+editează la **Configurare → Roluri în tabără** (vedeți [Vocabulare](../admin/vocabularies.md)).
+
+### Fotografii
+
+Pozele atașate taberei și cele de pe turele pe care le adună și pe care le puteți citi, desenate
+ca o grilă cu vizualizatorul galeriei. *Deschide în galerie* restrânge galeria în același fel.
+
+Ce se arată este răspunsul unui singur cititor — *„Fotografiile pe care le puteți vedea, din
+tabără și din turele ei pe care le puteți citi. Altcineva poate vedea mai multe sau mai puține."*
+O tură pe care nu o puteți deschide nu contribuie cu nicio poză, iar o tabără pe care nu o
+puteți deschide nu arată niciuna. Dacă nu există nimic: *„Nicio fotografie nu este atașată
+acestei tabere sau turelor din ea pe care le puteți citi."*
+
 ### Albume
 
-**Albume despre această tabără** — vedeți [Fotografii](photographs.md#albume).
+**Albume despre această tabără** — pe fila *Fișiere*; vedeți [Fotografii](photographs.md#albume).
+
+---
+
+## Raportul
+
+**Raport**, în antetul taberei, deschide tabăra aranjată pentru citit: *Despre tabără*, *Turele*,
+*Cine a participat* și fotografiile, construite din ceea ce puteți vedea **dumneavoastră** —
+pagina o spune: *„Acest raport arată ceea ce puteți vedea dumneavoastră. Altcineva care citește
+aceeași tabără poate vedea mai mult sau mai puțin: turele din ea, persoanele, fotografiile."*
+
+- **Descarcă documentul** îl salvează ca document Word, în modelul standard sau într-unul pe
+  care clubul îl ține la **Configurare → Modele de raport**.
+- **Salvează la tabără** depune documentul pe fila *Fișiere* a taberei. Copia salvată acolo poate
+  fi deschisă de toți cei care pot citi tabăra, așa că este construită din ce poate vedea orice
+  cont din turele ei; copia dumneavoastră completă este descărcarea.
+- **Tipărește** folosește browserul, fără cadrul aplicației pe hârtie.
+
+## Permisiuni și partajare
+
+Două butoane în antet, ambele pentru cineva care poate gestiona permisiunile taberei:
+
+**Permisiuni** deschide regulile de acces proprii ale taberei — cine poate citi, scrie sau
+șterge această tabără, persoană cu persoană sau grup cu grup. Vedeți
+[Permisiuni](../admin/permissions.md).
+
+**Partajează** ajunge mai departe: *„Partajarea unei tabere scrie câte o regulă pe fiecare tură
+adunată în ea, marcată ca fiind a taberei, astfel încât cel cu care este partajată poate citi ce
+a adunat tabăra."* Necesită dreptul de a gestiona permisiunile pe fiecare dintre aceste ture —
+dacă vreo tură refuză, nu se partajează nimic și vi se spune câte au refuzat, niciodată care.
+Dialogul arată câte dintre turele taberei acoperă fiecare partajare și spune când s-au alăturat
+ture de la ultima aplicare: aplicați-o din nou pentru a le acoperi sau retrageți-o pentru a o
+lua înapoi de pe toate turele deodată.
 
 ---
 

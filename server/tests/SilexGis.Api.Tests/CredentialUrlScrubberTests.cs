@@ -127,6 +127,19 @@ public class CredentialUrlScrubberTests
     }
 
     [Fact]
+    public void A_calendar_feed_token_is_scrubbed_and_its_extension_survives_outside_the_handle()
+    {
+        // A subscription address ends in `.ics` so calendar applications recognise it. The
+        // extension is route shape, so it is kept — and kept outside the handle, because the
+        // handle has to be a prefix of what the row stores, and a hash over token-plus-extension
+        // would be a prefix of nothing.
+        var scrubbed = CredentialUrlScrubber.Scrub($"/api/v1/calendar/feed/{Token}.ics")!;
+
+        scrubbed.ShouldNotContain(Token);
+        scrubbed.ShouldBe($"/api/v1/calendar/feed/[token:{Handle(Token)}].ics");
+    }
+
+    [Fact]
     public void Scrubbing_an_already_scrubbed_address_changes_nothing()
     {
         // Two things scrub an address here — the request-logging callback where the completion line

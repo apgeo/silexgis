@@ -13,8 +13,8 @@ import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import { useTranslation } from 'react-i18next';
-import { useTripLogMap, type CalendarEntry } from '../../api/hooks.ts';
-import { tripPalette as palette } from '../../map/markerPalette.ts';
+import { useCampAreasMap, useTripLogMap, type CalendarEntry } from '../../api/hooks.ts';
+import { surfaceFeaturePalette, tripPalette as palette } from '../../map/markerPalette.ts';
 
 /** Braşov: the middle of the karst this application was written for. */
 const DEFAULT_CENTER: [number, number] = [25.6, 45.65];
@@ -40,14 +40,32 @@ const meetingStyle = new Style({
 });
 
 /**
- * Which of the two shapes a trip may state this is, read from the shape's own word for itself.
- *
- * The two mean different things — where the party worked against where it gathered — and drawing
- * them alike would put a car park where the reader read a cave. The answer says which each one is
- * for exactly that reason, so nothing here guesses from the geometry.
+ * A camp's working area: the shape somebody drew on the camp's plan, a region rather than a
+ * place, drawn as a surface so it reads as ground the camp worked over and not as a position.
  */
-const styleFor = (feature: FeatureLike): Style =>
-  feature.get('kind') === 'meeting' ? meetingStyle : whereStyle;
+const areaStyle = new Style({
+  stroke: new Stroke({ color: surfaceFeaturePalette.line, width: 2, lineDash: [6, 4] }),
+  fill: new Fill({ color: surfaceFeaturePalette.fill }),
+});
+
+/**
+ * Which of the shapes this is, read from the shape's own word for itself.
+ *
+ * A trip states up to two and they mean different things — where the party worked against where
+ * it gathered — and drawing them alike would put a car park where the reader read a cave; a camp
+ * states one, its working area. The answer says which each one is for exactly that reason, so
+ * nothing here guesses from the geometry.
+ */
+const styleFor = (feature: FeatureLike): Style => {
+  switch (feature.get('kind')) {
+    case 'meeting':
+      return meetingStyle;
+    case 'area':
+      return areaStyle;
+    default:
+      return whereStyle;
+  }
+};
 
 /** The rectangle the map is looking at, as the answer wants it: west,south,east,north in degrees. */
 function viewBbox(map: Map): string | undefined {
@@ -86,22 +104,28 @@ interface Props {
 }
 
 /**
- * Where the trips in the days on screen actually are.
+ * Where the trips and camps in the days on screen actually are.
  *
- * **Two answers matched on the client, and neither of them widened.** The rows come from the
- * calendar, which carries no position of any kind; the shapes come from the map answer that
- * already serves exactly this question — the trips a reader may see whose shapes fall inside a
- * rectangle over a range of days — and both walk the same rule about who may read a trip over the
- * same table. So a shape is drawn when the identifier it carries is one of the rows on screen,
- * and every narrowing the reader made to the record narrows the map with it, without the map
- * answer having to learn a single word of the calendar's vocabulary.
+ * **Three answers matched on the client, and none of them widened.** The rows come from the
+ * calendar, which carries no position of any kind; the shapes come from the two map answers that
+ * already serve exactly this question — the trips a reader may see whose shapes fall inside a
+ * rectangle over a range of days, and the camps a reader may see whose working areas do — and
+ * each walks the same rule about who may read its record over the same table its record lives
+ * in. So a shape is drawn when the identifier it carries is one of the rows on screen, and every
+ * narrowing the reader made to the record narrows the map with it, without a map answer having
+ * to learn a single word of the calendar's vocabulary.
  *
- * **What it cannot draw, said here rather than discovered.** Camps and club dates are not trips
- * and have no shape in this answer, so a month whose records are all meetings draws nothing. And
- * the rectangle asked for is the one on screen and never the whole world — an answer over the
- * world is capped and would be a scatter of whichever rows sorted first, drawn as though it were
- * everything — so a trip outside the opening view is drawn once the reader pans to it and not
- * before.
+ * **A camp is its working area and nothing more.** Its own page draws three things — the area,
+ * its trips' sketches, and the entrances of the caves those trips name, the last withheld from a
+ * reader who may not place them. Here only the first is asked for: the sketches belong to the
+ * trips and arrive through the trip answer like any other trip's, and the entrances are not asked
+ * for at all, so there is no second door for a withheld coordinate to leave by.
+ *
+ * **What it cannot draw, said here rather than discovered.** Club dates have no shape, so a
+ * month whose records are all meetings draws nothing. And the rectangle asked for is the one on
+ * screen and never the whole world — an answer over the world is capped and would be a scatter
+ * of whichever rows sorted first, drawn as though it were everything — so a record outside the
+ * opening view is drawn once the reader pans to it and not before.
  */
 export default function CalendarMapPane({ entries, from, to, active, height = 320 }: Props) {
   const { t } = useTranslation();
@@ -110,17 +134,24 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
   const source = useRef(new VectorSource());
   const fitted = useRef(false);
   const [bbox, setBbox] = useState<string | undefined>(undefined);
-  // Counted as trips and not as shapes, because one trip can state two of them and a reader
+  // Counted as records and not as shapes, because one trip can state two of them and a reader
   // comparing this against the record is counting records. Held rather than read off the layer
   // at render time: the layer is filled from an effect, which is after the render that would
   // have read it.
   const [drawn, setDrawn] = useState(0);
 
-  const { data, isError } = useTripLogMap(bbox, from, to, active);
+  const trips = useTripLogMap(bbox, from, to, active);
+  const camps = useCampAreasMap(bbox, from, to, active);
+  const data = trips.data;
+  const campData = camps.data;
+  const isError = trips.isError || camps.isError;
 
-  // The identifiers on screen. A trip states up to two shapes and both carry the trip's own
-  // identifier, so this is a set of rows and not a count of anything drawable.
-  const wanted = new Set(entries.filter((e) => e.source === 'tripLog').map((e) => e.id));
+  // The identifiers on screen, per family, because an identifier is only meaningful beside the
+  // table it came from: a trip and a camp cannot share one, but a set that mixed them would be
+  // asking the wrong answer about the right row. A trip states up to two shapes and both carry
+  // the trip's own identifier, so these are sets of rows and not counts of anything drawable.
+  const wantedTrips = new Set(entries.filter((e) => e.source === 'tripLog').map((e) => e.id));
+  const wantedCamps = new Set(entries.filter((e) => e.source === 'expedition').map((e) => e.id));
 
   const draw = () => {
     source.current.clear();
@@ -129,15 +160,27 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
     // Re-measuring here, after the render that laid it out, is what stops a later answer
     // un-hiding a blank tile grid. Cheap and idempotent otherwise.
     map.current?.updateSize();
-    if (!data) {
+    if (!data && !campData) {
       setDrawn(0);
       return;
     }
-    const features = (
-      new GeoJSON().readFeatures(data, { featureProjection: 'EPSG:3857' }) as Feature[]
-    ).filter((feature) => wanted.has(String(feature.get('id'))));
+    const reader = new GeoJSON();
+    const tripFeatures = data
+      ? (reader.readFeatures(data, { featureProjection: 'EPSG:3857' }) as Feature[]).filter(
+          (feature) => wantedTrips.has(String(feature.get('id'))),
+        )
+      : [];
+    const campFeatures = campData
+      ? (reader.readFeatures(campData, { featureProjection: 'EPSG:3857' }) as Feature[]).filter(
+          (feature) => wantedCamps.has(String(feature.get('id'))),
+        )
+      : [];
+    const features = [...campFeatures, ...tripFeatures];
     source.current.addFeatures(features);
-    setDrawn(new Set(features.map((feature) => String(feature.get('id')))).size);
+    setDrawn(
+      new Set(tripFeatures.map((feature) => String(feature.get('id')))).size +
+        new Set(campFeatures.map((feature) => String(feature.get('id')))).size,
+    );
     // Framed once, on the first answer that holds anything, and never again: the rectangle asked
     // for is the one on screen, so moving the view is what asks the next question — and a pane
     // that re-framed itself on every answer would chase its own request round the map and would
@@ -198,8 +241,8 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
 
   useEffect(() => {
     draw();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- redraws when either answer changes
-  }, [data, entries]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- redraws when any answer changes
+  }, [data, campData, entries]);
 
   // The only teardown site. Doing it from the target ref would run on every re-render, because a
   // callback ref with a fresh identity is detached and re-attached each time, and the map would
@@ -225,8 +268,11 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
    * reader would pan away from a region satisfied there was nothing in it. So a failure says it
    * failed, and a first answer still on its way says nothing at all.
    */
+  // "Answered" means both families have answered: a caption that counted the trips while the
+  // camps were still on their way would report a number that is about to change.
+  const answered = data !== undefined && campData !== undefined;
   let caption: ReactNode = null;
-  if (isError && !data) {
+  if (isError && !answered) {
     caption = (
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -234,7 +280,7 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
         data-testid="calendar-map-failed"
       />
     );
-  } else if (data && drawn === 0) {
+  } else if (answered && drawn === 0) {
     caption = (
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -242,7 +288,7 @@ export default function CalendarMapPane({ entries, from, to, active, height = 32
         data-testid="calendar-map-empty"
       />
     );
-  } else if (data) {
+  } else if (answered) {
     caption = (
       <Typography.Paragraph
         type="secondary"

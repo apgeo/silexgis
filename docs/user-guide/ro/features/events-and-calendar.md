@@ -65,7 +65,8 @@ Două diferențe față de o tură:
 
 ## Evenimente care revin
 
-**Revine periodic** scrie întreaga serie acum, ca evenimente obișnuite. Fiecare este apoi editat,
+**Revine periodic** scrie întreaga serie acum, ca evenimente obișnuite. Fiecare apariție spune cât de
+des revine seria, în limba dumneavoastră, lângă cuvintele autorului. Fiecare este apoi editat,
 răspuns și anulat pe cont propriu.
 
 - **Cât de des**: zilnic · săptămânal · o dată la două săptămâni · lunar.
@@ -91,7 +92,9 @@ fiecare este evidența a ceva ce s-a întâmplat.
 
 **Activitate → Calendar.** O fereastră peste **ture, tabere și evenimente** citite împreună.
 
-Se citește ca **lună, an, săptămână sau agendă**, peste o hartă.
+Se citește ca **lună, an, săptămână sau agendă**, peste o hartă. Harta desenează turele și taberele
+zilelor de pe ecran — o tură acolo unde a lucrat și unde s-a întâlnit echipa, o tabără ca zona de lucru
+trasată pe planul ei — și nimic pentru o dată a clubului, care nu are nicio formă.
 
 Puteți:
 
@@ -121,6 +124,14 @@ Trebuie să spuneți ce zile vreți, iar intervalul este plafonat. Dacă o ferea
 decât returnează pagina, vă spune **câte rânduri a lăsat deoparte**, în loc să vă arate tăcut mai
 puțin decât există.
 
+## Luați-l cu dumneavoastră
+
+Turele, taberele și evenimentele dumneavoastră pot apărea și în calendarul de pe telefon sau de pe
+calculator, printr-o **adresă de flux** pe care o creați în **Setări → Cont** — după ce un
+administrator a pornit fluxurile. Vedeți [Abonarea la calendar](calendar-feed.md): ce călătorește
+este titlul, zilele și o legătură înapoi, și nimic altceva.
+
 ---
 
-Înrudite: [Ture](trips.md) · [Tabere](camps.md) · [Notificări](notifications.md)
+Înrudite: [Ture](trips.md) · [Tabere](camps.md) · [Abonarea la calendar](calendar-feed.md) ·
+[Notificări](notifications.md)

@@ -1481,6 +1481,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/map/expeditions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Camps' own working areas as GeoJSON for the given bbox and date range — the shape drawn on each camp's plan, and nothing a camp's trips or caves would add. */
+        get: {
+            parameters: {
+                query: {
+                    bbox: string;
+                    from?: string;
+                    to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FeatureCollection"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/map/cave-centerlines": {
         parameters: {
             query?: never;
@@ -1795,6 +1835,42 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["CalendarResultDto"];
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calendar/feed/{token}.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One account's own calendar as an iCalendar feed: the trips, camps and club dates that account is on, each as a title, its days and a link back. The address is the credential; every refusal is the same 404. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -2260,6 +2336,53 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["KarstLinkExportPreview"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/trip-logs/{id}/geometry/gpx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sets the trip's own geometry from the track in an uploaded GPX file.
+         * @description Multipart, one part named 'file'. Every track and route in the file is joined, in file order, into one line that replaces the trip's sketch; waypoints are ignored. Nothing of the file is kept. Needs Write on the trip.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        file: components["schemas"]["IFormFile"];
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TripLogDto"];
                     };
                 };
             };
@@ -4640,6 +4763,102 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/calendar-feeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's calendar feed addresses — metadata only, never the address — and whether the installation offers feeds. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CalendarFeedListDto"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Mints a calendar feed address for the caller's own calendar; the address is returned once and never stored. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CalendarFeedCreatedDto"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/calendar-feeds/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Withdraws one of the caller's feed addresses. A calendar still polling it is answered as though it never existed. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -10693,7 +10912,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Photographs the caller may see, newest first, narrowed by cave, feature, trip, caver, tag, album, camera, date or map extent. */
+        /** Photographs the caller may see, newest first, narrowed by cave, feature, trip, camp, caver, tag, album, camera, date or map extent. */
         get: {
             parameters: {
                 query?: {
@@ -10710,6 +10929,7 @@ export interface paths {
                     From?: string;
                     To?: string;
                     Search?: string;
+                    ExpeditionId?: string;
                     page?: number;
                     pageSize?: number;
                 };
@@ -16431,7 +16651,7 @@ export interface paths {
         };
         /**
          * Rules anchored on this object (ManagePermissions). A rule carrying a camp was written by that camp's sharing: it is shown here and withdrawn there.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event', 'checklist' (case-insensitive).
          */
         get: {
             parameters: {
@@ -16458,7 +16678,7 @@ export interface paths {
         };
         /**
          * Replaces the rules authored here, bounded by what the caller holds. A rule a camp's sharing wrote is left exactly as it is.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event', 'checklist' (case-insensitive).
          */
         put: {
             parameters: {
@@ -16503,7 +16723,7 @@ export interface paths {
         };
         /**
          * What the caller may do here; ?explain=true names the deciding rule.
-         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event' (case-insensitive).
+         * @description entityType is 'feature' (any feature, any kind) or one of 'tripLog', 'geofile', 'georeferencedMap', 'mapView', 'expedition', 'event', 'checklist' (case-insensitive).
          */
         get: {
             parameters: {
@@ -19240,6 +19460,30 @@ export interface components {
             cavingGroupId: null | string;
             hasPosition: boolean;
         };
+        CalendarFeedCreatedDto: {
+            /** Format: uuid */
+            id: string;
+            label: null | string;
+            url: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CalendarFeedCreateRequest: {
+            label: null | string;
+        };
+        CalendarFeedDto: {
+            /** Format: uuid */
+            id: string;
+            label: null | string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt: null | string;
+        };
+        CalendarFeedListDto: {
+            enabled: boolean;
+            feeds: components["schemas"]["CalendarFeedDto"][];
+        };
         /** @enum {unknown} */
         CalendarPlacement: "off" | "ahead" | "behind" | "calledOff" | "putBack";
         CalendarResultDto: {
@@ -20375,6 +20619,7 @@ export interface components {
             /** Format: uuid */
             seriesId?: null | string;
             seriesRule?: null | string;
+            seriesFrequency?: null | components["schemas"]["EventRecurrenceFrequency"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -20480,6 +20725,7 @@ export interface components {
             cavingGroupId?: null | string;
             visibility?: null | components["schemas"]["Visibility"];
             recurrence?: null | components["schemas"]["EventRecurrenceRequest"];
+            seriesFrequency?: null | components["schemas"]["EventRecurrenceFrequency"];
         };
         ExpeditionDto: {
             /** Format: uuid */
@@ -21818,6 +22064,8 @@ export interface components {
             phoneNumber: null | string;
             /** Format: uuid */
             cavingClubId: null | string;
+            /** Format: uuid */
+            caverId: null | string;
             locale: string;
             avatarUrl: null | string;
             avatarPreset: null | string;
@@ -22913,6 +23161,7 @@ export interface components {
         ProtectedDisplay: "snapPoint" | "withhold";
         ProtectionSettingsDto: {
             revealProtectedAssociations: boolean;
+            calendarFeedEnabled: boolean;
         };
         PublicAlbumDto: {
             title: string;

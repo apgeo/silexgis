@@ -55,6 +55,10 @@ an administrator."*
 **Export your data** — a copy of your profile, addresses, settings and a list of what you
 have added. Queued, prepared in the background, then downloadable.
 
+**Calendar feed** — shown only when an administrator has switched feeds on. Creates the secret
+address a phone or desktop calendar subscribes to, lists the ones you have by name and date, and
+revokes one. See [Subscribing to your calendar](calendar-feed.md).
+
 ---
 
 ## Emails

@@ -1065,6 +1065,52 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("cabinet_documents", (string)null);
                 });
 
+            modelBuilder.Entity("SilexGis.Domain.Entities.CalendarFeedToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("label");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_calendar_feed_tokens");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_calendar_feed_tokens_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_calendar_feed_tokens_user_id");
+
+                    b.ToTable("calendar_feed_tokens", (string)null);
+                });
+
             modelBuilder.Entity("SilexGis.Domain.Entities.Cave", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2389,6 +2435,10 @@ namespace SilexGis.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("published_at");
 
+                    b.Property<short?>("SeriesFrequency")
+                        .HasColumnType("smallint")
+                        .HasColumnName("series_frequency");
+
                     b.Property<Guid?>("SeriesId")
                         .HasColumnType("uuid")
                         .HasColumnName("series_id");
@@ -2443,6 +2493,8 @@ namespace SilexGis.Infrastructure.Migrations
                     b.ToTable("events", null, t =>
                         {
                             t.HasCheckConstraint("ck_events_dates", "end_date IS NULL OR end_date > start_date");
+
+                            t.HasCheckConstraint("ck_events_series_frequency", "series_frequency IS NULL OR series_id IS NOT NULL");
 
                             t.HasCheckConstraint("ck_events_series_rule", "series_rule IS NULL OR series_id IS NOT NULL");
                         });
@@ -8037,6 +8089,16 @@ namespace SilexGis.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_cabinet_documents_documents_document_id");
+                });
+
+            modelBuilder.Entity("SilexGis.Domain.Entities.CalendarFeedToken", b =>
+                {
+                    b.HasOne("SilexGis.Infrastructure.Identity.SilexGisUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_calendar_feed_tokens_users_user_id");
                 });
 
             modelBuilder.Entity("SilexGis.Domain.Entities.Cave", b =>

@@ -26,6 +26,9 @@ pentru toată lumea — este o listă obișnuită, iar modificările administrat
 
 Vizibilitate: *Doar eu · Grupul meu de speologie · Oricine autentificat · Toată lumea.*
 
+Ca să dați o listă unei singure persoane, pe nume, și nu unei audiențe întregi, folosiți butonul
+**lacăt** de pe fișa ei: deschide același dialog de permisiuni pe care îl are o tură sau o peșteră.
+
 > **Lista implicită publicată de un administrator nu este nimic altceva decât o listă cu o
 > audiență largă.** Nu există un concept special de „listă oficială" — o listă pe care o poate
 > citi toată lumea este felul în care una este publicată pentru întreaga instalare.

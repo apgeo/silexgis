@@ -8,6 +8,7 @@ using SilexGis.Domain.Entities;
 using SilexGis.Domain.Events;
 using SilexGis.Domain.Permissions;
 using SilexGis.Infrastructure.Permissions;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Events;
@@ -40,6 +41,10 @@ public static class EventEndpoints
     // that quietly does nothing with half of what it carries is how somebody comes to believe
     // they have extended a series that never grew.
     internal const string RecurrenceCreateOnlyCode = "event.recurrence_create_only";
+
+    // A new repetition sent to the route that edits one event. One occurrence has no spacing to
+    // change; the rest of the run does, and the edit that reaches it is the one that takes this.
+    internal const string SeriesFrequencySeriesOnlyCode = "event.series_frequency_series_only";
 
     public static RouteGroupBuilder MapEventEndpoints(this RouteGroupBuilder api)
     {
@@ -290,6 +295,14 @@ public static class EventEndpoints
                 + "changes that occurrence.");
         }
 
+        if (request.SeriesFrequency is not null)
+        {
+            return ApiProblems.BadRequest(
+                SeriesFrequencySeriesOnlyCode,
+                "How often a run comes round is changed on the run — on this occurrence and every "
+                + "later one — not on one occurrence of it.");
+        }
+
         // Required, as it is on every other full update of a dated record: an edit written on
         // top of a version the author never saw silently discards whatever changed in between,
         // and two committee members correcting the same evening is the ordinary case rather than
@@ -366,6 +379,11 @@ public static class EventEndpoints
             .ToListAsync(ct);
         db.AccessEntries.RemoveRange(anchored);
 
+        // The files attached to the event, the tags on it and its place in any relation have
+        // no foreign key to follow, so nothing removes them unless this does — the same sweep a
+        // camp's delete makes, under the same rule.
+        await PolymorphicRowCleanup.RemoveRowsPointingAtAsync(db, AttachedEntityType.Event, [row.Id], ct);
+
         db.Events.Remove(row);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
@@ -409,19 +427,23 @@ public static class EventEndpoints
         EventRecurrenceRequest recurrence,
         Guid ownerUserId)
     {
-        // The frequency is present because the validator requires it and runs before this.
+        var span = first.EndDate is { } finish ? finish.DayNumber - first.StartDate.DayNumber : 0;
+
+        // The frequency is present because the validator requires it and runs before this. The
+        // span goes with it so that a plan whose occurrences would run into each other is refused
+        // here, before a single row is written.
         var plan = EventRecurrence.Plan(
-            first.StartDate, recurrence.Frequency!.Value, recurrence.Count, recurrence.Until);
+            first.StartDate, recurrence.Frequency!.Value, recurrence.Count, recurrence.Until, span);
         if (plan.Refused)
         {
             return ApiProblems.BadRequest(plan.RefusalCode!, plan.RefusalDetail);
         }
 
         var seriesId = Guid.CreateVersion7();
-        var span = first.EndDate is { } finish ? finish.DayNumber - first.StartDate.DayNumber : 0;
 
         first.SeriesId = seriesId;
         first.SeriesRule = recurrence.Rule;
+        first.SeriesFrequency = recurrence.Frequency;
 
         // The first day of the plan is the event already built, so the rest are written from the
         // second onwards. Written as full rows rather than copied from the first, so that a
@@ -435,6 +457,7 @@ public static class EventEndpoints
             occurrence.EndDate = DayRange.EndForStorage(day, day.AddDays(span));
             occurrence.SeriesId = seriesId;
             occurrence.SeriesRule = recurrence.Rule;
+            occurrence.SeriesFrequency = recurrence.Frequency;
             db.Events.Add(occurrence);
         }
 
@@ -612,6 +635,7 @@ public static class EventEndpoints
         PublishedAt = row.PublishedAt,
         SeriesId = row.SeriesId,
         SeriesRule = row.SeriesRule,
+        SeriesFrequency = row.SeriesFrequency,
         CreatedAt = row.CreatedAt,
         UpdatedAt = row.UpdatedAt,
     };

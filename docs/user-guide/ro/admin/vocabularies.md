@@ -60,6 +60,22 @@ Cine a făcut două treburi este înregistrat făcându-le pe amândouă, nu pus
 
 ---
 
+## Configurare → Roluri în tabără
+
+**Ce guvernează:** ce a fost cineva într-o [tabără](../features/camps.md). Fiecare rând din
+lista *Cine a fost* a unei tabere își randează rolul din această listă.
+
+Vine cu: *Membru · Organizator · Bucătar · Tabără de bază · Șofer · Medic · Echipament ·
+Invitat*. **Membru există din start și nu poate fi scos** — fără el o tabără nu ar putea
+înregistra că cineva pur și simplu a fost acolo.
+
+O listă proprie, ținută dinadins separat de rolurile în tură: a găti pentru treizeci de oameni
+sau a ține tabăra de bază nu este o sarcină în subteran, așa că un rol adăugat aici nu este
+oferit niciodată într-o tură, iar un rol de tură nu este oferit niciodată într-o tabără. Se
+ajunge la ea și din lista taberelor, sub *Configurare*.
+
+---
+
 ## Configurare → Modele de raport
 
 **Ce guvernează:** modelul în care se redactează o tură.

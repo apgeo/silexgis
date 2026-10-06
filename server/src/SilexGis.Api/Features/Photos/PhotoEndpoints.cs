@@ -44,7 +44,7 @@ public static class PhotoEndpoints
         var photos = api.MapGroup("/photos").WithTags("Photos");
 
         photos.MapGet("/", ListAsync)
-            .WithSummary("Photographs the caller may see, newest first, narrowed by cave, feature, trip, caver, tag, album, camera, date or map extent.");
+            .WithSummary("Photographs the caller may see, newest first, narrowed by cave, feature, trip, camp, caver, tag, album, camera, date or map extent.");
         photos.MapGet("/duplicates", DuplicatesAsync)
             .WithSummary("Groups of photographs holding byte-identical content.");
         photos.MapGet("/deleted", DeletedAsync)
@@ -82,7 +82,7 @@ public static class PhotoEndpoints
             return TypedResults.Unauthorized();
         }
 
-        var photographs = (await PhotographReads.VisiblePhotographsAsync(db, ctx, ct)).Narrow(db, query);
+        var photographs = (await PhotographReads.VisiblePhotographsAsync(db, ctx, ct)).Narrow(db, ctx, query);
 
         if (!string.IsNullOrWhiteSpace(query.Bbox))
         {

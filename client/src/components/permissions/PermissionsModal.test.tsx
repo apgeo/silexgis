@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { EntityType } from '../../api/hooks.ts';
 
 const replace = vi.fn();
+// The camp a cascade row names, as the reader's own read of it answers: a name when they may
+// open it, nothing when it is not theirs to read.
+let campRead: { data?: { id: string; name: string } } = { data: undefined };
 let rules: {
   subjectKind: 'user' | 'cavingGroup';
   subjectId: string;
@@ -25,6 +29,7 @@ vi.mock('../../api/hooks.ts', async (importOriginal) => {
     useCavingGroups: () => ({ data: [{ id: 'club-1', name: 'Speo Club' }] }),
     useEffectiveAccess: () => ({ data: undefined }),
     useUserSearch: () => ({ data: [] }),
+    useExpedition: () => campRead,
   };
 });
 
@@ -33,7 +38,9 @@ const { default: PermissionsModal } = await import('./PermissionsModal.tsx');
 function show(entityType: EntityType = 'tripLog') {
   return render(
     <App>
-      <PermissionsModal entityType={entityType} entityId="trip-1" open onClose={() => {}} />
+      <MemoryRouter>
+        <PermissionsModal entityType={entityType} entityId="trip-1" open onClose={() => {}} />
+      </MemoryRouter>
     </App>,
   );
 }
@@ -48,6 +55,7 @@ describe('PermissionsModal on a trip', () => {
     replace.mockReset();
     replace.mockResolvedValue(undefined);
     rules = [];
+    campRead = { data: undefined };
   });
   afterEach(cleanup);
 
@@ -97,12 +105,15 @@ describe('PermissionsModal on a trip', () => {
       },
     ];
 
+    campRead = { data: { id: 'camp-1', name: 'Bihor summer camp' } };
     show();
 
     // Shown — the point of the list is that it is the whole list of who may read this trip —
     // and shown as somebody else's: it is changed where the camp is, and the save below
-    // replaces only the rules written here, so offering it as editable would be a lie.
-    expect(screen.getByText('From a camp')).toBeInTheDocument();
+    // replaces only the rules written here, so offering it as editable would be a lie. The
+    // mark names the camp and leads to it, which is where the rule is changed.
+    const mark = screen.getByRole('link', { name: 'Granted through camp Bihor summer camp' });
+    expect(mark.getAttribute('href')).toBe('/expeditions/camp-1');
     const removeButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('td button'));
     expect(removeButtons[0]).toBeDisabled();
     expect(removeButtons[1]).not.toBeDisabled();
@@ -114,6 +125,26 @@ describe('PermissionsModal on a trip', () => {
     expect(replace).toHaveBeenCalledWith([
       { subjectKind: 'user', subjectId: 'user-9', effect: 'allow', actions: 'read, write', scopeKind: 'object' },
     ]);
+  });
+
+  it('says only that a camp wrote a rule when the camp is not the reader\'s to open', () => {
+    // A camp the reader may not open answers as one that does not exist, so a link would lead
+    // to a page saying "no such camp": the mark then carries no name and no link.
+    rules = [
+      {
+        subjectKind: 'cavingGroup',
+        subjectId: 'club-1',
+        subjectName: 'Speo Club',
+        effect: 'allow',
+        scopeKind: 'object',
+        actions: 'read',
+        grantedViaExpeditionId: 'camp-1',
+      },
+    ];
+    show();
+
+    expect(screen.getByText('From a camp')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Granted through camp/ })).not.toBeInTheDocument();
   });
 
   it('lets a subject a camp already named be given a rule the trip owns itself', async () => {

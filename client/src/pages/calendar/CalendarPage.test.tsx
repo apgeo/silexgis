@@ -23,6 +23,7 @@ vi.mock('../../api/hooks.ts', () => ({
   // The pane under the record builds an OpenLayers map of its own; what it asks for is proved
   // where it lives, and here it is only required not to interfere with the record above it.
   useTripLogMap: () => ({ data: undefined }),
+  useCampAreasMap: () => ({ data: undefined }),
 }));
 
 const { default: CalendarPage } = await import('./CalendarPage.tsx');

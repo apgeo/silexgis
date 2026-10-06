@@ -83,6 +83,13 @@ public sealed record EventDto
     /// </summary>
     public string? SeriesRule { get; init; }
 
+    /// <summary>
+    /// How often the run comes round, as the generator stepped it — a closed value a reader's
+    /// screen renders in its own language, beside the author's sentence. Null off a series, and
+    /// null on a series written before the value was kept.
+    /// </summary>
+    public EventRecurrenceFrequency? SeriesFrequency { get; init; }
+
     public required DateTimeOffset CreatedAt { get; init; }
 
     public required DateTimeOffset UpdatedAt { get; init; }
@@ -169,6 +176,14 @@ public sealed record EventWriteRequest
     /// that is edited, moved and deleted like any other.
     /// </summary>
     public EventRecurrenceRequest? Recurrence { get; init; }
+
+    /// <summary>
+    /// A new repetition for the rest of a run, read only by the edit that reaches this occurrence
+    /// and every later one: those occurrences are re-spaced from this one's day by it, and carry
+    /// it from then on. Absent, the edit keeps the spacing the run already has. The single edit
+    /// refuses it, because one occurrence has no spacing to change.
+    /// </summary>
+    public EventRecurrenceFrequency? SeriesFrequency { get; init; }
 }
 
 /// <summary>
@@ -251,6 +266,8 @@ public sealed class EventWriteRequestValidator : AbstractValidator<EventWriteReq
         RuleFor(x => x.Recurrence!)
             .SetValidator(new EventRecurrenceRequestValidator())
             .When(x => x.Recurrence is not null);
+
+        RuleFor(x => x.SeriesFrequency).IsInEnum().When(x => x.SeriesFrequency is not null);
     }
 }
 

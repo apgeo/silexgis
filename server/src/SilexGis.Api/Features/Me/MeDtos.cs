@@ -60,6 +60,14 @@ public sealed record MeDto(
     string? Bio,
     string? PhoneNumber,
     Guid? CavingClubId,
+    /// <summary>
+    /// The caller's own entry in the club's roster, when one is linked to this account. Most
+    /// things a trip records are about roster entries rather than accounts, so a surface that
+    /// lets the caller act for themselves — put their own name down on a plan — needs this and
+    /// can get it from nowhere else: the roster list is capped and searched by name, and
+    /// finding oneself in it is a guess that fails silently in a large club.
+    /// </summary>
+    Guid? CaverId,
     string Locale,
     string? AvatarUrl,
     string? AvatarPreset,
@@ -167,7 +175,8 @@ internal static class MeMapping
     public static MeDto ToDto(
         SilexGisUser user,
         IReadOnlyList<UserAddress> addresses,
-        IFileAccessTokenService tokens) =>
+        IFileAccessTokenService tokens,
+        Guid? caverId) =>
         new(
             user.Id,
             user.UserName ?? string.Empty,
@@ -180,6 +189,7 @@ internal static class MeMapping
             user.Bio,
             user.PhoneNumber,
             user.CavingClubId,
+            caverId,
             user.Locale,
             AvatarUrl(user.AvatarFileId, tokens),
             user.AvatarPreset,

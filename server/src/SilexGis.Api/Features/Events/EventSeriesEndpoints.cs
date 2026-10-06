@@ -5,6 +5,8 @@ using SilexGis.Api.Common;
 using SilexGis.Domain;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Events;
+using SilexGis.Infrastructure.Documents;
 using SilexGis.Infrastructure.Persistence;
 
 namespace SilexGis.Api.Features.Events;
@@ -189,24 +191,51 @@ public static class EventSeriesEndpoints
         var storedEnd = DayRange.EndForStorage(request.StartDate, request.EndDate);
         var span = storedEnd is { } finish ? finish.DayNumber - request.StartDate.DayNumber : 0;
 
-        // Worked out in day numbers and checked before a single date is built. Nothing upstream
-        // bounds the day an edit may name, so a shift of several thousand years is a request
-        // somebody can send, and DateOnly answers arithmetic past its own range by throwing —
-        // which would surface as a failure instead of as the refusal it is. Checked over the
-        // whole set first, so this route stays all-or-nothing here as it is everywhere else.
         var moved = new List<(Event Row, DateOnly Start)>(rows.Count);
-        foreach (var row in rows)
+        if (request.SeriesFrequency is { } frequency)
         {
-            var number = (long)row.StartDate.DayNumber + shift;
-            if (number < DateOnly.MinValue.DayNumber || number + span > DateOnly.MaxValue.DayNumber)
+            // A new repetition re-spaces the rest of the run from the anchor's new day, through
+            // the same generator that wrote it, so every ceiling the create holds — the horizon,
+            // the overlap of occurrences longer than their stride — holds here too and refuses
+            // with the same code before anything is written. The count is the rows that exist:
+            // a re-spacing changes when they fall and never how many there are, so a run of one
+            // (an anchor with nothing after it) simply takes the anchor's day.
+            if (rows.Count == 1)
             {
-                return ApiProblems.BadRequest(
-                    SeriesMoveOutOfRangeCode,
-                    "Moving this occurrence that far would carry a later one of the run off the "
-                    + "end of the calendar, so none of them were moved. Pick a nearer day.");
+                moved.Add((rows[0], request.StartDate));
             }
+            else
+            {
+                var plan = EventRecurrence.Plan(request.StartDate, frequency, rows.Count, null, span);
+                if (plan.Refused)
+                {
+                    return ApiProblems.BadRequest(plan.RefusalCode!, plan.RefusalDetail);
+                }
 
-            moved.Add((row, DateOnly.FromDayNumber((int)number)));
+                moved.AddRange(rows.Zip(plan.Days, (row, day) => (row, day)));
+            }
+        }
+        else
+        {
+            // Worked out in day numbers and checked before a single date is built. Nothing
+            // upstream bounds the day an edit may name, so a shift of several thousand years is
+            // a request somebody can send, and DateOnly answers arithmetic past its own range by
+            // throwing — which would surface as a failure instead of as the refusal it is.
+            // Checked over the whole set first, so this route stays all-or-nothing here as it is
+            // everywhere else.
+            foreach (var row in rows)
+            {
+                var number = (long)row.StartDate.DayNumber + shift;
+                if (number < DateOnly.MinValue.DayNumber || number + span > DateOnly.MaxValue.DayNumber)
+                {
+                    return ApiProblems.BadRequest(
+                        SeriesMoveOutOfRangeCode,
+                        "Moving this occurrence that far would carry a later one of the run off the "
+                        + "end of the calendar, so none of them were moved. Pick a nearer day.");
+                }
+
+                moved.Add((row, DateOnly.FromDayNumber((int)number)));
+            }
         }
 
         foreach (var (row, start) in moved)
@@ -218,6 +247,12 @@ public static class EventSeriesEndpoints
             EventEndpoints.Apply(row, request);
             row.StartDate = start;
             row.EndDate = DayRange.EndForStorage(start, start.AddDays(span));
+            // The repetition the rest of the run now comes round by; the occurrences before the
+            // anchor keep the one they were written under, which is the truth about them.
+            if (request.SeriesFrequency is { } changed)
+            {
+                row.SeriesFrequency = changed;
+            }
         }
 
         // One save for the whole set, so the change is one act in the trail as it is to the person
@@ -323,6 +358,12 @@ public static class EventSeriesEndpoints
                 && doomedIds.Contains(e.ScopeId.Value))
             .ToListAsync(ct);
         db.AccessEntries.RemoveRange(anchored);
+
+        // Each occurrence is an ordinary event to everything that was already there, so each
+        // one may carry files, tags and a place in a relation of its own; they go with it, per
+        // occurrence, exactly as they would had each been deleted on its own.
+        await PolymorphicRowCleanup.RemoveRowsPointingAtAsync(db, AttachedEntityType.Event, doomedIds, ct);
+
         db.Events.RemoveRange(doomed);
         await db.SaveChangesAsync(ct);
 

@@ -203,6 +203,24 @@ public sealed class EventSeriesTests : IAsyncLifetime, IDisposable, IClassFixtur
             .ShouldBe([("2054-08-03", "2054-08-05"), ("2054-08-10", "2054-08-12"), ("2054-08-17", "2054-08-19")]);
     }
 
+    /// <summary>
+    /// The length travels with every occurrence, so a run whose occurrences would still be going
+    /// when the next began is refused whole — with the stable code, and with nothing written —
+    /// rather than materialised as rows of one series stacked on the same days.
+    /// </summary>
+    [Fact]
+    public async Task An_occurrence_still_running_when_the_next_begins_is_refused_and_writes_nothing()
+    {
+        var title = $"Overlapping {suffix}";
+        await RefusedAsync(
+            Body(title, new DateOnly(2054, 9, 7),
+                endDate: new DateOnly(2054, 9, 14),
+                recurrence: Repeat("weekly", count: 3, rule: "Eight days, weekly")),
+            EventRecurrence.OverlappingCode);
+
+        (await ListAsync(owner, null)).ShouldNotContain(x => x.GetProperty("title").GetString() == title);
+    }
+
     [Fact]
     public async Task A_repetition_sent_to_the_edit_of_one_event_is_refused()
     {

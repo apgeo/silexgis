@@ -26,6 +26,9 @@ for everybody — it is an ordinary list, and the administrator's edits stand.
 
 Visibility: *Only me · My caving group · Anyone signed in · Everyone.*
 
+To hand one list to one person by name rather than to a whole audience, use the **lock** button on
+its card: it opens the same permissions dialog a trip or a cave has.
+
 > **An administrator's published default is nothing more than a list with a wide audience.**
 > There is no special "official checklist" concept — a list everyone may read is how one is
 > published for the whole installation.

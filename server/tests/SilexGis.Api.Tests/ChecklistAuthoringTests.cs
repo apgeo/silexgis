@@ -26,6 +26,7 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
     private HttpClient owner = null!;
     private HttpClient outsider = null!;
     private Guid ownerId;
+    private Guid outsiderId;
 
     public ChecklistAuthoringTests(PostgresFixture postgres) =>
         factory = new SilexGisApiFactory(postgres.ConnectionString);
@@ -36,10 +37,83 @@ public sealed class ChecklistAuthoringTests : IAsyncLifetime, IDisposable, IClas
 
         // A Viewer, deliberately: the seeded Editors group reads past visibility at the widest
         // scope by design, so "an editor could not see it" would say nothing about the audience.
-        _ = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"cla-out-{suffix}@t.local");
+        outsiderId = await AuthHelper.CreateUserAsync(factory, GlobalRoles.Viewer, $"cla-out-{suffix}@t.local");
 
         owner = await AuthHelper.BearerClientAsync(factory, $"cla-own-{suffix}@t.local");
         outsider = await AuthHelper.BearerClientAsync(factory, $"cla-out-{suffix}@t.local");
+    }
+
+    /// <summary>
+    /// The door the domain exists for: one entry naming one list, authored through the same
+    /// route every other shareable object is shared through. The list's own routes answer the
+    /// outsider as though it were not there until the grant, read it afterwards, and refuse what
+    /// the entry did not name; the sharing route itself refuses a reader who may not manage it.
+    /// </summary>
+    [Fact]
+    public async Task One_list_is_handed_to_one_person_by_name_through_the_object_access_route()
+    {
+        var created = await owner.PostAsJsonAsync("/api/v1/checklists", new
+        {
+            title = $"Shared list {suffix}",
+            description = (string?)null,
+            visibility = (int)Visibility.Private,
+            items = new[] { new { text = "Permit obtained" } },
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
+        var id = (await created.Content.ReadFromJsonAsync<ChecklistPayload>())!.Id;
+
+        var grant = new
+        {
+            entries = new[]
+            {
+                new
+                {
+                    subjectKind = "user",
+                    subjectId = outsiderId,
+                    effect = "allow",
+                    actions = "Read",
+                    scopeKind = "object",
+                },
+            },
+        };
+
+        // Before the grant: the target parses, the route answers, and the outsider is admitted
+        // to nothing — not to the list, and not to its rules, which would state that it exists.
+        (await outsider.GetAsync($"/api/v1/checklists/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await outsider.PutAsJsonAsync($"/api/v1/objects/checklist/{id}/access", grant))
+            .StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var granted = await owner.PutAsJsonAsync($"/api/v1/objects/checklist/{id}/access", grant);
+        granted.StatusCode.ShouldBe(HttpStatusCode.OK, await granted.Content.ReadAsStringAsync());
+
+        (await outsider.GetAsync($"/api/v1/checklists/{id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var listing = await outsider.GetFromJsonAsync<List<ChecklistPayload>>("/api/v1/checklists");
+        listing.ShouldNotBeNull();
+        listing.ShouldContain(x => x.Id == id);
+
+        // Reading is not writing, and it is not managing: the entry named one action and confers
+        // that one only. A reader who may not manage the rules is refused rather than hidden
+        // from, because they already know the list exists.
+        (await outsider.PutAsJsonAsync($"/api/v1/checklists/{id}", new
+        {
+            title = $"Renamed by grantee {suffix}",
+            description = (string?)null,
+            visibility = (int)Visibility.Private,
+            items = new[] { new { text = "Permit obtained" } },
+        })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await outsider.PutAsJsonAsync($"/api/v1/objects/checklist/{id}/access", grant))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+        var effective = await outsider.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/v1/objects/checklist/{id}/effective-access");
+        (effective.GetProperty("actions").GetString() ?? string.Empty).ShouldContain("Read");
+
+        // Withdrawing the entry withdraws the reach, so the grant above is what admitted the
+        // outsider rather than anything the account already held.
+        var withdrawn = await owner.PutAsJsonAsync($"/api/v1/objects/checklist/{id}/access",
+            new { entries = Array.Empty<object>() });
+        withdrawn.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await outsider.GetAsync($"/api/v1/checklists/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]

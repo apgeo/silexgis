@@ -208,3 +208,95 @@ test("a camp's leads board is a tab of its own and says whose board it is", asyn
   await expect(page.getByTestId('expedition-leads-tab')).toBeVisible({ timeout: 15_000 });
   expect(new URL(page.url()).searchParams.get('tab')).toBe('leads');
 });
+
+/**
+ * A camp's whole life, driven from the list: made, renamed, announced, its permissions opened,
+ * its pictures asked for, written up and filed, and deleted again.
+ *
+ * One flow rather than six because each step is the next one's subject, and a camp made here is
+ * deleted here, so nothing depends on the seeded data holding a camp in any particular state.
+ */
+test('a camp is made from the list, renamed, announced, opened for its permissions, written up and deleted', async ({
+  page,
+  consoleErrors,
+}) => {
+  consoleErrors.allow(
+    /status of 404/,
+    'this flow deletes its own camp from the camp page, which refetches it once on the way out',
+  );
+  await login(page);
+
+  await gotoRoute(page, '/expeditions');
+  await page.getByTestId('expedition-new').click();
+  const name = `E2E camp ${Date.now()}`;
+  await page.getByTestId('expedition-form-name').fill(name);
+  // The days default to today and the audience to the caving group: a camp entered without
+  // touching either is a one-day camp today, which is all this flow needs of it.
+  await page.getByRole('button', { name: 'OK' }).click();
+
+  // Saving opens the camp, and a new camp is a draft that says so to whoever could announce it.
+  await expect(page).toHaveURL(/\/expeditions\/[0-9a-f-]{36}$/, { timeout: 20_000 });
+  await expect(page.getByTestId('expedition-name')).toHaveText(name, { timeout: 15_000 });
+  await expect(page.getByTestId('expedition-draft-notice')).toBeVisible();
+  const campUrl = page.url();
+
+  // Renamed through the same form, filled in; the heading follows the save.
+  await page.getByTestId('expedition-edit').click();
+  const nameBox = page.getByTestId('expedition-form-name');
+  await expect(nameBox).toHaveValue(name);
+  const renamed = `${name} renamed`;
+  await nameBox.fill(renamed);
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByTestId('expedition-name')).toHaveText(renamed, { timeout: 15_000 });
+
+  // Announced. Confirmed first, as a trip's is, in the camp's own words — nobody is notified —
+  // and the move shows twice over: the draft notice goes, and the state tag reads the new state.
+  await page.getByRole('button', { name: /Publish/ }).click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page.getByText('Announced.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('expedition-draft-notice')).toBeHidden({ timeout: 15_000 });
+  await expect(page.locator('.ant-tag', { hasText: 'Published' }).first()).toBeVisible();
+
+  // The permissions dialog opens from the header, on the camp itself.
+  await page.getByTestId('expedition-permissions').click();
+  const permissions = page.getByRole('dialog', { name: 'Permissions' });
+  await expect(permissions).toBeVisible({ timeout: 15_000 });
+  await permissions.getByRole('button', { name: 'Close' }).click();
+  await expect(permissions).toBeHidden();
+
+  // The pictures tab asks the gallery the camp question. A camp made a moment ago has none, and
+  // the sentence saying so admits that it is one reader's answer.
+  await page.goto(`${campUrl}?tab=photos`);
+  await expect(page.getByTestId('expedition-photos-tab')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/No photographs are filed against this camp/)).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // The write-up: the camp arranged to be read, headed by its name, then filed against it. The
+  // filing is waited on by its own response rather than by a message on the screen, because an
+  // earlier confirmation can still be up and would answer for it.
+  await page.goto(campUrl);
+  await page.getByTestId('expedition-open-report').click();
+  await expect(page.getByTestId('expedition-report')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('expedition-report-name')).toHaveText(renamed);
+  const filed = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      /\/api\/v1\/expeditions\/[^/]+\/report/.test(response.url()),
+    { timeout: 30_000 },
+  );
+  await page.getByTestId('expedition-report-keep').click();
+  expect((await filed).status()).toBe(200);
+
+  // Filed on the camp, in the slot its files live in, named as a write-up of the camp.
+  await page.goto(`${campUrl}?tab=files`);
+  await expect(page.getByTestId('expedition-name')).toHaveText(renamed, { timeout: 15_000 });
+  await expect(page.getByText(/expedition-report-[0-9a-f]{8}-\d{8}\.docx/).first()).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // And gone: the camp goes, and the list is where that leaves the reader.
+  await page.getByTestId('expedition-delete').click();
+  await page.getByRole('button', { name: 'OK' }).click();
+  await expect(page).toHaveURL(/\/expeditions$/, { timeout: 15_000 });
+});

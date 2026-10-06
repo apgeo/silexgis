@@ -97,6 +97,18 @@ the association.
 > **Turning it on never reveals a position.** Following the link still gives the protected
 > view.
 
+### The calendar feed setting
+
+The second switch on the same tab — **"Let members subscribe to their calendar from outside"** —
+is here for the same reason: it decides how far the club's dates may travel.
+
+Off by default. On, each member can create secret addresses that a phone or desktop calendar
+polls without signing in ([Subscribing to your calendar](../features/calendar-feed.md)). A feed
+carries **only the titles, dates and links** of what that member is on — never a place, a
+position or a participant — and is read through the member's own permissions every time it is
+polled, so a protected cave is no more reachable through a feed than through the calendar page.
+Switching it off again stops every address already handed out.
+
 ---
 
 ## Things that are deliberately *not* approximated

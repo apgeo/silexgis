@@ -32,6 +32,12 @@ describe('the addresses this application hands out', () => {
     expect(matchRoutes(routes, `/expeditions/${SOME_ID}`)).toBeTruthy();
   });
 
+  // The camp page offers its write-up by a link it builds itself, so the address is registered
+  // in two places and is exactly the kind that goes missing from one of them.
+  it('include the write-up the camp page sends people to', () => {
+    expect(matchRoutes(routes, `/expeditions/${SOME_ID}/report`)).toBeTruthy();
+  });
+
   // The sidebar offers this one by key, and a menu key with no route behind it lands whoever
   // clicked it on the router's error screen rather than failing to navigate.
   it('include the list of camps the sidebar sends people to', () => {
@@ -48,6 +54,12 @@ describe('the addresses this application hands out', () => {
   // from no menu and matched by no route is a page nobody finds either way.
   it('include the delivery health page the sidebar offers', () => {
     expect(matchRoutes(routes, '/admin/notification-health')).toBeTruthy();
+  });
+
+  // The camp-roster vocabulary's page: offered by key from the configuration group and from the
+  // camps list, and the one of the three activity vocabularies that had routes and no page.
+  it('include the camp roles page the sidebar and the camps list offer', () => {
+    expect(matchRoutes(routes, '/admin/camp-roster-roles')).toBeTruthy();
   });
 
   // Same reason, for the record of everything dated: the sidebar offers it by key.

@@ -64,7 +64,8 @@ Two differences from a trip:
 
 ## Events that come round again
 
-**It comes round again** writes the whole run now, as ordinary events. Each one is then
+**It comes round again** writes the whole run now, as ordinary events. Each occurrence says how
+often the run comes round, in your own language, beside the words its author used. Each one is then
 edited, answered and called off on its own.
 
 - **How often**: every day · every week · every other week · every month.
@@ -89,7 +90,9 @@ each is the record of something that happened.
 
 **Activity → Calendar.** One window over **trips, camps and events** read together.
 
-It reads as a **month, a year, a week or an agenda**, over a map.
+It reads as a **month, a year, a week or an agenda**, over a map. The map draws the trips and the
+camps of the days on screen — a trip where it worked and where its party met, a camp as the working
+area drawn on its plan — and nothing for a club date, which has no shape.
 
 You can:
 
@@ -119,7 +122,14 @@ You have to say which days you want, and the span is capped. If a window holds m
 page will return, it tells you **how many rows it left out** rather than quietly showing you
 less than there is.
 
+## Taking it with you
+
+Your own trips, camps and events can also appear in the calendar on your phone or desktop,
+through a **feed address** you create under **Settings → Account** — once an administrator has
+switched feeds on. See [Subscribing to your calendar](calendar-feed.md): what travels is the
+title, the days and a link back, and nothing else.
+
 ---
 
 Related: [Trips](trips.md) · [Camps](camps.md) ·
-[Notifications](notifications.md)
+[Subscribing to your calendar](calendar-feed.md) · [Notifications](notifications.md)

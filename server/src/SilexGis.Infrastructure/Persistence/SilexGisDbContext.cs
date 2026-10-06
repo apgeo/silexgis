@@ -182,6 +182,8 @@ public class SilexGisDbContext(DbContextOptions<SilexGisDbContext> options)
     /// <summary>Dated things a club runs that are not trips and not camps.</summary>
     public DbSet<Event> Events => Set<Event>();
 
+    public DbSet<CalendarFeedToken> CalendarFeedTokens => Set<CalendarFeedToken>();
+
     public DbSet<ChecklistItem> ChecklistItems => Set<ChecklistItem>();
 
     /// <summary>What each trip has confirmed of the list it works through: who, and when.</summary>

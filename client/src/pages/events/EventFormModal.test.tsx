@@ -174,4 +174,42 @@ describe('an event that comes round again', () => {
     // How many occurrences were really reached, reported rather than the number asked for.
     await waitFor(() => expect(screen.getByText(/12 occurrences were changed/)).toBeTruthy());
   });
+
+  /**
+   * The repetition is offered only with the wider scope, prefilled with the one the run was
+   * written under, and travels only when it was changed: sent unchanged it would re-space the
+   * run and undo an occurrence somebody had moved by hand.
+   */
+  it('offers the repetition for the rest of the run only, and sends it only when changed', async () => {
+    followingSpy.mockResolvedValue({ seriesId: 'series-1', changed: 3, anchor: anOccurrence() });
+    show(anOccurrence({ seriesFrequency: 'weekly' } as Partial<EventInfo>));
+    await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
+    expect(screen.queryByTestId('event-series-frequency')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('event-scope-following'));
+    await waitFor(() => expect(screen.getByTestId('event-series-frequency')).toBeTruthy());
+
+    // Unchanged: the body carries no repetition.
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(followingSpy).toHaveBeenCalled());
+    const unchanged = followingSpy.mock.calls[0][0] as { body: { seriesFrequency?: string } };
+    expect(unchanged.body.seriesFrequency).toBeUndefined();
+  });
+
+  it('sends the new repetition for the rest of the run once one is picked', async () => {
+    followingSpy.mockResolvedValue({ seriesId: 'series-1', changed: 3, anchor: anOccurrence() });
+    show(anOccurrence({ seriesFrequency: 'weekly' } as Partial<EventInfo>));
+    await waitFor(() => expect(screen.getByTestId('event-scope')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('event-scope-following'));
+    await waitFor(() => expect(screen.getByTestId('event-series-frequency')).toBeTruthy());
+
+    // antd's select: open it by its combobox, then pick the visible option by title.
+    fireEvent.mouseDown(screen.getByTestId('event-series-frequency').querySelector('input')!);
+    fireEvent.click(await screen.findByTitle('Every other week'));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(followingSpy).toHaveBeenCalled());
+    const changed = followingSpy.mock.calls[0][0] as { body: { seriesFrequency?: string } };
+    expect(changed.body.seriesFrequency).toBe('fortnightly');
+  });
 });

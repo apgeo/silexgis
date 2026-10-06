@@ -111,6 +111,9 @@ public static class EventRecurrence
     /// <summary>A repetition this application has no way to step by.</summary>
     public const string FrequencyInvalidCode = "event.recurrence_frequency_invalid";
 
+    /// <summary>An occurrence that runs on past the day the next one begins.</summary>
+    public const string OverlappingCode = "event.recurrence_overlapping";
+
     /// <summary>
     /// The words behind <see cref="HorizonTooFarCode"/>, in one place because two paths refuse
     /// with it: a repetition that walks past the horizon, and one that walks off the end of the
@@ -135,9 +138,20 @@ public static class EventRecurrence
     /// An occurrence landing exactly on it is kept: somebody naming a last day means "up to and
     /// including".
     /// </param>
+    /// <param name="spanDays">
+    /// How many days each occurrence runs on past its first: zero for an evening, two for a
+    /// three-day course. Every occurrence is the same length, so the plan can tell whether one
+    /// is still running when the next begins — which it refuses, because two rows of one series
+    /// on the same day is not a repetition anybody asked for and is what a weekly course
+    /// mistakenly given a ten-day span would silently become.
+    /// </param>
     public static EventSeriesPlan Plan(
-        DateOnly start, EventRecurrenceFrequency frequency, int? count, DateOnly? lastDay)
+        DateOnly start, EventRecurrenceFrequency frequency, int? count, DateOnly? lastDay, int spanDays = 0)
     {
+        // The span comes from an end date already validated against its start, so a negative
+        // one is a programming error rather than something a person typed.
+        ArgumentOutOfRangeException.ThrowIfNegative(spanDays);
+
         // Checked here rather than left to the step below, because a value that is not one of the
         // four arrives over the wire and must be refused, never thrown at. The step's own default
         // arm is then genuinely unreachable and says so.
@@ -220,6 +234,19 @@ public static class EventRecurrence
             if (day > horizon)
             {
                 return Refuse(HorizonTooFarCode, HorizonDetail);
+            }
+
+            // Measured against the day the previous occurrence ends rather than against the
+            // stride, because a month is not one number of days: a course of twenty-nine days
+            // repeating monthly clears March and collides with February. Checked here, as each
+            // day is produced, so the refusal names the first collision and not a summary.
+            if (days.Count > 0 && days[^1].AddDays(spanDays) >= day)
+            {
+                return Refuse(
+                    OverlappingCode,
+                    $"Each occurrence runs {spanDays + 1} days, so the one beginning on "
+                    + $"{days[^1]:yyyy-MM-dd} is still running when the next begins on "
+                    + $"{day:yyyy-MM-dd}. Make the event shorter, or make it come round less often.");
             }
 
             days.Add(day);

@@ -69,6 +69,7 @@ până la sfârșit, trimițând la paginile de referință pentru detalii.
 **Activitate**
 [Ture](features/trips.md) ·
 [Evenimente și calendar](features/events-and-calendar.md) ·
+[Abonarea la calendar](features/calendar-feed.md) ·
 [Tabere](features/camps.md) ·
 [Liste de verificare și apelul de urgență](features/checklists-and-callout.md) ·
 [Urmărirea în direct și turele publicate](features/live-tracking.md)

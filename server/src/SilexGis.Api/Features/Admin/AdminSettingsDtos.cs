@@ -72,9 +72,10 @@ public sealed record SecuritySettingsDto(
     int TwoFactorResendIntervalSeconds);
 
 /// <summary>
-/// What the installation gives away about a protected position's surroundings.
+/// What the installation gives away about a protected position's surroundings, and whether it
+/// lets an account subscribe to its own calendar from outside.
 /// </summary>
-public sealed record ProtectionSettingsDto(bool RevealProtectedAssociations);
+public sealed record ProtectionSettingsDto(bool RevealProtectedAssociations, bool CalendarFeedEnabled);
 
 /// <summary>
 /// Everything the installation-settings page needs in one read, including whether each channel is

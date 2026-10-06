@@ -51,7 +51,8 @@ public static class AttachmentTargets
     {
         AttachedEntityType.TripLog or AttachedEntityType.CavingGroup or AttachedEntityType.Geofile
             or AttachedEntityType.GeoreferencedMap or AttachedEntityType.MapView
-            or AttachedEntityType.StoredFile or AttachedEntityType.Expedition => true,
+            or AttachedEntityType.StoredFile or AttachedEntityType.Expedition
+            or AttachedEntityType.Event => true,
         _ => false,
     };
 

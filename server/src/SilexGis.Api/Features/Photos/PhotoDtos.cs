@@ -75,6 +75,11 @@ public sealed record PhotoCreditDto(
 /// <param name="CaveId">Photographs hanging on one cave, or on anything below it.</param>
 /// <param name="FeatureId">Photographs hanging on one feature exactly.</param>
 /// <param name="TripLogId">Photographs of one trip.</param>
+/// <param name="ExpeditionId">
+/// Photographs of one camp: the ones filed against the camp itself and the ones on the trips it
+/// gathers that this caller may read. A camp the caller may not read answers empty, as a trip
+/// does, so the filter cannot be used to find out which trips a camp holds.
+/// </param>
 /// <param name="CaverId">Photographs credited to one caver.</param>
 /// <param name="TagId">Photographs carrying one tag.</param>
 /// <param name="AlbumId">Photographs in one album — in the album's own order.</param>
@@ -97,7 +102,8 @@ public sealed record PhotoQuery(
     bool? Unplaced,
     DateOnly? From,
     DateOnly? To,
-    string? Search);
+    string? Search,
+    Guid? ExpeditionId);
 
 /// <summary>Editing what a photograph says about itself.</summary>
 public sealed record PhotoCreditWriteRequest(

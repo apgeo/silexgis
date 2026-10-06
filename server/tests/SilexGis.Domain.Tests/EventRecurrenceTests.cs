@@ -278,4 +278,44 @@ public class EventRecurrenceTests
         unknown.RefusalCode.ShouldBe(EventRecurrence.FrequencyInvalidCode);
         unknown.Days.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void An_occurrence_that_ends_before_the_next_begins_is_a_series_and_one_that_does_not_is_refused()
+    {
+        // A seven-day course weekly fills every day and overlaps nothing: Monday to Sunday, then
+        // Monday again. One day longer and the first is still running when the second begins.
+        var fits = EventRecurrence.Plan(Tuesday, EventRecurrenceFrequency.Weekly, 3, null, spanDays: 6);
+        fits.Refused.ShouldBeFalse(fits.RefusalDetail);
+        fits.Days.Count.ShouldBe(3);
+
+        var overlaps = EventRecurrence.Plan(Tuesday, EventRecurrenceFrequency.Weekly, 3, null, spanDays: 7);
+        overlaps.Refused.ShouldBeTrue();
+        overlaps.RefusalCode.ShouldBe(EventRecurrence.OverlappingCode);
+        overlaps.Days.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_daily_repetition_admits_only_a_one_day_occurrence()
+    {
+        EventRecurrence.Plan(Tuesday, EventRecurrenceFrequency.Daily, 3, null, spanDays: 0)
+            .Refused.ShouldBeFalse();
+
+        EventRecurrence.Plan(Tuesday, EventRecurrenceFrequency.Daily, 3, null, spanDays: 1)
+            .RefusalCode.ShouldBe(EventRecurrence.OverlappingCode);
+    }
+
+    [Fact]
+    public void A_monthly_occurrence_is_measured_against_the_month_it_actually_crosses()
+    {
+        // Twenty-nine days clears a March and would still clear a thirty-day month; it is the
+        // February on the way that the second occurrence runs into. Measured against the days
+        // produced rather than against a stride, so the short month is what refuses it.
+        var clearsLongMonths = EventRecurrence.Plan(
+            new DateOnly(2054, 3, 1), EventRecurrenceFrequency.Monthly, count: 2, lastDay: null, spanDays: 28);
+        clearsLongMonths.Refused.ShouldBeFalse(clearsLongMonths.RefusalDetail);
+
+        var runsIntoFebruary = EventRecurrence.Plan(
+            new DateOnly(2054, 1, 1), EventRecurrenceFrequency.Monthly, count: 3, lastDay: null, spanDays: 28);
+        runsIntoFebruary.RefusalCode.ShouldBe(EventRecurrence.OverlappingCode);
+    }
 }

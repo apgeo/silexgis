@@ -11,6 +11,7 @@ import {
   useRequestDataExport,
 } from '../../api/hooks.ts';
 import { useAuth } from '../../auth/auth.tsx';
+import CalendarFeedCard from './CalendarFeedCard.tsx';
 
 /**
  * Account-level actions: the sign-in name, and a copy of the account's own data.
@@ -125,6 +126,8 @@ export default function AccountSettingsPage() {
           </Button>
         </Flex>
       </Card>
+
+      <CalendarFeedCard />
 
       <Alert type="info" showIcon title={t('settings.account.noDeletion')} />
     </Flex>

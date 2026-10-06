@@ -58,6 +58,8 @@ interface FormValues {
   visibility: Visibility;
   cavingGroupId?: string | null;
   scope?: EditScope;
+  /** The repetition the rest of the run should come round by, offered only for the wider scope. */
+  seriesFrequency?: EventRecurrenceFrequency;
   repeats?: boolean;
   recurrenceFrequency?: EventRecurrenceFrequency;
   recurrenceRule?: string;
@@ -141,6 +143,7 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
         description: event.description ?? undefined,
         visibility: event.visibility,
         cavingGroupId: event.cavingGroupId ?? undefined,
+        seriesFrequency: event.seriesFrequency ?? undefined,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reinitialize only when the modal opens
@@ -208,6 +211,12 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
 
     try {
       if (event && values.scope === 'following') {
+        // A repetition is sent only when it was changed: sent unchanged it would re-space the
+        // run from this occurrence's day and undo any occurrence somebody had moved by hand,
+        // where the ordinary edit shifts every occurrence by the same amount and keeps that.
+        if (values.seriesFrequency && values.seriesFrequency !== event.seriesFrequency) {
+          body.seriesFrequency = values.seriesFrequency;
+        }
         // The whole of the rest of the run in one act. It answers with how many occurrences it
         // really reached and with the addressed one as it now stands, so the page behind this
         // dialog can redraw without a second read.
@@ -266,6 +275,31 @@ export default function EventFormModal({ open, event, onClose, onSaved }: Props)
                 {t('events.scopeFollowing')}
               </Radio.Button>
             </Radio.Group>
+          </Form.Item>
+        )}
+        {/* How often the rest of the run comes round — offered only with the wider scope, because
+            one occurrence has no spacing to change. Prefilled with the repetition the run was
+            written under, and sent only when it was changed. */}
+        {inSeries && (
+          <Form.Item noStyle shouldUpdate={(prev, next) => prev.scope !== next.scope}>
+            {({ getFieldValue }) =>
+              getFieldValue('scope') === 'following' ? (
+                <Form.Item
+                  name="seriesFrequency"
+                  label={t('events.repeatFrequency')}
+                  extra={t('events.seriesFrequencyChangeHelp')}
+                >
+                  <Select
+                    allowClear
+                    data-testid="event-series-frequency"
+                    options={FREQUENCIES.map((value) => ({
+                      value,
+                      label: t(`events.repeatFrequencyValues.${value}`),
+                    }))}
+                  />
+                </Form.Item>
+              ) : null
+            }
           </Form.Item>
         )}
         <Form.Item name="title" label={t('events.titleField')} rules={[{ required: true }]}>

@@ -6,6 +6,7 @@ import {
   useAnswerEventInvitation,
   useEventInvitations,
   useInviteToEvent,
+  useMe,
   useRemoveEventInvitation,
   useSelectForEvent,
   type EventInfo,
@@ -35,6 +36,8 @@ export default function EventResponsesTab({
   const { t } = useTranslation();
   const { message } = App.useApp();
   const { data, isPending, error, refetch } = useEventInvitations(event.id);
+  // Which caver the reader is, so they can put themselves down on an event nobody asked them to.
+  const { data: me } = useMe();
 
   const invite = useInviteToEvent();
   const answer = useAnswerEventInvitation();
@@ -138,6 +141,7 @@ export default function EventResponsesTab({
       keys="events.responses"
       idPrefix="event"
       inviting={invite.isPending}
+      self={me?.caverId ? { caverId: me.caverId } : null}
       onInvite={onInvite}
       onAnswer={onAnswer}
       onSelect={onSelect}

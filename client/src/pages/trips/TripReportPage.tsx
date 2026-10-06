@@ -48,10 +48,10 @@ import {
 } from '../../components/trips/tripSectionFields.ts';
 import { tripTypeLabelOf } from '../../components/trips/tripTypes.ts';
 import { parsePropertiesSchema, type SchemaField } from '../../components/typedProperties/propertiesSchema.ts';
-import './TripReport.css';
-import TripGeometryField from './TripGeometryField.tsx';
+import '../../components/trips/TripReport.css';
+import TripGeometryField from '../../components/trips/TripGeometryField.tsx';
 import TripRoleFields from './TripRoleFields.tsx';
-import { formatPosition, shapeLabelKey, tripGeometrySummary } from './tripGeometrySummary.ts';
+import { formatPosition, shapeLabelKey, tripGeometrySummary } from '../../components/trips/tripGeometrySummary.ts';
 
 /** How many photographs a write-up carries. The rest are one click away in the gallery. */
 const PlateCount = 24;

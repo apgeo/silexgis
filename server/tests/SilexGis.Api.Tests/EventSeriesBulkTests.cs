@@ -367,7 +367,8 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
         DateOnly startDate,
         DateOnly? endDate = null,
         string? place = null,
-        object? recurrence = null) => new
+        object? recurrence = null,
+        string? seriesFrequency = null) => new
         {
             title = $"{title} {suffix}",
             kind = "clubMeeting",
@@ -377,6 +378,7 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
             visibility = "cavingGroup",
             cavingGroupId,
             recurrence,
+            seriesFrequency,
         };
 
     /// <summary>A weekly run of the given length, and the identifiers of its occurrences in order.</summary>
@@ -474,6 +476,86 @@ public sealed class EventSeriesBulkTests : IAsyncLifetime, IDisposable, IClassFi
 
     private static string? Title(IEnumerable<JsonElement> rows, Guid id) =>
         rows.Single(x => Id(x) == id).GetProperty("title").GetString();
+
+    private static string? Frequency(IEnumerable<JsonElement> rows, Guid id) =>
+        rows.Single(x => Id(x) == id).GetProperty("seriesFrequency").GetString();
+
+    /// <summary>
+    /// The repetition a run was written under is kept on every occurrence, and the edit that
+    /// reaches the rest of the run may name a new one: the occurrences from the anchor onwards
+    /// are then re-spaced from the anchor's day by it and carry it, while the ones before keep the
+    /// repetition they were written under — which is the truth about them.
+    /// </summary>
+    [Fact]
+    public async Task The_rest_of_a_run_is_re_spaced_by_a_new_repetition_and_the_earlier_occurrences_keep_theirs()
+    {
+        var day = new DateOnly(2057, 3, 1);
+        var (seriesId, ids) = await SeriesAsync("Club night", day, 4);
+        (await BySeriesAsync(owner, seriesId))
+            .Select(x => x.GetProperty("seriesFrequency").GetString())
+            .ShouldAllBe(frequency => frequency == "weekly");
+
+        // The second occurrence and every later one, every other week from the second one's day.
+        var result = await EditFollowingAsync(
+            owner, ids[1], Body("Club night", day.AddDays(7), seriesFrequency: "fortnightly"));
+        result.GetProperty("changed").GetInt32().ShouldBe(3);
+
+        var after = await BySeriesAsync(owner, seriesId);
+        Day(after, ids[0]).ShouldBe("2057-03-01");
+        Day(after, ids[1]).ShouldBe("2057-03-08");
+        Day(after, ids[2]).ShouldBe("2057-03-22");
+        Day(after, ids[3]).ShouldBe("2057-04-05");
+        Frequency(after, ids[0]).ShouldBe("weekly");
+        Frequency(after, ids[1]).ShouldBe("fortnightly");
+        Frequency(after, ids[2]).ShouldBe("fortnightly");
+        Frequency(after, ids[3]).ShouldBe("fortnightly");
+    }
+
+    /// <summary>
+    /// A re-spacing goes through the generator that wrote the run, so it is refused — whole, with
+    /// the generator's own code and nothing written — where the create would have been: here, a
+    /// three-day course asked to come round daily.
+    /// </summary>
+    [Fact]
+    public async Task A_re_spacing_whose_occurrences_would_run_into_each_other_is_refused_whole()
+    {
+        var day = new DateOnly(2057, 5, 4);
+        var (seriesId, ids) = await SeriesAsync("Course", day, 3);
+
+        var response = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[0]}/series/following",
+            Body("Course", day, endDate: day.AddDays(2), seriesFrequency: "daily"));
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, payload);
+        payload.ShouldContain("event.recurrence_overlapping");
+
+        var after = await BySeriesAsync(owner, seriesId);
+        after.Select(x => x.GetProperty("startDate").GetString()).OrderBy(x => x)
+            .ShouldBe(["2057-05-04", "2057-05-11", "2057-05-18"]);
+        after.Select(x => x.GetProperty("endDate").ValueKind).ShouldAllBe(kind => kind == JsonValueKind.Null);
+    }
+
+    /// <summary>
+    /// One occurrence has no spacing to change, so the single edit refuses a repetition in so
+    /// many words rather than ignoring it — a request that quietly did nothing with half of what
+    /// it carried is how somebody comes to believe they re-spaced a run that never moved.
+    /// </summary>
+    [Fact]
+    public async Task A_new_repetition_sent_to_one_occurrence_is_refused()
+    {
+        var day = new DateOnly(2057, 6, 1);
+        var (seriesId, ids) = await SeriesAsync("Club night", day, 3);
+
+        var response = await owner.PutWithIfMatchAsync(
+            $"/api/v1/events/{ids[1]}", Body("Club night", day.AddDays(7), seriesFrequency: "fortnightly"));
+        var payload = await response.Content.ReadAsStringAsync();
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, payload);
+        payload.ShouldContain("event.series_frequency_series_only");
+
+        var after = await BySeriesAsync(owner, seriesId);
+        after.Select(x => x.GetProperty("startDate").GetString()).OrderBy(x => x)
+            .ShouldBe(["2057-06-01", "2057-06-08", "2057-06-15"]);
+    }
 
     public Task DisposeAsync() => Task.CompletedTask;
 

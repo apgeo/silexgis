@@ -891,6 +891,8 @@ describe('i18n locales', () => {
       'title',
       'invite',
       'invitePlaceholder',
+      'signUp',
+      'signUpHint',
       'empty',
       'emptyWithheld',
       'limit',

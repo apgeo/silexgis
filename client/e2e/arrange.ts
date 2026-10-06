@@ -18,6 +18,8 @@ import { bearerToken } from './rastermapApi.ts';
  */
 
 export interface Account {
+  /** The account's id, as the registration answered it — what a grant to this person names. */
+  id: string;
   email: string;
   password: string;
   displayName: string;
@@ -41,14 +43,15 @@ export async function registerAccount(request: Page['request'], label: string): 
     'this flow needs an account that is not the administrator: start the API with SILEXGIS__Auth__OpenRegistration=true',
   ).toBe(true);
   const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-  const account: Account = {
+  const account = {
     email: `e2e-${label}-${stamp}@dev.local`,
     password: `e2e-${label}-pass-1`,
     displayName: `E2E ${label} ${stamp}`,
   };
   const registered = await request.post('/api/v1/auth/register', { data: account });
   expect(registered.ok(), `registering answered ${registered.status()}`).toBeTruthy();
-  return account;
+  const { userId } = (await registered.json()) as { userId: string };
+  return { id: userId, ...account };
 }
 
 /**

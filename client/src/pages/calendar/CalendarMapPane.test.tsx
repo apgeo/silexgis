@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { CalendarEntry } from '../../api/hooks.ts';
 
-const { mapSpy } = vi.hoisted(() => ({ mapSpy: vi.fn() }));
+const { mapSpy, campSpy } = vi.hoisted(() => ({ mapSpy: vi.fn(), campSpy: vi.fn() }));
 
 vi.mock('../../api/hooks.ts', () => ({
   useTripLogMap: (...args: unknown[]) => mapSpy(...args),
+  useCampAreasMap: (...args: unknown[]) => campSpy(...args),
 }));
 
 const { default: CalendarMapPane } = await import('./CalendarMapPane.tsx');
@@ -22,6 +23,16 @@ const point = (id: string, kind: string, lon = 25.6, lat = 45.65) => ({
   type: 'Feature',
   geometry: { type: 'Point', coordinates: [lon, lat] },
   properties: { id, title: 'Coiba Mare recce', tripDate: '2026-09-05', kind },
+});
+
+/** A camp's working area as the camp map read answers it: a surface, named, and nothing else. */
+const area = (id: string) => ({
+  type: 'Feature',
+  geometry: {
+    type: 'Polygon',
+    coordinates: [[[25.5, 45.6], [25.7, 45.6], [25.7, 45.7], [25.5, 45.7], [25.5, 45.6]]],
+  },
+  properties: { id, name: 'Padiș camp', startDate: '2026-09-10', kind: 'area' },
 });
 
 function row(overrides: Partial<CalendarEntry> = {}): CalendarEntry {
@@ -54,6 +65,7 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   mapSpy.mockReturnValue({ data: collection([point(DRAWN, 'sketch')]) });
+  campSpy.mockReturnValue({ data: collection([]) });
 });
 
 /**
@@ -122,6 +134,31 @@ describe("the calendar's map", () => {
     expect(screen.getByTestId('calendar-map-drawn').textContent).toContain('1');
   });
 
+  it('draws a camp from the camp answer when its row is on screen, and counts it as a record', () => {
+    // The camp's shape comes from its own read and is matched against the camp rows, never the
+    // trip rows: a trip row carrying the same identifier would not draw it. One trip and one camp
+    // on screen, both answered, is two records.
+    campSpy.mockReturnValue({ data: collection([area(OTHER)]) });
+    render(
+      <CalendarMapPane
+        entries={[row(), row({ source: 'expedition', id: OTHER, title: 'Padiș camp' })]}
+        {...WINDOW}
+        active
+      />,
+    );
+
+    expect(screen.getByTestId('calendar-map-drawn').textContent).toContain('2');
+    // Both reads are asked over the same rectangle and the same days.
+    expect(campSpy.mock.calls.at(-1)?.slice(1, 3)).toEqual([WINDOW.from, WINDOW.to]);
+  });
+
+  it('does not draw a camp whose row is not on screen, whatever the camp answer holds', () => {
+    campSpy.mockReturnValue({ data: collection([area(OTHER)]) });
+    render(<CalendarMapPane entries={[row()]} {...WINDOW} active />);
+
+    expect(screen.getByTestId('calendar-map-drawn').textContent).toContain('1');
+  });
+
   it('draws nothing for rows that are not trips, and says so rather than looking broken', () => {
     // The answer carries a shape whose identifier a camp row on screen also carries — which is
     // the case that tells the two apart. A pane matching on identifier alone would draw it; the
@@ -174,6 +211,6 @@ describe("the calendar's map", () => {
   it('says what it is drawing and what it is leaving out', () => {
     render(<CalendarMapPane entries={[row()]} {...WINDOW} active />);
 
-    expect(screen.getByText(/Only trips are drawn/)).toBeTruthy();
+    expect(screen.getByText(/Only trips and camps are drawn/)).toBeTruthy();
   });
 });

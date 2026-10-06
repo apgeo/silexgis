@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+using SilexGis.Domain.Events;
+
 namespace SilexGis.Domain.Entities;
 
 /// <summary>
@@ -246,9 +248,9 @@ public class Event : IProtectedEntity, ITimestamped, IAuditable
     /// <para>
     /// <b>Nothing reads this but a person.</b> It is never parsed, never matched, and no dated row
     /// anywhere is derived from it: the days were worked out once, when the occurrences were
-    /// written, from a repetition the author picked from a short list, and that choice is not
-    /// stored because there is nothing left to do with it. What is stored is the sentence a reader
-    /// needs in order to understand why the same evening appears twelve times.
+    /// written, from a repetition the author picked from a short list — kept beside this as
+    /// <see cref="SeriesFrequency"/>, which is a closed value and not a rule. What is stored here is
+    /// the sentence a reader needs in order to understand why the same evening appears twelve times.
     /// </para>
     /// <para>
     /// It sits on every occurrence rather than in one place, because there is no one place: the
@@ -259,6 +261,26 @@ public class Event : IProtectedEntity, ITimestamped, IAuditable
     /// </para>
     /// </remarks>
     public string? SeriesRule { get; set; }
+
+    /// <summary>
+    /// How often the run comes round — the repetition the generator stepped by when the
+    /// occurrences were written. Null on an event that is not part of one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Stored so that the run can be re-spaced without being destroyed: "this one and every
+    /// later one, every other week from now" is an edit, and without the frequency the only way
+    /// to express it was to delete the future and write it again. It is a closed value from a
+    /// short list, never a grammar, so nothing here has become a rule the application evaluates
+    /// later — the days are still rows, settled when they were written or re-spaced.
+    /// </para>
+    /// <para>
+    /// On every occurrence rather than in one place, for the reason the sentence is: the series
+    /// is the rows. A "this and following" edit that changes it leaves the earlier occurrences
+    /// carrying the repetition they were written under, which is the truth about them.
+    /// </para>
+    /// </remarks>
+    public EventRecurrenceFrequency? SeriesFrequency { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

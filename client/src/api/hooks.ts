@@ -102,6 +102,11 @@ export type UnreadNotificationCount = components['schemas']['UnreadNotificationC
 /** What an opt-out link switched off, as the server reports it back to the landing page. */
 export type UnsubscribeResult = components['schemas']['UnsubscribeResultDto'];
 export type DataExport = components['schemas']['DataExportDto'];
+/** One of the caller's calendar feed addresses — metadata only; the address itself is never listed. */
+export type CalendarFeed = components['schemas']['CalendarFeedDto'];
+export type CalendarFeedList = components['schemas']['CalendarFeedListDto'];
+/** The mint answer: the one time the subscription address is ever shown. */
+export type CalendarFeedCreated = components['schemas']['CalendarFeedCreatedDto'];
 export type MfaStatus = components['schemas']['MfaStatusDto'];
 export type MfaMethod = components['schemas']['MfaMethodDto'];
 export type TwoFactorMethod = components['schemas']['TwoFactorMethod'];
@@ -263,12 +268,15 @@ export const queryKeys = {
   calendar: (params: CalendarParams) => ['calendar', params] as const,
   tripLogMap: (bbox: string, from: string, to: string) =>
     ['map', 'trip-logs', bbox, from, to] as const,
+  campAreasMap: (bbox: string, from: string, to: string) =>
+    ['map', 'expeditions', bbox, from, to] as const,
   tripLogs: (params: TripLogListParams) => ['trip-logs', 'list', params] as const,
   tripLogFacets: (params: TripLogFacetParams) => ['trip-logs', 'facets', params] as const,
   tripLogGrouping: (params: TripLogGroupingParams) => ['trip-logs', 'grouping', params] as const,
   tripLogStats: (params: TripLogFacetParams) => ['trip-logs', 'stats', params] as const,
   myTripLogs: (params: MyTripLogListParams) => ['trip-logs', 'mine', params] as const,
   tripLog: (id: string) => ['trip-logs', 'detail', id] as const,
+  tripPlanDefault: ['trip-logs', 'plan-default'] as const,
   tripInvitations: (id: string) => ['trip-logs', 'invitations', id] as const,
   tripChecklist: (id: string) => ['trip-logs', 'checklist', id] as const,
   tripTracking: (id: string) => ['trip-logs', 'tracking', id] as const,
@@ -359,6 +367,7 @@ export const queryKeys = {
   uiPreferences: ['me', 'preferences'] as const,
   uiDefaults: ['ui-defaults'] as const,
   dataExport: ['me', 'data-export'] as const,
+  calendarFeeds: ['me', 'calendar-feeds'] as const,
   phone: ['me', 'phone'] as const,
   adminSettings: ['admin', 'settings'] as const,
   messageTemplates: ['admin', 'message-templates'] as const,
@@ -401,6 +410,7 @@ export const queryKeys = {
   expeditionRoster: (id: string) => ['expeditions', 'roster', id] as const,
   expeditionMap: (id: string) => ['expeditions', 'map', id] as const,
   expeditionLeads: (id: string) => ['expeditions', 'leads', id] as const,
+  expeditionSharing: (id: string) => ['expeditions', 'sharing', id] as const,
   events: (params: EventListParams) => ['events', 'list', params] as const,
   event: (id: string) => ['events', 'detail', id] as const,
   eventDefaults: ['events', 'defaults'] as const,
@@ -898,6 +908,42 @@ export function useRequestDataExport() {
   return useMutation({
     mutationFn: () => unwrap(api.POST('/api/v1/me/data-export')),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['me', 'data-export'] }),
+  });
+}
+
+/**
+ * The caller's calendar feed addresses, and whether the installation offers feeds at all. The
+ * second rides on the first because the settings page draws the section only where a mint can
+ * work: an installation with feeds switched off shows nothing rather than a button that refuses.
+ */
+export function useCalendarFeeds() {
+  return useQuery({
+    queryKey: queryKeys.calendarFeeds,
+    queryFn: () => unwrap(api.GET('/api/v1/me/calendar-feeds')),
+  });
+}
+
+/**
+ * Mints a subscription address for the caller's own calendar. The answer carries the whole
+ * address exactly once — the server keeps only a hash of it — so the page that calls this is
+ * the one place it can ever be read, and must show it before the next render loses it.
+ */
+export function useMintCalendarFeed() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (label: string | null) =>
+      unwrap(api.POST('/api/v1/me/calendar-feeds', { body: { label } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.calendarFeeds }),
+  });
+}
+
+/** Withdraws one address; a calendar still polling it is answered as though it never existed. */
+export function useRevokeCalendarFeed() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/me/calendar-feeds/{id}', { params: { path: { id } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.calendarFeeds }),
   });
 }
 
@@ -2732,7 +2778,8 @@ export type EntityType =
   | 'georeferencedMap'
   | 'mapView'
   | 'expedition'
-  | 'event';
+  | 'event'
+  | 'checklist';
 // Stored files additionally carry taggings (never attachments or grants) — the tag
 // endpoints accept the extra target; the server rejects it everywhere else.
 export type AttachedEntityType = EntityType | 'storedFile';
@@ -3795,6 +3842,37 @@ export function useCreateTripLog() {
   });
 }
 
+/**
+ * The second of the two doors a trip is created through. Same body as the report door above and
+ * the same trip afterwards; the one difference is the audience a request that names none falls
+ * back to — the author's caving group rather than private, because a proposal only its author
+ * can read is a proposal to nobody. The rule itself lives on the server; a caller that wants it
+ * applied leaves `visibility` null.
+ */
+export function useCreateTripPlan() {
+  const invalidate = useInvalidateTripLogs();
+  return useMutation({
+    mutationFn: (body: TripLogWrite) => unwrap(api.POST('/api/v1/trip-logs/plans', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export type TripPlanDefault = components['schemas']['TripPlanDefaultDto'];
+
+/**
+ * The audience a trip this caller plans would get if they named none — the plan door's own rule,
+ * answered before the trip exists so a form can say who will see it instead of reciting the rule.
+ * It names the caller's own membership and nothing else, and is only worth asking while a plan is
+ * being written, which is what `enabled` says.
+ */
+export function useTripPlanDefault(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.tripPlanDefault,
+    queryFn: () => unwrap(api.GET('/api/v1/trip-logs/plan-default')),
+    enabled,
+  });
+}
+
 export function useUpdateTripLog() {
   const written = useTripLogWritten();
   const invalidateHistory = useInvalidateHistory();
@@ -3804,6 +3882,32 @@ export function useUpdateTripLog() {
     onSuccess: (trip) => {
       invalidateHistory();
       written(trip);
+    },
+  });
+}
+
+/**
+ * Replaces the trip's sketch with the track in a GPX file, in one request. A trip write like
+ * the update above, and finished the same way: the trip is read back before the mutation
+ * settles, because the write moved the row version the next save is checked against.
+ */
+export function useImportTripTrack() {
+  const readBack = useReadTripLogsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }): Promise<TripLogInfo> => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      // Multipart: hand the FormData through untouched (the browser sets the boundary).
+      return unwrap(api.POST('/api/v1/trip-logs/{id}/geometry/gpx', {
+        params: { path: { id } },
+        body: form as never,
+        bodySerializer: (b: unknown) => b as FormData,
+      }));
+    },
+    onSuccess: () => {
+      invalidateHistory();
+      return readBack();
     },
   });
 }
@@ -3823,6 +3927,19 @@ export function useTripReportTemplates(enabled = true) {
   return useQuery({
     queryKey: queryKeys.tripReportTemplates,
     queryFn: () => unwrap(api.GET('/api/v1/trip-report-templates')),
+    enabled,
+  });
+}
+
+/**
+ * The layouts of one kind — a trip's or a camp's — for the chooser on that kind's write-up page.
+ * Under the same key family as the full list, so a change to any layout refreshes both.
+ */
+export function useReportTemplatesOfKind(kind: 'trip' | 'expedition', enabled = true) {
+  return useQuery({
+    queryKey: [...queryKeys.tripReportTemplates, kind] as const,
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/trip-report-templates', { params: { query: { kind } } })),
     enabled,
   });
 }
@@ -6182,6 +6299,12 @@ export interface PhotoQueryParams {
   caveId?: string;
   featureId?: string;
   tripLogId?: string;
+  /**
+   * One camp's pictures: those filed against the camp and those on the trips it gathers that the
+   * caller may read. A camp the caller may not read answers empty rather than refusing, so the
+   * id cannot be used to find out which trips a camp holds.
+   */
+  expeditionId?: string;
   caverId?: string;
   tagId?: number;
   albumId?: string;
@@ -7166,6 +7289,186 @@ export function useExpedition(id: string | undefined) {
   });
 }
 
+export type ExpeditionWrite = components['schemas']['ExpeditionWriteRequest'];
+
+function useInvalidateExpeditions() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+}
+
+/**
+ * Hands the next write on a camp the version this one produced.
+ *
+ * A write is checked against the version the caller last read, and only a read records one, so
+ * a second save a second after the first would be refused unless the camp is read back in
+ * between. Returned rather than fired and forgotten, so the mutation resolves after the re-read
+ * and the surface that waits for it waits for the right thing.
+ */
+function useReadExpeditionsBack() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+}
+
+export function useCreateExpedition() {
+  const invalidate = useInvalidateExpeditions();
+  return useMutation({
+    mutationFn: (body: ExpeditionWrite) => unwrap(api.POST('/api/v1/expeditions', { body })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateExpedition() {
+  const readBack = useReadExpeditionsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ExpeditionWrite }) =>
+      unwrap(api.PUT('/api/v1/expeditions/{id}', { params: { path: { id } }, body })),
+    onSuccess: () => {
+      invalidateHistory();
+      return readBack();
+    },
+  });
+}
+
+export function useDeleteExpedition() {
+  const invalidate = useInvalidateExpeditions();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrapVoid(api.DELETE('/api/v1/expeditions/{id}', { params: { path: { id } } })),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * Moving a camp to another lifecycle state, through the one route that names the state it
+ * moves to rather than a verb per move — a camp has eight states and two dozen moves between
+ * them, and two dozen routes is not a surface.
+ *
+ * It is a write on the camp and is checked against the version the caller was looking at, so it
+ * carries the precondition the camp's own read captured. Which moves are legal from which state
+ * is the server's to decide; a move the rules refuse comes back as a conflict.
+ */
+export function useMoveExpedition() {
+  const readBack = useReadExpeditionsBack();
+  const invalidateHistory = useInvalidateHistory();
+  return useMutation({
+    mutationFn: ({ id, state }: { id: string; state: ActivityState }) => {
+      const etag = lastReadETag(`/api/v1/expeditions/${id}`);
+      return unwrap(
+        api.POST('/api/v1/expeditions/{id}/state', {
+          params: { path: { id } },
+          headers: etag ? { 'If-Match': etag } : undefined,
+          body: { state },
+        }),
+      );
+    },
+    onSuccess: () => {
+      invalidateHistory();
+      // As on a full update: the move is checked against the version last read, so it is not
+      // finished until the version it produced has been read.
+      return readBack();
+    },
+  });
+}
+
+export type ExpeditionSharing = components['schemas']['ExpeditionSharingDto'];
+export type ExpeditionSharedRule = components['schemas']['ExpeditionSharedRuleDto'];
+export type ExpeditionShareEntry = components['schemas']['ExpeditionShareEntryWrite'];
+
+/**
+ * What a camp's sharing grants, and how many of its trips carry it.
+ *
+ * Sharing a camp is not a rule on the camp: it is one object-scoped rule written onto each trip
+ * the camp gathers, marked with the camp that wrote it, so a partner club given the camp can read
+ * what the camp gathered. The read takes the right to manage the camp's permissions, and a
+ * refusal is a settled answer about the caller rather than something to retry.
+ */
+export function useExpeditionSharing(expeditionId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.expeditionSharing(expeditionId ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/expeditions/{id}/sharing', { params: { path: { id: expeditionId! } } })),
+    enabled: enabled && !!expeditionId,
+    retry: false,
+  });
+}
+
+function useInvalidateExpeditionSharing(expeditionId: string) {
+  const queryClient = useQueryClient();
+  const invalidateHistory = useInvalidateHistory();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.expeditionSharing(expeditionId) });
+    // The rules land on the trips, where each trip's own permissions dialog lists them.
+    void queryClient.invalidateQueries({ queryKey: ['object-access'] });
+    void queryClient.invalidateQueries({ queryKey: ['effective-access'] });
+    invalidateHistory();
+  };
+}
+
+/** Shares the camp: adds and restates one rule per member trip, and never removes. */
+export function useApplyExpeditionSharing(expeditionId: string) {
+  const invalidate = useInvalidateExpeditionSharing(expeditionId);
+  return useMutation({
+    mutationFn: (entries: ExpeditionShareEntry[]) =>
+      unwrap(
+        api.POST('/api/v1/expeditions/{id}/sharing', {
+          params: { path: { id: expeditionId } },
+          body: { entries },
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Carries the camp's sharing onto the trips that joined since it was applied. A trip joining is
+ * not covered by itself: coverage is an act somebody performs and the trail records.
+ */
+export function useReapplyExpeditionSharing(expeditionId: string) {
+  const invalidate = useInvalidateExpeditionSharing(expeditionId);
+  return useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.POST('/api/v1/expeditions/{id}/sharing/re-apply', {
+          params: { path: { id: expeditionId } },
+        }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/** Withdraws every rule this camp's sharing wrote, and only those. */
+export function useWithdrawExpeditionSharing(expeditionId: string) {
+  const invalidate = useInvalidateExpeditionSharing(expeditionId);
+  return useMutation({
+    mutationFn: () =>
+      unwrapVoid(
+        api.DELETE('/api/v1/expeditions/{id}/sharing', { params: { path: { id: expeditionId } } }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+export type ExpeditionReportSaved = components['schemas']['ExpeditionReportSavedDto'];
+
+/**
+ * Files the camp's write-up against the camp. What is filed is built from the reading any
+ * account has, not the filer's own: a file on a camp is reachable by everybody who may read the
+ * camp, which is routinely wider than the trips gathered into it.
+ */
+export function useKeepExpeditionReport() {
+  const invalidateAttachments = useInvalidateAttachments();
+  return useMutation({
+    mutationFn: ({ id, templateId }: { id: string; templateId?: string }) =>
+      unwrap(
+        api.POST('/api/v1/expeditions/{id}/report', {
+          params: { path: { id }, query: templateId ? { templateId } : {} },
+        }),
+      ),
+    onSuccess: () => invalidateAttachments(),
+  });
+}
+
 export type ExpeditionRoster = components['schemas']['ExpeditionRosterDto'];
 export type ExpeditionRosterEntry = components['schemas']['ExpeditionRosterEntryDto'];
 export type ExpeditionRosterRole = components['schemas']['ExpeditionRosterRoleDto'];
@@ -7176,6 +7479,51 @@ export function useExpeditionRosterRoles() {
     queryKey: queryKeys.taxonomy('expedition-roster-roles'),
     queryFn: () => unwrap(api.GET('/api/v1/expedition-roster-roles')),
     staleTime: 5 * 60_000,
+  });
+}
+
+/** A camp-roster role as an administrator authors it. */
+export interface ExpeditionRosterRoleWrite {
+  code: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+}
+
+function useInvalidateExpeditionRosterRoles() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.taxonomy('expedition-roster-roles') });
+    // Every roster row renders its role from this list, so a renamed or removed row leaves the
+    // camps already in cache showing wording that no longer exists.
+    void queryClient.invalidateQueries({ queryKey: ['expeditions'] });
+  };
+}
+
+export function useCreateExpeditionRosterRole() {
+  const invalidate = useInvalidateExpeditionRosterRoles();
+  return useMutation({
+    mutationFn: (body: ExpeditionRosterRoleWrite) =>
+      unwrap(api.POST('/api/v1/expedition-roster-roles', { body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateExpeditionRosterRole() {
+  const invalidate = useInvalidateExpeditionRosterRoles();
+  return useMutation({
+    mutationFn: ({ id, ...body }: ExpeditionRosterRoleWrite & { id: number }) =>
+      unwrap(api.PUT('/api/v1/expedition-roster-roles/{id}', { params: { path: { id } }, body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteExpeditionRosterRole() {
+  const invalidate = useInvalidateExpeditionRosterRoles();
+  return useMutation({
+    mutationFn: (id: number) =>
+      unwrapVoid(api.DELETE('/api/v1/expedition-roster-roles/{id}', { params: { path: { id } } })),
+    onSuccess: invalidate,
   });
 }
 
@@ -8741,6 +9089,27 @@ export function useTripLogMap(
     retry: false,
     // Panning keeps the shapes already drawn on screen while the next rectangle is answered,
     // rather than blanking the map under whoever is moving it.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * The working areas of the camps in a window that fall inside a rectangle — the shape drawn on
+ * each camp's plan and nothing a camp's trips or caves would add, read through the caller's own
+ * visibility. Asked beside the trip-log read by the calendar's map, under the same rectangle.
+ */
+export function useCampAreasMap(
+  bbox: string | undefined,
+  from: string,
+  to: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: queryKeys.campAreasMap(bbox ?? '', from, to),
+    queryFn: () =>
+      unwrap(api.GET('/api/v1/map/expeditions', { params: { query: { bbox: bbox!, from, to } } })),
+    enabled: enabled && !!bbox,
+    retry: false,
     placeholderData: keepPreviousData,
   });
 }

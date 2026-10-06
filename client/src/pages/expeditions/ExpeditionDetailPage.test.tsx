@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+import { App } from 'antd';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,14 +11,21 @@ import ExpeditionDetailPage from './ExpeditionDetailPage.tsx';
 
 const CAMP = '77777777-8888-9999-aaaa-bbbbbbbbbbbb';
 
-const { campSpy } = vi.hoisted(() => ({ campSpy: vi.fn() }));
+const { campSpy, accessSpy } = vi.hoisted(() => ({ campSpy: vi.fn(), accessSpy: vi.fn() }));
 
 vi.mock('../../api/hooks.ts', () => ({
   useExpedition: () => campSpy(),
   useCavingGroups: () => ({ data: [{ id: 'club-1', name: 'Clubul Speo' }] }),
-  useEffectiveAccess: () => ({ data: undefined }),
+  useEffectiveAccess: () => accessSpy(),
+  useDeleteExpedition: () => ({ mutateAsync: vi.fn() }),
   useCan: () => false,
   parseAccessActions: (actions: string) => new Set(actions.split(',')),
+}));
+
+// Opened from here, exercised by its own tests: what this page owes it is a button and the camp.
+vi.mock('../../components/permissions/PermissionsModal.tsx', () => ({
+  default: ({ entityType, open }: { entityType: string; open: boolean }) =>
+    open ? <div>permissions for {entityType}</div> : null,
 }));
 
 // The sections are mounted by name here, not exercised: each has its own tests, and each asks the
@@ -31,6 +39,15 @@ vi.mock('../../components/reslinks/LinksSection.tsx', () => ({
 vi.mock('../../components/history/HistoryPanel.tsx', () => ({
   default: ({ entityType }: { entityType: string }) => <div>history for {entityType}</div>,
 }));
+vi.mock('./ExpeditionSharingModal.tsx', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div>sharing the camp</div> : null),
+}));
+vi.mock('./ExpeditionFormModal.tsx', () => ({
+  default: ({ open }: { open: boolean }) => (open ? <div>the camp form</div> : null),
+}));
+vi.mock('./ExpeditionStateControl.tsx', () => ({
+  default: ({ canEdit }: { canEdit: boolean }) => (canEdit ? <div>the lifecycle control</div> : null),
+}));
 vi.mock('./ExpeditionTripsTab.tsx', () => ({
   default: () => <div>the trips gathered into the camp</div>,
 }));
@@ -39,6 +56,9 @@ vi.mock('./ExpeditionFilesTab.tsx', () => ({
 }));
 vi.mock('./ExpeditionRosterTab.tsx', () => ({
   default: () => <div>who was at the camp</div>,
+}));
+vi.mock('./ExpeditionPhotosTab.tsx', () => ({
+  default: () => <div>the pictures of the camp</div>,
 }));
 
 function camp(overrides: Partial<ExpeditionInfo> = {}): ExpeditionInfo {
@@ -62,17 +82,20 @@ function camp(overrides: Partial<ExpeditionInfo> = {}): ExpeditionInfo {
 
 function renderPage(entry = `/expeditions/${CAMP}`) {
   return render(
-    <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route path="/expeditions/:id" element={<ExpeditionDetailPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <App>
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/expeditions/:id" element={<ExpeditionDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </App>,
   );
 }
 
 afterEach(cleanup);
 beforeEach(() => {
   campSpy.mockReturnValue({ data: camp(), isPending: false, isError: false });
+  accessSpy.mockReturnValue({ data: undefined });
 });
 
 describe('the camp page', () => {
@@ -125,6 +148,10 @@ describe('the camp page', () => {
     cleanup();
     renderPage(`/expeditions/${CAMP}?tab=roster`);
     expect(screen.getByText('who was at the camp')).toBeTruthy();
+
+    cleanup();
+    renderPage(`/expeditions/${CAMP}?tab=photos`);
+    expect(screen.getByText('the pictures of the camp')).toBeTruthy();
   });
 
   it('falls back to its own tab when the address names one it does not have', () => {
@@ -140,6 +167,61 @@ describe('the camp page', () => {
 
     expect(screen.getByText('tags for expedition')).toBeTruthy();
     expect(screen.getByText('links for expedition')).toBeTruthy();
+  });
+
+  it('offers the write-up to anybody who may read the camp', () => {
+    // Circulating a camp's write-up is not an act of editing it, so a plain reader gets the link.
+    renderPage();
+    expect(screen.getByTestId('expedition-open-report').closest('a')?.getAttribute('href')).toBe(
+      `/expeditions/${CAMP}/report`,
+    );
+  });
+
+  it('offers the permissions dialog only to somebody who may manage them, over the camp itself', () => {
+    // Naming who may read a camp is its own right: a reader, and even an editor, is not shown
+    // the door. The server refuses regardless; what is avoided is a dialog that always fails.
+    accessSpy.mockReturnValue({ data: { actions: 'read,write' } });
+    renderPage();
+    expect(screen.queryByTestId('expedition-permissions')).toBeNull();
+
+    cleanup();
+    accessSpy.mockReturnValue({ data: { actions: 'read,write,managePermissions' } });
+    renderPage();
+    fireEvent.click(screen.getByTestId('expedition-permissions'));
+    expect(screen.getByText('permissions for expedition')).toBeTruthy();
+    // Sharing takes the same right: the camp is where a person asks, each trip is what answers.
+    fireEvent.click(screen.getByTestId('expedition-share'));
+    expect(screen.getByText('sharing the camp')).toBeTruthy();
+  });
+
+  it('draws the editing controls for the rights the caller holds, and none for a reader', () => {
+    accessSpy.mockReturnValue({ data: { actions: 'read' } });
+    renderPage();
+    expect(screen.queryByTestId('expedition-edit')).toBeNull();
+    expect(screen.queryByTestId('expedition-delete')).toBeNull();
+    expect(screen.queryByText('the lifecycle control')).toBeNull();
+
+    cleanup();
+    // Write without delete: the camp can be changed and moved, not removed.
+    accessSpy.mockReturnValue({ data: { actions: 'read,write' } });
+    renderPage();
+    expect(screen.getByText('the lifecycle control')).toBeTruthy();
+    expect(screen.queryByTestId('expedition-delete')).toBeNull();
+    fireEvent.click(screen.getByTestId('expedition-edit'));
+    expect(screen.getByText('the camp form')).toBeTruthy();
+  });
+
+  it('tells somebody who could announce a draft camp that it has not been announced', () => {
+    campSpy.mockReturnValue({ data: camp({ state: 'draft' }), isPending: false, isError: false });
+    accessSpy.mockReturnValue({ data: { actions: 'read' } });
+    renderPage();
+    // A reader is shown the badge and not the sentence: it is addressed to whoever can act.
+    expect(screen.queryByTestId('expedition-draft-notice')).toBeNull();
+
+    cleanup();
+    accessSpy.mockReturnValue({ data: { actions: 'read,write' } });
+    renderPage();
+    expect(screen.getByTestId('expedition-draft-notice')).toBeTruthy();
   });
 });
 

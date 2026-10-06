@@ -239,6 +239,18 @@ export function tripReportUrl(id: string, templateId?: string): string {
 }
 
 /**
+ * GET /api/v1/expeditions/{id}/report — one camp written up as a document, over the trips it
+ * gathered.
+ *
+ * Built from the same reading of the camp this caller's write-up page was drawn from: the trips
+ * in it are the ones that reader may open, the people are the ones they may be told of, and no
+ * cave in it is placed — the caves the camp's trips named are named and never positioned.
+ */
+export function expeditionReportUrl(id: string, templateId?: string): string {
+  return buildUrl(`/api/v1/expeditions/${encodeURIComponent(id)}/report`, { templateId });
+}
+
+/**
  * GET /api/v1/trip-report-templates/default — the layout the system ships, as a file to edit.
  *
  * It is the starting point for a club's own layout and it documents the whole substitution
