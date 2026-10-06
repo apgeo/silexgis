@@ -56,6 +56,25 @@ artifact.
   Full text: server/tests/SilexGis.Api.Tests/Fixtures/Karstnet/NOTICE.md
 
 --------------------------------------------------------------------------------
+P8 (Jackpot) demonstration survey
+--------------------------------------------------------------------------------
+client/e2e/fixtures/P8_Master.3d — a compiled Survex model of P8 (Jackpot), a cave
+near Castleton in the Peak District, England. It is the survey the CaveView.js
+project's own demonstration page opens, redistributed unmodified from that
+project's repository as a fixture for the browser specs and the survey-reader
+tests. Test fixture only: nothing here is built into a shipped artifact.
+
+  Source:    https://github.com/aardgoose/CaveView.js (docs/surveys/P8_Master.3d)
+  License:   MIT (c) 2016 aardgoose — the repository's licence; it states no
+             separate terms for its demonstration surveys
+  The cave:  https://peakdistrictcaving.info/home/the-caves/castleton/p8 — its entry
+             in the Derbyshire Caving Association's register of Peak District
+             caves, which publishes the cave's surveys (Eldon Pothole Club, 1975
+             and 1989) and a 3D model drawn by the same viewer. The source names
+             no surveyor for the data in this file.
+  Checksum:  sha256 9603e440953ba566e8b427ce7536f686e535c25213669586b2bdbd095d5c2bb3
+
+--------------------------------------------------------------------------------
 Feature symbol icons
 --------------------------------------------------------------------------------
 The 19 PNG symbols under client/public/feature_symbols/ (used to render surface
