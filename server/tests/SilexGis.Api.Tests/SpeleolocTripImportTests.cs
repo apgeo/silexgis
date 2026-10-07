@@ -479,11 +479,56 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
         (await BodyAsync(committed)).GetProperty("createdEventCount").GetInt32().ShouldBe(2);
     }
 
+    /// <summary>
+    /// A recording aimed at a deleted trip is refused exactly as one aimed at a trip that never
+    /// existed, on the dry run and on the confirmation alike. A deleted trip is somewhere nothing
+    /// can be written, and an upload that named it is not told that it is merely deleted.
+    /// </summary>
+    [Fact]
+    public async Task A_recording_aimed_at_a_deleted_trip_is_refused_as_one_aimed_at_no_trip_at_all()
+    {
+        var cave = await CreateCaveAsync(editor, locationProtected: false);
+        var model = await SeedModelWithStationsAsync(cave);
+        await SeedPlacesAsync(cave);
+        var fileId = await UploadArchiveAsync();
+        var (trip, cavers) = await CreateTripAsync(editor, "Deleted before the upload", guests: 1);
+
+        // While the trip is there the same request is answered, and offers points to record —
+        // so the refusals below are about the trip and nothing else in the arrangement.
+        var onto = Options(model, trip, cavers[0]);
+        var points = ProposedPointsOf(await PreviewAsync(editor, fileId, onto));
+        points.ShouldNotBeEmpty();
+
+        (await editor.DeleteAsync($"/api/v1/trip-logs/{trip}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        var nowhere = Options(model, Guid.CreateVersion7(), cavers[0]);
+        foreach (var (name, send) in new (string, Func<object, Task<HttpResponseMessage>>)[]
+                 {
+                     ("dry run", options => editor.PostAsJsonAsync(
+                         $"/api/v1/speleoloc-imports/{fileId}/preview", new { options, page = 1, pageSize = 100 })),
+                     ("confirmation", options => CommitAsync(editor, fileId, options, points)),
+                 })
+        {
+            var deleted = await send(onto);
+            var missing = await send(nowhere);
+            missing.StatusCode.ShouldBe(HttpStatusCode.NotFound, $"{name}: {await missing.Content.ReadAsStringAsync()}");
+            deleted.StatusCode.ShouldBe(HttpStatusCode.NotFound, $"{name}: {await deleted.Content.ReadAsStringAsync()}");
+            CodeOf(await deleted.Content.ReadAsStringAsync())
+                .ShouldBe(CodeOf(await missing.Content.ReadAsStringAsync()), name);
+        }
+
+        // Nothing was written onto it meanwhile.
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+        (await db.TripPositionEvents.IgnoreQueryFilters().CountAsync(e => e.TripLogId == trip)).ShouldBe(0);
+    }
+
     // ---------- the undo ----------
 
     /// <summary>
-    /// The batch reverts as one unit: the positions go, a trip the confirmation created goes with
-    /// them, and a trip that already existed does not.
+    /// The batch reverts as one unit: positions recorded onto a trip that already existed are
+    /// taken off it and that trip stays, while a trip the confirmation created is deleted with
+    /// its recording on it — hidden from every reader, and whole again if it is put back.
     /// </summary>
     [Fact]
     public async Task An_undo_takes_back_the_positions_and_only_a_trip_the_import_itself_created()
@@ -544,13 +589,29 @@ public sealed class SpeleolocTripImportTests : IAsyncLifetime, IDisposable, ICla
             // The trip the import wrote onto is still there — undoing an import must not delete
             // somebody's trip because positions were once recorded onto it.
             (await db.TripLogs.CountAsync(t => t.Id == existing)).ShouldBe(1);
-            // The trip the import created is not.
+            // The trip the import created is not, to any reader — and neither is anything that
+            // hangs on it: its positions and its tracking row are keyed by the trip and hidden
+            // with it. Nothing the confirmation made is left showing.
             (await db.TripLogs.CountAsync(t => t.Id == createdTrip)).ShouldBe(0);
             (await db.TripPositionEvents.CountAsync(e => e.TripLogId == createdTrip)).ShouldBe(0);
-            // Nor its tracking row: it is keyed by the trip and goes with it, which is why the
-            // import is allowed to write one there and nowhere else. Nothing the confirmation made
-            // outlives the undo.
             (await db.TripTrackings.CountAsync(t => t.TripLogId == createdTrip)).ShouldBe(0);
+
+            // It is deleted rather than removed, though, with its recording still on it: an undo
+            // deletes a trip the way a person would, so this one can be put back.
+            (await db.TripLogs.IgnoreQueryFilters().SingleAsync(t => t.Id == createdTrip)).DeletedAt.ShouldNotBeNull();
+            (await db.TripPositionEvents.IgnoreQueryFilters().CountAsync(e => e.TripLogId == createdTrip)).ShouldBe(2);
+            (await db.TripTrackings.IgnoreQueryFilters().CountAsync(t => t.TripLogId == createdTrip)).ShouldBe(1);
+        }
+
+        // Put back, it is the trip the import made: tracked against the model the reviewer chose,
+        // with the two positions the recording held.
+        var restored = await editor.PostAsync($"/api/v1/trip-logs/{createdTrip}/restore", null);
+        restored.StatusCode.ShouldBe(HttpStatusCode.OK, await restored.Content.ReadAsStringAsync());
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.TripPositionEvents.CountAsync(e => e.TripLogId == createdTrip)).ShouldBe(2);
+            (await db.TripTrackings.SingleAsync(t => t.TripLogId == createdTrip)).SurveyModelId.ShouldBe(model);
         }
 
         // Undoing twice is refused rather than repeated.

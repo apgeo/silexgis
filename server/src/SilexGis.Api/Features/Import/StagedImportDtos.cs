@@ -158,11 +158,19 @@ public sealed record ImportBatchDto(
 
 /// <summary>One line of a batch: what a source row became, under which rule.</summary>
 /// <remarks>
+/// <para>
 /// <c>TripTitle</c> is answered even where the trip itself is gone, out of what the line recorded
-/// at the time. A feature survives an undo — soft-deleted, keeping its identifier — but a trip is
-/// removed outright and the line's pointer at it goes null with it. Without a title kept here, a
-/// reverted trip import would render as a column of lines saying nothing at all, and "what did
-/// that import create" is exactly the question somebody looking at a reverted batch is asking.
+/// at the time. A trip survives an undo as a feature does — deleted, keeping its identifier, and
+/// restorable — but once its restore window has run out it is removed outright and the line's
+/// pointer at it goes null with it. Without a title kept here, an old reverted trip import would
+/// render as a column of lines saying nothing at all, and "what did that import create" is
+/// exactly the question somebody looking at a reverted batch is asking.
+/// </para>
+/// <para>
+/// <c>TripDeleted</c> says the trip the line points at is deleted and can still be put back, the
+/// way <c>FeatureDeleted</c> does for a feature. It is what lets a page send the reader to the
+/// list of deleted trips rather than to an address that answers not found.
+/// </para>
 /// </remarks>
 public sealed record ImportBatchItemDto(
     long Id,
@@ -176,7 +184,8 @@ public sealed record ImportBatchItemDto(
     string? RuleName,
     ImportDecisionAction Action,
     Guid? TripLogId,
-    string? TripTitle);
+    string? TripTitle,
+    bool TripDeleted);
 
 /// <summary>
 /// Where an object came from: which file, which rule, who confirmed it, when. The source

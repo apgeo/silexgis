@@ -73,7 +73,6 @@ public sealed class ImportCommitService(
     ImportCandidateService candidates,
     IAccessService access,
     Trips.TripLogWriteService tripWrites,
-    StoredContentRemover content,
     IOptions<ImportLimitOptions> limits)
 {
     /// <summary>Entrance type a cave built around an imported waypoint gets when no rule said otherwise.</summary>
@@ -292,21 +291,25 @@ public sealed class ImportCommitService(
     /// behind — on somebody else's cave, which is precisely the case undo exists for.
     /// </para>
     /// <para>
-    /// A spreadsheet of trips creates two kinds of thing at once, and both go: the trips
-    /// themselves, and the caves and areas the same confirmation invented along the way. A trip
-    /// is removed rather than stamped, because a trip carries no deleted mark and the surfaces
-    /// that list trips would go on listing it; it is removed through the one place that says what
-    /// dies with a trip, so an undo leaves no orphaned rule and no link relating caves to each
-    /// other through a trip that is gone. The people and the vocabulary terms a confirmation
-    /// added stay: a person is not something an undo may quietly remove from a club's roster,
-    /// where by then they may be named on trips this batch never touched.
+    /// A spreadsheet of trips creates two kinds of thing at once, and both go the same way: the
+    /// trips themselves, and the caves and areas the same confirmation invented along the way,
+    /// are all marked deleted and none of them is removed. A trip is deleted through the one
+    /// place that says what deleting a trip does — the same act the trip's own page performs —
+    /// so every trip an undo took down is on the list of deleted trips and can be put back from
+    /// it, one at a time, with its roster and its links as the import wrote them. The people and
+    /// the vocabulary terms a confirmation added stay: a person is not something an undo may
+    /// quietly remove from a club's roster, where by then they may be named on trips this batch
+    /// never touched.
     /// </para>
     /// <para>
-    /// A device recording creates positions on a trip's timeline, and those go too — removed, the
-    /// way the tracking log's own correction removes them, rather than stamped. The trip they were
-    /// recorded onto goes only when this same confirmation created it: a line naming a trip it did
-    /// not create names it as the place the positions went, and deleting somebody's trip because
-    /// an import wrote onto it would be a far larger act than the one they asked for.
+    /// A device recording creates positions on a trip's timeline. Recorded onto a trip that
+    /// already existed, they are taken off it — removed, the way the tracking log's own
+    /// correction removes them, rather than stamped — and the trip stays: a line naming a trip
+    /// it did not create names it as the place the positions went, and deleting somebody's trip
+    /// because an import wrote onto it would be a far larger act than the one they asked for.
+    /// Recorded into a trip this same confirmation created, they are left on it and the trip is
+    /// deleted like any other the undo takes down, so that putting it back gives the recording
+    /// back with it.
     /// </para>
     /// </summary>
     public async Task RevertAsync(ImportBatch batch, Guid userId, CancellationToken ct = default)
@@ -333,8 +336,13 @@ public sealed class ImportCommitService(
             .Where(i => i.TripLogId != null && i.TripPositionEventId is null && i.FeatureId is null)
             .Select(i => i.TripLogId!.Value)
             .ToHashSet();
+        // The positions to take off a log are the ones recorded onto a trip that stays. Those of
+        // a trip this same undo is about to delete are left where they are: that trip is kept
+        // whole so it can be put back, its positions are hidden with it, and removing them here
+        // would hand back, on a restore, a recording with nothing recorded.
         var eventIds = allItems
-            .Where(i => i.TripPositionEventId != null)
+            .Where(i => i.TripPositionEventId != null
+                && !(i.TripLogId is { } recordedOnto && tripIds.Contains(recordedOnto)))
             .Select(i => i.TripPositionEventId!.Value)
             .ToHashSet();
         var caves = await db.CaveEntrances.AsNoTracking()
@@ -344,32 +352,33 @@ public sealed class ImportCommitService(
             .ToListAsync(ct);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        var removedFiles = new List<StoredFile>();
 
         // Positions first, and they are removed rather than stamped: a report of something that
         // never happened is taken off the log, which is what the tracking surface itself does with
-        // one, so an undo speaks the same language. Removed even when the trip is about to go
-        // with them — the trip usually is not going, because a recording is normally imported
-        // onto a trip that already existed and has its own history to keep.
+        // one, so an undo speaks the same language.
+        //
+        // Read past the filter that hides a deleted trip's rows. The trip a recording went onto
+        // may itself have been deleted since, and the undo still has to take back what this
+        // import wrote there: left behind, the positions would return with the trip the day
+        // somebody restored it, as the one part of an undone import that was never undone.
         if (eventIds.Count > 0)
         {
-            await db.TripPositionEvents.Where(e => eventIds.Contains(e.Id)).ExecuteDeleteAsync(ct);
+            await db.TripPositionEvents.IgnoreQueryFilters()
+                .Where(e => eventIds.Contains(e.Id))
+                .ExecuteDeleteAsync(ct);
         }
 
-        // Trips next, and features after: a trip names the caves it reached through links, and
-        // the delete that takes a trip apart is the one place that knows which of those links
-        // cannot survive it. Doing it the other way round would leave a link naming a cave that
-        // no longer exists.
+        // Trips next. Each is marked deleted and keeps everything it had, exactly as when
+        // somebody deletes one from its own page; a trip of this batch that was already deleted
+        // by hand is not found here, and keeps the stamp it was given then.
         if (tripIds.Count > 0)
         {
             var trips = await db.TripLogs.Where(t => tripIds.Contains(t.Id)).ToListAsync(ct);
             foreach (var trip in trips)
             {
-                removedFiles.AddRange(await tripWrites.PurgeAsync(trip, ct));
+                tripWrites.SoftDelete(trip, userId);
             }
 
-            // The removals are polymorphic rows deleted by statement and a tracked delete of the
-            // trip itself; saving here is what makes the second half see a consistent picture.
             await db.SaveChangesAsync(ct);
         }
 
@@ -400,10 +409,6 @@ public sealed class ImportCommitService(
 
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-
-        // The generated write-ups of the trips that went: their bytes, once the rows that pointed
-        // at them are committed gone.
-        await content.DropAsync(removedFiles);
     }
 
     // ---------- one candidate ----------

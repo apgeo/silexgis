@@ -129,17 +129,21 @@ public static class ImportBatchEndpoints
             .Select(f => new { f.Id, f.Name, f.Kind, f.DeletedAt })
             .ToDictionaryAsync(f => f.Id, ct);
 
-        // The same for trips, with one difference that matters after an undo: a reverted trip is
-        // removed rather than soft-deleted, so the line's pointer at it is already null and there
-        // is nothing left to look up. What the line recorded of the source row answers instead.
+        // The same for trips, and read the same way — past the filter that hides deleted rows.
+        // After an undo every trip of the batch is deleted and still there, and this page is
+        // where somebody asks what the import had made: the line says the trip is deleted, and
+        // the reader is sent to where it can be put back. Still only what the caller may read.
+        // A trip removed for good is the one case with nothing to look up; the line's pointer
+        // went null with it, and what the line recorded of the source row answers instead.
         var tripIds = items.Where(i => i.TripLogId is not null).Select(i => i.TripLogId!.Value).ToList();
         var trips = tripIds.Count == 0
             ? []
             : await db.TripLogs.AsNoTracking()
+                .IgnoreQueryFilters()
                 .VisibleTo(ctx, AccessDomain.TripLogs)
                 .Where(t => tripIds.Contains(t.Id))
-                .Select(t => new { t.Id, t.Title })
-                .ToDictionaryAsync(t => t.Id, t => t.Title, ct);
+                .Select(t => new { t.Id, t.Title, t.DeletedAt })
+                .ToDictionaryAsync(t => t.Id, ct);
 
         // Only a trip spreadsheet's lines carry a recorded trip title. Every other source stores
         // the source row's own attributes here verbatim, so a file whose rows happen to carry a
@@ -155,6 +159,7 @@ public static class ImportBatchEndpoints
                 .. items.Select(i =>
                 {
                     var feature = i.FeatureId is { } fid ? visible.GetValueOrDefault(fid) : null;
+                    var trip = i.TripLogId is { } tid ? trips.GetValueOrDefault(tid) : null;
                     return new ImportBatchItemDto(
                         i.Id,
                         i.FeatureId,
@@ -167,8 +172,8 @@ public static class ImportBatchEndpoints
                         i.RuleName,
                         i.Action,
                         i.TripLogId,
-                        (i.TripLogId is { } tid ? trips.GetValueOrDefault(tid) : null)
-                            ?? (recordsTripTitles ? RecordedTitle(i.SourceProperties) : null));
+                        trip?.Title ?? (recordsTripTitles ? RecordedTitle(i.SourceProperties) : null),
+                        trip?.DeletedAt is not null);
                 })
             ]));
     }
@@ -285,7 +290,8 @@ public static class ImportBatchEndpoints
                 // This route is reached through a feature, so the line it answers with is a
                 // feature's line and carries no trip.
                 null,
-                null),
+                null,
+                false),
             ParseProperties(item.SourceProperties)));
     }
 

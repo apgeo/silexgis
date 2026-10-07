@@ -210,11 +210,13 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
     // ---------- undo ----------
 
     /// <summary>
-    /// Reverting the batch leaves no trip and no feature it created, and importing the same sheet
-    /// again writes a second batch rather than merging quietly into the first.
+    /// Undoing an import deletes what it created the way a person would delete it — the trips
+    /// and the features alike are marked and kept — so each trip is on the list of deleted trips
+    /// and can be put back with its links. Importing the same sheet again writes a second batch
+    /// of new trips: a deleted trip is matched by nothing and brought back by nothing.
     /// </summary>
     [Fact]
-    public async Task A_reverted_import_leaves_no_trip_and_re_importing_makes_a_second_batch()
+    public async Task An_undone_import_leaves_its_trips_restorable_and_re_importing_makes_new_ones()
     {
         var fileId = await UploadAsync("undo.csv", Sheet);
         var first = await CommitAsync(fileId, [2, 3], createEverything: true);
@@ -226,14 +228,14 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
 
         Guid[] createdFeatures;
         Guid[] createdTrips;
+        int linkEnds;
+        int rosterRows;
         await using (var before = factory.Services.CreateAsyncScope())
         {
             var db = before.ServiceProvider.GetRequiredService<SilexGisDbContext>();
             createdFeatures = [.. await db.ImportBatchItems.AsNoTracking()
                 .Where(i => i.ImportBatchId == batchId && i.FeatureId != null)
                 .Select(i => i.FeatureId!.Value).ToListAsync()];
-            // Held on to before the revert, because afterwards there is no trip left to name
-            // and the links have to be looked for by the identifiers they used to carry.
             createdTrips = [.. await db.ImportBatchItems.AsNoTracking()
                 .Where(i => i.ImportBatchId == batchId && i.TripLogId != null)
                 .Select(i => i.TripLogId!.Value).ToListAsync()];
@@ -245,6 +247,16 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
                 .Where(f => createdFeatures.Contains(f.Id) && f.AncestorIds.Length > 1)
                 .CountAsync();
             nested.ShouldBeGreaterThan(0);
+
+            // What the trips hold before the undo, so "nothing was taken down" below is a
+            // comparison and not a hope.
+            linkEnds = await db.ResLinkMembers.AsNoTracking()
+                .CountAsync(m => m.EntityType == AttachedEntityType.TripLog
+                    && m.EntityId != null && createdTrips.Contains(m.EntityId!.Value));
+            linkEnds.ShouldBeGreaterThan(0);
+            rosterRows = await db.TripLogParticipants.AsNoTracking()
+                .CountAsync(p => createdTrips.Contains(p.TripLogId));
+            rosterRows.ShouldBeGreaterThan(0);
         }
 
         var revert = await editor.PostAsync($"/api/v1/import-batches/{batchId}/revert", null);
@@ -253,15 +265,27 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
         await using (var after = factory.Services.CreateAsyncScope())
         {
             var db = after.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+
+            // No trip is left to any reader.
             (await db.TripLogs.AsNoTracking().CountAsync(t => t.OwnerUserId == editorId)).ShouldBe(0);
-            // Nor a link naming caves through a trip that is gone. Asked of the trips this
-            // batch created rather than of every trip-log link in the table: one database is
-            // shared by every test in this suite, and another test's links say nothing about
-            // whether this revert cleaned up after itself.
+
+            // And every one of them is still there, marked as deleted by whoever undid the
+            // import, with the links and the roster the import gave it. Asked of the trips this
+            // batch created rather than of every row in the table: one database is shared by
+            // every test in this class.
+            var kept = await db.TripLogs.AsNoTracking().IgnoreQueryFilters()
+                .Where(t => createdTrips.Contains(t.Id))
+                .ToListAsync();
+            kept.Count.ShouldBe(2);
+            kept.ShouldAllBe(t => t.DeletedAt != null && t.DeletedByUserId == editorId);
             (await db.ResLinkMembers.AsNoTracking()
                 .CountAsync(m => m.EntityType == AttachedEntityType.TripLog
                     && m.EntityId != null && createdTrips.Contains(m.EntityId!.Value)))
-                .ShouldBe(0);
+                .ShouldBe(linkEnds);
+            (await db.TripLogParticipants.AsNoTracking().IgnoreQueryFilters()
+                .CountAsync(p => createdTrips.Contains(p.TripLogId)))
+                .ShouldBe(rosterRows);
+
             var live = await db.Features.AsNoTracking().IgnoreQueryFilters()
                 .Where(f => createdFeatures.Contains(f.Id))
                 .ToListAsync();
@@ -271,30 +295,64 @@ public sealed class TripImportCommitTests : IAsyncLifetime, IDisposable, IClassF
                 .Select(b => b.RevertedAt).FirstAsync()).ShouldNotBeNull();
         }
 
-        // The batch still says what it created. A reverted trip is removed rather than
-        // soft-deleted, so the line's pointer at it is gone — and a list of lines saying nothing
-        // is no answer to the one question somebody opens a reverted import to ask.
+        // The batch still says what it created, and now says where it went: each line keeps its
+        // pointer at a trip that is deleted and can be put back.
         var detail = await editor.GetAsync($"/api/v1/import-batches/{batchId}");
         var detailBody = await BodyAsync(detail);
         detail.StatusCode.ShouldBe(HttpStatusCode.OK, detailBody);
-        var titles = JsonDocument.Parse(detailBody).RootElement.GetProperty("items").EnumerateArray()
-            .Select(i => i.GetProperty("tripTitle").GetString())
-            .Where(t => t is not null)
+        var lines = JsonDocument.Parse(detailBody).RootElement.GetProperty("items").EnumerateArray()
+            .Where(i => i.GetProperty("tripLogId").ValueKind != JsonValueKind.Null)
             .ToList();
-        titles.ShouldContain("Prima tura");
-        titles.ShouldContain("A doua tura");
+        lines.Select(i => i.GetProperty("tripTitle").GetString()).ShouldBe(["Prima tura", "A doua tura"], ignoreOrder: true);
+        lines.ShouldAllBe(i => i.GetProperty("tripDeleted").GetBoolean());
+        lines.Select(i => i.GetProperty("tripLogId").GetGuid()).ShouldBe(createdTrips, ignoreOrder: true);
+
+        // Each is on the list of deleted trips, to the person who undid the import.
+        var deleted = await editor.GetAsync("/api/v1/trip-logs/deleted?pageSize=500");
+        var deletedIds = JsonDocument.Parse(await BodyAsync(deleted)).RootElement.GetProperty("items")
+            .EnumerateArray().Select(t => t.GetProperty("id").GetGuid()).ToList();
+        createdTrips.ShouldBeSubsetOf(deletedIds);
 
         // The same file, confirmed again. A second batch, and trips again — the review is spent
-        // on confirmation, so there is nothing to merge into and nothing pretends there is.
+        // on confirmation, so there is nothing to merge into and nothing pretends there is. New
+        // trips, not the deleted ones come back: nothing about a deleted trip is matched.
         var second = await CommitAsync(fileId, [2, 3], createEverything: true);
-        second.GetProperty("batchId").GetGuid().ShouldNotBe(batchId);
+        var secondBatchId = second.GetProperty("batchId").GetGuid();
+        secondBatchId.ShouldNotBe(batchId);
         second.GetProperty("createdTripCount").GetInt32().ShouldBe(2);
+
+        Guid[] secondTrips;
+        await using (var again = factory.Services.CreateAsyncScope())
+        {
+            var db = again.ServiceProvider.GetRequiredService<SilexGisDbContext>();
+            (await db.ImportBatches.AsNoTracking()
+                .CountAsync(b => b.ConfirmedByUserId == editorId && b.Source == ImportSource.TripCsv)).ShouldBe(2);
+            secondTrips = [.. await db.ImportBatchItems.AsNoTracking()
+                .Where(i => i.ImportBatchId == secondBatchId && i.TripLogId != null)
+                .Select(i => i.TripLogId!.Value).ToListAsync()];
+            secondTrips.Length.ShouldBe(2);
+            secondTrips.Intersect(createdTrips).ShouldBeEmpty();
+            (await db.TripLogs.AsNoTracking().CountAsync(t => t.OwnerUserId == editorId)).ShouldBe(2);
+            (await db.TripLogs.AsNoTracking().IgnoreQueryFilters()
+                .CountAsync(t => createdTrips.Contains(t.Id) && t.DeletedAt != null)).ShouldBe(2);
+        }
+
+        // One of the first batch's trips, put back by hand: it returns beside the re-imported one
+        // of the same title and date, with no collision — nothing says a trip is unique by
+        // either — and with the roster the first import gave it.
+        var restore = await editor.PostAsync($"/api/v1/trip-logs/{createdTrips[0]}/restore", null);
+        var restored = JsonDocument.Parse(await BodyAsync(restore)).RootElement;
+        restore.StatusCode.ShouldBe(HttpStatusCode.OK, restored.ToString());
+        restored.GetProperty("id").GetGuid().ShouldBe(createdTrips[0]);
 
         await using var last = factory.Services.CreateAsyncScope();
         var db3 = last.ServiceProvider.GetRequiredService<SilexGisDbContext>();
-        (await db3.ImportBatches.AsNoTracking()
-            .CountAsync(b => b.ConfirmedByUserId == editorId && b.Source == ImportSource.TripCsv)).ShouldBe(2);
-        (await db3.TripLogs.AsNoTracking().CountAsync(t => t.OwnerUserId == editorId)).ShouldBe(2);
+        (await db3.TripLogs.AsNoTracking().CountAsync(t => t.OwnerUserId == editorId)).ShouldBe(3);
+        (await db3.TripLogParticipants.AsNoTracking().CountAsync(p => p.TripLogId == createdTrips[0]))
+            .ShouldBeGreaterThan(0);
+        var sameTitle = restored.GetProperty("title").GetString();
+        (await db3.TripLogs.AsNoTracking().CountAsync(t => t.OwnerUserId == editorId && t.Title == sameTitle))
+            .ShouldBe(2);
     }
 
     // ---------- where the trip was ----------
