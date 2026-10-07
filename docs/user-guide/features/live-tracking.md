@@ -549,9 +549,18 @@ neither is told about nobody else, and the page asks the server for neither.
   be opened from here, and the lists cannot be narrowed to one camp.
 - **The cave's finished published trips** — **Play** replays one on the survey its reports were
   measured in, under a banner that says plainly *"You are looking at a past trip"*. The view can
-  keep up with one team or person, and **Back to the party now** returns — as does the
-  browser's own Back button, since picking a trip is a step in the page's history. The address
-  follows what is on screen (`?past=…&team=…`), so a reader can send somebody that exact view.
+  keep up with one team or person; while it does, the two arrows that step from one report to
+  the next step through that team's or person's own reports and pass over everybody else's (the
+  marks on the rail stay the whole trip's, and where nothing was ever reported about the party
+  followed the arrows go on stepping through every report). **Back to the party now** returns —
+  as does the browser's own Back button, since picking a trip is a step in the page's history.
+  The address follows what is on screen (`?past=…&team=…`), so a reader can send somebody that
+  exact view. While a past trip is on screen, **Play another trip of this cave** directly under
+  the replay's controls opens the same list there, so going through a cave's history trip by
+  trip does not mean scrolling to the foot of the page and back. A replay belongs to the link it
+  was opened under, and so does everything else a reader chose there — another party they asked
+  to watch, the lists they opened: a second published link opened in the same tab starts on its
+  own party with both lists shut, or on the past trip its own address names.
 - **A link to one moment of a replay** — under the replay's rail, **Copy link to this moment**
   copies an address that opens the same trip, following the same team or person, with the clock
   at the moment showing; **Copy link that plays from here** copies one that also starts the replay
@@ -608,6 +617,32 @@ full page's: add `past=<trip>`, and where wanted `team=` or `caver=`, `at=<insta
 opens on that trip, at that moment, playing. The values are the ones **Copy link to this
 moment** puts into the address it copies.
 
+**What the frame shows while a past trip plays** depends on the room the frame has — its own
+width and height, not the screen's.
+
+- **A frame at least 800 px wide and 760 px tall** (the block's 4:3 box in a column about 1,020 px
+  wide, or a box you made taller) shows the whole strip under the drawing: the statement that this
+  is a past trip, the clock, play and pause, the speed, the steps from one report to the next, whom
+  the view keeps up with, the rail and the way back, all on screen at once, so the rail is dragged
+  while looking at the drawing it moves. Beside the way back, **Past trips in this cave** opens a
+  sheet over the frame with the cave's two lists.
+- **A smaller frame** — the 4:3 box in an ordinary article's column as well as a phone's — shows
+  one line along its bottom edge: a **Past trip** tag and the trip's name, the clock, play and
+  pause, the way back (**Now** where the block's own party is underground, **Back** where it is
+  not) and one last button. That button opens a sheet over the frame with the rest: the rail, the
+  speed, the steps from one report to the next, whom the view keeps up with and the statement in
+  full. On a phone the frame is about 260 px tall, and the line is what leaves the drawing four
+  fifths of it; the whole strip, with somebody followed and everything it can have to say, is about
+  350 px tall under a finger and 300 under a mouse, and is shown only where the drawing still keeps
+  half the frame beside it. Under those controls, **Past trips in this cave** opens the cave's two
+  lists in the same sheet, so a reader can change trip without leaving the replay first.
+
+In both, moving through a replay asks the server for nothing: the cave's lists — who else is
+underground now, and the finished trips — are read only when a reader presses the button named
+for them, exactly as while the party of now is on screen. A replay whose record was cut short
+says so on the frame itself, in either layout, so a clock that stops early is not taken for the
+end of the trip. The frame keeps its amber outline for as long as the past is on screen.
+
 **Links in your own prose can drive the viewer** — one attribute on an ordinary link:
 
 | Attribute | Moves the view to |
@@ -647,6 +682,14 @@ this one can be pasted as it is:
 <script>
 document.addEventListener('silexgis:ready', function (event) {
   var said = event.detail;
+  if (said.pastUnreadable) {
+    // The server REFUSED the past trip the frame was asked for: it has been taken back, or is
+    // older than this installation keeps. said.pastUnreadable.tripLogId says which trip; there
+    // is no title and no moment, and said.past is absent. Say so in your own words and offer a
+    // link with data-silexgis-trip="live" - and take the words down again on the next
+    // announcement, which no longer carries it. Checked BEFORE loaded, which stays false.
+    return;
+  }
   if (!said.loaded) return;   // nothing has arrived yet - not the same as "nobody"
   if (said.past) {
     // A REPLAY of a past trip: said.past.title, said.past.tripLogId, and said.past.at
@@ -683,8 +726,24 @@ What to rely on:
 - **Wait for `loaded: true`.** The first announcement usually arrives before the party has,
   with `loaded: false` and an empty party. An empty party with `loaded: true` is a trip with
   nobody on it.
-- **`past` present means a replay.** Absent, the party is the block's own trip as it stands
-  now. Never print a replayed party as where people are.
+- **`past` present means a replay**, and always carries `tripLogId`, `title` and `at`. Absent,
+  and with `loaded: true`, the party is the block's own trip as it stands now. Never print a
+  replayed party as where people are.
+- **`pastUnreadable` present means the server refused the past trip asked for** — its link was
+  taken back, it is older than the installation keeps, or it was never a trip of this cave. It
+  carries `tripLogId` and nothing else; beside it `past` is absent, `party` is empty and
+  `loaded` is `false`, because nothing is on screen — so read it **before** the `loaded` check,
+  as the example does. It is said once and stands until the next announcement, which no longer
+  carries it: the reader went to another trip or back to the party now, or — rarely — the trip
+  was published again and a later read was answered, in which case that announcement is an
+  ordinary `past`. It is **not** sent for a read that merely did not arrive (a phone without
+  signal, a server fault): the frame then goes on announcing `loaded: false` with nothing
+  beside it, tells its own reader that the trip could not be read, and reads again when they
+  return to the tab. The frame keeps its way back on screen either way; a link with
+  `data-silexgis-trip="live"` brings it back from your own prose. A listener written before
+  this member existed is not affected by it: `past` is untouched, and it stops at
+  `loaded: false` exactly as it did before, when a refused trip was announced as nothing at
+  all.
 - **`watching` present means another party of the cave.** The reader opened the frame's list
   of parties being followed in the cave and pressed **Watch** on one of them. That party is
   underground now and its members are numbered from 1 exactly as your trip's are, so a page

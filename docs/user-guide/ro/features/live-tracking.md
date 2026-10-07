@@ -576,10 +576,20 @@ care nu deschide niciuna nu află despre nimeni altcineva, iar pagina nu cere se
   numită — nu poate fi deschisă de aici, iar listele nu pot fi restrânse la o singură tabără.
 - **Turele încheiate și publicate ale peșterii** — **Redă** reia una pe ridicarea în care au fost
   măsurate rapoartele ei, sub un banner care spune limpede *„Aceasta este o tură trecută"*.
-  Vederea poate ține pasul cu o echipă sau cu o persoană, iar **Înapoi la echipa din peșteră
-  acum** vă întoarce — la fel și butonul Înapoi al browserului, pentru că alegerea unei ture este
-  un pas în istoricul paginii. Adresa urmează ce este pe ecran (`?past=…&team=…`), așa că un
-  cititor poate trimite cuiva exact acea vedere.
+  Vederea poate ține pasul cu o echipă sau cu o persoană; cât timp o face, cele două săgeți care
+  trec de la un raport la următorul trec prin rapoartele acelei echipe sau persoane și sar peste
+  ale celorlalți (semnele de pe linia reluării rămân ale întregii ture, iar acolo unde despre cei
+  urmăriți nu s-a raportat niciodată nimic săgețile trec în continuare prin toate rapoartele).
+  **Înapoi la echipa din peșteră acum** vă întoarce — la fel și butonul Înapoi al browserului,
+  pentru că alegerea unei ture este un pas în istoricul paginii. Adresa urmează ce este pe ecran
+  (`?past=…&team=…`), așa că un cititor poate trimite cuiva exact acea vedere. Cât timp o tură
+  trecută este pe ecran, **Redă altă tură din această peșteră**, chiar sub comenzile reluării,
+  deschide aceeași listă acolo, așa că parcurgerea istoricului unei peșteri tură cu tură nu
+  înseamnă a derula până la capătul paginii și înapoi. O reluare ține de linkul sub care a fost
+  deschisă, la fel ca tot ce a ales cititorul acolo — o altă echipă pe care a cerut să o vadă,
+  listele pe care le-a deschis: un al doilea link publicat, deschis în aceeași filă, pornește
+  pe echipa lui, cu ambele liste închise, sau pe tura trecută pe care o numește propria lui
+  adresă.
 - **Un link către un moment al unei reluări** — sub linia reluării, **Copiază linkul către acest
   moment** copiază o adresă care deschide aceeași tură, urmărind aceeași echipă sau persoană, cu
   ceasul la momentul afișat; **Copiază linkul care redă de aici** copiază una care pornește și
@@ -635,6 +645,34 @@ ca adresa paginii întregi: adăugați `past=<tură>` și, unde doriți, `team=`
 se deschide pe acea tură, la acel moment, în redare. Valorile sunt cele pe care **Copiază linkul
 către acest moment** le pune în adresa copiată.
 
+**Ce arată cadrul cât rulează o tură trecută** depinde de locul pe care îl are cadrul — de
+lățimea și înălțimea lui, nu ale ecranului.
+
+- **Un cadru de cel puțin 800 px lățime și 760 px înălțime** (caseta 4:3 a blocului într-o coloană
+  de aproximativ 1.020 px lățime sau o casetă făcută mai înaltă) arată sub desen toate comenzile
+  reluării: enunțul că este o tură trecută, ceasul, redarea și pauza, viteza, pașii de la un raport
+  la următorul, pe cine urmărește vederea, linia reluării și drumul înapoi, toate pe ecran deodată,
+  astfel încât linia reluării se trage privind desenul pe care îl mișcă. Lângă drumul înapoi,
+  **Ture trecute în această peșteră** deschide peste cadru o foaie cu cele două liste ale peșterii.
+- **Un cadru mai mic** — caseta 4:3 din coloana unui articol obișnuit, ca și cea de pe un telefon —
+  arată un singur rând de-a lungul marginii de jos: eticheta **Tură trecută** și numele turei,
+  ceasul, redarea și pauza, drumul înapoi (**Acum** când echipa blocului este în peșteră,
+  **Înapoi** când nu este) și un ultim buton. Acel buton deschide peste cadru o foaie cu restul:
+  linia reluării, viteza, pașii de la un raport la următorul, pe cine urmărește vederea și enunțul
+  întreg. Pe un telefon cadrul are în jur de 260 px înălțime, iar rândul este cel care lasă
+  desenului patru cincimi din el; toate comenzile reluării, cu cineva urmărit și cu tot ce poate
+  avea de spus enunțul, au în jur de 350 px înălțime sub deget și 300 sub mouse și sunt arătate
+  doar acolo unde desenul păstrează lângă ele jumătate din cadru. Sub aceste comenzi, **Ture
+  trecute în această peșteră** deschide în aceeași foaie cele două liste ale peșterii, astfel încât
+  cititorul poate schimba tura fără să iasă mai întâi din reluare.
+
+În ambele, parcurgerea unei reluări nu cere serverului nimic: listele peșterii — cine altcineva
+este în peșteră acum și turele încheiate — sunt citite doar când cititorul apasă butonul care le
+numește, exact ca atunci când pe ecran este echipa de acum. O reluare a cărei înregistrare a fost
+întreruptă o spune chiar pe cadru, în oricare dintre cele două forme, pentru ca un ceas care se
+oprește devreme să nu fie luat drept sfârșitul turei. Cadrul își păstrează conturul chihlimbariu
+cât timp trecutul este pe ecran.
+
 **Legăturile din propriul text pot comanda vizualizarea** — un atribut pe o legătură obișnuită:
 
 | Atribut | Mută vederea la |
@@ -674,6 +712,14 @@ acesta poate fi lipit așa cum este:
 <script>
 document.addEventListener('silexgis:ready', function (event) {
   var said = event.detail;
+  if (said.pastUnreadable) {
+    // Serverul A REFUZAT tura trecută cerută cadrului: a fost retrasă sau este mai veche decât
+    // păstrează această instalare. said.pastUnreadable.tripLogId spune care tură; nu există
+    // nici titlu, nici moment, iar said.past lipsește. Spuneți-o cu propriile cuvinte și
+    // oferiți o legătură cu data-silexgis-trip="live" - și retrageți cuvintele la următorul
+    // anunț, care nu îl mai poartă. Se verifică ÎNAINTE de loaded, care rămâne false.
+    return;
+  }
   if (!said.loaded) return;   // nu a sosit încă nimic - nu este același lucru cu „nimeni"
   if (said.past) {
     // O RELUARE a unei ture trecute: said.past.title, said.past.tripLogId și said.past.at
@@ -710,8 +756,24 @@ Pe ce vă puteți baza:
 - **Așteptați `loaded: true`.** Primul anunț sosește de obicei înaintea echipei, cu
   `loaded: false` și o echipă goală. O echipă goală cu `loaded: true` este o tură fără nimeni
   pe ea.
-- **`past` prezent înseamnă o reluare.** Absent, echipa este cea a turei publicate de bloc, așa
-  cum stă acum. Nu scrieți niciodată o echipă reluată ca loc în care se află oamenii.
+- **`past` prezent înseamnă o reluare** și poartă întotdeauna `tripLogId`, `title` și `at`.
+  Absent, și cu `loaded: true`, echipa este cea a turei publicate de bloc, așa cum stă acum. Nu
+  scrieți niciodată o echipă reluată ca loc în care se află oamenii.
+- **`pastUnreadable` prezent înseamnă că serverul a refuzat tura trecută cerută** — linkul ei a
+  fost retras, este mai veche decât păstrează instalarea sau nu a fost niciodată o tură a
+  acestei peșteri. Poartă `tripLogId` și nimic altceva; alături de el `past` lipsește, `party`
+  este goală și `loaded` este `false`, pentru că nimic nu este pe ecran — așa că citiți-l
+  **înainte** de verificarea lui `loaded`, cum face exemplul. Este spus o singură dată și rămâne
+  valabil până la următorul anunț, care nu îl mai poartă: cititorul a trecut la altă tură sau
+  înapoi la echipa de acum, ori — rar — tura a fost publicată din nou și o citire ulterioară a
+  primit răspuns, caz în care acel anunț este un `past` obișnuit. **Nu** este trimis pentru o
+  citire care doar nu a ajuns (un telefon fără semnal, o eroare a serverului): cadrul continuă
+  atunci să anunțe `loaded: false` fără nimic alături, îi spune propriului cititor că tura nu a
+  putut fi citită și citește din nou când acesta revine în filă. Cadrul își păstrează pe ecran
+  calea de întoarcere în ambele cazuri; o legătură cu `data-silexgis-trip="live"` îl aduce
+  înapoi din textul dumneavoastră. Un ascultător scris înainte să existe acest membru nu este
+  afectat de el: `past` rămâne neatins, iar ascultătorul se oprește la `loaded: false` exact ca
+  înainte, când o tură refuzată era anunțată ca nimic.
 - **`watching` prezent înseamnă o altă echipă din peșteră.** Cititorul a deschis în cadru lista
   echipelor urmărite în peșteră și a apăsat **Vezi echipa** pe una dintre ele. Acea echipă este
   în peșteră acum, iar membrii ei sunt numărați de la 1 exact ca ai turei dumneavoastră, așa că

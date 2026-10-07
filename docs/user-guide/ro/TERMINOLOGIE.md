@@ -172,6 +172,7 @@ odată cu ea — și apoi paginile.
 | Last heard | Ultima veste |
 | Replay the trip / Play | Reia tura / Redă |
 | A replay | Reluare |
+| The replay's rail (the line its handle is dragged along) | Linia reluării |
 | Language the page opens in | Limba în care se deschide pagina |
 | Being followed now | Urmărite acum |
 | Published trips (the administration page) | Ture publicate |
