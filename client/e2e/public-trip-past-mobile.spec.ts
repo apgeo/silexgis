@@ -235,6 +235,11 @@ interface ServedCave {
   truncated?: boolean;
   /** The link's own trip is over: nobody is underground for a replay to go back to. */
   over?: boolean;
+  /**
+   * An old link: the list of parties in the cave now is refused for good, in the one answer every
+   * refusal of a published link is given in, while the cave's past trips answer as before.
+   */
+  liveRefused?: boolean;
 }
 
 /**
@@ -296,6 +301,12 @@ async function serveCave(page: Page, cave: ServedCave = {}) {
       });
     } else if (path === `${base}/past/${PAST_TRIP}`) {
       await route.fulfill({ json: pastTrack(cave.truncated) });
+    } else if (path === `${base}/live` && cave.liveRefused) {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/problem+json',
+        json: { title: 'Not Found', status: 404, code: 'tracking.share_not_found' },
+      });
     } else if (path === `${base}/live`) {
       // The link's own trip is in this list too while it is being followed, as on the server —
       // without its survey, which a row never carries (a member left undefined is not sent).
@@ -1026,5 +1037,80 @@ test.describe('a cave’s past trips on a phone', () => {
     await expect(page.getByTestId('public-watch-line')).toHaveCount(0);
     await expect(frame).not.toHaveClass(/public-trip-embed-watch/);
     await expect(page.getByTestId('public-watch-ended')).toHaveCount(0);
+  });
+
+  test('an old link says it no longer lists who is in the cave today only once its past trips are in hand, and asks once', async ({
+    page,
+    consoleErrors,
+  }) => {
+    // Declared rather than left looking like a defect: the refusal IS the subject. It is the one
+    // answer a published link is ever refused with, so the page has no reason to read — only
+    // which of its two lists answered.
+    consoleErrors.allow(
+      /Failed to load resource.*404/,
+      'the refusal of the list of parties, which this test serves on purpose',
+    );
+    const served = await serveCave(page, { over: true, liveRefused: true });
+    const asked = (path: string) => served.reads.filter((read) => read === path).length;
+    await page.setViewportSize(NARROWEST);
+    await page.goto(`/shared/trips/${TOKEN}`);
+    await expect(page.getByTestId('public-trip-state-closed')).toBeVisible({ timeout: 30_000 });
+
+    // ---- The parties first: refused, with nothing yet known about the past trips ----
+    // The page has not read the cave's past trips and reads nothing to find out, so it cannot
+    // tell an old link from a list that failed, and keeps the wording it had.
+    await page.getByTestId('public-trip-live-section').tap();
+    await expect(page.getByTestId('public-live-failed')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('public-live-past-only')).toHaveCount(0);
+    expect(asked(served.pastList)).toBe(0);
+    expect(asked(served.liveList)).toBe(1);
+
+    // ---- The past trips answer: now it is known, and said as a fact about the link ----
+    await page.getByTestId('public-trip-past-section').tap();
+    await expect(page.getByTestId(`public-past-trip-${PAST_TRIP}`)).toBeVisible({ timeout: 20_000 });
+    const quiet = page.getByTestId('public-live-past-only');
+    await expect(quiet).toBeVisible();
+    await expect(quiet).toContainText('This link no longer lists who is in the cave today');
+    await expect(quiet).toContainText('past trips are still here');
+    // Nothing that promises to recover, nothing to press that could not succeed, and nothing
+    // saying the link itself is over while its past trips are on the screen below.
+    await expect(page.getByTestId('public-live-failed')).toHaveCount(0);
+    await expect(page.getByTestId('public-live-link-ended')).toHaveCount(0);
+    await expect(page.getByTestId('public-trip-ended')).toHaveCount(0);
+    await expect(page.getByTestId('public-trip-stale')).toHaveCount(0);
+    await expect(page.getByTestId('public-trip-retry')).toHaveCount(0);
+    await expect(page.getByTestId(`public-past-trip-${PAST_TRIP}`)).toBeVisible();
+    // Learning it cost the one read the reader asked for, and the refused list was not asked for
+    // again on the way: a refusal given for good is not tried twice.
+    expect(asked(served.pastList)).toBe(1);
+    expect(asked(served.liveList)).toBe(1);
+    expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
+  });
+
+  test('inside the smallest frame a club may paste, an old link’s sheet says the same and still lists the past trips', async ({
+    page,
+    consoleErrors,
+  }) => {
+    consoleErrors.allow(
+      /Failed to load resource.*404/,
+      'the refusal of the list of parties, which this test serves on purpose',
+    );
+    const served = await serveCave(page, { over: true, liveRefused: true });
+    await page.setViewportSize(SMALLEST_FRAME);
+    await page.goto(`/shared/trips/${TOKEN}/embed`);
+    await expect(page.getByTestId('public-trip-embed')).toBeVisible({ timeout: 30_000 });
+
+    // The sheet asks for both lists on the one press, so here both halves of the evidence arrive
+    // together: the past trips answered, the parties refused for good.
+    await page.getByTestId('public-past-open').tap();
+    await expect(page.getByTestId(`public-past-trip-${PAST_TRIP}`)).toBeVisible({ timeout: 20_000 });
+    const quiet = page.getByTestId('public-live-past-only');
+    await expect(quiet).toBeVisible({ timeout: 20_000 });
+    await expect(quiet).toContainText('This link no longer lists who is in the cave today');
+    await expect(page.getByTestId('public-live-failed')).toHaveCount(0);
+    await expect(page.getByTestId('public-live-link-ended')).toHaveCount(0);
+    await expect(page.getByTestId('public-trip-ended')).toHaveCount(0);
+    expect(served.reads.filter((read) => read === served.liveList).length).toBe(1);
+    expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
   });
 });
