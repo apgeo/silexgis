@@ -62,12 +62,14 @@ public static class TripPastTrackEndpoints
             .WithTags("TripTracking")
             .AllowAnonymous()
             .RequireRateLimiting(PublicTripRateLimits.PolicyName)
+            .WithMetadata(PublicTripRoute.Past)
             .WithSummary("Past trips of this link's cave: the ones that were published and are now over, newest first.");
 
         api.MapGet("/public/trips/{token}/past/{tripLogId:guid}", TrackAsync)
             .WithTags("TripTracking")
             .AllowAnonymous()
             .RequireRateLimiting(PublicTripRateLimits.PolicyName)
+            .WithMetadata(PublicTripRoute.PastTrip)
             .WithSummary("One past trip of this link's cave, played back: the party by their place in it and where each was reported over time.");
 
         return api;
@@ -100,7 +102,7 @@ public static class TripPastTrackEndpoints
     private static async Task<Results<Ok<PublicPastTripListDto>, ProblemHttpResult>> ListAsync(
         string token, SilexGisDbContext db, FeatureProtection protection,
         IOptions<TripTrackingOptions> live, IOptions<TripPastTrackOptions> past,
-        TimeProvider clock, CancellationToken ct)
+        TimeProvider clock, PublicTripDiagnostics diagnostics, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
         var opened = await OpenAsync(token, db, protection, live.Value, past.Value, now, ct);
@@ -108,9 +110,18 @@ public static class TripPastTrackEndpoints
         // both these routes answer exactly what an unknown token answers — the feature is not there
         // rather than there and empty — while the list of parties underground now, which shares the
         // gate, is deliberately unaffected.
-        if (!past.Value.Enabled) return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+        if (!past.Value.Enabled)
+        {
+            diagnostics.Refused(PublicTripRoute.Past, ArchiveOffOr(opened), token);
+            return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+        }
 
-        if (opened.Refusal is { } refused) return refused;
+        if (opened.Refusal is { } refused)
+        {
+            diagnostics.Refused(PublicTripRoute.Past, opened.Reason, token);
+            return refused;
+        }
+
         var configCave = opened.CaveFeatureId;
 
         var size = past.Value.EffectiveListSize;
@@ -220,6 +231,7 @@ public static class TripPastTrackEndpoints
         var camps = await TripTrackingPublicationEndpoints.ExpeditionsOfAsync(
             db, [.. page.Select(p => p.Id)], ct);
 
+        diagnostics.Served(PublicTripRoute.Past);
         return TypedResults.Ok(new PublicPastTripListDto(
             [.. page.Select(p => new PublicPastTripDto(
                 p.Id,
@@ -239,7 +251,7 @@ public static class TripPastTrackEndpoints
         string token, Guid tripLogId, SilexGisDbContext db, FeatureProtection protection,
         ICrsRegistry crs, IFileAccessTokenService tokens,
         IOptions<TripTrackingOptions> live, IOptions<TripPastTrackOptions> past,
-        TimeProvider clock, CancellationToken ct)
+        TimeProvider clock, PublicTripDiagnostics diagnostics, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
         var opened = await OpenAsync(token, db, protection, live.Value, past.Value, now, ct);
@@ -247,20 +259,39 @@ public static class TripPastTrackEndpoints
         // both these routes answer exactly what an unknown token answers — the feature is not there
         // rather than there and empty — while the list of parties underground now, which shares the
         // gate, is deliberately unaffected.
-        if (!past.Value.Enabled) return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+        if (!past.Value.Enabled)
+        {
+            diagnostics.Refused(PublicTripRoute.PastTrip, ArchiveOffOr(opened), token);
+            return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+        }
 
-        if (opened.Refusal is { } refused) return refused;
+        if (opened.Refusal is { } refused)
+        {
+            diagnostics.Refused(PublicTripRoute.PastTrip, opened.Reason, token);
+            return refused;
+        }
+
         var configCave = opened.CaveFeatureId;
+
+        // The link is good from here on, and what can still be refused is the trip it asked for.
+        // One word for all three ways below, as there is one answer for them: which of "another
+        // cave's", "no such trip" and "not history yet" it was is not something a holder of the
+        // link is told, and an operator looking at one link's refusals does not need it either.
+        ProblemHttpResult NotInArchive()
+        {
+            diagnostics.Refused(PublicTripRoute.PastTrip, PublishedReadRefusal.TripNotInArchive, token);
+            return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+        }
 
         // The scope check, and it is load-bearing: without it a link to one cave would read past
         // trips of every other cave on the installation. Asked as part of the lookup rather than
         // after it, so a trip of another cave is indistinguishable from a trip that does not exist.
         var tracking = await db.TripTrackings.AsNoTracking()
             .FirstOrDefaultAsync(t => t.TripLogId == tripLogId && t.CaveFeatureId == configCave, ct);
-        if (tracking is null) return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+        if (tracking is null) return NotInArchive();
 
         var trip = await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
-        if (trip is null) return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+        if (trip is null) return NotInArchive();
 
         // The same four clauses the list applies, asked of this one trip through the same function:
         // published and not withdrawn, not armed, its live window over, inside retention. A trip
@@ -271,7 +302,7 @@ public static class TripPastTrackEndpoints
                 now, tracking.State, tracking.ClosedAt, latestUnrevokedExpiry,
                 trip.TripDate, trip.TripDateEnd, live.Value.ShareGraceAfterClose, past.Value.Retention))
         {
-            return ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+            return NotInArchive();
         }
 
         var teams = await db.TripTeams.AsNoTracking()
@@ -397,7 +428,12 @@ public static class TripPastTrackEndpoints
         }
 
         var trackCamps = await TripTrackingPublicationEndpoints.ExpeditionsOfAsync(db, [trip.Id], ct);
+        // Read before the answer is built rather than inside it, so that the read is counted as
+        // served only once nothing is left that could fail.
+        var model = await TripTrackingPublicationEndpoints.ModelAsync(
+            db, protection, crs, tokens, tracking.SurveyModelId, configCave, ct);
 
+        diagnostics.Served(PublicTripRoute.PastTrip);
         return TypedResults.Ok(new PublicPastTrackDto(
             trip.Id,
             trackCamps.GetValueOrDefault(trip.Id),
@@ -411,8 +447,7 @@ public static class TripPastTrackEndpoints
             // This trip's own model, and the refusal above already established that its cave is
             // the one the publication decision was taken about — so a model answering to any other
             // cave is not handed over, and a superseded survey is drawn as itself or not at all.
-            await TripTrackingPublicationEndpoints.ModelAsync(
-                db, protection, crs, tokens, tracking.SurveyModelId, configCave, ct),
+            model,
             [.. teams.Select(t => new PublicTripTeamDto(t.Id, t.Title))],
             participants));
     }
@@ -440,6 +475,13 @@ public static class TripPastTrackEndpoints
     /// nothing here tells a stranger their guess was once real.
     /// </para>
     /// <para>
+    /// <b>Which way out it was is kept for the operator and for nobody else.</b> Each refusal
+    /// carries its reason beside the one shared answer, for the route to write into the
+    /// installation's log. The reason is worked out from the rows the single read above already
+    /// returned, so naming it adds no query — a once-real token still costs what an invented one
+    /// costs — and it travels in a member no route puts into a response.
+    /// </para>
+    /// <para>
     /// <b>The cave is re-decided here on every call and remembered nowhere.</b> A cave guarded
     /// after the link was handed out closes the archive at the moment it is guarded, exactly as it
     /// closes the live page — and a watch that has lost the cave it was anchored to has nothing to
@@ -450,13 +492,15 @@ public static class TripPastTrackEndpoints
         string token, SilexGisDbContext db, FeatureProtection protection,
         TripTrackingOptions live, TripPastTrackOptions past, DateTimeOffset now, CancellationToken ct)
     {
-        var refused = new OpenedToken(
-            Guid.Empty, null, Guid.Empty, false, false,
-            ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode));
+        // One answer, built once and handed out of every refusal below: only the reason beside it
+        // differs, and the reason goes to the log.
+        var notFound = ApiProblems.NotFound(TripTrackingPublicationEndpoints.NotFoundCode);
+        OpenedToken Refused(PublishedReadRefusal why) =>
+            new(Guid.Empty, null, Guid.Empty, false, false, notFound, why);
 
         if (string.IsNullOrEmpty(token) || token.Length > TripTrackingRules.MaxShareTokenLength)
         {
-            return refused;
+            return Refused(PublishedReadRefusal.UnknownLink);
         }
 
         // One round trip whatever the token turns out to be. The link, its trip, its watch and the
@@ -486,7 +530,7 @@ public static class TripPastTrackEndpoints
                     .Where(s => s.TripLogId == log.Id && s.RevokedAt == null)
                     .Max(s => (DateTimeOffset?)s.ExpiresAt),
             }).FirstOrDefaultAsync(ct);
-        if (found is null) return refused;
+        if (found is null) return Refused(PublishedReadRefusal.UnknownLink);
 
         var (share, trip, tracking, latestUnrevokedExpiry) =
             (found.Share, found.Trip, found.Tracking, found.LatestUnrevokedExpiry);
@@ -512,19 +556,53 @@ public static class TripPastTrackEndpoints
             trip.TripDateEnd,
             live.ShareGraceAfterClose,
             past.Retention);
-        if (windows.Neither) return refused;
+        if (windows.Neither)
+        {
+            // Why, asked of the same facts through the function that explains this rule. It answers
+            // null only when a window is open, which the line above has just excluded; the fallback
+            // is there so that a disagreement between the two could never turn a refusal into an
+            // exception on an anonymous route.
+            return Refused(
+                TripPublicationRefusal.OfBothWindows(
+                    now,
+                    share.RevokedAt,
+                    share.ExpiresAt,
+                    tracking.State,
+                    tracking.ClosedAt,
+                    latestUnrevokedExpiry,
+                    trip.TripDate,
+                    trip.TripDateEnd,
+                    live.ShareGraceAfterClose,
+                    past.Retention)
+                ?? PublishedReadRefusal.Expired);
+        }
 
         var (liveOpen, pastReadable) = (windows.Live, windows.Past);
 
         // The publication refusal, taken again and cached nowhere — the same call the live page
         // makes, about the same cave, on every single read.
-        if (tracking.CaveFeatureId is not { } configCave) return refused;
+        if (tracking.CaveFeatureId is not { } configCave) return Refused(PublishedReadRefusal.CaveWithheld);
         var publishable = await TrackingWithholding.PublishableCaveIdsAsync(db, protection, [configCave], ct);
-        if (!publishable.Contains(configCave)) return refused;
+        if (!publishable.Contains(configCave)) return Refused(PublishedReadRefusal.CaveWithheld);
 
         return new OpenedToken(
-            configCave, tracking.SurveyModelId, trip.Id, liveOpen, pastReadable, null);
+            configCave, tracking.SurveyModelId, trip.Id, liveOpen, pastReadable, null,
+            // Never read: a token that opened has no reason to give.
+            default);
     }
+
+    /// <summary>
+    /// The reason logged when the archive is switched off: the gate's own, where the link would
+    /// have been refused anyway, and otherwise the switch.
+    /// </summary>
+    /// <remarks>
+    /// The switch is tested ahead of the gate's refusal so that both cost the same; the reason is
+    /// read the other way round, because a link that is revoked or unknown is refused for that on
+    /// any installation, and "the archive is off" said of it would send an operator to a setting
+    /// that changing would not help.
+    /// </remarks>
+    private static PublishedReadRefusal ArchiveOffOr(OpenedToken opened) =>
+        opened.Refusal is null ? PublishedReadRefusal.ArchiveOff : opened.Reason;
 
     /// <summary>
     /// What a token opened, once every gate on it has been asked.
@@ -552,13 +630,19 @@ public static class TripPastTrackEndpoints
     /// archive's retention. Never true at the same instant as <paramref name="LiveWindowOpen"/>:
     /// the two rules partition a published trip's life, and a Domain test holds that they do.
     /// </param>
+    /// <param name="Refusal">The answer to give when the token opened nothing; null when it opened.</param>
+    /// <param name="Reason">
+    /// Why it opened nothing, for the installation's log and for nothing else. Meaningful only
+    /// beside a <paramref name="Refusal"/>, and never put into a response.
+    /// </param>
     internal sealed record OpenedToken(
         Guid CaveFeatureId,
         Guid? SurveyModelId,
         Guid TripLogId,
         bool LiveWindowOpen,
         bool PastReadable,
-        ProblemHttpResult? Refusal);
+        ProblemHttpResult? Refusal,
+        PublishedReadRefusal Reason);
 
     /// <summary>
     /// The latest expiry among a trip's links that nobody revoked, or null when it was never

@@ -21,6 +21,7 @@ import {
   type TrackingDepthCandidate,
   type TrackingTeam,
   type TripPositionEventKind,
+  type TripTrackingState,
 } from '../../api/hooks.ts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer.ts';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.ts';
@@ -29,6 +30,7 @@ import TrackingWhenField from './TrackingWhenField.tsx';
 import { useTrackingPanelTheme } from './trackingControlSizes.ts';
 import { trackingDepthGap } from './trackingDepthGap.ts';
 import { trackingProblemMessage } from './trackingProblems.ts';
+import { trackingLogWritable } from './trackingWatch.ts';
 import {
   trackingStationRules,
   useTrackingReport,
@@ -42,10 +44,13 @@ interface ReportForm extends TrackingReportValues {
 interface Props {
   tripLogId: string;
   /**
-   * Whether the watch's log may be written: it has been started, and is either still running or
-   * has been closed since. A watch never started is the one state that refuses every report.
+   * The state the watch is in, which decides two things here. Whether its log may be written at
+   * all: it has been started, and is either still running or has been closed since — a watch never
+   * started is the one state that refuses every report. And whether a report is being made as it
+   * happens or written up afterwards, which is what a closed watch means and changes what "when"
+   * may be left to say.
    */
-  writable: boolean;
+  state: TripTrackingState;
   /** The people this report is about — the table's selection, in the order it holds them. */
   caverIds: readonly string[];
   teams: readonly TrackingTeam[];
@@ -92,12 +97,20 @@ interface Props {
  */
 export default function TrackingReportForm({
   tripLogId,
-  writable,
+  state,
   caverIds,
   teams,
   onRecorded,
 }: Props) {
   const { t } = useTranslation();
+  const writable = trackingLogWritable(state);
+  /**
+   * Whether this report is being written up after the trip, rather than taken as it comes in.
+   *
+   * On a closed watch nothing is happening now, so "now" is never when anything was said: the
+   * moment is asked for outright, by every way this card has of sending a report.
+   */
+  const afterClose = state === 'closed';
   // Every control here is pressed, and how big it has to be follows the pointer and not the width:
   // a phone in landscape has a desk's room across and still no pixel precision.
   const coarse = useCoarsePointer();
@@ -232,8 +245,22 @@ export default function TrackingReportForm({
   // Saying somebody is out is the one report that is worth its own control: it is the commonest
   // thing anybody records, it carries no position, and asking for it through the picker is three
   // actions at the moment a party is walking out.
-  const onMarkOut = () =>
-    send({ kind: 'exited', teamId: form.getFieldValue('teamId') ?? null });
+  //
+  // On a closed watch it asks for the moment like every other report here. It was the one path that
+  // never read the form, so left alone it would have gone on stamping "out" with the hour somebody
+  // sat down to write the trip up — days after everybody was home.
+  const onMarkOut = async () => {
+    let recordedAt: ReportForm['recordedAt'];
+    if (afterClose) {
+      try {
+        ({ recordedAt } = await form.validateFields(['recordedAt']));
+      } catch {
+        // The field is already saying what is missing.
+        return;
+      }
+    }
+    await send({ kind: 'exited', teamId: form.getFieldValue('teamId') ?? null, recordedAt });
+  };
 
   /**
    * Taking one of the offered stations as the answer.
@@ -261,6 +288,19 @@ export default function TrackingReportForm({
 
   return (
     <Card size="small" title={t('trips.tracking.report')} style={{ marginBottom: 16 }}>
+      {/* Said before the fields rather than under the one it changes: it is why the card behaves
+          differently from the last time this person used it, and a required field met half-way
+          down a familiar form reads as a fault. */}
+      {afterClose && (
+        <Alert
+          type="info"
+          showIcon
+          title={t('trips.tracking.recordAfterCloseTitle')}
+          description={t('trips.tracking.recordAfterCloseBody')}
+          style={{ marginBottom: 12 }}
+          data-testid="trip-tracking-record-after"
+        />
+      )}
       {/* Around the form rather than around each chooser: a `Form.Item` hands its value and its
           change handler to the single element it is given, so anything put between the two takes
           them instead of the control. */}
@@ -505,8 +545,14 @@ export default function TrackingReportForm({
 
           {/* Left empty the server stamps the report with its own clock, which is what a report made
               as it happens wants. It is filled in for the other case — word relayed out of the cave
-              some time after it was said — and a time in the future is refused rather than stored. */}
-          <TrackingWhenField size={controlSize} coarse={coarse} idPrefix="trip-tracking" />
+              some time after it was said — and a time in the future is refused rather than stored.
+              Once the watch is closed there is no "as it happens" left, and the moment is asked for. */}
+          <TrackingWhenField
+            size={controlSize}
+            coarse={coarse}
+            idPrefix="trip-tracking"
+            required={afterClose}
+          />
         </Form>
       </ConfigProvider>
 

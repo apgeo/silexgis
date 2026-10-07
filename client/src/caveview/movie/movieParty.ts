@@ -93,6 +93,13 @@ export function movieMarkerId(tripLogId: string, caverId: string): string {
   return `${tripLogId}:${caverId}`;
 }
 
+/** Whether a marker of a movie stands for somebody of this trip. */
+export function movieMarkerIsOfTrip(markerId: string, tripLogId: string): boolean {
+  return markerId.startsWith(movieMarkerId(tripLogId, ''));
+}
+
+const NOBODY: ReadonlySet<string> = new Set();
+
 /** A caver on the model, with what their marker is keyed and coloured by. */
 interface Placed {
   id: string;
@@ -115,15 +122,42 @@ interface Placed {
  * come out is drawn in the muted grey whatever the colouring, because that is the distinction a
  * reader must not lose; with `showOut` off they are not drawn at all.
  *
+ * <b>Somebody the reader left out of the movie is not in it at all</b> (`excluded`, by
+ * {@link movieMarkerId}): no marker, no trail behind one, and no caption of a note they spoke — the
+ * note in force is then the latest one said by somebody who is shown. They are also left out of
+ * the set that decides how much of a name tells two people apart, so nobody's label grows a
+ * surname because of a person the movie does not show; a name lengthened for a reason the picture
+ * gives no sign of would itself say that somebody is missing. What does <i>not</i> change is how
+ * the others are coloured: trips and teams keep their colours and their lines of the legend, so a
+ * movie made twice, once without somebody, shows everybody else exactly alike.
+ *
  * @param instants the instant each trip is shown at, in the order of `trips` — the timeline's answer.
  */
 export function movieParty(
   trips: readonly MovieTripData[],
   instants: readonly number[],
   surveyModelId: string,
-  options: { settings: MovieSettings; t: TFunction; language: string; today: string },
+  options: {
+    settings: MovieSettings;
+    t: TFunction;
+    language: string;
+    today: string;
+    /** The markers the reader left out of this movie; nobody when not given. */
+    excluded?: ReadonlySet<string>;
+  },
 ): MovieParty {
   const { settings, t, language, today } = options;
+  const excluded = options.excluded ?? NOBODY;
+  const shown = (trip: MovieTripData, caverId: string): boolean =>
+    excluded.size === 0 || !excluded.has(movieMarkerId(trip.tripLogId, caverId));
+  // Whose words a caption may carry: somebody shown who is on the trip's roster. A report stays on
+  // the log after its caver is taken off the trip, but such a person can have no marker and is in
+  // nobody's list to untick, so the movie could quote them and offer no way to leave them out.
+  const rosters = new Map(
+    trips.map((trip) => [trip.tripLogId, new Set(trip.tracking.participants.map((person) => person.caverId))]),
+  );
+  const quoted = (trip: MovieTripData, caverId: string): boolean =>
+    shown(trip, caverId) && rosters.get(trip.tripLogId)!.has(caverId);
   const colourBy =
     settings.cavers.colourBy === 'auto'
       ? trips.length > 1 ? 'trip' : 'team'
@@ -147,11 +181,13 @@ export function movieParty(
 
   const line: MarkerLineOptions = { t, language, showTimes: settings.cavers.showTimes, today };
   const labelMode = settings.cavers.labels;
-  // Everybody on every selected trip's roster, so that whether two people's first names collide is
-  // one answer for the whole movie rather than a new one at each frame.
+  // Everybody the movie shows of every selected trip's roster, so that whether two people's first
+  // names collide is one answer for the whole movie rather than a new one at each frame.
   const names = movieCaverNames(
     trips.flatMap((trip) =>
-      trip.tracking.participants.map((person) => ({ caverId: person.caverId, name: trip.nameOf(person.caverId) })),
+      trip.tracking.participants
+        .filter((person) => shown(trip, person.caverId))
+        .map((person) => ({ caverId: person.caverId, name: trip.nameOf(person.caverId) })),
     ),
     labelMode,
   );
@@ -171,6 +207,9 @@ export function movieParty(
         continue;
       }
       if (caver.out && !settings.cavers.showOut) {
+        continue;
+      }
+      if (!shown(trip, caver.caverId)) {
         continue;
       }
       const teamless = caver.teamId === null || !teamColours.has(caver.teamId);
@@ -256,7 +295,7 @@ export function movieParty(
     clusterLabel,
     trails,
     legend,
-    note: settings.captions.note ? noteInForce(trips, instants, labelMode, nameOf, t) : null,
+    note: settings.captions.note ? noteInForce(trips, instants, labelMode, nameOf, quoted, t) : null,
   };
 }
 
@@ -267,12 +306,19 @@ export function movieParty(
  *
  * Who said it is named the way the markers name people, and not at all when the markers are not
  * labelled.
+ *
+ * A note spoken by somebody the movie does not show is passed over as if it had not been said: the
+ * one in force is the latest said by anybody who is shown. Captioned, it would put a person's words
+ * — and, with labels on, their name — into a movie they were taken out of. Somebody whose reports
+ * are on the log but who is no longer on the trip's roster is such a person too: the movie cannot
+ * show them, and the reader is given no box to untick them by.
  */
 function noteInForce(
   trips: readonly MovieTripData[],
   instants: readonly number[],
   labelMode: MovieSettings['cavers']['labels'],
   nameOf: (caverId: string, fallback: string) => string,
+  quoted: (trip: MovieTripData, caverId: string) => boolean,
   t: TFunction,
 ): string | null {
   let best: { age: number; text: string } | null = null;
@@ -281,7 +327,10 @@ function noteInForce(
     if (!Number.isFinite(at)) {
       continue;
     }
-    const note = noteAt(replayNotes(trip.events, { from: Number.NEGATIVE_INFINITY, to: at }), at);
+    const note = noteAt(
+      replayNotes(trip.events, { from: Number.NEGATIVE_INFINITY, to: at }).filter((said) => quoted(trip, said.caverId)),
+      at,
+    );
     if (note === null) {
       continue;
     }

@@ -79,6 +79,11 @@ export interface MovieRecording {
   settings: MovieSettings;
   /** In the order the reader chose them, which is what keeps each trip's colour. */
   trips: readonly MovieTripData[];
+  /**
+   * The markers the reader left out of this movie, by the id a caver's marker has in a movie.
+   * Required, so that a caller cannot record everybody by forgetting to say who was left out.
+   */
+  excluded: ReadonlySet<string>;
   timeline: MovieTimeline;
   surveyModelId: string;
   /** The title caption, as the preview draws it; null when the caption is off. */
@@ -148,45 +153,38 @@ function refKey(ref: CaveViewRef): string {
 }
 
 /**
- * Records the movie and answers its file.
+ * The preview's viewer made into the movie's, for as long as frames are drawn from it — and what
+ * hands it back.
  *
- * Rejects with the encoder's error when encoding fails, with the viewer's when capturing does, and
- * with an `AbortError` when `signal` is aborted — in every case after the viewer has been put back.
+ * One home for it because a movie and a still picture of one of its moments must come out of the
+ * same staging: a still drawn by a second, similar routine would sooner or later show a label, a
+ * layer or a person the movie's own frame of that moment does not.
  */
-export async function recordMovie(recording: MovieRecording): Promise<Blob> {
-  const {
-    viewer,
-    constants,
-    settings,
-    trips,
-    timeline,
-    surveyModelId,
-    title,
-    words,
-    signal,
-    onProgress,
-    openEncoder = openMovieEncoder,
-    createCanvas = detachedCanvas,
-    nextTask: yieldTask = nextTask,
-  } = recording;
-  const checkAborted = () => {
-    if (signal?.aborted) {
-      throw aborted();
-    }
-  };
-  checkAborted();
+interface MovieStage {
+  /** Sets the movie's view and labels on the viewer and opens its capture session. */
+  open(): void;
+  /**
+   * Stages frame `index` on the viewer, captures it into `context` and captions it. `moveMs` is how
+   * long the markers take to reach their places, `advanceMs` how far the frame moves them along.
+   */
+  compose(context: CanvasRenderingContext2D, index: number, moveMs: number, advanceMs: number): void;
+  /**
+   * Hands the viewer back, trying every step whatever an earlier one did — a session left open
+   * would leave the preview drawing nothing — and answers the steps that failed.
+   */
+  putBack(): unknown[];
+}
 
-  const { width, height } = movieSize(settings);
-  const frames = movieFrames(timeline, settings);
-  // Opened before the viewer is touched, so an encoder this browser cannot open leaves the
-  // preview exactly as it was without anything having to be put back.
-  const encoder: MovieEncoder = await openEncoder(settings.format, {
-    width,
-    height,
-    fps: frames.fps,
-    quality: settings.quality,
-    reservedColors: movieCaptionColors(),
-  });
+/**
+ * Notes what is standing on the viewer now, and answers the stage a recording draws its frames on.
+ * Nothing of the viewer is changed until the stage is opened.
+ */
+function movieStage(
+  recording: MovieRecording,
+  frames: ReturnType<typeof movieFrames>,
+  { width, height }: { width: number; height: number },
+): MovieStage {
+  const { viewer, constants, settings, trips, excluded, timeline, surveyModelId, title, words } = recording;
 
   // What is standing on the model now, to be put back.
   const markersBefore = viewer.getLiveMarkers().map((marker) => ({ ...marker }));
@@ -207,88 +205,56 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
   const drawnTrails = new Map<string, string>();
   let capturing = false;
 
-  /**
-   * Hands the viewer back, trying every step whatever an earlier one did — a session left open
-   * would leave the preview drawing nothing — and answers the steps that failed.
-   */
-  const putBack = (): unknown[] => {
-    const failures: unknown[] = [];
-    const attempt = (step: () => void) => {
-      try {
-        step();
-      } catch (error) {
-        failures.push(error);
+  const syncTrails = (party: MovieParty) => {
+    for (const [id, trail] of party.trails) {
+      const key = `${trail.color}\n${trail.stations.join('\n')}`;
+      const before = drawnTrails.get(id);
+      if (before === undefined) {
+        viewer.addTrail(TRAIL_PREFIX + id, trail.stations, { color: trail.color });
+      } else if (before !== key) {
+        viewer.updateTrail(TRAIL_PREFIX + id, trail.stations, { color: trail.color });
       }
-    };
-    attempt(() => encoder.close());
-    // While the session is still open, so the one view the viewer draws when it ends is the
-    // preview as it was, not the last frame of the movie.
-    attempt(() =>
-      putBackScene(viewer, drawn, markersBefore, drawnTrails, trailsShownBefore, recording.clusterLabelAfter),
-    );
-    attempt(() => restoreView?.());
-    attempt(() => viewer.setCameraAngles(cameraBefore));
-    if (capturing) {
-      attempt(() => viewer.endCapture());
+      drawnTrails.set(id, key);
     }
-    // After the session, which hands the label size back as it was when the session opened; this
-    // is what the preview had before the recording set anything. The angle is set again in case
-    // ending the session moved the camera.
-    attempt(() => restoreLabels?.());
-    attempt(() => viewer.setCameraAngles(cameraBefore));
-    return failures;
+    for (const id of [...drawnTrails.keys()]) {
+      if (!party.trails.has(id)) {
+        viewer.removeTrail(TRAIL_PREFIX + id);
+        drawnTrails.delete(id);
+      }
+    }
   };
 
-  let file: Blob;
-  try {
-    // A cancel that arrived while the encoder was opening still closes it.
-    checkAborted();
-    restoreView = applyMovieView(viewer, settings.view, constants);
-    // The preview's trails show its own moment; the movie draws its own, so the preview's are
-    // hidden rather than left standing in every frame.
-    for (const id of trailsShownBefore) {
-      viewer.updateTrail(id, null, { visible: false });
-    }
-    viewer.beginCapture({ width, height });
-    capturing = true;
-    // A capture is drawn at the frame's own size, so a label of so many frame pixels is that many
-    // device pixels of the drawing — no scaling here, which is what keeps it from being scaled twice.
-    restoreLabels = applyMovieMarkerLabels(viewer, settings.cavers, 1);
-
-    const canvas = createCanvas(width, height);
-    const context = canvas.getContext('2d', { willReadFrequently: encoder.samplesWanted > 0 });
-    if (context === null) {
-      throw new Error('A movie frame could not be composed: the browser gave no 2D canvas.');
-    }
-    const transitionMs = settings.cavers.transitionS * 1000;
-
-    const syncTrails = (party: MovieParty) => {
-      for (const [id, trail] of party.trails) {
-        const key = `${trail.color}\n${trail.stations.join('\n')}`;
-        const before = drawnTrails.get(id);
-        if (before === undefined) {
-          viewer.addTrail(TRAIL_PREFIX + id, trail.stations, { color: trail.color });
-        } else if (before !== key) {
-          viewer.updateTrail(TRAIL_PREFIX + id, trail.stations, { color: trail.color });
-        }
-        drawnTrails.set(id, key);
+  return {
+    open() {
+      restoreView = applyMovieView(viewer, settings.view, constants);
+      // The preview's trails show its own moment; the movie draws its own, so the preview's are
+      // hidden rather than left standing in every frame.
+      for (const id of trailsShownBefore) {
+        viewer.updateTrail(id, null, { visible: false });
       }
-      for (const id of [...drawnTrails.keys()]) {
-        if (!party.trails.has(id)) {
-          viewer.removeTrail(TRAIL_PREFIX + id);
-          drawnTrails.delete(id);
-        }
+      viewer.beginCapture({ width, height });
+      capturing = true;
+      // The preview slides its markers under the real clock while it plays, and a capture takes a
+      // slide under way over where it had got to. Whoever the first thing drawn leaves where the
+      // preview had them is not moved by it, and would be drawn between two stations, at a place
+      // decided by the moment the button was pressed. Placing every marker again where it was
+      // going ends its slide there; what is drawn next then starts from people standing still.
+      for (const marker of markersBefore) {
+        viewer.moveLiveMarker(marker.id, marker.ref, { ...markerOptions(marker), duration: 0 });
       }
-    };
+      // A capture is drawn at the frame's own size, so a label of so many frame pixels is that many
+      // device pixels of the drawing — no scaling here, which is what keeps it from being scaled twice.
+      restoreLabels = applyMovieMarkerLabels(viewer, settings.cavers, 1);
+    },
 
-    /** Stages frame `index` on the viewer, captures it into the composite and captions it. */
-    const compose = (index: number, moveMs: number, advanceMs: number) => {
+    compose(context, index, moveMs, advanceMs) {
       const frame = frames.frame(index);
       const party = movieParty(trips, timeline.instants(frame.position), surveyModelId, {
         settings,
         t: words.t,
         language: words.language,
         today: words.today,
+        excluded,
       });
       // Set before the markers move, so the groups their moves form are named by this frame's party.
       viewer.setLiveMarkerClusterLabel((markers) => party.clusterLabel(markers.map((marker) => marker.id)));
@@ -300,13 +266,108 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
         advance: advanceMs,
         into: context,
       });
-      drawMovieCaptions(
-        context,
-        width,
-        height,
-        movieCaptionsAt(settings, title, party, timeline.clock(frame.position), frame.progress, words),
+      drawMovieCaptions(context, width, height, movieCaptionsAt(settings, title, party, timeline, frame, words));
+    },
+
+    putBack() {
+      const failures: unknown[] = [];
+      const attempt = (step: () => void) => {
+        try {
+          step();
+        } catch (error) {
+          failures.push(error);
+        }
+      };
+      // While the session is still open, so the one view the viewer draws when it ends is the
+      // preview as it was, not the last frame of the movie.
+      attempt(() =>
+        putBackScene(viewer, drawn, markersBefore, drawnTrails, trailsShownBefore, recording.clusterLabelAfter),
       );
-    };
+      attempt(() => restoreView?.());
+      attempt(() => viewer.setCameraAngles(cameraBefore));
+      if (capturing) {
+        attempt(() => viewer.endCapture());
+      }
+      // After the session, which hands the label size back as it was when the session opened; this
+      // is what the preview had before the recording set anything. The angle is set again in case
+      // ending the session moved the camera.
+      attempt(() => restoreLabels?.());
+      attempt(() => viewer.setCameraAngles(cameraBefore));
+      return failures;
+    },
+  };
+}
+
+/** The canvas a frame is composed on, with its 2D context, or the reason there is none. */
+function compositeCanvas(
+  createCanvas: (width: number, height: number) => HTMLCanvasElement,
+  width: number,
+  height: number,
+  willReadFrequently: boolean,
+): { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D } {
+  const canvas = createCanvas(width, height);
+  const context = canvas.getContext('2d', { willReadFrequently });
+  if (context === null) {
+    throw new Error('A movie frame could not be composed: the browser gave no 2D canvas.');
+  }
+  return { canvas, context };
+}
+
+/**
+ * Records the movie and answers its file.
+ *
+ * Rejects with the encoder's error when encoding fails, with the viewer's when capturing does, and
+ * with an `AbortError` when `signal` is aborted — in every case after the viewer has been put back.
+ */
+export async function recordMovie(recording: MovieRecording): Promise<Blob> {
+  const {
+    settings,
+    signal,
+    onProgress,
+    openEncoder = openMovieEncoder,
+    createCanvas = detachedCanvas,
+    nextTask: yieldTask = nextTask,
+  } = recording;
+  const checkAborted = () => {
+    if (signal?.aborted) {
+      throw aborted();
+    }
+  };
+  checkAborted();
+
+  const { width, height } = movieSize(settings);
+  const frames = movieFrames(recording.timeline, settings);
+  // Opened before the viewer is touched, so an encoder this browser cannot open leaves the
+  // preview exactly as it was without anything having to be put back.
+  const encoder: MovieEncoder = await openEncoder(settings.format, {
+    width,
+    height,
+    fps: frames.fps,
+    quality: settings.quality,
+    reservedColors: movieCaptionColors(),
+  });
+
+  const stage = movieStage(recording, frames, { width, height });
+  /** Closes the encoder and hands the viewer back, answering every step of either that failed. */
+  const putBack = (): unknown[] => {
+    const failures: unknown[] = [];
+    try {
+      encoder.close();
+    } catch (error) {
+      failures.push(error);
+    }
+    failures.push(...stage.putBack());
+    return failures;
+  };
+
+  let file: Blob;
+  try {
+    // A cancel that arrived while the encoder was opening still closes it.
+    checkAborted();
+    stage.open();
+
+    const { canvas, context } = compositeCanvas(createCanvas, width, height, encoder.samplesWanted > 0);
+    const transitionMs = settings.cavers.transitionS * 1000;
 
     const total = encoder.samplesWanted + frames.count;
     let done = 0;
@@ -316,7 +377,7 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
       // frame holds, not about how it was arrived at.
       const samples: ImageData[] = [];
       for (const index of movieSampleFrames(frames.count, encoder.samplesWanted)) {
-        compose(index, 0, 0);
+        stage.compose(context, index, 0, 0);
         samples.push(context.getImageData(0, 0, width, height));
         onProgress?.({ stage: 'sampling', done: ++done, total, step: samples.length, steps: encoder.samplesWanted });
         await yieldTask();
@@ -330,7 +391,7 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
       const frame = frames.frame(index);
       // The first frame puts everybody where the movie starts at once — which is also what brings
       // the party back from wherever the palette samples left it.
-      compose(index, index === 0 ? 0 : transitionMs, frame.advanceMs);
+      stage.compose(context, index, index === 0 ? 0 : transitionMs, frame.advanceMs);
       await encoder.addFrame(canvas, index);
       onProgress?.({ stage: 'rendering', done: ++done, total, step: index + 1, steps: frames.count });
       await yieldTask();
@@ -352,6 +413,82 @@ export async function recordMovie(recording: MovieRecording): Promise<Blob> {
     throw failures[0];
   }
   return file;
+}
+
+/** What a still picture of a movie asks of the recording it is a frame of. */
+export type MovieStillRecording = Omit<MovieRecording, 'signal' | 'onProgress' | 'openEncoder' | 'nextTask'> & {
+  /** A seam for tests; the default asks the canvas for a PNG. */
+  toPng?: (canvas: HTMLCanvasElement) => Promise<Blob>;
+};
+
+/**
+ * One frame of the movie, as a PNG: frame `index` of the schedule, drawn as the export would draw
+ * it — the movie's view, labels, people, camera angle and captions, at the movie's own frame size —
+ * with everybody standing where that moment has them rather than part-way through a slide.
+ *
+ * It is drawn on the very stage a movie is recorded on, so the two cannot come to differ, and no
+ * encoder is opened for it. The viewer is taken and handed back within one task: nothing else runs
+ * between the two, and the picture is only compressed — which is what takes time — once the preview
+ * is the reader's again. That is also why there is nothing to cancel.
+ *
+ * Rejects with the viewer's error when capturing fails and with the first failed step of putting
+ * back when only that did — in both cases after everything that could be put back has been.
+ */
+export async function recordMovieStill(recording: MovieStillRecording, index: number): Promise<Blob> {
+  const { settings, createCanvas = detachedCanvas, toPng = canvasPng } = recording;
+  const size = movieSize(settings);
+  const frames = movieFrames(recording.timeline, settings);
+  const at = Math.min(Math.max(0, Math.round(index)), frames.count - 1);
+
+  const stage = movieStage(recording, frames, size);
+  let canvas: HTMLCanvasElement;
+  try {
+    stage.open();
+    const composite = compositeCanvas(createCanvas, size.width, size.height, false);
+    canvas = composite.canvas;
+    stage.compose(composite.context, at, 0, 0);
+  } catch (error) {
+    stage.putBack();
+    throw error;
+  }
+  const failures = stage.putBack();
+  if (failures.length > 0) {
+    throw failures[0];
+  }
+  return toPng(canvas);
+}
+
+/**
+ * The browser composed the picture and then gave no PNG of it. A kind of its own so that whoever
+ * shows the failure can say it in the reader's language: this message is for a log.
+ */
+export class MovieStillUnwrittenError extends Error {
+  constructor() {
+    super('The picture could not be written: the browser gave no PNG.');
+    this.name = 'MovieStillUnwrittenError';
+  }
+}
+
+function canvasPng(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob === null) {
+        reject(new MovieStillUnwrittenError());
+      } else {
+        resolve(blob);
+      }
+    }, 'image/png');
+  });
+}
+
+/** A marker's own label and colour, as options: only what it had, since an option handed over as
+ * undefined is not the same as one left out. */
+function markerOptions(marker: CaveViewLiveMarker): Pick<CaveViewLiveMarker, 'label' | 'sublabel' | 'color'> {
+  return {
+    label: marker.label,
+    ...(marker.sublabel === undefined ? {} : { sublabel: marker.sublabel }),
+    ...(marker.color === undefined ? {} : { color: marker.color }),
+  };
 }
 
 /** The markers, trails and group labels of the preview, as they stood before the recording. */
@@ -377,12 +514,7 @@ function putBackScene(
     }
   }
   for (const marker of markersBefore) {
-    // Only what the marker had: an option handed over as undefined is not the same as one left out.
-    const options = {
-      label: marker.label,
-      ...(marker.sublabel === undefined ? {} : { sublabel: marker.sublabel }),
-      ...(marker.color === undefined ? {} : { color: marker.color }),
-    };
+    const options = markerOptions(marker);
     if (drawn.has(marker.id)) {
       viewer.moveLiveMarker(marker.id, marker.ref, { ...options, duration: 0 });
     } else {

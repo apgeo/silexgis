@@ -697,6 +697,10 @@ public sealed class TripPastTrackTests : IAsyncLifetime, IDisposable, IClassFixt
         ListedIds(whole).ShouldBe(new[] { newer.Trip, older.Trip });
         whole.EnumerateObject().Select(p => p.Name).ShouldNotContain("total");
 
+        // One is also the floor the served size is held to — a setting of zero or less is raised to
+        // it — so this host sits on the bottom edge of that range, and the page of one below is
+        // what any lower setting would serve too. It shows the bound and the "more" bit; it does
+        // not show the floor, which only a setting below one could.
         using var small = HostWith(("TripPastTracks:ListSize", "1"));
         using var smallClient = small.CreateClient();
         var page = await Json(smallClient.GetAsync(PastList(newer.Token)));

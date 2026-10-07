@@ -2,8 +2,14 @@
 import { describe, expect, it } from 'vitest';
 import type { TrackingParticipant } from '../../api/hooks.ts';
 import {
+  byLastHeard,
   lastHeardAtIso,
   lastHeardInWords,
+  lateSpanOf,
+  planHourInWords,
+  planStanding,
+  quietCount,
+  quietThresholdOf,
   trackingLogWritable,
   trackingStandingOf,
   trackingStandings,
@@ -35,6 +41,10 @@ function participant(overrides: Partial<TrackingParticipant> = {}): TrackingPart
     // otherwise the roster's own name where the installation publishes names. Null is the
     // ordinary value here and means the page would call them by their place in the party.
     publishedAs: null,
+    onRoster: true,
+    name: null,
+    quiet: false,
+    outsideDeclaredParts: false,
     ...overrides,
   };
 }
@@ -226,5 +236,98 @@ describe('trackingLogWritable', () => {
     expect(trackingLogWritable('armed')).toBe(true);
     expect(trackingLogWritable('closed')).toBe(true);
     expect(trackingLogWritable('off')).toBe(false);
+  });
+});
+
+describe('the hour the party planned to be out by', () => {
+  const FIVE = '2026-09-16T17:00:00Z';
+  const at = (iso: string) => Date.parse(iso);
+
+  it('is nothing at all for a trip with no plan', () => {
+    expect(planStanding({ expectedReturnAt: null, underground: 3, now: NOON })).toBeNull();
+    expect(planStanding({ expectedReturnAt: undefined, underground: 3, now: NOON })).toBeNull();
+    // Not an hour: said as no plan rather than drawn as a nonsense one.
+    expect(planStanding({ expectedReturnAt: 'soon', underground: 3, now: NOON })).toBeNull();
+  });
+
+  it('is the plain hour while it is still ahead', () => {
+    expect(planStanding({ expectedReturnAt: FIVE, underground: 3, now: NOON })).toEqual({
+      dueAt: FIVE,
+      late: false,
+      lateByMs: 0,
+    });
+    // The hour itself is not yet past it.
+    expect(planStanding({ expectedReturnAt: FIVE, underground: 3, now: at(FIVE) })?.late).toBe(
+      false,
+    );
+  });
+
+  it('is late, and by how much, once the hour has passed with somebody still underground', () => {
+    expect(
+      planStanding({ expectedReturnAt: FIVE, underground: 1, now: at('2026-09-16T19:20:00Z') }),
+    ).toEqual({ dueAt: FIVE, late: true, lateByMs: 140 * 60_000 });
+  });
+
+  it('is not late with everybody out, however long ago the hour passed', () => {
+    // The same moment as the late case above, so the only thing that differs is the party.
+    expect(
+      planStanding({ expectedReturnAt: FIVE, underground: 0, now: at('2026-09-16T19:20:00Z') }),
+    ).toEqual({ dueAt: FIVE, late: false, lateByMs: 0 });
+  });
+
+  it('says a lateness in whole hours once there is one, rounded down, and in minutes before', () => {
+    expect(lateSpanOf(140 * 60_000)).toEqual({ unit: 'hours', amount: 2 });
+    expect(lateSpanOf(60 * 60_000)).toEqual({ unit: 'hours', amount: 1 });
+    expect(lateSpanOf(59 * 60_000 + 59_000)).toEqual({ unit: 'minutes', amount: 59 });
+    // Seconds past the hour are a minute late and not nought.
+    expect(lateSpanOf(20_000)).toEqual({ unit: 'minutes', amount: 1 });
+  });
+
+  it('prints the hour alone on its own day and with its day on any other', () => {
+    const due = new Date(2026, 8, 16, 17, 0).toISOString();
+    const sameDay = new Date(2026, 8, 16, 9, 0).getTime();
+    const dayBefore = new Date(2026, 8, 15, 21, 0).getTime();
+
+    expect(planHourInWords(due, sameDay, 'en-GB')).toBe('17:00');
+    expect(planHourInWords(due, dayBefore, 'en-GB')).toMatch(/16 Sept?.*17:00/);
+  });
+});
+
+describe('a long silence', () => {
+  it('counts the people the read marks and nobody else', () => {
+    expect(
+      quietCount([
+        participant({ quiet: true }),
+        participant({ quiet: false }),
+        participant({ quiet: true }),
+      ]),
+    ).toBe(2);
+    expect(quietCount([participant({ quiet: false })])).toBe(0);
+    expect(quietCount([])).toBe(0);
+  });
+
+  it('words the threshold in hours where it is whole hours and in minutes where it is not', () => {
+    expect(quietThresholdOf(3 * 3600)).toEqual({ unit: 'hours', amount: 3 });
+    expect(quietThresholdOf(90 * 60)).toEqual({ unit: 'minutes', amount: 90 });
+    expect(quietThresholdOf(600)).toEqual({ unit: 'minutes', amount: 10 });
+  });
+
+  it('has no threshold where the read sent none', () => {
+    expect(quietThresholdOf(null)).toBeNull();
+    expect(quietThresholdOf(undefined)).toBeNull();
+    expect(quietThresholdOf(0)).toBeNull();
+  });
+
+  it('sorts the longest silence first, and somebody never heard from ahead of everybody', () => {
+    const never = participant({ caverId: 'never', lastRecordedAt: null });
+    const morning = participant({ caverId: 'morning', lastRecordedAt: '2026-09-16T07:00:00Z' });
+    const justNow = participant({ caverId: 'now', lastRecordedAt: '2026-09-16T11:55:00Z' });
+
+    expect([justNow, never, morning].sort(byLastHeard).map((row) => row.caverId)).toEqual([
+      'never',
+      'morning',
+      'now',
+    ]);
+    expect(byLastHeard(morning, { ...morning })).toBe(0);
   });
 });

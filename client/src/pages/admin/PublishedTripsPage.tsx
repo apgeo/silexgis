@@ -7,6 +7,7 @@ import {
   Empty,
   Flex,
   Input,
+  InputNumber,
   Modal,
   Result,
   Select,
@@ -55,7 +56,16 @@ const sortByColumn: Record<string, PublishedLinkSort> = {
   tripDate: 'tripDate',
   createdAt: 'createdAt',
   expiresAt: 'expiresAt',
+  watchArmedAt: 'watchArmedAt',
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The longest stretch, in days, the server lets the list be asked about: ten years. The field is
+ * held to it so that a number the server would refuse is never sent.
+ */
+const MAX_ARMED_DAYS = 3650;
 
 /** What is waiting for somebody to say they mean it. */
 type Pending =
@@ -83,6 +93,17 @@ type Pending =
  * <b>A replaced link's address is shown once, in a dialog that a stray click cannot close.</b>
  * The server keeps a hash and nothing else; an address dismissed before it was copied is gone,
  * and the old one already answers nothing.
+ *
+ * <b>Tracking left running is shown, never closed from here.</b> Nothing closes a trip's tracking
+ * but a person, on purpose, so one that somebody forgot runs for ever: its party stays on the
+ * published page as still underground, or — once the link has run out — is in no public list at
+ * all. The page says when each was started and how long it has run, can be narrowed to those
+ * running longer than a number of days the reader chooses, and sends the reader to the trip's own
+ * tracking tab, where closing it is the coordinator's act with the coordinator's confirmation.
+ *
+ * <b>The address line is a mirror, not a setting.</b> It prints the address the server counted
+ * this very request under. Somebody who does not recognise it as their own has found a proxy
+ * count that is too low — which fails in no other visible way.
  */
 export default function PublishedTripsPage() {
   const { t, i18n } = useTranslation();
@@ -91,6 +112,7 @@ export default function PublishedTripsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [status, setStatus] = useState<PublishedLinkStatus | undefined>();
+  const [armedLongerThanDays, setArmedLongerThanDays] = useState<number | undefined>();
   const [sort, setSort] = useState<PublishedLinkSort | undefined>();
   const [descending, setDescending] = useState<boolean | undefined>();
   const [pending, setPending] = useState<Pending>(null);
@@ -102,7 +124,14 @@ export default function PublishedTripsPage() {
     protectedCaveWithinSurveyBounds: boolean;
   } | null>(null);
 
-  const links = usePublishedLinks({ page, pageSize, status, sort, descending });
+  const links = usePublishedLinks({
+    page,
+    pageSize,
+    status,
+    armedLongerThanDays,
+    sort,
+    descending,
+  });
   const replace = useReplaceTripTrackingShare();
   const revokeTrip = useRevokeTripPublishedLinks();
   const revokeEverything = useRevokeEveryPublishedLink();
@@ -208,6 +237,13 @@ export default function PublishedTripsPage() {
     0,
   );
   const anyWarned = (data?.items ?? []).some((item) => item.protectedCaveWithinSurveyBounds);
+  // Whole days between two instants the server gave: when the tracking was started, and the one
+  // moment every status in this answer was decided at. This browser's clock is not consulted.
+  const daysRunning = (armedAt: string) =>
+    data === undefined
+      ? 0
+      : Math.max(0, Math.floor((Date.parse(data.asOf) - Date.parse(armedAt)) / DAY_MS));
+  const longRunningLabel = t('publishedTrips.longRunning.label');
 
   const onTableChange: TableProps<PublishedLink>['onChange'] = (pagination, _filters, sorter) => {
     setPage(pagination.current ?? 1);
@@ -246,6 +282,22 @@ export default function PublishedTripsPage() {
         </Typography.Paragraph>
       )}
 
+      {data !== undefined && (
+        <Typography.Paragraph type="secondary" data-testid="published-trips-seen-from">
+          {data.seenFrom === null ? (
+            t('publishedTrips.seenFromUnknown')
+          ) : (
+            <>
+              {t('publishedTrips.seenFrom')}{' '}
+              <Typography.Text code data-testid="published-trips-seen-from-address">
+                {data.seenFrom}
+              </Typography.Text>{' '}
+              {t('publishedTrips.seenFromExplain')}
+            </>
+          )}
+        </Typography.Paragraph>
+      )}
+
       {/* The explanation in plain sight rather than only behind the tag: the tag says "look", and
           what it can and cannot have seen is the whole of what makes it safe to act on. */}
       {anyWarned && (
@@ -276,6 +328,32 @@ export default function PublishedTripsPage() {
             }))}
             data-testid="published-trips-status-filter"
           />
+          <Space size={4}>
+            <Typography.Text>{longRunningLabel}</Typography.Text>
+            <InputNumber
+              min={0}
+              max={MAX_ARMED_DAYS}
+              precision={0}
+              style={{ width: 96 }}
+              placeholder={t('publishedTrips.longRunning.any')}
+              aria-label={longRunningLabel}
+              value={armedLongerThanDays ?? null}
+              onChange={(value) => {
+                // Emptied is "no such question". A number the server would refuse is not sent:
+                // the field holds it back to its bounds when it is left.
+                if (value === null) setArmedLongerThanDays(undefined);
+                else if (
+                  Number.isInteger(value) &&
+                  value >= 0 &&
+                  value <= MAX_ARMED_DAYS
+                )
+                  setArmedLongerThanDays(value);
+                else return;
+                setPage(1);
+              }}
+              data-testid="published-trips-long-running-filter"
+            />
+          </Space>
           <Button onClick={() => void links.refetch()} loading={links.isFetching && !!data}>
             {t('publishedTrips.refresh')}
           </Button>
@@ -304,9 +382,13 @@ export default function PublishedTripsPage() {
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
-                status === undefined
-                  ? t('publishedTrips.empty')
-                  : t('publishedTrips.emptyFiltered')
+                armedLongerThanDays !== undefined
+                  ? status === undefined
+                    ? t('publishedTrips.emptyLongRunning')
+                    : t('publishedTrips.emptyBoth')
+                  : status === undefined
+                    ? t('publishedTrips.empty')
+                    : t('publishedTrips.emptyFiltered')
               }
             />
           ),
@@ -396,6 +478,59 @@ export default function PublishedTripsPage() {
               link.revokedAt === null
                 ? moment(link.expiresAt)
                 : t('publishedTrips.revokedAt', { when: moment(link.revokedAt) }),
+          },
+          {
+            title: (
+              <Tooltip title={t('publishedTrips.columns.watchArmedAtHelp')}>
+                <span>{t('publishedTrips.columns.watchArmedAt')}</span>
+              </Tooltip>
+            ),
+            key: 'watchArmedAt',
+            sorter: true,
+            render: (_: unknown, link) => {
+              if (link.watchArmedAt === null) {
+                return (
+                  <Typography.Text type="secondary">
+                    {t('publishedTrips.watch.unknown')}
+                  </Typography.Text>
+                );
+              }
+              if (link.watchState !== 'armed') {
+                // Over: when it was started is history, and there is nothing left to close.
+                return (
+                  <Flex vertical>
+                    <Typography.Text type="secondary">{moment(link.watchArmedAt)}</Typography.Text>
+                    {link.watchClosedAt !== null && (
+                      <Typography.Text type="secondary">
+                        {t('publishedTrips.watch.closed', { when: moment(link.watchClosedAt) })}
+                      </Typography.Text>
+                    )}
+                  </Flex>
+                );
+              }
+              return (
+                <Flex vertical data-testid={`published-trips-running-${link.id}`}>
+                  <span>{moment(link.watchArmedAt)}</span>
+                  <span>
+                    {t('publishedTrips.watch.running', { days: daysRunning(link.watchArmedAt) })}
+                  </span>
+                  {/* Running with a link that ran out: followed by nobody and in no list of past
+                      trips either, which is exactly the tracking nobody notices was left on. */}
+                  {link.status === 'lapsed' && (
+                    <Typography.Text type="warning">
+                      {t('publishedTrips.watch.runningLapsed')}
+                    </Typography.Text>
+                  )}
+                  {/* Closing is done where the coordinator does it, with what that asks. */}
+                  <Link
+                    to={`/trip-logs/${link.tripLogId}?tab=tracking`}
+                    data-testid={`published-trips-watch-${link.id}`}
+                  >
+                    {t('publishedTrips.watch.open')}
+                  </Link>
+                </Flex>
+              );
+            },
           },
           {
             title: (

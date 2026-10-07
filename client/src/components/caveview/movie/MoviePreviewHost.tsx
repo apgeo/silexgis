@@ -10,6 +10,7 @@ import {
   type CaveViewUi,
   type Cv2Namespace,
 } from '../../../caveview/loadCaveView.ts';
+import { markerLabelTheme } from '../../../caveview/markerLabelTheme.ts';
 import { MOVIE_LABEL_SIZE_RANGE, type MovieSettings } from '../../../caveview/movie/movieSettings.ts';
 import { applyMovieMarkerLabels, applyMovieView, turnToMovieView } from '../../../caveview/movie/movieView.ts';
 import { releaseWebGlContext } from '../../../caveview/releaseWebGlContext.ts';
@@ -82,22 +83,10 @@ type Status = 'loading' | 'ready' | 'error';
 
 /**
  * How a caver's label is drawn in a movie, set on the preview's viewer when it is made — and so on
- * every frame recorded from it.
- *
- * The viewer's own labels derive their plate from the background: over the movie's black scene
- * that is a light grey plate at 60 % opacity with black writing on it, and the first line of each
- * label, drawn in the marker's own colour, is then orange or pink or teal on mid grey — hard to read
- * in a small file. With the plate turned off the writing stays black, and the names under a team's
- * heading vanish into the black scene. A dark plate with white writing reads either way: the
- * coloured first lines stand out on it, and without it white writing stands out on black.
+ * every frame recorded from it: white writing on a dark plate, which reads in a small file whether
+ * the reader keeps the plate or turns it off.
  */
-const MOVIE_LABEL_THEME = {
-  liveMarkers: {
-    labelBackground: '#141414',
-    labelText: '#ffffff',
-    labelBackgroundOpacity: 0.8,
-  },
-} as const;
+const MOVIE_LABEL_THEME = markerLabelTheme('dark');
 
 /** What the viewer showed when its model loaded, kept off React state: an engine is not a value. */
 interface Loaded {

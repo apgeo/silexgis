@@ -59,6 +59,30 @@ datele ei și *Rapoarte: N*. Bifați-le pe cele pe care le arată filmul.
   acea clipă, așa că rapoartele sosite între timp sunt în fișier. Dacă jurnalul nu poate fi citit
   atunci, nu se exportă nimic și dialogul spune *„Jurnalul nu a putut fi citit"*; apăsați din nou **Exportă**.
 
+### Cine apare
+
+Sub fiecare tură bifată, după ce a fost citită, un rând spune *„Cine apare: N din M"*. Apăsați-l
+pentru a desface lista participanților turei, toți bifați, și debifați oamenii pe care acest film
+nu trebuie să îi arate.
+
+- Cine este debifat **nu are marcaj și nici traseu**, iar **o notă spusă de acea persoană nu este
+  scrisă peste imagine** — ultima notă arătată este atunci ultima spusă de cineva care este în film.
+- **Nici rapoartele acelei persoane nu dau ritmul filmului.** Cu **Scurtează perioadele
+  liniștite** pornit, ceasul încetinește în jurul fiecărui raport și sare peste orele dintre ele;
+  o face numai la rapoartele celor care apar, așa că nimic din fișier nu marchează clipa în care
+  a fost raportat cineva lăsat deoparte. De aceea, scoaterea cuiva poate schimba cât durează
+  fiecare perioadă și factorul de accelerare.
+- **Cine nu mai este printre participanții turei** — scos din tură după ce i-au fost înregistrate
+  rapoartele — nu este în listă, nu are marcaj, iar o notă spusă de acea persoană nu este scrisă
+  niciodată peste imagine.
+- Nimeni altcineva nu se schimbă: turele și echipele își păstrează culorile și rândurile din
+  legendă. O etichetă nu se lungește niciodată din cauza cuiva care nu este arătat — două persoane
+  pe nume Ana sunt deosebite printr-o inițială numai cât timp amândouă sunt în film.
+- Aceeași persoană aflată în două ture se bifează separat la fiecare tură.
+- **Alegerea este numai pentru acest film.** Nu este reținută odată cu setările și nu este
+  păstrată nicăieri: închideți dialogul, sau debifați tura și bifați-o din nou, și toată lumea
+  este înapoi.
+
 Cu mai multe ture, **Mai multe ture** (sub *Mișcare*) decide cum împart ele filmul:
 
 | Alegere | Ce obțineți | Ceasul arată |
@@ -82,6 +106,23 @@ Ce arată previzualizarea este ce va conține fișierul: aceleași straturi, eti
   **Revino la ea** pune camera la loc.
 - Cursorul, **Momentul din film**, arată orice moment al lui. **Redă previzualizarea** rulează
   filmul în timp real, cu tot cu rotirea camerei.
+- **Salvează acest moment ca imagine** — butonul cu aparat foto de lângă redare — salvează
+  momentul pe care stă cursorul ca PNG, la dimensiunea cadrului filmului. Este cadrul pe care îl
+  are filmul în acel moment: aceleași persoane, etichete, texte și legendă, cu camera rotită cât
+  s-a rotit filmul până atunci. Nu se face niciun film pentru ea și nu se încarcă nimic. Vedeți
+  [Numele fișierului](#numele-fișierului) pentru cum se numește.
+
+**Taste.** Faceți clic pe previzualizare, sau ajungeți la ea ori la cursor cu Tab — un contur în
+jurul previzualizării arată când tastele sunt ale ei — și:
+
+| Tastă | Ce face |
+|---|---|
+| **Spațiu** | Redă previzualizarea și o oprește |
+| **Home**, **End** | Duc la primul și la ultimul moment al filmului |
+| **← →** pe cursor | Un cadru înapoi sau înainte |
+
+Tastele nu fac nimic cât rulează un export. Pe un buton, Spațiu apasă acel buton, iar în caseta
+titlului scrie un spațiu, ca peste tot.
 
 ---
 
@@ -91,6 +132,18 @@ Dialogul se deschide pe un film mic și prudent: un GIF, 640 × 360, 10 cadre pe
 secunde și 2 secunde de imagine fixă la sfârșit, modelul rotindu-se cu 6° pe secundă. Setările
 dumneavoastră sunt **ținute minte în acest browser** pentru următorul film — toate, mai puțin
 titlul pe care l-ați scris, care nu este stocat niciodată.
+
+**Presetările** stau deasupra grupurilor, pentru un fișier făcut dintr-o apăsare:
+
+| Presetare | Ce stabilește |
+|---|---|
+| **Pentru chat** | Un GIF, 480 × 270, 10 cadre pe secundă, 15 secunde, calitate medie — destul de mic pentru a fi trimis într-un mesaj |
+| **Video HD** | 1280 × 720, 30 de cadre pe secundă, calitate ridicată, ca **MP4** unde browserul îl poate scrie și ca **WebM** unde nu. Unde nu poate scrie niciunul, nu se schimbă nimic și dialogul o spune |
+
+O presetare schimbă **doar fișierul** — setările grupului *Fișier*. Cine este etichetat și cum, ce
+se vede din model și ce texte se scriu sunt ale dumneavoastră și nu sunt atinse niciodată de o
+presetare. Turele bifate și persoanele lăsate deoparte nu sunt setări și rămân, atât după o
+presetare, cât și după o revenire la valorile implicite.
 
 | Grup | Setare | Ce decide |
 |---|---|---|
@@ -107,13 +160,40 @@ titlul pe care l-ați scris, care nu este stocat niciodată.
 | | **Culoarea marcajelor** | Automat (după echipă pentru o tură, după tură pentru mai multe), după tură, după echipă sau o singură culoare |
 | | **Arată speologii care au ieșit** | Dacă cineva raportat ca ieșit rămâne în imagine |
 | | **Traseul parcurs** | O linie în urma fiecărui marcaj |
-| **Vedere** | Straturile ridicării, **Colorare**, **Cameră**, **Grosimea liniilor**, **Scara verticală** | Ce se desenează din ridicare și cum. Un strat pe care ridicarea nu îl are este gri; colorările după adâncime au nevoie de o ridicare care stă pe teren real |
-| **Texte** | **Titlu**, **Ceas**, **Legendă**, **Bară de progres**, **Ultima notă**, **Mărimea textelor** | Ce se scrie peste imagine |
+| **Vedere** | Straturile ridicării, **Relieful de deasupra peșterii**, **Colorare**, **Cameră**, **Grosimea liniilor**, **Scara verticală** | Ce se desenează din ridicare și cum. Un strat pe care ridicarea nu îl are este gri; colorările după adâncime au nevoie de o ridicare care stă pe teren real |
+| **Texte** | **Titlu**, **Ceas**, **Factor de accelerare**, **Legendă**, **Bară de progres**, **Ultima notă**, **Mărimea textelor** | Ce se scrie peste imagine |
+
+**Revino la valorile implicite** stă sub presetări și nu este una dintre ele: readuce *fiecare*
+setare la ce arată o primă deschidere — textele, etichetele și vederea, nu doar fișierul, și
+titlul pe care l-ați scris. Dacă ați oprit **Titlul**, el revine, și odată cu el fișierul numit
+după tură sau după peșteră; aceleași valori sunt cele pe care se deschide filmul următor. Turele
+bifate și persoanele lăsate deoparte rămân cum sunt.
+
+**Factorul de accelerare.** După ceas, filmul spune de câte ori mai repede decât în realitate
+rulează — *„12 sept. 2026, 14:05 · ×240"* — astfel încât cine primește fișierul știe că un minut
+din el înseamnă patru ore din tură. Cifra este rotunjită (la cea mai apropiată zece de la o sută
+în sus, la un număr întreg de la zece în sus) și este ritmul a ceea ce se vede: acolo unde
+**Scurtează perioadele liniștite** a scurtat o perioadă, ceasul sare, iar saltul nu este socotit
+drept viteză. Un film care rulează aproximativ în ritmul în care s-au petrecut lucrurile nu poartă
+nicio cifră. Face parte din textul ceasului, deci oprirea **Ceasului** o scoate și pe ea. Pe un
+cadru mic sau îngust, sau cu o **Mărime a textelor** mare, ceasul și cifra pot să nu încapă
+amândouă; cifra este atunci lăsată deoparte întreagă, nu tăiată, iar previzualizarea o arată.
 
 **Culorile marcajelor.** Sunt douăsprezece. Un film cu mai mult de douăsprezece ture colorate
 după tură — sau cu mai mult de unsprezece echipe colorate după echipă — le refolosește în aceeași
 ordine, iar legenda poartă atunci o linie care o spune: *„Culorile turelor se repetă"* sau
 *„Culorile echipelor se repetă"*.
+
+**Relieful de deasupra peșterii.** Unele fișiere de ridicare conțin, pe lângă galerii, și
+suprafața de deasupra peșterii. **Relieful de deasupra peșterii**, sub *Vedere*, desenează acea
+suprafață în film. **Este oprit la început și rămâne oprit până îl porniți**: galeriile desenate
+singure sunt o formă, dar o peșteră desenată sub dealurile ei poate fi așezată pe hartă de oricine
+primește fișierul — același motiv pentru care busola și afișajul de altitudine pornesc oprite.
+Comutatorul este oferit numai pentru o ridicare al cărei fișier își conține propriul relief;
+pentru oricare alta este gri și spune *„Fișierul acestui model nu conține relief propriu, deci
+nu este nimic de desenat."* Planul neted pe care vizualizatorul 3D îl poate așeza sub o
+ridicare nu este relief și nu este desenat niciodată într-un film. Ca restul vederii, alegerea
+este ținută minte în acest browser, iar o presetare nu o atinge.
 
 ---
 
@@ -160,7 +240,9 @@ Merită deci să știți ce se află în el.
 | **Numele stațiilor**, **Comentariile stațiilor** | Oprite | — |
 | **Ultima notă** — text liber scris de cineva odată cu un raport | Oprită, fiindcă *„Notele sunt text liber și pot conține detalii de siguranță"* | — |
 | **Busola și afișajul de altitudine** | Oprite. Pornite, ele *„scriu altitudini și un azimut în fiecare cadru"* | — |
+| **Suprafața de deasupra peșterii** — dealuri, văi și locul intrărilor printre ele, acolo unde fișierul ridicării își conține relieful | Oprită. Pornită, peștera este desenată sub propriul ei peisaj, pe care cineva care cunoaște zona îl poate recunoaște | — lăsați **Relieful de deasupra peșterii** oprit. Alegerea este ținută minte, deci priviți previzualizarea înainte de a trimite un film făcut după unul care îl avea pornit |
 | **Numele fișierului** | Urmează titlul — vedeți mai jos | **Titlu** oprit |
+| **O persoană** — marcajul ei, traseul ei, o notă spusă de ea | Toți participanții fiecărei ture bifate | Debifați-o sub [Cine apare](#cine-apare) |
 
 O poziție care vă este ascunsă nu desenează niciun marcaj în film, din același motiv pentru care
 nu desenează niciunul pe panoul ridicării din tură.
@@ -183,13 +265,18 @@ literă sau cifră, și tăiate la 60 de caractere. Data este ziua în care a fo
 calendarul dumneavoastră. Fișierul este salvat exact sub numele arătat când ați apăsat
 **Exportă**.
 
+O imagine salvată din previzualizare este numită după aceeași regulă, cu terminația `.png` — așa
+că, având textul „Titlu" oprit, nici ea nu spune nimic despre care tură sau care peșteră.
+
 ### Un film care spune mai puțin
 
 Opriți **Titlu**, puneți **Etichetele speologilor** pe *Inițiale* sau *Fără etichete*, opriți
 **Ora ultimului raport în etichetă**, opriți **Legendă**, alegeți **Una lângă alta** sau opriți
-**Ceas** și debifați **Numele intrărilor**.
+**Ceas**, debifați **Numele intrărilor** și lăsați **Relieful de deasupra peșterii** oprit. Sub
+[Cine apare](#cine-apare), debifați pe oricine nu trebuie să apară deloc.
 Fișierul se numește atunci `silexgis-movie-<data>` și arată marcaje care se mișcă printr-o
 ridicare fără nume. Forma ridicării rămâne — un film nu poate ascunde peștera al cărei film este.
+O imagine salvată dintr-o astfel de previzualizare spune la fel de puțin și se numește la fel.
 
 ---
 

@@ -2,17 +2,19 @@
 namespace SilexGis.Domain.Import.TrackingCsv;
 
 /// <summary>
-/// How a name written on a tracking sheet is matched against the roster: by the given name, then
-/// by the given name and a surname initial, then by the whole name.
+/// How a name written on a tracking sheet is matched against the roster: by the whole name as the
+/// roster has it, then by the whole name in another order, then by a given name and a surname
+/// initial, then by an initial and a surname, then by the given name alone.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Why a ladder rather than one comparison.</b> A tracking sheet is written while somebody is
 /// on the phone. What gets typed is whatever is quickest and still unambiguous to the person
 /// typing: <c>Ion</c> when only one Ion is underground, <c>Ion P.</c> when two Ions are, and the
-/// whole name when the sheet is being written up properly afterwards. All three are the same
-/// person, and an importer that only understood the last of them would refuse most of a real
-/// sheet.
+/// whole name when the sheet is being written up properly afterwards — surname first as often as
+/// not, because that is how a register is kept, or as <c>I. Popescu</c>, because that is how a
+/// name is signed. All of them are the same person, and an importer that only understood the
+/// roster's own spelling would refuse most of a real sheet.
 /// </para>
 /// <para>
 /// <b>Narrowest rung wins, and a rung that answers with several people stops the walk.</b> The
@@ -37,8 +39,17 @@ public static class CaverNameLadder
         /// <summary>The whole name, as written, matched a whole name on the roster.</summary>
         FullName,
 
+        /// <summary>
+        /// The whole name, with its words in another order than the roster keeps them — "Popescu
+        /// Ion" for Ion Popescu — matched a whole name on the roster.
+        /// </summary>
+        FullNameAnyOrder,
+
         /// <summary>A given name and a surname initial — "Ion P." — matched one person.</summary>
         GivenNameAndInitial,
+
+        /// <summary>An initial and a whole surname — "I. Popescu" — matched one person.</summary>
+        InitialAndSurname,
 
         /// <summary>A given name alone matched exactly one person on the roster.</summary>
         GivenName,
@@ -88,9 +99,24 @@ public static class CaverNameLadder
             return [.. whole.Select(p => new Hit<T>(p.Key, p.Display, Rung.FullName))];
         }
 
+        // Rung two: the whole thing again, in whatever order its words were written. A register
+        // is kept surname first and a roster given name first, and both are the whole name. It
+        // comes after the rung above and never beside it: where one person is Ion Popescu and
+        // another Popescu Ion, each is found by their own spelling, and only a spelling that is
+        // neither's asks which of them was meant. One word has one order, so this starts at two.
+        if (asked.Length >= 2)
+        {
+            var sorted = Sorted(asked);
+            var reordered = people.Where(person => Sorted(person.Words).SequenceEqual(sorted)).ToList();
+            if (reordered.Count > 0)
+            {
+                return [.. reordered.Select(p => new Hit<T>(p.Key, p.Display, Rung.FullNameAnyOrder))];
+            }
+        }
+
         var given = asked[0];
 
-        // Rung two: a given name and an initial — "Ion P." Recognised by the written second word
+        // Rung three: a given name and an initial — "Ion P." Recognised by the written second word
         // being one letter once its punctuation is off, which is what the stop in "P." is: the
         // shared folder lowercases and removes diacritics and deliberately keeps everything else,
         // so the stop is still there to be dealt with here.
@@ -109,7 +135,27 @@ public static class CaverNameLadder
             }
         }
 
-        // Rung three: a given name alone, and only when the sheet wrote nothing else. A written
+        // Rung four: an initial and a surname — "I. Popescu". The mirror of the rung above, and
+        // told from it by which of the two words is the single letter, so one written name is
+        // never read both ways. The surname has to be the whole of the person's last word: an
+        // initial narrows a surname down to somebody, it does not stand in for one, and "I. Pop"
+        // is not Ion Popescu. Everybody the initial and the surname both fit is an answer — Ion
+        // and Ioana Popescu alike — and two answers are a question, as on every other rung.
+        if (asked.Length == 2 && asked[0].Length == 1 && asked[1].Length > 1)
+        {
+            var bySurname = people
+                .Where(person => person.Words.Length >= 2
+                    && person.Words[^1] == asked[1]
+                    && person.Words[0][0] == asked[0][0])
+                .ToList();
+
+            if (bySurname.Count > 0)
+            {
+                return [.. bySurname.Select(p => new Hit<T>(p.Key, p.Display, Rung.InitialAndSurname))];
+            }
+        }
+
+        // Rung five: a given name alone, and only when the sheet wrote nothing else. A written
         // "Ion Vasilescu" that matched nobody whole is not then matched on "Ion": the sheet was
         // specific and the roster disagreed, which is a name to report rather than to resolve.
         if (asked.Length == 1)
@@ -135,7 +181,9 @@ public static class CaverNameLadder
     /// list needs the stops. Here a stop is noise in two ways: it is what tells an initial apart
     /// from a word ("P." against "Popescu"), and a stray one typed after a surname would otherwise
     /// stop a whole name matching. Dropping it makes "Ion P.", "Ion P" and "ION p." one written
-    /// name, which is three ways a sheet writes the same thing.
+    /// name, which is three ways a sheet writes the same thing. A stop also ends a word, so that
+    /// "I.Popescu", typed without the space, is the two words it was meant as; no other mark
+    /// does, because a hyphen joins the halves of one name where a stop abbreviates one.
     /// </remarks>
     private static string[] Words(string? value)
     {
@@ -146,8 +194,16 @@ public static class CaverNameLadder
         }
 
         return [.. folded
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Split([' ', '.'], StringSplitOptions.RemoveEmptyEntries)
             .Select(word => new string([.. word.Where(char.IsLetterOrDigit)]))
             .Where(word => word.Length > 0)];
+    }
+
+    /// <summary>The words of a name in one fixed order, so two orders of one name compare equal.</summary>
+    private static string[] Sorted(string[] words)
+    {
+        var copy = (string[])words.Clone();
+        Array.Sort(copy, StringComparer.Ordinal);
+        return copy;
     }
 }

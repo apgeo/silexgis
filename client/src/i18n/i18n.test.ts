@@ -34,6 +34,7 @@ import type {
   TerrainDerivativeLayerInfo,
 } from '../api/hooks.ts';
 import { FEATURE_TYPE_GROUP_ORDER } from '../components/map/featureTypeGroups.ts';
+import { MOVIE_PRESETS } from '../caveview/movie/moviePresets.ts';
 import { MOVIE_VIEW_DIRECTIONS, MOVIE_VIEW_LAYERS } from '../caveview/movie/movieSettings.ts';
 import type { MovieProgress } from '../caveview/movie/movieRecorder.ts';
 import {
@@ -505,6 +506,8 @@ describe('i18n locales', () => {
       ['colourByHelp', MOVIE_COLOUR_BY],
       ['shadings', ['default', ...MOVIE_SHADINGS.map(({ id }) => id)]],
       ['groups', MOVIE_SETTINGS_GROUPS],
+      ['presets', MOVIE_PRESETS],
+      ['presetHelp', MOVIE_PRESETS],
       ['rotationModes', ['speed', 'fullTurn']],
       ['timelineModes', ['calendar', 'together']],
       ['timelineHelp', ['calendar', 'together']],

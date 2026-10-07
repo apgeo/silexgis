@@ -461,3 +461,40 @@ describe('copying a link to the moment on the clock', () => {
     expect(screen.getByTestId('public-past-links').querySelectorAll('button')).toHaveLength(2);
   });
 });
+
+describe('the camp a past trip was part of', () => {
+  const camp = { id: 'cccccccc-0000-0000-0000-000000000001', name: 'Summer camp 2019' };
+
+  it('is said under the trip\'s name where the server names one', () => {
+    render(
+      <PublicPastBar
+        playback={playback(everyMinute(20), { track: track({ expedition: camp }) })}
+        liveState="closed"
+        cavers={[]}
+      />,
+    );
+
+    expect(screen.getByTestId('public-past-banner-camp')).toHaveTextContent('Camp: Summer camp 2019');
+  });
+
+  it('is not said at all where the server names none', () => {
+    render(<PublicPastBar playback={playback(everyMinute(20))} liveState="closed" cavers={[]} />);
+
+    expect(screen.getByTestId('public-past-banner-what')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-past-banner-camp')).toBeNull();
+  });
+
+  it('is left out of a frame, whose strip is as tall as the drawing it stands over', () => {
+    render(
+      <PublicPastBar
+        playback={playback(everyMinute(20), { track: track({ expedition: camp }) })}
+        liveState="closed"
+        cavers={[]}
+        compact
+      />,
+    );
+
+    expect(screen.getByTestId('public-past-banner-what')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-past-banner-camp')).toBeNull();
+  });
+});

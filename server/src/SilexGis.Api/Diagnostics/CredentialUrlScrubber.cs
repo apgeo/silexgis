@@ -239,9 +239,22 @@ public static class CredentialUrlScrubber
     /// has never seen, including one minted by a surface that does not exist yet, so it hashes the
     /// segment it was given and asks nothing about where it came from.
     /// </remarks>
-    private static string Handle(string credential)
+    private static string Handle(string credential) => $"{HandlePrefix}{HandleOf(credential)}]";
+
+    /// <summary>
+    /// The bare handle of one credential: the characters between the brackets of what
+    /// <see cref="Scrub"/> writes in its place.
+    /// </summary>
+    /// <remarks>
+    /// For a diagnostic that has to name a link and is not an address — it has the token in hand
+    /// rather than a URL to take it out of. Asking here, rather than hashing where the diagnostic
+    /// is written, is what keeps its handle and the request log's the same handle: a second
+    /// spelling of "how many characters of which hash" is how the two would come to name one link
+    /// two ways. The value is a prefix of a one-way hash and opens nothing.
+    /// </remarks>
+    public static string HandleOf(string credential)
     {
         var hash = Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(credential)));
-        return $"{HandlePrefix}{hash[..HandleLength]}]";
+        return hash[..HandleLength];
     }
 }

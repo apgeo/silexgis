@@ -14,6 +14,7 @@ import {
   type CaveViewUi,
   type CaveViewer,
 } from '../../caveview/loadCaveView.ts';
+import { markerLabelTheme, type MarkerLabelPlate } from '../../caveview/markerLabelTheme.ts';
 import { modelDeliveryIdentity } from '../../caveview/modelDelivery.ts';
 import {
   focusForRef,
@@ -22,6 +23,7 @@ import {
   pathOf,
   type PickedModelPart,
 } from '../../caveview/modelParts.ts';
+import { declaredPartsView, type DeclaredPartsView } from '../../caveview/declaredParts.ts';
 import { noStationsMissing, stationsNotOnModel } from '../../caveview/placedOnModel.ts';
 import { mediaForStation } from '../../caveview/stationMedia.ts';
 import {
@@ -110,6 +112,15 @@ export interface CaveViewPanelProps {
    */
   trackedCavers?: readonly TrackedCaver[];
   /**
+   * How long ago a moment on a tracked person's card was, worded by the caller — passed straight
+   * to the list over the model, which then prints the gap and keeps the clock reading as a title.
+   *
+   * The panel reads no clock and rounds nothing: a page that words its moments as gaps does so by
+   * one rule and from one instant per render, and it is that page which answers here. Absent,
+   * the card prints clock readings, which is what every surface without such a page wants.
+   */
+  trackedMomentInWords?: (iso: string) => string | null;
+  /**
    * How long a marker takes to move to its next station, in milliseconds; 0 places it.
    *
    * <b>A replay decides this, the live watch does not.</b> The viewer's own slide is right for a
@@ -142,6 +153,25 @@ export interface CaveViewPanelProps {
    * against a drawing nobody is looking at.
    */
   onUnplacedStationsChange?: (stations: ReadonlySet<string>) => void;
+  /**
+   * The parts of the cave a tracking watch declared — starts of survey or station names — when
+   * the caller wants to know what this drawing makes of them. Absent or empty, nothing is asked.
+   */
+  declaredParts?: readonly string[];
+  /**
+   * Whether every survey that holds nothing declared is taken off the drawing.
+   *
+   * Acted on only when the drawing answers to every declared entry: narrowing the picture by half
+   * a declaration would hide passage the party said it was going to. Only the surveys this switch
+   * hid are shown again when it is turned off — whatever else was hidden stays hidden.
+   */
+  onlyDeclaredParts?: boolean;
+  /**
+   * Told what the loaded drawing makes of `declaredParts`: which surveys lie outside them and
+   * which entries it has no survey for. Null while there is no drawing to ask, and again as this
+   * panel goes off the screen.
+   */
+  onDeclaredPartsView?: (view: DeclaredPartsView | null) => void;
   /**
    * Told every station of the drawing once it is parsed — the index a station typeahead
    * offers, in the viewer's own spelling, the same one every anchor stores.
@@ -187,6 +217,16 @@ export interface CaveViewPanelProps {
    * the model is loaded again, which is the same contract the `home` option has.
    */
   crsLookup?: (code: string) => Promise<string | null>;
+  /**
+   * The plate behind each marker's label: `derived`, the viewer's own, worked out from the scene's
+   * background — or `dark`, white writing on a near-black plate, as a movie of a trip draws them.
+   * Left out, it is `derived`, and the viewer is built with exactly the options it is built with
+   * when this is not named at all.
+   *
+   * Read once, when the viewer is built, like the lookup above: the viewer takes its colours when it
+   * is made, so a change afterwards changes nothing until the model is loaded again.
+   */
+  markerLabels?: MarkerLabelPlate;
   /**
    * A place to fly the camera to, asked for from outside. See {@link CaveViewFocusRequest}.
    */
@@ -320,12 +360,17 @@ export default function CaveViewPanel({
   onPartPick,
   surveyModelId,
   trackedCavers,
+  trackedMomentInWords,
   markerMoveMs,
   onUnplacedStationsChange,
+  declaredParts,
+  onlyDeclaredParts = false,
+  onDeclaredPartsView,
   onStationsLoaded,
   toolbar = false,
   stationMedia,
   crsLookup,
+  markerLabels = 'derived',
   focusRequest,
   compare,
 }: CaveViewPanelProps) {
@@ -470,6 +515,8 @@ export default function CaveViewPanel({
   // fresh closure, which is what the callbacks above already ride a ref to avoid.
   const crsLookupRef = useRef(crsLookup);
   crsLookupRef.current = crsLookup;
+  const markerLabelsRef = useRef(markerLabels);
+  markerLabelsRef.current = markerLabels;
   // Read off a ref at the moment a viewer is built, like the lookup above: a language switched
   // while a model is open is not a reason to rebuild the viewer and reload the model.
   const languageRef = useRef(i18n.language);
@@ -558,10 +605,13 @@ export default function CaveViewPanel({
       // Built with what every viewer here is built with — see `caveViewerOptions` for why none of
       // it is this component's to choose. A caller with no account cannot reach this installation's
       // coordinate-system registry and supplies a lookup of its own; see the prop.
-      const viewer = new cv2.CaveViewer(
-        containerIdRef.current!,
-        caveViewerOptions(languageRef.current, crsLookupRef.current),
-      );
+      // The labels' plate is the one thing a caller may choose, and a caller that chooses nothing
+      // adds no option at all.
+      const labelTheme = markerLabelTheme(markerLabelsRef.current);
+      const viewer = new cv2.CaveViewer(containerIdRef.current!, {
+        ...caveViewerOptions(languageRef.current, crsLookupRef.current),
+        ...(labelTheme === undefined ? {} : { theme: labelTheme }),
+      });
       viewer.addEventListener('newCave', () => {
         if (disposed) return;
         setStatus('ready');
@@ -859,6 +909,51 @@ export default function CaveViewPanel({
     onUnplacedRef.current?.(unplacedStations);
   }, [unplacedStations]);
   useEffect(() => () => onUnplacedRef.current?.(noStationsMissing), []);
+
+  // ---- Narrowing the drawing to the parts a watch declared ----
+  //
+  // Asked of the parsed survey each time there is one, because which surveys a drawing has is a
+  // fact about that file and a new viewer is built for every file. What this hid is remembered
+  // against the viewer it was hidden on: a viewer built since starts with everything drawn, so
+  // nothing recorded for an earlier one is shown "again" on it.
+  const onDeclaredViewRef = useRef(onDeclaredPartsView);
+  onDeclaredViewRef.current = onDeclaredPartsView;
+  const hiddenForDeclarationRef = useRef<{
+    viewer: CaveViewer;
+    refs: readonly (readonly string[])[];
+  } | null>(null);
+  useEffect(() => {
+    const viewer = viewerRef.current?.viewer;
+    if (status !== 'ready' || viewer === undefined) {
+      onDeclaredViewRef.current?.(null);
+      return;
+    }
+    const view =
+      declaredParts === undefined || declaredParts.length === 0
+        ? null
+        : declaredPartsView(viewer.getSurveyTree(), declaredParts);
+    onDeclaredViewRef.current?.(view);
+
+    const want = onlyDeclaredParts && view !== null && view.unmatched.length === 0 ? view.hide : [];
+    const before =
+      hiddenForDeclarationRef.current?.viewer === viewer ? hiddenForDeclarationRef.current.refs : [];
+    const keyOf = (ref: readonly string[]) => JSON.stringify(ref);
+    const wanted = new Set(want.map(keyOf));
+    const had = new Set(before.map(keyOf));
+    // Only what differs is touched: every call redraws the model.
+    for (const ref of before) {
+      if (!wanted.has(keyOf(ref))) {
+        viewer.setSectionVisible(ref, true);
+      }
+    }
+    for (const ref of want) {
+      if (!had.has(keyOf(ref))) {
+        viewer.setSectionVisible(ref, false);
+      }
+    }
+    hiddenForDeclarationRef.current = { viewer, refs: want };
+  }, [status, modelLoads, declaredParts, onlyDeclaredParts]);
+  useEffect(() => () => onDeclaredViewRef.current?.(null), []);
 
   // ---- Whether the markers say who they are ----
   //
@@ -1203,6 +1298,7 @@ export default function CaveViewPanel({
           shown={shownPlace}
           onShow={setShownPlace}
           raised={toolbarWanted && toolbarPlacement === 'bottom'}
+          momentInWords={trackedMomentInWords}
         />
       )}
       {openedPictures !== null

@@ -41,6 +41,51 @@ export interface PublicTripPartyGroup<T> {
   members: T[];
 }
 
+/** The trips of one camp, or the gathering of the trips that belong to none. */
+export interface PublicTripCampGroup<T> {
+  /** Null for the trips of no camp; the page names that group in its own language. */
+  camp: { id: string; name: string } | null;
+  trips: T[];
+}
+
+/**
+ * A cave's trips arranged by the camp each was part of, with the trips of no camp gathered last.
+ *
+ * <b>Nothing is reordered that the server ordered.</b> The camps stand in the order their first
+ * trip arrives in and each camp's trips keep the order they arrived in, so a list sent newest
+ * first reads newest camp first and newest trip first inside it. Trips are matched to a camp by
+ * its identifier and never by its name: two summers' camps may well share one.
+ *
+ * <b>A list that names no camp at all is one group with no name</b>, which a caller draws as the
+ * plain list it always was — a heading that said "other trips" over every trip of the cave would
+ * be a heading about nothing. That is also what makes this safe against a server that stops
+ * sending the camp: the arrangement simply is not there.
+ */
+export function tripsByCamp<
+  T extends { expedition?: { id: string; name: string } | null },
+>(trips: readonly T[]): PublicTripCampGroup<T>[] {
+  const camps = new Map<string, PublicTripCampGroup<T>>();
+  const loose: T[] = [];
+  for (const trip of trips) {
+    const camp = trip.expedition ?? null;
+    if (camp === null) {
+      loose.push(trip);
+      continue;
+    }
+    const group = camps.get(camp.id);
+    if (group === undefined) {
+      camps.set(camp.id, { camp: { id: camp.id, name: camp.name }, trips: [trip] });
+    } else {
+      group.trips.push(trip);
+    }
+  }
+  const groups = [...camps.values()];
+  if (loose.length > 0) {
+    groups.push({ camp: null, trips: loose });
+  }
+  return groups;
+}
+
 /**
  * The party arranged the way it was organised: by team, with everybody on no team gathered at the
  * end.

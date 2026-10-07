@@ -142,7 +142,79 @@ public sealed record TrackingParticipantDto(
     /// set than that: only to somebody who may read this trip.
     /// </para>
     /// </remarks>
-    string? PublishedAs);
+    string? PublishedAs,
+    /// <summary>
+    /// Whether the trip still names this person. False for somebody who is listed here only
+    /// because the watch's log holds reports about them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The party is everybody the trip names <em>and</em> everybody its log speaks of. The two part
+    /// company when somebody is taken off a finished trip's roster after having been reported on:
+    /// their reports stay in the log, and a table that listed only the roster would count one
+    /// person fewer than the log printed beneath it accounts for.
+    /// </para>
+    /// <para>
+    /// <b>What false changes.</b> No report and no caption is taken for somebody the trip does not
+    /// name, so a surface offers neither. <see cref="Label"/> and <see cref="PublishedAs"/> are null
+    /// for them whatever is stored: a published page counts its party from the roster and shows
+    /// this person no longer, so a field saying what it would call them would describe nothing.
+    /// </para>
+    /// </remarks>
+    bool OnRoster,
+    /// <summary>
+    /// The person's name, sent only for somebody the trip no longer names
+    /// (<see cref="OnRoster"/> false); null for everybody on the roster.
+    /// </summary>
+    /// <remarks>
+    /// Everybody on the roster is named by the trip itself, which every reader of this watch has
+    /// already read, so repeating those names here would be a second copy that could disagree with
+    /// the first. Somebody off the roster is named by nothing the reader holds, and a row that
+    /// could only say "somebody" beside a place in a cave is the least useful thing this read could
+    /// send. It is the label every signed-in surface shows that person under, resolved by the same
+    /// rule and for the same caller, so it tells nobody a name they could not already read.
+    /// </remarks>
+    string? Name,
+    /// <summary>
+    /// True when this person is underground by the log and nothing at all has been heard about
+    /// them for longer than the installation's threshold, on a watch that is running.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>A mark for whoever is reading this, and nothing else.</b> It is worked out at the moment
+    /// of the read against the server's own clock and stored nowhere. Nothing is sent, raised or
+    /// stood down because of it; the trip's overdue callout neither reads it nor is read by it.
+    /// </para>
+    /// <para>
+    /// Always false for somebody who is out, for somebody never heard from, on a watch that is not
+    /// running, and on an installation that has switched the mark off. It says nothing of where
+    /// anybody is — it is a reading of <see cref="LastRecordedAt"/>, which every reader of the
+    /// trip is sent whether or not the place beside it is withheld — so it is answered the same
+    /// for every reader.
+    /// </para>
+    /// </remarks>
+    bool Quiet,
+    /// <summary>
+    /// True when the place this person was last reported at is known to lie outside the parts of
+    /// the cave the watch declared — somewhere the party did not say it was going.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The declaration is the watch's own list of survey parts (<c>depthFilter</c> on the state),
+    /// and the comparison is the one a reported depth is resolved by. False where nothing was
+    /// declared, where the place was measured on a survey the watch has since left, and where the
+    /// survey no longer holds that station: the mark says "known to be elsewhere" and is not
+    /// raised on a guess.
+    /// </para>
+    /// <para>
+    /// <b>Said only beside a place that is being told.</b> It is false whenever
+    /// <see cref="StationName"/> is withheld, and whenever the declaration itself is — either
+    /// would otherwise tell a reader one fact about station names they were refused. It is a word
+    /// on a row for the people running the watch: nothing is sent or raised because of it, and no
+    /// published page carries it.
+    /// </para>
+    /// </remarks>
+    bool OutsideDeclaredParts);
 
 public sealed record TrackingStateDto(
     TripTrackingState State,
@@ -229,7 +301,19 @@ public sealed record TrackingStateDto(
     /// </remarks>
     DateTimeOffset? PublishedUntil,
     IReadOnlyList<TrackingTeamDto> Teams,
-    IReadOnlyList<TrackingParticipantDto> Participants);
+    IReadOnlyList<TrackingParticipantDto> Participants,
+    /// <summary>
+    /// After how many seconds without a report somebody underground is marked as not heard from,
+    /// or null when nobody can be: the watch is not running, or the installation has switched the
+    /// mark off.
+    /// </summary>
+    /// <remarks>
+    /// Sent so that a surface can say what its mark means ("no word for over 3 h") in the
+    /// installation's own number rather than a guessed one, and can leave the whole subject out
+    /// where it does not apply. Which people are marked is <c>quiet</c> on each of them, decided
+    /// here; a surface does not work it out again from this number and its own clock.
+    /// </remarks>
+    int? QuietAfterSeconds);
 
 /// <summary>One report of the log, or the answer to recording or correcting one.</summary>
 /// <param name="DepthPlacement">
@@ -238,6 +322,20 @@ public sealed record TrackingStateDto(
 /// depth, and on a read of the log, which does not keep how a station was arrived at. It is there
 /// because a declaration whose station the model lacks is passed over and measured instead, and a
 /// person who picked a declared place would otherwise never learn that the log holds something else.
+/// </param>
+/// <param name="Corrected">
+/// Whether the report has been changed since it was first written down — corrected in place,
+/// replaced by a sheet, or moved to another roster entry. A yes or a no: when and by whom is not
+/// said here. It is on the signed-in log only; nothing a visitor without an account reads carries
+/// it. It says nothing of where anybody was, so it is answered the same whether or not the place
+/// beside it is withheld.
+/// </param>
+/// <param name="OutsideDeclaredParts">
+/// Whether this report's station is known to lie outside the parts of the cave the watch declared.
+/// False where nothing is declared, where the report was measured on a survey the watch has since
+/// left, and wherever the place or the declaration is withheld from the caller — it rides the
+/// place's own branch. On the sheet import's "what is there now" it is not worked out and reads
+/// false. Signed-in log only.
 /// </param>
 public sealed record TrackingEventDto(
     Guid Id,
@@ -249,6 +347,8 @@ public sealed record TrackingEventDto(
     decimal? DepthEnteredM,
     string? Note,
     DateTimeOffset RecordedAt,
+    bool Corrected,
+    bool OutsideDeclaredParts,
     TrackingDepthPlacementOutcome? DepthPlacement = null);
 
 /// <summary>

@@ -351,9 +351,29 @@
   font-size: 0.78rem;
 }
 
-/* The parties being followed right now, above the archive's rows. Not buttons: a row here names a
-   party that is underground and says so, and this page draws the link's own trip, so there is
-   nothing a press could open. The same shape as an archive row, so the list reads as one list. */
+/* The archive gathered by camp. A heading the size of the rows' own text rather than of a page
+   heading: it sorts a list, and a cave with three camps must not read as three chapters. */
+.public-past-group + .public-past-group {
+  margin-top: 12px;
+}
+
+.public-past-group-heading {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.public-past-banner-camp {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+/* The parties being followed right now, in a section of their own above the archive. A row is not
+   itself a button, unlike an archive row: it carries something to read — who is still underground
+   — beside the one control that changes whom the drawing shows, and a whole row that did that
+   under a thumb scrolling past would do it by accident. The same shape as an archive row
+   otherwise, so the two lists read as one. */
 .public-live {
   margin-bottom: 12px;
 }
@@ -365,6 +385,9 @@
 
 .public-live-row {
   display: flex;
+  /* The marks and the control drop under the name where a phone has no room for them beside it,
+     rather than squeezing a cave's name into a column three letters wide. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -375,10 +398,39 @@
   border-radius: 8px;
 }
 
+.public-live-row > .public-past-row-main {
+  flex: 1 1 11rem;
+}
+
+/* The party the drawing above is showing, marked on the row as well as in words. */
+.public-live-row[aria-current='true'] {
+  border-color: var(--silexgis-public-accent);
+}
+
 .public-live-row-marks {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 4px;
+  max-width: 100%;
+}
+
+/* A control a finger has to land on, whatever size the library would have drawn it. */
+.public-live-watch {
+  min-height: 40px;
+}
+
+/* The statement that somebody other than this link's own party is on screen, and the way back. */
+.public-watch-banner-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.public-watch-banner-action {
+  margin-top: 2px;
 }
 
 .public-past-bar {
@@ -500,6 +552,22 @@
 .public-trip-embed-past {
   outline: 2px solid var(--silexgis-public-warning);
   outline-offset: -2px;
+}
+
+/* The same outline in another colour while the frame's reader is watching another party of the
+   cave: live, so not the colour of the past, and not the party the article around it is about. */
+.public-trip-embed-watch {
+  outline: 2px solid var(--silexgis-public-accent);
+  outline-offset: -2px;
+}
+
+/* Whose party is on screen, in the frame's one strip. Allowed to wrap and to take the row to
+   itself in a narrow frame, never cut short: the party's name is the whole of what it says. */
+.public-trip-embed-watch-what {
+  flex: 1 1 9rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
 }
 
 /* The archive's sheet belongs to the frame, not to the host page: without this it would be

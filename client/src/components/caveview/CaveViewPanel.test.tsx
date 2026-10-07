@@ -74,6 +74,18 @@ const getLiveMarkers = vi.fn(() => [...heldMarkers.values()]);
 const setLiveMarkerClusterLabel = vi.fn();
 const setStationMedia = vi.fn();
 const clearStationMedia = vi.fn();
+/**
+ * The surveys the fake drawing has, as the real viewer's tree hands them over, and every call that
+ * showed or hid one — which is the whole of what narrowing a drawing to declared parts does to it.
+ */
+type FakeNode = { name: string; children: FakeNode[]; isStation: () => boolean };
+const fakeSurvey = (name: string, ...children: FakeNode[]): FakeNode => ({
+  name,
+  children,
+  isStation: () => false,
+});
+let surveyTree: FakeNode = fakeSurvey('');
+const setSectionVisible = vi.fn((_ref: unknown, _visible: boolean) => true);
 const toolbarDispose = vi.fn();
 let lastToolbar: { container: unknown; options: unknown } | undefined;
 /** What the fake survey holds for enumeration; null fakes a build without the method. */
@@ -120,6 +132,8 @@ class FakeViewer {
   setLiveMarkerClusterLabel = setLiveMarkerClusterLabel;
   setStationMedia = setStationMedia;
   clearStationMedia = clearStationMedia;
+  getSurveyTree = () => surveyTree;
+  setSectionVisible = setSectionVisible;
   // Bound per instance exactly as the panel reads it, and absent — as an older vendored
   // build would have it — when the test says so.
   forEachStation = enumerableStations === null
@@ -197,6 +211,9 @@ const caver = (overrides: Partial<TrackedCaver> = {}): TrackedCaver => ({
   positionAt:
     'positionAt' in overrides ? (overrides.positionAt ?? null) : (overrides.lastRecordedAt ?? '2026-09-12T09:00:00Z'),
 });
+
+/** One declaration, held still: the panel reads a new list as a new declaration. */
+const DECLARED: readonly string[] = ['p.g'];
 
 /** Renders a panel and takes it to the state where the model is loaded. */
 async function renderReady(props: Partial<Parameters<typeof CaveViewPanel>[0]> = {}) {
@@ -311,6 +328,34 @@ describe('CaveViewPanel', () => {
     // unreachable — dropping either would leave every other test green.
     expect(lastViewerConfig!.home).toBe(CAVEVIEW_HOME);
     expect(typeof lastViewerConfig!.crsLookup).toBe('function');
+  });
+
+  it('builds the viewer with the labels’ own plate unless a caller asks for the dark one', async () => {
+    // Every screen that draws a party draws it through this panel and names no plate, so what a
+    // viewer is built with by default is what members and visitors see. Exactly these three
+    // options, and no theme: an option added to the default shows here.
+    const { unmount } = render(<CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" />);
+    await waitFor(() => expect(lastViewerConfig).toBeDefined());
+    expect(Object.keys(lastViewerConfig!).sort()).toEqual(['crsLookup', 'home', 'language']);
+    unmount();
+
+    // Named outright, the viewer's own plate is the same construction.
+    lastViewerConfig = undefined;
+    const derived = render(
+      <CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" markerLabels="derived" />,
+    );
+    await waitFor(() => expect(lastViewerConfig).toBeDefined());
+    expect(Object.keys(lastViewerConfig!).sort()).toEqual(['crsLookup', 'home', 'language']);
+    derived.unmount();
+
+    // Asked for, the dark plate is the one a movie of a trip is drawn with.
+    lastViewerConfig = undefined;
+    render(<CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" markerLabels="dark" />);
+    await waitFor(() => expect(lastViewerConfig).toBeDefined());
+    expect(lastViewerConfig!.theme).toEqual({
+      liveMarkers: { labelBackground: '#141414', labelText: '#ffffff', labelBackgroundOpacity: 0.8 },
+    });
+    expect(Object.keys(lastViewerConfig!).sort()).toEqual(['crsLookup', 'home', 'language', 'theme']);
   });
 
   it('builds the viewer in the language the interface is in, and builds no other when that changes', async () => {
@@ -745,6 +790,82 @@ describe('CaveViewPanel', () => {
         expect(focusStation).toHaveBeenCalledWith('p.g.7', { highlight: true }),
       );
       expect(screen.queryByTestId('caveview-caver-card-not-on-model')).not.toBeInTheDocument();
+    });
+
+    describe('narrowed to the parts a watch declared', () => {
+      const cave = () =>
+        fakeSurvey('', fakeSurvey('p', fakeSurvey('g'), fakeSurvey('side'), fakeSurvey('far')));
+
+      beforeEach(() => {
+        surveyTree = cave();
+        setSectionVisible.mockClear();
+      });
+      afterEach(() => {
+        surveyTree = fakeSurvey('');
+      });
+
+      it('says what the drawing makes of the declaration and hides nothing until asked', async () => {
+        const answers: unknown[] = [];
+        await renderReady({
+          declaredParts: ['p.g'],
+          onDeclaredPartsView: (view: unknown) => answers.push(view),
+        });
+
+        expect(answers.at(-1)).toEqual({ hide: [['p', 'side'], ['p', 'far']], unmatched: [] });
+        expect(setSectionVisible).not.toHaveBeenCalled();
+      });
+
+      it('hides the surveys outside it when asked, and shows exactly those again', async () => {
+        const narrowed = (only: boolean) => (
+          <CaveViewPanel
+            fileUrl="http://files.local/survey"
+            fileName="demo.lox"
+            surveyModelId={MODEL}
+            declaredParts={DECLARED}
+            onlyDeclaredParts={only}
+          />
+        );
+        const view = await renderReady({ declaredParts: DECLARED, onlyDeclaredParts: true });
+
+        expect(setSectionVisible.mock.calls).toEqual([
+          [['p', 'side'], false],
+          [['p', 'far'], false],
+        ]);
+
+        // Rendered again with nothing changed — a poll's answer — costs the model no redraw.
+        view.rerender(narrowed(true));
+        expect(setSectionVisible).toHaveBeenCalledTimes(2);
+
+        view.rerender(narrowed(false));
+        expect(setSectionVisible.mock.calls.slice(2)).toEqual([
+          [['p', 'side'], true],
+          [['p', 'far'], true],
+        ]);
+      });
+
+      it('hides nothing for a declaration the drawing has no survey for, and says which entry', async () => {
+        const answers: { unmatched: string[] }[] = [];
+        await renderReady({
+          declaredParts: ['p.g', 'elsewhere.series'],
+          onlyDeclaredParts: true,
+          onDeclaredPartsView: (view: unknown) => answers.push(view as { unmatched: string[] }),
+        });
+
+        // Half a declaration followed would take declared passage off the screen.
+        expect(answers.at(-1)?.unmatched).toEqual(['elsewhere.series']);
+        expect(setSectionVisible).not.toHaveBeenCalled();
+      });
+
+      it('asks nothing of a drawing shown with no declaration', async () => {
+        const answers: unknown[] = [];
+        await renderReady({
+          onlyDeclaredParts: true,
+          onDeclaredPartsView: (view: unknown) => answers.push(view),
+        });
+
+        expect(answers.at(-1)).toBeNull();
+        expect(setSectionVisible).not.toHaveBeenCalled();
+      });
     });
 
     it('tells whoever mounted it which stations the model could not place a marker at', async () => {

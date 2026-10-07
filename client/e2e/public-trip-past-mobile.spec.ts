@@ -28,6 +28,15 @@ const TEAM_SURVEY = '22222222-2222-4222-8222-222222222222';
 const STATION_A = 'p8.p8.98';
 const STATION_B = 'p8.bens_dig.217';
 const PAST_TITLE = 'Peștera Demo Mare — the 2019 push';
+/** The link's own trip, and a second party of the same cave being followed at the same time. */
+const LIVE_TRIP = 'bbbbbbbb-0000-4000-8000-000000000001';
+const LIVE_TITLE = 'Peștera Demo Mare — explorare';
+const OTHER_TRIP = 'cccccccc-0000-4000-8000-000000000001';
+const OTHER_TITLE = 'Peștera Demo Mare — echipa de topografie';
+/** A finished trip of the cave that was part of no camp. */
+const LONE_TRIP = 'aaaaaaaa-0000-4000-8000-000000000002';
+/** The camp the 2019 trip and the second party belong to, as the server names one: an id and a name. */
+const CAMP = { id: 'dddddddd-0000-4000-8000-000000000001', name: 'Demo Mare 2019' };
 
 /** The narrowest screen these surfaces are designed for; the project's own device is wider. */
 const NARROWEST = { width: 360, height: 740 };
@@ -53,9 +62,9 @@ const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).
 
 /** The link's own trip: one person underground now, so "back to now" has somebody to go back to. */
 const liveEnvelope = () => ({
-  tripLogId: 'bbbbbbbb-0000-4000-8000-000000000001',
+  tripLogId: LIVE_TRIP,
   expedition: null,
-  title: 'Peștera Demo Mare — explorare',
+  title: LIVE_TITLE,
   tripDate: new Date().toISOString().slice(0, 10),
   tripDateEnd: null,
   state: 'armed',
@@ -126,14 +135,72 @@ const pastTrack = () => ({
 });
 
 /**
+ * The cave's other party, as a row of the list of parties being followed: the envelope's own
+ * shape without a survey, because every place in it was already decided against the link's.
+ * One person underground at a station and one out, so the row's three figures are not all alike
+ * and the party list it becomes has somebody to place.
+ */
+const otherParty = () => ({
+  tripLogId: OTHER_TRIP,
+  expedition: CAMP,
+  title: OTHER_TITLE,
+  tripDate: new Date().toISOString().slice(0, 10),
+  tripDateEnd: null,
+  state: 'armed',
+  armedAt: minutesAgo(120),
+  closedAt: null,
+  positionsWithheld: false,
+  teams: [],
+  participants: [
+    {
+      ordinal: 1,
+      label: 'Sorin',
+      teamId: null,
+      stationName: STATION_B,
+      depthM: null,
+      lastRecordedAt: minutesAgo(20),
+      positionRecordedAt: minutesAgo(20),
+      positionOnOtherModel: false,
+      in: true,
+      out: false,
+    },
+    {
+      ordinal: 2,
+      label: 'Dana',
+      teamId: null,
+      stationName: null,
+      depthM: null,
+      lastRecordedAt: minutesAgo(5),
+      positionRecordedAt: null,
+      positionOnOtherModel: false,
+      in: true,
+      out: true,
+    },
+  ],
+});
+
+/** What a cave is served with beyond one party underground and one finished trip of no camp. */
+interface ServedCave {
+  /** A second party of the cave is being followed now, beside the link's own. */
+  twoParties?: boolean;
+  /** The 2019 trip was part of a camp, and a second finished trip of the cave was part of none. */
+  camps?: boolean;
+}
+
+/**
  * Answers every public read this link makes — the trip, the cave's two lists and the one track —
  * and the survey file. Anything else asked of the public surface is a 404, which the console sweep
  * reports: a read this spec did not expect is a read worth knowing about.
+ *
+ * Hands back the path of every public read it answered, in order, for the tests whose claim is
+ * about what was — and was not — asked for.
  */
-async function serveCave(page: Page) {
+async function serveCave(page: Page, cave: ServedCave = {}) {
   const base = `/api/v1/public/trips/${TOKEN}`;
+  const reads: string[] = [];
   await page.route('**/api/v1/public/trips/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
+    reads.push(path);
     if (path === base) {
       await route.fulfill({ json: liveEnvelope() });
     } else if (path === `${base}/past`) {
@@ -142,7 +209,7 @@ async function serveCave(page: Page) {
           trips: [
             {
               tripLogId: PAST_TRIP,
-              expedition: null,
+              expedition: cave.camps ? CAMP : null,
               title: PAST_TITLE,
               tripDate: '2019-07-06',
               tripDateEnd: null,
@@ -150,6 +217,20 @@ async function serveCave(page: Page) {
               participantCount: 2,
               playable: true,
             },
+            ...(cave.camps
+              ? [
+                  {
+                    tripLogId: LONE_TRIP,
+                    expedition: null,
+                    title: 'Peștera Demo Mare — a day out in 2017',
+                    tripDate: '2017-05-13',
+                    tripDateEnd: null,
+                    closedAt: '2017-05-13T16:00:00Z',
+                    participantCount: 3,
+                    playable: true,
+                  },
+                ]
+              : []),
           ],
           more: false,
         },
@@ -157,7 +238,12 @@ async function serveCave(page: Page) {
     } else if (path === `${base}/past/${PAST_TRIP}`) {
       await route.fulfill({ json: pastTrack() });
     } else if (path === `${base}/live`) {
-      await route.fulfill({ json: { trips: [], more: false } });
+      // The link's own trip is in this list too while it is being followed, as on the server —
+      // without its survey, which a row never carries (a member left undefined is not sent).
+      const own = { ...liveEnvelope(), model: undefined };
+      await route.fulfill({
+        json: { trips: cave.twoParties ? [own, otherParty()] : [], more: false },
+      });
     } else {
       await route.fulfill({ status: 404, json: {} });
     }
@@ -168,6 +254,7 @@ async function serveCave(page: Page) {
       contentType: 'application/octet-stream',
     }),
   );
+  return { reads, ownTrip: base, liveList: `${base}/live` };
 }
 
 /** Asserts a control is at least a finger's height, naming it when it is not. */
@@ -355,5 +442,145 @@ test.describe('a cave’s past trips on a phone', () => {
     const opened = await page.getByTestId('public-past-clock').textContent();
     await page.getByTestId('public-past-report-next').tap();
     await expect(page.getByTestId('public-past-clock')).not.toHaveText(opened ?? '');
+  });
+
+  test('another party of the cave is watched from a list that is shut until asked for, under a banner, and left again', async ({
+    page,
+  }) => {
+    const served = await serveCave(page, { twoParties: true, camps: true });
+    await page.setViewportSize(NARROWEST);
+    await page.goto(`/shared/trips/${TOKEN}`);
+    await expect(page.getByTestId('public-trip-state-armed')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('public-trip-party')).toContainText('Carmen');
+
+    // Shut, and unread: a reader who never asks who else is in the cave is told about nobody
+    // else, and the page has not asked the server either.
+    await expect(page.getByTestId('public-live')).toBeHidden();
+    expect(served.reads.filter((path) => path === served.liveList)).toEqual([]);
+
+    await page.getByTestId('public-trip-live-section').tap();
+    const other = page.getByTestId(`public-live-trip-${OTHER_TRIP}`);
+    await expect(other).toBeVisible({ timeout: 20_000 });
+    expect(served.reads.filter((path) => path === served.liveList).length).toBeGreaterThan(0);
+    await expect(other).toContainText(OTHER_TITLE);
+    // The three standings, each with its number, and the camp the party is out from.
+    const standings = page.getByTestId(`public-live-standings-${OTHER_TRIP}`);
+    await expect(standings).toContainText('Underground: 1');
+    await expect(standings).toContainText('Out: 1');
+    await expect(standings).toContainText('Not reported yet: 0');
+    await expect(page.getByTestId(`public-live-camp-${OTHER_TRIP}`)).toHaveText(`Camp: ${CAMP.name}`);
+    // The link's own trip is named as that, and is neither something to watch nor — while it is
+    // the one on screen — somewhere to go back to.
+    await expect(page.getByTestId(`public-live-own-${LIVE_TRIP}`)).toHaveText("This link's trip");
+    await expect(page.getByTestId(`public-live-watch-${LIVE_TRIP}`)).toHaveCount(0);
+    await expect(page.getByTestId('public-live-back-own')).toHaveCount(0);
+    await expect(page.getByTestId('public-watch-banner')).toHaveCount(0);
+
+    const watch = page.getByTestId(`public-live-watch-${OTHER_TRIP}`);
+    await fingerSized(watch, 'Watch, on the other party’s row');
+    expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
+    const readsBeforeThePress = served.reads.length;
+    await watch.tap();
+
+    // Answered where the reader is looking: whose party this is, and the way back beside it.
+    await expect(page.getByTestId('public-watch-banner')).toBeInViewport({ timeout: 20_000 });
+    await expect(page.getByTestId('public-watch-banner-what')).toContainText(OTHER_TITLE);
+    await expect(page.getByTestId('public-trip-title')).toHaveText(OTHER_TITLE);
+    const party = page.getByTestId('public-trip-party');
+    await expect(party).toContainText('Sorin');
+    await expect(party).toContainText(STATION_B);
+    await expect(party).toContainText('Dana');
+    await expect(party).not.toContainText('Carmen');
+    // The row says it is the one on screen in words, and the link's own row now carries the way back.
+    await expect(page.getByTestId(`public-live-watching-${OTHER_TRIP}`)).toHaveText('Watching');
+    await expect(page.getByTestId('public-live-back-own')).toHaveCount(1);
+    // The tab and the address are still the link's: it was published for one trip, and a copy of
+    // the address must never open somebody else's party.
+    expect(await page.title()).toBe(LIVE_TITLE);
+    expect(new URL(page.url()).search).toBe('');
+    // And the press itself asked the server for nothing of its own: the party was already in the
+    // list. Only the two reads the page keeps making by the minute may have landed meanwhile.
+    expect(
+      served.reads
+        .slice(readsBeforeThePress)
+        .filter((path) => path !== served.liveList && path !== served.ownTrip),
+    ).toEqual([]);
+
+    await fingerSized(page.getByTestId('public-watch-back'), 'the way back to this link’s trip');
+    expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
+    await page.getByTestId('public-watch-back').tap();
+    await expect(page.getByTestId('public-watch-banner')).toHaveCount(0);
+    await expect(page.getByTestId('public-trip-title')).toHaveText(LIVE_TITLE);
+    await expect(party).toContainText('Carmen');
+    await expect(party).not.toContainText('Sorin');
+    // Going back is not a watch that ended under the reader, and is not announced as one.
+    await expect(page.getByTestId('public-watch-ended')).toHaveCount(0);
+
+    // ---- The finished trips, gathered by the camp each was part of ----
+    await page.getByTestId('public-trip-past-section').tap();
+    const camp = page.getByTestId(`public-past-group-${CAMP.id}`);
+    await expect(page.getByTestId(`public-past-group-${CAMP.id}-heading`)).toHaveText(
+      `Camp: ${CAMP.name}`,
+      { timeout: 20_000 },
+    );
+    await expect(camp.getByTestId(`public-past-trip-${PAST_TRIP}`)).toBeVisible();
+    await expect(camp.getByTestId(`public-past-trip-${LONE_TRIP}`)).toHaveCount(0);
+    // The trips of no camp come last, under words of their own rather than under no heading.
+    await expect(page.getByTestId('public-past-group-other-heading')).toHaveText(
+      'Other trips of this cave',
+    );
+    await expect(
+      page.getByTestId('public-past-group-other').getByTestId(`public-past-trip-${LONE_TRIP}`),
+    ).toBeVisible();
+    expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
+  });
+
+  test('a cave whose finished trips belong to no camp is one plain list, with no heading', async ({
+    page,
+  }) => {
+    await serveCave(page);
+    await page.setViewportSize(NARROWEST);
+    await page.goto(`/shared/trips/${TOKEN}`);
+    await expect(page.getByTestId('public-trip-state-armed')).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId('public-trip-past-section').tap();
+    await expect(page.getByTestId(`public-past-trip-${PAST_TRIP}`)).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('.public-past-group-heading')).toHaveCount(0);
+  });
+
+  test('inside the smallest frame a club may paste, another party is watched from the sheet and the strip says whose it is', async ({
+    page,
+  }) => {
+    const served = await serveCave(page, { twoParties: true, camps: true });
+    await page.setViewportSize(SMALLEST_FRAME);
+    await page.goto(`/shared/trips/${TOKEN}/embed`);
+    const frame = page.getByTestId('public-trip-embed');
+    await expect(frame).toBeVisible({ timeout: 30_000 });
+    expect(served.reads.filter((path) => path === served.liveList)).toEqual([]);
+
+    await page.getByTestId('public-past-open').tap();
+    const watch = page.getByTestId(`public-live-watch-${OTHER_TRIP}`);
+    await expect(watch).toBeVisible({ timeout: 20_000 });
+    await fingerSized(watch, 'Watch, in the frame’s sheet');
+    // The same sheet carries the finished trips, under their camp.
+    await expect(page.getByTestId(`public-past-group-${CAMP.id}-heading`)).toHaveText(
+      `Camp: ${CAMP.name}`,
+    );
+    await watch.tap();
+
+    // The sheet gets out of the way, and the frame's one line says whose party is on the drawing.
+    await expect(watch).toBeHidden();
+    await expect(page.getByTestId('public-watch-line')).toContainText(OTHER_TITLE, {
+      timeout: 20_000,
+    });
+    await expect(frame).toHaveClass(/public-trip-embed-watch/);
+    await expect(frame).not.toHaveClass(/public-trip-embed-past/);
+    await fingerSized(page.getByTestId('public-watch-back'), 'the way back, in the frame');
+    await fingerSized(page.getByTestId('public-past-open'), 'the way into the lists, while watching');
+    expect(await noSidewaysScroll(page)).toBeLessThanOrEqual(1);
+
+    await page.getByTestId('public-watch-back').tap();
+    await expect(page.getByTestId('public-watch-line')).toHaveCount(0);
+    await expect(frame).not.toHaveClass(/public-trip-embed-watch/);
+    await expect(page.getByTestId('public-watch-ended')).toHaveCount(0);
   });
 });

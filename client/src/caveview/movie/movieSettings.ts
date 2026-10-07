@@ -90,6 +90,12 @@ export interface MovieSettings {
   };
   view: Record<MovieViewLayer, boolean> & {
     /**
+     * Whether the surface over the cave is drawn, where the survey's file carries one. Off unless
+     * the reader turns it on: a cave drawn under its hills is a cave somebody can place, which a
+     * drawing of its passages alone is not — the same reason the compass and the scale start off.
+     */
+    terrain: boolean;
+    /**
      * The view the preview turns to when the model loads and when this changes. The movie starts
      * from what the preview shows, so turning or zooming the preview afterwards is kept.
      */
@@ -110,6 +116,11 @@ export interface MovieSettings {
     /** '' means the title is composed from the trips. */
     titleText: string;
     clock: boolean;
+    /**
+     * Whether the clock says how many times faster than life the movie runs. Part of the clock's
+     * caption, so it is drawn only while the clock is.
+     */
+    speed: boolean;
     legend: boolean;
     progress: boolean;
     note: boolean;
@@ -209,6 +220,7 @@ export const DEFAULT_MOVIE_SETTINGS: MovieSettings = {
     HUD: false,
     box: false,
     grid: false,
+    terrain: false,
     direction: 'north',
     shading: null,
     camera: 'perspective',
@@ -219,6 +231,7 @@ export const DEFAULT_MOVIE_SETTINGS: MovieSettings = {
     title: true,
     titleText: '',
     clock: true,
+    speed: true,
     legend: true,
     progress: true,
     note: false,
@@ -353,6 +366,7 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
     },
     view: {
       ...layers,
+      terrain: flag(view.terrain, d.view.terrain),
       direction: oneOf<MovieViewDirection>(view.direction, MOVIE_VIEW_DIRECTIONS, d.view.direction),
       shading,
       camera: oneOf(view.camera, ['perspective', 'orthographic'] as const, d.view.camera),
@@ -363,6 +377,7 @@ export function normaliseMovieSettings(raw: unknown): MovieSettings {
       title: flag(captions.title, d.captions.title),
       titleText: typeof captions.titleText === 'string' ? captions.titleText.slice(0, 200) : d.captions.titleText,
       clock: flag(captions.clock, d.captions.clock),
+      speed: flag(captions.speed, d.captions.speed),
       legend: flag(captions.legend, d.captions.legend),
       progress: flag(captions.progress, d.captions.progress),
       note: flag(captions.note, d.captions.note),

@@ -31,13 +31,31 @@ export class ApiError extends Error {
    */
   readonly problem?: Readonly<Record<string, unknown>>;
 
-  constructor(status: number, code?: string, detail?: string, problem?: Record<string, unknown>) {
+  /**
+   * How long the server asked to be left alone before this request is made again, in
+   * milliseconds — or undefined where it named no wait.
+   *
+   * A server that refuses for being asked too often usually says when to come back, in the
+   * response's `Retry-After`. Asking again sooner is not merely wasted: each early attempt is
+   * counted against the very allowance the refusal was about, so a client that ignores the number
+   * keeps itself refused. Read once, where the response is in hand, by {@link retryAfterOf}.
+   */
+  readonly retryAfterMs?: number;
+
+  constructor(
+    status: number,
+    code?: string,
+    detail?: string,
+    problem?: Record<string, unknown>,
+    retryAfterMs?: number,
+  ) {
     super(`API error ${status}${code ? ` (${code})` : ''}`);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.detail = detail;
     this.problem = problem;
+    this.retryAfterMs = retryAfterMs;
   }
 
   /** One member of the refusal, when the server sent it and it is a string. */
@@ -88,6 +106,70 @@ export function retryQuery(failureCount: number, error: unknown): boolean {
     return false;
   }
   return failureCount < 3;
+}
+
+/**
+ * The longest wait a response is allowed to name. A header is text from the network: one that
+ * said a day, by a misconfigured proxy or a clock that is wrong, would otherwise leave a screen
+ * waiting on a request that looks in flight until somebody reloads it.
+ */
+export const RETRY_AFTER_CEILING_MS = 5 * 60_000;
+
+/** A date as HTTP writes one: `Mon, 14 Sep 2026 12:00:45 GMT`. */
+const HTTP_DATE = /^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/;
+
+/**
+ * The wait a response names in its `Retry-After`, in milliseconds, or undefined where it names
+ * none that can be read.
+ *
+ * The header has two spellings and both are in use: a whole number of seconds, which is what a
+ * rate limiter writes, and a date, which is what a proxy in front of a server that is down for
+ * maintenance tends to write. A date already past means "now". Anything else — an empty value, a
+ * fraction, a negative number, words — is no wait at all rather than a guess, so the caller falls
+ * back to its own pacing exactly as if the header were absent.
+ */
+export function retryAfterOf(
+  response: { headers?: Pick<Headers, 'get'> },
+  now = Date.now(),
+): number | undefined {
+  // The header list is asked for and not assumed: a reply that did not come from a browser's own
+  // transport may carry none, and that is "no wait named", not a fault of its own.
+  const written = response.headers?.get('Retry-After')?.trim();
+  if (!written) {
+    return undefined;
+  }
+  if (/^\d+$/.test(written)) {
+    return Math.min(Number(written) * 1000, RETRY_AFTER_CEILING_MS);
+  }
+  // Only the one date spelling HTTP writes today. The engine's own date reading is far more
+  // generous than that — it makes a year out of "-5" and a day out of "1.5" — and a wait
+  // conjured from a value nobody meant as a date is worse than no wait.
+  if (!HTTP_DATE.test(written)) {
+    return undefined;
+  }
+  const at = Date.parse(written);
+  if (Number.isNaN(at)) {
+    return undefined;
+  }
+  return Math.min(Math.max(at - now, 0), RETRY_AFTER_CEILING_MS);
+}
+
+/**
+ * How long to wait before attempt number `failureCount` of a read that failed.
+ *
+ * <b>The server's number where it gave one, and otherwise the wait this client always used.</b>
+ * A read refused for being asked too often is retried — rate limiting clears by itself — and
+ * retried a second, two and four later it spends three more requests of the allowance it was just
+ * told is used up, which is how a page that was merely busy becomes a page that stays refused. So
+ * a refusal that says when to come back is taken at its word. Everything else doubles from one
+ * second, capped at thirty: the query library's own pacing, written out because supplying this
+ * function replaces it.
+ */
+export function retryDelay(failureCount: number, error: unknown): number {
+  if (error instanceof ApiError && error.retryAfterMs !== undefined) {
+    return error.retryAfterMs;
+  }
+  return Math.min(1000 * 2 ** failureCount, 30_000);
 }
 
 /**
@@ -277,6 +359,7 @@ export async function readJson<T>(path: string): Promise<T> {
       typeof problem?.code === 'string' ? problem.code : undefined,
       typeof problem?.detail === 'string' ? problem.detail : undefined,
       problem,
+      retryAfterOf(response),
     );
   }
 

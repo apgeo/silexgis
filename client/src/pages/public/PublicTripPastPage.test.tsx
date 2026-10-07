@@ -46,7 +46,7 @@ vi.mock('../../api/hooks.ts', () => ({
     }
     return enabled ? list : { data: undefined, isPending: false, isError: false };
   },
-  // The parties being followed now, behind the same press as the archive and counted the same way.
+  // The parties being followed now, behind a press of their own and counted the same way.
   usePublicLiveTrips: (_token: string | undefined, enabled: boolean) => {
     if (enabled) {
       liveReads++;
@@ -176,6 +176,8 @@ function pastTrack(): PublicPastTrack {
 
 const openArchive = () =>
   fireEvent.click(screen.getByText('Past trips in this cave', { selector: 'span' }));
+const openParties = () =>
+  fireEvent.click(screen.getByText('Also in this cave now', { selector: 'span' }));
 
 beforeEach(() => {
   live = { data: envelope(), isPending: false, error: null };
@@ -227,16 +229,30 @@ describe('reaching a cave’s past from a published link', () => {
     // The whole point of the gate: this page is opened by families on phones in numbers nobody can
     // see, and a list nobody asked for would double the cost of the cheapest surface here.
     expect(listReads).toBe(0);
-    // The parties being followed now are the other half of the same list, behind the same gate.
+    // The parties being followed now are the other half of the cave's list, behind a gate of
+    // their own.
     expect(liveReads).toBe(0);
     expect(trackReads.every((asked) => asked === undefined)).toBe(true);
 
-    // The positive twin — the same page, one press later.
+    // The positive twin — the same page, one press later. And one press reads one list: the
+    // archive's section says nothing of who is in the cave now, so it does not ask.
     openArchive();
     expect(listReads).toBeGreaterThan(0);
-    expect(liveReads).toBeGreaterThan(0);
+    expect(liveReads).toBe(0);
     expect(screen.getByTestId('public-past-list')).toBeTruthy();
+    expect(screen.queryByTestId('public-live')).toBeNull();
+  });
+
+  it('reads who else is in the cave now only when that section is opened, and not the archive with it', () => {
+    render(<PublicTripPage />);
+    expect(liveReads).toBe(0);
+
+    openParties();
+
+    expect(liveReads).toBeGreaterThan(0);
+    expect(listReads).toBe(0);
     expect(screen.getByTestId('public-live')).toBeTruthy();
+    expect(screen.queryByTestId('public-past-list')).toBeNull();
   });
 
   it('fetches no track until a trip is chosen', () => {
@@ -871,6 +887,29 @@ describe('an archive this installation does not offer', () => {
     expect(screen.queryByText(/Try opening this list again/)).toBeNull();
   });
 
+  it('keeps a list already in hand when a later read of it merely does not land', () => {
+    // The list is read again when a reader comes back to it after a while. A request that did
+    // not get through says nothing about the rows already shown, and must not swap them for a
+    // failure under somebody who was about to press one.
+    list = { ...list, isError: true, error: new TypeError('Failed to fetch') };
+    render(<PublicTripPage />);
+    openArchive();
+
+    expect(screen.getByTestId(`public-past-trip-${TRIP_2019}`)).toBeEnabled();
+    expect(screen.queryByTestId('public-past-failed')).toBeNull();
+  });
+
+  it('gives a list in hand up once the server refuses it for good', () => {
+    // The twin: every row of it would be refused the same way when pressed, so the sentence that
+    // says so replaces rows that can no longer do anything.
+    list = { ...list, isError: true, error: new ApiError(404, 'not_found') };
+    render(<PublicTripPage />);
+    openArchive();
+
+    expect(screen.getByTestId('public-past-not-offered')).toBeInTheDocument();
+    expect(screen.queryByTestId(`public-past-trip-${TRIP_2019}`)).toBeNull();
+  });
+
   it('still invites the reader to try again when the list merely did not land', () => {
     list = { data: undefined, isPending: false, isError: true, error: new TypeError('Failed to fetch') };
     render(<PublicTripPage />);
@@ -896,6 +935,7 @@ describe('an archive this installation does not offer', () => {
     render(<PublicTripPage />);
     expect(screen.getByTestId('public-trip-ended')).toBeTruthy();
     openArchive();
+    openParties();
 
     expect(screen.getByTestId('public-past-link-ended')).toHaveTextContent(
       'Past trips cannot be read through this link any more',

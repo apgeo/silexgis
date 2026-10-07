@@ -94,6 +94,60 @@ public static class TrackingDepthResolver
     }
 
     /// <summary>
+    /// Whether a station lies in the parts of the cave a watch declared. Nothing declared means
+    /// the whole model, so every station is in; otherwise a station is in when its full name — in
+    /// either spelling — or its survey name starts with one of the entries.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>One test for two questions.</b> The entries are where the party said it was going. A
+    /// reported depth is looked for only among those stations, and a station somebody was reported
+    /// at is compared with the same entries to say whether the party is where it said it would be.
+    /// Were the two to read the entries differently, a place a depth may resolve to could be
+    /// called outside the plan, or the reverse.
+    /// </para>
+    /// <para>
+    /// A plain start-of-name test, not a walk of the survey tree: an entry is something a person
+    /// typed while reading names off a list, and <c>upper</c> is meant to take <c>upper.2</c> and
+    /// <c>upper2.1</c> alike exactly as it always has for depths.
+    /// </para>
+    /// </remarks>
+    public static bool InDeclaredParts(Station station, IReadOnlyCollection<string> declaredParts)
+    {
+        ArgumentNullException.ThrowIfNull(declaredParts);
+
+        if (declaredParts.Count == 0) return true;
+        foreach (var part in declaredParts)
+        {
+            if (station.Name.StartsWith(part, StringComparison.Ordinal)
+                || station.ViewerName.StartsWith(part, StringComparison.Ordinal)
+                || (station.SurveyName?.StartsWith(part, StringComparison.Ordinal) ?? false))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a reported station is somewhere the party did not say it was going: true only when
+    /// the watch declared parts, the station is one the watch's survey holds, and it is in none of
+    /// them.
+    /// </summary>
+    /// <remarks>
+    /// Every way of not knowing answers false. Nothing declared is no plan to be outside of; a
+    /// station the survey no longer holds (<paramref name="station"/> null) has no survey name to
+    /// compare and may have been in any part. The mark says "this is known to be elsewhere", and
+    /// a mark raised on a guess would be read as exactly that.
+    /// </remarks>
+    public static bool OutsideDeclaredParts(Station? station, IReadOnlyCollection<string> declaredParts)
+    {
+        ArgumentNullException.ThrowIfNull(declaredParts);
+
+        return station is { } known && declaredParts.Count > 0 && !InDeclaredParts(known, declaredParts);
+    }
+
+    /// <summary>
     /// The stations closest to the asked depth, best first. Ties break by name so the answer
     /// is stable between calls. An empty filter means the whole model; a filter entry matches
     /// a station whose full name — in either spelling — or whose survey name starts with it.
@@ -116,10 +170,7 @@ public static class TrackingDepthResolver
         var target = Math.Abs(askedDepthM);
 
         return stations
-            .Where(s => filterPrefixes.Count == 0 || filterPrefixes.Any(p =>
-                s.Name.StartsWith(p, StringComparison.Ordinal)
-                || s.ViewerName.StartsWith(p, StringComparison.Ordinal)
-                || (s.SurveyName?.StartsWith(p, StringComparison.Ordinal) ?? false)))
+            .Where(s => InDeclaredParts(s, filterPrefixes))
             .Select(s => new Candidate(
                 s.Name, s.ViewerName, s.SurveyName, referenceZ - s.Z, Math.Abs(referenceZ - s.Z - target)))
             .OrderBy(c => c.DeltaM)

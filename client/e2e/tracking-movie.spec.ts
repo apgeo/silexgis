@@ -273,6 +273,17 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   await report(second.id, [ticu], 'exited', null, null, hoursAgo(2));
   await setWatch(page, auth, second.id, { state: 'closed' });
 
+  // What the viewer does about a surface for this survey is written into the run's report: every
+  // time it asks this installation for a list of terrain tile sets, and what it was answered. The
+  // survey names its coordinate system, and a viewer that is given one lays a plane of tiles under
+  // the model; the movie's own switch for terrain is checked against that further down.
+  const tileSetAnswers: string[] = [];
+  page.on('response', (response) => {
+    if (new URL(response.url()).pathname.endsWith('/tileSets.json')) {
+      tileSetAnswers.push(`${response.status()} ${response.headers()['content-type'] ?? 'no type'}`);
+    }
+  });
+
   // ---- The first trip's Tracking tab, with its model on screen ----
   await gotoRoute(page, `/trip-logs/${first.id}`);
   await page.getByRole('tab', { name: 'Tracking' }).click();
@@ -362,12 +373,17 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   await typeNumber(page, dialog, 'movie-duration', 4);
   await expect(dialog.getByTestId('movie-summary')).toContainText('40 frames');
   // Tab from a button, which the viewer does not leave alone by itself as it does a text box: the
-  // focus moves on to the next control, the slider's handle, and back again with Shift.
+  // focus moves on to the next controls — the button that saves a picture, then the slider's
+  // handle — and back again with Shift.
   const play = dialog.getByTestId('movie-play');
+  const still = dialog.getByTestId('movie-still');
   await expect(play).toBeEnabled();
   await play.focus();
   await page.keyboard.press('Tab');
+  await expect(still).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(dialog.getByTestId('movie-position').getByRole('slider')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Shift+Tab');
   await expect(play).toBeFocused();
   // The X in the corner is drawn outside the dialog's body and is the dialog's all the same: with
@@ -388,6 +404,66 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   await expect(play).toHaveAttribute('aria-label', 'Stop the preview');
   await page.keyboard.press('Space');
   await expect(play).toHaveAttribute('aria-label', 'Play the preview');
+  // The preview itself takes the focus, and there the keys are the preview's own — with the
+  // pointer still resting on it, where the viewer would have had them first: Space plays and
+  // pauses, End and Home go to the two ends of the forty frames.
+  const previewKeys = dialog.getByTestId('movie-preview-keys');
+  await previewKeys.focus();
+  await expect(previewKeys).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(play).toHaveAttribute('aria-label', 'Stop the preview');
+  await page.keyboard.press('Space');
+  await expect(play).toHaveAttribute('aria-label', 'Play the preview');
+  // A press of the mouse on the drawing gives the preview the focus too. The viewer cancels every
+  // press on its canvas so that a drag turns the model, and a cancelled press moves no focus by
+  // itself: the keys then went on going to whichever button was pressed last. The focus is parked
+  // on the play button first, so it has somewhere to be found still standing.
+  await play.focus();
+  await expect(play).toBeFocused();
+  await dialog.getByTestId('movie-preview').locator('canvas').first().click({ position: { x: 24, y: 24 } });
+  await expect(previewKeys).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(play).toHaveAttribute('aria-label', 'Stop the preview');
+  await page.keyboard.press('Space');
+  await expect(play).toHaveAttribute('aria-label', 'Play the preview');
+  // Reached with Tab, the preview shows that the focus is on it: a ring drawn over the drawing.
+  // The preview's box and the viewer's canvas paint over an outline of the element around them,
+  // so the ring is judged where the drawing reaches the edge — the middle of the top edge — and by
+  // the colour that is on the screen there, not by a style that says a ring is meant.
+  await play.focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(previewKeys).toBeFocused();
+  const ringMeant = await previewKeys.evaluate((element) => {
+    const ring = getComputedStyle(element, '::after');
+    return { visible: element.matches(':focus-visible'), colour: ring.outlineColor, width: ring.outlineWidth };
+  });
+  expect(ringMeant.visible).toBe(true);
+  expect(ringMeant.width).toBe('2px');
+  const ringColour = /(\d+),\s*(\d+),\s*(\d+)/.exec(ringMeant.colour)!.slice(1, 4).map(Number);
+  const ringShown = await page.evaluate(
+    async (base64: string) => {
+      const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${base64}`)).blob());
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext('2d')!;
+      context.drawImage(bitmap, 0, 0);
+      const at = (x: number, y: number) => [...context.getImageData(x, y, 1, 1).data.subarray(0, 3)];
+      const middle = Math.floor(bitmap.width / 2);
+      const answer = { top: at(middle, 0), bottom: at(middle, bitmap.height - 1), inside: at(middle, 6) };
+      bitmap.close();
+      return answer;
+    },
+    (await previewKeys.screenshot()).toString('base64'),
+  );
+  const farFrom = (pixel: number[], colour: number[]) => Math.max(...pixel.map((value, index) => Math.abs(value - colour[index])));
+  expect(farFrom(ringShown.top, ringColour), `the top edge shows ${ringShown.top}, the ring is ${ringColour}`).toBeLessThanOrEqual(8);
+  expect(farFrom(ringShown.bottom, ringColour), `the bottom edge shows ${ringShown.bottom}`).toBeLessThanOrEqual(8);
+  // A ring, not a wash over the whole preview: a little way in, the drawing is what shows.
+  expect(farFrom(ringShown.inside, ringColour)).toBeGreaterThan(8);
+  const position = dialog.getByTestId('movie-position');
+  await page.keyboard.press('End');
+  await expect(position).toHaveAttribute('data-frame', '39');
+  await page.keyboard.press('Home');
+  await expect(position).toHaveAttribute('data-frame', '0');
 
   // ---- The name the file will be saved under is on screen before anything is made ----
   const fileName = dialog.getByTestId('movie-file-name');
@@ -437,6 +513,48 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   // none is merged into its neighbour and the browser counts exactly the frames the dialog said.
   expect(decoded).toEqual({ frames: 40, width: 320, height: 180 });
 
+  // ---- A still picture of the moment the slider is on ----
+  // Named by the rule that named the GIF — the title caption is still off, so neither the cave nor
+  // a trip is in it — and a picture of the frame's own size with a drawing in it, not a blank one.
+  await expect(still).toBeEnabled({ timeout: 30_000 });
+  const stillDownload = page.waitForEvent('download', { timeout: 60_000 });
+  await still.click();
+  const stillFile = await stillDownload;
+  expect(stillFile.suggestedFilename()).toBe(gifNamed.replace(/\.gif$/, '.png'));
+  expect(stillFile.suggestedFilename()).toMatch(/^silexgis-movie-\d{4}-\d{2}-\d{2}\.png$/);
+  const stillBytes = await readFile(await stillFile.path());
+  expect(stillBytes.subarray(1, 4).toString('latin1')).toBe('PNG');
+  const picture = await page.evaluate(async (base64: string) => {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext('2d')!;
+    context.drawImage(bitmap, 0, 0);
+    // Judged where no caption can reach: the right half of the frame, below the clock at its top
+    // and above the bar along its bottom (the legend keeps to the left half, and there is no note
+    // and no title here). The captions alone are some two hundred colours of smoothed white text,
+    // so a count over the whole picture would pass with the model never drawn into it.
+    const left = Math.floor(bitmap.width / 2);
+    const top = Math.floor(bitmap.height * 0.2);
+    const region = context.getImageData(left, top, bitmap.width - left, Math.floor(bitmap.height * 0.85) - top);
+    const pixels = new Uint32Array(region.data.buffer);
+    const counts = new Map<number, number>();
+    for (const pixel of pixels) {
+      counts.set(pixel, (counts.get(pixel) ?? 0) + 1);
+    }
+    const background = Math.max(...counts.values());
+    const answer = { width: bitmap.width, height: bitmap.height, drawn: pixels.length - background, of: pixels.length };
+    bitmap.close();
+    return answer;
+  }, stillBytes.toString('base64'));
+  expect({ width: picture.width, height: picture.height }).toEqual({ width: 320, height: 180 });
+  // The model's own lines, there: a frame the model was never drawn into is one colour all over it.
+  expect(picture.drawn, `pixels of the model among ${picture.of} no caption reaches`).toBeGreaterThan(40);
+  await expect(dialog.getByTestId('movie-still-failed')).toHaveCount(0);
+  // The preview is the reader's again — and the export below is recorded from the same viewer,
+  // which refuses a second capture while one is still open.
+  await expect(still).toBeEnabled({ timeout: 30_000 });
+
   // ---- A tiny WebM, which a <video> element has to find a length in ----
   await expect(dialog.getByTestId('movie-format-webm')).toBeEnabled({ timeout: 30_000 });
   // The test id sits on the radio's own input, which antd draws under its button face: the face
@@ -478,7 +596,8 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   expect(played.duration).toBeLessThan(4.5);
   expect({ width: played.width, height: played.height }).toEqual({ width: 320, height: 180 });
 
-  expect(downloads).toBe(2);
+  // The GIF, the picture and the WebM, and nothing else.
+  expect(downloads).toBe(3);
 
   // ---- Closing the dialog leaves the panel's own viewer as it was ----
   // Closed by Escape with the pointer back on the preview — where the viewer has every key first —
@@ -513,6 +632,46 @@ test('a movie of two tracked trips is made from a trip, judged by the browser, a
   // Closed from the keyboard on the X, with the pointer resting on a preview that has its survey —
   // which is when the viewer takes every key it is left, Enter among them.
   await expect(fromCave.getByTestId('movie-preview')).toHaveAttribute('data-status', 'ready', { timeout: 90_000 });
+
+  // ---- The surface over the cave is not on offer for a file that carries none of its own ----
+  // This survey is a centre line with a coordinate system and no terrain in it. Whatever plane the
+  // viewer lays under such a model is not the file's, and the movie does not offer to draw it.
+  await openGroup(fromCave, 'View');
+  const terrain = fromCave.getByTestId('movie-terrain');
+  await expect(terrain).toBeDisabled();
+  await expect(terrain).toHaveAttribute('aria-checked', 'false');
+  await expect(fromCave.getByText('This survey file carries no terrain of its own')).toBeVisible();
+  test.info().annotations.push({
+    type: 'terrain tile sets asked for',
+    description: `${tileSetAnswers.length}: ${[...new Set(tileSetAnswers)].join(' | ') || 'none'}`,
+  });
+
+  // ---- A preset sets the file up and leaves what the movie shows alone ----
+  // The title caption is the reader's choice about what the file says. Turned off here, it is
+  // still off after a preset has changed the format, the frame, the rate and the length.
+  await openGroup(fromCave, 'Captions');
+  const captionChoice = fromCave.getByTestId('movie-caption-title');
+  await expect(captionChoice).toHaveAttribute('aria-checked', 'true');
+  await captionChoice.click();
+  await expect(captionChoice).toHaveAttribute('aria-checked', 'false');
+  const directionBefore = await fromCave.getByTestId('movie-view-direction').textContent();
+  // And a choice of the view that this model can answer either way, changed from what it was: the
+  // terrain switch is off on this survey whatever the setting under it holds, and would say
+  // nothing about what a preset did to it.
+  const stationsLayer = fromCave.getByTestId('movie-layer-stations');
+  await expect(stationsLayer).toBeEnabled();
+  const stationsChosen = !(await stationsLayer.isChecked());
+  await stationsLayer.setChecked(stationsChosen);
+  await expect(stationsLayer).toBeChecked({ checked: stationsChosen });
+  await fromCave.getByTestId('movie-preset-chat').click();
+  await expect(fromCave.getByTestId('movie-format-gif')).toBeChecked();
+  await expect(fromCave.getByTestId('movie-size')).toContainText('480 × 270');
+  await expect(fromCave.getByTestId('movie-fps')).toContainText('10');
+  await expect(numberBox(fromCave, 'movie-duration')).toHaveAttribute('aria-valuenow', '15');
+  await expect(captionChoice).toHaveAttribute('aria-checked', 'false');
+  await expect(stationsLayer).toBeChecked({ checked: stationsChosen });
+  expect(await fromCave.getByTestId('movie-view-direction').textContent()).toBe(directionBefore);
+
   await fromCave.getByTestId('movie-preview').hover();
   await fromCave.locator('.ant-modal-close').focus();
   await page.keyboard.press('Enter');

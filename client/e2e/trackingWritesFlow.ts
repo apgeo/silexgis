@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
-import { gotoRoute, login } from './helpers.ts';
+import { chooseOption, gotoRoute, login } from './helpers.ts';
 import { apiJson, bearerToken } from './rastermapApi.ts';
 
 /**
  * The three ways a coordinator writes a tracking log other than reporting live: correcting a report
  * in place — on a running watch and again once it is closed — importing a spreadsheet of reports,
  * from a file and from rows pasted in, and declaring what the cave's depths mean so that a report
- * can be made by the name of a place.
+ * can be made by the name of a place. And what follows from each: a sheet imported twice writes
+ * nothing the second time, a sheet that corrects one cell changes that cell and nothing else, the
+ * log can be narrowed to one person, and a report added once the watch is closed has to say when
+ * it was made.
  *
  * <b>Why this is a browser flow and not only a component suite.</b> Each of these has a component
  * suite, and each suite stubs every write — which is how a sentence looked up with its arguments
@@ -64,6 +67,19 @@ const TIMES_ONLY = {
     ['Ora,Speologi,Stare,Nota', `00:00,${person},intrare,${note}`].join('\n'),
 };
 
+/**
+ * The one cell of the sample sheet this walk rewrites, and what it rewrites it to.
+ *
+ * No comma in the new wording: the sheet is comma-separated, and a comma here would turn one cell
+ * into two and the walk into a test of quoting.
+ */
+const SHEET_NOTE = { written: 'apa mare in meandru', corrected: 'apa foarte mare in meandru' };
+/** The line of the sample sheet that note is on, counted as the dialog counts: the header is 1. */
+const SHEET_NOTE_LINE = 4;
+
+/** What is typed on the closed watch, for a call nobody wrote down at the time. */
+const LATE_NOTE = 'E2E written up after the watch was closed';
+
 interface Report {
   id: string;
   caverId: string;
@@ -72,6 +88,8 @@ interface Report {
   depthEnteredM: number | null;
   note: string | null;
   recordedAt: string;
+  corrected: boolean;
+  outsideDeclaredParts: boolean;
 }
 
 export async function correctImportAndReportByPlace(page: Page) {
@@ -119,7 +137,9 @@ export async function correctImportAndReportByPlace(page: Page) {
     caverId: null, newCaverName: name, roleId: null, entryTime: null, exitTime: null, note: null,
   });
   const tripDate = new Date().toISOString().slice(0, 10);
-  const trip = (await apiJson(page, token, 'POST', '/api/v1/trip-logs', {
+  // Kept, because the roster is written whole: the same trip is sent again further down with one
+  // person left out, and everything else about it has to be what was saved here.
+  const tripBody = {
     title: `E2E tracking writes ${stamp}`,
     tripTypeId: null,
     tripDate,
@@ -132,7 +152,11 @@ export async function correctImportAndReportByPlace(page: Page) {
     depthReachedM: null, lengthSurveyedM: null, surveyStations: null, ropeMetres: null,
     hadIncident: false, fieldData: null, logistics: null, safety: null,
     maxParticipants: null, meetingGeom: null,
-  })) as { id: string; participants: { caverId: string; name: string }[] };
+  };
+  const trip = (await apiJson(page, token, 'POST', '/api/v1/trip-logs', tripBody)) as {
+    id: string;
+    participants: { caverId: string; name: string }[];
+  };
   const ion = trip.participants.find((p) => p.name === ION)!.caverId;
   const maria = trip.participants.find((p) => p.name === MARIA)!.caverId;
 
@@ -177,6 +201,50 @@ export async function correctImportAndReportByPlace(page: Page) {
   const log = page.getByTestId('trip-tracking-events');
   await expect(log).toContainText('E2E Maria went in', { timeout: 30_000 });
 
+  // ---- Somebody just heard from is not marked as silent ----
+  // The count is on screen, so the mark is in force on this watch and has a threshold; it counts
+  // nobody, and neither person carries the tag. Asserted together: a tag that is absent because
+  // the mark is switched off would prove nothing about a fresh report.
+  const party = page.getByTestId('trip-tracking-participants');
+  await expect(page.getByTestId('trip-tracking-count-quiet')).toHaveAttribute('data-quiet', '0');
+  await expect(page.getByTestId('trip-tracking-standing-underground')).toHaveCount(2);
+  await expect(page.getByTestId(`trip-tracking-quiet-${ion}`)).toHaveCount(0);
+  await expect(page.getByTestId(`trip-tracking-quiet-${maria}`)).toHaveCount(0);
+
+  // ---- Nobody the log speaks of is taken off a running watch ----
+  // The trip's form sends its two lists as the whole roster, so this is what a save with Maria's
+  // row deleted sends. She has gone in and the watch is running: the write is refused by name,
+  // and she is still on the trip and on the watch.
+  const asRostered = (caverId: string) => ({
+    caverId, newCaverName: null, roleId: null, entryTime: null, exitTime: null, note: null,
+  });
+  const tripRead = await page.request.fetch(`/api/v1/trip-logs/${trip.id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(tripRead.ok()).toBeTruthy();
+  const tripTag = tripRead.headers()['etag'];
+  const leaving = await page.request.fetch(`/api/v1/trip-logs/${trip.id}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, ...(tripTag ? { 'If-Match': tripTag } : {}) },
+    data: { ...tripBody, participants: [asRostered(ion)] },
+  });
+  expect(leaving.status()).toBe(400);
+  expect(((await leaving.json()) as { code?: string }).code).toBe('trip_log.participant_tracked');
+  // The same write with both people kept is taken, so what was refused was the departure and
+  // not the shape of the request.
+  await apiJson(
+    page,
+    token,
+    'PUT',
+    `/api/v1/trip-logs/${trip.id}`,
+    { ...tripBody, participants: [asRostered(ion), asRostered(maria)] },
+    tripTag ? { 'If-Match': tripTag } : {},
+  );
+  await page.reload();
+  await expect(log).toContainText('E2E Maria went in', { timeout: 30_000 });
+  await expect(party.getByRole('row', { name: new RegExp(MARIA) })).toBeVisible();
+  await expect(page.getByTestId(`trip-tracking-off-roster-${maria}`)).toHaveCount(0);
+
   // ---- Correcting a report in place ----
   const correction = page.getByRole('dialog', { name: 'Correct this report' });
   const note = correction.getByTestId('trip-tracking-edit-note');
@@ -204,6 +272,9 @@ export async function correctImportAndReportByPlace(page: Page) {
   expect((await logOf()).find((row) => row.id === mariaWent.id)?.note).toBe(
     'E2E Maria went in, corrected',
   );
+  // The log says which row no longer reads as it was first written — and says it of that row only.
+  await expect(page.getByTestId(`trip-tracking-event-corrected-${mariaWent.id}`)).toBeVisible();
+  await expect(page.getByTestId(`trip-tracking-event-corrected-${ionWent.id}`)).toHaveCount(0);
 
   // ---- Reporting by the name of a declared place ----
   await page
@@ -231,6 +302,7 @@ export async function correctImportAndReportByPlace(page: Page) {
     .toBe(DECLARED_STATION);
 
   // ---- Importing the sample sheet the dialog offers ----
+  const beforeImport = await logOf();
   await page.getByTestId('trip-tracking-csv-open').click();
   const importing = page.getByRole('dialog', { name: 'Import reports from a spreadsheet' });
   await expect(importing).toBeVisible();
@@ -277,6 +349,99 @@ export async function correctImportAndReportByPlace(page: Page) {
   ).toBe(DECLARED_STATION);
   // …and the unticked line did not land for either of them.
   expect(afterImport.filter((row) => row.kind === 'exited')).toEqual([]);
+  const landed = afterImport.length - beforeImport.length;
+  expect(landed).toBeGreaterThan(0);
+
+  /** Reads a sheet into the dialog and leaves its last line out, as the first import did. */
+  const readSheet = async (bytes: Buffer) => {
+    await page.getByTestId('trip-tracking-csv-open').click();
+    await expect(importing).toBeVisible();
+    await importing.locator('input[type="file"]').setInputFiles({
+      name: sample.suggestedFilename(),
+      mimeType: 'text/csv',
+      buffer: bytes,
+    });
+    await importing.getByTestId('trip-tracking-csv-preview').click();
+    await expect(rows).toBeVisible({ timeout: 15_000 });
+    await lastLine.first().uncheck();
+    await expect(lastLine.nth(1)).not.toBeChecked();
+  };
+  const overwrite = importing.getByRole('checkbox', {
+    name: /Overwrite what the log already holds/,
+  });
+  const before = importing.getByTestId(`trip-tracking-csv-row-before-${SHEET_NOTE_LINE}`);
+  const after = importing.getByTestId(`trip-tracking-csv-row-after-${SHEET_NOTE_LINE}`);
+
+  // ---- The same sheet a second time ----
+  // Every row left ticked is one the log already holds, and none of them is new. Counted from what
+  // the first import actually wrote, so a sheet that landed fewer rows than it showed cannot pass
+  // here by agreeing with itself.
+  await readSheet(sampleBytes);
+  await expect(importing.getByTestId('trip-tracking-csv-creates')).toHaveText(/\D0$/);
+  await expect(importing.getByTestId('trip-tracking-csv-replaces')).toHaveText(
+    new RegExp(`\\D${landed}$`),
+  );
+  // A row that would replace a report shows the report as it stands and as it would be left — the
+  // place in the survey's word on one line, and in the sheet's word beside the station it became
+  // on the other.
+  await expect(before).toContainText('In the log now:');
+  await expect(before).toContainText(DECLARED_STATION);
+  await expect(before).toContainText(SHEET_NOTE.written);
+  await expect(after).toContainText('After the import:');
+  await expect(after).toContainText(`${PLACE.label} → ${DECLARED_STATION}`);
+  await expect(after).toContainText(SHEET_NOTE.written);
+
+  // Leave to overwrite is given, so nothing stands between the sheet and the log but what the
+  // sheet says — and it says what the log says. The answer names every row as already so, and the
+  // log is the same log: the same reports under the same ids, none added, none changed, and none
+  // newly marked as corrected. Without the count in the answer, an import that was quietly turned
+  // away would leave the log just as untouched.
+  await overwrite.check();
+  await importing.getByTestId('trip-tracking-csv-commit').click();
+  await expect(
+    page.getByText(`0 recorded, 0 corrected, ${landed} already as the sheet says, 2 left out.`),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(importing).toBeHidden({ timeout: 15_000 });
+  expect(await logOf()).toEqual(afterImport);
+
+  // ---- The sheet again, one cell corrected ----
+  const meandru = afterImport.find(
+    (row) => row.note === SHEET_NOTE.written && row.caverId === maria,
+  )!;
+  await readSheet(
+    Buffer.from(
+      sampleBytes.toString('utf8').replace(SHEET_NOTE.written, SHEET_NOTE.corrected),
+      'utf8',
+    ),
+  );
+  // The two lines now differ, and differ in the note alone.
+  await expect(before).toContainText(`“${SHEET_NOTE.written}”`);
+  await expect(before).not.toContainText(SHEET_NOTE.corrected);
+  await expect(after).toContainText(`“${SHEET_NOTE.corrected}”`);
+  await expect(after).not.toContainText(SHEET_NOTE.written);
+
+  await overwrite.check();
+  await importing.getByTestId('trip-tracking-csv-commit').click();
+  await expect(
+    page.getByText(
+      `0 recorded, 1 corrected, ${landed - 1} already as the sheet says, 2 left out.`,
+    ),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(importing).toBeHidden({ timeout: 15_000 });
+  await expect(log).toContainText(SHEET_NOTE.corrected, { timeout: 15_000 });
+  // One report changed, in the one thing the sheet changed about it, and it is the only one the
+  // import marked: every other report is exactly as it was.
+  expect(await logOf()).toEqual(
+    afterImport.map((row) =>
+      row.id === meandru.id ? { ...row, note: SHEET_NOTE.corrected, corrected: true } : row,
+    ),
+  );
+  await expect(page.getByTestId(`trip-tracking-event-corrected-${meandru.id}`)).toBeVisible();
+  // Proved on a report the same sheet named and left alone, in the same import.
+  const untouched = afterImport.find(
+    (row) => row.note === 'intrat in pestera' && row.caverId === ion,
+  )!;
+  await expect(page.getByTestId(`trip-tracking-event-corrected-${untouched.id}`)).toHaveCount(0);
 
   // ---- Pasted rows, the date and the time in two columns, read on another zone's clocks ----
   await page.getByTestId('trip-tracking-csv-open').click();
@@ -347,6 +512,17 @@ export async function correctImportAndReportByPlace(page: Page) {
   expect(timed).toBeTruthy();
   expect(Date.parse(timed!.recordedAt)).toBe(Date.parse(`${tripDate}T00:00:00Z`));
 
+  // ---- One person's reports ----
+  // The log is everybody's, newest first, and the report to put right is nearly always one
+  // person's. Both people have a report with their name in its note, so the narrowed log is shown
+  // to hold the one and to have dropped the other — and to give it back when the choice is cleared.
+  const whose = page.getByTestId('trip-tracking-events-caver');
+  await chooseOption(page, whose, MARIA);
+  await expect(log).not.toContainText('E2E Ion went in', { timeout: 15_000 });
+  await expect(log).toContainText('E2E Maria went in, corrected');
+  await whose.locator('.ant-select-clear').click();
+  await expect(log).toContainText('E2E Ion went in', { timeout: 15_000 });
+
   // ---- Correcting a report once the watch is closed ----
   // A trip is written up after everybody is out, so a closed log takes a correction exactly as a
   // running one does. Closed here the way a coordinator closes it, from the card, so the tab under
@@ -356,6 +532,54 @@ export async function correctImportAndReportByPlace(page: Page) {
   await expect(page.getByTestId('trip-tracking-state')).toContainText('Tracking closed', {
     timeout: 15_000,
   });
+  // The report card stays, and now says the trip is being written up afterwards: the moment is
+  // asked for outright, and "now" — which on a finished trip is never when anything was said — is
+  // not among the answers.
+  await expect(page.getByTestId('trip-tracking-record-after')).toBeVisible();
+  await expect(page.getByTestId('trip-tracking-recorded-at')).toBeVisible();
+  await expect(page.getByTestId('trip-tracking-when-now')).toHaveCount(0);
+
+  // A call nobody wrote down at the time. Sent with no moment it is refused on the page, with a
+  // sentence saying what is wanted…
+  await page
+    .getByTestId('trip-tracking-participants')
+    .getByRole('row', { name: new RegExp(MARIA) })
+    .getByRole('checkbox')
+    .check();
+  await page.getByTestId('trip-tracking-kind').click();
+  await page.locator('.ant-select-item-option[title="Note"]').click();
+  await page.getByTestId('trip-tracking-note').fill(LATE_NOTE);
+  await page.getByTestId('trip-tracking-record').click();
+  await expect(page.getByText(/Say when this was said/)).toBeVisible();
+
+  // …and with one it lands at that moment. Three hours back, worked out on the page's own clock
+  // and typed the way the field shows a moment, so the instant expected is the instant typed
+  // whatever zone this browser keeps — and far enough from the present that a report stamped
+  // "now" could not be mistaken for it.
+  const late = await page.evaluate(() => {
+    const at = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    at.setSeconds(0, 0);
+    const two = (value: number) => String(value).padStart(2, '0');
+    return {
+      typed:
+        `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())} ` +
+        `${two(at.getHours())}:${two(at.getMinutes())}:00`,
+      instant: at.getTime(),
+    };
+  });
+  const saidAt = page.getByTestId('trip-tracking-recorded-at');
+  await saidAt.click();
+  await saidAt.fill(late.typed);
+  await saidAt.press('Enter');
+  await expect(saidAt).toHaveValue(late.typed);
+  await page.getByTestId('trip-tracking-record').click();
+  await expect(page.getByText('Recorded for 1.')).toBeVisible({ timeout: 15_000 });
+  await expect(log).toContainText(LATE_NOTE, { timeout: 15_000 });
+  // Once, and at the moment named: the press that was refused wrote nothing.
+  const writtenUp = (await logOf()).filter((row) => row.note === LATE_NOTE);
+  expect(writtenUp).toHaveLength(1);
+  expect(Date.parse(writtenUp[0].recordedAt)).toBe(late.instant);
+
   await page.getByTestId(`trip-tracking-event-edit-${ionWent.id}`).click();
   await expect(note).toHaveValue('E2E Ion went in');
   await note.fill('E2E Ion went in, corrected after closing');

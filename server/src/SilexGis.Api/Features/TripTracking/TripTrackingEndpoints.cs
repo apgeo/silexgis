@@ -158,7 +158,8 @@ public static class TripTrackingEndpoints
     private static async Task<Results<Ok<TrackingStateDto>, ProblemHttpResult>> GetAsync(
         Guid tripLogId, HttpContext http, SilexGisDbContext db, IAccessService access,
         FeatureProtection protection, IAccessContextAccessor accessAccessor,
-        IOptions<TripTrackingOptions> options, TimeProvider clock, CancellationToken ct)
+        IOptions<TripTrackingOptions> options, TimeProvider clock, IUserContextAccessor userAccessor,
+        CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         if (ctx is null) return ApiProblems.NotFound("trip_log.not_found");
@@ -168,8 +169,10 @@ public static class TripTrackingEndpoints
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         var teams = await db.TripTeams.AsNoTracking()
             .Where(t => t.TripLogId == tripLogId).OrderBy(t => t.Title).ToListAsync(ct);
-        var rosterCavers = await db.TripLogParticipants.AsNoTracking()
-            .Where(p => p.TripLogId == tripLogId).Select(p => p.CaverId).Distinct().ToListAsync(ct);
+        // The people the trip names, in the order it first named each of them — asked of the same
+        // function the published reads number the party by, so the table a coordinator reads and
+        // the page a follower reads list the same people in the same order.
+        var rosterCavers = await TripTrackingPublicationEndpoints.RosterOrderAsync(db, tripLogId, ct);
         // What a published page calls each of them, where somebody chose. Shown here so the
         // panel that sets the labels can show what it set; nothing about the choice is
         // location data, so it follows the trip's own readability and nothing else.
@@ -263,9 +266,52 @@ public static class TripTrackingEndpoints
 
         var withheldAny = configHasVocabulary && !configOpen;
         var byCaver = events.GroupBy(e => e.CaverId).ToDictionary(g => g.Key, g => g.ToList());
-        var participants = new List<TrackingParticipantDto>();
-        foreach (var caverId in rosterCavers.OrderBy(c => c))
+
+        // <b>The party is everybody the trip names and everybody the log speaks of.</b> Folding the
+        // roster alone dropped a person the moment they were taken off it, while every report about
+        // them stayed in the log printed under this table: one screen, two answers to who was in
+        // the cave. Nothing recorded is a reason to stop showing somebody, so they stay, marked.
+        //
+        // After the roster, and in the order the log first mentions each of them. That order is
+        // the log's own (the events above are already oldest first), it does not move when the
+        // roster is edited again, and it keeps the people nothing more can be recorded for below
+        // the ones a coordinator is still working with.
+        var onRoster = rosterCavers.ToHashSet();
+        var offRoster = new List<Guid>();
+        var seenOffRoster = new HashSet<Guid>();
+        foreach (var report in events)
         {
+            if (!onRoster.Contains(report.CaverId) && seenOffRoster.Add(report.CaverId))
+            {
+                offRoster.Add(report.CaverId);
+            }
+        }
+
+        // Their names, since the trip this reader holds no longer has them: the label every
+        // signed-in surface shows a person under, by the one rule that decides it. Asked only when
+        // there is somebody to name, which on nearly every trip there is not.
+        var formerNames = offRoster.Count > 0
+            ? await CaverDirectory.ResolveLabelsAsync(db, await userAccessor.GetAsync(ct), offRoster, ct)
+            : [];
+
+        var watchState = tracking?.State ?? TripTrackingState.Off;
+        var quietAfter = options.Value.EffectiveQuietAfter;
+
+        // Where the party said it was going, against where each of them was last reported — for
+        // the places this caller is about to be told and for no others, and only for a caller
+        // who is being told the declaration itself. One read of those few stations.
+        var declaredParts = await TrackingDeclaredParts.ForAsync(
+            db, tracking, configOpen,
+            byCaver.Values
+                .Select(reports => reports.LastOrDefault(TrackingWithholding.HasPosition))
+                .OfType<TripPositionEvent>()
+                .Where(lastPlace => TrackingWithholding.PositionOpen(lastPlace, openCaves)),
+            ct);
+
+        var participants = new List<TrackingParticipantDto>();
+        foreach (var caverId in rosterCavers.Concat(offRoster))
+        {
+            var listed = onRoster.Contains(caverId);
             byCaver.TryGetValue(caverId, out var own);
             var last = own?.Count > 0 ? own[^1] : null;
             // A note or an exit says something happened, not where — the displayed position
@@ -300,16 +346,32 @@ public static class TripTrackingEndpoints
                 positionOpen ? lastPositioned?.SurveyModelId : null,
                 standing == TripStanding.Underground,
                 standing == TripStanding.Out,
-                labels.GetValueOrDefault(caverId),
+                // The caption and the published name are statements about a page that counts its
+                // party from the roster. For somebody off it that page shows nothing, so neither
+                // is said — a caption row may well still be stored for them, and reading it out
+                // would describe a line the page does not print.
+                listed ? labels.GetValueOrDefault(caverId) : null,
                 // One rule, two surfaces. Calling the published read's own function is what keeps
                 // this from telling somebody they appear as a place in the party while the page
                 // names them.
-                TripTrackingPublicationEndpoints.NameFor(caverId, labels, publishedNames)));
+                listed ? TripTrackingPublicationEndpoints.NameFor(caverId, labels, publishedNames) : null,
+                listed,
+                listed ? null : formerNames.GetValueOrDefault(caverId),
+                // Asked of Domain with the watch's own state, so that a closed watch, somebody out
+                // and somebody never heard from are each answered there and not by a test here.
+                // Measured from the last word of any kind — a note ends a silence as surely as a
+                // place does — and that moment is sent to every reader whatever is withheld, so
+                // the mark tells nobody anything the row beside it does not.
+                TripTrackingRules.IsQuiet(watchState, standing, last?.RecordedAt, now, quietAfter),
+                // On the branch the place itself is told on, and nowhere else: beside a withheld
+                // place the word would say that somebody is at a station, and that it is none of
+                // a set, to a reader who was refused both.
+                positionOpen && lastPositioned is not null && declaredParts.Outside(lastPositioned)));
         }
 
         await Concurrency.EmitETagAsync(http, db, VersionedTable.TripLogs, trip.Id, ct);
         return TypedResults.Ok(new TrackingStateDto(
-            tracking?.State ?? TripTrackingState.Off,
+            watchState,
             configOpen ? tracking?.SurveyModelId : null,
             // Said only to a caller who is being told which model it is: to anyone else the id
             // arrives null anyway, and "the survey that watch was on has been deleted" is a fact
@@ -326,7 +388,12 @@ public static class TripTrackingEndpoints
             publishedAt,
             publishedUntil,
             [.. teams.Select(t => new TrackingTeamDto(t.Id, t.Title))],
-            participants));
+            participants,
+            // The threshold only where the mark can apply: null says "nobody is being marked
+            // here", which is a different answer from a number nobody happens to have crossed.
+            watchState == TripTrackingState.Armed && quietAfter > TimeSpan.Zero
+                ? (int)Math.Min(quietAfter.TotalSeconds, int.MaxValue)
+                : null));
     }
 
     private static async Task<Results<Ok<PagedResult<TrackingEventDto>>, ProblemHttpResult>> ListEventsAsync(
@@ -352,20 +419,22 @@ public static class TripTrackingEndpoints
             .OrderByDescending(e => e.RecordedAt).ThenByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id)
             .ToPagedAsync(p, ps, e => e, ct);
 
-        var caveIds = result.Items.Where(e => e.CaveFeatureId is not null)
-            .Select(e => e.CaveFeatureId!.Value).Distinct().ToList();
-        var openCaves = await TrackingWithholding.OpenCaveIdsAsync(db, access, protection, ctx, caveIds, ct);
-
-        var dtos = result.Items.Select(e =>
-        {
-            var open = TrackingWithholding.PositionOpen(e, openCaves);
-            return new TrackingEventDto(
-                e.Id, e.CaverId, e.TeamId, e.Kind,
-                open ? e.SurveyModelId : null,
-                open ? e.ViewerStationName : null,
-                open ? e.DepthEnteredM : null,
-                e.Note, e.RecordedAt);
-        }).ToList();
+        // The watch's own cave is asked about together with the rows' caves: its declared parts
+        // are station vocabulary of that cave, and whether a row is outside them is said only to
+        // a caller who may be told both the row's place and the declaration.
+        var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
+        var openCaves = await TrackingWithholding.OpenCaveIdsAsync(
+            db, access, protection, ctx,
+            [.. result.Items.Where(e => e.CaveFeatureId is not null).Select(e => e.CaveFeatureId!.Value)
+                .Concat(tracking?.CaveFeatureId is { } watchCave ? [watchCave] : Array.Empty<Guid>())
+                .Distinct()],
+            ct);
+        var declaredParts = await TrackingDeclaredParts.ForAsync(
+            db, tracking,
+            declarationTold: tracking?.CaveFeatureId is { } declaredFor && openCaves.Contains(declaredFor),
+            result.Items.Where(e => TrackingWithholding.PositionOpen(e, openCaves)),
+            ct);
+        var dtos = result.Items.Select(e => TrackingWithholding.Shown(e, openCaves, declaredParts)).ToList();
 
         return TypedResults.Ok(new PagedResult<TrackingEventDto>(dtos, result.Page, result.PageSize, result.TotalItems));
     }
@@ -375,7 +444,8 @@ public static class TripTrackingEndpoints
     private static async Task<Results<Ok<TrackingStateDto>, ProblemHttpResult>> PutConfigAsync(
         Guid tripLogId, TrackingConfigRequest request, HttpContext http, SilexGisDbContext db,
         IAccessService access, FeatureProtection protection, IAccessContextAccessor accessAccessor,
-        IOptions<TripTrackingOptions> options, TimeProvider clock, CancellationToken ct)
+        IOptions<TripTrackingOptions> options, TimeProvider clock, IUserContextAccessor userAccessor,
+        CancellationToken ct)
     {
         var ctx = await accessAccessor.GetAsync(ct);
         var trip = ctx is null ? null : await db.TripLogs.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tripLogId, ct);
@@ -396,7 +466,7 @@ public static class TripTrackingEndpoints
         var current = tracking?.State ?? TripTrackingState.Off;
         if (!TripTrackingRules.MayTransition(current, target))
         {
-            return ApiProblems.Conflict("tracking.state_invalid", $"Tracking does not move from {current} to {target}.");
+            return ApiProblems.Conflict(TrackingProblemCodes.StateInvalid, $"Tracking does not move from {current} to {target}.");
         }
 
         // Absent fields keep what is stored (an empty string clears the reference, an empty
@@ -406,7 +476,7 @@ public static class TripTrackingEndpoints
         var effectiveModelId = request.SurveyModelId ?? tracking?.SurveyModelId;
         if (target == TripTrackingState.Armed && effectiveModelId is null)
         {
-            return ApiProblems.Conflict("tracking.model_missing", "Tracking needs a survey model to place cavers in.");
+            return ApiProblems.Conflict(TrackingProblemCodes.ModelMissing, "Tracking needs a survey model to place cavers in.");
         }
 
         // Arming on a survey that is no longer here is the same refusal, deliberately worded the
@@ -422,7 +492,7 @@ public static class TripTrackingEndpoints
         if (target == TripTrackingState.Armed && !modelChanging && effectiveModelId is { } keeping
             && !await db.SurveyModels.AsNoTracking().AnyAsync(m => m.Id == keeping, ct))
         {
-            return ApiProblems.Conflict("tracking.model_missing",
+            return ApiProblems.Conflict(TrackingProblemCodes.ModelMissing,
                 "The survey model this watch was armed on is no longer here — choose another before arming.");
         }
 
@@ -438,7 +508,7 @@ public static class TripTrackingEndpoints
             // is a placing act and takes the placing right. Closing, re-arming and filter
             // edits do not; a co-writer without exact view can still end a watch.
             var usable = await UsableModelAsync(db, access, protection, ctx!, effectiveModelId, ct);
-            if (usable is null) return ApiProblems.Conflict("tracking.model_unavailable",
+            if (usable is null) return ApiProblems.Conflict(TrackingProblemCodes.ModelUnavailable,
                 "The survey model does not exist here, or its cave cannot be placed by this account.");
             snapshotCave = usable.Value.Cave.Id;
             // Swapping the survey under an armed watch is allowed and stays allowed: a corrected or
@@ -458,7 +528,7 @@ public static class TripTrackingEndpoints
             if (modelChanging
                 && !TripTrackingRules.MayPointAtCave(target, tracking?.CaveFeatureId, snapshotCave.Value))
             {
-                return ApiProblems.Conflict("tracking.model_other_cave",
+                return ApiProblems.Conflict(TrackingProblemCodes.ModelOtherCave,
                     "An armed watch can only be moved to another survey of the same cave — close it first.");
             }
             if (referenceChanging)
@@ -468,7 +538,7 @@ public static class TripTrackingEndpoints
                 // Therion model that is not guaranteed to be the string the survey rows hold.
                 referenceResolved = await ResolveStationAsync(
                     db, usable.Value.Model, request.ReferenceStationName!, ct);
-                if (referenceResolved is null) return ApiProblems.Conflict("tracking.reference_unknown",
+                if (referenceResolved is null) return ApiProblems.Conflict(TrackingProblemCodes.ReferenceUnknown,
                     "The reference station is not a station of the chosen model.");
             }
         }
@@ -523,10 +593,11 @@ public static class TripTrackingEndpoints
         {
             // Two first-ever config writes raced to insert the same one-per-trip row; the
             // loser is told to look again rather than being answered with a stack trace.
-            return ApiProblems.Conflict("tracking.concurrent_write", "Another tracking write landed first — reload and retry.");
+            return ApiProblems.Conflict(TrackingProblemCodes.ConcurrentWrite, "Another tracking write landed first — reload and retry.");
         }
 
-        return await GetAsync(tripLogId, http, db, access, protection, accessAccessor, options, clock, ct);
+        return await GetAsync(
+            tripLogId, http, db, access, protection, accessAccessor, options, clock, userAccessor, ct);
     }
 
     private static async Task<Results<Ok<TrackingTeamDto>, ProblemHttpResult>> CreateTeamAsync(
@@ -558,7 +629,7 @@ public static class TripTrackingEndpoints
         if (refusal is not null) return refusal;
 
         var team = await db.TripTeams.FirstOrDefaultAsync(t => t.Id == teamId && t.TripLogId == tripLogId, ct);
-        if (team is null) return ApiProblems.NotFound("tracking.team_not_found");
+        if (team is null) return ApiProblems.NotFound(TrackingProblemCodes.TeamNotFound);
         team.Title = request.Title!;
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(new TrackingTeamDto(team.Id, team.Title));
@@ -576,7 +647,7 @@ public static class TripTrackingEndpoints
         if (refusal is not null) return refusal;
 
         var team = await db.TripTeams.FirstOrDefaultAsync(t => t.Id == teamId && t.TripLogId == tripLogId, ct);
-        if (team is null) return ApiProblems.NotFound("tracking.team_not_found");
+        if (team is null) return ApiProblems.NotFound(TrackingProblemCodes.TeamNotFound);
         db.TripTeams.Remove(team);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
@@ -608,7 +679,7 @@ public static class TripTrackingEndpoints
             .AnyAsync(p => p.TripLogId == tripLogId && p.CaverId == caverId, ct);
         if (!onRoster)
         {
-            return ApiProblems.BadRequest("tracking.caver_not_participant",
+            return ApiProblems.BadRequest(TrackingProblemCodes.CaverNotParticipant,
                 "Only somebody on the trip's roster can be named on its published page.");
         }
 
@@ -654,7 +725,7 @@ public static class TripTrackingEndpoints
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
         {
-            return ApiProblems.Conflict("tracking.not_writable", LogNotWritable);
+            return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -665,7 +736,7 @@ public static class TripTrackingEndpoints
         var recordedAt = (request.RecordedAt ?? now).ToUniversalTime();
         if (TripTrackingRules.MomentIsInFuture(recordedAt, now))
         {
-            return ApiProblems.BadRequest("tracking.recorded_in_future", "A report cannot be about the future.");
+            return ApiProblems.BadRequest(TrackingProblemCodes.RecordedInFuture, "A report cannot be about the future.");
         }
 
         var caverIds = request.CaverIds!.Distinct().ToList();
@@ -674,7 +745,7 @@ public static class TripTrackingEndpoints
             .Select(p => p.CaverId).Distinct().ToListAsync(ct);
         if (participants.Count != caverIds.Count)
         {
-            return ApiProblems.BadRequest("tracking.caver_not_participant",
+            return ApiProblems.BadRequest(TrackingProblemCodes.CaverNotParticipant,
                 "Every reported caver has to be on the trip's roster first.");
         }
 
@@ -682,7 +753,7 @@ public static class TripTrackingEndpoints
         {
             var teamKnown = await db.TripTeams.AsNoTracking()
                 .AnyAsync(t => t.Id == request.TeamId && t.TripLogId == tripLogId, ct);
-            if (!teamKnown) return ApiProblems.NotFound("tracking.team_not_found");
+            if (!teamKnown) return ApiProblems.NotFound(TrackingProblemCodes.TeamNotFound);
         }
 
         var placed = await ResolvePlaceAsync(
@@ -711,8 +782,15 @@ public static class TripTrackingEndpoints
         db.TripPositionEvents.AddRange(created);
         await db.SaveChangesAsync(ct);
 
+        // The answer says what the next read of the log will say, this included. A report that
+        // names a station got through the gate on placing anybody in the watch's cave, which is
+        // the right the declaration is told under; one that names none is asked nothing.
+        var declaredParts = await TrackingDeclaredParts.ForAsync(
+            db, tracking, declarationTold: placed.StationName is not null, created, ct);
         IReadOnlyList<TrackingEventDto> dtos = [.. created.Select(e => new TrackingEventDto(
             e.Id, e.CaverId, e.TeamId, e.Kind, e.SurveyModelId, e.ViewerStationName, e.DepthEnteredM, e.Note, e.RecordedAt,
+            TripTrackingRules.ChangedSinceWritten(e.CreatedAt, e.UpdatedAt),
+            declaredParts.Outside(e),
             placed.Placement))];
         return TypedResults.Ok(dtos);
     }
@@ -745,10 +823,10 @@ public static class TripTrackingEndpoints
         {
             if (tracking.SurveyModelId is null)
             {
-                return Refused(ApiProblems.Conflict("tracking.model_missing", "Tracking has no survey model to place cavers in."));
+                return Refused(ApiProblems.Conflict(TrackingProblemCodes.ModelMissing, "Tracking has no survey model to place cavers in."));
             }
             var usable = await UsableModelAsync(db, access, protection, ctx!, tracking.SurveyModelId, ct);
-            if (usable is null) return Refused(ApiProblems.Conflict("tracking.model_unavailable",
+            if (usable is null) return Refused(ApiProblems.Conflict(TrackingProblemCodes.ModelUnavailable,
                 "The survey model does not exist here, or its cave cannot be placed by this account."));
             surveyModelId = usable.Value.Model.Id;
             caveFeatureId = usable.Value.Cave.Id;
@@ -760,7 +838,7 @@ public static class TripTrackingEndpoints
                 // differently, so a station pressed on the model is a real station under a name a
                 // string comparison against the survey rows would call unknown.
                 resolvedStation = await ResolveStationAsync(db, usable.Value.Model, stationName!, ct);
-                if (resolvedStation is null) return Refused(ApiProblems.BadRequest("tracking.station_unknown",
+                if (resolvedStation is null) return Refused(ApiProblems.BadRequest(TrackingProblemCodes.StationUnknown,
                     "The station is not one of the chosen model's stations."));
             }
             else
@@ -780,10 +858,10 @@ public static class TripTrackingEndpoints
                 switch (placedAt.Outcome)
                 {
                     case TrackingDepthPlacementOutcome.ReferenceUnknown:
-                        return Refused(ApiProblems.Conflict("tracking.reference_unknown",
+                        return Refused(ApiProblems.Conflict(TrackingProblemCodes.ReferenceUnknown,
                             "The depth datum cannot be established for the chosen model."));
                     case TrackingDepthPlacementOutcome.NoStationAtDepth:
-                        return Refused(ApiProblems.Conflict("tracking.no_station_at_depth",
+                        return Refused(ApiProblems.Conflict(TrackingProblemCodes.NoStationAtDepth,
                             "No station matches that depth under the trip's depth filter."));
                 }
 
@@ -870,25 +948,25 @@ public static class TripTrackingEndpoints
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
         {
-            return ApiProblems.Conflict("tracking.not_writable", LogNotWritable);
+            return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
         }
 
         var row = await db.TripPositionEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
-        if (row is null) return ApiProblems.NotFound("tracking.event_not_found");
+        if (row is null) return ApiProblems.NotFound(TrackingProblemCodes.EventNotFound);
 
         var now = DateTimeOffset.UtcNow;
         // To UTC for the same reason the record route does it: the column accepts no other offset.
         var recordedAt = (request.RecordedAt ?? row.RecordedAt).ToUniversalTime();
         if (TripTrackingRules.MomentIsInFuture(recordedAt, now))
         {
-            return ApiProblems.BadRequest("tracking.recorded_in_future", "A report cannot be about the future.");
+            return ApiProblems.BadRequest(TrackingProblemCodes.RecordedInFuture, "A report cannot be about the future.");
         }
 
         if (request.TeamId is not null)
         {
             var teamKnown = await db.TripTeams.AsNoTracking()
                 .AnyAsync(t => t.Id == request.TeamId && t.TripLogId == tripLogId, ct);
-            if (!teamKnown) return ApiProblems.NotFound("tracking.team_not_found");
+            if (!teamKnown) return ApiProblems.NotFound(TrackingProblemCodes.TeamNotFound);
         }
 
         var placed = await ResolvePlaceAsync(
@@ -906,9 +984,18 @@ public static class TripTrackingEndpoints
         row.RecordedAt = recordedAt;
         await db.SaveChangesAsync(ct);
 
+        // As on recording: a correction that names a station passed the gate on placing in the
+        // watch's cave, so the corrector is somebody the declaration is told to.
+        var declaredParts = await TrackingDeclaredParts.ForAsync(
+            db, tracking, declarationTold: placed.StationName is not null, [row], ct);
         return TypedResults.Ok(new TrackingEventDto(
             row.Id, row.CaverId, row.TeamId, row.Kind, row.SurveyModelId, row.ViewerStationName,
-            row.DepthEnteredM, row.Note, row.RecordedAt, placed.Placement));
+            row.DepthEnteredM, row.Note, row.RecordedAt,
+            // Read off the row as it was saved: a correction that changed nothing leaves the stamps
+            // where they were, and the answer then says what the next read of the log will say.
+            TripTrackingRules.ChangedSinceWritten(row.CreatedAt, row.UpdatedAt),
+            declaredParts.Outside(row),
+            placed.Placement));
     }
 
     /// <summary>
@@ -936,11 +1023,11 @@ public static class TripTrackingEndpoints
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
         {
-            return ApiProblems.Conflict("tracking.not_writable", LogNotWritable);
+            return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
         }
 
         var row = await db.TripPositionEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
-        if (row is null) return ApiProblems.NotFound("tracking.event_not_found");
+        if (row is null) return ApiProblems.NotFound(TrackingProblemCodes.EventNotFound);
         db.TripPositionEvents.Remove(row);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
@@ -985,7 +1072,7 @@ public static class TripTrackingEndpoints
         var usable = await UsableModelAsync(db, access, protection, ctx!, tracking?.SurveyModelId, ct);
         if (usable is null)
         {
-            return ApiProblems.Conflict("tracking.model_unavailable",
+            return ApiProblems.Conflict(TrackingProblemCodes.ModelUnavailable,
                 "The survey model does not exist here, or its cave cannot be placed by this account.");
         }
 
@@ -1018,10 +1105,10 @@ public static class TripTrackingEndpoints
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking?.SurveyModelId is null)
         {
-            return ApiProblems.Conflict("tracking.model_missing", "Tracking has no survey model to place cavers in.");
+            return ApiProblems.Conflict(TrackingProblemCodes.ModelMissing, "Tracking has no survey model to place cavers in.");
         }
         var usable = await UsableModelAsync(db, access, protection, ctx!, tracking.SurveyModelId, ct);
-        if (usable is null) return ApiProblems.Conflict("tracking.model_unavailable",
+        if (usable is null) return ApiProblems.Conflict(TrackingProblemCodes.ModelUnavailable,
             "The survey model does not exist here, or its cave cannot be placed by this account.");
 
         var stations = await StationsOfAsync(db, usable.Value.Model, ct);
@@ -1044,7 +1131,7 @@ public static class TripTrackingEndpoints
         var referenceZ = TrackingDepthResolver.ReferenceZ(stations, tracking.ReferenceStationName);
         if (referenceZ is null && declared is null)
         {
-            return ApiProblems.Conflict("tracking.reference_unknown",
+            return ApiProblems.Conflict(TrackingProblemCodes.ReferenceUnknown,
                 "The depth datum cannot be established for the chosen model.");
         }
 

@@ -397,6 +397,21 @@ feature and walkthroughs of whole jobs.
   The sheet may be a file or rows pasted from a phone's spreadsheet, may keep the date and the
   time in one column or two — or times alone, for a sheet kept in a day — and may be read on a
   named time zone's clocks, summer and winter time included, instead of exactly as written.
+  A row that would replace a report shows the report as it stands beside the report as it would
+  be left, a replacement changes only what the sheet has a column for, and the import writes
+  what the preview showed or nothing: if the trip changed in between, the sheet is read again
+  instead. The same sheet imported twice writes nothing the second time. The log itself is
+  paged and can be narrowed to one person, a report that was changed after it was written is
+  marked **Corrected**, and a report added once tracking is closed has to say when it was made
+  rather than being stamped with the hour it was typed.
+  The tab also tells whoever is coordinating three things it used to leave them to work out:
+  somebody underground with **no word for hours** (three by default, an installation setting),
+  the trip's **planned hour out and how late** the party is once it has passed with people
+  still inside, and a station reported **outside the parts of the cave the party said it was
+  going to** — parts the model can be narrowed to. Everybody the log has reports about stays
+  in the table, marked, after being taken off the roster, and cannot be taken off it while
+  tracking is running. None of this alarms anybody: nothing is sent, the overdue callout is not
+  involved, and a published page shows none of it.
   A trip can then be **published** with a link: anybody holding it, with no account, sees the
   party on the survey, refreshed while they are underground. The page is written for a reader who
   has never followed a trip: it says that a place is where somebody was last *reported* and not a
@@ -406,7 +421,9 @@ feature and walkthroughs of whole jobs.
   English from a button on the page or from a link that names the language. A club pastes a
   block into its own website to show the same viewer in an article whose links can move it, and
   the framed viewer tells that article what it is showing. The same link lists
-  the cave's other parties being followed now and its finished published trips, each playable as
+  the cave's other parties being followed now — in a list shut until the reader opens it, from
+  which any of them can be watched on the link's own survey under a banner saying whose party it
+  is — and its finished published trips, gathered by camp, each playable as
   a replay on the survey its reports were measured in; any moment of a replay can be copied as a
   link that opens there, standing or already playing. The page names people as the installation
   decides — real names by default, a caption to keep one person off it — a cave with protected
@@ -423,7 +440,23 @@ feature and walkthroughs of whole jobs.
   back only by starting its watch again. A survey file can draw more than its own cave, so a
   publication is **flagged, never refused**, when a protected cave's position lies inside the
   area the survey's stations span — a check by position that cannot see inside the file, names
-  no cave, and tells a publisher nothing about a cave they may not place.
+  no cave, and tells a publisher nothing about a cave they may not place. Tracking that
+  nobody closed is not closed for them: the page says when each trip's tracking was started and
+  for how many days it has run, narrows to those running longer than a number of days the
+  reader chooses, and leads to the trip where closing it is done. It also prints the address
+  the server counted the reader's own request under, which is how a reverse-proxy count that
+  is too low — otherwise silent — is seen.
+- **"The published page shows nothing" has an answer** — a published page tells a visitor the
+  same thing for every link it will not open, on purpose, and that used to leave whoever runs
+  the installation guessing among a dozen causes. Now each refused read is written to the
+  server's log with a one-word reason and the link's short log code (never its address), the
+  installation counts the published reads it answers and the ones it turns away, a reader turned
+  away as one request too many is told how long to wait, and a script asks an installation from
+  outside what one link answers — taking the link on standard input, never as an argument, and
+  printing it nowhere. The [install guide](INSTALL.md#when-a-published-page-or-the-article-showing-it-shows-nothing)
+  lists the causes in order of likelihood with the reason word for each. Settings for published
+  trips that cannot mean anything now stop the application at start, naming the setting, instead
+  of quietly producing pages that answer nobody.
 - **A tracked trip becomes a movie you can send** — from the trip's tracking tab, or from a survey
   on the cave's page, a signed-in member makes a short film of the party moving through the
   survey: one trip or several, on one calendar or side by side, the model turning or still. It is
@@ -437,7 +470,17 @@ feature and walkthroughs of whole jobs.
   filmed, and its movie ends when the export starts. An export draws every frame anew — half a
   minute to a few minutes on a computer without a graphics card — so it says how long it has left,
   **Cancel export** stops it at once, and Escape or the X ask before throwing it away. The size
-  estimate of a GIF corrects itself from the GIFs you have made. The
+  estimate of a GIF corrects itself from the GIFs you have made. Any moment of the preview can be
+  saved as a **picture** (a PNG of that frame, captions and legend included, named by the same
+  rule); two **presets** set the file up in one press — a small GIF for a chat, or an HD video as
+  MP4 or WebM, whichever the browser can write — and change the file only, never who appears, the
+  view or the captions; and with the preview or its slider in focus, **Space** plays and pauses
+  and **Home** and **End** go to the two ends. Under each ticked trip you choose **who appears** —
+  somebody left out has no marker, no trail and no note in the picture, and the choice is for that
+  movie only, stored nowhere. After the clock the movie says how many times faster than life it
+  runs (**×240**). And where a survey's file carries its own **terrain**, a switch draws the
+  surface over the cave — off until you turn it on, because a cave shown under its hills can be
+  placed by whoever gets the file. The
   [user guide](user-guide/features/tracking-movie.md) has the whole of it.
 - **Being asked onto a trip does not open the cave, so somebody who can open it is told** — an
   invitation grants nothing, so when a person asked onto a trip cannot read a cave the trip is about,

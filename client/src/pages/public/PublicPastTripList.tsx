@@ -3,7 +3,7 @@ import { CaretRightOutlined } from '@ant-design/icons';
 import { Alert, Skeleton, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { PublicPastTrip } from '../../api/hooks.ts';
-import { tripDateRange } from './publicTripParty.ts';
+import { tripDateRange, tripsByCamp } from './publicTripParty.ts';
 
 export interface PublicPastTripListProps {
   trips: readonly PublicPastTrip[] | undefined;
@@ -117,51 +117,83 @@ export default function PublicPastTripList({
     );
   }
 
+  const row = (trip: PublicPastTrip) => {
+    const dates = tripDateRange(trip.tripDate, trip.tripDateEnd, i18n.language);
+    const playing = trip.tripLogId === playingId;
+    return (
+      <li key={trip.tripLogId}>
+        <button
+          type="button"
+          className="public-past-row"
+          disabled={!trip.playable}
+          aria-current={playing ? 'true' : undefined}
+          onClick={() => onPlay(trip.tripLogId)}
+          data-testid={`public-past-trip-${trip.tripLogId}`}
+        >
+          <span className="public-past-row-main">
+            <span className="public-past-row-title">{trip.title}</span>
+            <Typography.Text type="secondary" className="public-past-row-when">
+              {t('publicTrip.past.rowWhen', { dates, count: trip.participantCount })}
+            </Typography.Text>
+          </span>
+          {/* Said in words, never by colour alone: the difference between a row that plays
+              and one that cannot is the one thing a reader has to be able to see here. */}
+          {trip.playable ? (
+            <Tag
+              color={playing ? 'blue' : undefined}
+              icon={<CaretRightOutlined />}
+              className="public-past-row-mark"
+            >
+              {playing ? t('publicTrip.past.playing') : t('publicTrip.past.play')}
+            </Tag>
+          ) : (
+            <Tag
+              className="public-past-row-mark"
+              data-testid={`public-past-unplayable-${trip.tripLogId}`}
+            >
+              {t('publicTrip.past.notPlayable')}
+            </Tag>
+          )}
+        </button>
+      </li>
+    );
+  };
+
+  // A cave worked from camps is remembered by camp — "the 2019 one" — so that is how its trips
+  // are gathered where the server says which camp a trip was part of. Where it names none there is
+  // exactly one group and no heading at all: the list is the plain list it always was.
+  const groups = tripsByCamp(trips);
+  const grouped = groups.some((group) => group.camp !== null);
+
   return (
     <div data-testid="public-past-list">
-      <ul className="public-past-rows">
-        {trips.map((trip) => {
-          const dates = tripDateRange(trip.tripDate, trip.tripDateEnd, i18n.language);
-          const playing = trip.tripLogId === playingId;
-          return (
-            <li key={trip.tripLogId}>
-              <button
-                type="button"
-                className="public-past-row"
-                disabled={!trip.playable}
-                aria-current={playing ? 'true' : undefined}
-                onClick={() => onPlay(trip.tripLogId)}
-                data-testid={`public-past-trip-${trip.tripLogId}`}
+      {groups.map((group) => {
+        const key = group.camp?.id ?? 'other';
+        const headingId = `public-past-group-${key}`;
+        return (
+          <section
+            key={key}
+            className={grouped ? 'public-past-group' : undefined}
+            aria-labelledby={grouped ? headingId : undefined}
+            data-testid={grouped ? headingId : undefined}
+          >
+            {grouped && (
+              // A heading in the document's outline and not a bold line: a reader working down a
+              // long archive by headings is exactly who the grouping is for.
+              <h3
+                id={headingId}
+                className="public-past-group-heading"
+                data-testid={`${headingId}-heading`}
               >
-                <span className="public-past-row-main">
-                  <span className="public-past-row-title">{trip.title}</span>
-                  <Typography.Text type="secondary" className="public-past-row-when">
-                    {t('publicTrip.past.rowWhen', { dates, count: trip.participantCount })}
-                  </Typography.Text>
-                </span>
-                {/* Said in words, never by colour alone: the difference between a row that plays
-                    and one that cannot is the one thing a reader has to be able to see here. */}
-                {trip.playable ? (
-                  <Tag
-                    color={playing ? 'blue' : undefined}
-                    icon={<CaretRightOutlined />}
-                    className="public-past-row-mark"
-                  >
-                    {playing ? t('publicTrip.past.playing') : t('publicTrip.past.play')}
-                  </Tag>
-                ) : (
-                  <Tag
-                    className="public-past-row-mark"
-                    data-testid={`public-past-unplayable-${trip.tripLogId}`}
-                  >
-                    {t('publicTrip.past.notPlayable')}
-                  </Tag>
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+                {group.camp === null
+                  ? t('publicTrip.past.otherTrips')
+                  : t('publicTrip.camp', { name: group.camp.name })}
+              </h3>
+            )}
+            <ul className="public-past-rows">{group.trips.map(row)}</ul>
+          </section>
+        );
+      })}
       {/* Not a count, because the server deliberately does not send one: how many times a club has
           been into one cave is a disclosure, and that there is something older is not. */}
       {more && (

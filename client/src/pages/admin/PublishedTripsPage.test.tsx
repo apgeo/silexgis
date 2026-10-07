@@ -24,6 +24,7 @@ function link(overrides: Partial<PublishedLink>): PublishedLink {
     tripDateEnd: null,
     cave: { id: CAVE, name: 'Invented cave' },
     watchState: 'armed',
+    watchArmedAt: '2026-09-12T07:00:00Z',
     watchClosedAt: null,
     createdBy: 'user-1',
     createdByLabel: 'Ana Example',
@@ -50,6 +51,7 @@ function answer(items: PublishedLink[], overrides: Partial<PublishedLinks> = {})
     ),
     publishesRealNames: true,
     archiveEnabled: true,
+    seenFrom: '203.0.113.7',
     ...overrides,
   };
 }
@@ -242,6 +244,125 @@ describe('the page of everything published', () => {
     fireEvent.click(await screen.findByTitle('In the archive'));
 
     await waitFor(() => expect(asked.at(-1)).toMatchObject({ page: 1, status: 'inArchive' }));
+  });
+
+  /**
+   * Tracking left running is shown for what it is, and closing it is one click away — on the
+   * trip, where the coordinator's own button is. A watch somebody closed gets neither the count
+   * nor the way in, so what puts them on the first row is that its tracking is running.
+   */
+  it('says when tracking was started and how long it has run, and leads to the trip only while it runs', () => {
+    show();
+
+    // Started 2026-09-12 07:00, statuses as of 2026-09-14 12:00: two whole days, by the server's
+    // two instants and not by this machine's clock.
+    const running = screen.getByTestId(`published-trips-running-${LIVE}`);
+    expect(running).toHaveTextContent('Days running: 2');
+    expect(screen.getByTestId(`published-trips-watch-${LIVE}`)).toHaveAttribute(
+      'href',
+      `/trip-logs/${TRIP_A}?tab=tracking`,
+    );
+    // Followed now: its link has not run out, so nothing is said about that.
+    expect(running).not.toHaveTextContent(/this link has run out/);
+
+    expect(screen.queryByTestId(`published-trips-running-${PAST}`)).toBeNull();
+    expect(screen.queryByTestId(`published-trips-watch-${PAST}`)).toBeNull();
+    expect(screen.getByText(/^Closed /)).toBeInTheDocument();
+  });
+
+  it('points out tracking that is still running behind a link that ran out', () => {
+    list = settled(
+      answer([link({ status: 'lapsed', watchArmedAt: '2026-08-01T07:00:00Z' }), link({ id: PAST })]),
+    );
+    show();
+
+    const forgotten = screen.getByTestId(`published-trips-running-${LIVE}`);
+    expect(forgotten).toHaveTextContent('Days running: 44');
+    expect(forgotten).toHaveTextContent('Tracking is still running, but this link has run out.');
+    // The followed one beside it runs too and is not flagged.
+    expect(screen.getByTestId(`published-trips-running-${PAST}`)).not.toHaveTextContent(
+      /this link has run out/,
+    );
+  });
+
+  it('says so when nothing recorded the moment tracking was started', () => {
+    list = settled(answer([link({ watchArmedAt: null })]));
+    show();
+
+    expect(screen.getByText('Not recorded')).toBeInTheDocument();
+    expect(screen.queryByTestId(`published-trips-running-${LIVE}`)).toBeNull();
+  });
+
+  it('asks the server for tracking running longer than the days typed, and stops asking when emptied', async () => {
+    show();
+    expect(asked.at(-1)).toMatchObject({ armedLongerThanDays: undefined });
+
+    const days = screen.getByRole('spinbutton', { name: 'Tracking running longer than (days)' });
+    fireEvent.change(days, { target: { value: '7' } });
+    await waitFor(() =>
+      expect(asked.at(-1)).toMatchObject({ page: 1, armedLongerThanDays: 7 }),
+    );
+
+    // Zero is a question of its own — every trip whose tracking is running — not "no filter".
+    fireEvent.change(days, { target: { value: '0' } });
+    await waitFor(() => expect(asked.at(-1)).toMatchObject({ armedLongerThanDays: 0 }));
+
+    fireEvent.change(days, { target: { value: '' } });
+    await waitFor(() => expect(asked.at(-1)).toMatchObject({ armedLongerThanDays: undefined }));
+  });
+
+  it('tells an empty answer to the long-running question apart from nothing published at all', async () => {
+    list = settled(answer([]));
+    show();
+    expect(screen.getByText('Nothing has been published on this installation.')).toBeInTheDocument();
+
+    fireEvent.change(
+      screen.getByRole('spinbutton', { name: 'Tracking running longer than (days)' }),
+      { target: { value: '30' } },
+    );
+
+    expect(
+      await screen.findByText("No published trip's tracking has been running that long."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Nothing has been published on this installation.')).toBeNull();
+  });
+
+  it('asks for the longest-running first when the column is pressed', async () => {
+    show();
+
+    // The table renders the heading's text more than once. Pressing the first is enough: what
+    // proves the press reached the column's sorter is the question asked below.
+    fireEvent.click(screen.getAllByText('Tracking started')[0]);
+
+    await waitFor(() =>
+      expect(asked.at(-1)).toMatchObject({ sort: 'watchArmedAt', descending: false }),
+    );
+  });
+
+  /**
+   * The address is the server's reading of where this request came from, printed back so that a
+   * wrong proxy count — which fails in no other visible way — can be seen by somebody who knows
+   * their own address. When the server could not tell, the page says that and invents nothing.
+   */
+  it('prints the address the server counted the request under, and what it means when it is a proxy', () => {
+    const told = show();
+
+    expect(screen.getByTestId('published-trips-seen-from-address')).toHaveTextContent(
+      /^203\.0\.113\.7$/,
+    );
+    const line = screen.getByTestId('published-trips-seen-from');
+    expect(line).toHaveTextContent(/This request reached the server from:/);
+    expect(line).toHaveTextContent(/number of proxies is too low/);
+    expect(line).toHaveTextContent(/SILEXGIS__Proxy__Hops/);
+    told.unmount();
+
+    list = settled(answer([link({})], { seenFrom: null }));
+    show();
+
+    expect(screen.getByTestId('published-trips-seen-from')).toHaveTextContent(
+      'The server could not tell which address this request came from.',
+    );
+    expect(screen.queryByTestId('published-trips-seen-from-address')).toBeNull();
   });
 
   /**

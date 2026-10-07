@@ -109,6 +109,22 @@ export interface CaveViewTrackingOverlayProps {
    * other survey, unreported — are the same fact on every drawing and keep one wording.
    */
   drawing?: 'model' | 'map';
+  /**
+   * How long ago a moment was, in the reader's language — given by a surface that words its
+   * moments as gaps, and left out by one that prints them as clock readings.
+   *
+   * <b>Handed in, never worked out here.</b> The coordinator's table beside this card says "3 h
+   * ago" by one rounding rule and from one reading of the clock per render; a card that read the
+   * clock for itself, or rounded for itself, would be the second surface of one watch disagreeing
+   * with the first about how long somebody has been silent. So whoever owns that rule and that
+   * instant words the gap, and this card only decides where the words go: on screen, with the
+   * clock reading kept as the element's title for whoever has to write the hour down.
+   *
+   * Absent, the card prints the clock reading as it always has — which is what a published trip
+   * and a replay of a past moment want, since "ago" measured from now says nothing true about a
+   * moment somebody scrubbed back to. An answer of null is treated the same way.
+   */
+  momentInWords?: (iso: string) => string | null;
 }
 
 /**
@@ -155,6 +171,7 @@ export default function CaveViewTrackingOverlay({
   onShow,
   raised = false,
   drawing = 'model',
+  momentInWords,
 }: CaveViewTrackingOverlayProps) {
   const { t, i18n } = useTranslation();
   const narrow = useIsMobile();
@@ -166,6 +183,31 @@ export default function CaveViewTrackingOverlay({
   const open = cavers.find((caver) => caver.caverId === openCaverId) ?? null;
   const when = (value: string | null) =>
     value === null ? '—' : new Date(value).toLocaleString(i18n.language);
+  /**
+   * A moment as this surface words it: the gap where one was handed in, the clock otherwise, and
+   * the clock reading as the title only where the gap took its place on screen.
+   *
+   * A moment that is not there has neither: a dash with a title would be a time for a report
+   * nobody made.
+   */
+  const moment = (value: string | null): { text: string; title: string | undefined } => {
+    if (value === null) {
+      return { text: '—', title: undefined };
+    }
+    const words = momentInWords?.(value) ?? null;
+    return words === null
+      ? { text: when(value), title: undefined }
+      : { text: words, title: when(value) };
+  };
+  // A moment is taken only where a place was actually drawn; see the card below. The entry stays
+  // a clock reading on every surface: it is an hour somebody wrote down and is read as one, not a
+  // silence anybody is measuring.
+  const positionMoment = moment(
+    open !== null && (open.position.kind === 'station' || open.position.kind === 'depth')
+      ? open.positionAt
+      : null,
+  );
+  const lastHeardMoment = moment(open?.lastRecordedAt ?? null);
 
   const groups = useMemo(() => trackedCaverTeams(cavers), [cavers]);
   // Headings are drawn only where they say something. A trip whose party was never divided into
@@ -522,12 +564,9 @@ export default function CaveViewTrackingOverlay({
             <span
               className="caveview-tracking-card-value"
               data-testid="caveview-caver-card-position-at"
+              title={positionMoment.title}
             >
-              {when(
-                open.position.kind === 'station' || open.position.kind === 'depth'
-                  ? open.positionAt
-                  : null,
-              )}
+              {positionMoment.text}
             </span>
           </div>
           {/* <b>The last word, named for what it is rather than for being the latest thing.</b>
@@ -544,8 +583,9 @@ export default function CaveViewTrackingOverlay({
             <span
               className="caveview-tracking-card-value"
               data-testid="caveview-caver-card-last-heard"
+              title={lastHeardMoment.title}
             >
-              {when(open.lastRecordedAt)}
+              {lastHeardMoment.text}
             </span>
           </div>
           {open.position.kind === 'withheld' && (

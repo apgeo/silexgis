@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Alert, Skeleton, Tag, Typography } from 'antd';
+import { EyeOutlined } from '@ant-design/icons';
+import { Alert, Button, Skeleton, Tag, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import type { PublicLiveTrip } from '../../api/hooks.ts';
-import { tripDateRange } from './publicTripParty.ts';
+import { partyStandings, tripDateRange } from './publicTripParty.ts';
 
 export interface PublicLiveTripListProps {
   trips: readonly PublicLiveTrip[] | undefined;
@@ -18,8 +19,15 @@ export interface PublicLiveTripListProps {
    * opens the trip above and inviting another try that will be refused the same way.
    */
   linkEnded?: boolean;
-  /** This link's own trip, so its row is named as the one this page is already showing. */
+  /** This link's own trip, so its row is named as the one this link was published for. */
   ownTripLogId: string | null | undefined;
+  /**
+   * Asks for a party to be drawn — and, given this link's own trip, for the way back to it.
+   * Without it the rows are statements and nothing on them can be pressed.
+   */
+  onWatch?(tripLogId: string): void;
+  /** The other party being drawn now, or null while the drawing is this link's own trip. */
+  watchingId?: string | null;
 }
 
 /**
@@ -36,11 +44,20 @@ export interface PublicLiveTripListProps {
  * party in the cave. A row whose watch has closed says it has just finished, and never that
  * anybody is underground — that is the one false sentence this list must not produce.
  *
- * <b>Nothing here is pressable.</b> The drawing above is this link's own trip, and it is the one
- * party this page follows; a row is a statement about the cave, not a control that changes the
- * view. The link's own trip appears here too while it is being followed, and is named as the trip
- * already on screen — matched by identifier, never by title, because two trips of one cave may
- * share a title.
+ * <b>A row of another party can be asked for, and that changes whom the drawing shows — never
+ * which drawing.</b> Every place in a row was decided by the server against the survey this link
+ * was published with, so pressing *Watch* puts that party on the drawing already loaded; nothing
+ * is fetched and no other survey is opened. The row being watched says so in words instead of
+ * offering the press again, and while another party is on screen the link's own row carries the
+ * way back. The control is a button inside the row and not the row itself: a row also carries
+ * what a reader may only want to read — who is still underground — and a whole row that changed
+ * the drawing under a thumb scrolling past it would do so by accident.
+ *
+ * <b>The link's own trip is never something to watch.</b> It appears here too while it is being
+ * followed, named as this link's trip — matched by identifier, never by title, because two trips
+ * of one cave may share a title — and it is what the page draws whenever nothing else was asked
+ * for. Its standings are not repeated in its row: the page above reads them by the link's own
+ * route, more often, and two figures for one party a minute apart would be two stories.
  */
 export default function PublicLiveTripList({
   trips,
@@ -50,8 +67,23 @@ export default function PublicLiveTripList({
   refused = false,
   linkEnded = false,
   ownTripLogId,
+  onWatch,
+  watchingId = null,
 }: PublicLiveTripListProps) {
   const { t, i18n } = useTranslation();
+
+  /** How many of a party stand where, as "Label: number" — the three states, never folded to two. */
+  const standingsOf = (trip: PublicLiveTrip) => {
+    const counts = partyStandings(trip.participants);
+    return (['underground', 'out', 'unheard'] as const)
+      .map((standing) =>
+        t('publicTrip.live.standingCount', {
+          standing: t(`publicTrip.standing.${standing}`),
+          number: counts[standing],
+        }),
+      )
+      .join(' · ');
+  };
 
   const body = () => {
     if (failed && refused && linkEnded) {
@@ -92,10 +124,13 @@ export default function PublicLiveTripList({
           {trips.map((trip) => {
             const dates = tripDateRange(trip.tripDate, trip.tripDateEnd, i18n.language);
             const underground = trip.state === 'armed';
+            const own = trip.tripLogId === ownTripLogId;
+            const watched = !own && trip.tripLogId === watchingId;
             return (
               <li
                 key={trip.tripLogId}
                 className="public-live-row"
+                aria-current={watched ? 'true' : undefined}
                 data-testid={`public-live-trip-${trip.tripLogId}`}
               >
                 <span className="public-past-row-main">
@@ -103,9 +138,30 @@ export default function PublicLiveTripList({
                   <Typography.Text type="secondary" className="public-past-row-when">
                     {t('publicTrip.past.rowWhen', { dates, count: trip.participants.length })}
                   </Typography.Text>
+                  {/* The camp this party is out from, where the server names one. A line and not
+                      a grouping: there are a handful of rows here at most, and two parties of
+                      one camp are told from a visiting club's by reading it. */}
+                  {trip.expedition != null && (
+                    <Typography.Text
+                      type="secondary"
+                      className="public-past-row-when"
+                      data-testid={`public-live-camp-${trip.tripLogId}`}
+                    >
+                      {t('publicTrip.camp', { name: trip.expedition.name })}
+                    </Typography.Text>
+                  )}
+                  {!own && (
+                    <Typography.Text
+                      type="secondary"
+                      className="public-past-row-when"
+                      data-testid={`public-live-standings-${trip.tripLogId}`}
+                    >
+                      {standingsOf(trip)}
+                    </Typography.Text>
+                  )}
                 </span>
                 <span className="public-live-row-marks">
-                  {trip.tripLogId === ownTripLogId && (
+                  {own && (
                     <Tag
                       className="public-past-row-mark"
                       data-testid={`public-live-own-${trip.tripLogId}`}
@@ -120,6 +176,41 @@ export default function PublicLiveTripList({
                   >
                     {t(underground ? 'publicTrip.live.underground' : 'publicTrip.live.justFinished')}
                   </Tag>
+                  {/* Said in words, as the archive's rows say which one is playing: which party
+                      the drawing above is showing is the one thing this list must not leave to a
+                      colour. */}
+                  {watched && (
+                    <Tag
+                      color="blue"
+                      icon={<EyeOutlined />}
+                      className="public-past-row-mark"
+                      data-testid={`public-live-watching-${trip.tripLogId}`}
+                    >
+                      {t('publicTrip.live.watching')}
+                    </Tag>
+                  )}
+                  {onWatch !== undefined && !own && !watched && (
+                    <Button
+                      icon={<EyeOutlined />}
+                      className="public-live-watch"
+                      onClick={() => onWatch(trip.tripLogId)}
+                      data-testid={`public-live-watch-${trip.tripLogId}`}
+                    >
+                      {t('publicTrip.live.watch')}
+                    </Button>
+                  )}
+                  {/* Only while somebody else is on screen: with the link's own trip drawn there
+                      is nowhere to go back to, and a button that did nothing would be a control
+                      that looks broken. */}
+                  {onWatch !== undefined && own && watchingId !== null && (
+                    <Button
+                      className="public-live-watch"
+                      onClick={() => onWatch(trip.tripLogId)}
+                      data-testid="public-live-back-own"
+                    >
+                      {t('publicTrip.live.backToOwn')}
+                    </Button>
+                  )}
                 </span>
               </li>
             );

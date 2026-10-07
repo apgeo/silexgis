@@ -7,6 +7,8 @@ import {
   movieFrames,
   movieNewReports,
   movieSpansAt,
+  movieSpansShowing,
+  movieSpeedFactor,
   movieTripIsLive,
   movieTripSpan,
   type MovieTripSpan,
@@ -227,6 +229,40 @@ describe('movieTripSpan', () => {
     expect(movieSpansAt([live, never, done], T0 + 5 * HOUR, 'model-1')).toBeNull();
   });
 
+  it('paces a movie by the reports of the people who appear, and of nobody else', () => {
+    const by = (caverId: string, ms: number, surveyModelId: string | null = 'model-1') => ({
+      ...report(ms, surveyModelId),
+      caverId,
+    });
+    const tracking = { armedAt: at(T0), closedAt: at(T0 + 8 * HOUR) };
+    // Ana reports at the start and the end; Bogdan alone in the middle, and once on another survey.
+    const events = [by('ana', T0), by('bogdan', T0 + 4 * HOUR), by('bogdan', T0 + 5 * HOUR, 'model-2'), by('ana', T0 + 8 * HOUR)];
+    const trips = [{ tripLogId: 'trip-a', tracking, events }];
+    const spans = movieSpansAt(trips, T0 + 9 * HOUR, 'model-1')!;
+    expect(spans[0].moments).toEqual([T0, T0 + 4 * HOUR, T0 + 8 * HOUR]);
+
+    // Everybody appears: the very spans, untouched.
+    expect(movieSpansShowing(spans, trips, 'model-1', () => true)).toEqual(spans);
+    expect(movieSpansShowing(spans, trips, 'model-1', () => true)[0]).toBe(spans[0]);
+
+    const without = movieSpansShowing(spans, trips, 'model-1', (trip, caver) => !(trip === 'trip-a' && caver === 'bogdan'));
+    expect(without).toEqual([{ tripLogId: 'trip-a', window: spans[0].window, moments: [T0, T0 + 8 * HOUR] }]);
+
+    // And so the movie does not stop at the moment somebody it does not show was reported: with
+    // him the clock dwells around the fourth hour, without him it goes straight across.
+    const quiet = { mode: 'calendar' as const, quietGapMs: 30 * MIN };
+    const withHim = buildMovieTimeline(spans, quiet)!;
+    const withoutHim = buildMovieTimeline(without, quiet)!;
+    expect(withHim.length).toBeGreaterThan(withoutHim.length);
+    const shownAt = (timeline: typeof withHim) =>
+      Array.from({ length: 201 }, (_, step) => timeline.instants((step / 200) * timeline.length)[0]);
+    const near = (instant: number) => Math.abs(instant - (T0 + 4 * HOUR)) < 10 * MIN;
+    expect(shownAt(withHim).filter(near).length).toBeGreaterThan(shownAt(withoutHim).filter(near).length + 10);
+
+    // A span of a trip that is not among the trips given is handed back as it is.
+    expect(movieSpansShowing(spans, [], 'model-1', () => false)).toEqual(spans);
+  });
+
   it('counts the reports that have arrived by which they are, not by the time they carry', () => {
     const known = new Set(['r1', 'r2']);
     expect(movieNewReports([{ id: 'r1' }, { id: 'r2' }], known)).toBe(0);
@@ -247,5 +283,43 @@ describe('movieFrameCount', () => {
 
   it('never has an empty replay part', () => {
     expect(movieFrameCount(settings({ fps: 10, durationS: 0, holdEndS: 0 })).count).toBe(1);
+  });
+});
+
+describe('movieSpeedFactor', () => {
+  const twoHours = buildMovieTimeline([span('trip-a', T0, T0 + 2 * HOUR, [])], { mode: 'calendar', quietGapMs: null })!;
+
+  it('is how much of the timeline goes by in a second of the movie, between its first and last replay frames', () => {
+    // 30 s at 25 frames a second is 750 frames, the last of them showing the end: the two hours are
+    // crossed in 749 frame times.
+    const chosen = settings({ fps: 25, durationS: 30, holdEndS: 2 });
+    expect(movieSpeedFactor(twoHours, chosen)).toBeCloseTo((2 * HOUR) / ((749 * 1000) / 25), 9);
+    // Which is what the schedule's own frames say: one frame's step of the timeline over one frame's time.
+    const frames = movieFrames(twoHours, chosen);
+    const step = frames.frame(1).position - frames.frame(0).position;
+    expect(movieSpeedFactor(twoHours, chosen)).toBeCloseTo(step / (1000 / 25), 9);
+  });
+
+  it('is the same on every frame: it reads nothing but the timeline’s length and the settings', () => {
+    const chosen = settings({ fps: 10, durationS: 10, holdEndS: 5 });
+    expect(movieSpeedFactor({ length: twoHours.length }, chosen)).toBe(movieSpeedFactor(twoHours, chosen));
+    // The still frames at the end add nothing to it.
+    expect(movieSpeedFactor(twoHours, { ...chosen, holdEndS: 0 })).toBe(movieSpeedFactor(twoHours, chosen));
+  });
+
+  it('is the rate of what is shown, not of what was skipped: a shortened quiet stretch lowers it', () => {
+    // Twenty minutes of reports at each end of ten hours, and nothing between them.
+    const quiet = [span('trip-a', T0, T0 + 10 * HOUR, [T0 + 20 * MIN, T0 + 10 * HOUR - 20 * MIN])];
+    const whole = buildMovieTimeline(quiet, { mode: 'calendar', quietGapMs: null })!;
+    const shortened = buildMovieTimeline(quiet, { mode: 'calendar', quietGapMs: 30 * MIN })!;
+    const chosen = settings({ fps: 10, durationS: 10 });
+    expect(shortened.length).toBe(70 * MIN);
+    expect(movieSpeedFactor(shortened, chosen)! / movieSpeedFactor(whole, chosen)!).toBeCloseTo(70 / 600, 9);
+  });
+
+  it('has no figure for a movie of one replay frame, or a timeline with no length', () => {
+    expect(movieSpeedFactor(twoHours, settings({ fps: 10, durationS: 0 }))).toBeNull();
+    expect(movieSpeedFactor({ length: 0 }, settings({ fps: 10, durationS: 10 }))).toBeNull();
+    expect(movieSpeedFactor({ length: Number.NaN }, settings({ fps: 10, durationS: 10 }))).toBeNull();
   });
 });
