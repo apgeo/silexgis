@@ -181,7 +181,8 @@ export async function selectionFor(base = 'master', mapFile = DEFAULT_MAP) {
   return { base, changed: files.length, ...classify(files, map) };
 }
 
-function changedFiles(base) {
+/** The working tree's changes against `base`: tracked differences and untracked files. */
+export function changedFiles(base) {
   const opts = { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 };
   const diff = execFileSync('git', ['diff', '--name-only', base, '--'], opts);
   const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], opts);

@@ -27,6 +27,12 @@ async function protectionNow(page: Page): Promise<ProtectionSettings> {
 }
 
 test.describe('the calendar feed', () => {
+  // One after the other, whatever the rest of the suite does: the first test switches feeds on
+  // for the whole installation and off again, and the second is about what the account page
+  // shows while they are off. Side by side — the runner's fast form spreads the tests of a file
+  // over the workers — the second would look while the first has them on.
+  test.describe.configure({ mode: 'default' });
+
   test.beforeEach(async ({ page, consoleErrors }) => {
     // The account page asks for the caller's newest data export on every visit, and an account
     // that never requested one is answered 404 — the page's normal empty state, read as "none",
