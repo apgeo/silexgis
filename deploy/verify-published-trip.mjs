@@ -327,7 +327,9 @@ export async function verify({ address, token, origins = [], linkAddress = null 
     }
   }
 
-  // 3 and 4. The cave's two lists. A link whose own trip is over still opens these.
+  // 3 and 4. The cave's two lists. A link whose own trip is over still opens the past trips, and
+  // the parties followed now beside them unless the installation set a period after which an old
+  // link stops listing those.
   const list = async (what, suffix) => {
     const response = await read(what, `${API_PREFIX}${tokenPath}${suffix}`, { accept: 'application/json' });
     if (response === null) return null;
@@ -353,10 +355,19 @@ export async function verify({ address, token, origins = [], linkAddress = null 
   if (past === false && typeof live === 'number') {
     say('note', 'past trips: not offered through this link — past trips are switched off on this installation');
   }
+  // The mirror case has one cause: only the period an installation may set stops this list while
+  // the past trips go on answering.
+  const liveLapsed = live === false && typeof past === 'number';
+  if (liveLapsed) {
+    say('note', 'followed now: not offered through this link — its own trip ended longer ago than SILEXGIS__TripTracking__SiblingWindowAfterLapse allows on this installation (the API log gives the reason "past_sibling_window"). Nothing is wrong and the past trips are unaffected; to show a camp that is running, publish one of its trips and use that link');
+  }
 
   if (followed === false) {
     if (typeof live === 'number' || typeof past === 'number') {
-      say('note', 'party: the link no longer follows its own trip (tracking closed and the period after closing over, or tracking off) — it opens its cave\'s lists, above, and nothing of its own');
+      const opens = liveLapsed
+        ? 'it opens its cave\'s past trips, above, and nothing else'
+        : 'it opens its cave\'s lists, above, and nothing of its own';
+      say('note', `party: the link no longer follows its own trip (tracking closed and the period after closing over, or tracking off) — ${opens}`);
     } else if (live === false && past === false) {
       say('FAIL', `link: the server answers it exactly as it answers a link it never issued. Why is in the API log and nowhere else: search it for "link ${handle}" — the line begins "Published trip read refused" and gives the reason`);
     }
