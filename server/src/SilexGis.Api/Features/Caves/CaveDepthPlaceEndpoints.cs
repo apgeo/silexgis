@@ -5,9 +5,11 @@ using Npgsql;
 using SilexGis.Api.Common;
 using SilexGis.Domain.Access;
 using SilexGis.Domain.Entities;
+using SilexGis.Domain.Surveys;
 using SilexGis.Domain.Trips;
 using SilexGis.Infrastructure.Permissions;
 using SilexGis.Infrastructure.Persistence;
+using SilexGis.Infrastructure.Surveys;
 
 namespace SilexGis.Api.Features.Caves;
 
@@ -31,10 +33,17 @@ namespace SilexGis.Api.Features.Caves;
 /// told the other. A cave nobody may read answers the same not-found an absent cave answers.
 /// </para>
 /// <para>
-/// <b>Location protection does not reach it, and the reason is worth stating.</b> These rows carry
-/// no coordinate: a depth is a distance below an entrance and a station name is a label inside a
-/// survey, neither of which places a cave on the earth. What protects a survey's geometry is the
-/// gate on the survey model itself, which is untouched here.
+/// <b>Location protection does not reach the rows, and the reason is worth stating.</b> These rows
+/// carry no coordinate: a depth is a distance below an entrance and a station name is a label
+/// inside a survey, neither of which places a cave on the earth. What protects a survey's geometry
+/// is the gate on the survey model itself, which is untouched here.
+/// </para>
+/// <para>
+/// <b>It does reach the one thing said here about the survey.</b> Each row is sent with whether the
+/// cave's survey holds its station, and that is not a fact about the declaration: it says the cave
+/// has a survey that has been read, and which names are and are not in it. So it is answered on
+/// the survey's terms — Read on the cave and its exact position open — and is null for everybody
+/// else, exactly as it is for a cave with no survey at all.
 /// </para>
 /// </remarks>
 public static class CaveDepthPlaceEndpoints
@@ -74,10 +83,13 @@ public static class CaveDepthPlaceEndpoints
             // offer, because somebody picking where a party is thinks downwards from the entrance.
             .OrderBy(x => x.DepthM)
             .ThenBy(x => x.Id)
-            .Select(x => new CaveDepthPlaceDto(x.Id, x.DepthM, x.ViewerStationName, x.PlaceLabel))
             .ToListAsync(ct);
 
-        return TypedResults.Ok(rows);
+        var inSurvey = await InSurveyAsync(db, ctx, caveId, [.. rows.Select(x => x.ViewerStationName)], ct);
+        return TypedResults.Ok(rows
+            .Select(x => new CaveDepthPlaceDto(
+                x.Id, x.DepthM, x.ViewerStationName, x.PlaceLabel, inSurvey(x.ViewerStationName)))
+            .ToList());
     }
 
     private static async Task<Results<Ok<CaveDepthPlaceDto>, ProblemHttpResult>> WriteAsync(
@@ -136,8 +148,73 @@ public static class CaveDepthPlaceEndpoints
                 "That depth was declared by somebody else while this was being written. Read the list and write again.");
         }
 
-        return TypedResults.Ok(
-            new CaveDepthPlaceDto(existing.Id, existing.DepthM, existing.ViewerStationName, existing.PlaceLabel));
+        // Said on the answer to a write as it is on the list, under the same terms: the person
+        // who has just typed a station name is the one who can act on being told the survey does
+        // not have it, and somebody who may write the cave but not place it is told nothing.
+        var inSurvey = await InSurveyAsync(db, ctx, caveId, [existing.ViewerStationName], ct);
+        return TypedResults.Ok(new CaveDepthPlaceDto(
+            existing.Id, existing.DepthM, existing.ViewerStationName, existing.PlaceLabel,
+            inSurvey(existing.ViewerStationName)));
+    }
+
+    /// <summary>
+    /// For each of these station names, whether the cave's current survey holds it — or null for
+    /// all of them where that may not be said to this caller, or there is no such survey.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "Current" is the survey carrying the cave's mark, once it has been read, and nothing else:
+    /// a survey that merely stands in for an unreadable marked one answers for the cave's figures
+    /// but not here. The page that shows these answers offers station names out of the marked
+    /// survey and tells its reader to check which survey is the current one, so an answer judged
+    /// against any other upload would contradict both.
+    /// </para>
+    /// <para>
+    /// The survey and the caller's right to hear about it are asked together, in one statement,
+    /// so there is no path through here on which the names are compared for somebody who was not
+    /// first found entitled to the survey.
+    /// </para>
+    /// <para>
+    /// The comparison itself is the one a watch makes before it honours a declaration, asked of
+    /// the same function: a declaration keeps the name the drawing shows, a station row may hold
+    /// it under the file's root survey, and "is it there" has to mean the same thing on the cave's
+    /// page as it does at the moment a report is placed. Only the rows either reading could mean
+    /// are fetched — a cave declares a handful of places and its survey holds tens of thousands
+    /// of stations.
+    /// </para>
+    /// </remarks>
+    private static async Task<Func<string, bool?>> InSurveyAsync(
+        SilexGisDbContext db, AccessContext? ctx, Guid caveId, IReadOnlyList<string> viewerNames,
+        CancellationToken ct)
+    {
+        if (ctx is null || viewerNames.Count == 0)
+        {
+            return _ => null;
+        }
+
+        var survey = await ChosenSurveyModelSql.CurrentForCaveAsync(db, ctx, caveId, ct);
+        if (survey is null)
+        {
+            return _ => null;
+        }
+
+        var readings = viewerNames
+            .SelectMany(name => SurveyStationNames.StoredCandidates(survey.Format, survey.RootSurveyName, name))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var held = await db.SurveyStations.AsNoTracking()
+            .Where(s => s.SurveyModelId == survey.Id && readings.Contains(s.Name))
+            .Select(s => new { s.Name, s.SurveyName })
+            .ToListAsync(ct);
+
+        // Altitude and the entrance flag play no part in whether a name is there, so neither is read.
+        var stations = held
+            .Select(s => TrackingDepthResolver.Station.Of(
+                survey.Format, survey.RootSurveyName, s.Name, s.SurveyName, z: 0, isEntrance: false))
+            .ToList();
+
+        return name => TrackingDepthPlacements.NamesAStationOf(
+            stations, new DeclaredDepthPlaces.Declared(0, name, null));
     }
 
     /// <summary>The unique index on (cave, depth) refused the write, and nothing else did.</summary>

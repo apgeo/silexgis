@@ -20202,6 +20202,7 @@ export interface components {
             depthM: number;
             stationName: string;
             placeLabel: null | string;
+            stationInSurvey: null | boolean;
         };
         CaveDepthPlaceWriteRequest: {
             /** Format: double */
