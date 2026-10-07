@@ -16,11 +16,20 @@ namespace SilexGis.Api.Features.TripTracking;
 /// can tell them. A publication usually ends earlier than this — closing the watch gets there first
 /// — so it is an outer bound rather than a promise about how long the page will answer.
 /// </param>
+/// <param name="ProtectedCaveWithinSurveyBounds">
+/// A warning, never a refusal: the position of a protected cave other than the trip's own, or of
+/// one of its entrances, lies inside the rectangle spanned by the stations of the survey this link
+/// hands out. It is a check by position and cannot see inside the file — the survey may not enter
+/// that cave at all, and a survey that does can still answer false. It names no cave and carries no
+/// position, and it counts only caves whose exact position the caller may already see, so it is
+/// false for a publisher who may not, whatever lies there.
+/// </param>
 public sealed record TripTrackingShareCreatedDto(
     Guid Id,
     string Token,
     DateTimeOffset CreatedAt,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt,
+    bool ProtectedCaveWithinSurveyBounds);
 
 /// <summary>Publication-link metadata for the managing list — deliberately token-free.</summary>
 /// <param name="ExpiresAt">
