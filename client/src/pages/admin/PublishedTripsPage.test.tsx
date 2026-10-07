@@ -428,7 +428,11 @@ describe('the page of everything published', () => {
     fireEvent.click(screen.getByTestId('published-trips-revoke-everything'));
 
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent(/Links still standing: 2/);
+    expect(dialog).toHaveTextContent(/Links still standing in this list: 2/);
+    // The figure is the list's, and the act reaches past the list: said before the press.
+    expect(screen.getByTestId('published-trips-revoke-everything-deleted')).toHaveTextContent(
+      /links of deleted trips are taken back as well.*this list does not show them.*can therefore be larger/,
+    );
     expect(dialog).toHaveTextContent(/Every cave's public list of past trips empties/);
     expect(dialog).toHaveTextContent(/published again only by starting its watch again/);
     expect(dialog).toHaveTextContent(/cannot be undone/);
@@ -449,6 +453,34 @@ describe('the page of everything published', () => {
     await waitFor(() => expect(revokeEverything).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Links taken back: 2 · Trips: 2')).toBeInTheDocument();
     expect(revokeTrip).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The act also takes back the links of trips that are deleted at that moment — a deleted trip
+   * can be restored, and its links with it — and the list leaves those out. So the answer can
+   * name more links than the list had rows for, and an administrator who checks one against the
+   * other must be told that this is the act working, not a miscount.
+   */
+  it('says why more links were taken back than the list showed', async () => {
+    // The list shows two standing links; the act answers that it took back five, of four trips.
+    revokeEverything.mockResolvedValue({ revokedLinks: 5, trips: 4 });
+    show();
+
+    fireEvent.click(screen.getByTestId('published-trips-revoke-everything'));
+    fireEvent.change(await screen.findByTestId('published-trips-revoke-everything-word'), {
+      target: { value: 'UNPUBLISH' },
+    });
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Unpublish everything' }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Links taken back: 5 · Trips: 4 · Links this list showed: 2. The links of deleted trips, which the list leaves out, are taken back too.',
+      ),
+    ).toBeInTheDocument();
+    // Never the short answer beside it: two figures for one act would be two stories.
+    expect(screen.queryByText('Links taken back: 5 · Trips: 4')).toBeNull();
   });
 
   it('forgets a word typed for a withdrawal that was backed out of', async () => {
