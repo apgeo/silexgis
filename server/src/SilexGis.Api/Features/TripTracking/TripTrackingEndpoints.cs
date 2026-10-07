@@ -396,7 +396,7 @@ public static class TripTrackingEndpoints
         var current = tracking?.State ?? TripTrackingState.Off;
         if (!TripTrackingRules.MayTransition(current, target))
         {
-            return ApiProblems.Conflict("tracking.state_invalid", $"Tracking does not move from {current} to {target}.");
+            return ApiProblems.Conflict(TrackingProblemCodes.StateInvalid, $"Tracking does not move from {current} to {target}.");
         }
 
         // Absent fields keep what is stored (an empty string clears the reference, an empty
@@ -406,7 +406,7 @@ public static class TripTrackingEndpoints
         var effectiveModelId = request.SurveyModelId ?? tracking?.SurveyModelId;
         if (target == TripTrackingState.Armed && effectiveModelId is null)
         {
-            return ApiProblems.Conflict("tracking.model_missing", "Tracking needs a survey model to place cavers in.");
+            return ApiProblems.Conflict(TrackingProblemCodes.ModelMissing, "Tracking needs a survey model to place cavers in.");
         }
 
         // Arming on a survey that is no longer here is the same refusal, deliberately worded the
@@ -422,7 +422,7 @@ public static class TripTrackingEndpoints
         if (target == TripTrackingState.Armed && !modelChanging && effectiveModelId is { } keeping
             && !await db.SurveyModels.AsNoTracking().AnyAsync(m => m.Id == keeping, ct))
         {
-            return ApiProblems.Conflict("tracking.model_missing",
+            return ApiProblems.Conflict(TrackingProblemCodes.ModelMissing,
                 "The survey model this watch was armed on is no longer here — choose another before arming.");
         }
 
@@ -438,7 +438,7 @@ public static class TripTrackingEndpoints
             // is a placing act and takes the placing right. Closing, re-arming and filter
             // edits do not; a co-writer without exact view can still end a watch.
             var usable = await UsableModelAsync(db, access, protection, ctx!, effectiveModelId, ct);
-            if (usable is null) return ApiProblems.Conflict("tracking.model_unavailable",
+            if (usable is null) return ApiProblems.Conflict(TrackingProblemCodes.ModelUnavailable,
                 "The survey model does not exist here, or its cave cannot be placed by this account.");
             snapshotCave = usable.Value.Cave.Id;
             // Swapping the survey under an armed watch is allowed and stays allowed: a corrected or
@@ -458,7 +458,7 @@ public static class TripTrackingEndpoints
             if (modelChanging
                 && !TripTrackingRules.MayPointAtCave(target, tracking?.CaveFeatureId, snapshotCave.Value))
             {
-                return ApiProblems.Conflict("tracking.model_other_cave",
+                return ApiProblems.Conflict(TrackingProblemCodes.ModelOtherCave,
                     "An armed watch can only be moved to another survey of the same cave — close it first.");
             }
             if (referenceChanging)
@@ -468,7 +468,7 @@ public static class TripTrackingEndpoints
                 // Therion model that is not guaranteed to be the string the survey rows hold.
                 referenceResolved = await ResolveStationAsync(
                     db, usable.Value.Model, request.ReferenceStationName!, ct);
-                if (referenceResolved is null) return ApiProblems.Conflict("tracking.reference_unknown",
+                if (referenceResolved is null) return ApiProblems.Conflict(TrackingProblemCodes.ReferenceUnknown,
                     "The reference station is not a station of the chosen model.");
             }
         }
@@ -523,7 +523,7 @@ public static class TripTrackingEndpoints
         {
             // Two first-ever config writes raced to insert the same one-per-trip row; the
             // loser is told to look again rather than being answered with a stack trace.
-            return ApiProblems.Conflict("tracking.concurrent_write", "Another tracking write landed first — reload and retry.");
+            return ApiProblems.Conflict(TrackingProblemCodes.ConcurrentWrite, "Another tracking write landed first — reload and retry.");
         }
 
         return await GetAsync(tripLogId, http, db, access, protection, accessAccessor, options, clock, ct);
@@ -558,7 +558,7 @@ public static class TripTrackingEndpoints
         if (refusal is not null) return refusal;
 
         var team = await db.TripTeams.FirstOrDefaultAsync(t => t.Id == teamId && t.TripLogId == tripLogId, ct);
-        if (team is null) return ApiProblems.NotFound("tracking.team_not_found");
+        if (team is null) return ApiProblems.NotFound(TrackingProblemCodes.TeamNotFound);
         team.Title = request.Title!;
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(new TrackingTeamDto(team.Id, team.Title));
@@ -576,7 +576,7 @@ public static class TripTrackingEndpoints
         if (refusal is not null) return refusal;
 
         var team = await db.TripTeams.FirstOrDefaultAsync(t => t.Id == teamId && t.TripLogId == tripLogId, ct);
-        if (team is null) return ApiProblems.NotFound("tracking.team_not_found");
+        if (team is null) return ApiProblems.NotFound(TrackingProblemCodes.TeamNotFound);
         db.TripTeams.Remove(team);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
@@ -608,7 +608,7 @@ public static class TripTrackingEndpoints
             .AnyAsync(p => p.TripLogId == tripLogId && p.CaverId == caverId, ct);
         if (!onRoster)
         {
-            return ApiProblems.BadRequest("tracking.caver_not_participant",
+            return ApiProblems.BadRequest(TrackingProblemCodes.CaverNotParticipant,
                 "Only somebody on the trip's roster can be named on its published page.");
         }
 
@@ -654,7 +654,7 @@ public static class TripTrackingEndpoints
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
         {
-            return ApiProblems.Conflict("tracking.not_writable", LogNotWritable);
+            return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -665,7 +665,7 @@ public static class TripTrackingEndpoints
         var recordedAt = (request.RecordedAt ?? now).ToUniversalTime();
         if (TripTrackingRules.MomentIsInFuture(recordedAt, now))
         {
-            return ApiProblems.BadRequest("tracking.recorded_in_future", "A report cannot be about the future.");
+            return ApiProblems.BadRequest(TrackingProblemCodes.RecordedInFuture, "A report cannot be about the future.");
         }
 
         var caverIds = request.CaverIds!.Distinct().ToList();
@@ -674,7 +674,7 @@ public static class TripTrackingEndpoints
             .Select(p => p.CaverId).Distinct().ToListAsync(ct);
         if (participants.Count != caverIds.Count)
         {
-            return ApiProblems.BadRequest("tracking.caver_not_participant",
+            return ApiProblems.BadRequest(TrackingProblemCodes.CaverNotParticipant,
                 "Every reported caver has to be on the trip's roster first.");
         }
 
@@ -682,7 +682,7 @@ public static class TripTrackingEndpoints
         {
             var teamKnown = await db.TripTeams.AsNoTracking()
                 .AnyAsync(t => t.Id == request.TeamId && t.TripLogId == tripLogId, ct);
-            if (!teamKnown) return ApiProblems.NotFound("tracking.team_not_found");
+            if (!teamKnown) return ApiProblems.NotFound(TrackingProblemCodes.TeamNotFound);
         }
 
         var placed = await ResolvePlaceAsync(
@@ -745,10 +745,10 @@ public static class TripTrackingEndpoints
         {
             if (tracking.SurveyModelId is null)
             {
-                return Refused(ApiProblems.Conflict("tracking.model_missing", "Tracking has no survey model to place cavers in."));
+                return Refused(ApiProblems.Conflict(TrackingProblemCodes.ModelMissing, "Tracking has no survey model to place cavers in."));
             }
             var usable = await UsableModelAsync(db, access, protection, ctx!, tracking.SurveyModelId, ct);
-            if (usable is null) return Refused(ApiProblems.Conflict("tracking.model_unavailable",
+            if (usable is null) return Refused(ApiProblems.Conflict(TrackingProblemCodes.ModelUnavailable,
                 "The survey model does not exist here, or its cave cannot be placed by this account."));
             surveyModelId = usable.Value.Model.Id;
             caveFeatureId = usable.Value.Cave.Id;
@@ -760,7 +760,7 @@ public static class TripTrackingEndpoints
                 // differently, so a station pressed on the model is a real station under a name a
                 // string comparison against the survey rows would call unknown.
                 resolvedStation = await ResolveStationAsync(db, usable.Value.Model, stationName!, ct);
-                if (resolvedStation is null) return Refused(ApiProblems.BadRequest("tracking.station_unknown",
+                if (resolvedStation is null) return Refused(ApiProblems.BadRequest(TrackingProblemCodes.StationUnknown,
                     "The station is not one of the chosen model's stations."));
             }
             else
@@ -780,10 +780,10 @@ public static class TripTrackingEndpoints
                 switch (placedAt.Outcome)
                 {
                     case TrackingDepthPlacementOutcome.ReferenceUnknown:
-                        return Refused(ApiProblems.Conflict("tracking.reference_unknown",
+                        return Refused(ApiProblems.Conflict(TrackingProblemCodes.ReferenceUnknown,
                             "The depth datum cannot be established for the chosen model."));
                     case TrackingDepthPlacementOutcome.NoStationAtDepth:
-                        return Refused(ApiProblems.Conflict("tracking.no_station_at_depth",
+                        return Refused(ApiProblems.Conflict(TrackingProblemCodes.NoStationAtDepth,
                             "No station matches that depth under the trip's depth filter."));
                 }
 
@@ -870,25 +870,25 @@ public static class TripTrackingEndpoints
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
         {
-            return ApiProblems.Conflict("tracking.not_writable", LogNotWritable);
+            return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
         }
 
         var row = await db.TripPositionEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
-        if (row is null) return ApiProblems.NotFound("tracking.event_not_found");
+        if (row is null) return ApiProblems.NotFound(TrackingProblemCodes.EventNotFound);
 
         var now = DateTimeOffset.UtcNow;
         // To UTC for the same reason the record route does it: the column accepts no other offset.
         var recordedAt = (request.RecordedAt ?? row.RecordedAt).ToUniversalTime();
         if (TripTrackingRules.MomentIsInFuture(recordedAt, now))
         {
-            return ApiProblems.BadRequest("tracking.recorded_in_future", "A report cannot be about the future.");
+            return ApiProblems.BadRequest(TrackingProblemCodes.RecordedInFuture, "A report cannot be about the future.");
         }
 
         if (request.TeamId is not null)
         {
             var teamKnown = await db.TripTeams.AsNoTracking()
                 .AnyAsync(t => t.Id == request.TeamId && t.TripLogId == tripLogId, ct);
-            if (!teamKnown) return ApiProblems.NotFound("tracking.team_not_found");
+            if (!teamKnown) return ApiProblems.NotFound(TrackingProblemCodes.TeamNotFound);
         }
 
         var placed = await ResolvePlaceAsync(
@@ -936,11 +936,11 @@ public static class TripTrackingEndpoints
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking is null || !TripTrackingRules.MayWriteLog(tracking.State))
         {
-            return ApiProblems.Conflict("tracking.not_writable", LogNotWritable);
+            return ApiProblems.Conflict(TrackingProblemCodes.NotWritable, LogNotWritable);
         }
 
         var row = await db.TripPositionEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.TripLogId == tripLogId, ct);
-        if (row is null) return ApiProblems.NotFound("tracking.event_not_found");
+        if (row is null) return ApiProblems.NotFound(TrackingProblemCodes.EventNotFound);
         db.TripPositionEvents.Remove(row);
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
@@ -985,7 +985,7 @@ public static class TripTrackingEndpoints
         var usable = await UsableModelAsync(db, access, protection, ctx!, tracking?.SurveyModelId, ct);
         if (usable is null)
         {
-            return ApiProblems.Conflict("tracking.model_unavailable",
+            return ApiProblems.Conflict(TrackingProblemCodes.ModelUnavailable,
                 "The survey model does not exist here, or its cave cannot be placed by this account.");
         }
 
@@ -1018,10 +1018,10 @@ public static class TripTrackingEndpoints
         var tracking = await db.TripTrackings.AsNoTracking().FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking?.SurveyModelId is null)
         {
-            return ApiProblems.Conflict("tracking.model_missing", "Tracking has no survey model to place cavers in.");
+            return ApiProblems.Conflict(TrackingProblemCodes.ModelMissing, "Tracking has no survey model to place cavers in.");
         }
         var usable = await UsableModelAsync(db, access, protection, ctx!, tracking.SurveyModelId, ct);
-        if (usable is null) return ApiProblems.Conflict("tracking.model_unavailable",
+        if (usable is null) return ApiProblems.Conflict(TrackingProblemCodes.ModelUnavailable,
             "The survey model does not exist here, or its cave cannot be placed by this account.");
 
         var stations = await StationsOfAsync(db, usable.Value.Model, ct);
@@ -1044,7 +1044,7 @@ public static class TripTrackingEndpoints
         var referenceZ = TrackingDepthResolver.ReferenceZ(stations, tracking.ReferenceStationName);
         if (referenceZ is null && declared is null)
         {
-            return ApiProblems.Conflict("tracking.reference_unknown",
+            return ApiProblems.Conflict(TrackingProblemCodes.ReferenceUnknown,
                 "The depth datum cannot be established for the chosen model.");
         }
 

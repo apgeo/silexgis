@@ -156,7 +156,7 @@ public static class TrackingCsvImportEndpoints
 
         if (!TripTrackingRules.MayWriteLog(loaded.Tracking!.State))
         {
-            return ApiProblems.Conflict("tracking.not_writable",
+            return ApiProblems.Conflict(TrackingProblemCodes.NotWritable,
                 "A report lands on a watch that is armed or has been closed — arm the watch first.");
         }
 
@@ -312,7 +312,7 @@ public static class TrackingCsvImportEndpoints
         if (tracking is null)
         {
             return new Loaded(null, null, null, null,
-                ApiProblems.Conflict("tracking.not_configured", "This trip has no watch to import reports onto."));
+                ApiProblems.Conflict(TrackingProblemCodes.NotConfigured, "This trip has no watch to import reports onto."));
         }
 
         // Distinct by person, not by roster row: the roster is one row per person per job, so the

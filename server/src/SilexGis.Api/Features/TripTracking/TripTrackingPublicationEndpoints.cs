@@ -126,7 +126,7 @@ public static class TripTrackingPublicationEndpoints
     /// refusal that told "your token is bad" apart from "that past trip is gone" would be an answer
     /// about which trips exist and which tokens were once real.
     /// </remarks>
-    internal const string NotFoundCode = "tracking.share_not_found";
+    internal const string NotFoundCode = TrackingProblemCodes.ShareNotFound;
 
     /// <summary>
     /// The caller may run this trip but may not hand its cave to the internet.
@@ -137,7 +137,7 @@ public static class TripTrackingPublicationEndpoints
     /// caller demonstrably holds; splitting the answer would turn a refusal about publishing
     /// into an answer about which caves this account may read.
     /// </remarks>
-    private const string CaveRefusedCode = "tracking.publication_refused_cave";
+    private const string CaveRefusedCode = TrackingProblemCodes.PublicationRefusedCave;
 
     /// <summary>
     /// The link somebody asked to replace has been taken back, so there is nothing to exchange.
@@ -147,7 +147,7 @@ public static class TripTrackingPublicationEndpoints
     /// and read which of them were taken back — it says nothing the list does not. The published
     /// routes never answer it: there a link taken back is an unknown one.
     /// </remarks>
-    internal const string ShareRevokedCode = "tracking.share_revoked";
+    internal const string ShareRevokedCode = TrackingProblemCodes.ShareRevoked;
 
     // ---- management ----------------------------------------------------------------------
 
@@ -174,7 +174,7 @@ public static class TripTrackingPublicationEndpoints
             .FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking?.State is not TripTrackingState.Armed)
         {
-            return ApiProblems.Conflict("tracking.publication_refused_not_armed",
+            return ApiProblems.Conflict(TrackingProblemCodes.PublicationRefusedNotArmed,
                 "A follow link opens a page only while the watch is running, so arm it before publishing.");
         }
 
@@ -1401,7 +1401,7 @@ public static class TripTrackingPublicationEndpoints
             .FirstOrDefaultAsync(t => t.TripLogId == tripLogId, ct);
         if (tracking?.CaveFeatureId is not { } caveId)
         {
-            return ApiProblems.Conflict("tracking.model_missing",
+            return ApiProblems.Conflict(TrackingProblemCodes.ModelMissing,
                 "Tracking has no survey model, so there is nothing for a follower to see.");
         }
 
@@ -1418,7 +1418,7 @@ public static class TripTrackingPublicationEndpoints
         var publishable = await TrackingWithholding.PublishableCaveIdsAsync(db, protection, [caveId], ct);
         return publishable.Contains(caveId)
             ? null
-            : ApiProblems.Conflict("tracking.publication_refused_protected",
+            : ApiProblems.Conflict(TrackingProblemCodes.PublicationRefusedProtected,
                 "This trip's cave has protected coordinates, so the trip cannot be published.");
     }
 
