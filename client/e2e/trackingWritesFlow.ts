@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, type Page } from '@playwright/test';
 import { chooseOption, gotoRoute, login } from './helpers.ts';
-import { apiJson, bearerToken } from './rastermapApi.ts';
+import { apiJson, bearerToken, uploadMapPng } from './rastermapApi.ts';
 
 /**
  * The three ways a coordinator writes a tracking log other than reporting live: correcting a report
@@ -10,8 +10,9 @@ import { apiJson, bearerToken } from './rastermapApi.ts';
  * from a file and from rows pasted in, and declaring what the cave's depths mean so that a report
  * can be made by the name of a place. And what follows from each: a sheet imported twice writes
  * nothing the second time, a sheet that corrects one cell changes that cell and nothing else, the
- * log can be narrowed to one person, and a report added once the watch is closed has to say when
- * it was made.
+ * log taken out as a sheet reads straight back with nothing to do, a photograph is shown where it
+ * will be drawn before it is attached, the log can be narrowed to one person, and a report added
+ * once the watch is closed has to say when it was made.
  *
  * <b>Why this is a browser flow and not only a component suite.</b> Each of these has a component
  * suite, and each suite stubs every write — which is how a sentence looked up with its arguments
@@ -429,6 +430,55 @@ export async function correctImportAndReportByPlace(page: Page) {
     })
     .toEqual(['atStation', DECLARED_STATION, true]);
 
+  // ---- A photograph, shown where it will be drawn before it is attached ----
+  // Noise of this run's own, filed on the trip the way its gallery files one. It carries no time
+  // of its own, so the dialog offers the moment it was opened at — the report it was opened from.
+  const photo = await uploadMapPng(page, token, `e2e-tracking-photo-${stamp}.png`, 24);
+  await apiJson(page, token, 'POST', '/api/v1/attachments', {
+    fileId: photo.id,
+    entityType: 'tripLog',
+    entityId: trip.id,
+    role: 'photoInterior',
+    caption: null,
+    sortOrder: 0,
+  });
+  // The gallery lists it once it has been read as a picture; the dialog asks once, on opening.
+  await expect
+    .poll(
+      async () =>
+        (
+          (await apiJson(
+            page,
+            token,
+            'GET',
+            `/api/v1/photos?tripLogId=${trip.id}&pageSize=60`,
+          )) as { items: { documentId: string }[] }
+        ).items.some((item) => item.documentId === photo.documentId),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+
+  await page.getByTestId(`trip-tracking-event-picture-${ionBelow.id}`).click();
+  const hanging = page.getByRole('dialog', { name: 'Photographs of this moment' });
+  await expect(hanging).toBeVisible();
+  await hanging.getByTestId(`trip-tracking-pictures-pick-${photo.documentId}`).check();
+  // Opened from Ion's report at the declared station, so it is about Ion at that moment — and the
+  // answer is read out of the real log by the rule the replay draws with.
+  const willBeDrawn = hanging.getByTestId(`trip-tracking-pictures-row-place-${photo.documentId}`);
+  const about = hanging.getByTestId(`trip-tracking-pictures-row-subject-${photo.documentId}`);
+  await expect(willBeDrawn).toHaveText(`Drawn at station ${DECLARED_STATION}`, {
+    timeout: 15_000,
+  });
+  // About Maria it has nowhere to go: she had gone in and nobody had said where she was.
+  await chooseOption(page, about, MARIA);
+  await expect(willBeDrawn).toHaveAttribute('data-placement', 'unplaced');
+  await expect(willBeDrawn).toContainText('on the timeline only');
+  await chooseOption(page, about, ION);
+  await expect(willBeDrawn).toHaveText(`Drawn at station ${DECLARED_STATION}`);
+  await hanging.getByRole('button', { name: 'Attach photographs (1)' }).click();
+  await expect(page.getByText('Attached: 1. Not attached: 0.')).toBeVisible({ timeout: 15_000 });
+  await expect(hanging).toBeHidden();
+
   // ---- Importing the sample sheet the dialog offers ----
   const beforeImport = await logOf();
   await page.getByTestId('trip-tracking-csv-open').click();
@@ -639,6 +689,51 @@ export async function correctImportAndReportByPlace(page: Page) {
   const timed = (await logOf()).find((row) => row.note === TIMES_ONLY.note && row.caverId === ion);
   expect(timed).toBeTruthy();
   expect(Date.parse(timed!.recordedAt)).toBe(Date.parse(`${tripDate}T00:00:00Z`));
+
+  // ---- The log taken out as a sheet, and read straight back ----
+  // Everything written so far — typed, corrected, imported from a file, pasted on another zone's
+  // clocks, placed on a day the dialog asked for — leaves as one sheet for anybody who reads the
+  // trip, and that sheet is the importer's own: read back, every row is one the log already holds.
+  const beforeExport = await logOf();
+  const taken = page.waitForEvent('download');
+  await page.getByTestId('trip-tracking-csv-export').click();
+  const sheet = await taken;
+  // Named by what it is, a fragment of the trip's id and the day — never by the cave or the trip.
+  expect(sheet.suggestedFilename()).toMatch(/^tracking-log-[0-9a-f]{8}-\d{8}\.csv$/);
+  const sheetBytes = readFileSync((await sheet.path())!);
+  const sheetText = sheetBytes.toString('utf8');
+  // The sample's own header, and a line for every report under it. No note in this walk holds a
+  // line break, so lines are rows.
+  expect(sheetText).toContain('Data si ora');
+  expect(sheetText).not.toContain(caveName);
+  expect(sheetText.trim().split('\r\n')).toHaveLength(beforeExport.length + 1);
+
+  await page.getByTestId('trip-tracking-csv-open').click();
+  await expect(importing).toBeVisible();
+  await importing.locator('input[type="file"]').setInputFiles({
+    name: sheet.suggestedFilename(),
+    mimeType: 'text/csv',
+    buffer: sheetBytes,
+  });
+  await importing.getByTestId('trip-tracking-csv-preview').click();
+  await expect(rows).toBeVisible({ timeout: 15_000 });
+  // Nothing new, and every report found again: each moment was written to the instant with its
+  // offset, so no row comes back as a second report beside the first.
+  await expect(importing.getByTestId('trip-tracking-csv-creates')).toHaveText(/\D0$/);
+  await expect(importing.getByTestId('trip-tracking-csv-replaces')).toHaveText(
+    new RegExp(`\\D${beforeExport.length}$`),
+  );
+  // Given leave to overwrite, it overwrites nothing: the sheet says what the log says, row for
+  // row, and the log afterwards is the same reports under the same ids with none newly marked.
+  await overwrite.check();
+  await importing.getByTestId('trip-tracking-csv-commit').click();
+  await expect(
+    page.getByText(
+      `0 recorded, 0 corrected, ${beforeExport.length} already as the sheet says, 0 left out.`,
+    ),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(importing).toBeHidden({ timeout: 15_000 });
+  expect(await logOf()).toEqual(beforeExport);
 
   // ---- One person's reports ----
   // The log is everybody's, newest first, and the report to put right is nearly always one
