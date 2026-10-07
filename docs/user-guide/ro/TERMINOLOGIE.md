@@ -147,6 +147,13 @@ odată cu ea — și apoi paginile.
 | Follow link | Link de urmărire |
 | Caption (on the public page) | Etichetă |
 | Past trips in this cave | Ture trecute în această peșteră |
+| Survey (the drawing a party is placed on) | Ridicare |
+| Party / Team | Echipă |
+| Underground (where somebody stands) | În peșteră |
+| Last heard | Ultima veste |
+| Replay the trip / Play | Reia tura / Redă |
+| A replay | Reluare |
+| Language the page opens in | Limba în care se deschide pagina |
 | Being followed now | Urmărite acum |
 | Published trips (the administration page) | Ture publicate |
 | Replace link | Înlocuiește linkul |
