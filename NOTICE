@@ -75,6 +75,23 @@ tests. Test fixture only: nothing here is built into a shipped artifact.
   Checksum:  sha256 9603e440953ba566e8b427ce7536f686e535c25213669586b2bdbd095d5c2bb3
 
 --------------------------------------------------------------------------------
+Cheddar demonstration survey (one branch of it)
+--------------------------------------------------------------------------------
+server/tests/SilexGis.Api.Tests/Fixtures/Cheddar-Whitebeam.lox — one branch of the
+compiled Therion model the CaveView.js project publishes as its Cheddar
+demonstration survey: nine surveys and their two ancestors, the stations belonging
+to them and the legs between those stations, read with the format's own reader and
+written back out with its own writer. Nothing else was edited; it is 38 kB of a
+9 MB file. Test fixture only: nothing here is built into a shipped artifact.
+
+  Source:    https://github.com/aardgoose/CaveView.js (docs/surveys/Cheddar.lox)
+  License:   MIT (c) 2016 aardgoose — the repository's licence; it states no
+             separate terms for its demonstration surveys
+  The cave:  the source names no surveyor and no register entry for the data in
+             this file.
+  Checksum:  sha256 898b4c198eba42980e21ef3be319b1dede24e6579fee3bc9dd39f8dc6c8d5da7
+
+--------------------------------------------------------------------------------
 Feature symbol icons
 --------------------------------------------------------------------------------
 The 19 PNG symbols under client/public/feature_symbols/ (used to render surface

@@ -1,25 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react';
+import { modelDeliveryIdentity } from '../../caveview/modelDelivery.ts';
 
-/**
- * Which drawing a delivery URL delivers, ignoring the signature that expires.
- *
- * A published envelope carries the survey as a signed address: the stored file's own path, and a
- * token good for about ten minutes. Every re-read of the envelope re-signs it, so the whole string
- * changes every minute while the path — the file being handed over — stays exactly what it was.
- * That path is the drawing's identity in the only sense this page needs one: the viewer draws
- * those bytes, and two addresses naming the same file name the same survey.
- *
- * <b>Deliberately not the model's identity, which this page is never sent.</b> A published trip
- * carries no internal identifier of anything, on purpose. What it does carry is the address of the
- * bytes, and the bytes are the better answer anyway: a station is drawn at a point of a particular
- * geometry, so the question "may this report be drawn here" is a question about the geometry on
- * screen and not about which row in a table produced it.
- */
-export function modelDeliveryIdentity(url: string): string {
-  const query = url.indexOf('?');
-  return query === -1 ? url : url.slice(0, query);
-}
+// What the pin below compares addresses by: the file an address delivers, whatever signature it
+// carries. A published trip is sent no internal identifier of anything, on purpose, and the bytes
+// are the better answer here anyway — a station is drawn at a point of a particular geometry, so
+// "may this report be drawn here" is a question about the geometry on screen and not about which
+// row in a table produced it.
 
 /**
  * The survey address the viewer is given, held still while it is the same survey and replaced when
@@ -32,6 +19,8 @@ export function modelDeliveryIdentity(url: string): string {
  * back to its opening view once a minute, for the whole time somebody sits watching a party
  * underground. Whether the first address still works an hour later is of no interest to a model
  * that is already in the browser.
+ * The viewer has since been taught the same thing about signatures for itself, for every page that
+ * mounts it; the pin stays for the two things below, which only the page can decide.
  *
  * <b>Why it is not held still forever, which is the part that was wrong.</b> The address was pinned
  * on first sight and released only when the page was opened on a different trip. But the survey a

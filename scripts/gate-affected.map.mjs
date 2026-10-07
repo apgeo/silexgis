@@ -164,7 +164,9 @@ export const groups = {
   exports: [
     'KarstLinkExportTests', 'SpreadsheetWriterTests',
   ],
-  about: ['ApiSmokeTests'],
+  // With the smoke test because it asks the same kind of question one step earlier: not whether
+  // the application answers, but whether each test was given the application its mode promises.
+  about: ['ApiSmokeTests', 'TestModeTests'],
   audit: ['AccessHistoryTests', 'HistoryTests'],
   admin: ['AdminMessagingTests', 'AdminTestSendRateLimitTests', 'DemoSeedIdempotencyTests', 'SeededGroupUpgradeTests'],
   settings: ['AccountSettingsTests', 'TerrainOptionsTests', 'UiDefaultsTests'],

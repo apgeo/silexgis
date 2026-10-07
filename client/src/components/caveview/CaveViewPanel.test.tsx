@@ -345,6 +345,53 @@ describe('CaveViewPanel', () => {
     }
   });
 
+  it('keeps the model it has drawn when the same file is offered at a freshly signed address', async () => {
+    // Whatever lists a survey signs its address afresh every few minutes, for as long as the page
+    // is open. A panel that loaded for each new signature would put the camera back where it
+    // started, every few minutes, under somebody looking at the model.
+    const { rerender } = render(
+      <CaveViewPanel fileUrl="http://files.local/files/a/content?token=first" fileName="demo.lox" />,
+    );
+    await waitFor(() => expect(viewers).toHaveLength(1));
+
+    rerender(
+      <CaveViewPanel fileUrl="http://files.local/files/a/content?token=second" fileName="demo.lox" />,
+    );
+    // A turn of the event loop is waited out, since a rebuild would only then have asked for the
+    // file.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(viewers).toHaveLength(1);
+
+    // Another file is another model, asked for at the address it was offered at.
+    rerender(
+      <CaveViewPanel fileUrl="http://files.local/files/b/content?token=third" fileName="demo.lox" />,
+    );
+    await waitFor(() => expect(viewers).toHaveLength(2));
+    expect(fetch).toHaveBeenLastCalledWith('http://files.local/files/b/content?token=third');
+  });
+
+  it('asks for a model at the newest address in hand, not the one the panel was mounted with', async () => {
+    // The first signature may have lapsed long before a second load is called for; the newest one
+    // is the one with longest to run.
+    const { rerender } = render(
+      <CaveViewPanel fileUrl="http://files.local/files/a/content?token=first" fileName="demo.lox" />,
+    );
+    await waitFor(() => expect(viewers).toHaveLength(1));
+    rerender(
+      <CaveViewPanel fileUrl="http://files.local/files/a/content?token=second" fileName="demo.lox" />,
+    );
+
+    // The same bytes under another name are read by another parser, which is a load.
+    rerender(
+      <CaveViewPanel fileUrl="http://files.local/files/a/content?token=second" fileName="demo.3d" />,
+    );
+    await waitFor(() => expect(viewers).toHaveLength(2));
+    expect(fetch).toHaveBeenLastCalledWith('http://files.local/files/a/content?token=second');
+  });
+
   it('reports entrance label clicks through onEntrancePick', async () => {
     const onPick = vi.fn();
     render(<CaveViewPanel fileUrl="http://files.local/survey" fileName="demo.lox" onEntrancePick={onPick} />);

@@ -14,6 +14,7 @@ import {
   type CaveViewUi,
   type CaveViewer,
 } from '../../caveview/loadCaveView.ts';
+import { modelDeliveryIdentity } from '../../caveview/modelDelivery.ts';
 import {
   focusForRef,
   partFromLeg,
@@ -510,6 +511,17 @@ export default function CaveViewPanel({
     return clusterLabelFor(members, (member) => markerLine(member, line));
   };
 
+  // Which file is on screen, as distinct from the address it was last offered at. The address is
+  // signed, and whatever lists the survey signs it afresh every few minutes for as long as the
+  // page is open; the file it names does not change. A viewer built again for each new signature
+  // would download and parse the survey under the reader and put the camera back where it
+  // started, every few minutes, for as long as somebody sat looking at it. So a model is loaded
+  // for another file and never for another signature — and when one is loaded, it is asked for at
+  // the newest address in hand, which is the one whose signature has longest to run.
+  const fileIdentity = modelDeliveryIdentity(fileUrl);
+  const fileUrlRef = useRef(fileUrl);
+  fileUrlRef.current = fileUrl;
+
   useEffect(() => {
     let disposed = false;
     let ui: CaveViewUi | null = null;
@@ -538,7 +550,7 @@ export default function CaveViewPanel({
 
     (async () => {
       const cv2 = await loadCaveView();
-      const response = await fetch(fileUrl);
+      const response = await fetch(fileUrlRef.current);
       if (!response.ok) throw new Error(`survey file request failed (${response.status})`);
       const blob = await response.blob();
       if (disposed) return;
@@ -688,7 +700,7 @@ export default function CaveViewPanel({
         built = null;
       }
     };
-  }, [fileUrl, fileName]);
+  }, [fileIdentity, fileName]);
 
   // ---- Re-asking the viewer what a group says ----
   //

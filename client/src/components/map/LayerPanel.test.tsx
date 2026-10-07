@@ -91,6 +91,7 @@ interface PanelOverrides {
   unconfiguredPhotoLibraries?: LibraryPhotoProvider[];
   suspendedPhotoLibraries?: LibraryPhotoProvider[];
   visibleLibraryPhotoSources?: string[];
+  centerlinesVisible?: boolean;
 }
 
 function renderPanel(overrides: PanelOverrides = {}) {
@@ -128,7 +129,7 @@ function panel(overrides: PanelOverrides = {}) {
       treeNonce={0}
       tagFilter={null}
       onTagFilterChange={vi.fn()}
-      centerlinesVisible={false}
+      centerlinesVisible={overrides.centerlinesVisible ?? false}
       onCenterlineLimitsChange={vi.fn()}
       tripsVisible={false}
       tripFilter={{}}
@@ -429,5 +430,18 @@ describe('the basemap groups of the layer panel', () => {
     // because the panel opens a group when the drawn basemap moves into it and not on every render.
     expect(header).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByRole('radio', { name: 'Street Base', hidden: true })).toBeChecked();
+  });
+});
+
+describe('the survey-line limits of the layer panel', () => {
+  it('accepts exactly what the advanced settings accept for the same two numbers', () => {
+    // The two places write the same stored values. A number one of them takes and the other marks
+    // as out of range reads as one of the two being broken.
+    renderPanel({ centerlinesVisible: true });
+
+    const detailZoom = screen.getByRole('spinbutton', { name: 'Detail from zoom' });
+    expect(detailZoom).toHaveAttribute('aria-valuemin', '1');
+    expect(detailZoom).toHaveAttribute('aria-valuemax', '22');
+    expect(screen.getByRole('spinbutton', { name: 'Line budget' })).toHaveAttribute('aria-valuemin', '100');
   });
 });
