@@ -193,7 +193,10 @@ describe('the fold, compiled for a page that has no build step', () => {
 
     for (const name of PUBLISHED_NAMES) {
       if (name === 'PAST_LINK_PARAMS') {
-        expect(api[name], name).toEqual(['past', 'team', 'caver', 'at']);
+        // `play` joined on purpose: the page answers to it in its address, so leaving a replay
+        // has to clear it with the rest. An addition only — the four names before it are the
+        // ones every address already written uses, in the order they were published.
+        expect(api[name], name).toEqual(['past', 'team', 'caver', 'at', 'play']);
       } else {
         expect(api[name], name).toBeTypeOf('function');
       }

@@ -563,7 +563,7 @@ export default function PublicTripEmbedPage() {
             : kind === 'caver'
               ? { kind: 'caver', id: ref }
               : null;
-        openPast(tripRef, { at: askedAt, follow });
+        openPast(tripRef, { at: askedAt, follow, play: inbound.play });
         // A *place* named alongside one is the other half of the same sentence, and it is held
         // rather than dropped: the trip's survey is not on screen yet, so the move is made when it
         // is, and the answer sent then is the drawing's own.
@@ -576,6 +576,14 @@ export default function PublicTripEmbedPage() {
         // the next `ready`, which names the trip on screen and the party in it.
         settled(true);
         return;
+      }
+      if (inbound.play && pastTripLogId !== null) {
+        // A link that also says to play, over the replay already on screen: its clock is started
+        // where it stands, or — the request being held as a moment is — where the rest of this
+        // press puts it, once there is a track to play. Over the trip being followed now there is
+        // no clock to start, and the word is left alone rather than answered with a refusal: the
+        // rest of the link still means what it meant.
+        openPast(pastTripLogId, { play: true });
       }
       if (pastEngaged && (kind === 'team' || kind === 'caver')) {
         // Within the trip already on screen. Over a replay, "show me Ana" means keep up with Ana as

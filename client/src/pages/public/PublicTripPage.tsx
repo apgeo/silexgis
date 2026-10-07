@@ -58,7 +58,7 @@ import {
 } from './publicTripParty.ts';
 import { usePastTripPlayback } from './usePastTripPlayback.ts';
 import { usePublicLanguage } from './usePublicLanguage.ts';
-import { readPastLink, writePastLink } from './pastTripLink.ts';
+import { momentLink, PAST_LINK_PARAMS, readPastLink, writePastLink } from './pastTripLink.ts';
 import './PublicTripPage.css';
 
 /**
@@ -130,16 +130,24 @@ export default function PublicTripPage() {
   const view = past.engaged ? (past.envelope ?? undefined) : data;
 
   // A link in somebody's prose, opened in a fresh tab: the address carries which past trip to play
-  // and, where it says so, whom to keep the camera on and where to start. Applied when the address
-  // changes and never afterwards, so a reader who presses "back to now" is not sent straight back
-  // into the past by their own URL.
+  // and, where it says so, whom to keep the camera on, where to start and whether to start
+  // playing. Applied when the address changes and never afterwards, so a reader who presses "back
+  // to now" is not sent straight back into the past by their own URL.
+  //
+  // "Changes" is what the address says about the past, and nothing else on it. The same address
+  // carries the page's language, which the language button rewrites; a link naming a moment and
+  // asking to play would otherwise be honoured a second time by that press — the replay wound
+  // back to the link's moment and set going again because the reader asked for English.
   const openPast = past.open;
+  const askedOfThePast = PAST_LINK_PARAMS.map((name) => search.get(name) ?? '\u0000').join('\u0001');
+  const searchRef = useRef(search);
+  searchRef.current = search;
   useEffect(() => {
-    const asked = readPastLink(search);
+    const asked = readPastLink(searchRef.current);
     if (asked !== null) {
-      openPast(asked.tripLogId, { at: asked.at, follow: asked.follow });
+      openPast(asked.tripLogId, { at: asked.at, follow: asked.follow, play: asked.play });
     }
-  }, [search, openPast]);
+  }, [askedOfThePast, openPast]);
 
   // The address the viewer is given: held still while it is the same survey, replaced when the
   // survey itself changes. Both halves matter and the reasoning for each lives with the rule,
@@ -358,6 +366,22 @@ export default function PublicTripPage() {
     if (past.tripLogId !== null) {
       setSearch(writePastLink(search, past.tripLogId, follow), { replace: true });
     }
+  };
+
+  /**
+   * The address of the moment on the replay's clock, for the two copy buttons on its strip.
+   *
+   * Built from where the reader is — this page's own address, with the trip, whom the replay
+   * follows and the moment written onto it — so whatever else the address carries, the page's
+   * language above all, travels with the link. Read when a button is pressed, never while the clock
+   * runs: the address bar itself is still never given a moment.
+   */
+  const momentAddress = (playing: boolean): string => {
+    const query =
+      past.tripLogId === null
+        ? search
+        : momentLink(search, past.tripLogId, past.follow, past.at, playing);
+    return `${window.location.origin}${window.location.pathname}?${query.toString()}`;
   };
 
   /**
@@ -737,6 +761,7 @@ export default function PublicTripPage() {
               playback={{ ...past, backToNow: leavePast, setFollow: followPast }}
               liveState={data.state}
               cavers={cavers}
+              momentAddress={momentAddress}
             />
           </div>
         )}

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicPastTrack } from '../../api/hooks.ts';
 import { REPLAY_MARKER_MOVE_MS } from '../../caveview/useReplayClock.ts';
 
@@ -141,6 +141,197 @@ describe('a moment asked for with a trip', () => {
     act(() => result.current.open(TRIP_X, { follow: { kind: 'caver', id: '1' } }));
 
     expect(result.current.at).toBe(TEN_2019);
+  });
+});
+
+/**
+ * A link that says "from here, playing".
+ *
+ * <b>The request is held exactly as the moment is, and for the same reason</b>: it is made in the
+ * press that names the trip, long before that trip's track has been read. So the cases are the
+ * moment's cases over again — what lands, what was asked of a trip that is no longer the one on
+ * screen — and two of its own: a reader who asked for less movement, and a clock asked to start
+ * twice.
+ */
+describe('a replay asked to play', () => {
+  it('starts once the track has landed, from the moment the link named', () => {
+    const { result, rerender } = renderHook(() => usePastTripPlayback('follow-token'));
+    act(() => result.current.open(TRIP_X, { at: '2019-07-06T10:00:00Z', play: true }));
+    // Nothing to play yet, so nothing is playing — and the request is not lost for that.
+    expect(result.current.loading).toBe(true);
+    expect(result.current.transport.playing).toBe(false);
+
+    answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+    act(() => rerender());
+
+    expect(result.current.at).toBe(TEN_2019);
+    expect(result.current.transport.playing).toBe(true);
+  });
+
+  it('leaves a trip opened without it standing still', () => {
+    // The twin of the case above: the same trip, the same moment, and no word about playing.
+    answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+    const { result } = renderHook(() => usePastTripPlayback('follow-token'));
+
+    act(() => result.current.open(TRIP_X, { at: '2019-07-06T10:00:00Z' }));
+
+    expect(result.current.at).toBe(TEN_2019);
+    expect(result.current.transport.playing).toBe(false);
+  });
+
+  it('plays from where the trip opens when the link names no moment', () => {
+    answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+    const { result } = renderHook(() => usePastTripPlayback('follow-token'));
+
+    act(() => result.current.open(TRIP_X, { play: true }));
+
+    expect(result.current.at).toBe(START_2019);
+    expect(result.current.transport.playing).toBe(true);
+  });
+
+  it('plays from where the trip opens when the moment named cannot be read', () => {
+    answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+    const { result } = renderHook(() => usePastTripPlayback('follow-token'));
+
+    act(() => result.current.open(TRIP_X, { at: 'half-past-one', play: true }));
+
+    expect(result.current.at).toBe(START_2019);
+    expect(result.current.transport.playing).toBe(true);
+  });
+
+  it('is spent once: a reader who pauses is not set playing again by the link that opened the trip', () => {
+    answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+    const { result, rerender } = renderHook(() => usePastTripPlayback('follow-token'));
+    act(() => result.current.open(TRIP_X, { play: true }));
+    expect(result.current.transport.playing).toBe(true);
+
+    act(() => result.current.transport.toggle());
+    act(() => result.current.setAt(TEN_2019));
+    act(() => rerender());
+
+    expect(result.current.transport.playing).toBe(false);
+  });
+
+  it('starts the trip already on screen where its clock stands, and asked twice is still playing', () => {
+    answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+    const { result } = renderHook(() => usePastTripPlayback('follow-token'));
+    act(() => result.current.open(TRIP_X));
+    act(() => result.current.setAt(TEN_2019));
+    expect(result.current.transport.playing).toBe(false);
+
+    act(() => result.current.open(TRIP_X, { play: true }));
+    expect(result.current.at).toBe(TEN_2019);
+    expect(result.current.transport.playing).toBe(true);
+
+    // A second press of the same link in an article: a toggle would have paused it.
+    act(() => result.current.open(TRIP_X, { play: true }));
+    expect(result.current.transport.playing).toBe(true);
+  });
+
+  it('does not answer a link naming the trip’s last moment by starting the trip again', () => {
+    answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+    const { result } = renderHook(() => usePastTripPlayback('follow-token'));
+
+    act(() => result.current.open(TRIP_X, { at: '2019-07-06T23:00:00Z', play: true }));
+
+    const end = result.current.span?.to;
+    expect(end).toBeDefined();
+    expect(result.current.at).toBe(end);
+    expect(result.current.transport.playing).toBe(false);
+  });
+
+  it('is dropped when the reader opens another trip before the first has landed', () => {
+    const { result, rerender } = renderHook(() => usePastTripPlayback('follow-token'));
+    act(() => result.current.open(TRIP_X, { play: true }));
+    expect(result.current.loading).toBe(true);
+
+    act(() => result.current.open(TRIP_Y));
+    answers[TRIP_Y] = { data: trip2019(TRIP_Y), isPending: false, isError: false };
+    act(() => rerender());
+
+    expect(result.current.at).toBe(START_2019);
+    expect(result.current.transport.playing).toBe(false);
+  });
+
+  it('is not waiting for the next trip a reader picks after the one it named was refused', () => {
+    answers[TRIP_X] = { data: undefined, isPending: false, isError: true };
+    const { result, rerender } = renderHook(() => usePastTripPlayback('follow-token'));
+    act(() => result.current.open(TRIP_X, { play: true }));
+    expect(result.current.failed).toBe(true);
+
+    act(() => result.current.open(TRIP_Y));
+    answers[TRIP_Y] = { data: trip2019(TRIP_Y), isPending: false, isError: false };
+    act(() => rerender());
+
+    expect(result.current.at).toBe(START_2019);
+    expect(result.current.transport.playing).toBe(false);
+  });
+
+  it('is dropped when the trip it was asked for could not be read, even if that trip answers later', () => {
+    // The read is tried again by itself when the reader comes back to the tab. A replay that
+    // then began to move, minutes after the page said the trip could not be read and with nobody
+    // pressing anything, would be movement nobody was asking for any more.
+    answers[TRIP_X] = { data: undefined, isPending: false, isError: true };
+    const { result, rerender } = renderHook(() => usePastTripPlayback('follow-token'));
+    act(() => result.current.open(TRIP_X, { play: true }));
+    expect(result.current.failed).toBe(true);
+
+    answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+    act(() => rerender());
+
+    expect(result.current.failed).toBe(false);
+    expect(result.current.at).toBe(START_2019);
+    expect(result.current.transport.playing).toBe(false);
+  });
+
+  it('is dropped when the reader goes back to the live party before the track has landed', () => {
+    const { result, rerender } = renderHook(() => usePastTripPlayback('follow-token'));
+    act(() => result.current.open(TRIP_X, { play: true }));
+    act(() => result.current.backToNow());
+
+    answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+    act(() => result.current.open(TRIP_X));
+    act(() => rerender());
+
+    expect(result.current.at).toBe(START_2019);
+    expect(result.current.transport.playing).toBe(false);
+  });
+
+  describe('for a reader who asked for less movement', () => {
+    const realMatchMedia = window.matchMedia;
+
+    afterEach(() => {
+      window.matchMedia = realMatchMedia;
+      delete document.documentElement.dataset.reduceMotion;
+    });
+
+    it('opens at the moment named and stands still, when the system says so', () => {
+      window.matchMedia = ((query: string) => ({
+        ...realMatchMedia(query),
+        matches: query.includes('prefers-reduced-motion'),
+      })) as typeof window.matchMedia;
+      answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+      const { result } = renderHook(() => usePastTripPlayback('follow-token'));
+
+      act(() => result.current.open(TRIP_X, { at: '2019-07-06T10:00:00Z', play: true }));
+
+      expect(result.current.at).toBe(TEN_2019);
+      expect(result.current.transport.playing).toBe(false);
+      // Their own press still plays: what is declined is movement nobody on this page asked for.
+      act(() => result.current.transport.toggle());
+      expect(result.current.transport.playing).toBe(true);
+    });
+
+    it('opens standing still when this application’s own setting says so', () => {
+      document.documentElement.dataset.reduceMotion = 'true';
+      answers[TRIP_X] = { data: trip2019(TRIP_X), isPending: false, isError: false };
+      const { result } = renderHook(() => usePastTripPlayback('follow-token'));
+
+      act(() => result.current.open(TRIP_X, { play: true }));
+
+      expect(result.current.at).toBe(START_2019);
+      expect(result.current.transport.playing).toBe(false);
+    });
   });
 });
 

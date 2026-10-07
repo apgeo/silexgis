@@ -28,10 +28,23 @@ export interface PastTripLink {
   follow: PastFollow | null;
   /** The instant asked for, as written — parsed where it is used, so a bad one is one absence. */
   at: string | null;
+  /** Whether the link asks for the replay to be started, rather than opened and left standing. */
+  play: boolean;
 }
 
 /** The names this page answers to on its query string. */
-export const PAST_LINK_PARAMS = ['past', 'team', 'caver', 'at'] as const;
+export const PAST_LINK_PARAMS = ['past', 'team', 'caver', 'at', 'play'] as const;
+
+/**
+ * The values of `play` that mean "do not".
+ *
+ * <b>Everything else that is present means play</b>, the bare word included: `…&play` is what
+ * somebody shortening a link by hand ends up with, and `play=1`, `play=yes` and `play=true` are
+ * what three different people would guess. A flag has two meanings, so the short list is the one
+ * that says no — the same list a club's own page reading this vocabulary answers to, so one link
+ * means one thing on both.
+ */
+const PLAY_REFUSED = /^(0|no|false|off)$/i;
 
 /**
  * What a query string is asking for, or null when it asks for nothing of the past.
@@ -55,7 +68,13 @@ export function readPastLink(params: URLSearchParams): PastTripLink | null {
         // The empty string is the group of everybody on no team, which is a real group with no id
         // — the one place where an absent value and an empty one mean different things.
         : { kind: 'team', id: team.length === 0 ? null : team };
-  return { tripLogId, follow, at: params.get('at') };
+  const play = params.get('play');
+  return {
+    tripLogId,
+    follow,
+    at: params.get('at'),
+    play: play !== null && !PLAY_REFUSED.test(play),
+  };
 }
 
 /**
@@ -87,6 +106,43 @@ export function writePastLink(
     next.set('caver', follow.id);
   } else if (follow?.kind === 'team') {
     next.set('team', follow.id ?? '');
+  }
+  return next;
+}
+
+/**
+ * The address of one moment of a past trip, and optionally of that moment set playing.
+ *
+ * <b>Written only when a reader asks for it by pressing a button — which is the whole difference
+ * from {@link writePastLink}.</b> The address bar never carries a moment, for the reason given
+ * there; a link somebody copies on purpose is the opposite case, a number they did choose, taken
+ * once.
+ *
+ * <b>The moment is written to the second, in UTC.</b> A replay's clock moves in steps of several
+ * seconds at its slowest useful speed, so anything finer is noise in a link a person may read out
+ * or retype — and an instant with its zone on it opens at the same moment of the trip wherever the
+ * person who receives it happens to be.
+ *
+ * `play` is written as `1` and never as its absence spelled out: a link that does not play is the
+ * shorter one. Without a moment there is nothing to stand the clock on, so `play` alone opens the
+ * trip where it would have opened anyway and starts it from there.
+ */
+export function momentLink(
+  params: URLSearchParams,
+  tripLogId: string,
+  follow: PastFollow | null,
+  atMs: number | null,
+  play: boolean,
+): URLSearchParams {
+  const next = writePastLink(params, tripLogId, follow);
+  if (atMs !== null && Number.isFinite(atMs)) {
+    const second = new Date(Math.floor(atMs / 1000) * 1000);
+    if (!Number.isNaN(second.getTime())) {
+      next.set('at', second.toISOString().replace('.000Z', 'Z'));
+    }
+  }
+  if (play) {
+    next.set('play', '1');
   }
   return next;
 }

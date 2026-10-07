@@ -90,6 +90,17 @@ export interface EmbedFocusMessage {
    * "around midday" should not have to know when the watch was armed.
    */
   at?: string;
+  /**
+   * Whether to set the replay playing — from the moment named, or from where its clock stands.
+   *
+   * <b>A new member of the same message, and the protocol's number does not move for it.</b> The
+   * number says which messages both sides understand, and a block pasted before this existed
+   * never sends the member: its links do exactly what they did. Only `true` means anything — a
+   * link that does not ask for play is not asking for a pause, so an article can move a playing
+   * replay to another moment without stopping it. Over the trip being followed now there is no
+   * clock to start, and the member is left alone.
+   */
+  play?: boolean;
 }
 
 /**
@@ -225,6 +236,7 @@ export type EmbedInbound =
       target: EmbedFocusMessage['target'];
       trip: string | null;
       at: string | null;
+      play: boolean;
     };
 
 /**
@@ -250,6 +262,7 @@ export function parseEmbedInbound(data: unknown): EmbedInbound | null {
     target?: unknown;
     trip?: unknown;
     at?: unknown;
+    play?: unknown;
   };
   if (message.silexgis !== EMBED_CHANNEL || message.v !== EMBED_PROTOCOL) {
     return null;
@@ -279,6 +292,10 @@ export function parseEmbedInbound(data: unknown): EmbedInbound | null {
     target: { kind: kind as EmbedFocusKind, ref },
     trip: shortString(message.trip),
     at: shortString(message.at),
+    // The boolean and nothing that merely looks like one: the attribute a link carries is read
+    // generously by the relay, which is where a person's spelling arrives; what crosses the frame
+    // boundary is a message a program wrote.
+    play: message.play === true,
   };
 }
 
@@ -475,6 +492,10 @@ const RELAY_SOURCE = `(function () {
     if (trip) message.trip = trip;
     var at = link.getAttribute('data-silexgis-moment');
     if (at) message.at = at;
+    /* Whether the replay is set playing. The attribute alone says yes, and so does any value but
+       the short list that says no — the same reading the full page gives "play" in its address. */
+    var play = link.getAttribute('data-silexgis-play');
+    if (play !== null && !/^(0|no|false|off)$/i.test(play)) message.play = true;
     send(frame, message);
     /* On a phone the prose and the viewer are rarely on screen together, so a link that moved a
        camera nobody can see would look like a link that did nothing. */
@@ -624,6 +645,11 @@ function escapeAttribute(value: string): string {
  * The comment at the top is part of the deliverable, not decoration. Whoever pastes this is an
  * editor rather than a developer, and the one thing they have to know to use the link attributes
  * is written where they will be looking.
+ *
+ * The one button it sends them to is named as the page shows it in each of its two languages. The
+ * page opens in Romanian unless its address says otherwise, so an instruction quoting the English
+ * label alone names a button its reader cannot find. Written out here rather than read from the
+ * catalogue: this module is pure, and the test beside it holds both names to the catalogue's.
  */
 export function buildEmbedSnippet({
   origin,
@@ -647,16 +673,21 @@ export function buildEmbedSnippet({
        <a href="#cave" data-silexgis-survey="galeria-nord" data-silexgis-target="${frameId}">the north gallery</a>
        <a href="#cave" data-silexgis-caver="3" data-silexgis-target="${frameId}">caver 3</a>
      And the same viewer can play a past trip of this cave, and follow a team or a person through
-     it. The trip and team ids are in the full page's address once you pick the trip and whom to
-     follow there (?past=…&team=… or &caver=…); the list itself prints no ids:
+     it. To get the values, open the full page, play the past trip to the moment you mean, choose
+     whom to follow and press "Copy link to this moment" (on a page in Romanian the button reads
+     "Copiază linkul către acest moment"): the address it copies names the trip (past=), the team
+     or the person (team= or caver=) and the moment (at=):
        <a href="#cave" data-silexgis-trip="TRIP-ID" data-silexgis-target="${frameId}">the 2019 push</a>
        <a href="#cave" data-silexgis-team="TEAM-ID" data-silexgis-trip="TRIP-ID"
           data-silexgis-target="${frameId}">the survey team that day</a>
        <a href="#cave" data-silexgis-caver="2" data-silexgis-trip="TRIP-ID"
           data-silexgis-moment="2019-07-06T13:40:00Z" data-silexgis-target="${frameId}">where Ana was at half one</a>
+       <a href="#cave" data-silexgis-trip="TRIP-ID" data-silexgis-moment="2019-07-06T13:40:00Z"
+          data-silexgis-play data-silexgis-target="${frameId}">watch them come out, from half one</a>
        <a href="#cave" data-silexgis-trip="live" data-silexgis-target="${frameId}">back to this trip</a>
      data-silexgis-trip and data-silexgis-moment may be added to any of the links above; on their
-     own they change the trip or the clock without moving the camera.
+     own they change the trip or the clock without moving the camera. data-silexgis-play, added to
+     a link that names a past trip or a moment, also starts the replay.
      With only this one viewer on the page, data-silexgis-target may be left off. With more than
      one — two trips in the same article — every link must name the viewer it drives, or it is
      left alone rather than sent to the wrong cave. -->

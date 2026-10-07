@@ -3781,7 +3781,13 @@
       "speed": "{{value}}×",
       "scrub": "Moment of the trip",
       "reportPrevious": "Previous report",
-      "reportNext": "Next report"
+      "reportNext": "Next report",
+      "copyMoment": "Copy link to this moment",
+      "copyPlaying": "Copy link that plays from here",
+      "copiedMoment": "Link copied. It opens this trip at {{when}}.",
+      "copiedPlaying": "Link copied. It opens this trip at {{when}} and starts playing.",
+      "copyRefused": "This browser did not allow copying. The link is below: select it and copy it by hand.",
+      "copyByHand": "Link to this moment"
     },
     "live": {
       "heading": "Being followed now",

@@ -8,6 +8,7 @@ import type {
   PublicPastTripList,
   PublicTripEnvelope,
 } from '../../api/hooks.ts';
+import { readPastLink } from './pastTripLink.ts';
 
 /**
  * The cave's past, as somebody holding one published link reaches it.
@@ -636,6 +637,152 @@ describe('after a row is pressed at the bottom of the page', () => {
 
     expect(screen.getByTestId('public-past-banner')).toBeTruthy();
     expect(scrolledTo()).toHaveLength(0);
+  });
+});
+
+/**
+ * A link that names a moment of a past trip, with or without the word that sets it playing — read
+ * off the page's address when it arrives, and written by the two buttons on the replay's strip.
+ *
+ * <b>The page's part is the joining.</b> How the address is parsed, how a request to play is held
+ * until the track lands and what the strip says after a press are each proved where they live;
+ * what only the page can get wrong is handing one to the other — the address's `play` to the
+ * replay, and the replay's trip, follow and moment to the link a button copies.
+ */
+describe('a link to a moment of a past trip', () => {
+  const HALF_NINE = '2019-07-06T09:30:00Z';
+  const realClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+
+  afterEach(() => {
+    if (realClipboard === undefined) {
+      Reflect.deleteProperty(navigator, 'clipboard');
+    } else {
+      Object.defineProperty(navigator, 'clipboard', realClipboard);
+    }
+  });
+
+  const clockShows = (iso: string) =>
+    expect(screen.getByTestId('public-past-scrub').querySelector('[role="slider"]')).toHaveAttribute(
+      'aria-valuenow',
+      String(Date.parse(iso)),
+    );
+
+  it('opens at the moment named and starts playing when the address says play', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}&at=${HALF_NINE}&play=1`);
+    render(<PublicTripPage />);
+
+    clockShows(HALF_NINE);
+    // The button offers the opposite of what the clock is doing.
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+  });
+
+  it('opens at the moment named and stands still when the address does not', () => {
+    // The twin of the case above: the same link without the word, and one that says no.
+    address = new URLSearchParams(`past=${TRIP_2019}&at=${HALF_NINE}`);
+    const first = render(<PublicTripPage />);
+    clockShows(HALF_NINE);
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+    first.unmount();
+
+    address = new URLSearchParams(`past=${TRIP_2019}&at=${HALF_NINE}&play=0`);
+    render(<PublicTripPage />);
+    clockShows(HALF_NINE);
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+  });
+
+  it('is not honoured a second time because something else in the address changed', () => {
+    // The language button rewrites the same address. A reader who paused, dragged the handle and
+    // then asked for English must not be wound back to the link's moment and set going again.
+    address = new URLSearchParams(`past=${TRIP_2019}&at=${HALF_NINE}&play=1`);
+    const { rerender } = render(<PublicTripPage />);
+    fireEvent.click(screen.getByTestId('public-past-play'));
+    fireEvent.click(screen.getByTestId('public-past-report-next'));
+    clockShows('2019-07-06T10:00:00Z');
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+
+    address = new URLSearchParams(`past=${TRIP_2019}&at=${HALF_NINE}&play=1&lang=en`);
+    rerender(<PublicTripPage />);
+
+    clockShows('2019-07-06T10:00:00Z');
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+  });
+
+  it('is honoured again when the address comes to name another moment', () => {
+    // The other half of the rule above: what the address says about the past did change.
+    address = new URLSearchParams(`past=${TRIP_2019}&at=${HALF_NINE}`);
+    const { rerender } = render(<PublicTripPage />);
+    clockShows(HALF_NINE);
+
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T10:00:00Z`);
+    rerender(<PublicTripPage />);
+
+    clockShows('2019-07-06T10:00:00Z');
+  });
+
+  it('copies a link that opens the trip, the team followed and the moment on the clock — playing or not', async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          written.push(text);
+          return Promise.resolve();
+        },
+      },
+    });
+    address = new URLSearchParams(`lang=en&past=${TRIP_2019}&team=${TEAM_B}&at=${HALF_NINE}`);
+    render(<PublicTripPage />);
+    // A follow opened before its team appears stays at the moment the link named.
+    clockShows(HALF_NINE);
+
+    fireEvent.click(screen.getByTestId('public-past-copy-moment'));
+    await waitFor(() => expect(written).toHaveLength(1));
+    fireEvent.click(screen.getByTestId('public-past-copy-playing'));
+    await waitFor(() => expect(written).toHaveLength(2));
+
+    const [standing, playing] = written.map((text) => new URL(text));
+    expect(standing.origin + standing.pathname).toBe(window.location.origin + window.location.pathname);
+    // Read back by the same reader the page reads its own address with.
+    expect(readPastLink(standing.searchParams)).toEqual({
+      tripLogId: TRIP_2019,
+      follow: { kind: 'team', id: TEAM_B },
+      at: HALF_NINE,
+      play: false,
+    });
+    expect(readPastLink(playing.searchParams)).toEqual({
+      tripLogId: TRIP_2019,
+      follow: { kind: 'team', id: TEAM_B },
+      at: HALF_NINE,
+      play: true,
+    });
+    // Whatever else the address carried goes with the link — the language above all.
+    expect(standing.searchParams.get('lang')).toBe('en');
+    expect(playing.searchParams.get('lang')).toBe('en');
+    // And the address bar itself was given no moment by either press.
+    for (const call of setAddress.mock.calls) {
+      expect((call[0] as URLSearchParams).has('at')).toBe(false);
+    }
+  });
+
+  it('copies the moment the reader moved the clock to, not the one the link opened at', async () => {
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          written.push(text);
+          return Promise.resolve();
+        },
+      },
+    });
+    address = new URLSearchParams(`past=${TRIP_2019}&at=${HALF_NINE}`);
+    render(<PublicTripPage />);
+    fireEvent.click(screen.getByTestId('public-past-report-next'));
+
+    fireEvent.click(screen.getByTestId('public-past-copy-moment'));
+    await waitFor(() => expect(written).toHaveLength(1));
+
+    expect(new URL(written[0]).searchParams.get('at')).toBe('2019-07-06T10:00:00Z');
   });
 });
 

@@ -96,6 +96,16 @@ export interface ReplayClock {
   setSpeed(speed: number): void;
   /** Play, pause, or — pressed at the very end — start the trip again. */
   toggle(): void;
+  /**
+   * Start the clock from where it stands; nothing at all when it is already running.
+   *
+   * <b>Not a press of the button, and it differs from one in the two places that matter.</b> It
+   * is what something other than the reader asks for — a link that names a moment and says to
+   * play from it — so asked twice it must still mean "playing", where a second press would pause;
+   * and at the very end it does nothing, where a press starts the trip again: a link naming a
+   * trip's last moment was written to show that moment, not to be answered with its first.
+   */
+  play(): void;
   /** Move the handle, which always stops the clock: a drag is somebody taking the wheel. */
   scrubTo(at: number): void;
   /** How far one step of the handle moves, so the rail has the same feel at every length. */
@@ -147,6 +157,11 @@ export function useReplayClock({ span, at, onAtChange, engaged }: ReplayClockOpt
         onAtChange(span.from);
       }
       setPlaying(true);
+    },
+    play: () => {
+      if (span !== null && (at ?? span.from) < span.to) {
+        setPlaying(true);
+      }
     },
     scrubTo: (value: number) => {
       setPlaying(false);

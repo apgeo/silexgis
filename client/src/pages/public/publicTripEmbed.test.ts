@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import en from '../../i18n/locales/en.json';
+import ro from '../../i18n/locales/ro.json';
 import {
   EMBED_CHANNEL,
   EMBED_FOCUS_KINDS,
@@ -364,6 +366,12 @@ describe('an article that drives the cave’s past', () => {
          <a id="link-moment" href="#cave" data-silexgis-caver="2" data-silexgis-trip="trip-1"
             data-silexgis-moment="2019-07-06T13:40:00Z">where Ana was at half one</a>
          <a id="link-live" href="#cave" data-silexgis-trip="live">back to this trip</a>
+         <a id="link-play" href="#cave" data-silexgis-trip="trip-1"
+            data-silexgis-moment="2019-07-06T13:40:00Z" data-silexgis-play>from half one, playing</a>
+         <a id="link-play-yes" href="#cave" data-silexgis-trip="trip-1" data-silexgis-play="yes">playing</a>
+         <a id="link-play-off" href="#cave" data-silexgis-trip="trip-1" data-silexgis-play="Off">standing</a>
+         <a id="link-play-zero" href="#cave" data-silexgis-trip="trip-1" data-silexgis-play="0">standing</a>
+         <a id="link-play-alone" href="#cave" data-silexgis-play>an ordinary link</a>
        </p>`,
     );
   }
@@ -396,6 +404,52 @@ describe('an article that drives the cave’s past', () => {
     const page = pastArticle();
     page.click('#link-live');
     expect(page.focuses().at(-1)?.message.target).toEqual({ kind: 'trip', ref: 'live' });
+  });
+
+  it('says to play when the link carries the attribute, bare or with any word but a no', () => {
+    const page = pastArticle();
+    page.click('#link-play');
+    const posted = page.focuses().at(-1)?.message;
+    expect(posted?.target).toEqual({ kind: 'moment', ref: '2019-07-06T13:40:00Z' });
+    expect(posted?.trip).toBe('trip-1');
+    expect(posted?.at).toBe('2019-07-06T13:40:00Z');
+    expect(posted?.play).toBe(true);
+
+    page.click('#link-play-yes');
+    expect(page.focuses().at(-1)?.message.play).toBe(true);
+  });
+
+  it('says nothing about playing for a link that does not ask, or that says no', () => {
+    // The positive twin is the test above, on the same page. "Nothing" and not `false`: a block
+    // pasted before the word existed sends no such member, and a link without it must go on
+    // sending exactly the message it always sent.
+    const page = pastArticle();
+    for (const link of ['#link-trip', '#link-moment', '#link-play-off', '#link-play-zero']) {
+      page.click(link);
+      const posted = page.focuses().at(-1)?.message;
+      expect(posted, link).toBeDefined();
+      expect(Object.hasOwn(posted ?? {}, 'play'), link).toBe(false);
+    }
+  });
+
+  it('leaves a link that only says play alone, as it leaves every link naming nothing to show', () => {
+    const page = pastArticle();
+    page.click('#link-play-alone');
+    expect(page.focuses()).toHaveLength(0);
+  });
+
+  it('tells the editor to press copy for the values, and shows a link that plays', () => {
+    const html = snippet();
+    expect(html).toContain('press "Copy link to this moment"');
+    // Named as the page shows it in each language it can be read in — it opens in Romanian — and
+    // held to the catalogue, so a label reworded there cannot leave this instruction behind.
+    const comment = html.slice(0, html.indexOf('-->')).replace(/\s+/g, ' ');
+    expect(comment).toContain(`"${en.publicTrip.past.copyMoment}"`);
+    expect(comment).toContain(`"${ro.publicTrip.past.copyMoment}"`);
+    expect(html).toContain('data-silexgis-play');
+    // What it used to say: that the ids were to be read off the address bar, which never carried
+    // the moment at all.
+    expect(html).not.toContain("are in the full page's address");
   });
 
   it('leaves a link naming none of these attributes entirely alone', () => {
@@ -511,7 +565,21 @@ describe('what the embedded page will act on', () => {
       // exactly as it did, and the page it drives has no second branch for it.
       trip: null,
       at: null,
+      play: false,
     });
+  });
+
+  it('reads play only as the boolean a relay sends, and anything else as not asked', () => {
+    const read = (play: unknown) => {
+      const inbound = parseEmbedInbound({ ...focus, play });
+      return inbound?.type === 'focus' ? inbound.play : 'not a focus';
+    };
+    expect(read(true)).toBe(true);
+    // The message is still a focus, and still acted on: a member of the wrong shape is an absent
+    // one, never a reason to drop the link.
+    for (const other of [false, 1, 'true', '1', 'yes', null, undefined, {}, []]) {
+      expect(read(other), JSON.stringify(other)).toBe(false);
+    }
   });
 
   it('ignores anything that is not this conversation', () => {
@@ -541,6 +609,7 @@ describe('what the embedded page will act on', () => {
       target: { kind: 'team', ref: 'team-a' },
       trip: 'trip-1',
       at: '2019-07-06T13:40:00Z',
+      play: false,
     });
   });
 
@@ -548,7 +617,13 @@ describe('what the embedded page will act on', () => {
     // These arrive from another document as `unknown`. A page that destructured them would be a
     // page any script anywhere could make throw by posting a number at it.
     const read = parseEmbedInbound({ ...focus, trip: 42, at: { when: 'now' } });
-    expect(read).toEqual({ type: 'focus', target: { kind: 'station', ref: 'p.g.7' }, trip: null, at: null });
+    expect(read).toEqual({
+      type: 'focus',
+      target: { kind: 'station', ref: 'p.g.7' },
+      trip: null,
+      at: null,
+      play: false,
+    });
     const overlong = parseEmbedInbound({ ...focus, trip: 'x'.repeat(401) });
     expect(overlong?.type === 'focus' ? overlong.trip : 'not a focus').toBeNull();
   });

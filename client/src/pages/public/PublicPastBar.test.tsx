@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../../i18n';
 import type { PublicPastTrack } from '../../api/hooks.ts';
@@ -69,6 +69,7 @@ function playback(moments: readonly number[], overrides: Partial<PastTripPlaybac
       speed: 60,
       setSpeed: () => {},
       toggle: () => {},
+      play: () => {},
       scrubTo: () => {},
       step: 1,
     },
@@ -319,5 +320,144 @@ describe('the strip under a finger', () => {
     render(<PublicPastBar playback={following()} liveState="closed" cavers={[]} />);
 
     expect(screen.getByTestId('public-past-unfollow').className).toContain('ant-btn-sm');
+  });
+});
+
+/**
+ * The two buttons that copy a link to the moment on the clock.
+ *
+ * <b>The strip decides what is offered and says what happened; the address is the page's.</b> So
+ * what is proved here is the offer — only where a page handed an address in, never in the frame —
+ * that each button asks for the right one of the two links, that a reader is told which moment went
+ * into it, and that a browser refusing the clipboard still leaves them holding the link.
+ */
+describe('copying a link to the moment on the clock', () => {
+  const realClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  const clipboard = (writeText: (text: string) => Promise<void>) =>
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+
+  afterEach(() => {
+    if (realClipboard === undefined) {
+      Reflect.deleteProperty(navigator, 'clipboard');
+    } else {
+      Object.defineProperty(navigator, 'clipboard', realClipboard);
+    }
+  });
+
+  const address = (playing: boolean) =>
+    `https://club.example/shared/trips/t?past=trip-1${playing ? '&play=1' : ''}`;
+
+  it('copies the moment, or the moment set playing, and says which moment it took', async () => {
+    const written: string[] = [];
+    clipboard((text) => {
+      written.push(text);
+      return Promise.resolve();
+    });
+    render(
+      <PublicPastBar
+        playback={playback(everyMinute(20))}
+        liveState="closed"
+        cavers={[]}
+        momentAddress={address}
+      />,
+    );
+    // Named by their own words, which is what a screen reader is given too.
+    expect(screen.getByRole('button', { name: 'Copy link to this moment' })).toBe(
+      screen.getByTestId('public-past-copy-moment'),
+    );
+    expect(screen.getByRole('button', { name: 'Copy link that plays from here' })).toBe(
+      screen.getByTestId('public-past-copy-playing'),
+    );
+    // The line a confirmation is announced in is there before there is anything to announce.
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+
+    fireEvent.click(screen.getByTestId('public-past-copy-moment'));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Link copied'));
+    expect(written).toEqual([address(false)]);
+    const clock = screen.getByTestId('public-past-clock').textContent;
+    expect(clock).not.toBe('');
+    expect(screen.getByRole('status')).toHaveTextContent(`It opens this trip at ${clock}.`);
+    expect(screen.getByRole('status')).not.toHaveTextContent('starts playing');
+
+    fireEvent.click(screen.getByTestId('public-past-copy-playing'));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('starts playing'));
+    expect(written).toEqual([address(false), address(true)]);
+    expect(screen.queryByTestId('public-past-copy-by-hand')).toBeNull();
+  });
+
+  it('hands the link over to be copied by hand when the browser refuses the clipboard', async () => {
+    clipboard(() => Promise.reject(new DOMException('denied', 'NotAllowedError')));
+    render(
+      <PublicPastBar
+        playback={playback(everyMinute(20))}
+        liveState="closed"
+        cavers={[]}
+        momentAddress={address}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('public-past-copy-playing'));
+
+    const byHand = await screen.findByTestId('public-past-copy-by-hand');
+    expect(byHand).toHaveValue(address(true));
+    expect(byHand).toHaveAccessibleName('Link to this moment');
+    expect(screen.getByRole('status')).toHaveTextContent('did not allow copying');
+    expect(screen.getByRole('status')).not.toHaveTextContent('Link copied');
+  });
+
+  it('hands the link over as well where the browser has no clipboard at all', async () => {
+    // A page opened over plain HTTP has no such object: reaching for it throws, which must end
+    // the same way a refusal does rather than as a press that did nothing.
+    Reflect.deleteProperty(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    render(
+      <PublicPastBar
+        playback={playback(everyMinute(20))}
+        liveState="closed"
+        cavers={[]}
+        momentAddress={address}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('public-past-copy-moment'));
+
+    expect(await screen.findByTestId('public-past-copy-by-hand')).toHaveValue(address(false));
+  });
+
+  it('offers neither button where no page handed it an address, nor inside a frame', () => {
+    // The positive twin is the first case of this group: the same strip, with an address.
+    const { unmount } = render(
+      <PublicPastBar playback={playback(everyMinute(20))} liveState="closed" cavers={[]} />,
+    );
+    expect(screen.getByTestId('public-past-play')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-past-links')).toBeNull();
+    unmount();
+
+    render(
+      <PublicPastBar
+        playback={playback(everyMinute(20))}
+        liveState="closed"
+        cavers={[]}
+        momentAddress={address}
+        compact
+      />,
+    );
+    expect(screen.getByTestId('public-past-play')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-past-links')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('draws them as buttons, never as links the page would be navigated by', () => {
+    render(
+      <PublicPastBar
+        playback={playback(everyMinute(20))}
+        liveState="closed"
+        cavers={[]}
+        momentAddress={address}
+      />,
+    );
+
+    expect(screen.getByTestId('public-past-links').querySelectorAll('a')).toHaveLength(0);
+    expect(screen.getByTestId('public-past-links').querySelectorAll('button')).toHaveLength(2);
   });
 });

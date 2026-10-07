@@ -3781,7 +3781,13 @@
       "speed": "{{value}}×",
       "scrub": "Momentul din tură",
       "reportPrevious": "Raportul anterior",
-      "reportNext": "Raportul următor"
+      "reportNext": "Raportul următor",
+      "copyMoment": "Copiază linkul către acest moment",
+      "copyPlaying": "Copiază linkul care redă de aici",
+      "copiedMoment": "Link copiat. Deschide această tură la {{when}}.",
+      "copiedPlaying": "Link copiat. Deschide această tură la {{when}} și pornește redarea.",
+      "copyRefused": "Browserul nu a permis copierea. Linkul este mai jos: selectează-l și copiază-l manual.",
+      "copyByHand": "Linkul către acest moment"
     },
     "live": {
       "heading": "Urmărite acum",

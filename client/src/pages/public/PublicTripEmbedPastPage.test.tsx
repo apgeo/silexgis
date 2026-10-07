@@ -667,6 +667,105 @@ describe('an article driving the cave’s past through the frame', () => {
     expect(drawn.map((caver) => caver.position.kind)).toEqual(['station', 'unreported']);
   });
 
+  it('opens a trip at a moment and sets it playing, when the link says play', () => {
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { trip: TRIP_2019, play: true }),
+    );
+
+    expect(focused(sent).at(-1)).toMatchObject({ target: { kind: 'moment' }, found: true });
+    // The button offers the opposite of what the clock is doing.
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+  });
+
+  it('opens the same link standing still without the word, as every block already pasted sends it', () => {
+    // The twin of the case above, and the promise to older blocks: a message with no `play`, and
+    // one carrying something that only looks like it, open the trip exactly as before.
+    const { parent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { trip: TRIP_2019 }),
+    );
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:40:00Z', { trip: TRIP_2019, play: 'yes' }),
+    );
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+  });
+
+  it('starts the trip already playing from a moment named with play, and a second press leaves it playing', () => {
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { play: true }),
+    );
+
+    expect(focused(sent).at(-1)).toMatchObject({ target: { kind: 'moment' }, found: true });
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+
+    // Pressed again, the link must not behave as the button does: that would pause it.
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { play: true }),
+    );
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+  });
+
+  it('holds a request to play made while the trip is still being read, and honours it when it lands', () => {
+    trackAnswer = { data: undefined, isPending: true, isError: false };
+    const { parent } = fakeParent();
+    const { rerender } = render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+    deliver(parent, 'https://club.example.org', focus('trip', TRIP_2019));
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2019-07-06T09:30:00Z', { play: true }),
+    );
+    expect(screen.queryByTestId('public-past-play')).toBeNull();
+
+    trackAnswer = { data: pastTrack(), isPending: false, isError: false };
+    rerender(<PublicTripEmbedPage />);
+
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+  });
+
+  it('leaves the word alone over the trip being followed now, where there is no clock to start', () => {
+    const { parent, sent } = fakeParent();
+    render(<PublicTripEmbedPage />);
+    deliver(parent, 'https://club.example.org', hello);
+
+    deliver(
+      parent,
+      'https://club.example.org',
+      focus('moment', '2026-09-14T09:00:00Z', { play: true }),
+    );
+
+    // Refused for the moment, exactly as it is without the word — and no replay was opened by it.
+    expect(focused(sent).at(-1)).toMatchObject({ target: { kind: 'moment' }, found: false });
+    expect(screen.queryByTestId('public-past-bar')).toBeNull();
+  });
+
   it('moves the clock to a caver named beside the trip already open, as it does without the trip', () => {
     // Two spellings of one link: an article names a caver with the trip beside it, or the caver
     // alone once the trip is open. The replay stands at its start, before this person was placed

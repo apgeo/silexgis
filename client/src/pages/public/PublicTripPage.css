@@ -428,6 +428,16 @@
   opacity: 0.55;
 }
 
+/* The two buttons that copy a link to the moment on the clock, and the line saying what the last
+   press copied. Under the rail rather than beside the transport: they are about the moment the
+   rail shows, and they are not what a reader reaches for while the replay is playing. */
+.public-past-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .public-past-follow {
   min-width: 140px;
   max-width: 100%;
