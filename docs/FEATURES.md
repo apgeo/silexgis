@@ -429,6 +429,14 @@ feature and walkthroughs of whole jobs.
   in the table, marked, after being taken off the roster, and cannot be taken off it while
   tracking is running. None of this alarms anybody: nothing is sent, the overdue callout is not
   involved, and a published page shows none of it.
+  **A camp counts all of its parties on one screen**: the camp's page has a *Who is underground*
+  tab listing every trip of the camp that is being tracked, or was closed in the last two days,
+  with how many of its party are underground, out and not yet heard from, each person by name
+  and when they were last heard. It is a head count and deliberately not a map — it carries no
+  station, depth, survey or cave for anybody, which is what lets it count a party in a cave
+  whose location the reader may not be told — and it raises no alarm: the hour a party plans to
+  be out by is printed as a time and compared with nothing. It lists only the trips its reader
+  may read, and a trip whose tracking was never started is not on it at all.
   A trip can then be **published** with a link: anybody holding it, with no account, sees the
   party on the survey, refreshed while they are underground. The page is written for a reader who
   has never followed a trip: it says that a place is where somebody was last *reported* and not a

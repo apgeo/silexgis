@@ -48,7 +48,7 @@ paginile acestea sunt detaliul spre care trimit ele.
 | [Ture](trips.md) | Fișa turei integral: plan, echipă, ce a făcut, raport |
 | [Evenimente și calendar](events-and-calendar.md) | Datele clubului, repetiția și o fereastră peste tot ce are dată |
 | [Abonarea la calendar](calendar-feed.md) | Turele, taberele și evenimentele dumneavoastră în calendarul de pe telefon sau de pe calculator |
-| [Tabere](camps.md) | Expediții cu mai multe ture, lista lor, panoul de continuări |
+| [Tabere](camps.md) | Expediții cu mai multe ture, lista lor, panoul de continuări, cine e în peșteră în turele lor |
 | [Liste de verificare și apelul de urgență](checklists-and-callout.md) | Ce stabilește o echipă înainte de plecare și alarma de întârziere |
 | [Urmărirea în direct și turele publicate](live-tracking.md) | Unde este echipa cât timp e în peșteră, corectarea jurnalului, importul unei foi, ce înseamnă adâncimile unei peșteri, publicarea unei ture |
 | [Un film al unei ture urmărite](tracking-movie.md) | Un GIF sau un video cu echipa mișcându-se prin ridicare: alegerea turelor, formate, ce poartă fișierul și numele lui, cât durează un export, anularea |

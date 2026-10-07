@@ -2,7 +2,7 @@
 
 🇬🇧 [English](../../features/live-tracking.md) · 🇷🇴 **Română**
 
-[← Referință](README.md) · Înrudite: [Ture](trips.md) ·
+[← Referință](README.md) · Înrudite: [Ture](trips.md) · [Tabere](camps.md) ·
 [Liste de verificare și apelul de urgență](checklists-and-callout.md) ·
 [Partajare, coduri QR și pagini publice](sharing-and-public-pages.md)
 
@@ -197,6 +197,26 @@ făcute pe ea rămân marcate în tabel, în cuvinte.
 **Fă un film**, pe același panou, salvează reluarea ca fișier — un GIF sau un video cu echipa
 mișcându-se prin ridicare, al acestei ture sau al mai multora. Vedeți
 [Un film al unei ture urmărite](tracking-movie.md).
+
+### Mai multe echipe deodată: numărătoarea unei tabere
+
+O tură care aparține unei [tabere](camps.md) este numărată și pe fila **Cine e în peșteră** a
+taberei: fiecare tură a taberei aflată în urmărire, sau încheiată în ultimele două zile, cu
+numerele ei **În peșteră · Ieșit · Fără nicio veste** și cu oamenii ei, pe un singur ecran. Nu
+trebuie pornit nimic — pornirea urmăririi pe tură este ce o pune acolo.
+
+Fila aceea este numărătoarea și nimic altceva:
+
+- **Nu arată niciun loc.** Nicio stație, adâncime, ridicare sau peșteră nu se află pe ea, pentru
+  nimeni — așa că poate spune cuiva că un om este în peșteră într-o peșteră a cărei locație îi
+  este ascunsă, exact cum face aici *Nu îți este arătată*. Unde sunt oamenii rămâne aici, pe
+  tură.
+- **Nici nu dă alarma.** Tipărește ca oră momentul la care echipa plănuiește să fie afară și nu
+  îl compară cu nimic. [Apelul de urgență](checklists-and-callout.md) nu se află pe ea.
+- **Listează doar turele pe care cititorul ei le poate citi** și numește oamenii așa cum îi
+  numește pagina turei pentru acel cititor.
+
+Vedeți [Tabere → Cine e în peșteră](camps.md#cine-e-în-peșteră).
 
 ---
 

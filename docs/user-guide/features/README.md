@@ -48,7 +48,7 @@ detail those walkthroughs link into.
 | [Trips](trips.md) | The trip record in full: plan, roster, what it did, report |
 | [Events and calendar](events-and-calendar.md) | Club dates, repetition, and one window over everything |
 | [Subscribing to your calendar](calendar-feed.md) | Your trips, camps and events in the calendar on your phone or desktop |
-| [Camps](camps.md) | Multi-trip expeditions, their roster, their leads board |
+| [Camps](camps.md) | Multi-trip expeditions, their roster, their leads board, who is underground on their trips |
 | [Checklists and the callout](checklists-and-callout.md) | What a party settles before it sets off, and the overdue alarm |
 | [Live tracking and published trips](live-tracking.md) | Where the party is while it is underground, correcting the log, importing a sheet, what a cave's depths mean, publishing a trip |
 | [A movie of a tracked trip](tracking-movie.md) | A GIF or a video of the party moving through the survey: choosing trips, formats, what the file carries and its name, how long an export takes, cancelling |

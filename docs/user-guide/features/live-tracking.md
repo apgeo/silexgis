@@ -2,7 +2,7 @@
 
 🇬🇧 **English** · 🇷🇴 [Română](../ro/features/live-tracking.md)
 
-[← Feature reference](README.md) · Related: [Trips](trips.md) ·
+[← Feature reference](README.md) · Related: [Trips](trips.md) · [Camps](camps.md) ·
 [Checklists and the callout](checklists-and-callout.md) ·
 [Sharing, QR codes and public pages](sharing-and-public-pages.md)
 
@@ -186,6 +186,25 @@ not on the list; the reports made on it stay marked in the table, in words.
 **Make a movie**, on the same panel, saves the replay as a file — a GIF or a video of the party
 moving through the survey, of this trip or of several. See
 [A movie of a tracked trip](tracking-movie.md).
+
+### Several parties at once: a camp's head count
+
+A trip that belongs to a [camp](camps.md) is also counted on the camp's **Who is underground**
+tab: every trip of the camp being tracked, or closed in the last two days, with its
+**Underground · Out · Not heard from** numbers and its people, on one screen. Nothing has to be
+switched on — starting tracking on the trip is what puts it there.
+
+That tab is the count and nothing else:
+
+- **It shows no place.** No station, depth, survey or cave is on it, for anybody — so it can
+  tell somebody that a person is underground in a cave whose location is withheld from them,
+  exactly as this tab's *Not shown to you* does. Where people are stays here, on the trip.
+- **It raises no alarm either.** It prints the hour the party plans to be out by as a time, and
+  compares it with nothing. The [callout](checklists-and-callout.md) is not on it.
+- **It lists only the trips its reader may read**, and names people as the trip's own page
+  names them to that reader.
+
+See [Camps → Who is underground](camps.md#who-is-underground).
 
 ---
 

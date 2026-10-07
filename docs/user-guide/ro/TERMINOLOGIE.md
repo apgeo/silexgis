@@ -134,6 +134,10 @@ odată cu ea — și apoi paginile.
 | First visits | Primele vizite |
 | Leads | Continuări |
 | Who was there | Cine a fost |
+| Who is underground (a camp's tab) | Cine e în peșteră |
+| Head count (what that tab is) | Numărătoare |
+| Out / Not heard from (where somebody stands) | Ieșit / Fără nicio veste |
+| Expected back | Ieșire estimată |
 | Add a stay / Edit stay / Remove stay | Adaugă o ședere / Editare ședere / Șterge șederea |
 | Who / Role / Days / Note (a stay) | Cine / Rol / Zilele / Notă |
 | Tracking (the tab) | Urmărire |
