@@ -404,6 +404,69 @@ describe('reaching a cave’s past from a published link', () => {
     expect(written.get('past')).toBe(TRIP_2019);
   });
 
+  it('makes picking a trip a step the browser’s Back button undoes', () => {
+    // <b>The defect this pins.</b> The pick replaced the entry the reader was on, so Back — the
+    // press somebody reaches for on finding themselves in a trip of years ago — left the page.
+    render(<PublicTripPage />);
+    openArchive();
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+
+    // A new entry, and handed to the page before the press returns: a Back pressed while the
+    // browser is still busy with the survey the pick asked for must find the pick already there.
+    expect(setAddress.mock.calls.at(-1)?.[1]).toEqual({ replace: false, flushSync: true });
+  });
+
+  it('adds no second step for the row of the trip the address already names', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}`);
+    render(<PublicTripPage />);
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+
+    expect(setAddress.mock.calls.at(-1)?.[1]).toEqual({ replace: true, flushSync: true });
+  });
+
+  it('clears the address in place when the reader leaves by the page’s own way back', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}&team=${TEAM_B}`);
+    render(<PublicTripPage />);
+
+    fireEvent.click(screen.getByTestId('public-past-back'));
+
+    const written = setAddress.mock.calls.at(-1)?.[0] as URLSearchParams;
+    expect(written.has('past')).toBe(false);
+    expect(written.has('team')).toBe(false);
+    expect(setAddress.mock.calls.at(-1)?.[1]).toEqual({ replace: true, flushSync: true });
+  });
+
+  it('returns to the party being followed now when the address stops naming a past trip', () => {
+    // What Back produces after a pick: the same page, at the address it had before.
+    address = new URLSearchParams(`past=${TRIP_2019}&team=${TEAM_B}`);
+    const { rerender } = render(<PublicTripPage />);
+    expect(screen.getByTestId('public-past-banner')).toBeTruthy();
+
+    address = new URLSearchParams();
+    rerender(<PublicTripPage />);
+
+    expect(screen.queryByTestId('public-past-banner')).toBeNull();
+    expect(((given?.trackedCavers ?? []) as { name: string }[]).map((caver) => caver.name)).toEqual([
+      'Ana',
+    ]);
+    // And it left by reading the address, not by writing one: there is nothing to clear.
+    expect(setAddress).not.toHaveBeenCalled();
+  });
+
+  it('stays in a replay the reader picked while only the page’s language changes in the address', () => {
+    // The address never named the trip in this renderer, exactly as it does not for the moment
+    // between a press and the router answering it. Something else changing must not read as Back.
+    const { rerender } = render(<PublicTripPage />);
+    openArchive();
+    fireEvent.click(screen.getByTestId(`public-past-trip-${TRIP_2019}`));
+    expect(screen.getByTestId('public-past-banner')).toBeTruthy();
+
+    address = new URLSearchParams('lang=en');
+    rerender(<PublicTripPage />);
+
+    expect(screen.getByTestId('public-past-banner')).toBeTruthy();
+  });
+
   it('writes whom the reader follows into the address as well, so the link sent is the view seen', async () => {
     // <b>The defect this pins.</b> Following the survey team changed the screen and left the address
     // at `?past=` alone, so a reader who copied the bar sent a link that opened the trip following

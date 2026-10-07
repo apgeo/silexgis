@@ -138,7 +138,15 @@ export default function PublicTripPage() {
   // carries the page's language, which the language button rewrites; a link naming a moment and
   // asking to play would otherwise be honoured a second time by that press — the replay wound
   // back to the link's moment and set going again because the reader asked for English.
+  //
+  // An address that comes to name no past trip is the other half of the same reading, and it is
+  // what the browser's Back button produces: picking a trip is a step in the reader's history, so
+  // stepping back over it arrives at the address of the party being followed now — and a page still
+  // playing the replay under that address would be showing one thing and naming another. Leaving
+  // the past where nothing of it is on screen changes nothing, so the first reading of an address
+  // that never named a trip is harmless.
   const openPast = past.open;
+  const leaveThePast = past.backToNow;
   const askedOfThePast = PAST_LINK_PARAMS.map((name) => search.get(name) ?? '\u0000').join('\u0001');
   const searchRef = useRef(search);
   searchRef.current = search;
@@ -146,8 +154,10 @@ export default function PublicTripPage() {
     const asked = readPastLink(searchRef.current);
     if (asked !== null) {
       openPast(asked.tripLogId, { at: asked.at, follow: asked.follow, play: asked.play });
+    } else {
+      leaveThePast();
     }
-  }, [askedOfThePast, openPast]);
+  }, [askedOfThePast, openPast, leaveThePast]);
 
   // The address the viewer is given: held still while it is the same survey, replaced when the
   // survey itself changes. Both halves matter and the reasoning for each lives with the rule,
@@ -325,10 +335,30 @@ export default function PublicTripPage() {
     pastBarRef.current?.scrollIntoView?.({ block: 'start' });
   }, [picked, pastSettled, past.tripLogId]);
 
-  /** Choosing a trip: play it, and write it into the address so the view can be sent to somebody. */
+  /**
+   * Choosing a trip: play it, and write it into the address so the view can be sent to somebody.
+   *
+   * <b>A new entry in the reader's history, where everything else this page writes replaces the
+   * one it is on.</b> Somebody who pressed a row and finds themselves in a trip of years ago
+   * reaches for the browser's Back button to undo it, and with the address merely replaced that
+   * press took them off the page altogether — out of the party they came to follow. Pressing the
+   * row of the trip the address already names is the exception: there is no step to add, and a
+   * second identical entry would be a Back press that appears to do nothing.
+   *
+   * <b>Written into the page at once, not when the router gets round to it.</b> The router hands
+   * a new address to the page as a change that may wait — and it does wait, for as long as the
+   * browser is busy parsing the survey this very press asked for. The way back above is read from
+   * the address *changing* to one that names no trip; a reader who pressed Back inside that wait
+   * went from an address the page had not yet been told about to the one it was already on, which
+   * is no change at all, and stayed in the replay under the live trip's address. So the pick is
+   * committed before the press returns, and there is no such wait to press Back in.
+   */
   const play = (tripLogId: string) => {
     past.open(tripLogId, { follow: null });
-    setSearch(writePastLink(search, tripLogId, null), { replace: true });
+    setSearch(writePastLink(search, tripLogId, null), {
+      replace: search.get('past') === tripLogId,
+      flushSync: true,
+    });
     scrollOwedFor.current = tripLogId;
     setPicked((count) => count + 1);
   };
@@ -340,12 +370,13 @@ export default function PublicTripPage() {
    * back and then copies what is in the bar would otherwise be sending somebody a link into a past
    * trip while believing they were sending the live page — the address would still name a trip the
    * page had stopped showing. `replace` rather than a new entry: leaving a replay is not a place in
-   * the reader's history to go back to.
+   * the reader's history to go back to. And at once, for the reason a pick is: whether the next
+   * pick is a new step in the reader's history is decided against the address this leaves behind.
    */
   const leavePast = () => {
     scrollOwedFor.current = null;
     past.backToNow();
-    setSearch(writePastLink(search, null, null), { replace: true });
+    setSearch(writePastLink(search, null, null), { replace: true, flushSync: true });
   };
 
   /**

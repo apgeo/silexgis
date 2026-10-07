@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n';
 import { ApiError } from '../../api/client.ts';
@@ -427,6 +427,10 @@ describe('the viewer a website frames', () => {
     answer = { data: undefined, isPending: false, error: new ApiError(404) };
     const view = render(<PublicTripEmbedPage />);
     expect(screen.getByTestId('public-trip-embed-failure')).toHaveTextContent('Nothing to show for this link');
+    // The one sentence in the frame, and so the one place the other language has to be offered.
+    expect(
+      within(screen.getByTestId('public-trip-embed-failure')).getByTestId('public-trip-language'),
+    ).toBeInTheDocument();
 
     // A phone with no signal, opened straight onto the article: nothing in hand, and no answer
     // from the server about the link either. Said as a fault, with the way to ask again.
@@ -438,6 +442,9 @@ describe('the viewer a website frames', () => {
     expect(screen.getByTestId('public-trip-embed-unreachable')).toHaveTextContent(
       'The trip could not be read just now',
     );
+    expect(
+      within(screen.getByTestId('public-trip-embed-unreachable')).getByTestId('public-trip-language'),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('public-trip-retry'));
     expect(refetch).toHaveBeenCalledOnce();
   });

@@ -59,7 +59,7 @@ vi.mock('../../api/hooks.ts', () => ({
   },
 }));
 // The frame's address, which is where an article says what language it is written in.
-const address = new URLSearchParams();
+let address = new URLSearchParams();
 const setAddress = vi.fn();
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ token: 'follow-token' }),
@@ -240,6 +240,7 @@ beforeEach(() => {
   given = undefined;
   sheetPane = undefined;
   coarse = false;
+  address = new URLSearchParams();
 });
 
 afterEach(cleanup);
@@ -458,6 +459,51 @@ describe('the frame’s buttons under a finger', () => {
     render(<PublicTripEmbedPage />);
 
     expect(screen.getByTestId('public-trip-retry').className).toContain('ant-btn-lg');
+  });
+});
+
+describe('a frame whose own address names a moment of a past trip', () => {
+  const clockShows = (iso: string) =>
+    expect(screen.getByTestId('public-past-scrub').querySelector('[role="slider"]')).toHaveAttribute(
+      'aria-valuenow',
+      String(Date.parse(iso)),
+    );
+
+  it('opens that trip at that moment and sets it playing, as the full page does', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z&play=1`);
+    render(<PublicTripEmbedPage />);
+
+    expect(trackReads).toContain(TRIP_2019);
+    expect(screen.getByTestId('public-past-banner-what')).toHaveTextContent('the 2019 push');
+    clockShows('2019-07-06T09:30:00Z');
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Pause');
+  });
+
+  it('opens it standing still when the address does not say play', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z`);
+    render(<PublicTripEmbedPage />);
+
+    clockShows('2019-07-06T09:30:00Z');
+    expect(screen.getByTestId('public-past-play')).toHaveAccessibleName('Play');
+  });
+
+  it('is not sent back to it because the frame’s language changed in the same address', () => {
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z&play=1`);
+    const { rerender } = render(<PublicTripEmbedPage />);
+    fireEvent.click(screen.getByTestId('public-past-back'));
+    expect(screen.queryByTestId('public-past-banner-what')).toBeNull();
+
+    address = new URLSearchParams(`past=${TRIP_2019}&at=2019-07-06T09:30:00Z&play=1&lang=en`);
+    rerender(<PublicTripEmbedPage />);
+
+    expect(screen.queryByTestId('public-past-banner-what')).toBeNull();
+  });
+
+  it('reads no track for an address that names no past trip', () => {
+    address = new URLSearchParams('lang=en&at=2019-07-06T09:30:00Z&play=1');
+    render(<PublicTripEmbedPage />);
+
+    expect(trackReads.filter((read) => read !== undefined)).toEqual([]);
   });
 });
 

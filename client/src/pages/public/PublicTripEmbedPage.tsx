@@ -12,7 +12,7 @@ import {
 import { HistoryOutlined } from '@ant-design/icons';
 import { Alert, Button, Drawer, Flex, Skeleton, Spin, Tabs, Typography, theme } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { isSettledRefusal } from '../../api/client.ts';
 import { usePublicLiveTrips, usePublicPastTrips, usePublicTrip } from '../../api/hooks.ts';
 import CaveViewPanel, {
@@ -27,6 +27,7 @@ import { unnamedViewerFileName } from '../../caveview/viewerFileName.ts';
 import { usePublishedSheets } from '../../rastermap/publishedSheets.ts';
 import { VIEW_KIND_ICONS } from '../../rastermap/viewKindIcons.tsx';
 import { followedStation, type PastFollow } from './pastTrackReplay.ts';
+import { PAST_LINK_PARAMS, readPastLink } from './pastTripLink.ts';
 import { usePinnedModelUrl } from './pinnedModelUrl.ts';
 import PublicPastBar from './PublicPastBar.tsx';
 import PublicLiveTripList from './PublicLiveTripList.tsx';
@@ -204,6 +205,31 @@ export default function PublicTripEmbedPage() {
     tripLogId: pastTripLogId,
     loading: pastLoading,
   } = past;
+
+  /**
+   * What the frame's own address says about the past, in the words the full page's address uses.
+   *
+   * <b>One vocabulary for both, so a link copied on the page means the same thing here.</b> An
+   * editor who wants the frame to open on a moment of an old trip — the article is about that
+   * day — writes `past`, `at` and `play` after the frame's address, exactly as the page's copy
+   * buttons write them, and does not have to learn that the frame only listens to its article.
+   *
+   * Read when what the address says about the past changes and at no other time: the language
+   * button rewrites the same address, and must not wind a replay back to the link's moment. The
+   * frame never writes these itself — its reader's picks and its article's links are not places
+   * in anybody's history — so there is no other half to this reading, and an address naming no
+   * past trip leaves whatever the article has since asked for alone.
+   */
+  const [search] = useSearchParams();
+  const askedOfThePast = PAST_LINK_PARAMS.map((name) => search.get(name) ?? '\u0000').join('\u0001');
+  const searchRef = useRef(search);
+  searchRef.current = search;
+  useEffect(() => {
+    const asked = readPastLink(searchRef.current);
+    if (asked !== null) {
+      openPast(asked.tripLogId, { at: asked.at, follow: asked.follow, play: asked.play });
+    }
+  }, [askedOfThePast, openPast]);
 
   const followStation = followedStation(cavers, past.follow);
   useEffect(() => {
@@ -696,10 +722,16 @@ export default function PublicTripEmbedPage() {
     ? 'public-trip-embed public-trip-embed-past'
     : 'public-trip-embed';
 
+  // The one sentence in a frame with nothing to show is the one its reader most needs to be able
+  // to read, and it is all there is: the way into the other language is drawn under it, where the
+  // strip that carries it on a working frame does not exist.
   const failure = (message: string) => (
     <div className="public-trip-embed" style={palette} data-testid="public-trip-embed-failure">
       <div className="public-trip-embed-failure">
-        <Typography.Text type="secondary">{message}</Typography.Text>
+        <Flex vertical align="center" gap="small">
+          <Typography.Text type="secondary">{message}</Typography.Text>
+          <PublicLanguageButton control={language} compact size={controlSize} />
+        </Flex>
       </div>
     </div>
   );
@@ -730,6 +762,7 @@ export default function PublicTripEmbedPage() {
             >
               {t('publicTrip.retry')}
             </Button>
+            <PublicLanguageButton control={language} compact size={controlSize} />
           </Flex>
         </div>
       </div>
