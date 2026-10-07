@@ -31,11 +31,13 @@ export interface MovieTripData {
 }
 
 export interface MovieLegendEntry {
-  color: string;
+  /** The marker colour the line explains; null for a line that explains the legend itself. */
+  color: string | null;
   label: string;
   /**
-   * Explains a kind of marker rather than naming a trip or a team — the grey of somebody who has
-   * come out — so a legend with too little room keeps it and cuts the named entries instead.
+   * Explains a kind of marker, or the legend itself, rather than naming a trip or a team — the
+   * grey of somebody who has come out, the line saying that colours repeat — so a legend with too
+   * little room keeps it and cuts the named entries instead.
    */
   pinned?: boolean;
 }
@@ -58,6 +60,15 @@ export interface MovieParty {
  * colours the viewer already draws with — red stations, yellow junctions, white entrances — and of
  * the grey a caver who has come out is drawn in. All opaque: the viewer drops an alpha channel and
  * would draw a translucent colour as solid black or white.
+ *
+ * <b>Twelve, and past twelve the legend says so.</b> A camp's movie runs to a dozen trips, and a
+ * colour used twice makes two parties one to anybody reading the legend. More colours than this
+ * cannot be told apart as small moving dots on a compressed frame, so beyond the list the colours
+ * do repeat — in the same order — and {@link movieParty} adds a line to the legend saying it,
+ * rather than leave a reader to find out from two parties that look like one. The four at the end
+ * were added after the first eight and are the furthest from them, and from the viewer's own
+ * colours, that still read on black; a colour is only ever appended, since a trip's colour is its
+ * place in this list.
  */
 export const MOVIE_MARKER_PALETTE: readonly string[] = [
   trackedCaverPalette.underground,
@@ -68,7 +79,14 @@ export const MOVIE_MARKER_PALETTE: readonly string[] = [
   '#ff5e8e',
   '#b18cff',
   '#d9b77a',
+  '#1f9e5a',
+  '#f2a7d0',
+  '#c2f0a0',
+  '#7c5cff',
 ];
+
+/** The colours teams are told apart by: the first of the palette is kept for people in no team. */
+const TEAM_COLOURS = MOVIE_MARKER_PALETTE.length - 1;
 
 /** The id of a caver's marker in a movie. The same person on two trips is two markers. */
 export function movieMarkerId(tripLogId: string, caverId: string): string {
@@ -117,7 +135,7 @@ export function movieParty(
   trips.forEach((trip) => {
     for (const team of trip.tracking.teams) {
       // The first colour is kept for nobody's team, so teams start at the second.
-      const color = MOVIE_MARKER_PALETTE[1 + (teamColours.size % (MOVIE_MARKER_PALETTE.length - 1))];
+      const color = MOVIE_MARKER_PALETTE[1 + (teamColours.size % TEAM_COLOURS)];
       teamColours.set(team.id, color);
       const title = team.title.length > 0 ? team.title : t('caveview.tracking.noTeam');
       teamLegend.push({
@@ -221,6 +239,14 @@ export function movieParty(
               : []),
           ]
         : [];
+  // Whether two trips, or two teams, are drawn in one colour is a fact about the whole movie, so
+  // the line stands on every frame rather than appearing when the thirteenth party walks in.
+  if (colourBy === 'trip' && trips.length > MOVIE_MARKER_PALETTE.length) {
+    legend.push({ color: null, label: t('caveview.movie.legendTripColoursRepeat'), pinned: true });
+  }
+  if (colourBy === 'team' && teamColours.size > TEAM_COLOURS) {
+    legend.push({ color: null, label: t('caveview.movie.legendTeamColoursRepeat'), pinned: true });
+  }
   if (placed.some((entry) => entry.caver.out)) {
     legend.push({ color: trackedCaverPalette.out, label: t('caveview.tracking.out'), pinned: true });
   }

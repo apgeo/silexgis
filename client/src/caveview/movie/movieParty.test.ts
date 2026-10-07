@@ -155,6 +155,46 @@ describe('movieParty', () => {
     expect(late.legend.map((entry) => entry.label)).toEqual(['Echipa 1', 'Echipa 2', 'No team']);
   });
 
+  it('tells a dozen trips apart, and says in the legend when there are more trips than colours', () => {
+    const log = [event({ stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' })];
+    const trips = (count: number) =>
+      Array.from({ length: count }, (_, index) => trip(`trip-${index + 1}`, `Trip ${index + 1}`, state([ANA]), log));
+
+    const dozen = partyOf(trips(12));
+    expect(new Set([...dozen.markers.values()].map((marker) => marker.color)).size).toBe(12);
+    expect(dozen.legend).toHaveLength(12);
+    expect(dozen.legend.every((entry) => entry.color !== null && entry.pinned !== true)).toBe(true);
+
+    const thirteen = partyOf(trips(13));
+    // The thirteenth is drawn in the first colour again: there is no thirteenth to give it.
+    expect(thirteen.markers.get('trip-13:caver-ana')!.color).toBe(thirteen.markers.get('trip-1:caver-ana')!.color);
+    // Said by a line of its own with no swatch, kept when the legend is short of room.
+    expect(thirteen.legend.at(-1)).toEqual({ color: null, label: 'Trip colours repeat', pinned: true });
+    // Colouring that does not go by trip repeats nothing, so it says nothing.
+    expect(partyOf(trips(13), settings({ colourBy: 'single' })).legend).toEqual([]);
+    expect(partyOf(trips(13), settings({ colourBy: 'team' })).legend.some((entry) => entry.color === null)).toBe(false);
+  });
+
+  it('says when there are more teams than colours, on every frame and not only once the last team walks in', () => {
+    const teams = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({ id: `team-${index + 1}`, title: `Echipa ${index + 1}` }));
+    const log = [event({ caverId: ANA, teamId: 'team-1', stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' })];
+
+    // The first colour is kept for people in no team, so eleven teams are told apart.
+    const eleven = partyOf([trip('trip-1', 'One', state([ANA], teams(11)), log)]);
+    expect(new Set(eleven.legend.map((entry) => entry.color)).size).toBe(11);
+    expect(eleven.legend.some((entry) => entry.color === null)).toBe(false);
+
+    const twelve = partyOf([trip('trip-1', 'One', state([ANA], teams(12)), log)]);
+    expect(twelve.legend.at(-1)).toEqual({ color: null, label: 'Team colours repeat', pinned: true });
+    expect(twelve.legend[11].color).toBe(twelve.legend[0].color);
+    // Before anybody of the twelfth team has reported, the line is already there.
+    const early = partyOf([trip('trip-1', 'One', state([ANA], teams(12)), log)], settings(), [
+      Date.parse('2026-09-12T08:30:00Z'),
+    ]);
+    expect(early.legend.at(-1)).toEqual({ color: null, label: 'Team colours repeat', pinned: true });
+  });
+
   it('draws everybody in one colour when asked, with no legend of trips', () => {
     const log = [event({ stationName: 'p.1', recordedAt: '2026-09-12T09:00:00Z' })];
     const party = partyOf(
@@ -303,5 +343,46 @@ describe('movieParty', () => {
     expect(partyOf([one], settings({ labels: 'full' }, { note: true })).note).toBe('Ana Popescu: Turning back');
     expect(partyOf([one], settings({ labels: 'initials' }, { note: true })).note).toBe('AP: Turning back');
     expect(partyOf([one], settings({ labels: 'off' }, { note: true })).note).toBe('Turning back');
+  });
+});
+
+describe('the marker palette', () => {
+  const channels = (hex: string) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+  // How far apart two colours look, as the CIE 1976 colour difference: about 2 is just noticeable
+  // side by side, and markers are small, far apart and move.
+  const lab = (hex: string) => {
+    const [r, g, b] = channels(hex).map((value) => {
+      const unit = value / 255;
+      return unit <= 0.04045 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
+    });
+    const f = (value: number) => (value > 0.008856 ? Math.cbrt(value) : 7.787 * value + 16 / 116);
+    const x = f((r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047);
+    const y = f(r * 0.2126 + g * 0.7152 + b * 0.0722);
+    const z = f((r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883);
+    return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+  };
+  const apart = (left: string, right: string) => {
+    const [a, b] = [lab(left), lab(right)];
+    return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  };
+
+  it('holds twelve opaque colours, the first being the one a single party is drawn in everywhere', () => {
+    expect(MOVIE_MARKER_PALETTE).toHaveLength(12);
+    expect(MOVIE_MARKER_PALETTE[0]).toBe(trackedCaverPalette.underground);
+    // Six hex digits and no alpha: the viewer drops an alpha channel.
+    expect(MOVIE_MARKER_PALETTE.every((color) => /^#[0-9a-f]{6}$/.test(color))).toBe(true);
+  });
+
+  it('keeps every colour apart from every other, and from the colours that already mean something', () => {
+    // The viewer's stations, junctions and entrances, the scene behind them, and somebody out.
+    const taken = ['#ff0000', '#ffff00', '#ffffff', '#000000', trackedCaverPalette.out];
+    for (const [index, color] of MOVIE_MARKER_PALETTE.entries()) {
+      for (const other of MOVIE_MARKER_PALETTE.slice(index + 1)) {
+        expect(apart(color, other), `${color} and ${other}`).toBeGreaterThan(20);
+      }
+      for (const other of taken) {
+        expect(apart(color, other), `${color} and ${other}`).toBeGreaterThan(30);
+      }
+    }
   });
 });

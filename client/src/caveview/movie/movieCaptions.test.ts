@@ -65,14 +65,16 @@ describe('drawMovieCaptions', () => {
     expect(ctx.font).toMatch(/sans-serif$/);
   });
 
-  it('says how many legend entries it had no room for, and keeps the key to the grey of somebody out', () => {
+  it('says how many legend entries it had no room for, and keeps the lines that explain the legend', () => {
     const { ctx, fillText, fills } = recordingContext();
-    // Twenty trips' worth of entries and the out key after them, as a movie of twenty trips has.
+    // Twenty trips' worth of entries, the line saying their colours repeat and the out key after
+    // them, as a movie of twenty trips has.
     const legend = [
       ...Array.from({ length: 20 }, (_, index) => ({
         color: MOVIE_MARKER_PALETTE[index % MOVIE_MARKER_PALETTE.length],
         label: `Trip ${index + 1}`,
       })),
+      { color: null, label: 'Trip colours repeat', pinned: true },
       { color: trackedCaverPalette.out, label: 'Out', pinned: true },
     ];
     drawMovieCaptions(
@@ -82,12 +84,17 @@ describe('drawMovieCaptions', () => {
       captions({ clock: null, note: null, legend, legendMore: (hidden) => `and ${hidden} more` }),
     );
     const texts = fillText.mock.calls.map((call) => call[0] as string);
-    const trips = texts.filter((text) => text.startsWith('Trip '));
+    const trips = texts.filter((text) => /^Trip \d+$/.test(text));
     // Fewer than all of them fit into a 360-pixel frame...
     expect(trips.length).toBeGreaterThan(0);
     expect(trips.length).toBeLessThan(20);
     // ...and the ones left out are counted, not dropped without a word.
     expect(texts).toContain(`and ${20 - trips.length} more`);
+    // That two trips share a colour is still said, on a line with no swatch of its own: every
+    // solid colour drawn is one the legend's other lines or the captions already use.
+    expect(texts[texts.length - 2]).toBe('Trip colours repeat');
+    const reserved = new Set(movieCaptionColors());
+    expect(fills.every((colour) => reserved.has(colour))).toBe(true);
     // The grey is still explained, with its swatch.
     expect(texts[texts.length - 1]).toBe('Out');
     expect(fills).toContain(trackedCaverPalette.out);
