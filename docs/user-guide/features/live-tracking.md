@@ -114,9 +114,19 @@ Each row of **Reports** offers two controls, and they mean different things:
 - **Delete this report** — only for a report that should not be there at all. It leaves the log
   for good.
 
-Both work on a **closed** watch as well as a running one. On a trip where tracking was never
-started, neither does: positions put onto such a trip by importing a SpeleoLoc recording are
-taken back by undoing that import.
+Both work on a **closed** watch as well as a running one.
+
+**Some imported positions cannot be corrected one by one.** A SpeleoLoc recording imported onto
+a trip that already existed puts its positions on that trip's log and leaves its tracking as it
+was — an import does not start a watch on somebody else's trip. Where tracking was never
+started, the log is not open for writing, so those rows are shown **without** *Correct* and
+*Delete this report*, and a notice above them says where they came from. They are taken back
+all together, by **Undo** on that import under **Geodata → Imports**.
+
+Two cases that look alike are not in this state. A recording that **created** its trip writes
+the trip's tracking already closed, and its rows are corrected like any others. And reports read
+from a spreadsheet (below) only ever land on a trip whose tracking has been started, so they can
+always be corrected and deleted row by row.
 
 ---
 
@@ -153,9 +163,11 @@ What a coordinator often actually keeps is a sheet: a line per phone call, with 
 was about, how deep they were and a note. **Import a sheet**, beside the reports:
 
 1. **Download a sample sheet** — a template this installation reads without any settings.
-2. **Choose a CSV file, or drop one here.** The characters and the column separator are worked
-   out from the file and shown beside its name; **File settings** overrules either, and sets
-   **Day and month** where the file's own dates cannot settle which number is the day.
+2. **Choose a CSV file, or drop one here** — or switch to **Pasted rows** and paste the rows
+   copied from your spreadsheet, header row first, which is the quick way on a phone. The
+   characters and the column separator are worked out from the sheet and shown beside it;
+   **File settings** overrules either, sets **Day and month** where the sheet's own dates cannot
+   settle which number is the day, and sets the **Sheet's time zone**.
 3. **Read it.** Reading writes nothing: what comes back is exactly what importing would do,
    row by row — **New**, **Replaces**, or refused — with **Findings** beside each row. Above the
    rows the dialog states how the times and dates were read.
@@ -165,12 +177,25 @@ was about, how deep they were and a note. **Import a sheet**, beside the reports
    whole), tick **Overwrite what the log already holds at these moments** if you mean to, and
    **Import**.
 
+**Where the moment is written.** Three layouts are read, and which one a sheet uses is worked
+out from its header row: one column carrying the date and the time together (`Data si ora`, as
+in the sample), a date column beside a time column (`Data`, `Ora`), or a time column on its own,
+for a sheet kept during a single day — the dialog then asks for the day.
+
+**Whose clock the times are on.** A sheet's *14:05* is a time on somebody's wall. Left as it
+is, **Sheet's time zone** reads it **Exactly as written (UTC)**; choose **My time zone** when
+the sheet was filled in off your own clock, or search for another zone by name. The choice is
+made for the whole sheet, each time it is read; nothing about it is remembered on the trip.
+
 | Rule | Why |
 |---|---|
 | **A report is filed under the person and the moment** | A corrected sheet imported again corrects the rows it corrected instead of doubling them |
-| **A time written without a zone is read as UTC, exactly as written** | A sheet's 14:30 becomes 14:30 UTC, shown in your own zone. Where the hour has to sit beside reports typed live, write the offset in the cell: `2026-09-12T14:30+03:00` |
+| **A time written without a zone is read as UTC, exactly as written — unless you name the sheet's time zone** | A sheet's 14:30 becomes 14:30 UTC, shown in your own zone. Choose **Sheet's time zone** under **File settings** — your own zone is offered by name and any other can be searched — and 14:30 is read on that zone's clocks, summer and winter time included; the preview says which zone was used and shows each row on its clocks. A cell that writes its own offset (`2026-09-12T14:30+03:00`) is read as it says under either choice |
+| **A sheet already imported is not corrected by importing it again in another zone** | A report is filed under the person and the moment, and the zone changes every moment — so the second import adds rows beside the first instead of replacing them. Delete the earlier rows first |
+| **An hour the clocks skipped is refused; an hour they showed twice is read as the first of the two** | When the clocks go forward an hour never exists, and a row written in it is refused. When they go back an hour happens twice: the earlier one is taken and the row says so — write the offset in the cell if the later one was meant |
+| **A sheet of times with no dates asks for its day** | The dialog asks for **The day the sheet was kept on** and offers the trip's date: check it and read the sheet again. A time earlier than one further up the sheet is flagged, whoever the two rows are about, because a sheet kept in order that does this ran past midnight and that row belongs to the next day — leave it out, or give the sheet a date column |
 | **A date with no time is refused** | Filed at midnight, a whole day's reports would collapse onto one moment |
-| **The date and the time in two separate columns is refused for the whole file** | The moment is read from one column carrying both — join them |
+| **The date and the time may be in two separate columns** | They are joined and read as one moment, under the same rules as a single column. A row that leaves its date blank is refused — the date is not carried down from the row above |
 | **Names are matched against this trip's roster only** | Full name, then given name and initial ("Ion P."), then given name. A name matching nobody, or two people, is refused rather than guessed |
 | **A row's place: station, then declared place, then depth** | Going in and coming out claim no station |
 | **Two rows for the same person at the same moment are one report** | The last one wins, and both lines say so |

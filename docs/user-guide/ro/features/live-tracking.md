@@ -119,9 +119,19 @@ Fiecare rând din **Rapoarte** oferă două comenzi, și ele înseamnă lucruri 
 - **Șterge acest raport** — doar pentru un raport care nu ar trebui să existe deloc. Dispare din
   jurnal definitiv.
 
-Amândouă funcționează atât pe o urmărire **încheiată**, cât și pe una pornită. Pe o tură a cărei
-urmărire nu a fost pornită niciodată nu funcționează niciuna: pozițiile puse pe o astfel de tură
-prin importul unei înregistrări SpeleoLoc se retrag anulând acel import.
+Amândouă funcționează atât pe o urmărire **încheiată**, cât și pe una pornită.
+
+**Unele poziții importate nu pot fi corectate una câte una.** O înregistrare SpeleoLoc importată
+pe o tură care exista deja își pune pozițiile în jurnalul acelei ture și îi lasă urmărirea cum
+era — un import nu pornește urmărirea turei altcuiva. Acolo unde urmărirea nu a fost pornită
+niciodată, jurnalul nu este deschis pentru scriere, așa că acele rânduri sunt arătate **fără**
+*Corectează* și *Șterge acest raport*, iar o notă deasupra lor spune de unde vin. Se retrag toate
+odată, cu **Anulează** pe acel import, la **Geodate → Importuri**.
+
+Două cazuri care seamănă nu sunt în această stare. O înregistrare care **a creat** tura îi scrie
+urmărirea gata încheiată, iar rândurile ei se corectează ca oricare altele. Iar rapoartele citite
+dintr-o foaie de calcul (mai jos) ajung doar pe o tură a cărei urmărire a fost pornită, deci pot
+fi oricând corectate și șterse rând cu rând.
 
 ---
 
@@ -160,10 +170,12 @@ despre cine era, cât de adânc era și o notă. **Importă o foaie**, lângă r
 
 1. **Descarcă o foaie exemplu** — un șablon pe care această instalare îl citește fără nicio
    setare.
-2. **Alege un fișier CSV sau trage unul aici.** Caracterele și separatorul de coloane sunt
-   deduse din fișier și arătate lângă numele lui; **Setări fișier** le poate schimba pe oricare,
-   iar **Zi și lună** stabilește ordinea acolo unde datele fișierului nu pot decide care număr
-   este ziua.
+2. **Alege un fișier CSV sau trage unul aici** — sau treceți la **Rânduri lipite** și lipiți
+   rândurile copiate din foaia de calcul, cu rândul capetelor de coloană primul; pe telefon este
+   calea cea mai scurtă. Caracterele și separatorul de coloane sunt deduse din foaie și arătate
+   lângă ea; **Setări fișier** le poate schimba pe oricare, **Zi și lună** stabilește ordinea
+   acolo unde datele foii nu pot decide care număr este ziua, iar **Fusul orar al foii** spune
+   după al cui ceas au fost scrise orele.
 3. **Citește.** Citirea nu scrie nimic: ce primiți înapoi este exact ce ar face importul, rând
    cu rând — **Nou**, **Înlocuiește** sau refuzat — cu **Observații** lângă fiecare rând.
    Deasupra rândurilor, dialogul spune cum au fost citite orele și datele.
@@ -174,12 +186,25 @@ despre cine era, cât de adânc era și o notă. **Importă o foaie**, lângă r
    este luat sau lăsat deoparte întreg), bifați **Suprascrie ce are deja jurnalul la aceste
    momente** dacă asta vreți, și **Importă**.
 
+**Unde este scris momentul.** Sunt citite trei așezări, iar pe care o folosește o foaie se
+deduce din rândul capetelor de coloană: o singură coloană cu data și ora împreună (`Data si ora`,
+ca în exemplu), o coloană de dată lângă una de oră (`Data`, `Ora`) sau doar o coloană de oră,
+pentru o foaie ținută într-o singură zi — dialogul cere atunci ziua.
+
+**După al cui ceas sunt orele.** *14:05* dintr-o foaie este o oră de pe ceasul cuiva. Lăsat
+neschimbat, **Fusul orar al foii** o citește **Exact cum a fost scrisă (UTC)**; alegeți **Fusul
+meu orar** când foaia a fost completată după ceasul dumneavoastră sau căutați alt fus după nume.
+Alegerea se face pentru toată foaia, la fiecare citire; nimic din ea nu se păstrează pe tură.
+
 | Regulă | De ce |
 |---|---|
 | **Un raport este identificat prin persoană și moment** | O foaie corectată, importată din nou, schimbă rândurile corectate în loc să le dubleze |
-| **O oră scrisă fără fus orar este citită ca UTC, exact cum a fost scrisă** | 14:30 din foaie devine 14:30 UTC, arătat în fusul dumneavoastră. Acolo unde ora trebuie să stea lângă rapoarte scrise pe loc, scrieți decalajul în celulă: `2026-09-12T14:30+03:00` |
+| **O oră scrisă fără fus orar este citită ca UTC, exact cum a fost scrisă — dacă nu numiți fusul orar al foii** | 14:30 din foaie devine 14:30 UTC, arătat în fusul dumneavoastră. Alegeți **Fusul orar al foii** la **Setări fișier** — fusul dumneavoastră este oferit pe nume, iar oricare altul poate fi căutat — și 14:30 este citit după ceasul acelui fus, cu ora de vară și de iarnă cu tot; previzualizarea spune ce fus s-a folosit și arată fiecare rând după ceasul lui. O celulă care își scrie singură decalajul (`2026-09-12T14:30+03:00`) este citită cum spune, oricare ar fi alegerea |
+| **O foaie deja importată nu se corectează importând-o din nou în alt fus orar** | Un raport este identificat prin persoană și moment, iar fusul schimbă fiecare moment — așa că al doilea import adaugă rânduri lângă primele în loc să le înlocuiască. Ștergeți întâi rândurile de dinainte |
+| **O oră peste care ceasurile au sărit este refuzată; una pe care au arătat-o de două ori este citită ca prima dintre cele două** | Când ceasurile se dau înainte, o oră nu există deloc, iar un rând scris în ea este refuzat. Când se dau înapoi, o oră are loc de două ori: se ia prima, iar rândul o spune — scrieți decalajul în celulă dacă era vorba de a doua |
+| **O foaie cu ore fără date își cere ziua** | Dialogul cere **Ziua în care a fost ținută foaia** și propune data turei: verificați-o și citiți foaia din nou. O oră mai mică decât una aflată mai sus în foaie este semnalată, oricui i-ar aparține cele două rânduri, pentru că o foaie ținută în ordine care face asta a trecut de miezul nopții, iar rândul acela ține de ziua următoare — lăsați-l deoparte sau dați foii o coloană de dată |
 | **O dată fără oră este refuzată** | Puse la miezul nopții, rapoartele unei zile întregi s-ar suprapune într-un singur moment |
-| **Data și ora în două coloane separate sunt refuzate pentru tot fișierul** | Momentul se citește dintr-o singură coloană care le conține pe amândouă — uniți-le |
+| **Data și ora pot sta în două coloane separate** | Sunt unite și citite ca un singur moment, după aceleași reguli ca o singură coloană. Un rând care lasă data goală este refuzat — data nu se preia de pe rândul de deasupra |
 | **Numele sunt potrivite doar cu lista acestei ture** | Numele întreg, apoi prenumele și inițiala („Ion P."), apoi prenumele. Un nume care nu corespunde nimănui, sau corespunde la doi oameni, este refuzat, nu ghicit |
 | **Locul unui rând: stația, apoi locul declarat, apoi adâncimea** | Intrarea și ieșirea nu revendică nicio stație |
 | **Două rânduri pentru aceeași persoană la același moment sunt un singur raport** | Ultimul câștigă, iar amândouă rândurile o spun |

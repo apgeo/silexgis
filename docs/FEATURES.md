@@ -388,6 +388,9 @@ feature and walkthroughs of whole jobs.
   spreadsheet of calls is read onto the log through a preview that says, row by row, what it
   would create, correct or refuse and states how it read the times; each report is filed under
   the person and the moment, so a corrected sheet imported again corrects instead of doubling.
+  The sheet may be a file or rows pasted from a phone's spreadsheet, may keep the date and the
+  time in one column or two — or times alone, for a sheet kept in a day — and may be read on a
+  named time zone's clocks, summer and winter time included, instead of exactly as written.
   A trip can then be **published** with a link: anybody holding it, with no account, sees the
   party on the survey, refreshed while they are underground, and a club pastes a block into its
   own website to show the same viewer in an article whose links can move it. The same link lists
